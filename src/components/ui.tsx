@@ -1,0 +1,106 @@
+export function Badge({
+  children,
+  tone = "zinc",
+}: {
+  children: React.ReactNode;
+  tone?: "zinc" | "indigo" | "green" | "amber" | "red" | "blue" | "purple";
+}) {
+  const tones: Record<string, string> = {
+    zinc: "bg-zinc-100 text-zinc-600",
+    indigo: "bg-indigo-50 text-indigo-700",
+    green: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+    red: "bg-red-50 text-red-700",
+    blue: "bg-sky-50 text-sky-700",
+    purple: "bg-purple-50 text-purple-700",
+  };
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${tones[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+export function tierTone(tier?: string | null): "red" | "amber" | "blue" | "zinc" {
+  if (tier === "A") return "red";
+  if (tier === "B") return "amber";
+  if (tier === "C") return "blue";
+  return "zinc";
+}
+
+export function ScoreBar({ score }: { score: number }) {
+  const color = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="flex items-center gap-2 min-w-[90px]">
+      <div className="flex-1 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${score}%` }} />
+      </div>
+      <span className="text-xs tabular-nums text-zinc-500 w-8">{score}%</span>
+    </div>
+  );
+}
+
+export function PageHeader({
+  title,
+  desc,
+  actions,
+}: {
+  title: string;
+  desc?: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-8 pt-7 pb-5">
+      <div>
+        <h1 className="text-xl font-bold text-zinc-900">{title}</h1>
+        {desc && <p className="text-sm text-zinc-500 mt-1">{desc}</p>}
+      </div>
+      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+    </div>
+  );
+}
+
+export function Card({
+  title,
+  children,
+  className = "",
+  actions,
+}: {
+  title?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className={`bg-white rounded-xl border border-zinc-200/80 shadow-sm ${className}`}>
+      {(title || actions) && (
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100">
+          <h3 className="text-sm font-semibold text-zinc-800">{title}</h3>
+          {actions}
+        </div>
+      )}
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+export function EmptyState({ text }: { text: string }) {
+  return <div className="text-center py-8 text-sm text-zinc-400">{text}</div>;
+}
+
+export function fmtDate(d: Date | string | null | undefined) {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+export function fmtDateTime(d: Date | string | null | undefined) {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

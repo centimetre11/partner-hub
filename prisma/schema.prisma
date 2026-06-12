@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  partners     Partner[]
+  todos        TodoItem[]
+  events       TimelineEvent[]
+}
+
+model Partner {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  // PROSPECT 候选 / ACTIVE 正式 / ARCHIVED 归档
+  status           String   @default("PROSPECT")
+  // NEW 新候选 / ADVANCING 推进中 / WATCHING 观察 / DROPPED 放弃
+  poolFlag         String   @default("NEW")
+  // PURE_DATA / POWER_BI / TABLEAU / QLIK / IT_INTEGRATOR / OTHER
+  category         String   @default("OTHER")
+  tier             String? // A / B / C
+  city             String?
+  country          String?
+  headcount        String?
+  website          String?
+  companyType      String?
+  coreBusiness     String?
+  capability       String?
+  knownClients     String?
+  certLevel        String?
+  currentTools     String?
+  keyDifferentiator String?
+  playbook         String?
+  pitch            String?
+  bestChannel      String?
+  fitScore         Int?
+  priority         String? // P0 / P1 / P2 / P3
+  aiVerified       String? // VERIFIED / PARTIAL / UNKNOWN
+  manualChecked    Boolean  @default(false)
+  pipelineStage    Int      @default(1) // 1-10 十阶段
+  ownerId          String?
+  owner            User?    @relation(fields: [ownerId], references: [id])
+  promotedAt       DateTime?
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  contacts      Contact[]
+  opportunities Opportunity[]
+  todos         TodoItem[]
+  events        TimelineEvent[]
+  trainings     Training[]
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  partnerId   String
+  partner     Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  name        String
+  // DECISION_MAKER / TECH_GATEKEEPER / BIZ_LEAD / EXECUTOR / BLOCKER / OTHER
+  role        String   @default("OTHER")
+  title       String?
+  influence   Int? // 1-5
+  support     String? // POSITIVE / NEGATIVE / UNKNOWN
+  contactInfo String?
+  approach    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Opportunity {
+  id         String    @id @default(cuid())
+  partnerId  String
+  partner    Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  name       String
+  client     String?
+  amount     String?
+  stage      String    @default("需求诊断")
+  nextStep   String?
+  followUpAt DateTime?
+  status     String    @default("ACTIVE") // ACTIVE / WON / LOST / PAUSED
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model TodoItem {
+  id         String    @id @default(cuid())
+  title      String
+  detail     String?
+  partnerId  String?
+  partner    Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  assigneeId String?
+  assignee   User?     @relation(fields: [assigneeId], references: [id])
+  dueDate    DateTime?
+  priority   String    @default("MEDIUM") // HIGH / MEDIUM / LOW
+  status     String    @default("OPEN") // OPEN / DONE / CANCELLED
+  source     String    @default("MANUAL") // MANUAL / AI / SEED
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  doneAt     DateTime?
+}
+
+model TimelineEvent {
+  id          String   @id @default(cuid())
+  partnerId   String
+  partner     Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // NOTE / MEETING / CHAT_IMPORT / AI_SUMMARY / NEWS / SYSTEM / CHANGE
+  type        String   @default("NOTE")
+  title       String
+  content     String?
+  meta        String? // JSON：AI 审计信息（依据原文、变更明细等）
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Training {
+  id          String    @id @default(cuid())
+  partnerId   String
+  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  person      String
+  currentSkill String?
+  targetCert  String?
+  method      String?
+  deadline    DateTime?
+  status      String    @default("PLANNED") // PLANNED / IN_PROGRESS / DONE
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

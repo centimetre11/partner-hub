@@ -1,0 +1,27 @@
+import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { LoginForm } from "./login-form";
+
+export default async function LoginPage() {
+  const user = await getCurrentUser();
+  if (user) redirect("/");
+  const firstRun = (await db.user.count()) === 0;
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-amber-50 px-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white text-2xl font-bold mb-4 shadow-lg shadow-indigo-200">
+            帆
+          </div>
+          <h1 className="text-2xl font-bold text-zinc-900">帆软中东伙伴管理系统</h1>
+          <p className="text-sm text-zinc-500 mt-2">
+            {firstRun ? "首次使用：创建管理员账号" : "AI 原生 · 候选池 · 权力地图 · 会议模式"}
+          </p>
+        </div>
+        <LoginForm firstRun={firstRun} />
+      </div>
+    </div>
+  );
+}
