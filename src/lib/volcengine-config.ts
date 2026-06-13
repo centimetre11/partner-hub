@@ -55,19 +55,28 @@ function normalizeBaseUrl(url: string): string {
 function extractBearerKey(raw: string): string | undefined {
   const bearer = raw.match(/Authorization:\s*Bearer\s+([^\s'"\\]+)/i);
   if (!bearer) return undefined;
-  const key = bearer[1].trim();
-  if (!sanitizeVolcengineApiKey(key)) return undefined;
-  return key;
+  return normalizeApiKeyInput(bearer[1]) ?? undefined;
 }
 
-/** 过滤占位符、空值和明显无效的 Key */
-export function sanitizeVolcengineApiKey(key: string): string | null {
+/** 是否为占位符（非真实 Key） */
+export function isPlaceholderApiKey(key: string): boolean {
   const trimmed = key.trim().replace(/^Bearer\s+/i, "");
-  if (!trimmed) return null;
-  if (/^\$[A-Z_][A-Z0-9_]*$/i.test(trimmed)) return null;
-  if (/你的|xxx|example|placeholder|changeme/i.test(trimmed)) return null;
-  if (trimmed.length < 16) return null;
+  if (!trimmed) return true;
+  if (/^\$[A-Z_][A-Z0-9_]*$/i.test(trimmed)) return true;
+  if (/你的|xxx|example|placeholder|changeme/i.test(trimmed)) return true;
+  return false;
+}
+
+/** 规范化用户输入或数据库中的 Key（仅过滤占位符，不做长度限制） */
+export function normalizeApiKeyInput(key: string): string | null {
+  const trimmed = key.trim().replace(/^Bearer\s+/i, "");
+  if (isPlaceholderApiKey(trimmed)) return null;
   return trimmed;
+}
+
+/** @deprecated 使用 normalizeApiKeyInput */
+export function sanitizeVolcengineApiKey(key: string): string | null {
+  return normalizeApiKeyInput(key);
 }
 
 export function sanitizeVolcengineModel(model: string): string | null {

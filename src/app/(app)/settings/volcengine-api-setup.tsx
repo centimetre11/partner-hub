@@ -187,6 +187,7 @@ function VolcengineEditForm({
     ? buildVolcengineSnippetFromConfig(existing.model, existing.extraConfig, existing.baseUrl)
     : "";
   const [snippet, setSnippet] = useState(initialSnippet);
+  const [apiKeyInput, setApiKeyInput] = useState("");
   const [state, action, pending] = useActionState(upsertVolcengineApiAction, null);
   const [testState, testAction, testing] = useActionState(testVolcengineApiAction, null);
 
@@ -224,6 +225,8 @@ function VolcengineEditForm({
               name="apiKey"
               type="password"
               required={!existing}
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
               placeholder={existing ? "仅更换 Key 时填写" : "从火山方舟控制台 → API Key 管理 复制"}
               className={textInput}
               autoComplete="off"
@@ -274,23 +277,26 @@ function VolcengineEditForm({
         </div>
       </form>
 
-      <form action={testAction} className="flex flex-wrap items-start gap-2 border-t border-orange-200 pt-3">
-        {existing && <input type="hidden" name="id" value={existing.id} />}
-        <input type="hidden" name="snippet" value={snippet} />
-        <button
-          type="submit"
-          disabled={testing}
-          className="rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 disabled:opacity-50"
-        >
-          {testing ? "测试中..." : "测试当前表单（保存前）"}
-        </button>
-        <p className="text-xs text-zinc-500 flex-1 min-w-[200px]">
-          保存前可先用表单里的 Key 和 curl 试连通；已保存的配置也可在卡片上直接点「测试连通性」。
-        </p>
-        <div className="w-full">
-          <StateMessage state={testState} />
-        </div>
-      </form>
+      {existing && (
+        <form action={testAction} className="flex flex-wrap items-start gap-2 border-t border-orange-200 pt-3">
+          <input type="hidden" name="id" value={existing.id} />
+          <input type="hidden" name="snippet" value={snippet} />
+          <input type="hidden" name="apiKey" value={apiKeyInput} />
+          <button
+            type="submit"
+            disabled={testing}
+            className="rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+          >
+            {testing ? "测试中..." : "测试当前表单（保存前）"}
+          </button>
+          <p className="text-xs text-zinc-500 flex-1 min-w-[200px]">
+            优先使用上方新填的 Key，否则读数据库；保存后请用卡片上的「测试连通性」。
+          </p>
+          <div className="w-full">
+            <StateMessage state={testState} />
+          </div>
+        </form>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Badge, Card, EmptyState, PageHeader, fmtDate, fmtDateTime } from "@/com
 import { RegisterForm } from "./register-form";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
-import { sanitizeVolcengineApiKey, type VolcengineExtraConfig } from "@/lib/volcengine-config";
+import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 
 function maskKey(apiKey: string) {
   if (!apiKey) return "未填写";
@@ -68,7 +68,7 @@ export default async function SettingsPage() {
         enabled: api.enabled,
         isDefault: api.isDefault,
         keyTail: maskKey(api.apiKey),
-        keyValid: !!sanitizeVolcengineApiKey(api.apiKey),
+        keyValid: !!normalizeApiKeyInput(api.apiKey),
         extraConfig,
         createdAt: api.createdAt.toISOString(),
       };

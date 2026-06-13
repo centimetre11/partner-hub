@@ -3,7 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireUser } from "./session";
-import { parseVolcengineSnippet, sanitizeVolcengineApiKey } from "./volcengine-config";
+import { parseVolcengineSnippet, normalizeApiKeyInput } from "./volcengine-config";
+
+function resolveVolcengineApiKey(opts: {
+  formKey?: string;
+  snippetKey?: string;
+  storedKey?: string;
+}): string | null {
+  for (const raw of [opts.formKey, opts.snippetKey, opts.storedKey]) {
+    const normalized = normalizeApiKeyInput(raw ?? "");
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+function describeStoredKey(storedKey: string | undefined | null): string {
+  const raw = (storedKey ?? "").trim();
+  if (!raw) return "数据库中未保存 API Key";
+  return `数据库 Key 长度 ${raw.length}，尾号 ${raw.slice(-4)}`;
+}
 
 export type AiApiActionState = { ok?: boolean; error?: string; message?: string } | null;
 
@@ -94,7 +112,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
   await requireUser();
   const id = cleanText(formData.get("id"));
   const name = cleanText(formData.get("name")) || "火山方舟 Doubao";
-  const manualKey = sanitizeVolcengineApiKey(cleanText(formData.get("apiKey")));
+  const manualKey = normalizeApiKeyInput(cleanText(formData.get("apiKey")));
   const snippet = cleanText(formData.get("snippet"));
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
@@ -113,7 +131,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
     baseUrl = parsed.data.baseUrl;
     model = parsed.data.model;
     extraConfig = JSON.stringify(parsed.data.extraConfig);
-    snippetKey = parsed.data.apiKey ? sanitizeVolcengineApiKey(parsed.data.apiKey) : null;
+    snippetKey = parsed.data.apiKey ? normalizeApiKeyInput(parsed.data.apiKey) : null;
   } else if (id) {
     const existing = await db.aiApiConfig.findUnique({ where: { id } });
     if (!existing || existing.provider !== "volcengine") return { error: "配置不存在" };
@@ -147,7 +165,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
     if (isDefault) await makeOnlyDefault(id);
     else await ensureDefaultApi();
     revalidatePath("/settings");
-    return { ok: true, message: finalKey ? "火山引擎配置已更新（含新 Key）" : "火山引擎配置已更新" };
+    return { ok: true, message: finalKey ? `火山引擎配置已更新（Key 尾号 ${finalKey.slice(-4)}）` : "火山引擎配置已更新" };
   }
 
   const count = await db.aiApiConfig.count();
@@ -166,26 +184,26 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
   if (created.isDefault) await makeOnlyDefault(created.id);
   else await ensureDefaultApi();
   revalidatePath("/settings");
-  return { ok: true, message: "火山引擎配置已保存，可点击「测试连通性」验证" };
+  return { ok: true, message: `火山引擎配置已保存（Key 尾号 ${finalKey!.slice(-4)}），可点击「测试连通性」验证` };
 }
 
 export async function testVolcengineApiAction(_: AiApiActionState, formData: FormData): Promise<AiApiActionState> {
   await requireUser();
   const id = cleanText(formData.get("id"));
   const snippet = cleanText(formData.get("snippet"));
-  const manualKey = sanitizeVolcengineApiKey(cleanText(formData.get("apiKey")));
+  const formKeyRaw = cleanText(formData.get("apiKey"));
 
-  let api: { baseUrl: string; model: string; apiKey: string; extraConfig: string | null } | null = null;
-  if (id) {
-    const row = await db.aiApiConfig.findUnique({ where: { id } });
-    if (!row || row.provider !== "volcengine") return { error: "火山引擎配置不存在" };
-    api = row;
+  if (!id) {
+    return { error: "缺少配置 ID，请从已保存的配置卡片上点击「测试连通性」" };
   }
 
-  let model = api?.model ?? "";
-  let baseUrl = api?.baseUrl ?? "";
-  let apiKey = manualKey ?? api?.apiKey ?? "";
+  const row = await db.aiApiConfig.findUnique({ where: { id } });
+  if (!row || row.provider !== "volcengine") return { error: "火山引擎配置不存在" };
+
+  let model = row.model;
+  let baseUrl = row.baseUrl;
   let extra: Record<string, unknown> = {};
+  let snippetKey: string | undefined;
 
   if (snippet) {
     const parsed = parseVolcengineSnippet(snippet);
@@ -193,20 +211,24 @@ export async function testVolcengineApiAction(_: AiApiActionState, formData: For
     model = parsed.data.model;
     baseUrl = parsed.data.baseUrl;
     extra = parsed.data.extraConfig;
-    const snippetKey = parsed.data.apiKey ? sanitizeVolcengineApiKey(parsed.data.apiKey) : null;
-    if (snippetKey) apiKey = snippetKey;
-  } else if (api?.extraConfig) {
+    snippetKey = parsed.data.apiKey;
+  } else if (row.extraConfig) {
     try {
-      extra = JSON.parse(api.extraConfig);
+      extra = JSON.parse(row.extraConfig);
     } catch {
       extra = {};
     }
   }
 
-  if (!sanitizeVolcengineApiKey(apiKey)) {
+  const apiKey = resolveVolcengineApiKey({
+    formKey: formKeyRaw,
+    snippetKey,
+    storedKey: row.apiKey,
+  });
+
+  if (!apiKey) {
     return {
-      error:
-        "API Key 无效或未保存。请在编辑配置时重新填写 ARK API Key（完整密钥，不要用 $ARK_API_KEY 占位符），保存后再测试",
+      error: `${describeStoredKey(row.apiKey)}。请在编辑页重新填写 ARK API Key 并保存（curl 里的 $ARK_API_KEY 只是占位符，不会自动写入）。`,
     };
   }
   if (!model || !baseUrl) return { error: "缺少模型或 Base URL" };
@@ -234,20 +256,20 @@ export async function testVolcengineApiAction(_: AiApiActionState, formData: For
     if (!res.ok) {
       if (res.status === 401) {
         return {
-          error: `认证失败（401）：API Key 无效或已过期。请到火山方舟控制台重新创建 Key，在编辑配置里粘贴完整密钥后保存再试。\n${text.slice(0, 280)}`,
+          error: `认证失败（401）：Key 已从数据库读取（尾号 ${apiKey.slice(-4)}），但火山方舟拒绝了该 Key。请到控制台确认 Key 有效且未过期。\n${text.slice(0, 280)}`,
         };
       }
       return { error: `测试失败（HTTP ${res.status}）：${text.slice(0, 400)}` };
     }
     let preview = text.slice(0, 120);
     try {
-      const data = JSON.parse(text) as { output?: Array<{ content?: Array<{ text?: string }> }> };
+      const data = JSON.parse(text) as { output?: { content?: { text?: string }[] }[] };
       const msg = data.output?.find((o) => o.content)?.content?.[0]?.text;
       if (msg) preview = msg.slice(0, 120);
     } catch {
       // 保留原始片段
     }
-    return { ok: true, message: `连通成功。模型回复：${preview}` };
+    return { ok: true, message: `连通成功（使用数据库 Key，尾号 ${apiKey.slice(-4)}）。模型回复：${preview}` };
   } catch (e) {
     return { error: `测试请求失败：${e instanceof Error ? e.message : String(e)}` };
   }
