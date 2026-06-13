@@ -54,10 +54,43 @@ function normalizeBaseUrl(url: string): string {
 
 function extractBearerKey(raw: string): string | undefined {
   const bearer = raw.match(/Authorization:\s*Bearer\s+([^\s'"\\]+)/i);
-  if (bearer) return bearer[1];
-  const envRef = raw.match(/\$([A-Z_][A-Z0-9_]*)/);
-  if (envRef && envRef[1] !== "ARK_API_KEY") return undefined;
-  return undefined;
+  if (!bearer) return undefined;
+  const key = bearer[1].trim();
+  if (!sanitizeVolcengineApiKey(key)) return undefined;
+  return key;
+}
+
+/** 过滤占位符、空值和明显无效的 Key */
+export function sanitizeVolcengineApiKey(key: string): string | null {
+  const trimmed = key.trim().replace(/^Bearer\s+/i, "");
+  if (!trimmed) return null;
+  if (/^\$[A-Z_][A-Z0-9_]*$/i.test(trimmed)) return null;
+  if (/你的|xxx|example|placeholder|changeme/i.test(trimmed)) return null;
+  if (trimmed.length < 16) return null;
+  return trimmed;
+}
+
+export function sanitizeVolcengineModel(model: string): string | null {
+  const trimmed = model.trim();
+  if (!/^ep-[a-z0-9-]+$/i.test(trimmed)) return null;
+  if (/你的|xxx|example/i.test(trimmed)) return null;
+  return trimmed;
+}
+
+export function buildVolcengineSnippetFromConfig(
+  model: string,
+  extra: VolcengineExtraConfig | null,
+  baseUrl = DEFAULT_BASE_URL
+): string {
+  const body: Record<string, unknown> = {
+    model,
+    ...(extra ?? {}),
+    input: [{ role: "user", content: [{ type: "input_text", text: "示例问题" }] }],
+  };
+  return `curl --location '${baseUrl.replace(/\/+$/, "")}/responses' \\
+--header "Authorization: Bearer $ARK_API_KEY" \\
+--header 'Content-Type: application/json' \\
+--data '${JSON.stringify(body, null, 2)}'`;
 }
 
 export function parseVolcengineSnippet(raw: string): { ok: true; data: VolcengineParsedConfig } | { ok: false; error: string } {
@@ -72,8 +105,9 @@ export function parseVolcengineSnippet(raw: string): { ok: true; data: Volcengin
       body = JSON.parse(extractJsonBlock(text)) as Record<string, unknown>;
     }
 
-    const model = String(body.model ?? "").trim();
-    if (!model) return { ok: false, error: "请求体中缺少 model（推理接入点 ep-xxx）" };
+    const modelRaw = String(body.model ?? "").trim();
+    const model = sanitizeVolcengineModel(modelRaw);
+    if (!model) return { ok: false, error: "请求体中缺少有效 model（应为 ep- 开头的推理接入点 ID）" };
 
     const url = extractUrl(text);
     const baseUrl = normalizeBaseUrl(url ?? DEFAULT_BASE_URL);
@@ -85,15 +119,13 @@ export function parseVolcengineSnippet(raw: string): { ok: true; data: Volcengin
     if (extraConfig.store === undefined) extraConfig.store = true;
 
     const apiKeyFromSnippet = extractBearerKey(text);
-    const apiKey =
-      apiKeyFromSnippet && !apiKeyFromSnippet.startsWith("$") ? apiKeyFromSnippet : undefined;
 
     return {
       ok: true,
       data: {
         baseUrl,
         model,
-        apiKey,
+        apiKey: apiKeyFromSnippet,
         extraConfig,
         sampleInput: body.input,
       },

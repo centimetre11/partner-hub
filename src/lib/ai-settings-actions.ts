@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireUser } from "./session";
-import { parseVolcengineSnippet } from "./volcengine-config";
+import { parseVolcengineSnippet, sanitizeVolcengineApiKey } from "./volcengine-config";
 
 export type AiApiActionState = { ok?: boolean; error?: string; message?: string } | null;
 
@@ -94,18 +94,18 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
   await requireUser();
   const id = cleanText(formData.get("id"));
   const name = cleanText(formData.get("name")) || "火山方舟 Doubao";
-  const apiKey = cleanText(formData.get("apiKey"));
+  const manualKey = sanitizeVolcengineApiKey(cleanText(formData.get("apiKey")));
   const snippet = cleanText(formData.get("snippet"));
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
 
-  if (!id && !apiKey) return { error: "请填写 ARK API Key" };
+  if (!id && !manualKey) return { error: "请填写 ARK API Key（从火山方舟控制台 → API Key 管理复制完整密钥）" };
   if (!id && !snippet) return { error: "请粘贴 curl 或 JSON 请求体" };
 
   let baseUrl = "";
   let model = "";
   let extraConfig = "";
-  let parsedKey: string | undefined;
+  let snippetKey: string | null = null;
 
   if (snippet) {
     const parsed = parseVolcengineSnippet(snippet);
@@ -113,7 +113,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
     baseUrl = parsed.data.baseUrl;
     model = parsed.data.model;
     extraConfig = JSON.stringify(parsed.data.extraConfig);
-    parsedKey = parsed.data.apiKey;
+    snippetKey = parsed.data.apiKey ? sanitizeVolcengineApiKey(parsed.data.apiKey) : null;
   } else if (id) {
     const existing = await db.aiApiConfig.findUnique({ where: { id } });
     if (!existing || existing.provider !== "volcengine") return { error: "配置不存在" };
@@ -124,8 +124,12 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
     return { error: "请粘贴 curl 或 JSON 请求体" };
   }
 
-  const finalKey = apiKey || parsedKey;
-  if (!id && !finalKey) return { error: "请填写 ARK API Key（或在 curl 里使用真实 Key，不要用 $ARK_API_KEY 占位）" };
+  const finalKey = manualKey || snippetKey;
+  if (!id && !finalKey) {
+    return {
+      error: "请填写有效的 ARK API Key。curl 里的 $ARK_API_KEY 只是占位符，必须在上方密钥框粘贴真实 Key",
+    };
+  }
 
   if (id) {
     await db.aiApiConfig.update({
@@ -143,7 +147,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
     if (isDefault) await makeOnlyDefault(id);
     else await ensureDefaultApi();
     revalidatePath("/settings");
-    return { ok: true, message: "火山引擎配置已更新" };
+    return { ok: true, message: finalKey ? "火山引擎配置已更新（含新 Key）" : "火山引擎配置已更新" };
   }
 
   const count = await db.aiApiConfig.count();
@@ -169,6 +173,7 @@ export async function testVolcengineApiAction(_: AiApiActionState, formData: For
   await requireUser();
   const id = cleanText(formData.get("id"));
   const snippet = cleanText(formData.get("snippet"));
+  const manualKey = sanitizeVolcengineApiKey(cleanText(formData.get("apiKey")));
 
   let api: { baseUrl: string; model: string; apiKey: string; extraConfig: string | null } | null = null;
   if (id) {
@@ -179,15 +184,17 @@ export async function testVolcengineApiAction(_: AiApiActionState, formData: For
 
   let model = api?.model ?? "";
   let baseUrl = api?.baseUrl ?? "";
-  let apiKey = api?.apiKey ?? "";
+  let apiKey = manualKey ?? api?.apiKey ?? "";
   let extra: Record<string, unknown> = {};
+
   if (snippet) {
     const parsed = parseVolcengineSnippet(snippet);
     if (!parsed.ok) return { error: parsed.error };
     model = parsed.data.model;
     baseUrl = parsed.data.baseUrl;
-    if (parsed.data.apiKey) apiKey = parsed.data.apiKey;
     extra = parsed.data.extraConfig;
+    const snippetKey = parsed.data.apiKey ? sanitizeVolcengineApiKey(parsed.data.apiKey) : null;
+    if (snippetKey) apiKey = snippetKey;
   } else if (api?.extraConfig) {
     try {
       extra = JSON.parse(api.extraConfig);
@@ -196,8 +203,13 @@ export async function testVolcengineApiAction(_: AiApiActionState, formData: For
     }
   }
 
-  if (!apiKey) return { error: "缺少 API Key，请先填写 Key 再测试" };
-  if (!model || !baseUrl) return { error: "缺少模型或 Base URL，请粘贴 curl 片段" };
+  if (!sanitizeVolcengineApiKey(apiKey)) {
+    return {
+      error:
+        "API Key 无效或未保存。请在编辑配置时重新填写 ARK API Key（完整密钥，不要用 $ARK_API_KEY 占位符），保存后再测试",
+    };
+  }
+  if (!model || !baseUrl) return { error: "缺少模型或 Base URL" };
 
   const body: Record<string, unknown> = {
     model,
@@ -220,6 +232,11 @@ export async function testVolcengineApiAction(_: AiApiActionState, formData: For
     });
     const text = await res.text();
     if (!res.ok) {
+      if (res.status === 401) {
+        return {
+          error: `认证失败（401）：API Key 无效或已过期。请到火山方舟控制台重新创建 Key，在编辑配置里粘贴完整密钥后保存再试。\n${text.slice(0, 280)}`,
+        };
+      }
       return { error: `测试失败（HTTP ${res.status}）：${text.slice(0, 400)}` };
     }
     let preview = text.slice(0, 120);
