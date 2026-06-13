@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     let pid = partnerId as string | undefined;
     let guess: { partnerId: string | null; partnerName: string | null; confidence: string } | null = null;
     if (!pid) {
-      guess = await guessPartner(text);
+      guess = await guessPartner(text, uid);
       if (!guess.partnerId) {
         return NextResponse.json({ error: "AI 无法判断这段文本属于哪个伙伴，请手动选择伙伴后重试。", needPartner: true }, { status: 422 });
       }
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       text,
       sourceType: sourceType || "聊天记录",
       today: new Date().toISOString().slice(0, 10),
+      userId: uid,
     });
     return NextResponse.json({ proposal: { ...proposal, partnerId: pid }, guess });
   } catch (e) {

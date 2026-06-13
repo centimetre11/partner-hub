@@ -42,17 +42,20 @@ export async function POST(_req: NextRequest) {
   const overdueLines = overdue.map((t) => `${t.title}（${t.partner?.name ?? "-"}）`).join("\n");
 
   try {
-    const { content } = await chatCompletion([
-      {
-        role: "system",
-        content:
-          "你是帆软中东伙伴业务的经营分析师。基于数据生成本周经营周报（中文），结构：1）整体进展（2-3句）；2）风险信号（停滞伙伴、逾期待办，点名道姓）；3）本周建议聚焦的3个伙伴及理由；4）下周关键动作（3-5条）。简洁直接，不要套话。",
-      },
-      {
-        role: "user",
-        content: `候选池：${prospects} 家\n正式伙伴：${active.length} 家\n未完成待办：${openTodos} 项\n\n【正式伙伴状态】\n${partnerLines || "（无）"}\n\n【近7天动态】\n${eventLines || "（无）"}\n\n【逾期待办】\n${overdueLines || "（无）"}`,
-      },
-    ]);
+    const { content } = await chatCompletion(
+      [
+        {
+          role: "system",
+          content:
+            "你是帆软中东伙伴业务的经营分析师。基于数据生成本周经营周报（中文），结构：1）整体进展（2-3句）；2）风险信号（停滞伙伴、逾期待办，点名道姓）；3）本周建议聚焦的3个伙伴及理由；4）下周关键动作（3-5条）。简洁直接，不要套话。",
+        },
+        {
+          role: "user",
+          content: `候选池：${prospects} 家\n正式伙伴：${active.length} 家\n未完成待办：${openTodos} 项\n\n【正式伙伴状态】\n${partnerLines || "（无）"}\n\n【近7天动态】\n${eventLines || "（无）"}\n\n【逾期待办】\n${overdueLines || "（无）"}`,
+        },
+      ],
+      { feature: "AI 经营周报", userId: uid }
+    );
 
     const report = { content: content ?? "", generatedAt: new Date().toISOString() };
     await db.setting.upsert({

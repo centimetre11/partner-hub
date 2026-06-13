@@ -6,7 +6,7 @@ import {
   newSkillContext,
   REPORT_AGENT_KEYWORDS,
   runSkill,
-  useKimiBuiltinSearch,
+  shouldUseKimiBuiltinSearch,
 } from "./skills";
 import { partnerContext } from "./proposals";
 import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
@@ -80,7 +80,7 @@ export async function runAgent(agentId: string, triggeredBy: "manual" | "schedul
     const resolved = await resolveAgentSkills(agent.id, agent.skills);
     const skillNames = resolved.skillNames;
     const tools: (ToolDef | Record<string, unknown>)[] = buildToolsForAgent(skillNames);
-    const kimiSearch = skillNames.includes("web_search") && useKimiBuiltinSearch();
+    const kimiSearch = skillNames.includes("web_search") && (await shouldUseKimiBuiltinSearch());
     if (kimiSearch) tools.push(KIMI_BUILTIN_SEARCH);
 
     // 作用域上下文
@@ -121,7 +121,12 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
 
     let output = "";
     for (let i = 0; i < MAX_STEPS; i++) {
-      const { content, toolCalls } = await chatCompletion(chat, { tools, temperature: 0.3 });
+      const { content, toolCalls } = await chatCompletion(chat, {
+        tools,
+        temperature: 0.3,
+        feature: `Agent 运行：${agent.name}`,
+        userId: agent.createdById ?? undefined,
+      });
       if (!toolCalls.length) {
         output = content ?? "（无输出）";
         break;

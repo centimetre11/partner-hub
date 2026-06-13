@@ -165,6 +165,7 @@ export async function runIntakeTurn(opts: {
   partnerId?: string;
   messages: IntakeMessage[];
   today: string;
+  userId?: string;
 }): Promise<IntakeTurn> {
   const cfg = SCOPE_CONFIG[opts.scope];
   let ctx = "";
@@ -191,10 +192,19 @@ ${OUTPUT_SCHEMA}`;
 
   let content: string | null;
   try {
-    ({ content } = await chatCompletion(chat, { jsonMode: true, temperature: 0.3 }));
+    ({ content } = await chatCompletion(chat, {
+      jsonMode: true,
+      temperature: 0.3,
+      feature: `AI 录入助手：${cfg.title}`,
+      userId: opts.userId,
+    }));
   } catch {
     chat[0].content += "\n\n务必只输出一个合法 JSON 对象。";
-    ({ content } = await chatCompletion(chat, { temperature: 0.3 }));
+    ({ content } = await chatCompletion(chat, {
+      temperature: 0.3,
+      feature: `AI 录入助手：${cfg.title}`,
+      userId: opts.userId,
+    }));
   }
   const raw = parseJsonLoose<Partial<IntakeTurn>>(content ?? "");
   const p: Partial<IntakeProposal> = raw.proposal ?? {};

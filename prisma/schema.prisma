@@ -22,6 +22,7 @@ model User {
   materials    Material[]
   knowledgeArticles KnowledgeArticle[]
   skills       Skill[]
+  aiTokenUsages AiTokenUsage[]
 }
 
 model Partner {
@@ -157,6 +158,61 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+model AiApiConfig {
+  id          String              @id @default(cuid())
+  name        String
+  baseUrl     String
+  apiKey      String
+  model       String
+  enabled     Boolean             @default(true)
+  isDefault   Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  tokenUsages AiTokenUsage[]
+  dailyUsages AiDailyTokenUsage[]
+}
+
+model AiTokenUsage {
+  id               String       @id @default(cuid())
+  apiConfigId      String?
+  apiConfig        AiApiConfig? @relation(fields: [apiConfigId], references: [id], onDelete: SetNull)
+  bucketKey        String
+  apiName          String
+  feature          String
+  model            String
+  promptTokens     Int          @default(0)
+  completionTokens Int          @default(0)
+  totalTokens      Int          @default(0)
+  status           String       @default("SUCCESS")
+  error            String?
+  userId           String?
+  user             User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt        DateTime     @default(now())
+
+  @@index([apiConfigId, createdAt])
+  @@index([bucketKey, createdAt])
+  @@index([feature, createdAt])
+}
+
+model AiDailyTokenUsage {
+  id               String       @id @default(cuid())
+  apiConfigId      String?
+  apiConfig        AiApiConfig? @relation(fields: [apiConfigId], references: [id], onDelete: SetNull)
+  bucketKey        String
+  apiName          String
+  day              String
+  promptTokens     Int          @default(0)
+  completionTokens Int          @default(0)
+  totalTokens      Int          @default(0)
+  requestCount     Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([bucketKey, day])
+  @@index([apiConfigId, day])
+  @@index([day])
 }
 
 model Agent {

@@ -118,10 +118,14 @@ export async function extractProposal(opts: {
   text: string;
   sourceType: string;
   today: string;
+  userId?: string;
 }): Promise<ExtractionProposal> {
   const ctx = await partnerContext(opts.partnerId);
   const user = `今天日期：${opts.today}\n文本类型：${opts.sourceType}\n\n${ctx}\n\n【原始文本】\n${opts.text}`;
-  const raw = await chatJson<Partial<ExtractionProposal>>(EXTRACT_SYSTEM, user);
+  const raw = await chatJson<Partial<ExtractionProposal>>(EXTRACT_SYSTEM, user, {
+    feature: "AI 信息抽取",
+    userId: opts.userId,
+  });
   return normalizeProposal(raw, opts.partnerId);
 }
 
@@ -141,12 +145,13 @@ export function normalizeProposal(raw: Partial<ExtractionProposal>, partnerId?: 
 
 // ============ 识别文本归属哪个伙伴 ============
 
-export async function guessPartner(text: string): Promise<{ partnerId: string | null; partnerName: string | null; confidence: string }> {
+export async function guessPartner(text: string, userId?: string): Promise<{ partnerId: string | null; partnerName: string | null; confidence: string }> {
   const partners = await db.partner.findMany({ select: { id: true, name: true, city: true, country: true } });
   const list = partners.map((p) => `${p.id} | ${p.name}（${p.city ?? "?"}, ${p.country ?? "?"}）`).join("\n");
   const res = await chatJson<{ partnerId: string | null; partnerName: string | null; confidence: string }>(
     `你是伙伴管理系统的路由器。根据文本内容判断它与系统中哪个伙伴公司相关。只输出 JSON：{"partnerId": "匹配到的id或null", "partnerName": "匹配到的名称或null", "confidence": "high/medium/low"}。判断依据：公司名、人名、产品、城市等线索。匹配不上就返回 null。`,
-    `【系统中的伙伴列表】\n${list}\n\n【文本】\n${text.slice(0, 4000)}`
+    `【系统中的伙伴列表】\n${list}\n\n【文本】\n${text.slice(0, 4000)}`,
+    { feature: "AI 文本归属识别", userId }
   );
   return res;
 }
