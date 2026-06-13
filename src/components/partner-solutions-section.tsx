@@ -4,9 +4,11 @@ import { SOLUTION_STATUS_LABELS, DOCUMENT_TYPE_LABELS } from "@/lib/constants";
 import {
   deleteSolutionAction,
   linkSolutionAssetAction,
+  unlinkSolutionAssetAction,
   upsertSolutionAction,
 } from "@/lib/content-actions";
 import { SolutionAssetUpload } from "@/components/solution-asset-upload";
+import { AssetCard } from "@/components/asset-link";
 import { AiAddButton } from "@/components/ai-add-button";
 
 type SolutionRow = {
@@ -19,7 +21,11 @@ type SolutionRow = {
   pricingModel: string | null;
   status: string;
   notes: string | null;
-  assets: { assetId: string; label: string | null; asset: { filename: string } }[];
+  assets: {
+    assetId: string;
+    label: string | null;
+    asset: { id: string; kind: string | null; filename: string; url: string | null; thumbnailUrl: string | null };
+  }[];
   documents: { id: string; title: string; type: string }[];
 };
 
@@ -79,13 +85,14 @@ export function PartnerSolutionsSection({
               </form>
 
               <div>
-                <div className="text-xs text-zinc-500 mb-2">附件（PPT、架构图等）</div>
-                <ul className="space-y-1 mb-2">
+                <div className="text-xs text-zinc-500 mb-2">附件（PPT、架构图、云盘链接等）</div>
+                <ul className="space-y-2 mb-2">
                   {sol.assets.map((a) => (
-                    <li key={a.assetId} className="text-sm">
-                      <a href={`/api/assets/${a.assetId}`} className="text-indigo-600 hover:underline" target="_blank">
-                        📎 {a.label ? `${a.label} · ` : ""}{a.asset.filename}
-                      </a>
+                    <li key={a.assetId} className="flex items-center gap-2">
+                      <AssetCard asset={a.asset} label={a.label} />
+                      <form action={unlinkSolutionAssetAction.bind(null, partnerId, sol.id, a.assetId)}>
+                        <button className="text-xs text-zinc-400 hover:text-red-600">移除</button>
+                      </form>
                     </li>
                   ))}
                   {sol.assets.length === 0 && <li className="text-xs text-zinc-400">暂无附件</li>}

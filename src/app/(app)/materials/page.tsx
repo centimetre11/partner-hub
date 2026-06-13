@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
 import { MATERIAL_CATEGORY_LABELS } from "@/lib/constants";
 import { deleteMaterialAction } from "@/lib/content-actions";
+import { AssetCard } from "@/components/asset-link";
 
 export default async function MaterialsPage() {
   await requireUser();
@@ -31,14 +32,10 @@ export default async function MaterialsPage() {
                 <Link href={`/materials/${m.id}`} className="font-semibold text-zinc-900 hover:text-indigo-600">{m.title}</Link>
                 <div className="text-xs text-zinc-400 mt-1 flex gap-2 flex-wrap">
                   <Badge tone="zinc">{MATERIAL_CATEGORY_LABELS[m.category] ?? m.category}</Badge>
-                  {m.asset && (
-                    <a href={`/api/assets/${m.assetId}`} className="text-indigo-500 hover:underline" target="_blank">
-                      📎 {m.asset.filename}
-                    </a>
-                  )}
                   <span>{m.createdBy?.name} · {fmtDateTime(m.updatedAt)}</span>
                 </div>
                 {m.description && <p className="text-sm text-zinc-500 mt-2">{m.description}</p>}
+                {m.asset && <div className="mt-2"><AssetCard asset={m.asset} /></div>}
               </div>
               <form action={deleteMaterialAction.bind(null, m.id)}>
                 <button className="text-xs text-zinc-400 hover:text-red-600">删除</button>

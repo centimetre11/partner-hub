@@ -3,15 +3,21 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { PageHeader } from "@/components/ui";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/constants";
-import { upsertDocumentAction } from "@/lib/content-actions";
+import {
+  upsertDocumentAction,
+  linkDocumentAssetAction,
+  unlinkDocumentAssetAction,
+} from "@/lib/content-actions";
 import { RichEditor } from "@/components/rich-editor";
+import { DocumentAssetUpload } from "@/components/document-asset-upload";
+import { AssetCard } from "@/components/asset-link";
 
 export default async function DocumentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
   const doc = await db.document.findUnique({
     where: { id },
-    include: { partner: true },
+    include: { partner: true, assets: { include: { asset: true } } },
   });
   if (!doc) notFound();
 
@@ -51,6 +57,24 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
         </div>
         <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-indigo-700">保存</button>
       </form>
+
+      <div className="px-8 max-w-4xl mt-4">
+        <div className="bg-white rounded-xl border p-5 space-y-3">
+          <div className="text-sm font-medium text-zinc-700">附件（上传文件或贴云盘链接）</div>
+          <ul className="space-y-2">
+            {doc.assets.map((a) => (
+              <li key={a.assetId} className="flex items-center gap-2">
+                <AssetCard asset={a.asset} label={a.label} />
+                <form action={unlinkDocumentAssetAction.bind(null, doc.id, a.assetId)}>
+                  <button className="text-xs text-zinc-400 hover:text-red-600">移除</button>
+                </form>
+              </li>
+            ))}
+            {doc.assets.length === 0 && <li className="text-xs text-zinc-400">暂无附件</li>}
+          </ul>
+          <DocumentAssetUpload documentId={doc.id} action={linkDocumentAssetAction} />
+        </div>
+      </div>
     </div>
   );
 }

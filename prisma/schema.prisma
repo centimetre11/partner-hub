@@ -272,10 +272,15 @@ model Notification {
 
 model Asset {
   id           String   @id @default(cuid())
+  // FILE 上传文件 / LINK 云盘外链
+  kind         String   @default("FILE")
   filename     String
-  mimeType     String
-  size         Int
-  storageKey   String
+  mimeType     String   @default("application/octet-stream")
+  size         Int      @default(0)
+  storageKey   String? // FILE 才有本地存储 key
+  url          String? // LINK 的外部链接
+  thumbnailUrl String? // 预览缩略图（OG 图或云盘缩略图）
+  provider     String? // gdrive / dropbox / web 等
   uploadedById String?
   uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())

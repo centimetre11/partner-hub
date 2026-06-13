@@ -1,6 +1,7 @@
 import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
 import { db } from "./db";
+import { fetchLinkPreview } from "./link-preview";
 
 const ALLOWED_EXT = new Set([
   ".pdf", ".ppt", ".pptx", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".md", ".txt",
@@ -49,8 +50,29 @@ export async function saveUploadedFile(file: File, userId: string | null) {
   });
 }
 
+export async function saveLinkAsset(rawUrl: string, userId: string | null) {
+  const url = rawUrl.trim();
+  if (!url) throw new Error("链接不能为空");
+  const preview = await fetchLinkPreview(url);
+  return db.asset.create({
+    data: {
+      kind: "LINK",
+      filename: preview.title || preview.url,
+      mimeType: "text/uri-list",
+      size: 0,
+      url: preview.url,
+      thumbnailUrl: preview.thumbnailUrl,
+      provider: preview.provider,
+      uploadedById: userId,
+    },
+  });
+}
+
 export async function readAssetFile(assetId: string) {
   const asset = await db.asset.findUniqueOrThrow({ where: { id: assetId } });
+  if (asset.kind === "LINK" || !asset.storageKey) {
+    throw new Error("LINK 类型无本地文件");
+  }
   const data = await readFile(path.join(uploadDir(), asset.storageKey));
   return { asset, data };
 }

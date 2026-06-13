@@ -6,6 +6,7 @@ import { MATERIAL_CATEGORY_LABELS } from "@/lib/constants";
 import { upsertMaterialAction } from "@/lib/content-actions";
 import { RichEditor } from "@/components/rich-editor";
 import { FileUploadField } from "@/components/file-upload";
+import { AssetCard } from "@/components/asset-link";
 
 export default async function MaterialDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -28,9 +29,10 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
             ))}
           </select>
           {m.asset && (
-            <p className="text-xs text-zinc-500">
-              当前文件：<a href={`/api/assets/${m.assetId}`} className="text-indigo-500">{m.asset.filename}</a>（上传新文件可替换）
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs text-zinc-500">当前附件（重新上传或贴链接可替换）：</p>
+              <AssetCard asset={m.asset} />
+            </div>
           )}
           <FileUploadField name="assetId" />
           <label className="flex items-center gap-2 text-sm">

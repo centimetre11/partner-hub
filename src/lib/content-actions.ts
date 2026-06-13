@@ -72,20 +72,21 @@ export async function saveNotificationAsDocumentAction(notificationId: string) {
 export async function upsertMaterialAction(formData: FormData) {
   const user = await requireUser();
   const id = String(formData.get("id") ?? "");
+  const assetId = String(formData.get("assetId") ?? "") || null;
   const data = {
     title: String(formData.get("title") ?? "").trim(),
     description: String(formData.get("description") ?? "") || null,
     category: String(formData.get("category") ?? "OTHER"),
     body: String(formData.get("body") ?? "") || null,
-    assetId: String(formData.get("assetId") ?? "") || null,
     shared: formData.get("shared") === "on",
   };
   if (!data.title) return;
   let materialId = id;
   if (id) {
-    await db.material.update({ where: { id }, data });
+    // 编辑时若未重新上传/贴链接，则保留原附件
+    await db.material.update({ where: { id }, data: assetId ? { ...data, assetId } : data });
   } else {
-    const created = await db.material.create({ data: { ...data, createdById: user.id } });
+    const created = await db.material.create({ data: { ...data, assetId, createdById: user.id } });
     materialId = created.id;
   }
   revalidatePath("/materials");
@@ -167,6 +168,30 @@ export async function linkSolutionAssetAction(partnerId: string, solutionId: str
     update: { label },
   });
   revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function unlinkSolutionAssetAction(partnerId: string, solutionId: string, assetId: string) {
+  await requireUser();
+  await db.solutionAsset.delete({ where: { solutionId_assetId: { solutionId, assetId } } });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+// ============ Document 附件 ============
+
+export async function linkDocumentAssetAction(documentId: string, assetId: string, label?: string) {
+  await requireUser();
+  await db.documentAsset.upsert({
+    where: { documentId_assetId: { documentId, assetId } },
+    create: { documentId, assetId, label },
+    update: { label },
+  });
+  revalidatePath(`/documents/${documentId}`);
+}
+
+export async function unlinkDocumentAssetAction(documentId: string, assetId: string) {
+  await requireUser();
+  await db.documentAsset.delete({ where: { documentId_assetId: { documentId, assetId } } });
+  revalidatePath(`/documents/${documentId}`);
 }
 
 // ============ Skill ============
