@@ -33,9 +33,11 @@ type ResolvedAiApi = {
   id: string | null;
   name: string;
   bucketKey: string;
+  provider: string;
   baseUrl: string;
   apiKey: string;
   model: string;
+  extraConfig: string | null;
 };
 
 type TokenUsage = {
@@ -54,9 +56,11 @@ async function resolveAiApi(): Promise<ResolvedAiApi> {
       id: configured.id,
       name: configured.name,
       bucketKey: `api:${configured.id}`,
+      provider: configured.provider,
       baseUrl: configured.baseUrl,
       apiKey: configured.apiKey,
       model: configured.model,
+      extraConfig: configured.extraConfig,
     };
   }
 
@@ -70,9 +74,11 @@ async function resolveAiApi(): Promise<ResolvedAiApi> {
     id: null,
     name: "环境变量 API",
     bucketKey: `env:${baseUrl}:${model}`,
+    provider: "openai",
     baseUrl,
     apiKey,
     model,
+    extraConfig: null,
   };
 }
 
@@ -145,6 +151,176 @@ async function recordBestEffort(opts: Parameters<typeof recordAiTokenUsage>[0]) 
   }
 }
 
+function parseExtraConfig(extraConfig: string | null): Record<string, unknown> {
+  if (!extraConfig) return {};
+  try {
+    return JSON.parse(extraConfig) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
+  const input: unknown[] = [];
+  for (const m of messages) {
+    if (m.role === "system") continue;
+    if (m.role === "user") {
+      input.push({
+        role: "user",
+        content: [{ type: "input_text", text: m.content ?? "" }],
+      });
+      continue;
+    }
+    if (m.role === "assistant") {
+      if (m.tool_calls?.length) {
+        for (const tc of m.tool_calls) {
+          input.push({
+            type: "function_call",
+            call_id: tc.id,
+            name: tc.function.name,
+            arguments: tc.function.arguments,
+          });
+        }
+      }
+      if (m.content) {
+        input.push({
+          role: "assistant",
+          content: [{ type: "output_text", text: m.content }],
+        });
+      }
+      continue;
+    }
+    if (m.role === "tool") {
+      input.push({
+        type: "function_call_output",
+        call_id: m.tool_call_id,
+        output: m.content ?? "",
+      });
+    }
+  }
+  return input;
+}
+
+function parseVolcengineResponse(data: Record<string, unknown>): { content: string | null; toolCalls: ToolCall[] } {
+  const output = (data.output ?? []) as Array<Record<string, unknown>>;
+  const textParts: string[] = [];
+  const toolCalls: ToolCall[] = [];
+  for (const item of output) {
+    if (item.type === "message") {
+      const parts = (item.content ?? []) as Array<{ type?: string; text?: string }>;
+      for (const part of parts) {
+        if (part.text) textParts.push(part.text);
+      }
+      continue;
+    }
+    if (item.type === "function_call") {
+      toolCalls.push({
+        id: String(item.call_id ?? item.id ?? `call_${toolCalls.length}`),
+        type: "function",
+        function: {
+          name: String(item.name ?? ""),
+          arguments:
+            typeof item.arguments === "string" ? item.arguments : JSON.stringify(item.arguments ?? {}),
+        },
+      });
+    }
+  }
+  return {
+    content: textParts.length ? textParts.join("\n") : null,
+    toolCalls,
+  };
+}
+
+function readVolcengineTokenUsage(data: Record<string, unknown>): TokenUsage {
+  const usage = (data.usage ?? {}) as Record<string, unknown>;
+  const promptTokens = Number(usage.input_tokens ?? usage.prompt_tokens ?? 0);
+  const completionTokens = Number(usage.output_tokens ?? usage.completion_tokens ?? 0);
+  const totalTokens = Number(usage.total_tokens ?? promptTokens + completionTokens);
+  return {
+    promptTokens: Number.isFinite(promptTokens) ? promptTokens : 0,
+    completionTokens: Number.isFinite(completionTokens) ? completionTokens : 0,
+    totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+  };
+}
+
+async function volcengineResponsesCompletion(
+  api: ResolvedAiApi,
+  messages: ChatMessage[],
+  opts: {
+    tools?: (ToolDef | Record<string, unknown>)[];
+    jsonMode?: boolean;
+    temperature?: number;
+    feature?: string;
+    userId?: string;
+  }
+): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+  const extra = parseExtraConfig(api.extraConfig);
+  const systemText = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content ?? "")
+    .join("\n\n");
+  const configuredInstructions = typeof extra.instructions === "string" ? extra.instructions : "";
+  const instructions = [configuredInstructions, systemText].filter(Boolean).join("\n\n");
+
+  const tools = [
+    ...((extra.tools as unknown[]) ?? []),
+    ...(opts.tools ?? []),
+  ];
+
+  const body: Record<string, unknown> = {
+    model: api.model,
+    stream: false,
+    store: extra.store ?? true,
+    input: messagesToVolcengineInput(messages),
+    ...(instructions ? { instructions } : {}),
+    ...(typeof extra.max_output_tokens === "number" ? { max_output_tokens: extra.max_output_tokens } : {}),
+    ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+    ...(tools.length ? { tools } : {}),
+  };
+  if (opts.jsonMode) {
+    body.text = { format: { type: "json_object" } };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${api.baseUrl.replace(/\/$/, "")}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${api.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: msg });
+    throw new AIError(`火山引擎接口调用失败：${msg}`);
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    await recordBestEffort({
+      api,
+      feature: opts.feature ?? "未标注 AI 调用",
+      userId: opts.userId,
+      status: "FAILED",
+      error: `HTTP ${res.status}: ${text.slice(0, 500)}`,
+    });
+    throw new AIError(`火山引擎接口调用失败（${res.status}）：${text.slice(0, 500)}`);
+  }
+
+  const data = (await res.json()) as Record<string, unknown>;
+  const usage = readVolcengineTokenUsage(data);
+  await recordBestEffort({
+    api,
+    feature: opts.feature ?? "未标注 AI 调用",
+    userId: opts.userId,
+    usage,
+    status: "SUCCESS",
+  });
+  return parseVolcengineResponse(data);
+}
+
 export async function chatCompletion(
   messages: ChatMessage[],
   opts: {
@@ -156,6 +332,10 @@ export async function chatCompletion(
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
   const api = await resolveAiApi();
+
+  if (api.provider === "volcengine") {
+    return volcengineResponsesCompletion(api, messages, opts);
+  }
 
   const body: Record<string, unknown> = {
     model: api.model,

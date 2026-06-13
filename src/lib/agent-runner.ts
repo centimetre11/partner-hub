@@ -7,6 +7,7 @@ import {
   REPORT_AGENT_KEYWORDS,
   runSkill,
   shouldUseKimiBuiltinSearch,
+  shouldUseVolcengineBuiltinSearch,
 } from "./skills";
 import { partnerContext } from "./proposals";
 import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
@@ -79,8 +80,10 @@ export async function runAgent(agentId: string, triggeredBy: "manual" | "schedul
   try {
     const resolved = await resolveAgentSkills(agent.id, agent.skills);
     const skillNames = resolved.skillNames;
-    const tools: (ToolDef | Record<string, unknown>)[] = buildToolsForAgent(skillNames);
-    const kimiSearch = skillNames.includes("web_search") && (await shouldUseKimiBuiltinSearch());
+    const volcSearch = skillNames.includes("web_search") && (await shouldUseVolcengineBuiltinSearch());
+    const effectiveSkillNames = volcSearch ? skillNames.filter((n) => n !== "web_search") : skillNames;
+    const tools: (ToolDef | Record<string, unknown>)[] = buildToolsForAgent(effectiveSkillNames);
+    const kimiSearch = skillNames.includes("web_search") && !volcSearch && (await shouldUseKimiBuiltinSearch());
     if (kimiSearch) tools.push(KIMI_BUILTIN_SEARCH);
 
     // 作用域上下文

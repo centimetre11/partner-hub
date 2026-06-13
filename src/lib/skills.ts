@@ -540,14 +540,35 @@ export const KIMI_BUILTIN_SEARCH = {
   function: { name: "$web_search" },
 };
 
+export async function shouldUseVolcengineBuiltinSearch(): Promise<boolean> {
+  if (process.env.TAVILY_API_KEY) return false;
+  const configured = await db.aiApiConfig.findFirst({
+    where: { enabled: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    select: { provider: true, extraConfig: true },
+  });
+  if (configured?.provider !== "volcengine") return false;
+  try {
+    const extra = JSON.parse(configured.extraConfig ?? "{}") as { tools?: Array<{ type?: string }> };
+    return (extra.tools ?? []).some((t) => t.type === "web_search");
+  } catch {
+    return false;
+  }
+}
+
 export async function shouldUseKimiBuiltinSearch(): Promise<boolean> {
   if (process.env.TAVILY_API_KEY) return false;
+  if (await shouldUseVolcengineBuiltinSearch()) return false;
   const configured = await db.aiApiConfig.findFirst({
     where: { enabled: true },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
     select: { baseUrl: true },
   });
   return ((configured?.baseUrl ?? process.env.AI_BASE_URL) ?? "").includes("moonshot");
+}
+
+export async function shouldUseBuiltinWebSearch(): Promise<boolean> {
+  return (await shouldUseVolcengineBuiltinSearch()) || (await shouldUseKimiBuiltinSearch());
 }
 
 export function skillsToTools(names: string[]): ToolDef[] {

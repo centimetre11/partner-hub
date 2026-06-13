@@ -3,6 +3,8 @@ import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDate, fmtDateTime } from "@/components/ui";
 import { RegisterForm } from "./register-form";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
+import type { VolcengineApiForClient } from "./volcengine-api-setup";
+import type { VolcengineExtraConfig } from "@/lib/volcengine-config";
 
 function maskKey(apiKey: string) {
   if (!apiKey) return "未填写";
@@ -38,6 +40,7 @@ export default async function SettingsPage() {
   const apiConfigs: AiApiConfigForClient[] = aiApis.map((api) => ({
     id: api.id,
     name: api.name,
+    provider: api.provider,
     baseUrl: api.baseUrl,
     model: api.model,
     enabled: api.enabled,
@@ -45,6 +48,30 @@ export default async function SettingsPage() {
     keyTail: maskKey(api.apiKey),
     createdAt: api.createdAt.toISOString(),
   }));
+
+  const volcengineConfigs: VolcengineApiForClient[] = aiApis
+    .filter((api) => api.provider === "volcengine")
+    .map((api) => {
+      let extraConfig: VolcengineExtraConfig | null = null;
+      if (api.extraConfig) {
+        try {
+          extraConfig = JSON.parse(api.extraConfig) as VolcengineExtraConfig;
+        } catch {
+          extraConfig = null;
+        }
+      }
+      return {
+        id: api.id,
+        name: api.name,
+        baseUrl: api.baseUrl,
+        model: api.model,
+        enabled: api.enabled,
+        isDefault: api.isDefault,
+        keyTail: maskKey(api.apiKey),
+        extraConfig,
+        createdAt: api.createdAt.toISOString(),
+      };
+    });
   const aiConfigured = aiApis.some((api) => api.enabled) || !!process.env.AI_API_KEY;
   const todayUsage = dailyUsage.filter((row) => row.day === today);
   const todayTokens = todayUsage.reduce((sum, row) => sum + row.totalTokens, 0);
@@ -102,7 +129,7 @@ export default async function SettingsPage() {
         </Card>
 
         <Card title="大模型管理中心" className="lg:col-span-2">
-          <AiApiManager apis={apiConfigs} />
+          <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
         </Card>
 
         <Card title="最近 14 天每日 Token 用量" className="lg:col-span-2">

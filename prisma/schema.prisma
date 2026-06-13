@@ -163,9 +163,11 @@ model Setting {
 model AiApiConfig {
   id          String              @id @default(cuid())
   name        String
+  provider    String              @default("openai") // openai | volcengine
   baseUrl     String
   apiKey      String
   model       String
+  extraConfig String? // JSON：火山引擎 Responses API 的 tools / instructions 等
   enabled     Boolean             @default(true)
   isDefault   Boolean             @default(false)
   createdAt   DateTime            @default(now())

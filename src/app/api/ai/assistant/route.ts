@@ -8,6 +8,7 @@ import {
   newSkillContext,
   runSkill,
   shouldUseKimiBuiltinSearch,
+  shouldUseVolcengineBuiltinSearch,
   skillsToTools,
 } from "@/lib/skills";
 
@@ -26,7 +27,9 @@ export async function POST(req: NextRequest) {
 4. 跨伙伴对比分析：调工具获取双方档案后给出有理有据的建议。
 5. 背景：帆软产品 FineReport（中国式复杂报表）/ FineBI（自助分析）/ FineDataLink（数据集成）；中东主打差异化是复杂报表能力+数据主权合规（纯内网部署）；策略材料包括 Tier A/B/C 作战清单、前三单补贴（首单+20%折扣+免费驻场2周）、首年超级折扣（L2 40%/L3 50%/L4 60%）、Fast Track（Tableau/微软转投伙伴≥5人认证直接L2）。`;
 
-  const tools: (ToolDef | Record<string, unknown>)[] = skillsToTools(ASSISTANT_SKILLS);
+  const volcSearch = await shouldUseVolcengineBuiltinSearch();
+  const assistantSkills = volcSearch ? ASSISTANT_SKILLS.filter((s) => s !== "web_search") : ASSISTANT_SKILLS;
+  const tools: (ToolDef | Record<string, unknown>)[] = skillsToTools(assistantSkills);
   if (await shouldUseKimiBuiltinSearch()) tools.push(KIMI_BUILTIN_SEARCH);
 
   const chat: ChatMessage[] = [

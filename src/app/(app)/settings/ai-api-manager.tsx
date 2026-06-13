@@ -8,10 +8,12 @@ import {
   upsertAiApiAction,
   type AiApiActionState,
 } from "@/lib/ai-settings-actions";
+import { VolcengineApiSetup, type VolcengineApiForClient } from "./volcengine-api-setup";
 
 export type AiApiConfigForClient = {
   id: string;
   name: string;
+  provider: string;
   baseUrl: string;
   model: string;
   enabled: boolean;
@@ -77,16 +79,27 @@ function ApiForm({
   );
 }
 
-export function AiApiManager({ apis }: { apis: AiApiConfigForClient[] }) {
+export function AiApiManager({
+  apis,
+  volcengineApis,
+}: {
+  apis: AiApiConfigForClient[];
+  volcengineApis: VolcengineApiForClient[];
+}) {
+  const genericApis = apis.filter((api) => api.provider !== "volcengine");
+
   return (
     <div className="space-y-5">
+      <VolcengineApiSetup configs={volcengineApis} />
+
       <div className="rounded-xl border border-zinc-100 bg-zinc-50 p-4">
-        <div className="text-sm font-semibold text-zinc-800 mb-3">添加大模型 API</div>
+        <div className="text-sm font-semibold text-zinc-800 mb-1">其他 OpenAI 兼容 API</div>
+        <div className="text-xs text-zinc-400 mb-3">Kimi、DeepSeek、通义等走 Chat Completions 协议的接口</div>
         <ApiForm submitText="添加 API" />
       </div>
 
       <div className="space-y-3">
-        {apis.map((api) => (
+        {genericApis.map((api) => (
           <div key={api.id} className="rounded-xl border border-zinc-200 p-4">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
@@ -124,9 +137,9 @@ export function AiApiManager({ apis }: { apis: AiApiConfigForClient[] }) {
             <ApiForm api={api} submitText="保存修改" />
           </div>
         ))}
-        {apis.length === 0 && (
+        {genericApis.length === 0 && (
           <div className="rounded-xl border border-dashed border-zinc-200 p-6 text-center text-sm text-zinc-400">
-            暂无数据库 API 配置。未添加前仍可使用 `.env` 中的 AI_API_KEY 作为兼容兜底。
+            暂无其他 API 配置。未添加前仍可使用 `.env` 中的 AI_API_KEY 作为兼容兜底。
           </div>
         )}
       </div>
