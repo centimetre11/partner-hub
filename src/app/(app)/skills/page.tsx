@@ -12,11 +12,16 @@ export default async function SkillsPage() {
     <div className="pb-16">
       <PageHeader
         title="Skill 库"
-        desc="内置工具技能 + 团队共享的提示词技能，可在 Agent 中勾选组合"
+        desc="AI 中心的一部分：内置工具技能 + 团队共享提示词技能，供 Agent Builder 自动匹配"
         actions={
-          <Link href="/skills/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            + 新建提示词 Skill
-          </Link>
+          <>
+            <Link href="/ai" className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
+              AI 中心
+            </Link>
+            <Link href="/skills/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+              + 新建提示词 Skill
+            </Link>
+          </>
         }
       />
       <div className="px-8 max-w-4xl space-y-3">

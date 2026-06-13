@@ -6,6 +6,7 @@ import { db } from "./db";
 import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
 import { applyProposal } from "./proposals";
+import type { AgentBuilderDraft } from "./agent-builder";
 import type { AgentFieldProposal } from "./skills";
 
 // ============ Agent CRUD ============
@@ -57,6 +58,46 @@ export async function upsertAgentAction(formData: FormData) {
   }
   revalidatePath("/agents");
   redirect(`/agents/${agentId}`);
+}
+
+export async function createAgentFromBuilderAction(formData: FormData) {
+  const user = await requireUser();
+  const raw = String(formData.get("draft") ?? "");
+  if (!raw) return;
+  const draft = JSON.parse(raw) as AgentBuilderDraft;
+  const trigger = draft.trigger === "SCHEDULE" ? "SCHEDULE" : "MANUAL";
+  const scopeType = draft.scopeType === "PARTNER" && draft.partnerId ? "PARTNER" : "ALL";
+  const data = {
+    name: draft.name.trim(),
+    icon: draft.icon?.trim() || "🤖",
+    description: draft.description?.trim() || null,
+    instructions: draft.instructions.trim(),
+    skills: JSON.stringify(Array.isArray(draft.skills) ? draft.skills : []),
+    trigger,
+    frequency: trigger === "SCHEDULE" ? draft.frequency : null,
+    runHour: Number.isInteger(draft.runHour) ? draft.runHour : 9,
+    runWeekday: Number.isInteger(draft.runWeekday) ? draft.runWeekday : 1,
+    scopeType,
+    partnerId: scopeType === "PARTNER" ? draft.partnerId : null,
+    shared: draft.shared !== false,
+    enabled: true,
+    webhookUrl: draft.webhookUrl?.trim() || null,
+    createdById: user.id,
+  };
+  if (!data.name || !data.instructions) return;
+
+  const created = await db.agent.create({ data });
+  if (created.trigger === "SCHEDULE") {
+    await db.agent.update({ where: { id: created.id }, data: { nextRunAt: computeNextRunAt(created) } });
+  }
+
+  const skillIds = Array.isArray(draft.skillIds) ? draft.skillIds : [];
+  for (const skillId of skillIds) {
+    await db.agentSkill.create({ data: { agentId: created.id, skillId } });
+  }
+  revalidatePath("/agents");
+  revalidatePath("/ai");
+  redirect(`/agents/${created.id}`);
 }
 
 export async function deleteAgentAction(agentId: string) {

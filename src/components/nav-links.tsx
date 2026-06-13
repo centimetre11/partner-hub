@@ -10,20 +10,25 @@ const links = [
   { href: "/todos", label: "待办事项", icon: "☑" },
   { href: "/documents", label: "报告中心", icon: "📄" },
   { href: "/materials", label: "物料中心", icon: "📦" },
-  { href: "/knowledge", label: "知识库", icon: "📚" },
-  { href: "/skills", label: "Skill 库", icon: "⚡" },
-  { href: "/agents", label: "Agent 中心", icon: "❖" },
+  { href: "/ai", label: "AI 中心", icon: "✦", aliases: ["/agents", "/skills", "/knowledge"] },
   { href: "/inbox", label: "收件箱", icon: "✉" },
   { href: "/dashboard", label: "经营看板", icon: "◫" },
   { href: "/settings", label: "团队设置", icon: "⚙" },
 ];
+
+function linkAliases(link: (typeof links)[number]) {
+  return "aliases" in link && Array.isArray(link.aliases) ? link.aliases : [];
+}
 
 export function NavLinks({ unread = 0 }: { unread?: number }) {
   const pathname = usePathname();
   return (
     <nav className="flex-1 px-3 py-4 space-y-1">
       {links.map((l) => {
-        const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+        const active =
+          l.href === "/"
+            ? pathname === "/"
+            : pathname.startsWith(l.href) || linkAliases(l).some((href) => pathname.startsWith(href));
         return (
           <Link
             key={l.href}

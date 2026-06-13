@@ -79,11 +79,16 @@ export default async function AgentsPage() {
     <div className="pb-16">
       <PageHeader
         title="Agent 中心"
-        desc="自定义 AI Agent：指令 + 技能 + 触发器。可定时运行、推送收件箱和群机器人，团队共享"
+        desc="AI 中心的一部分：用对话或手动方式创建可运行的自动化 Agent"
         actions={
-          <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            + 创建 Agent
-          </Link>
+          <>
+            <Link href="/ai" className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
+              AI 中心
+            </Link>
+            <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+              对话构建 Agent
+            </Link>
+          </>
         }
       />
       <div className="px-8 space-y-7">
