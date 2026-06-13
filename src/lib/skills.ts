@@ -540,8 +540,14 @@ export const KIMI_BUILTIN_SEARCH = {
   function: { name: "$web_search" },
 };
 
-export function useKimiBuiltinSearch(): boolean {
-  return !process.env.TAVILY_API_KEY && (process.env.AI_BASE_URL ?? "").includes("moonshot");
+export async function useKimiBuiltinSearch(): Promise<boolean> {
+  if (process.env.TAVILY_API_KEY) return false;
+  const configured = await db.aiApiConfig.findFirst({
+    where: { enabled: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    select: { baseUrl: true },
+  });
+  return ((configured?.baseUrl ?? process.env.AI_BASE_URL) ?? "").includes("moonshot");
 }
 
 export function skillsToTools(names: string[]): ToolDef[] {

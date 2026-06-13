@@ -49,7 +49,9 @@ npm run dev                 # http://localhost:3000
 
 ## AI 配置
 
-在 `.env` 中配置 OpenAI 兼容接口（Kimi / DeepSeek / 通义 / OpenAI 均可）：
+推荐登录后在「团队设置 → 大模型管理中心」添加一个或多个 OpenAI 兼容接口（Kimi / DeepSeek / 通义 / OpenAI 均可），可设置默认 API，并在同页查看各 API 每日 Token 用量与最近调用记录。
+
+也可以继续在 `.env` 中配置一个兜底接口：
 
 ```env
 AI_BASE_URL="https://api.moonshot.cn/v1"
@@ -57,7 +59,7 @@ AI_API_KEY="sk-..."
 AI_MODEL="kimi-k2-0711-preview"
 ```
 
-不配置 Key 时系统其他功能正常，AI 功能会提示未配置。
+不配置数据库 API 且不配置 Key 时系统其他功能正常，AI 功能会提示未配置。
 
 ## Git 仓库（Mac / 手机 Cursor 共用）
 

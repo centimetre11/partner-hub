@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       partnerId: partnerId || undefined,
       messages: messages as IntakeMessage[],
       today: new Date().toISOString().slice(0, 10),
+      userId: uid,
     });
     return NextResponse.json(turn);
   } catch (e) {

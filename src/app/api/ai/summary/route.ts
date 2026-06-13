@@ -25,17 +25,20 @@ export async function POST(req: NextRequest) {
   const opps = partner.opportunities.map((o) => `${o.name}（${o.stage}，${o.amount ?? "金额未知"}，${o.status}）`).join("；");
 
   try {
-    const { content } = await chatCompletion([
-      {
-        role: "system",
-        content:
-          "你是帆软中东伙伴管理系统的分析师。基于伙伴的动态时间线生成简明摘要（中文），包含三部分：1）近期发生了什么（2-4句）；2）风险信号（如有）；3）建议动作（1-3条，具体可执行）。直接输出文本，不要用 markdown 标题。",
-      },
-      {
-        role: "user",
-        content: `伙伴：${partner.name}（Pipeline 阶段 ${partner.pipelineStage}/10）\n商机：${opps || "无"}\n未完成待办：${partner.todos.length} 项\n\n【动态时间线（新→旧）】\n${timeline || "（无动态）"}`,
-      },
-    ]);
+    const { content } = await chatCompletion(
+      [
+        {
+          role: "system",
+          content:
+            "你是帆软中东伙伴管理系统的分析师。基于伙伴的动态时间线生成简明摘要（中文），包含三部分：1）近期发生了什么（2-4句）；2）风险信号（如有）；3）建议动作（1-3条，具体可执行）。直接输出文本，不要用 markdown 标题。",
+        },
+        {
+          role: "user",
+          content: `伙伴：${partner.name}（Pipeline 阶段 ${partner.pipelineStage}/10）\n商机：${opps || "无"}\n未完成待办：${partner.todos.length} 项\n\n【动态时间线（新→旧）】\n${timeline || "（无动态）"}`,
+        },
+      ],
+      { feature: "伙伴动态摘要", userId: uid }
+    );
 
     const summary = content ?? "";
     await db.timelineEvent.create({
