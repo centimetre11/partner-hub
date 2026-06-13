@@ -16,11 +16,16 @@ export default async function KnowledgePage() {
     <div className="pb-16">
       <PageHeader
         title="知识库"
-        desc="帆软背景、中东策略、产品能力等——Agent 运行时可检索引用"
+        desc="AI 中心的一部分：沉淀帆软背景、中东策略、产品能力，Agent 运行时可检索引用"
         actions={
-          <Link href="/knowledge/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            + 新建文章
-          </Link>
+          <>
+            <Link href="/ai" className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
+              AI 中心
+            </Link>
+            <Link href="/knowledge/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+              + 新建文章
+            </Link>
+          </>
         }
       />
       <div className="px-8 max-w-4xl space-y-3">
