@@ -6,13 +6,14 @@ import { stageName, TODO_PRIORITY_LABELS } from "@/lib/constants";
 import { staleDays } from "@/lib/completeness";
 import { toggleTodoAction } from "@/lib/actions";
 import { WeeklyReport } from "./weekly-report";
+import { AiAddButton } from "@/components/ai-add-button";
 
 export default async function HomePage() {
   const user = await requireUser();
   const now = new Date();
   const in7days = new Date(Date.now() + 7 * 24 * 3600 * 1000);
 
-  const [myTodos, overdueTodos, activePartners, prospectCount, activeCount, openTodoCount] = await Promise.all([
+  const [myTodos, overdueTodos, activePartners, prospectCount, activeCount, openTodoCount, unreadNotifications] = await Promise.all([
     db.todoItem.findMany({
       where: { status: "OPEN", OR: [{ assigneeId: user.id }, { assigneeId: null }], dueDate: { lte: in7days } },
       include: { partner: true },
@@ -32,6 +33,12 @@ export default async function HomePage() {
     db.partner.count({ where: { status: "PROSPECT" } }),
     db.partner.count({ where: { status: "ACTIVE" } }),
     db.todoItem.count({ where: { status: "OPEN" } }),
+    db.notification.findMany({
+      where: { readAt: null },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: { agentRun: { include: { agent: true } } },
+    }),
   ]);
 
   const stalePartners = activePartners
@@ -164,13 +171,33 @@ export default async function HomePage() {
 
         {/* 右栏：AI 周报 */}
         <div className="space-y-5">
+          {unreadNotifications.length > 0 && (
+            <Card
+              title={`✉ 收件箱未读（${unreadNotifications.length}）`}
+              className="border-indigo-200"
+              actions={<Link href="/inbox" className="text-xs text-indigo-600 hover:underline">查看全部 →</Link>}
+            >
+              <div className="space-y-2.5">
+                {unreadNotifications.map((n) => (
+                  <Link key={n.id} href="/inbox" className="block group">
+                    <div className="text-sm text-zinc-800 group-hover:text-indigo-600 line-clamp-1">{n.title}</div>
+                    <div className="text-xs text-zinc-400 line-clamp-1">
+                      {n.proposal && <span className="text-amber-600 mr-1">[待确认提案]</span>}
+                      {n.content?.slice(0, 80) ?? ""}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          )}
           <WeeklyReport />
           <Card title="快捷入口">
             <div className="space-y-2 text-sm">
-              <Link href="/import" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">✦ 投喂聊天记录</div>
-                <div className="text-xs text-zinc-400 mt-0.5">粘贴 WhatsApp/微信记录，AI 自动整理入库</div>
-              </Link>
+              <div className="rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
+                <div className="font-medium text-zinc-800">✦ AI 建档</div>
+                <div className="text-xs text-zinc-400 mt-0.5 mb-2">扔会议记录或公司介绍，AI 对话式建档</div>
+                <AiAddButton scope="new_partner" label="开始建档" variant="soft" />
+              </div>
               <Link href="/pool?tier=A" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
                 <div className="font-medium text-zinc-800">◬ Tier A 候选</div>
                 <div className="text-xs text-zinc-400 mt-0.5">查看 10 家「立即打」的重点候选</div>

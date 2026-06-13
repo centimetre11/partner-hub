@@ -3,18 +3,33 @@
 import { useState } from "react";
 import { createPartnerAction } from "@/lib/actions";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { AiIntakePanel } from "@/components/ai-intake-panel";
 
 export function AddPartnerForm() {
   const [open, setOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700"
-      >
-        + 添加候选
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setAiOpen(true)}
+          className="rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+        >
+          ✦ AI 建档
+        </button>
+        <button
+          onClick={() => setOpen(true)}
+          className="rounded-lg border border-zinc-200 bg-white text-zinc-700 px-4 py-2 text-sm font-medium hover:bg-zinc-50"
+        >
+          + 手动添加
+        </button>
+      </div>
+
+      {aiOpen && (
+        <AiIntakePanel scope="new_partner" onClose={() => setAiOpen(false)} onDone={(id) => (window.location.href = `/partners/${id}`)} />
+      )}
+
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
@@ -38,7 +53,7 @@ export function AddPartnerForm() {
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">添加</button>
               </div>
             </form>
-            <p className="text-xs text-zinc-400 mt-3">提示：也可以在「AI 信息投喂」里粘贴公司介绍，让 AI 自动建档。</p>
+            <p className="text-xs text-zinc-400 mt-3">不想填表？点上方「✦ AI 建档」，把会议记录或公司介绍丢给 AI 即可。</p>
           </div>
         </div>
       )}

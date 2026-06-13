@@ -12,7 +12,6 @@ type SeedContact = {
   name: string;
   role: string;
   title?: string;
-  influence?: number;
   contactInfo?: string;
   approach?: string;
 };
@@ -49,9 +48,9 @@ const partners: SeedPartner[] = [
     playbook: "Tableau生态脆弱（Salesforce裁员、Einstein Alliance只收25家），推「Tableau+帆软双持」互补策略，提供 Arabic RTL Demo",
     bestChannel: "LinkedIn 联系 CEO → 技术 Demo 邀请", aiVerified: "VERIFIED", priority: "P0", fitScore: 9,
     contacts: [
-      { name: "Shantosh Sridhar", role: "DECISION_MAKER", title: "CEO", influence: 5, contactInfo: "LinkedIn: Shantosh Sridhar Beinex", approach: "LinkedIn 直接联系" },
-      { name: "Rahul Vijayan", role: "TECH_GATEKEEPER", title: "CTO", influence: 4 },
-      { name: "Hamid Khan", role: "BIZ_LEAD", title: "COO", influence: 4 },
+      { name: "Shantosh Sridhar", role: "DECISION_MAKER", title: "CEO", contactInfo: "LinkedIn: Shantosh Sridhar Beinex", approach: "LinkedIn 直接联系" },
+      { name: "Rahul Vijayan", role: "EVALUATOR", title: "CTO", },
+      { name: "Hamid Khan", role: "SUPPORTER", title: "COO", },
     ],
   },
   {
@@ -62,7 +61,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "唯一 UAE+沙特双实体的微软 Gold 伙伴",
     playbook: "Power BI 企业级限制（1GB上限、涨价40%）→推 FineReport 填补复杂报表空白，「Power BI+帆软」联合方案",
     bestChannel: "LinkedIn 联系 CEO → 华为云联合引荐", aiVerified: "VERIFIED", priority: "P0", fitScore: 9,
-    contacts: [{ name: "Srinivas Singh", role: "DECISION_MAKER", title: "CEO", influence: 5, contactInfo: "LinkedIn: Srinivas Singh TechMantra" }],
+    contacts: [{ name: "Srinivas Singh", role: "DECISION_MAKER", title: "CEO", contactInfo: "LinkedIn: Srinivas Singh TechMantra" }],
   },
   {
     name: "Bilytica", category: "POWER_BI", tier: "A", city: "利雅得 / 达曼 / 吉达", country: "KSA",
@@ -73,8 +72,8 @@ const partners: SeedPartner[] = [
     playbook: "政府关系强+规模大→推「嵌入式BI/OEM合作」，成为帆软在沙特的门面代理，政府项目联合投标",
     bestChannel: "SDAIA 活动引荐 → LinkedIn 联系 CEO", aiVerified: "VERIFIED", priority: "P0", fitScore: 9,
     contacts: [
-      { name: "Usman Ahmad", role: "DECISION_MAKER", title: "CEO（帝国理工计算机安全硕士）", influence: 5, contactInfo: "LinkedIn: Usman Ahmad Bilytica" },
-      { name: "Dr. Sari Al Qahtani", role: "BIZ_LEAD", title: "沙特国家总监", influence: 4 },
+      { name: "Usman Ahmad", role: "DECISION_MAKER", title: "CEO（帝国理工计算机安全硕士）", contactInfo: "LinkedIn: Usman Ahmad Bilytica" },
+      { name: "Dr. Sari Al Qahtani", role: "SUPPORTER", title: "沙特国家总监", },
     ],
   },
   {
@@ -85,7 +84,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "DAMA Saudi - Riyadh 分会创始负责人所在公司，政府信任壁垒",
     playbook: "DAMA 生态入口→「数据治理(DataPlus)+BI工具(帆软)+数据集成(帆软)」闭环联合方案，通过 DAMA Saudi 活动建立信任",
     bestChannel: "DAMA Saudi 活动见面 → LinkedIn", aiVerified: "VERIFIED", priority: "P0", fitScore: 9,
-    contacts: [{ name: "Mosaab Alharbi", role: "DECISION_MAKER", title: "创始人/CEO", influence: 5, contactInfo: "LinkedIn: Mosaab Alharbi DataPlus", approach: "DAMA 活动见面" }],
+    contacts: [{ name: "Mosaab Alharbi", role: "DECISION_MAKER", title: "创始人/CEO", contactInfo: "LinkedIn: Mosaab Alharbi DataPlus", approach: "DAMA 活动见面" }],
   },
   {
     name: "SEIDOR / Clariba", category: "TABLEAU", tier: "A", city: "利雅得 / 迪拜 / 巴塞罗那", country: "KSA / UAE / Spain",
@@ -96,8 +95,8 @@ const partners: SeedPartner[] = [
     playbook: "推「SAP+帆软」混合方案：SAP Analytics Cloud + FineReport，Clariba 250+顾问是天然实施力量",
     bestChannel: "LinkedIn 联系 Marc Haberland → 利雅得办公室拜访", aiVerified: "VERIFIED", priority: "P0", fitScore: 8,
     contacts: [
-      { name: "Marc Haberland", role: "TECH_GATEKEEPER", title: "Head of Analytics", influence: 4, contactInfo: "LinkedIn: Marc Haberland SEIDOR" },
-      { name: "Ignacio Ruiz", role: "DECISION_MAKER", title: "MD", influence: 5 },
+      { name: "Marc Haberland", role: "EVALUATOR", title: "Head of Analytics", contactInfo: "LinkedIn: Marc Haberland SEIDOR" },
+      { name: "Ignacio Ruiz", role: "DECISION_MAKER", title: "MD", },
     ],
   },
   {
@@ -108,7 +107,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "科威特银行业全覆盖（11家银行客户）",
     playbook: "推「SAP BO 替代」方案：FineReport 替代 SAP BO，提供 POC + TCO 计算，通过 KASP 一次覆盖11家银行",
     bestChannel: "华为云引荐（KASP 是华为云伙伴）→ 直接拜访", aiVerified: "VERIFIED", priority: "P0", fitScore: 8,
-    contacts: [{ name: "Dr. Magd Donia", role: "DECISION_MAKER", title: "总经理", influence: 5, contactInfo: "LinkedIn: Magd Donia KASP Kuwait", approach: "华为云引荐" }],
+    contacts: [{ name: "Dr. Magd Donia", role: "DECISION_MAKER", title: "总经理", contactInfo: "LinkedIn: Magd Donia KASP Kuwait", approach: "华为云引荐" }],
   },
   {
     name: "Datahub Analytics", category: "PURE_DATA", tier: "A", city: "安曼 / 利雅得", country: "Jordan / KSA",
@@ -118,7 +117,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "约旦首家数据分析公司，纯数据公司认知对齐，合作意愿预期最高",
     playbook: "低成本切换：提供 Tableau→FineBI 转换培训和工具，覆盖 Tableau/Power BI 服务不了的新客户",
     bestChannel: "LinkedIn → 行业活动", aiVerified: "VERIFIED", priority: "P0", fitScore: 9,
-    contacts: [{ name: "Ruba al-Tarawneh", role: "DECISION_MAKER", title: "联合创始人/BI负责人", influence: 5, contactInfo: "LinkedIn: Ruba al-Tarawneh Datahub" }],
+    contacts: [{ name: "Ruba al-Tarawneh", role: "DECISION_MAKER", title: "联合创始人/BI负责人", contactInfo: "LinkedIn: Ruba al-Tarawneh Datahub" }],
   },
   {
     name: "BEMEA", category: "POWER_BI", tier: "A", city: "迪拜", country: "UAE",
@@ -128,7 +127,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "中东头部 Power BI 服务商，正在招聘 KSA BD（进沙特窗口期）",
     playbook: "250+客户中有大量 Power BI 不满的（1GB限制、涨价40%）→推「Power BI+帆软」互补，留客户多赚服务费",
     bestChannel: "LinkedIn → KSA BD Manager 招聘窗口", aiVerified: "VERIFIED", priority: "P0", fitScore: 9,
-    contacts: [{ name: "Johnny Youssef", role: "DECISION_MAKER", title: "创始人", influence: 5, contactInfo: "LinkedIn: Johnny Youssef BEMEA" }],
+    contacts: [{ name: "Johnny Youssef", role: "DECISION_MAKER", title: "创始人", contactInfo: "LinkedIn: Johnny Youssef BEMEA" }],
   },
   {
     name: "Ejada Systems", category: "IT_INTEGRATOR", tier: "A", city: "利雅得", country: "KSA",
@@ -138,7 +137,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "Al Rajhi Bank 子公司、政府合同量巨大",
     playbook: "多重身份+政府项目多→推「帆软加入工具箱」方案不替代现有工具，华为云引荐+政府项目联合投标",
     bestChannel: "华为云引荐（最高优先级）", aiVerified: "VERIFIED", priority: "P0", fitScore: 8,
-    contacts: [{ name: "Mohammed Hassoobh", role: "DECISION_MAKER", title: "代理CEO", influence: 5, contactInfo: "LinkedIn: Mohammed Hassoobh Ejada", approach: "华为云引荐" }],
+    contacts: [{ name: "Mohammed Hassoobh", role: "DECISION_MAKER", title: "代理CEO", contactInfo: "LinkedIn: Mohammed Hassoobh Ejada", approach: "华为云引荐" }],
   },
   {
     name: "Future Systems", category: "PURE_DATA", tier: "A", city: "利雅得", country: "KSA",
@@ -148,7 +147,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "本土三工具咨询，缺第4个差异化工具",
     playbook: "推全产品线独家代理方案：不依赖云、能做中国式复杂报表的工具，利雅得区域独家代理权谈判",
     bestChannel: "直接拜访利雅得办公室", aiVerified: "VERIFIED", priority: "P0", fitScore: 8,
-    contacts: [{ name: "Ayman al Jehane", role: "DECISION_MAKER", title: "MD", influence: 5, contactInfo: "LinkedIn: Ayman al Jehane Future Systems Saudi" }],
+    contacts: [{ name: "Ayman al Jehane", role: "DECISION_MAKER", title: "MD", contactInfo: "LinkedIn: Ayman al Jehane Future Systems Saudi" }],
   },
 
   // ===== Tier B（重点打） =====
@@ -167,7 +166,7 @@ const partners: SeedPartner[] = [
     certLevel: "Microsoft Gold BI Partner", currentTools: "Power BI",
     playbook: "250+人大公司→推「批量认证+产研驻场」：免费10人FCA批量认证 + 1个月产研驻场",
     aiVerified: "VERIFIED", priority: "P1", fitScore: 8,
-    contacts: [{ name: "Sujith Varghese", role: "DECISION_MAKER", title: "CEO", influence: 5, contactInfo: "LinkedIn: Sujith Varghese Data Semantics" }],
+    contacts: [{ name: "Sujith Varghese", role: "DECISION_MAKER", title: "CEO", contactInfo: "LinkedIn: Sujith Varghese Data Semantics" }],
   },
   {
     name: "Logesys Solutions", category: "POWER_BI", tier: "B", city: "迪拜", country: "UAE",
@@ -175,7 +174,7 @@ const partners: SeedPartner[] = [
     capability: "零售/FMCG 数据项目", knownClients: "Landmark Group（1800门店）、Times Square Group",
     playbook: "零售/FMCG深度→推「帆软FineBI+Logesys零售数据模型」行业联合方案",
     aiVerified: "VERIFIED", priority: "P1", fitScore: 7,
-    contacts: [{ name: "Joseph Vijayakumar", role: "DECISION_MAKER", title: "CEO", influence: 5, contactInfo: "LinkedIn: Joseph Vijayakumar Logesys" }],
+    contacts: [{ name: "Joseph Vijayakumar", role: "DECISION_MAKER", title: "CEO", contactInfo: "LinkedIn: Joseph Vijayakumar Logesys" }],
   },
   {
     name: "Kagool", category: "POWER_BI", tier: "B", city: "迪拜", country: "UAE",
@@ -184,7 +183,7 @@ const partners: SeedPartner[] = [
     certLevel: "FY24 Microsoft UAE Partner of the Year",
     playbook: "推「政府AI+BI」联合方案：Kagool 做 AI 决策层，帆软 FineBI 做展示层",
     aiVerified: "VERIFIED", priority: "P1", fitScore: 7,
-    contacts: [{ name: "Mo Fayez", role: "DECISION_MAKER", title: "MD", influence: 5, contactInfo: "LinkedIn: Mo Fayez Kagool" }],
+    contacts: [{ name: "Mo Fayez", role: "DECISION_MAKER", title: "MD", contactInfo: "LinkedIn: Mo Fayez Kagool" }],
   },
   {
     name: "Alnafitha", category: "POWER_BI", tier: "B", city: "利雅得", country: "KSA",
@@ -209,7 +208,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "自有 BI SaaS 产品，可做 OEM",
     playbook: "推「OEM合作」：FineReport 引擎 API 级嵌入 Suhail 平台",
     aiVerified: "VERIFIED", priority: "P1", fitScore: 8,
-    contacts: [{ name: "Ahmed Bukhamseen", role: "DECISION_MAKER", title: "CEO", influence: 5, contactInfo: "LinkedIn: Ahmed Bukhamseen Quant" }],
+    contacts: [{ name: "Ahmed Bukhamseen", role: "DECISION_MAKER", title: "CEO", contactInfo: "LinkedIn: Ahmed Bukhamseen Quant" }],
   },
   {
     name: "Bahrain Consulting", category: "PURE_DATA", tier: "B", city: "麦纳麦", country: "Bahrain",
@@ -227,7 +226,7 @@ const partners: SeedPartner[] = [
     keyDifferentiator: "创始人同时是卡塔尔劳工部数字化转型顾问，跨双市场",
     playbook: "推「阿曼+卡塔尔双市场独家代理」，帆软技术与市场全力支持",
     aiVerified: "VERIFIED", priority: "P1", fitScore: 7,
-    contacts: [{ name: "Salim Al-Barami", role: "DECISION_MAKER", title: "创始人", influence: 5, contactInfo: "LinkedIn: Salim Al-Barami Gulflytics" }],
+    contacts: [{ name: "Salim Al-Barami", role: "DECISION_MAKER", title: "创始人", contactInfo: "LinkedIn: Salim Al-Barami Gulflytics" }],
   },
   {
     name: "Accurate Middle East", category: "PURE_DATA", tier: "B", city: "阿布扎比 / 迪拜", country: "UAE",
@@ -239,8 +238,8 @@ const partners: SeedPartner[] = [
   },
 
   // ===== Tier C（后续跟进） =====
-  { name: "SquareOne KSA", category: "IT_INTEGRATOR", tier: "C", city: "利雅得", country: "KSA", playbook: "Dr. Muhammad Ali Khan 18年经验→推行业解决方案合作", priority: "P2", aiVerified: "PARTIAL", contacts: [{ name: "Dr. Muhammad Ali Khan", role: "DECISION_MAKER", title: "负责人", influence: 5 }] },
-  { name: "Whetstonez", category: "PURE_DATA", tier: "C", city: "吉达", country: "KSA", knownClients: "SNB、GIB、ISDB、SAB 四大银行", playbook: "四大银行客户资源极有价值→推银行BI方案", priority: "P1", aiVerified: "PARTIAL", contacts: [{ name: "Waqar Ali Gill", role: "DECISION_MAKER", title: "CEO", influence: 5, contactInfo: "LinkedIn: Waqar Ali Gill Whetstonez" }] },
+  { name: "SquareOne KSA", category: "IT_INTEGRATOR", tier: "C", city: "利雅得", country: "KSA", playbook: "Dr. Muhammad Ali Khan 18年经验→推行业解决方案合作", priority: "P2", aiVerified: "PARTIAL", contacts: [{ name: "Dr. Muhammad Ali Khan", role: "DECISION_MAKER", title: "负责人", }] },
+  { name: "Whetstonez", category: "PURE_DATA", tier: "C", city: "吉达", country: "KSA", knownClients: "SNB、GIB、ISDB、SAB 四大银行", playbook: "四大银行客户资源极有价值→推银行BI方案", priority: "P1", aiVerified: "PARTIAL", contacts: [{ name: "Waqar Ali Gill", role: "DECISION_MAKER", title: "CEO", contactInfo: "LinkedIn: Waqar Ali Gill Whetstonez" }] },
   { name: "Daam Al-Arabia", category: "PURE_DATA", tier: "C", city: "吉达", country: "KSA", headcount: "11-20人", capability: "数字分析、Google Analytics、电商", knownClients: "Nahdi Medical、Masdar", playbook: "沙特首家数字分析agency→小而精，推灵活合作", priority: "P3", aiVerified: "VERIFIED" },
   { name: "Constient", category: "TABLEAU", tier: "C", city: "迪拜", country: "UAE", capability: "Tableau + 数据分析", knownClients: "迪拜 Top10 AI 咨询", currentTools: "Tableau", playbook: "低成本试用切入", priority: "P2", aiVerified: "VERIFIED" },
   { name: "IAX Services", category: "POWER_BI", tier: "C", city: "迪拜硅绿洲", country: "UAE", certLevel: "Microsoft Gold + Solutions Partner", capability: "制造、零售行业 BI", playbook: "推 Power BI 互补方案", priority: "P2", aiVerified: "VERIFIED" },
@@ -252,8 +251,8 @@ const partners: SeedPartner[] = [
   { name: "DoAnalytica", category: "PURE_DATA", tier: "C", city: "吉达", country: "KSA", headcount: "11-50人", capability: "AI + 数据科学，金融科技、医疗", playbook: "推 AI+BI 联合方案", priority: "P2", aiVerified: "VERIFIED" },
 
   // ===== 候选池其余（来自纯数据/BI伙伴清单 V3，未进作战清单） =====
-  { name: "Keyrus", category: "PURE_DATA", city: "迪拜 / 卡萨布兰卡", country: "UAE / Morocco", headcount: "3,300+", capability: "数据咨询、AI、EPM、多工具策略（Tableau+PBI+Snowflake）", knownClients: "Huawei、Saudi Vision 2030", currentTools: "Tableau / Power BI / Snowflake", aiVerified: "VERIFIED", contacts: [{ name: "Mehdi Skik", role: "DECISION_MAKER", title: "MEA MD", influence: 5 }] },
-  { name: "D4DS", category: "PURE_DATA", city: "利雅得", country: "KSA", headcount: "21-50人", capability: "数据治理、数字化转型", knownClients: "Orion Governance、沙特政府", aiVerified: "VERIFIED", contacts: [{ name: "Dr. Fawaz Bindelaim", role: "DECISION_MAKER", title: "负责人", influence: 5 }] },
+  { name: "Keyrus", category: "PURE_DATA", city: "迪拜 / 卡萨布兰卡", country: "UAE / Morocco", headcount: "3,300+", capability: "数据咨询、AI、EPM、多工具策略（Tableau+PBI+Snowflake）", knownClients: "Huawei、Saudi Vision 2030", currentTools: "Tableau / Power BI / Snowflake", aiVerified: "VERIFIED", contacts: [{ name: "Mehdi Skik", role: "DECISION_MAKER", title: "MEA MD", }] },
+  { name: "D4DS", category: "PURE_DATA", city: "利雅得", country: "KSA", headcount: "21-50人", capability: "数据治理、数字化转型", knownClients: "Orion Governance、沙特政府", aiVerified: "VERIFIED", contacts: [{ name: "Dr. Fawaz Bindelaim", role: "DECISION_MAKER", title: "负责人", }] },
   { name: "Proven Consult", category: "PURE_DATA", city: "利雅得", country: "KSA", headcount: "100-200人", capability: "数据咨询、BI、EPM", knownClients: "沙特企业、政府", aiVerified: "VERIFIED" },
   { name: "UData", category: "PURE_DATA", city: "麦纳麦", country: "Bahrain", headcount: "10-20人", capability: "数据科学，Soothsayer 全球团队", knownClients: "巴林及 MENA 企业", aiVerified: "VERIFIED" },
   { name: "Anova Analysis", category: "PURE_DATA", city: "利雅得", country: "KSA", headcount: "11-50人", capability: "数据分析、媒体监测", knownClients: "媒体客户", aiVerified: "VERIFIED" },
@@ -322,7 +321,231 @@ const weeklyActions: { week: number; title: string; partner?: string }[] = [
   { week: 12, title: "目标：累计签约 5-8 家；启动首批前三单补贴项目" },
 ];
 
+// ===== Agent 模板库（幂等：按名称 upsert） =====
+const agentTemplates = [
+  {
+    name: "领英/外部动态监测",
+    icon: "📡",
+    description: "定期搜索绑定伙伴公司与高管的公开动态（领英、新闻、招聘、中标），写入时间线并推送简报",
+    instructions: `你是伙伴外部动态监测雷达。每次运行：
+1. 读取绑定伙伴的档案（get_partner），拿到公司名、高管/联系人姓名、所在城市。
+2. 用 web_search 搜索该公司和关键高管的最新公开动态，多组关键词都要试：
+   - "公司名 news"、"公司名 LinkedIn"、"公司名 hiring"、"公司名 中标/contract award"
+   - 关键联系人姓名 + 公司名
+3. 对有价值的搜索结果，用 fetch_url 深入阅读原文确认细节。
+4. 每条确认有价值的动态（人事变动、新项目、融资、裁员、新客户、技术栈变化），用 add_timeline_event 写入伙伴时间线，content 里带来源 URL。
+5. 输出简报：本次发现了什么、对我们推进帆软合作意味着什么（机会还是风险）、建议的下一步动作。没有新发现就明说。`,
+    skills: ["get_partner", "web_search", "fetch_url", "add_timeline_event", "create_todo"],
+    trigger: "SCHEDULE",
+    frequency: "WEEKLY",
+    runWeekday: 1,
+    runHour: 9,
+    scopeType: "PARTNER",
+  },
+  {
+    name: "停滞伙伴唤醒",
+    icon: "⏰",
+    description: "每天扫描超 30 天无动态的正式伙伴，结合档案生成重启接触建议并自动建待办",
+    instructions: `你是伙伴跟进健康度监督员。每次运行：
+1. 用 search_partners 找出 status=ACTIVE 且超过 30 天无动态的伙伴（staleDaysOver=30）。
+2. 没有停滞伙伴就输出"全部健康"并结束。
+3. 对每个停滞伙伴，用 get_partner 读档案，结合其 Tier、Pipeline 阶段、上次进展和打法建议，给出一条具体的重启接触动作（找谁、用什么由头、说什么）。
+4. 对 Tier A 或 Pipeline 阶段 >= 4 的停滞伙伴，用 create_todo 建一条高优先级待办（标题写明伙伴名和具体动作）。
+5. 输出简报：停滞名单（按风险排序）+ 每家的唤醒建议 + 已建的待办。`,
+    skills: ["search_partners", "get_partner", "create_todo", "list_todos"],
+    trigger: "SCHEDULE",
+    frequency: "DAILY",
+    runHour: 8,
+    scopeType: "ALL",
+  },
+  {
+    name: "竞品信号雷达",
+    icon: "🎯",
+    description: "每周搜索 Tableau / Power BI / Qlik 在中东区的涨价、裁员、政策变化，整理成话术弹药",
+    instructions: `你是竞品情报分析员。帆软在中东的主要竞品是 Tableau（Salesforce）、Power BI（Microsoft）、Qlik。每次运行：
+1. 用 web_search 搜索竞品最新动态，关键词示例：
+   - "Tableau price increase 2026"、"Salesforce layoffs Tableau"、"Tableau partner program changes"
+   - "Power BI licensing change Middle East"、"Microsoft Fabric pricing"
+   - "Qlik acquisition news"、"Qlik partner program"
+2. 重点找：涨价、裁员、伙伴政策收紧、产品停服、客户流失、中东本地化问题。
+3. 用 fetch_url 核实重要信息的原文。
+4. 输出简报：每条信号 + 来源 + 「怎么用」——即 BD 在跟 Tableau/微软/Qlik 系伙伴聊时可以怎么引用这条信息说服对方转向帆软。`,
+    skills: ["web_search", "fetch_url"],
+    trigger: "SCHEDULE",
+    frequency: "WEEKLY",
+    runWeekday: 5,
+    runHour: 10,
+    scopeType: "ALL",
+  },
+  {
+    name: "候选伙伴发现",
+    icon: "🔍",
+    description: "手动运行：按条件搜索新的潜在伙伴公司，输出调研简报供加入候选池",
+    instructions: `你是伙伴拓展研究员。每次运行：
+1. 先用 search_partners 列出系统里已有的伙伴，避免重复推荐。
+2. 用 web_search 搜索中东（重点 UAE / 沙特）的 BI、数据分析实施商，关键词示例：
+   - "BI implementation partner Dubai"、"data analytics consulting Riyadh"
+   - "Tableau partner UAE"、"Power BI consulting Saudi Arabia"、"Qlik partner Middle East"
+3. 对有潜力的公司用 fetch_url 看官网，确认：规模、技术栈、行业客户、认证级别。
+4. 输出简报：每家候选公司一段——名称、所在地、技术栈、规模、客户、为什么适合帆软、建议接触方式。用户确认后可手动加入候选池。`,
+    skills: ["search_partners", "web_search", "fetch_url"],
+    trigger: "MANUAL",
+    scopeType: "ALL",
+  },
+  {
+    name: "会前简报",
+    icon: "📋",
+    description: "手动运行（绑定伙伴）：汇总档案 + 最新外部动态，生成 1 页会前 brief",
+    instructions: `你是会议准备助理。每次运行，为绑定伙伴生成一页会前简报：
+1. 用 get_partner 读完整档案。
+2. 用 list_todos 查该伙伴的未完成待办（上次承诺的事项）。
+3. 用 web_search 快速搜一下该公司近两周的公开动态，有值得一提的就纳入。
+4. 输出 1 页简报，结构：
+   - 一句话现状（Pipeline 阶段 + 上次进展）
+   - 关键人物及态度（权力地图摘要：谁支持、谁阻挡、本次见谁）
+   - 未结事项（我们欠对方的 / 对方欠我们的）
+   - 本次会议建议议程（3 条以内）+ 想达成的目标
+   - 可引用的最新外部动态或竞品话术弹药`,
+    skills: ["get_partner", "list_todos", "web_search", "fetch_url", "search_knowledge", "create_document"],
+    trigger: "MANUAL",
+    scopeType: "PARTNER",
+  },
+  {
+    name: "联合解决方案报告",
+    icon: "📝",
+    description: "手动运行（绑定伙伴）：基于档案与知识库，生成可编辑的联合方案 Markdown 报告",
+    instructions: `你是联合解决方案撰写助手。每次运行，为绑定伙伴生成一份联合解决方案报告：
+1. 用 get_partner 读取伙伴完整档案（能力、客户、技术栈、打法）。
+2. 用 search_knowledge 检索帆软产品能力、中东策略、竞品话术等相关背景。
+3. 用 list_todos 查看与该伙伴相关的未完成事项，纳入方案推进节奏。
+4. 输出结构化的 Markdown 报告，包含：
+   - 目标客户画像与痛点
+   - 联合价值主张（帆软提供 + 伙伴提供）
+   - 典型场景与架构思路（文字描述即可）
+   - 定价/合作模式建议
+   - 90 天推进计划（3-5 条可执行动作）
+5. 完成后调用 create_document 保存到报告中心（type=JOINT_SOLUTION）。`,
+    skills: ["get_partner", "search_knowledge", "list_todos", "create_document"],
+    trigger: "MANUAL",
+    scopeType: "PARTNER",
+  },
+];
+
+async function seedBuiltinSkills() {
+  const { SKILLS } = await import("../src/lib/skills");
+  for (const s of SKILLS) {
+    const exists = await db.skill.findFirst({ where: { name: s.name, isBuiltin: true } });
+    if (exists) continue;
+    await db.skill.create({
+      data: {
+        name: s.name,
+        label: s.label,
+        description: s.desc,
+        kind: "BUILTIN",
+        toolDef: JSON.stringify(s.def),
+        isBuiltin: true,
+        shared: true,
+      },
+    });
+  }
+  console.log("内置 Skill 库就绪");
+}
+
+async function seedKnowledgeAndMaterials() {
+  const kCount = await db.knowledgeArticle.count();
+  if (kCount === 0) {
+    await db.knowledgeArticle.createMany({
+      data: [
+        {
+          title: "帆软公司与产品概览",
+          slug: "fanruan-overview",
+          category: "COMPANY",
+          content:
+            "帆软（Fanruan）是中国领先的商业智能与数据分析软件厂商，核心产品包括 FineReport（企业级报表）、FineBI（自助分析）、FineDataLink（数据集成）。在中东市场主打：复杂报表+自助分析组合、Arabic RTL 支持、本地化部署、相对 Tableau/Power BI 的性价比与报表深度优势。",
+          shared: true,
+        },
+        {
+          title: "中东区伙伴拓展策略",
+          slug: "middle-east-strategy",
+          category: "STRATEGY",
+          content:
+            "重点市场：UAE、沙特（KSA）。策略：Tier A 伙伴优先（Tableau/Power BI 系实施商），推「双持/互补」而非替代；政府项目强调 NDMO/合规与本地化；通过 DAMA、华为云、微软生态活动引荐；12 周目标签约 5-8 家伙伴并启动首批补贴项目。",
+          shared: true,
+        },
+        {
+          title: "FineBI vs Power BI 话术弹药",
+          slug: "finebi-vs-powerbi",
+          category: "PLAYBOOK",
+          content:
+            "Power BI 痛点：1GB 数据集限制、企业级功能涨价、复杂中国式报表弱。帆软切入点：FineReport 填补复杂报表与打印场景；FineBI 覆盖自助分析；联合方案「Power BI 看板 + 帆软报表」降低迁移阻力。",
+          shared: true,
+        },
+      ],
+    });
+    console.log("知识库种子文章已导入");
+  }
+
+  const mCount = await db.material.count();
+  if (mCount === 0) {
+    await db.material.createMany({
+      data: [
+        {
+          title: "伙伴分级制度（Tier A/B/C）",
+          description: "中东区伙伴分级标准与权益",
+          category: "TIER_POLICY",
+          body: "## Tier A\n立即打，资源优先。\n\n## Tier B\n培育池，季度复盘。\n\n## Tier C\n观察名单。",
+          shared: true,
+        },
+        {
+          title: "FineBI vs Power BI 产品对比表",
+          description: "销售/BD 用一页对比",
+          category: "PRODUCT_COMPARE",
+          body: "| 维度 | FineBI | Power BI |\n|------|--------|----------|\n| 复杂报表 | 强 | 弱 |\n| 自助分析 | 强 | 强 |\n| 本地化部署 | 支持 | 有限 |",
+          shared: true,
+        },
+        {
+          title: "帆软中东推介 Deck 提纲",
+          description: "对外推介 PPT 结构建议",
+          category: "DECK",
+          body: "1. 帆软是谁\n2. 中东客户案例\n3. 产品矩阵\n4. 伙伴合作模式\n5. 下一步",
+          shared: true,
+        },
+      ],
+    });
+    console.log("物料中心种子已导入");
+  }
+}
+
+async function seedAgentTemplates() {
+  for (const t of agentTemplates) {
+    const exists = await db.agent.findFirst({ where: { name: t.name, isTemplate: true } });
+    if (exists) continue;
+    await db.agent.create({
+      data: {
+        name: t.name,
+        icon: t.icon,
+        description: t.description,
+        instructions: t.instructions,
+        skills: JSON.stringify(t.skills),
+        trigger: t.trigger,
+        frequency: t.frequency ?? null,
+        runHour: t.runHour ?? 9,
+        runWeekday: t.runWeekday ?? 1,
+        scopeType: t.scopeType,
+        shared: true,
+        enabled: false,
+        isTemplate: true,
+      },
+    });
+  }
+  console.log(`Agent 模板库就绪（${agentTemplates.length} 个模板）`);
+}
+
 async function main() {
+  await seedBuiltinSkills();
+  await seedKnowledgeAndMaterials();
+  await seedAgentTemplates();
+
   const count = await db.partner.count();
   if (count > 0) {
     console.log(`数据库已有 ${count} 个伙伴，跳过种子导入（如需重置请删除 prisma/dev.db 后重新 db push + seed）`);

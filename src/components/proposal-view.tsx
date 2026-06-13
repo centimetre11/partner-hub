@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ExtractionProposal } from "@/lib/proposals";
-import { CONTACT_ROLE_LABELS, SUPPORT_LABELS } from "@/lib/constants";
+import { CONTACT_ROLE_LABELS, attitudeLabel } from "@/lib/constants";
 
 type Props = {
   proposal: ExtractionProposal;
@@ -111,9 +111,10 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "�
               <span className="text-zinc-500 ml-1.5 text-xs">
                 {[
                   c.title,
+                  c.department,
                   c.role && (CONTACT_ROLE_LABELS[c.role] ?? c.role),
-                  c.influence && `影响力${c.influence}`,
-                  c.support && `支持度:${SUPPORT_LABELS[c.support] ?? c.support}`,
+                  typeof c.attitude === "number" && `态度:${c.attitude}(${attitudeLabel(c.attitude)})`,
+                  c.reportsToName && `汇报给:${c.reportsToName}`,
                   c.contactInfo,
                 ]
                   .filter(Boolean)

@@ -22,6 +22,19 @@ AI 原生的中东区合作伙伴管理系统，为帆软软件 MEA BD 团队打
 - **补全助手**：基于档案缺口生成"下次接触该问什么"
 - **动态摘要 / 经营周报**：一键生成伙伴近况摘要和本周经营周报
 
+## Agent 框架（自定义 + 共享 + 定时推送）
+
+「Agent 中心」让任何成员组装自己的自动化 Agent：**一段指令 + 勾选技能 + 触发方式 + 作用域**。
+
+- **技能库**（Agent 与全局助手共用）：查/读/改伙伴档案、建/查待办、`web_search` 联网搜索、`fetch_url` 读网页、写伙伴时间线
+- **触发**：手动运行，或定时调度（每小时/每天/每周，内置每分钟调度器，无需外部队列）
+- **推送**：运行简报进系统收件箱（侧边栏未读角标 + 工作台卡片），可配 Webhook 推到飞书/企微/钉钉/Slack 群机器人
+- **安全边界**：Agent 修改档案字段一律生成提案，收件箱里人工确认后才入库；写时间线和建待办直接执行并留工具调用审计日志
+- **共享**：Agent 默认团队共享，可一键克隆改造
+- **模板库**（开箱即用）：领英/外部动态监测（定时·每周）、停滞伙伴唤醒（定时·每天）、竞品信号雷达（定时·每周）、候选伙伴发现（手动）、会前简报（手动·绑定伙伴）
+
+联网搜索配置：`.env` 里填 `TAVILY_API_KEY`（[tavily.com](https://tavily.com) 有免费额度）优先用 Tavily；不配且 AI 用的是 Kimi（moonshot）时自动改用 Kimi 内置 `$web_search`。
+
 ## 本地启动
 
 ```bash
@@ -46,13 +59,64 @@ AI_MODEL="kimi-k2-0711-preview"
 
 不配置 Key 时系统其他功能正常，AI 功能会提示未配置。
 
-## 团队部署（Docker）
+## Git 仓库（Mac / 手机 Cursor 共用）
+
+源码托管在 GitHub：**https://github.com/centimetre11/partner-hub**（私有仓库）
 
 ```bash
-AI_API_KEY=sk-xxx SESSION_SECRET=$(openssl rand -hex 32) docker compose up -d --build
+# Mac 日常开发
+git add .
+git commit -m "your message"
+git push
+
+# 手机 Cursor：登录同一 GitHub 账号，打开 centimetre11/partner-hub 即可
 ```
 
-数据持久化在 `partner-data` 卷中；首次启动自动建表并导入种子数据。
+`.env`、本地数据库、上传文件已在 `.gitignore` 中，**不会**被推送到 GitHub。
+
+## 团队部署（Git + Docker）
+
+**首次**在云服务器上（需已配置 SSH 密钥访问 GitHub，见下方）：
+
+```bash
+# 在 Mac 上执行（把 ubuntu@你的IP 和域名换成实际值）
+chmod +x scripts/deploy.sh
+./scripts/deploy.sh ubuntu@你的公网IP --domain app.你的域名.com --init
+```
+
+**日常更新**（Mac push 代码后）：
+
+```bash
+./scripts/deploy.sh ubuntu@你的公网IP
+```
+
+服务器上 `.env` 单独维护，不会随 `git pull` 覆盖。生产环境示例：
+
+```env
+SESSION_SECRET="用 openssl rand -hex 32 生成"
+AI_API_KEY="sk-..."
+AI_BASE_URL="https://api.moonshot.cn/v1"
+AI_MODEL="kimi-k2-0711-preview"
+```
+
+数据持久化在 Docker 卷中；首次启动自动建表并导入种子数据。
+
+### 服务器访问私有 GitHub 仓库
+
+在服务器上生成 Deploy Key（只读即可）：
+
+```bash
+ssh-keygen -t ed25519 -C "partner-hub-deploy" -f ~/.ssh/partner_hub_deploy -N ""
+cat ~/.ssh/partner_hub_deploy.pub   # 复制到 GitHub → 仓库 Settings → Deploy keys
+```
+
+并在 `~/.ssh/config` 中配置：
+
+```
+Host github.com
+  IdentityFile ~/.ssh/partner_hub_deploy
+  IdentitiesOnly yes
+```
 
 ## 技术栈
 

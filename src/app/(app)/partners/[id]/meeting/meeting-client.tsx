@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ExtractionProposal } from "@/lib/proposals";
 import { ProposalView } from "@/components/proposal-view";
-import { CONTACT_ROLE_LABELS, SUPPORT_LABELS, stageName } from "@/lib/constants";
+import { CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS, attitudeLabel, stageName } from "@/lib/constants";
+import { attitudeDotClass } from "@/components/power-map";
 
 type MeetingPartner = {
   id: string;
   name: string;
   pipelineStage: number;
-  contacts: { id: string; name: string; role: string; title: string | null; influence: number | null; support: string | null }[];
+  contacts: { id: string; name: string; role: string; title: string | null; department: string | null; attitude: number }[];
   opportunities: { id: string; name: string; client: string | null; amount: string | null; stage: string }[];
 };
 
@@ -148,13 +149,20 @@ export function MeetingClient({ partner }: { partner: MeetingPartner }) {
                     className={`rounded-lg border px-4 py-3 bg-white ${upd ? "border-amber-300 bg-amber-50/70 shadow-sm" : "border-zinc-200"}`}
                   >
                     <div className="flex items-center gap-2 text-sm flex-wrap">
+                      <span
+                        className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${attitudeDotClass(upd?.attitude ?? c.attitude)}`}
+                        title={attitudeLabel(upd?.attitude ?? c.attitude)}
+                      >
+                        {upd?.attitude ?? c.attitude}
+                      </span>
                       <span className="font-medium">{c.name}</span>
                       <span className="text-xs text-zinc-500">
-                        {(upd?.title ?? c.title) || ""} · {CONTACT_ROLE_LABELS[upd?.role ?? c.role] ?? "其他"}
+                        {(upd?.title ?? c.title) || ""}
+                        {(upd?.department ?? c.department) && ` · ${upd?.department ?? c.department}`}
+                        {" · "}
+                        {CONTACT_ROLE_CODES[upd?.role ?? c.role] ?? "I"}·{CONTACT_ROLE_LABELS[upd?.role ?? c.role] ?? "影响者"}
                       </span>
-                      <span className="text-xs text-zinc-400">
-                        影响力 {"★".repeat(upd?.influence ?? c.influence ?? 0) || "?"} · {SUPPORT_LABELS[(upd?.support ?? c.support) ?? "UNKNOWN"] ?? "未知"}
-                      </span>
+                      <span className="text-xs text-zinc-400">{attitudeLabel(upd?.attitude ?? c.attitude)}</span>
                       {upd && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 text-amber-800">有更新</span>}
                     </div>
                     {upd?.reason && <div className="text-xs text-amber-700 mt-1">{upd.reason}</div>}
@@ -164,10 +172,16 @@ export function MeetingClient({ partner }: { partner: MeetingPartner }) {
               {newPeople.map((c, i) => (
                 <div key={`new-${i}`} className="rounded-lg border border-emerald-300 bg-emerald-50/70 px-4 py-3 shadow-sm">
                   <div className="flex items-center gap-2 text-sm flex-wrap">
+                    {typeof c.attitude === "number" && (
+                      <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${attitudeDotClass(c.attitude)}`}>
+                        {c.attitude}
+                      </span>
+                    )}
                     <span className="font-medium">{c.name}</span>
                     <span className="text-xs text-zinc-600">
-                      {c.title || ""} · {CONTACT_ROLE_LABELS[c.role ?? "OTHER"] ?? "其他"}
+                      {[c.title, c.department, CONTACT_ROLE_LABELS[c.role ?? "INFLUENCER"] ?? "影响者"].filter(Boolean).join(" · ")}
                     </span>
+                    {c.reportsToName && <span className="text-xs text-zinc-500">汇报给 {c.reportsToName}</span>}
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800">新人物</span>
                   </div>
                   {c.reason && <div className="text-xs text-emerald-700 mt-1">{c.reason}</div>}

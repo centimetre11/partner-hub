@@ -16,6 +16,12 @@ model User {
   partners     Partner[]
   todos        TodoItem[]
   events       TimelineEvent[]
+  agents       Agent[]
+  assets       Asset[]
+  documents    Document[]
+  materials    Material[]
+  knowledgeArticles KnowledgeArticle[]
+  skills       Skill[]
 }
 
 model Partner {
@@ -23,6 +29,8 @@ model Partner {
   name             String   @unique
   // PROSPECT 候选 / ACTIVE 正式 / ARCHIVED 归档
   status           String   @default("PROSPECT")
+  // 归档前的状态，用于恢复时原样还原
+  prevStatus       String?
   // NEW 新候选 / ADVANCING 推进中 / WATCHING 观察 / DROPPED 放弃
   poolFlag         String   @default("NEW")
   // PURE_DATA / POWER_BI / TABLEAU / QLIK / IT_INTEGRATOR / OTHER
@@ -59,23 +67,29 @@ model Partner {
   todos         TodoItem[]
   events        TimelineEvent[]
   trainings     Training[]
+  agents        Agent[]
+  solutions     Solution[]
+  documents     Document[]
 }
 
 model Contact {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   partnerId   String
-  partner     Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   name        String
-  // DECISION_MAKER / TECH_GATEKEEPER / BIZ_LEAD / EXECUTOR / BLOCKER / OTHER
-  role        String   @default("OTHER")
+  // APPROVER(A审批者) / DECISION_MAKER(D决策者) / SUPPORTER(S支持者) / EVALUATOR(E评估者) / INFLUENCER(I影响者)
+  role        String    @default("INFLUENCER")
   title       String?
-  influence   Int? // 1-5
-  support     String? // POSITIVE / NEGATIVE / UNKNOWN
+  department  String? // 部门
+  attitude    Int       @default(0) // 3教练 / 2支持并排他 / 1支持不排他 / 0未接触或中立 / -1反对
+  reportsToId String? // 汇报上级（权力地图层级）
+  reportsTo   Contact?  @relation("ContactReports", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports     Contact[] @relation("ContactReports")
   contactInfo String?
   approach    String?
   notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model Opportunity {
@@ -143,4 +157,183 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+model Agent {
+  id           String    @id @default(cuid())
+  name         String
+  icon         String    @default("🤖")
+  description  String?
+  instructions String // 系统提示词：这个 Agent 是谁、做什么
+  skills       String // JSON 数组：启用的技能名
+  trigger      String    @default("MANUAL") // MANUAL / SCHEDULE
+  frequency    String? // HOURLY / DAILY / WEEKLY
+  runHour      Int       @default(9) // DAILY/WEEKLY 的运行时刻（0-23）
+  runWeekday   Int       @default(1) // WEEKLY 的星期（1=周一 ... 7=周日）
+  nextRunAt    DateTime?
+  scopeType    String    @default("ALL") // ALL / PARTNER
+  partnerId    String?
+  partner      Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  shared       Boolean   @default(true)
+  enabled      Boolean   @default(true)
+  webhookUrl   String?
+  isTemplate   Boolean   @default(false) // 模板库条目，克隆使用
+  createdById  String?
+  createdBy    User?     @relation(fields: [createdById], references: [id])
+  lastRunAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  runs         AgentRun[]
+  skillLinks   AgentSkill[]
+}
+
+model AgentRun {
+  id         String    @id @default(cuid())
+  agentId    String
+  agent      Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  status     String    @default("RUNNING") // RUNNING / SUCCESS / FAILED
+  output     String? // Markdown 简报
+  toolLog    String? // JSON：工具调用审计
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  notifications Notification[]
+  documents     Document[]
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  title      String
+  content    String?
+  agentRunId String?
+  agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  partnerId  String?
+  proposal   String? // JSON：待人工确认的档案变更提案
+  appliedAt  DateTime?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Asset {
+  id           String   @id @default(cuid())
+  filename     String
+  mimeType     String
+  size         Int
+  storageKey   String
+  uploadedById String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+  materials    Material[]
+  solutionLinks SolutionAsset[]
+  documentLinks DocumentAsset[]
+}
+
+model Document {
+  id             String   @id @default(cuid())
+  title          String
+  type           String   @default("CUSTOM")
+  status         String   @default("DRAFT")
+  content        String   @default("")
+  partnerId      String?
+  partner        Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  solutionId     String?
+  solution       Solution? @relation(fields: [solutionId], references: [id], onDelete: SetNull)
+  agentRunId     String?
+  agentRun       AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  notificationId String?
+  createdById    String?
+  createdBy      User?    @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  assets         DocumentAsset[]
+}
+
+model DocumentAsset {
+  documentId String
+  assetId    String
+  label      String?
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  @@id([documentId, assetId])
+}
+
+model Material {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  category    String   @default("OTHER")
+  body        String?
+  assetId     String?
+  asset       Asset?   @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  tags        String?
+  shared      Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model KnowledgeArticle {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  category    String   @default("COMPANY")
+  content     String
+  shared      Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Solution {
+  id             String   @id @default(cuid())
+  partnerId      String
+  partner        Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  name           String
+  targetCustomer String?
+  painPoint      String?
+  fanruanOffer   String?
+  partnerOffer   String?
+  pricingModel   String?
+  status         String   @default("DRAFT")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  assets         SolutionAsset[]
+  documents      Document[]
+}
+
+model SolutionAsset {
+  solutionId String
+  assetId    String
+  label      String?
+  solution   Solution @relation(fields: [solutionId], references: [id], onDelete: Cascade)
+  asset      Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  @@id([solutionId, assetId])
+}
+
+model Skill {
+  id          String   @id @default(cuid())
+  name        String
+  label       String
+  description String?
+  kind        String   @default("PROMPT")
+  toolDef     String?
+  promptBody  String?
+  shared      Boolean  @default(false)
+  isBuiltin   Boolean  @default(false)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  agentLinks  AgentSkill[]
+}
+
+model AgentSkill {
+  agentId String
+  skillId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  @@id([agentId, skillId])
 }

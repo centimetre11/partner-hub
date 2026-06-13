@@ -150,9 +150,35 @@ export async function promotePartnerAction(partnerId: string) {
 
 export async function archivePartnerAction(partnerId: string) {
   const user = await requireUser();
-  await db.partner.update({ where: { id: partnerId }, data: { status: "ARCHIVED", poolFlag: "DROPPED" } });
+  const p = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
+  if (p.status === "ARCHIVED") return;
+  await db.partner.update({
+    where: { id: partnerId },
+    data: { status: "ARCHIVED", prevStatus: p.status, poolFlag: "DROPPED" },
+  });
   await db.timelineEvent.create({
-    data: { partnerId, type: "SYSTEM", title: "归档", createdById: user.id },
+    data: { partnerId, type: "SYSTEM", title: "归档", content: `归档前状态：${p.status}`, createdById: user.id },
+  });
+  revalidatePath("/pool");
+  revalidatePath("/partners");
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function restorePartnerAction(partnerId: string) {
+  const user = await requireUser();
+  const p = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
+  if (p.status !== "ARCHIVED") return;
+  const target = p.prevStatus === "ACTIVE" ? "ACTIVE" : "PROSPECT";
+  await db.partner.update({
+    where: { id: partnerId },
+    data: {
+      status: target,
+      prevStatus: null,
+      poolFlag: target === "PROSPECT" ? "NEW" : p.poolFlag,
+    },
+  });
+  await db.timelineEvent.create({
+    data: { partnerId, type: "SYSTEM", title: "恢复归档", content: `恢复为：${target === "ACTIVE" ? "正式伙伴" : "候选"}`, createdById: user.id },
   });
   revalidatePath("/pool");
   revalidatePath("/partners");
@@ -183,10 +209,11 @@ export async function upsertContactAction(partnerId: string, formData: FormData)
   const id = String(formData.get("id") ?? "");
   const data = {
     name: String(formData.get("name") ?? "").trim(),
-    role: String(formData.get("role") ?? "OTHER"),
+    role: String(formData.get("role") ?? "INFLUENCER"),
     title: String(formData.get("title") ?? "") || null,
-    influence: formData.get("influence") ? parseInt(String(formData.get("influence")), 10) : null,
-    support: String(formData.get("support") ?? "") || null,
+    department: String(formData.get("department") ?? "") || null,
+    attitude: parseInt(String(formData.get("attitude") ?? "0"), 10) || 0,
+    reportsToId: String(formData.get("reportsToId") ?? "") || null,
     contactInfo: String(formData.get("contactInfo") ?? "") || null,
     approach: String(formData.get("approach") ?? "") || null,
     notes: String(formData.get("notes") ?? "") || null,

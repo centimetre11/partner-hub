@@ -1,0 +1,29 @@
+import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
+import { getSessionUserId } from "@/lib/session";
+import { applyIntake, type IntakeScope, type IntakeProposal } from "@/lib/ai-intake";
+
+export async function POST(req: NextRequest) {
+  const uid = await getSessionUserId();
+  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+
+  const { scope, partnerId, proposal, sourceText } = await req.json();
+  if (!proposal) return NextResponse.json({ error: "缺少提案" }, { status: 400 });
+
+  try {
+    const result = await applyIntake({
+      scope: scope as IntakeScope,
+      partnerId: partnerId || undefined,
+      proposal: proposal as IntakeProposal,
+      userId: uid,
+      sourceText,
+    });
+    revalidatePath("/pool");
+    revalidatePath("/partners");
+    revalidatePath("/todos");
+    if (result.partnerId) revalidatePath(`/partners/${result.partnerId}`);
+    return NextResponse.json(result);
+  } catch (e) {
+    return NextResponse.json({ error: `写入失败：${e instanceof Error ? e.message : e}` }, { status: 500 });
+  }
+}

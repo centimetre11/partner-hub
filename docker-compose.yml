@@ -8,9 +8,13 @@ services:
       - AI_BASE_URL=${AI_BASE_URL:-https://api.moonshot.cn/v1}
       - AI_API_KEY=${AI_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-kimi-k2-0711-preview}
+      - UPLOAD_DIR=/data/uploads
+      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-20}
     volumes:
       - partner-data:/data
+      - partner-uploads:/data/uploads
     restart: unless-stopped
 
 volumes:
   partner-data:
+  partner-uploads:

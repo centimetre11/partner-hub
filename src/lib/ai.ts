@@ -29,7 +29,7 @@ export class AIError extends Error {}
 
 export async function chatCompletion(
   messages: ChatMessage[],
-  opts: { tools?: ToolDef[]; jsonMode?: boolean; temperature?: number } = {}
+  opts: { tools?: (ToolDef | Record<string, unknown>)[]; jsonMode?: boolean; temperature?: number } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
   const baseUrl = process.env.AI_BASE_URL || "https://api.openai.com/v1";
   const apiKey = process.env.AI_API_KEY;

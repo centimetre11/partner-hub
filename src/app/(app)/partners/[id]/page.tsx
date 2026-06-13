@@ -4,18 +4,23 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } from "@/components/ui";
 import {
-  CATEGORY_LABELS, CONTACT_ROLE_LABELS, EVENT_TYPE_LABELS, PIPELINE_STAGES,
-  POOL_FLAG_LABELS, STATUS_LABELS, SUPPORT_LABELS, TODO_PRIORITY_LABELS, stageName,
+  ATTITUDE_LABELS, CATEGORY_LABELS, CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS,
+  EVENT_TYPE_LABELS, PIPELINE_STAGES, POOL_FLAG_LABELS, STATUS_LABELS,
+  TODO_PRIORITY_LABELS, attitudeLabel, stageName,
 } from "@/lib/constants";
+import { PowerMapChart, PowerMapLegend, attitudeDotClass } from "@/components/power-map";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import {
   addNoteAction, archivePartnerAction, createTodoAction, deleteContactAction,
   deleteOpportunityAction, deleteTrainingAction, promotePartnerAction,
-  setPipelineStageAction, toggleTodoAction, updatePartnerAction,
+  restorePartnerAction, setPipelineStageAction, toggleTodoAction, updatePartnerAction,
   upsertContactAction, upsertOpportunityAction, upsertTrainingAction,
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
+import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
+import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
+import { AiAddButton } from "@/components/ai-add-button";
 
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -23,16 +28,33 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   const p = await db.partner.findUnique({
     where: { id },
     include: {
-      contacts: { orderBy: { influence: "desc" } },
+      contacts: { orderBy: [{ attitude: "desc" }, { createdAt: "asc" }] },
       opportunities: { orderBy: { updatedAt: "desc" } },
       events: { orderBy: { createdAt: "desc" }, include: { createdBy: true } },
       trainings: true,
       todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], include: { assignee: true } },
       owner: true,
+      solutions: {
+        orderBy: { updatedAt: "desc" },
+        include: {
+          assets: { include: { asset: true } },
+          documents: { select: { id: true, title: true, type: true } },
+        },
+      },
     },
   });
   if (!p) notFound();
   const users = await db.user.findMany();
+  const partnerAgents = await db.agent.findMany({
+    where: { partnerId: id, isTemplate: false },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, name: true, icon: true, description: true, enabled: true, lastRunAt: true },
+  });
+  const agentTemplates = await db.agent.findMany({
+    where: { isTemplate: true, OR: [{ name: { contains: "会前" } }, { name: { contains: "联合" } }, { name: { contains: "动态" } }] },
+    select: { id: true, name: true, icon: true, description: true },
+    orderBy: { name: "asc" },
+  });
   const completeness = computeCompleteness(p);
   const stale = staleDays(p);
 
@@ -75,12 +97,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             >
               ● 会议模式
             </Link>
-            <Link
-              href={`/import?partnerId=${p.id}`}
+            <AiAddButton
+              scope="profile"
+              partnerId={p.id}
+              label="✦ AI 录入"
               className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-            >
-              ✦ 投喂信息
-            </Link>
+            />
             {p.status === "PROSPECT" && (
               <form action={promotePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
@@ -88,10 +110,16 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 </button>
               </form>
             )}
-            {p.status !== "ARCHIVED" && (
+            {p.status !== "ARCHIVED" ? (
               <form action={archivePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400 hover:text-red-600">
                   归档
+                </button>
+              </form>
+            ) : (
+              <form action={restorePartnerAction.bind(null, p.id)}>
+                <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+                  恢复{p.prevStatus === "ACTIVE" ? "为正式伙伴" : "为候选"}
                 </button>
               </form>
             )}
@@ -127,7 +155,15 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         {/* ===== 左侧 2/3 ===== */}
         <div className="xl:col-span-2 space-y-5">
           {/* 模块一：伙伴画像 */}
-          <Card title="① 伙伴画像" actions={<ProfileEditor partner={p} users={users} />}>
+          <Card
+            title="① 伙伴画像"
+            actions={
+              <div className="flex items-center gap-2">
+                <AiAddButton scope="profile" partnerId={p.id} label="✦ AI 补全" variant="soft" />
+                <ProfileEditor partner={p} users={users} />
+              </div>
+            }
+          >
             <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 text-sm">
               {[
                 ["公司规模", p.headcount],
@@ -168,30 +204,49 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           {/* 模块二：权力地图 */}
-          <Card title={`② 权力地图（${p.contacts.length} 人）`}>
+          <Card
+            title={`② 权力地图（${p.contacts.length} 人）`}
+            actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI 加人" variant="soft" />}
+          >
+            <div className="mb-4 rounded-lg bg-zinc-50/80 border border-zinc-100 px-4 py-3">
+              <PowerMapLegend />
+            </div>
+            {p.contacts.length > 0 && (
+              <div className="mb-5 border-b border-zinc-100 pb-4">
+                <PowerMapChart
+                  contacts={p.contacts.map((c) => ({
+                    id: c.id, name: c.name, role: c.role, title: c.title,
+                    department: c.department, attitude: c.attitude, reportsToId: c.reportsToId,
+                  }))}
+                />
+              </div>
+            )}
             <div className="space-y-3">
               {p.contacts.map((c) => (
                 <details key={c.id} className="group rounded-lg border border-zinc-100 hover:border-zinc-200">
                   <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
-                    <div
-                      className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${
-                        c.support === "POSITIVE" ? "bg-emerald-100 text-emerald-700"
-                        : c.support === "NEGATIVE" ? "bg-red-100 text-red-700"
-                        : "bg-zinc-100 text-zinc-500"
-                      }`}
-                    >
-                      {c.name.slice(0, 1)}
+                    <div className="relative shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center text-sm font-semibold">
+                        {c.name.slice(0, 1)}
+                      </div>
+                      <span
+                        className={`absolute -top-1 -right-1.5 w-4.5 h-4.5 rounded-full text-[10px] font-bold flex items-center justify-center ${attitudeDotClass(c.attitude)}`}
+                      >
+                        {c.attitude}
+                      </span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-zinc-900">{c.name}</span>
-                        <Badge tone={c.role === "DECISION_MAKER" ? "red" : c.role === "BLOCKER" ? "amber" : "zinc"}>
-                          {CONTACT_ROLE_LABELS[c.role] ?? c.role}
+                        <Badge tone={c.role === "DECISION_MAKER" || c.role === "APPROVER" ? "red" : "zinc"}>
+                          {CONTACT_ROLE_CODES[c.role] ?? "I"} · {CONTACT_ROLE_LABELS[c.role] ?? c.role}
                         </Badge>
                         {c.title && <span className="text-xs text-zinc-500">{c.title}</span>}
+                        {c.department && <span className="text-xs text-zinc-400">{c.department}</span>}
                       </div>
                       <div className="text-xs text-zinc-400 mt-0.5">
-                        影响力 {c.influence ? "★".repeat(c.influence) : "?"} · 支持度 {SUPPORT_LABELS[c.support ?? "UNKNOWN"] ?? "未知"}
+                        态度：{attitudeLabel(c.attitude)}
+                        {c.reportsToId && ` · 汇报给 ${p.contacts.find((x) => x.id === c.reportsToId)?.name ?? "?"}`}
                         {c.contactInfo && ` · ${c.contactInfo}`}
                       </div>
                     </div>
@@ -203,25 +258,25 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                       <input name="name" defaultValue={c.name} placeholder="姓名" className={input} />
                       <select name="role" defaultValue={c.role} className={input}>
                         {Object.entries(CONTACT_ROLE_LABELS).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
+                          <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {v}</option>
+                        ))}
+                      </select>
+                      <select name="attitude" defaultValue={c.attitude} className={input}>
+                        {Object.entries(ATTITUDE_LABELS).sort((a, b) => Number(b[0]) - Number(a[0])).map(([k, v]) => (
+                          <option key={k} value={k}>{k} · {v}</option>
                         ))}
                       </select>
                       <input name="title" defaultValue={c.title ?? ""} placeholder="职位" className={input} />
-                      <select name="influence" defaultValue={c.influence ?? ""} className={input}>
-                        <option value="">影响力?</option>
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <option key={n} value={n}>影响力 {n}</option>
-                        ))}
-                      </select>
-                      <select name="support" defaultValue={c.support ?? ""} className={input}>
-                        <option value="">支持度?</option>
-                        {Object.entries(SUPPORT_LABELS).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
+                      <input name="department" defaultValue={c.department ?? ""} placeholder="部门" className={input} />
+                      <select name="reportsToId" defaultValue={c.reportsToId ?? ""} className={input}>
+                        <option value="">汇报上级（无 = 顶层）</option>
+                        {p.contacts.filter((x) => x.id !== c.id).map((x) => (
+                          <option key={x.id} value={x.id}>汇报给 {x.name}</option>
                         ))}
                       </select>
                       <input name="contactInfo" defaultValue={c.contactInfo ?? ""} placeholder="联系方式" className={input} />
                       <input name="approach" defaultValue={c.approach ?? ""} placeholder="最佳接触方式" className={input} />
-                      <input name="notes" defaultValue={c.notes ?? ""} placeholder="备注" className={`${input} md:col-span-2`} />
+                      <input name="notes" defaultValue={c.notes ?? ""} placeholder="备注" className={input} />
                       <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
                         <button formAction={deleteContactAction.bind(null, p.id, c.id)} className="text-xs text-zinc-400 hover:text-red-600 px-2">
                           删除
@@ -240,20 +295,20 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   <input name="name" required placeholder="姓名 *" className={input} />
                   <select name="role" className={input}>
                     {Object.entries(CONTACT_ROLE_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
+                      <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {v}</option>
+                    ))}
+                  </select>
+                  <select name="attitude" defaultValue="0" className={input}>
+                    {Object.entries(ATTITUDE_LABELS).sort((a, b) => Number(b[0]) - Number(a[0])).map(([k, v]) => (
+                      <option key={k} value={k}>{k} · {v}</option>
                     ))}
                   </select>
                   <input name="title" placeholder="职位" className={input} />
-                  <select name="influence" className={input}>
-                    <option value="">影响力?</option>
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <option key={n} value={n}>影响力 {n}</option>
-                    ))}
-                  </select>
-                  <select name="support" className={input}>
-                    <option value="">支持度?</option>
-                    {Object.entries(SUPPORT_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
+                  <input name="department" placeholder="部门" className={input} />
+                  <select name="reportsToId" className={input}>
+                    <option value="">汇报上级（无 = 顶层）</option>
+                    {p.contacts.map((x) => (
+                      <option key={x.id} value={x.id}>汇报给 {x.name}</option>
                     ))}
                   </select>
                   <input name="contactInfo" placeholder="联系方式" className={input} />
@@ -266,7 +321,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           {/* 模块三/四：商机 Pipeline */}
-          <Card title={`③ 商机跟踪（${p.opportunities.filter((o) => o.status === "ACTIVE").length} 个进行中）`}>
+          <Card
+            title={`③ 商机跟踪（${p.opportunities.filter((o) => o.status === "ACTIVE").length} 个进行中）`}
+            actions={<AiAddButton scope="opportunity" partnerId={p.id} label="✦ AI 加商机" variant="soft" />}
+          >
             <div className="space-y-3">
               {p.opportunities.map((o) => (
                 <details key={o.id} className="group rounded-lg border border-zinc-100 hover:border-zinc-200">
@@ -333,7 +391,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           {/* 模块五：培训认证 */}
-          <Card title={`④ 能力培训（${p.trainings.length}）`}>
+          <Card
+            title={`④ 能力培训（${p.trainings.length}）`}
+            actions={<AiAddButton scope="training" partnerId={p.id} label="✦ AI 加培训" variant="soft" />}
+          >
             <div className="space-y-2">
               {p.trainings.map((t) => (
                 <form key={t.id} action={upsertTrainingAction.bind(null, p.id)} className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm items-center">
@@ -367,6 +428,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </details>
             </div>
           </Card>
+
+          <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />
 
           {/* 时间线 */}
           <Card title={`⑤ 动态时间线（${p.events.length}）`}>
@@ -430,8 +493,13 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           {/* AI 面板：补全助手 + 动态摘要 */}
           <AiPanel partnerId={p.id} missing={completeness.missing} />
 
+          <PartnerAgentsPanel partnerId={p.id} agents={partnerAgents} templates={agentTemplates} />
+
           {/* 待办 */}
-          <Card title={`待办（${p.todos.filter((t) => t.status === "OPEN").length} 项未完成）`}>
+          <Card
+            title={`待办（${p.todos.filter((t) => t.status === "OPEN").length} 项未完成）`}
+            actions={<AiAddButton scope="todo" partnerId={p.id} label="✦ AI 加" variant="soft" />}
+          >
             <form action={createTodoAction} className="flex gap-2 mb-4">
               <input type="hidden" name="partnerId" value={p.id} />
               <input name="title" required placeholder="添加待办…" className={input} />

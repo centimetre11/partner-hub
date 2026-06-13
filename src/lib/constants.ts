@@ -37,20 +37,35 @@ export const STATUS_LABELS: Record<string, string> = {
   ARCHIVED: "已归档",
 };
 
+// 权力地图角色（A/D/S/E/I 体系）
 export const CONTACT_ROLE_LABELS: Record<string, string> = {
-  DECISION_MAKER: "最终决策者",
-  TECH_GATEKEEPER: "技术把关人",
-  BIZ_LEAD: "商务负责人",
-  EXECUTOR: "实际执行者",
-  BLOCKER: "潜在反对者",
-  OTHER: "其他",
+  APPROVER: "审批者",
+  DECISION_MAKER: "决策者",
+  SUPPORTER: "支持者",
+  EVALUATOR: "评估者",
+  INFLUENCER: "影响者",
 };
 
-export const SUPPORT_LABELS: Record<string, string> = {
-  POSITIVE: "支持",
-  NEGATIVE: "反对",
-  UNKNOWN: "未知",
+export const CONTACT_ROLE_CODES: Record<string, string> = {
+  APPROVER: "A",
+  DECISION_MAKER: "D",
+  SUPPORTER: "S",
+  EVALUATOR: "E",
+  INFLUENCER: "I",
 };
+
+// 态度评分：3教练 / 2支持并排他 / 1支持不排他 / 0未接触或中立 / -1反对
+export const ATTITUDE_LABELS: Record<number, string> = {
+  3: "教练",
+  2: "支持并排他",
+  1: "支持不排他",
+  0: "未接触或中立",
+  [-1]: "反对",
+};
+
+export function attitudeLabel(a: number | null | undefined) {
+  return ATTITUDE_LABELS[a ?? 0] ?? "未接触或中立";
+}
 
 export const TODO_PRIORITY_LABELS: Record<string, string> = {
   HIGH: "高",
@@ -72,6 +87,35 @@ export const AI_VERIFIED_LABELS: Record<string, string> = {
   VERIFIED: "AI已验证",
   PARTIAL: "部分信息",
   UNKNOWN: "未验证",
+};
+
+export const DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  AGENT_BRIEF: "Agent 简报",
+  JOINT_SOLUTION: "联合方案报告",
+  MEETING: "会议纪要",
+  STRATEGY: "策略分析",
+  CUSTOM: "自定义",
+};
+
+export const MATERIAL_CATEGORY_LABELS: Record<string, string> = {
+  TIER_POLICY: "伙伴等级制度",
+  PRODUCT_COMPARE: "产品对比",
+  PITCH_DECK: "推介材料",
+  OTHER: "其他",
+};
+
+export const KNOWLEDGE_CATEGORY_LABELS: Record<string, string> = {
+  COMPANY: "公司介绍",
+  STRATEGY: "策略政策",
+  PRODUCT: "产品能力",
+  GTM: "区域打法",
+  COMPETITOR: "竞品情报",
+};
+
+export const SOLUTION_STATUS_LABELS: Record<string, string> = {
+  DRAFT: "草稿",
+  ACTIVE: "在用",
+  ARCHIVED: "已归档",
 };
 
 // 伙伴档案中允许 AI / 表单更新的字段（含中文标签，供 diff 展示和提示词使用）

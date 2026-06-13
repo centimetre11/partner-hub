@@ -9,7 +9,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const partner = await db.partner.findUnique({
     where: { id },
     include: {
-      contacts: { orderBy: { influence: "desc" } },
+      contacts: { orderBy: { attitude: "desc" } },
       opportunities: { where: { status: "ACTIVE" } },
     },
   });
@@ -26,8 +26,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           name: c.name,
           role: c.role,
           title: c.title,
-          influence: c.influence,
-          support: c.support,
+          department: c.department,
+          attitude: c.attitude,
         })),
         opportunities: partner.opportunities.map((o) => ({
           id: o.id,

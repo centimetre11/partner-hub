@@ -1,10 +1,12 @@
 import { requireUser } from "@/lib/session";
+import { db } from "@/lib/db";
 import { logoutAction } from "@/lib/actions";
 import { NavLinks } from "@/components/nav-links";
 import { AssistantDock } from "@/components/assistant-dock";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  const unread = await db.notification.count({ where: { readAt: null } });
 
   return (
     <div className="flex min-h-screen">
@@ -18,7 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <div className="text-[10px] text-zinc-500">Fanruan MEA Partner Hub</div>
           </div>
         </div>
-        <NavLinks />
+        <NavLinks unread={unread} />
         <div className="mt-auto border-t border-zinc-800 px-5 py-4">
           <div className="text-xs text-zinc-400 mb-2">
             {user.name} · {user.email}

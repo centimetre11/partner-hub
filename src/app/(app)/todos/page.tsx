@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import { PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { TODO_PRIORITY_LABELS } from "@/lib/constants";
 import { createTodoAction, deleteTodoAction, toggleTodoAction } from "@/lib/actions";
+import { AiAddButton } from "@/components/ai-add-button";
 
 export default async function TodosPage({
   searchParams,
@@ -45,7 +46,11 @@ export default async function TodosPage({
 
   return (
     <div className="pb-16">
-      <PageHeader title="待办事项" desc="关联伙伴与负责人，逾期自动标红 · 初始待办来自 12 周行动时间线" />
+      <PageHeader
+        title="待办事项"
+        desc="关联伙伴与负责人，逾期自动标红 · 初始待办来自 12 周行动时间线"
+        actions={<AiAddButton scope="todo" label="✦ AI 加待办" variant="soft" />}
+      />
       <div className="px-8">
         {/* 新建 */}
         <form action={createTodoAction} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-4 mb-5 flex flex-wrap gap-2">
