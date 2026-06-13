@@ -540,7 +540,7 @@ export const KIMI_BUILTIN_SEARCH = {
   function: { name: "$web_search" },
 };
 
-export async function useKimiBuiltinSearch(): Promise<boolean> {
+export async function shouldUseKimiBuiltinSearch(): Promise<boolean> {
   if (process.env.TAVILY_API_KEY) return false;
   const configured = await db.aiApiConfig.findFirst({
     where: { enabled: true },

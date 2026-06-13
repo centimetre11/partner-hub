@@ -7,8 +7,8 @@ import {
   KIMI_BUILTIN_SEARCH,
   newSkillContext,
   runSkill,
+  shouldUseKimiBuiltinSearch,
   skillsToTools,
-  useKimiBuiltinSearch,
 } from "@/lib/skills";
 
 export async function POST(req: NextRequest) {
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 5. 背景：帆软产品 FineReport（中国式复杂报表）/ FineBI（自助分析）/ FineDataLink（数据集成）；中东主打差异化是复杂报表能力+数据主权合规（纯内网部署）；策略材料包括 Tier A/B/C 作战清单、前三单补贴（首单+20%折扣+免费驻场2周）、首年超级折扣（L2 40%/L3 50%/L4 60%）、Fast Track（Tableau/微软转投伙伴≥5人认证直接L2）。`;
 
   const tools: (ToolDef | Record<string, unknown>)[] = skillsToTools(ASSISTANT_SKILLS);
-  if (await useKimiBuiltinSearch()) tools.push(KIMI_BUILTIN_SEARCH);
+  if (await shouldUseKimiBuiltinSearch()) tools.push(KIMI_BUILTIN_SEARCH);
 
   const chat: ChatMessage[] = [
     { role: "system", content: system },

@@ -11,7 +11,7 @@ import { AiAddButton } from "@/components/ai-add-button";
 export default async function HomePage() {
   const user = await requireUser();
   const now = new Date();
-  const in7days = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+  const in7days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
 
   const [myTodos, overdueTodos, activePartners, prospectCount, activeCount, openTodoCount, unreadNotifications] = await Promise.all([
     db.todoItem.findMany({
