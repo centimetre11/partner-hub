@@ -566,7 +566,8 @@ export function intakeEnrichmentSkillsForScope(scope: string): string[] {
     case "profile":
       return [...INTAKE_ENRICHMENT_SKILLS];
     case "powermap":
-      return ["linkedin_search", "web_search"];
+      // AI 加人保持最简：只从用户给的文字/图片里提取属性，不联网调研
+      return [];
     case "opportunity":
       return ["web_search", "search_knowledge"];
     default:

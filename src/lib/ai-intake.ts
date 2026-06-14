@@ -121,15 +121,16 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
   powermap: {
     title: "添加权力地图人物",
     intro:
-      "用户想往这个伙伴的权力地图里加人/更新人。权力地图的核心是组织层级（谁向谁汇报），所以本任务的首要目标不是单纯录入字段，而是把这个人准确放进上下级关系里。",
-    guide: `【聚焦上下级关系（最重要）】
-1. 加人的第一要务是定位他在组织里的层级：他汇报给谁（reportsToName），以及是否有现有联系人应当改为汇报给他。
-2. 必须对照下方【权力地图/关键人物】现有名单来判断：reportsToName 要尽量解析成名单里已存在的人；如果某个现有联系人的汇报线应随这次加人而改变（例如新来的总监应成为某人的上级），就对那个人输出 action=update（带其 id）并更新其 reportsToName。
-3. 汇报线不明确时，不要瞎填——优先用结构化澄清提问：clarifications 里给一条「{这个人}应该汇报给谁？」，options 用【现有联系人姓名】+「公司高层/顶层」+「暂不确定」，让用户一键点选。
-4. 通过联网搜索 + LinkedIn 调研这个人的职位、所在部门与汇报层级线索（不依赖 KMS/知识库，那里通常没有）；调研到的职级有助于推断他在权力地图中的位置。
-5. 仍然顺带补全：职位 title、${ROLE_LINE}、${ATTITUDE_LINE}、所属部门 department，但重心始终是上下级关系。用户说不清楚的就跳过，别纠缠。`,
+      "用户想往这个伙伴的权力地图里加人/更新人。任务很简单：直接从用户提供的文字或图片（名片、会议记录、组织架构图、聊天截图等）里把人物属性提取出来，不需要联网调研。",
+    guide: `只提取材料（文字/图片）里有依据的信息，不要编造、不要猜测、不要联网查。每个人尽量提取：
+- 姓名 name
+- 职位 title、所属部门 department
+- ${ROLE_LINE}
+- ${ATTITUDE_LINE}
+- 汇报上级 reportsToName（材料里能看出谁向谁汇报/隶属关系时填；尽量对应下方【权力地图/关键人物】现有名单里的人）
+对照现有名单判断是新增（action=add）还是更新已有人（action=update 带 id）。材料里没提到的字段就留空，别追问太多。只有当汇报关系明显缺失且需要确认时，才用一条结构化澄清「{这个人}汇报给谁？」，options 用现有联系人姓名 +「顶层」+「暂不确定」。`,
     schemaHint:
-      "只填 contacts（action=add 新增 / update 更新并带 id；update 既可用于补全已有人的信息，也可用于调整已有人的 reportsToName 汇报线）。fields/opportunities/todos/trainings/solutions 全部留空数组。",
+      "只填 contacts（action=add 新增 / update 更新并带 id）。fields/opportunities/todos/trainings/solutions 全部留空数组。",
   },
   opportunity: {
     title: "添加商机",
