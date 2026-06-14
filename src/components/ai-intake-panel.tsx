@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
+import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-intake";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
@@ -55,6 +55,7 @@ export function AiIntakePanel({
   const [proposal, setProposal] = useState<IntakeProposal | null>(null);
   const [ready, setReady] = useState(false);
   const [questions, setQuestions] = useState<string[]>([]);
+  const [clarifications, setClarifications] = useState<IntakeClarification[]>([]);
   const [liveTrace, setLiveTrace] = useState<AiTraceStep[]>([]);
   const [replyText, setReplyText] = useState("");
   const [phase, setPhase] = useState("");
@@ -73,14 +74,15 @@ export function AiIntakePanel({
     setReplyText(state.replyText);
     setProposal(state.proposal);
     setQuestions(state.questions);
+    setClarifications(state.clarifications);
     setReady(state.ready);
     setPhase(state.phase);
     setPhaseLabel(state.phaseLabel);
     if (state.lastPatchChanges) setPatchChanges(state.lastPatchChanges);
   }
 
-  async function send() {
-    const text = input.trim();
+  async function send(override?: string) {
+    const text = (override ?? input).trim();
     if ((!text && !pendingImages.length) || loading) return;
     const next = [
       ...messages,
@@ -97,6 +99,7 @@ export function AiIntakePanel({
     setError(null);
     setLiveTrace([]);
     setReplyText("");
+    setClarifications([]);
     setPatchChanges(null);
     const ac = new AbortController();
     abortRef.current = ac;
@@ -120,11 +123,12 @@ export function AiIntakePanel({
         ]);
         return;
       }
-      const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[] };
+      const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[]; clarifications?: IntakeClarification[] };
       setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace: [...trace] }]);
       setProposal(turn.proposal);
       setReady(turn.ready);
       setQuestions(turn.questions ?? []);
+      setClarifications(turn.clarifications ?? []);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setMessages((m) => [...m, { role: "assistant", content: "（已停止）", trace: [...liveTrace] }]);
@@ -167,6 +171,8 @@ export function AiIntakePanel({
           proposal={proposal}
           patchChanges={patchChanges}
           questions={questions}
+          clarifications={clarifications}
+          onClarify={(t) => send(t)}
           ready={ready}
           scope={scope}
           partnerId={partnerId}
@@ -174,7 +180,7 @@ export function AiIntakePanel({
           onApplied={handleApplied}
           input={input}
           onInputChange={setInput}
-          onSend={send}
+          onSend={() => send()}
           onStop={stop}
           pendingImages={pendingImages}
           onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}

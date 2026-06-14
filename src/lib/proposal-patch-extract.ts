@@ -15,15 +15,35 @@ const PATCH_TOOLS = new Set([
   "search_partners",
 ]);
 
+/** 工具返回里表示「没查到 / 未配置 / 出错」的无意义文本，绝不能当公司名或摘要 */
+const NO_RESULT_RE =
+  /(未找到|没有找到|无结果|未查到|查不到|无相关|未配置|未授权|无权限|没有权限|失败|错误|超时|not\s*found|no\s*result|no\s*results|not\s*configured|unauthorized|error|failed|empty)/i;
+
+function isMeaningless(text: string | undefined): boolean {
+  if (!text) return true;
+  const t = text.trim();
+  if (t.length < 2) return true;
+  return NO_RESULT_RE.test(t);
+}
+
 function heuristicPatch(toolName: string, result: string): ProposalPatchOp[] {
   const ops: ProposalPatchOp[] = [];
+  // 整段返回若是「未找到」类提示，直接放弃，不产生任何 patch
+  if (isMeaningless(result) && result.trim().length < 120) return ops;
+
   const lines = result.split("\n").map((l) => l.trim()).filter(Boolean);
   const first = lines[0]?.replace(/^#+\s*/, "").replace(/\*+/g, "").trim();
 
-  if ((toolName === "read_kms" || toolName === "search_knowledge") && first && first.length < 100) {
+  if (
+    (toolName === "read_kms" || toolName === "search_knowledge") &&
+    first &&
+    first.length < 100 &&
+    !isMeaningless(first)
+  ) {
     ops.push({ op: "set_partner", name: first, source: toolName });
-    if (lines.length > 1) {
-      ops.push({ op: "set_summary", summary: lines.slice(1, 3).join(" ").slice(0, 200) });
+    const summary = lines.slice(1, 3).join(" ").slice(0, 200);
+    if (summary && !isMeaningless(summary)) {
+      ops.push({ op: "set_summary", summary });
     }
   }
 
@@ -71,6 +91,8 @@ export async function extractPatchFromTool(
   const name = toolName === "$web_search" ? "web_search" : toolName;
   if (!PATCH_TOOLS.has(name) && !PATCH_TOOLS.has(toolName)) return [];
   if (!result.trim()) return [];
+  // 「未找到 / 未配置」类短返回直接跳过，避免浪费 LLM 调用并产生噪声 patch
+  if (isMeaningless(result) && result.trim().length < 120) return [];
 
   const snippet = result.slice(0, 3500);
   const fieldList = Object.entries(PARTNER_FIELD_LABELS)

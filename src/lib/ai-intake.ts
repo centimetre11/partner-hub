@@ -62,9 +62,19 @@ export type IntakeProposal = {
   solutions: SolutionProposal[];
 };
 
+/** 结构化澄清：信息不全时给出可点选的候选项，辅助用户快速澄清 */
+export type IntakeClarification = {
+  id: string;
+  question: string; // 要澄清的点（一句话）
+  options: string[]; // 候选项（用户点选即回填）
+  multi?: boolean; // 是否允许多选
+  allowOther?: boolean; // 是否允许「其他/手动补充」
+};
+
 export type IntakeTurn = {
   reply: string; // AI 对用户说的话（自然语气，可含追问）
   questions: string[]; // 待澄清要点（引导用）
+  clarifications: IntakeClarification[]; // 结构化选项澄清
   ready: boolean; // 信息是否足以入库
   proposal: IntakeProposal;
 };
@@ -155,6 +165,9 @@ const OUTPUT_SCHEMA = `只输出一个 JSON 对象，结构：
 {
   "reply": "你对用户说的话（中文，自然口语，如需澄清就在这里友好地问，一次最多问1-2个最关键的点）",
   "questions": ["待澄清要点1", "..."],
+  "clarifications": [
+    { "id":"country", "question":"这家公司主要在哪个国家？", "options":["阿联酋","沙特","卡塔尔","埃及"], "multi":false, "allowOther":true }
+  ],
   "ready": true/false,
   "proposal": {
     "partnerName": "（仅 new_partner 用，公司名）",
@@ -170,7 +183,11 @@ const OUTPUT_SCHEMA = `只输出一个 JSON 对象，结构：
 规则：
 - 只提取有依据的内容：用户原文、工具返回的公开/内部信息均可；reason 标注来源（用户原文/KMS/web_search/LinkedIn/search_knowledge 等）。不要编造工具未返回的内容。
 - ready 判断：核心必填项齐了就为 true（建议补全项缺失只做软提示，不要因此把 ready 设为 false）。用户明确说"就这些/直接录入/不知道了"时 ready 必须为 true。
-- proposal 要带上目前已确认的全部内容（累加，不要每轮清空之前已抽取的）。`;
+- proposal 要带上目前已确认的全部内容（累加，不要每轮清空之前已抽取的）。
+- clarifications（重要）：当某些关键信息缺失、且你能合理枚举出可能的取值时，给出 1-3 个带候选项的选择题，方便用户一键点选澄清，而不是只用文字提问。
+  · 每个 clarification 给 2-5 个最可能的候选项（基于已掌握的线索推断，例如根据城市推断国家、根据业务推断 category）。
+  · 已经能确定或调研已查明的内容，不要再问。没有需要澄清的就给空数组 []。
+  · options 用简短中文短语；id 用对应字段英文名（如 country/category/headcount）。`;
 
 const RESEARCH_GUIDE = `【主动调研（重要）】
 目标：把建档所需信息尽量补全。各类输入（仅公司名、长文、KMS 链接、聊天记录）都要走「多源叠加」，不要只做一种调研就停。
@@ -185,11 +202,31 @@ const RESEARCH_GUIDE = `【主动调研（重要）】
 
 const MAX_RESEARCH_STEPS = 8;
 
+function normalizeClarifications(raw: unknown): IntakeClarification[] {
+  if (!Array.isArray(raw)) return [];
+  const out: IntakeClarification[] = [];
+  for (let i = 0; i < raw.length && out.length < 4; i++) {
+    const c = raw[i] as Partial<IntakeClarification> | null;
+    if (!c || typeof c.question !== "string" || !Array.isArray(c.options)) continue;
+    const options = c.options.map((o) => String(o).trim()).filter(Boolean).slice(0, 6);
+    if (!options.length) continue;
+    out.push({
+      id: typeof c.id === "string" && c.id ? c.id : `clarify-${i}`,
+      question: c.question.trim(),
+      options,
+      multi: !!c.multi,
+      allowOther: c.allowOther !== false,
+    });
+  }
+  return out;
+}
+
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>): IntakeTurn {
   const p: Partial<IntakeProposal> = raw.proposal ?? {};
   return {
     reply: raw.reply || "我整理了一下，请确认。",
     questions: Array.isArray(raw.questions) ? raw.questions : [],
+    clarifications: normalizeClarifications(raw.clarifications),
     ready: !!raw.ready,
     proposal: {
       partnerName: p.partnerName,
@@ -314,6 +351,9 @@ ${OUTPUT_SCHEMA}`;
         status: "running",
       },
     });
+    // 收集每个工具完成后的「增量抽取」promise；调研结束后统一 await，
+    // 确保 proposal_patch 在 SSE 流关闭前全部发出（否则右侧草稿收不到实时增量）
+    const pendingPatches: Promise<void>[] = [];
     const researchContent = await runToolLoop({
       chat,
       tools,
@@ -324,12 +364,20 @@ ${OUTPUT_SCHEMA}`;
       emit: opts.emit,
       streamReply: false,
       onToolDone: (tc, result) => {
-        void extractPatchFromTool(tc.function.name, result, opts.scope, opts.userId).then((ops) => {
-          emitProposalPatch(opts.emit, ops);
-        });
+        pendingPatches.push(
+          extractPatchFromTool(tc.function.name, result, opts.scope, opts.userId)
+            .then((ops) => {
+              emitProposalPatch(opts.emit, ops);
+            })
+            .catch(() => {
+              /* 单条抽取失败不影响整体 */
+            })
+        );
       },
       executeTool: (tc) => runIntakeToolCall(tc, opts.userId),
     });
+    // 等所有增量抽取落地，保证草稿增量不丢
+    if (pendingPatches.length) await Promise.allSettled(pendingPatches);
     opts.emit?.({
       event: "trace_patch",
       id: planId,

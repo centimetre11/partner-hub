@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { IntakeProposal } from "@/lib/ai-intake";
+import type { IntakeProposal, IntakeClarification } from "@/lib/ai-intake";
 import { CONTACT_ROLE_LABELS, attitudeLabel } from "@/lib/constants";
 import {
   countProposalItems,
@@ -21,6 +21,8 @@ type Props = {
   onConfirm: (filtered: NormalizedProposal) => Promise<void> | void;
   confirmLabel?: string;
   questions?: string[];
+  clarifications?: IntakeClarification[];
+  onClarify?: (text: string) => void;
   ready?: boolean;
   loading?: boolean;
 };
@@ -31,6 +33,8 @@ export function LiveProposalDraft({
   onConfirm,
   confirmLabel = "确认入库",
   questions = [],
+  clarifications = [],
+  onClarify,
   ready = false,
   loading = false,
 }: Props) {
@@ -231,7 +235,11 @@ export function LiveProposalDraft({
         <div ref={bottomRef} />
       </div>
 
-      {questions.length > 0 && !ready && (
+      {clarifications.length > 0 && onClarify && (
+        <ClarifyBlock clarifications={clarifications} onClarify={onClarify} disabled={loading} />
+      )}
+
+      {questions.length > 0 && !ready && clarifications.length === 0 && (
         <div className="shrink-0 mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
           补充这些会更完整：{questions.join("；")}
         </div>
@@ -249,6 +257,92 @@ export function LiveProposalDraft({
           {applying ? "写入中…" : ready ? `✓ ${confirmLabel}` : confirmLabel}
         </button>
       </div>
+    </div>
+  );
+}
+
+function ClarifyBlock({
+  clarifications,
+  onClarify,
+  disabled,
+}: {
+  clarifications: IntakeClarification[];
+  onClarify: (text: string) => void;
+  disabled?: boolean;
+}) {
+  // 多选题的本地勾选状态：{ [clarifyId]: Set<option> }
+  const [picked, setPicked] = useState<Record<string, Set<string>>>({});
+
+  const togglePick = (id: string, opt: string) =>
+    setPicked((prev) => {
+      const next = { ...prev };
+      const set = new Set(next[id] ?? []);
+      if (set.has(opt)) set.delete(opt);
+      else set.add(opt);
+      next[id] = set;
+      return next;
+    });
+
+  const submitSingle = (q: string, opt: string) => {
+    if (disabled) return;
+    onClarify(`${q} ${opt}`);
+  };
+
+  const submitMulti = (c: IntakeClarification) => {
+    if (disabled) return;
+    const chosen = [...(picked[c.id] ?? [])];
+    if (!chosen.length) return;
+    onClarify(`${c.question} ${chosen.join("、")}`);
+    setPicked((prev) => ({ ...prev, [c.id]: new Set() }));
+  };
+
+  return (
+    <div className="shrink-0 mt-2 space-y-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
+        <span>需要你帮忙澄清几点</span>
+        <span className="text-[10px] text-amber-500">（点选即可，也可在左侧直接补充）</span>
+      </div>
+      {clarifications.map((c) => {
+        const sel = picked[c.id] ?? new Set<string>();
+        return (
+          <div key={c.id} className="space-y-1.5">
+            <div className="text-xs text-zinc-700">{c.question}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {c.options.map((opt) => {
+                const active = c.multi && sel.has(opt);
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => (c.multi ? togglePick(c.id, opt) : submitSingle(c.question, opt))}
+                    className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+                      active
+                        ? "border-amber-500 bg-amber-500 text-white"
+                        : "border-amber-300 bg-white text-amber-800 hover:border-amber-500 hover:bg-amber-100"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+              {c.allowOther && !c.multi && (
+                <span className="text-[10px] text-amber-500 self-center">其他情况可在左侧输入</span>
+              )}
+            </div>
+            {c.multi && (
+              <button
+                type="button"
+                disabled={disabled || sel.size === 0}
+                onClick={() => submitMulti(c)}
+                className="rounded-lg bg-amber-600 text-white px-3 py-1 text-xs hover:bg-amber-700 disabled:opacity-50"
+              >
+                确认所选（{sel.size}）
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

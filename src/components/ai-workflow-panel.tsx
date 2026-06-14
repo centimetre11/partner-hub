@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
+import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-intake";
 import type { AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
@@ -25,6 +25,8 @@ export function AiWorkflowPanel({
   proposal,
   patchChanges,
   questions,
+  clarifications,
+  onClarify,
   ready,
   scope,
   partnerId,
@@ -55,6 +57,8 @@ export function AiWorkflowPanel({
   proposal: IntakeProposal | null;
   patchChanges?: ProposalChanges | null;
   questions?: string[];
+  clarifications?: IntakeClarification[];
+  onClarify?: (text: string) => void;
   ready?: boolean;
   scope?: IntakeScope;
   partnerId?: string;
@@ -249,6 +253,8 @@ export function AiWorkflowPanel({
             onConfirm={apply}
             confirmLabel={ready ? "确认入库" : "信息够了，直接入库"}
             questions={questions}
+            clarifications={clarifications}
+            onClarify={onClarify}
             ready={ready}
             loading={loading}
           />

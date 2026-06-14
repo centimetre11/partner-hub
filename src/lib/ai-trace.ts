@@ -1,5 +1,5 @@
 import { getToolLabel } from "./tools-registry";
-import type { IntakeProposal } from "./ai-intake";
+import type { IntakeProposal, IntakeClarification } from "./ai-intake";
 import type { ContactProposal, OpportunityProposal, TodoProposal } from "./proposals";
 import type { ProposalChanges } from "./proposal-merge";
 
@@ -67,6 +67,7 @@ export type AiStreamEvent =
       event: "proposal_update";
       proposal: IntakeProposal;
       questions?: string[];
+      clarifications?: IntakeClarification[];
       ready?: boolean;
     }
   | { event: "done"; data: unknown }
@@ -78,6 +79,7 @@ export type AiStreamState = {
   liveText: string;
   proposal: IntakeProposal | null;
   questions: string[];
+  clarifications: IntakeClarification[];
   ready: boolean;
   phase: AiPhase;
   phaseLabel: string;
@@ -161,13 +163,14 @@ export function emitProposalPatch(emit: TraceEmitter | undefined, ops: ProposalP
 
 export function emitProposalUpdate(
   emit: TraceEmitter | undefined,
-  turn: { proposal: IntakeProposal; questions?: string[]; ready?: boolean }
+  turn: { proposal: IntakeProposal; questions?: string[]; clarifications?: IntakeClarification[]; ready?: boolean }
 ) {
   if (!emit) return;
   emit({
     event: "proposal_update",
     proposal: turn.proposal,
     questions: turn.questions,
+    clarifications: turn.clarifications,
     ready: turn.ready,
   });
 }
@@ -248,6 +251,7 @@ export async function consumeAiSse(
   liveText: string;
   proposal: IntakeProposal | null;
   questions: string[];
+  clarifications: IntakeClarification[];
   ready: boolean;
   aborted: boolean;
 }> {
@@ -267,6 +271,7 @@ export async function consumeAiSse(
   let replyText = "";
   let proposal: IntakeProposal | null = null;
   let questions: string[] = [];
+  let clarifications: IntakeClarification[] = [];
   let ready = false;
   let phase: AiPhase = "idle";
   let phaseLabel = "";
@@ -279,6 +284,7 @@ export async function consumeAiSse(
     liveText: replyText,
     proposal,
     questions,
+    clarifications,
     ready,
     phase,
     phaseLabel,
@@ -324,6 +330,7 @@ export async function consumeAiSse(
     } else if (ev.event === "proposal_update") {
       proposal = mergeFinalProposal(proposal, ev.proposal, excluded);
       questions = ev.questions ?? [];
+      clarifications = ev.clarifications ?? [];
       ready = !!ev.ready;
     } else if (ev.event === "done") {
       result = ev.data;
@@ -367,5 +374,5 @@ export async function consumeAiSse(
     }
   }
   if (!aborted && result === undefined) throw new Error("流式响应未返回结果");
-  return { data: result, trace, replyText, liveText: replyText, proposal, questions, ready, aborted };
+  return { data: result, trace, replyText, liveText: replyText, proposal, questions, clarifications, ready, aborted };
 }

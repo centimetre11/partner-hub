@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
+import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-intake";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
@@ -23,6 +23,7 @@ type ProposeResult = {
   reply: string;
   proposal: IntakeProposal;
   questions: string[];
+  clarifications?: IntakeClarification[];
   ready: boolean;
   scope: IntakeScope;
 };
@@ -51,6 +52,7 @@ export function AssistantDock() {
   const [proposeScope, setProposeScope] = useState<IntakeScope>("new_partner");
   const [proposePartnerId, setProposePartnerId] = useState<string | undefined>();
   const [questions, setQuestions] = useState<string[]>([]);
+  const [clarifications, setClarifications] = useState<IntakeClarification[]>([]);
   const [ready, setReady] = useState(false);
   const [phase, setPhase] = useState("");
   const [phaseLabel, setPhaseLabel] = useState("");
@@ -71,6 +73,7 @@ export function AssistantDock() {
     setReplyText(state.replyText);
     if (state.proposal) setProposal(state.proposal);
     setQuestions(state.questions);
+    setClarifications(state.clarifications);
     setReady(state.ready);
     setPhase(state.phase);
     setPhaseLabel(state.phaseLabel);
@@ -96,6 +99,7 @@ export function AssistantDock() {
     setReplyText("");
     setProposal(null);
     setQuestions([]);
+    setClarifications([]);
     setReady(false);
     setPatchChanges(null);
     const likelyPropose = /kms\.fineres|pageId=\d+|建档|补全画像|录入|创建伙伴/i.test(content);
@@ -134,6 +138,7 @@ export function AssistantDock() {
         setProposal(p.proposal);
         setProposeScope(p.scope);
         setQuestions(p.questions ?? []);
+        setClarifications(p.clarifications ?? []);
         setReady(p.ready);
         setMessages([...next, { role: "assistant", content: p.reply || finalReply, trace: [...trace] }]);
       } else {
@@ -212,6 +217,8 @@ export function AssistantDock() {
             proposal={proposal}
             patchChanges={patchChanges}
             questions={questions}
+            clarifications={clarifications}
+            onClarify={(t) => send(t)}
             ready={ready}
             scope={proposeScope}
             partnerId={proposePartnerId}
