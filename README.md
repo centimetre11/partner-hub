@@ -33,7 +33,7 @@ AI 原生的中东区合作伙伴管理系统，为帆软软件 MEA BD 团队打
 - **共享**：Agent 默认团队共享，可一键克隆改造
 - **模板库**（开箱即用）：领英/外部动态监测（定时·每周）、停滞伙伴唤醒（定时·每天）、竞品信号雷达（定时·每周）、候选伙伴发现（手动）、会前简报（手动·绑定伙伴）
 
-联网搜索配置：`.env` 里填 `TAVILY_API_KEY`（[tavily.com](https://tavily.com) 有免费额度）优先用 Tavily；不配且 AI 用的是 Kimi（moonshot）时自动改用 Kimi 内置 `$web_search`。
+联网搜索配置：`.env` 里填 `BOCHA_API_KEY`（[博查开放平台](https://open.bocha.cn)）；不配且 AI 用的是 Kimi（moonshot）时自动改用 Kimi 内置 `$web_search`。
 
 ## 本地启动
 

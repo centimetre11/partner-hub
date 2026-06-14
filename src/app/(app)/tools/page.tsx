@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-registry";
-import { hasTavilyKey } from "@/lib/web-search";
+import { hasWebSearchKey } from "@/lib/web-search";
 
 export default async function ToolsPage() {
   const user = await requireUser();
@@ -20,7 +20,7 @@ export default async function ToolsPage() {
     }
   }
 
-  const tavilyReady = hasTavilyKey();
+  const webSearchReady = hasWebSearchKey();
   const readyCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).filter(
     (t) => getToolAvailability(t.name, { kmsConfigured }) === "ready"
   ).length;
@@ -33,21 +33,21 @@ export default async function ToolsPage() {
         desc="经测试可用的 Agent 能力单元——中东伙伴拓展场景优先：档案、领英、新闻、待办、知识库"
         actions={
           <div className="flex items-center gap-2 text-xs">
-            <Badge tone={tavilyReady ? "green" : "amber"}>
-              {tavilyReady ? `${readyCount}/${totalCount} 可用` : `${readyCount}/${totalCount} 可用（缺 Tavily）`}
+            <Badge tone={webSearchReady ? "green" : "amber"}>
+              {webSearchReady ? `${readyCount}/${totalCount} 可用` : `${readyCount}/${totalCount} 可用（缺联网搜索 Key）`}
             </Badge>
           </div>
         }
       />
       <AiCenterNav />
       <div className="px-8 max-w-5xl space-y-6">
-        {!tavilyReady && (
+        {!webSearchReady && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-medium">领英搜索 / 新闻搜索需要 Tavily Key。</span>
+            <span className="font-medium">领英搜索 / 新闻搜索需要联网搜索 Key。</span>
             在服务器 <code className="text-xs bg-amber-100 px-1 rounded">/opt/partner-hub/.env</code> 添加{" "}
-            <code className="text-xs bg-amber-100 px-1 rounded">TAVILY_API_KEY=tvly-xxx</code>（
-            <a href="https://tavily.com" className="underline" target="_blank" rel="noreferrer">
-              免费注册
+            <code className="text-xs bg-amber-100 px-1 rounded">BOCHA_API_KEY=sk-xxx</code>（
+            <a href="https://open.bocha.cn" className="underline" target="_blank" rel="noreferrer">
+              博查开放平台
             </a>
             ），然后重新部署。
           </div>
@@ -97,8 +97,8 @@ export default async function ToolsPage() {
                         <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{tool.desc}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge tone={status === "ready" ? "green" : status === "needs_tavily" || status === "needs_kms" ? "amber" : "zinc"}>
-                          {status === "ready" ? "已验证" : status === "needs_tavily" ? "需 Tavily" : status === "needs_kms" ? "需 KMS 令牌" : "未知"}
+                        <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" ? "amber" : "zinc"}>
+                          {status === "ready" ? "已验证" : status === "needs_web_search" ? "需联网 Key" : status === "needs_kms" ? "需 KMS 令牌" : "未知"}
                         </Badge>
                         {usedToolNames.has(tool.name) && <Badge tone="blue">已装备</Badge>}
                       </div>

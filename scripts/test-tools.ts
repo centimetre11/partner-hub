@@ -4,16 +4,16 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { runSkill, newSkillContext, SKILLS } from "../src/lib/skills";
-import { hasTavilyKey } from "../src/lib/web-search";
+import { hasWebSearchKey } from "../src/lib/web-search";
 
 const prisma = new PrismaClient();
 
 function classify(tool: string, out: string): "pass" | "skip" | "fail" {
-  if (out.includes("未配置 KMS") || out.includes("未配置 TAVILY") || out.includes("TAVILY_API_KEY")) {
+  if (out.includes("未配置 KMS") || out.includes("未配置 BOCHA") || out.includes("BOCHA_API_KEY")) {
     if (tool === "read_kms") return process.env.KMS_TEST_TOKEN ? "fail" : "skip";
-    return hasTavilyKey() ? "fail" : "skip";
+    return hasWebSearchKey() ? "fail" : "skip";
   }
-  if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败") || out.startsWith("Tavily")) {
+  if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败") || out.startsWith("博查")) {
     return "fail";
   }
   if (tool === "search_knowledge" && out.includes("未找到")) return "fail";
@@ -99,7 +99,7 @@ async function main() {
   results.push({ tool: "create_document", status: docOk ? "pass" : "fail", preview: docOut });
 
   const summary = {
-    tavilyConfigured: hasTavilyKey(),
+    webSearchConfigured: hasWebSearchKey(),
     registeredTools: SKILLS.map((s) => s.name),
     removedTools: ["fetch_url"],
     results,

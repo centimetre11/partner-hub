@@ -1,5 +1,5 @@
 import { SKILLS } from "./skills";
-import { hasTavilyKey } from "./web-search";
+import { hasWebSearchKey } from "./web-search";
 
 export type ToolMeta = {
   name: string;
@@ -7,8 +7,8 @@ export type ToolMeta = {
   desc: string;
   /** 是否已在代码中注册且实现 */
   implemented: boolean;
-  /** 是否需要 Tavily Key */
-  requiresTavily?: boolean;
+  /** 是否需要博查联网搜索 Key */
+  requiresWebSearch?: boolean;
   /** 是否需要用户配置 KMS 个人令牌 */
   requiresKms?: boolean;
   /** 核心场景优先级 */
@@ -28,8 +28,8 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   get_partner: { implemented: true, priority: "core" },
   add_timeline_event: { implemented: true, priority: "core" },
   create_todo: { implemented: true, priority: "core" },
-  linkedin_search: { implemented: true, requiresTavily: true, priority: "core" },
-  web_search: { implemented: true, requiresTavily: true, priority: "core" },
+  linkedin_search: { implemented: true, requiresWebSearch: true, priority: "core" },
+  web_search: { implemented: true, requiresWebSearch: true, priority: "core" },
   search_knowledge: { implemented: true, priority: "core" },
   read_kms: { implemented: true, requiresKms: true, priority: "core" },
   create_document: { implemented: true, priority: "core" },
@@ -86,22 +86,22 @@ export function getToolLabel(name: string) {
 export function isToolAvailable(name: string) {
   const meta = TOOL_META[name];
   if (!meta?.implemented) return false;
-  if (meta.requiresTavily && !hasTavilyKey()) return false;
+  if (meta.requiresWebSearch && !hasWebSearchKey()) return false;
   return true;
 }
 
 export function getToolAvailability(
   name: string,
   opts?: { kmsConfigured?: boolean }
-): "ready" | "needs_tavily" | "needs_kms" | "unknown" {
+): "ready" | "needs_web_search" | "needs_kms" | "unknown" {
   if (!SKILLS.some((t) => t.name === name)) return "unknown";
   const meta = TOOL_META[name];
-  if (meta?.requiresTavily && !hasTavilyKey()) return "needs_tavily";
+  if (meta?.requiresWebSearch && !hasWebSearchKey()) return "needs_web_search";
   if (meta?.requiresKms && !opts?.kmsConfigured) return "needs_kms";
   return "ready";
 }
 
-/** Agent 默认装备的核心工具（不含需 Tavily 的情报工具，由模板按需追加） */
+/** Agent 默认装备的核心工具（不含需博查 Key 的情报工具，由模板按需追加） */
 export const CORE_AGENT_TOOLS = [
   "search_partners",
   "get_partner",

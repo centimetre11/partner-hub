@@ -3,7 +3,7 @@ import type { ToolDef } from "./ai";
 import { PARTNER_FIELD_LABELS, stageName } from "./constants";
 import { partnerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
-import { generalWebSearch, linkedinSearch } from "./web-search";
+import { generalWebSearch, hasWebSearchKey, linkedinSearch } from "./web-search";
 import { readKmsForUser } from "./kms";
 
 // ============ 技能执行上下文 ============
@@ -588,7 +588,7 @@ export const KIMI_BUILTIN_SEARCH = {
 };
 
 export async function shouldUseVolcengineBuiltinSearch(): Promise<boolean> {
-  if (process.env.TAVILY_API_KEY) return false;
+  if (hasWebSearchKey()) return false;
   const configured = await db.aiApiConfig.findFirst({
     where: { enabled: true },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
@@ -604,7 +604,7 @@ export async function shouldUseVolcengineBuiltinSearch(): Promise<boolean> {
 }
 
 export async function shouldUseKimiBuiltinSearch(): Promise<boolean> {
-  if (process.env.TAVILY_API_KEY) return false;
+  if (hasWebSearchKey()) return false;
   if (await shouldUseVolcengineBuiltinSearch()) return false;
   const configured = await db.aiApiConfig.findFirst({
     where: { enabled: true },
