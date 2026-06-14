@@ -2,9 +2,15 @@ import { db } from "./db";
 import { SKILLS, skillsToTools, type Skill } from "./skills";
 import type { ToolDef } from "./ai";
 
+export type ToolOption = { name: string; label: string; desc: string };
+export type PromptSkillOption = { id: string; name: string; label: string; desc: string };
+
 export type ResolvedAgentSkills = {
   skillNames: string[];
   promptFragments: string[];
+  toolOptions: ToolOption[];
+  promptSkillOptions: PromptSkillOption[];
+  /** @deprecated 兼容旧调用，等于 [...toolOptions as kind=BUILTIN, ...promptSkillOptions as kind=PROMPT] */
   skillOptions: { name: string; label: string; desc: string; kind: string; id?: string }[];
 };
 
@@ -29,23 +35,23 @@ export async function resolveAgentSkills(agentId?: string, skillsJson = "[]"): P
     orderBy: { label: "asc" },
   });
 
-  const skillOptions: ResolvedAgentSkills["skillOptions"] = SKILLS.map((s) => ({
+  const toolOptions: ToolOption[] = SKILLS.map((s) => ({
     name: s.name,
     label: s.label,
     desc: s.desc,
-    kind: "BUILTIN",
   }));
-  for (const s of custom) {
-    skillOptions.push({
-      id: s.id,
-      name: s.name,
-      label: s.label,
-      desc: s.description ?? "自定义提示词技能",
-      kind: "PROMPT",
-    });
-  }
+  const promptSkillOptions: PromptSkillOption[] = custom.map((s) => ({
+    id: s.id,
+    name: s.name,
+    label: s.label,
+    desc: s.description ?? "自定义方法论技能",
+  }));
+  const skillOptions: ResolvedAgentSkills["skillOptions"] = [
+    ...toolOptions.map((t) => ({ ...t, kind: "BUILTIN" })),
+    ...promptSkillOptions.map((s) => ({ ...s, kind: "PROMPT" })),
+  ];
 
-  return { skillNames: [...names], promptFragments, skillOptions };
+  return { skillNames: [...names], promptFragments, toolOptions, promptSkillOptions, skillOptions };
 }
 
 export function buildToolsForAgent(skillNames: string[]): (ToolDef | Record<string, unknown>)[] {

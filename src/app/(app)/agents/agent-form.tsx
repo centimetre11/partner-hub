@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { upsertAgentAction } from "@/lib/agent-actions";
+import type { PromptSkillOption, ToolOption } from "@/lib/skill-resolver";
 
-type SkillOption = { name: string; label: string; desc: string; kind: string; id?: string };
 type PartnerOption = { id: string; name: string };
 
 type AgentData = {
@@ -28,11 +28,13 @@ const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:
 
 export function AgentForm({
   agent,
-  skillOptions,
+  toolOptions,
+  promptSkillOptions,
   partners,
 }: {
   agent: AgentData;
-  skillOptions: SkillOption[];
+  toolOptions: ToolOption[];
+  promptSkillOptions: PromptSkillOption[];
   partners: PartnerOption[];
 }) {
   const [trigger, setTrigger] = useState(agent.trigger);
@@ -73,30 +75,50 @@ export function AgentForm({
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-3">
-        <h3 className="text-sm font-semibold text-zinc-800">技能（Agent 可以使用的工具）</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-800">工具背包</h3>
+          <p className="text-xs text-zinc-400 mt-0.5">Agent 可直接调用的能力单元——读档案、搜网页、写待办等</p>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {skillOptions.map((s) =>
-            s.kind === "PROMPT" && s.id ? (
-              <label key={s.id} className="flex items-start gap-2.5 rounded-lg border border-purple-100 px-3.5 py-2.5 cursor-pointer hover:border-purple-200 bg-purple-50/30">
+          {toolOptions.map((t) => (
+            <label
+              key={t.name}
+              className="flex items-start gap-2.5 rounded-lg border border-zinc-100 px-3.5 py-2.5 cursor-pointer hover:border-indigo-200"
+            >
+              <input type="checkbox" name="skills" value={t.name} defaultChecked={agent.skills.includes(t.name)} className="mt-0.5 rounded" />
+              <span className="min-w-0">
+                <span className="text-sm font-medium text-zinc-800 block">{t.label}</span>
+                <span className="text-xs text-zinc-400 font-mono">{t.name}</span>
+                <span className="text-xs text-zinc-400 block mt-0.5">{t.desc}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {promptSkillOptions.length > 0 && (
+        <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-800">技能书</h3>
+            <p className="text-xs text-zinc-400 mt-0.5">方法论与专业流程——注入系统指令，指导 Agent 如何组合工具完成任务</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {promptSkillOptions.map((s) => (
+              <label
+                key={s.id}
+                className="flex items-start gap-2.5 rounded-lg border border-purple-100 px-3.5 py-2.5 cursor-pointer hover:border-purple-200 bg-purple-50/30"
+              >
                 <input type="checkbox" name="skillIds" value={s.id} defaultChecked={agent.skillIds.includes(s.id)} className="mt-0.5 rounded" />
                 <span className="min-w-0">
                   <span className="text-sm font-medium text-zinc-800 block">{s.label}</span>
-                  <span className="text-xs text-purple-500">提示词技能</span>
+                  <span className="text-xs text-purple-500">方法论</span>
                   <span className="text-xs text-zinc-400 block">{s.desc}</span>
                 </span>
               </label>
-            ) : (
-              <label key={s.name} className="flex items-start gap-2.5 rounded-lg border border-zinc-100 px-3.5 py-2.5 cursor-pointer hover:border-indigo-200">
-                <input type="checkbox" name="skills" value={s.name} defaultChecked={agent.skills.includes(s.name)} className="mt-0.5 rounded" />
-                <span className="min-w-0">
-                  <span className="text-sm font-medium text-zinc-800 block">{s.label}</span>
-                  <span className="text-xs text-zinc-400">{s.desc}</span>
-                </span>
-              </label>
-            )
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-4">
         <h3 className="text-sm font-semibold text-zinc-800">触发与作用域</h3>

@@ -61,8 +61,8 @@ const OUTPUT_SCHEMA = `只输出一个 JSON 对象：
     "icon": "一个 emoji",
     "description": "一句话说明",
     "instructions": "完整系统指令，说明身份、每次运行步骤、工具使用顺序、输出格式、遇到没有工具时如何先用已有资料和推理尝试解决并说明限制",
-    "skills": ["内置技能 name"],
-    "skillIds": ["提示词技能 id"],
+    "skills": ["工具 name，如 web_search"],
+    "skillIds": ["技能 id"],
     "trigger": "MANUAL 或 SCHEDULE",
     "frequency": "HOURLY/DAILY/WEEKLY",
     "runHour": 0-23,
@@ -71,9 +71,9 @@ const OUTPUT_SCHEMA = `只输出一个 JSON 对象：
     "partnerId": "绑定伙伴 id 或空字符串",
     "shared": true,
     "webhookUrl": "",
-    "missingSkillNotes": ["没有合适 skill 时的说明和 Agent 将如何临时处理"],
+    "missingSkillNotes": ["没有合适技能时的说明和 Agent 将如何临时处理"],
     "questionnaire": ["像调研问卷一样给用户确认的问题"],
-    "rationale": "为什么选这些 skill 和触发方式"
+    "rationale": "为什么选这些工具和技能、以及触发方式"
   }
 }`;
 
@@ -91,7 +91,7 @@ export async function runAgentBuilderTurn(opts: {
   messages: AgentBuilderMessage[];
   userId?: string;
 }): Promise<AgentBuilderTurn> {
-  const [{ skillOptions }, partners, knowledge] = await Promise.all([
+  const [{ toolOptions, promptSkillOptions }, partners, knowledge] = await Promise.all([
     resolveAgentSkills(),
     db.partner.findMany({
       where: { status: { not: "ARCHIVED" } },
@@ -107,13 +107,12 @@ export async function runAgentBuilderTurn(opts: {
     }),
   ]);
 
-  const builtinNames = new Set(skillOptions.filter((s) => s.kind !== "PROMPT").map((s) => s.name));
-  const promptSkillIds = new Set(skillOptions.filter((s) => s.kind === "PROMPT" && s.id).map((s) => s.id as string));
+  const builtinNames = new Set(toolOptions.map((t) => t.name));
+  const promptSkillIds = new Set(promptSkillOptions.map((s) => s.id));
   const partnerIds = new Set(partners.map((p) => p.id));
 
-  const skillLines = skillOptions
-    .map((s) => `${s.kind === "PROMPT" ? `PROMPT id=${s.id}` : `BUILTIN name=${s.name}`} | ${s.label} | ${s.desc}`)
-    .join("\n");
+  const toolLines = toolOptions.map((t) => `TOOL name=${t.name} | ${t.label} | ${t.desc}`).join("\n");
+  const promptSkillLines = promptSkillOptions.map((s) => `SKILL id=${s.id} | ${s.label} | ${s.desc}`).join("\n") || "（暂无自定义技能）";
   const partnerLines = partners
     .map((p) => `${p.id} | ${p.name} | ${p.status}${p.tier ? ` | Tier ${p.tier}` : ""}${p.country ? ` | ${p.country}` : ""}`)
     .join("\n");
@@ -125,14 +124,17 @@ export async function runAgentBuilderTurn(opts: {
 工作方式：
 1. 先理解业务目标、输入来源、触发时机、输出物、写库/推送需求、风险边界。
 2. 信息不足时，用“调研问卷”的方式一次性提出最关键的澄清问题，不要碎片化追问。
-3. 主动从 Skill 清单里选择合适 skill；优先选择少而准的技能。
-4. 如果没有完全匹配的 skill，不要卡住；在 missingSkillNotes 说明缺口，并把临时解决办法写入 instructions：先用已有知识库、伙伴档案、web_search/fetch_url、推理和透明限制说明尝试完成。
+3. 主动从工具清单选择合适工具（draft.skills）；从技能清单选择方法论（draft.skillIds）；优先少而准。
+4. 如果没有完全匹配的技能，不要卡住；在 missingSkillNotes 说明缺口，并把临时解决办法写入 instructions：先用已有知识库、伙伴档案、web_search/fetch_url、推理和透明限制说明尝试完成。
 5. 如果任务需要公司策略/产品知识，建议选择 search_knowledge，并在指令里要求先查知识库。
 6. Agent 对伙伴档案字段的修改应走提案/人工确认；写时间线、建待办、创建文档可以作为执行动作。
 7. ready=true 只在草案足够创建时给出；如果仍缺目标/触发/输出/数据源这些核心信息，ready=false 并给 questionnaire。
 
-【可用 Skill】
-${skillLines}
+【可用工具（draft.skills 填 name）】
+${toolLines}
+
+【可用技能（draft.skillIds 填 id）】
+${promptSkillLines}
 
 【可绑定伙伴】
 ${partnerLines || "（暂无伙伴）"}

@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
 import { cloneAgentAction, toggleAgentAction } from "@/lib/agent-actions";
-import { SKILL_MAP } from "@/lib/skills";
+import { getToolLabel } from "@/lib/tools-registry";
+import { AiCenterNav } from "@/components/ai-center-nav";
 
 const FREQ_LABELS: Record<string, string> = { HOURLY: "每小时", DAILY: "每天", WEEKLY: "每周" };
 const WEEKDAYS = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -53,7 +54,7 @@ export default async function AgentsPage() {
           {a.partner && <Badge tone="blue">绑定 {a.partner.name}</Badge>}
           {a.webhookUrl && <Badge tone="green">Webhook</Badge>}
           {skills.slice(0, 3).map((s) => (
-            <Badge key={s} tone="zinc">{SKILL_MAP.get(s)?.label ?? s}</Badge>
+            <Badge key={s} tone="zinc">{getToolLabel(s)}</Badge>
           ))}
           {skills.length > 3 && <span className="text-xs text-zinc-400">+{skills.length - 3}</span>}
         </div>
@@ -79,18 +80,16 @@ export default async function AgentsPage() {
     <div className="pb-16">
       <PageHeader
         title="Agent 中心"
-        desc="AI 中心的一部分：用对话或手动方式创建可运行的自动化 Agent"
+        desc="编排自动化 Agent：装备工具（能做什么）+ 技能（怎么做），配置触发与作用域"
         actions={
           <>
-            <Link href="/ai" className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
-              AI 中心
-            </Link>
             <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
               对话构建 Agent
             </Link>
           </>
         }
       />
+      <AiCenterNav />
       <div className="px-8 space-y-7">
         {/* 模板库 */}
         <div>

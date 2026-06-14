@@ -32,18 +32,18 @@ function DraftPreview({ draft }: { draft: AgentBuilderDraft }) {
           <div className="font-medium text-zinc-800">{draft.scopeType === "PARTNER" ? "绑定伙伴" : "全局"}</div>
         </div>
         <div className="rounded-lg bg-white p-2">
-          <div className="text-zinc-400">内置 Skill</div>
+          <div className="text-zinc-400">工具</div>
           <div className="font-medium text-zinc-800">{draft.skills.length}</div>
         </div>
         <div className="rounded-lg bg-white p-2">
-          <div className="text-zinc-400">提示词 Skill</div>
+          <div className="text-zinc-400">技能</div>
           <div className="font-medium text-zinc-800">{draft.skillIds.length}</div>
         </div>
       </div>
       {draft.rationale && <p className="text-xs text-zinc-500 leading-relaxed">{draft.rationale}</p>}
       {draft.missingSkillNotes.length > 0 && (
         <div className="rounded-lg bg-amber-50 border border-amber-100 p-3">
-          <div className="text-xs font-semibold text-amber-800 mb-1">Skill 缺口与临时处理</div>
+          <div className="text-xs font-semibold text-amber-800 mb-1">技能缺口与临时处理</div>
           <ul className="list-disc list-inside text-xs text-amber-700 space-y-1">
             {draft.missingSkillNotes.map((note, i) => <li key={i}>{note}</li>)}
           </ul>
@@ -99,7 +99,7 @@ export function AgentBuilder() {
       <div className="xl:col-span-3 bg-white rounded-xl border border-zinc-200/80 shadow-sm flex flex-col min-h-[640px]">
         <div className="px-5 py-4 border-b border-zinc-100">
           <div className="text-sm font-semibold text-zinc-900">对话式 Agent Builder</div>
-          <div className="text-xs text-zinc-400 mt-1">描述目标即可；信息不够时会生成调研问卷，并自动匹配 Skill。</div>
+          <div className="text-xs text-zinc-400 mt-1">描述目标即可；信息不够时会生成调研问卷，并自动匹配工具与技能。</div>
         </div>
         <div className="flex-1 p-5 space-y-3 overflow-y-auto">
           {messages.length === 0 && (
@@ -123,7 +123,7 @@ export function AgentBuilder() {
               </div>
             </div>
           ))}
-          {loading && <div className="text-xs text-zinc-400 animate-pulse">正在梳理目标、匹配 Skill、生成草案...</div>}
+          {loading && <div className="text-xs text-zinc-400 animate-pulse">正在梳理目标、匹配工具与技能、生成草案...</div>}
           {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
           <div ref={bottomRef} />
         </div>
@@ -160,7 +160,7 @@ export function AgentBuilder() {
             <form action={createAgentFromBuilderAction} className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
               <input type="hidden" name="draft" value={draftJson} />
               <p className="text-xs text-zinc-500 leading-relaxed">
-                草案确认后会创建一个可编辑 Agent；之后仍可进入详情页微调 Skill、触发方式和指令。
+                草案确认后会创建一个可编辑 Agent；之后仍可进入详情页微调工具、技能、触发方式和指令。
               </p>
               <button
                 disabled={!turn.ready}
@@ -172,7 +172,7 @@ export function AgentBuilder() {
           </>
         ) : (
           <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-sm text-zinc-400">
-            这里会展示 Agent 草案、Skill 匹配理由和需要确认的调研问卷。
+            这里会展示 Agent 草案、工具/技能匹配理由和需要确认的调研问卷。
           </div>
         )}
       </div>

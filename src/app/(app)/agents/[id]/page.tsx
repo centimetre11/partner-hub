@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
+import { AiCenterNav } from "@/components/ai-center-nav";
 import { resolveAgentSkills } from "@/lib/skill-resolver";
 import { deleteAgentAction } from "@/lib/agent-actions";
 import { AgentForm } from "../agent-form";
@@ -21,7 +22,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
   });
   if (!agent || agent.isTemplate) notFound();
 
-  const { skillOptions } = await resolveAgentSkills(agent.id, agent.skills);
+  const { toolOptions, promptSkillOptions } = await resolveAgentSkills(agent.id, agent.skills);
 
   const partners = await db.partner.findMany({
     where: { status: { not: "ARCHIVED" } },
@@ -45,6 +46,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           </>
         }
       />
+      <AiCenterNav />
       <div className="px-8 grid grid-cols-1 xl:grid-cols-5 gap-6">
         <div className="xl:col-span-3">
           <AgentForm
@@ -65,7 +67,8 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
               shared: agent.shared,
               webhookUrl: agent.webhookUrl ?? "",
             }}
-            skillOptions={skillOptions}
+            toolOptions={toolOptions}
+            promptSkillOptions={promptSkillOptions}
             partners={partners}
           />
         </div>

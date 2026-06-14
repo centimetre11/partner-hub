@@ -1,0 +1,40 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const tabs = [
+  { href: "/ai", label: "总览", icon: "✦", exact: true },
+  { href: "/agents", label: "Agent", icon: "❖" },
+  { href: "/tools", label: "工具", icon: "🔧" },
+  { href: "/skills", label: "技能", icon: "⚡" },
+  { href: "/knowledge", label: "知识库", icon: "📚" },
+];
+
+export function AiCenterNav() {
+  const pathname = usePathname();
+
+  return (
+    <div className="px-8 pb-4">
+      <div className="flex flex-wrap gap-1 rounded-xl border border-zinc-200/80 bg-zinc-50/80 p-1 max-w-3xl">
+        {tabs.map((tab) => {
+          const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              className={`flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? "bg-white text-indigo-700 shadow-sm border border-zinc-200/60"
+                  : "text-zinc-500 hover:text-zinc-800 hover:bg-white/60"
+              }`}
+            >
+              <span className="text-base leading-none">{tab.icon}</span>
+              {tab.label}
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

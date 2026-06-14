@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/ui";
+import { AiCenterNav } from "@/components/ai-center-nav";
 import { requireUser } from "@/lib/session";
 import { upsertSkillAction } from "@/lib/content-actions";
 
@@ -8,7 +9,8 @@ export default async function NewSkillPage() {
 
   return (
     <div className="pb-16">
-      <PageHeader title="新建提示词 Skill" desc="注入一段提示词片段，Agent 运行时附加到系统指令中" />
+      <PageHeader title="新建技能" desc="编写方法论流程，Agent 运行时将注入系统指令，指导如何组合工具完成任务" />
+      <AiCenterNav />
       <form action={upsertSkillAction} className="px-8 max-w-3xl space-y-4">
         <div className="bg-white rounded-xl border p-5 space-y-3">
           <input name="name" required placeholder="标识名（英文，如 joint_solution_outline）" className={input} />
