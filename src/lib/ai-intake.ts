@@ -318,6 +318,7 @@ ${OUTPUT_SCHEMA}`;
       userId: opts.userId,
       maxSteps: MAX_RESEARCH_STEPS,
       emit: opts.emit,
+      streamReply: false,
       onToolDone: (tc, result) => {
         void extractPatchFromTool(tc.function.name, result, opts.scope, opts.userId).then((ops) => {
           emitProposalPatch(opts.emit, ops);

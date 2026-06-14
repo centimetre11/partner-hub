@@ -376,6 +376,136 @@ async function volcengineResponsesCompletion(
   return parseVolcengineResponse(data);
 }
 
+/** 火山 Responses API 真·流式：边生成边通过 onDelta 推送文本增量；最终用 response.completed 的完整 output 解析权威结果 */
+async function volcengineResponsesStream(
+  api: ResolvedAiApi,
+  messages: ChatMessage[],
+  opts: {
+    tools?: (ToolDef | Record<string, unknown>)[];
+    jsonMode?: boolean;
+    temperature?: number;
+    feature?: string;
+    userId?: string;
+    onDelta?: (delta: string) => void;
+  }
+): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
+  const extra = parseExtraConfig(api.extraConfig);
+  const systemText = messages
+    .filter((m) => m.role === "system")
+    .map((m) => m.content ?? "")
+    .join("\n\n");
+  const configuredInstructions = typeof extra.instructions === "string" ? extra.instructions : "";
+  const instructions = [configuredInstructions, systemText].filter(Boolean).join("\n\n");
+
+  const tools = toVolcengineTools([
+    ...((extra.tools as (ToolDef | Record<string, unknown>)[]) ?? []),
+    ...(opts.tools ?? []),
+  ]);
+
+  const body: Record<string, unknown> = {
+    model: api.model,
+    stream: true,
+    store: extra.store ?? true,
+    input: messagesToVolcengineInput(messages),
+    ...(instructions ? { instructions } : {}),
+    ...(typeof extra.max_output_tokens === "number" ? { max_output_tokens: extra.max_output_tokens } : {}),
+    ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
+    ...(tools.length ? { tools } : {}),
+  };
+  if (opts.jsonMode) {
+    body.text = { format: { type: "json_object" } };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${api.baseUrl.replace(/\/$/, "")}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${api.apiKey}`,
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: msg });
+    throw new AIError(`火山引擎接口调用失败：${msg}`);
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    await recordBestEffort({
+      api,
+      feature: opts.feature ?? "未标注 AI 调用",
+      userId: opts.userId,
+      status: "FAILED",
+      error: `HTTP ${res.status}: ${text.slice(0, 500)}`,
+    });
+    throw new AIError(`火山引擎接口调用失败（${res.status}）：${text.slice(0, 500)}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new AIError("流式响应不可用");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finalResponse: Record<string, unknown> | null = null;
+  let fallbackText = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      let parsed: Record<string, unknown>;
+      try {
+        parsed = JSON.parse(payload) as Record<string, unknown>;
+      } catch {
+        continue;
+      }
+      const type = String(parsed.type ?? "");
+      // 文本增量：真·流式逐字推送
+      if (type === "response.output_text.delta") {
+        const delta = parsed.delta;
+        if (typeof delta === "string" && delta) {
+          fallbackText += delta;
+          opts.onDelta?.(delta);
+        }
+      } else if (type === "response.completed" || type === "response.incomplete") {
+        const r = parsed.response;
+        if (r && typeof r === "object") finalResponse = r as Record<string, unknown>;
+      } else if (type === "error" || type === "response.failed") {
+        const errMsg = (parsed.message as string) ?? JSON.stringify(parsed);
+        await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: errMsg.slice(0, 500) });
+        throw new AIError(`火山引擎流式出错：${errMsg.slice(0, 500)}`);
+      }
+    }
+  }
+
+  if (finalResponse) {
+    const usage = readVolcengineTokenUsage(finalResponse);
+    await recordBestEffort({
+      api,
+      feature: opts.feature ?? "未标注 AI 调用",
+      userId: opts.userId,
+      usage,
+      status: "SUCCESS",
+    });
+    return parseVolcengineResponse(finalResponse);
+  }
+
+  // 未收到 response.completed：用累计文本兜底
+  await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "SUCCESS" });
+  return { content: fallbackText || null, toolCalls: [], volcengineReplay: [] };
+}
+
 function simulateTextDeltas(text: string | null, onDelta?: (delta: string) => void) {
   if (!text || !onDelta) return;
   const size = 8;
@@ -519,9 +649,11 @@ export async function chatCompletion(
   const api = await resolveAiApi();
 
   if (api.provider === "volcengine") {
-    const result = await volcengineResponsesCompletion(api, messages, opts);
-    if (opts.onDelta && result.content) await simulateTextDeltasAsync(result.content, opts.onDelta);
-    return result;
+    // 有 onDelta 时走真·流式（边生成边推送），否则一次性返回
+    if (opts.onDelta) {
+      return volcengineResponsesStream(api, messages, opts);
+    }
+    return volcengineResponsesCompletion(api, messages, opts);
   }
 
   if (opts.onDelta) {

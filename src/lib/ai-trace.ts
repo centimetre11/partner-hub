@@ -58,6 +58,7 @@ export type AiStreamEvent =
   | { event: "trace_result_delta"; id: string; delta: string }
   | { event: "phase"; phase: AiPhase; label?: string }
   | { event: "reply_delta"; delta: string }
+  | { event: "reply_reset" }
   | { event: "reply_done" }
   | { event: "text_delta"; delta: string }
   | { event: "text_done" }
@@ -188,8 +189,8 @@ export async function emitTraceResultChunks(
 export async function emitReplyChunks(
   emit: TraceEmitter | undefined,
   text: string,
-  chunkSize = 8,
-  delayMs = 20
+  chunkSize = 3,
+  delayMs = 28
 ) {
   if (!emit || !text) return;
   for (let i = 0; i < text.length; i += chunkSize) {
@@ -313,6 +314,8 @@ export async function consumeAiSse(
       if (ev.label) phaseLabel = ev.label;
     } else if (ev.event === "reply_delta" || ev.event === "text_delta") {
       replyText += ev.delta;
+    } else if (ev.event === "reply_reset") {
+      replyText = "";
     } else if (ev.event === "proposal_patch") {
       const { draft, changes } = mergeProposalPatch(proposal, ev.ops, excluded);
       proposal = draft;
