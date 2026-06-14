@@ -239,6 +239,94 @@ export async function deleteContactAction(partnerId: string, contactId: string) 
   revalidatePath(`/partners/${partnerId}`);
 }
 
+// ============ 权力地图：拖拽 / 汇报关系 / 布局 ============
+
+// 防环：若把 subId 的上级设为 supId，沿实线（reportsToId + SOLID 附加线）向上遍历，
+// 若能从 supId 回到 subId，则说明会成环，应拒绝。
+async function wouldCreateCycle(partnerId: string, subId: string, supId: string): Promise<boolean> {
+  if (subId === supId) return true;
+  const contacts = await db.contact.findMany({
+    where: { partnerId },
+    select: { id: true, reportsToId: true },
+  });
+  const solidLinks = await db.contactLink.findMany({
+    where: { partnerId, kind: "SOLID" },
+    select: { subordinateId: true, superiorId: true },
+  });
+  // 邻接表：下级 -> 所有上级
+  const parents = new Map<string, string[]>();
+  for (const c of contacts) {
+    if (c.reportsToId) parents.set(c.id, [...(parents.get(c.id) ?? []), c.reportsToId]);
+  }
+  for (const l of solidLinks) {
+    parents.set(l.subordinateId, [...(parents.get(l.subordinateId) ?? []), l.superiorId]);
+  }
+  // 从 supId 出发向上找，看是否能到达 subId
+  const stack = [supId];
+  const seen = new Set<string>();
+  while (stack.length) {
+    const cur = stack.pop()!;
+    if (cur === subId) return true;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    for (const p of parents.get(cur) ?? []) stack.push(p);
+  }
+  return false;
+}
+
+export async function moveContactAction(partnerId: string, contactId: string, x: number, y: number) {
+  await requireUser();
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  await db.contact.update({ where: { id: contactId }, data: { x, y } });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function setReportsToAction(
+  partnerId: string,
+  subId: string,
+  superiorId: string | null,
+) {
+  await requireUser();
+  if (!subId) return;
+  if (superiorId) {
+    if (subId === superiorId) return;
+    if (await wouldCreateCycle(partnerId, subId, superiorId)) return;
+  }
+  await db.contact.update({ where: { id: subId }, data: { reportsToId: superiorId } });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function addContactLinkAction(
+  partnerId: string,
+  subId: string,
+  supId: string,
+  kind: string,
+) {
+  await requireUser();
+  if (!subId || !supId || subId === supId) return;
+  const linkKind = kind === "SOLID" ? "SOLID" : "DOTTED";
+  // 仅实线参与防环约束；虚线允许跨级跨部门
+  if (linkKind === "SOLID" && (await wouldCreateCycle(partnerId, subId, supId))) return;
+  await db.contactLink.upsert({
+    where: { subordinateId_superiorId: { subordinateId: subId, superiorId: supId } },
+    update: { kind: linkKind },
+    create: { partnerId, subordinateId: subId, superiorId: supId, kind: linkKind },
+  });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function removeContactLinkAction(partnerId: string, linkId: string) {
+  await requireUser();
+  await db.contactLink.delete({ where: { id: linkId } });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function resetPowerMapLayoutAction(partnerId: string) {
+  await requireUser();
+  await db.contact.updateMany({ where: { partnerId }, data: { x: null, y: null } });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
 // ============ 商机 ============
 
 export async function upsertOpportunityAction(partnerId: string, formData: FormData) {

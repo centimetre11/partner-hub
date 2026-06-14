@@ -65,6 +65,7 @@ model Partner {
   updatedAt        DateTime @updatedAt
 
   contacts      Contact[]
+  contactLinks  ContactLink[]
   opportunities Opportunity[]
   todos         TodoItem[]
   events        TimelineEvent[]
@@ -84,14 +85,35 @@ model Contact {
   title       String?
   department  String? // 部门
   attitude    Int       @default(0) // 3教练 / 2支持并排他 / 1支持不排他 / 0未接触或中立 / -1反对
-  reportsToId String? // 汇报上级（权力地图层级）
+  reportsToId String? // 汇报上级（主汇报实线）
   reportsTo   Contact?  @relation("ContactReports", fields: [reportsToId], references: [id], onDelete: SetNull)
   reports     Contact[] @relation("ContactReports")
+  x           Float? // 权力地图手动摆放坐标（null = 自动布局）
+  y           Float?
+  linksAsSub  ContactLink[] @relation("LinkSub") // 作为下级的附加汇报线
+  linksAsSup  ContactLink[] @relation("LinkSup") // 作为上级的附加汇报线
   contactInfo String?
   approach    String?
   notes       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+// 附加汇报线（虚线/双线汇报）。主汇报实线仍走 Contact.reportsToId
+model ContactLink {
+  id            String   @id @default(cuid())
+  partnerId     String
+  partner       Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  subordinateId String // 下级
+  superiorId    String // 上级
+  // SOLID 附加实线 / DOTTED 虚线
+  kind          String   @default("DOTTED")
+  subordinate   Contact  @relation("LinkSub", fields: [subordinateId], references: [id], onDelete: Cascade)
+  superior      Contact  @relation("LinkSup", fields: [superiorId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@unique([subordinateId, superiorId])
+  @@index([partnerId])
 }
 
 model Opportunity {

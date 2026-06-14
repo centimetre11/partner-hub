@@ -13,6 +13,7 @@
     "@blocknote/mantine": "^0.51.4",
     "@blocknote/react": "^0.51.4",
     "@prisma/client": "^6.19.3",
+    "@xyflow/react": "^12.11.0",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.3",
     "next": "16.2.9",

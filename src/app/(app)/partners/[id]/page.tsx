@@ -8,7 +8,8 @@ import {
   EVENT_TYPE_LABELS, PIPELINE_STAGES, POOL_FLAG_LABELS, STATUS_LABELS,
   TODO_PRIORITY_LABELS, attitudeLabel, stageName,
 } from "@/lib/constants";
-import { PowerMapChart, PowerMapLegend, attitudeDotClass } from "@/components/power-map";
+import { attitudeDotClass } from "@/components/power-map";
+import { PowerMapFlow } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import {
   addNoteAction, archivePartnerAction, createTodoAction, deleteContactAction,
@@ -29,6 +30,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     where: { id },
     include: {
       contacts: { orderBy: [{ attitude: "desc" }, { createdAt: "asc" }] },
+      contactLinks: true,
       opportunities: { orderBy: { updatedAt: "desc" } },
       events: { orderBy: { createdAt: "desc" }, include: { createdBy: true } },
       trainings: true,
@@ -208,15 +210,17 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             title={`② 权力地图（${p.contacts.length} 人）`}
             actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI 加人" variant="soft" />}
           >
-            <div className="mb-4 rounded-lg bg-zinc-50/80 border border-zinc-100 px-4 py-3">
-              <PowerMapLegend />
-            </div>
             {p.contacts.length > 0 && (
               <div className="mb-5 border-b border-zinc-100 pb-4">
-                <PowerMapChart
+                <PowerMapFlow
+                  partnerId={p.id}
                   contacts={p.contacts.map((c) => ({
                     id: c.id, name: c.name, role: c.role, title: c.title,
                     department: c.department, attitude: c.attitude, reportsToId: c.reportsToId,
+                    x: c.x, y: c.y,
+                  }))}
+                  links={p.contactLinks.map((l) => ({
+                    id: l.id, subordinateId: l.subordinateId, superiorId: l.superiorId, kind: l.kind,
                   }))}
                 />
               </div>
