@@ -121,10 +121,16 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
   },
   powermap: {
     title: "添加权力地图人物",
-    intro: "用户想往这个伙伴的权力地图里加人/更新人。请抽取人物信息。",
-    guide: `每个人建议补全：职位 title、${ROLE_LINE}、${ATTITUDE_LINE}、所属部门 department、汇报上级 reportsToName。如果用户只给了名字和职位、没说清角色/态度/汇报给谁，就自然地追问最关键的一两点（例如"这个人是拍板的还是评估的？""他汇报给谁？"）。用户说不清楚就跳过，别纠缠。`,
+    intro:
+      "用户想往这个伙伴的权力地图里加人/更新人。权力地图的核心是组织层级（谁向谁汇报），所以本任务的首要目标不是单纯录入字段，而是把这个人准确放进上下级关系里。",
+    guide: `【聚焦上下级关系（最重要）】
+1. 加人的第一要务是定位他在组织里的层级：他汇报给谁（reportsToName），以及是否有现有联系人应当改为汇报给他。
+2. 必须对照下方【权力地图/关键人物】现有名单来判断：reportsToName 要尽量解析成名单里已存在的人；如果某个现有联系人的汇报线应随这次加人而改变（例如新来的总监应成为某人的上级），就对那个人输出 action=update（带其 id）并更新其 reportsToName。
+3. 汇报线不明确时，不要瞎填——优先用结构化澄清提问：clarifications 里给一条「{这个人}应该汇报给谁？」，options 用【现有联系人姓名】+「公司高层/顶层」+「暂不确定」，让用户一键点选。
+4. 通过联网搜索 + LinkedIn 调研这个人的职位、所在部门与汇报层级线索（不依赖 KMS/知识库，那里通常没有）；调研到的职级有助于推断他在权力地图中的位置。
+5. 仍然顺带补全：职位 title、${ROLE_LINE}、${ATTITUDE_LINE}、所属部门 department，但重心始终是上下级关系。用户说不清楚的就跳过，别纠缠。`,
     schemaHint:
-      "只填 contacts（action=add 新增 / update 更新并带 id）。fields/opportunities/todos/trainings/solutions 全部留空数组。",
+      "只填 contacts（action=add 新增 / update 更新并带 id；update 既可用于补全已有人的信息，也可用于调整已有人的 reportsToName 汇报线）。fields/opportunities/todos/trainings/solutions 全部留空数组。",
   },
   opportunity: {
     title: "添加商机",
@@ -527,22 +533,16 @@ export async function applyIntake(opts: {
     }
   }
 
-  // ---- 联系人 ----
+  // ---- 联系人（两遍：先落库，再解析汇报关系） ----
+  // 第一遍：create/update 所有人，暂不算 reportsToId，记录每个人的姓名→落库 id
+  const contactIdByName = new Map<string, string>();
   for (const c of proposal.contacts) {
-    let reportsToId: string | undefined;
-    if (c.reportsToName) {
-      const boss = await db.contact.findFirst({
-        where: { partnerId, name: { contains: c.reportsToName }, NOT: { name: c.name } },
-      });
-      reportsToId = boss?.id;
-    }
     const payload = {
       name: c.name,
       role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
       title: c.title,
       department: c.department,
       attitude: typeof c.attitude === "number" && c.attitude >= -1 && c.attitude <= 3 ? c.attitude : undefined,
-      reportsToId,
       contactInfo: c.contactInfo,
       approach: c.approach,
       notes: c.notes,
@@ -551,12 +551,34 @@ export async function applyIntake(opts: {
     const existing =
       (c.action === "update" && c.id && (await db.contact.findFirst({ where: { id: c.id, partnerId } }))) ||
       (await db.contact.findFirst({ where: { partnerId, name: c.name } }));
+    let savedId: string;
     if (existing) {
       await db.contact.update({ where: { id: existing.id }, data: clean });
+      savedId = existing.id;
       applied.push(`更新联系人：${c.name}`);
     } else {
-      await db.contact.create({ data: { partnerId, ...clean, name: c.name } });
+      const created = await db.contact.create({ data: { partnerId, ...clean, name: c.name } });
+      savedId = created.id;
       applied.push(`新增联系人：${c.name}`);
+    }
+    contactIdByName.set(c.name, savedId);
+  }
+
+  // 第二遍：解析 reportsToName → reportsToId（含同批新增的上级、以及现有人改挂到新人下）
+  for (const c of proposal.contacts) {
+    if (!c.reportsToName) continue;
+    const subId = contactIdByName.get(c.name);
+    if (!subId) continue;
+    // 先用本批落库的人匹配，再回退到数据库里既有的同伙伴联系人
+    let bossId = contactIdByName.get(c.reportsToName);
+    if (!bossId) {
+      const boss = await db.contact.findFirst({
+        where: { partnerId, name: { contains: c.reportsToName }, NOT: { name: c.name } },
+      });
+      bossId = boss?.id;
+    }
+    if (bossId && bossId !== subId) {
+      await db.contact.update({ where: { id: subId }, data: { reportsToId: bossId } });
     }
   }
 

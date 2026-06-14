@@ -13,7 +13,7 @@ import { PowerMapFlow } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import {
   addNoteAction, archivePartnerAction, createTodoAction, deleteContactAction,
-  deleteOpportunityAction, deleteTrainingAction, promotePartnerAction,
+  deleteOpportunityAction, deleteTodoAction, deleteTrainingAction, promotePartnerAction,
   restorePartnerAction, setPipelineStageAction, toggleTodoAction, updatePartnerAction,
   upsertContactAction, upsertOpportunityAction, upsertTrainingAction,
 } from "@/lib/actions";
@@ -511,38 +511,66 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               <button className="rounded-lg bg-zinc-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-zinc-700">+</button>
             </form>
             <div className="space-y-2">
-              {p.todos.map((t) => {
-                const overdue = t.status === "OPEN" && t.dueDate && new Date(t.dueDate) < new Date();
-                return (
-                  <div key={t.id} className="flex items-start gap-2.5 group">
-                    <form action={toggleTodoAction.bind(null, t.id)}>
-                      <button
-                        className={`w-4.5 h-4.5 mt-0.5 rounded border flex items-center justify-center text-[10px] ${
-                          t.status === "DONE" ? "bg-indigo-600 border-indigo-600 text-white" : "border-zinc-300 hover:border-indigo-400"
-                        }`}
-                      >
-                        {t.status === "DONE" && "✓"}
-                      </button>
-                    </form>
-                    <div className="min-w-0 flex-1">
-                      <div className={`text-sm ${t.status === "DONE" ? "line-through text-zinc-300" : "text-zinc-800"}`}>
-                        {t.title}
-                        {t.source === "AI" && <span className="ml-1.5 text-[10px] text-purple-500">AI</span>}
+              {(() => {
+                const openTodos = p.todos.filter((t) => t.status !== "DONE");
+                const doneTodos = p.todos.filter((t) => t.status === "DONE");
+                const renderTodo = (t: (typeof p.todos)[number]) => {
+                  const overdue = t.status === "OPEN" && t.dueDate && new Date(t.dueDate) < new Date();
+                  return (
+                    <div key={t.id} className="flex items-start gap-2.5 group">
+                      <form action={toggleTodoAction.bind(null, t.id)}>
+                        <button
+                          className={`w-4.5 h-4.5 mt-0.5 rounded border flex items-center justify-center text-[10px] ${
+                            t.status === "DONE" ? "bg-indigo-600 border-indigo-600 text-white" : "border-zinc-300 hover:border-indigo-400"
+                          }`}
+                        >
+                          {t.status === "DONE" && "✓"}
+                        </button>
+                      </form>
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-sm ${t.status === "DONE" ? "line-through text-zinc-300" : "text-zinc-800"}`}>
+                          {t.title}
+                          {t.source === "AI" && <span className="ml-1.5 text-[10px] text-purple-500">AI</span>}
+                        </div>
+                        <div className="text-xs text-zinc-400">
+                          {t.dueDate && (
+                            <span className={overdue ? "text-red-500 font-medium" : ""}>
+                              {fmtDate(t.dueDate)}{overdue && " 已逾期"}
+                            </span>
+                          )}
+                          {t.assignee && ` · ${t.assignee.name}`}
+                          {` · ${TODO_PRIORITY_LABELS[t.priority]}`}
+                        </div>
                       </div>
-                      <div className="text-xs text-zinc-400">
-                        {t.dueDate && (
-                          <span className={overdue ? "text-red-500 font-medium" : ""}>
-                            {fmtDate(t.dueDate)}{overdue && " 已逾期"}
-                          </span>
-                        )}
-                        {t.assignee && ` · ${t.assignee.name}`}
-                        {` · ${TODO_PRIORITY_LABELS[t.priority]}`}
-                      </div>
+                      <form action={deleteTodoAction.bind(null, t.id)}>
+                        <button
+                          title="删除待办"
+                          className="text-zinc-300 hover:text-red-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
+                        >
+                          ✕
+                        </button>
+                      </form>
                     </div>
-                  </div>
+                  );
+                };
+                return (
+                  <>
+                    {openTodos.map(renderTodo)}
+                    {doneTodos.length > 0 && (
+                      <details open={openTodos.length === 0} className="group/done -mx-1">
+                        <summary className="flex items-center gap-1.5 px-1 py-1.5 cursor-pointer select-none text-xs text-zinc-400 hover:text-zinc-600 list-none">
+                          <span className="transition-transform group-open/done:rotate-90">▸</span>
+                          已完成 ({doneTodos.length})
+                        </summary>
+                        <div className="space-y-2 mt-1">
+                          {doneTodos.map(renderTodo)}
+                        </div>
+                      </details>
+                    )}
+                    {p.todos.length === 0 && <EmptyState text="暂无待办" />}
+                  </>
                 );
-              })}
-              {p.todos.length === 0 && <EmptyState text="暂无待办" />}
+              })()}
             </div>
           </Card>
         </div>
