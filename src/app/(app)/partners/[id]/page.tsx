@@ -495,7 +495,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           {/* 待办 */}
           <Card
             title={`待办（${p.todos.filter((t) => t.status === "OPEN").length} 项未完成）`}
-            actions={<AiAddButton scope="todo" partnerId={p.id} label="✦ AI 加" variant="soft" />}
           >
             <form action={createTodoAction} className="flex gap-2 mb-4">
               <input type="hidden" name="partnerId" value={p.id} />

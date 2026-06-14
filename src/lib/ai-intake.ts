@@ -26,7 +26,6 @@ export type IntakeScope =
   | "opportunity"
   | "profile"
   | "training"
-  | "todo"
   | "solution";
 
 export type TrainingProposal = {
@@ -150,12 +149,6 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     guide:
       "每条培训建议补全：人员 person（必填）、当前能力 currentSkill、目标认证 targetCert、截止 deadline(YYYY-MM-DD)、状态 status(PLANNED/IN_PROGRESS/DONE)。缺人员就问。",
     schemaHint: "只填 trainings。其余留空数组。",
-  },
-  todo: {
-    title: "添加待办",
-    intro: "用户想记一条或多条待办/跟进事项。",
-    guide: "每条待办建议补全：标题 title（必填）、截止 dueDate(YYYY-MM-DD)、优先级 priority(HIGH/MEDIUM/LOW)。",
-    schemaHint: "只填 todos。其余留空数组。",
   },
   solution: {
     title: "添加联合解决方案",
@@ -513,7 +506,7 @@ export async function applyIntake(opts: {
     });
   }
 
-  if (!partnerId && scope !== "todo") throw new Error("缺少伙伴");
+  if (!partnerId) throw new Error("缺少伙伴");
 
   // ---- 画像字段（非建档场景）----
   if (scope !== "new_partner" && proposal.fields.length) {

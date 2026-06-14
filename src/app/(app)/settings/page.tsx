@@ -41,6 +41,9 @@ export default async function SettingsPage() {
     db.userKmsCredential.findUnique({ where: { userId: user.id } }),
   ]);
 
+  const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
+  const usedTodayByBucket = new Map(todayUsageEarly.map((row) => [row.bucketKey, row.totalTokens]));
+
   const apiConfigs: AiApiConfigForClient[] = aiApis.map((api) => ({
     id: api.id,
     name: api.name,
@@ -51,6 +54,8 @@ export default async function SettingsPage() {
     isDefault: api.isDefault,
     keyTail: maskKey(api.apiKey),
     capabilities: parseAiCapabilities(api.capabilities),
+    dailyTokenLimit: api.dailyTokenLimit ?? null,
+    usedTodayTokens: usedTodayByBucket.get(`api:${api.id}`) ?? 0,
     createdAt: api.createdAt.toISOString(),
   }));
 
@@ -76,12 +81,13 @@ export default async function SettingsPage() {
         keyValid: !!normalizeApiKeyInput(api.apiKey),
         extraConfig,
         capabilities: parseAiCapabilities(api.capabilities),
+        dailyTokenLimit: api.dailyTokenLimit ?? null,
+        usedTodayTokens: usedTodayByBucket.get(`api:${api.id}`) ?? 0,
         createdAt: api.createdAt.toISOString(),
       };
     });
   const aiConfigured = aiApis.some((api) => api.enabled) || !!process.env.AI_API_KEY;
-  const todayUsage = dailyUsage.filter((row) => row.day === today);
-  const todayTokens = todayUsage.reduce((sum, row) => sum + row.totalTokens, 0);
+  const todayTokens = todayUsageEarly.reduce((sum, row) => sum + row.totalTokens, 0);
 
   return (
     <div className="pb-16">

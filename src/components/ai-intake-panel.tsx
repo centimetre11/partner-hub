@@ -31,7 +31,6 @@ const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = 
     placeholder: "描述公司情况或粘贴 KMS 链接，右侧会实时补全字段。",
   },
   training: { title: "AI 加培训", placeholder: "描述要安排的培训/认证。" },
-  todo: { title: "AI 加待办", placeholder: "说要跟进的事。" },
   solution: { title: "AI 加联合方案", placeholder: "描述联合方案。" },
 };
 

@@ -43,8 +43,14 @@ export type VolcengineApiForClient = {
   keyValid: boolean;
   extraConfig: VolcengineExtraConfig | null;
   capabilities: AiCapability[];
+  dailyTokenLimit: number | null;
+  usedTodayTokens: number;
   createdAt: string;
 };
+
+function fmtNum(value: number) {
+  return new Intl.NumberFormat("zh-CN").format(value);
+}
 
 function ParsePreview({ snippet }: { snippet: string }) {
   const parsed = useMemo(() => parseVolcengineSnippet(snippet), [snippet]);
@@ -130,6 +136,17 @@ function VolcengineConfigCard({
             <div className="sm:col-span-2">
               <dt className="text-zinc-400">Base URL</dt>
               <dd className="font-mono text-zinc-800 mt-0.5 break-all">{cfg.baseUrl}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-zinc-400">每日 Token 上限</dt>
+              {cfg.dailyTokenLimit ? (
+                <dd className={`font-mono mt-0.5 ${cfg.usedTodayTokens >= cfg.dailyTokenLimit ? "text-red-600" : "text-zinc-800"}`}>
+                  今日 {fmtNum(cfg.usedTodayTokens)} / {fmtNum(cfg.dailyTokenLimit)}
+                  {cfg.usedTodayTokens >= cfg.dailyTokenLimit ? "（已达上限，本日已切换到其他模型）" : ""}
+                </dd>
+              ) : (
+                <dd className="font-mono text-zinc-400 mt-0.5">不限</dd>
+              )}
             </div>
           </dl>
           {extraSummary.length > 0 && (
@@ -258,6 +275,18 @@ function VolcengineEditForm({
         <ParsePreview snippet={snippet} />
 
         <AiCapabilityFields defaultCapabilities={existing?.capabilities} />
+
+        <label className="space-y-1 block">
+          <span className={label}>每日 Token 上限（可选，留空 = 不限）</span>
+          <input
+            name="dailyTokenLimit"
+            type="number"
+            min={0}
+            defaultValue={existing?.dailyTokenLimit ?? ""}
+            placeholder="如 1000000；超过后自动切换到其他启用的模型"
+            className={textInput}
+          />
+        </label>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
           <label className="inline-flex items-center gap-1.5">

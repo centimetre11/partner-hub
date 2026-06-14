@@ -100,15 +100,50 @@ async function resolveAiApi(opts?: { capabilities?: AiCapability[] }): Promise<R
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
   });
 
-  const matched = configured.find((api) =>
-    apiHasCapabilities(parseAiCapabilities(api.capabilities), required)
-  );
-  if (matched) return toResolvedApi(matched);
-
   if (configured.length) {
-    const fallback = configured[0];
+    // 读取今日各模型已用 Token，用于判断是否触达每日上限
+    const day = new Date().toISOString().slice(0, 10);
+    const usages = await db.aiDailyTokenUsage.findMany({
+      where: { day, bucketKey: { in: configured.map((api) => `api:${api.id}`) } },
+    });
+    const usedByBucket = new Map(usages.map((u) => [u.bucketKey, u.totalTokens]));
+
+    type ConfiguredApi = (typeof configured)[number];
+    const isOverDailyLimit = (api: ConfiguredApi) => {
+      const limit = api.dailyTokenLimit ?? 0;
+      if (limit <= 0) return false; // null 或 0 视为不限
+      return (usedByBucket.get(`api:${api.id}`) ?? 0) >= limit;
+    };
+    const matchesCap = (api: ConfiguredApi) =>
+      apiHasCapabilities(parseAiCapabilities(api.capabilities), required);
+
+    const available = configured.filter((api) => !isOverDailyLimit(api));
+
+    // 优先：未超每日上限且具备所需能力
+    const matched = available.find(matchesCap);
+    if (matched) {
+      const naturalChoice = configured.find(matchesCap);
+      if (naturalChoice && naturalChoice.id !== matched.id) {
+        console.warn(
+          `[ai] ${naturalChoice.name} 已达每日 Token 上限（${usedByBucket.get(`api:${naturalChoice.id}`) ?? 0}/${naturalChoice.dailyTokenLimit}），自动切换到 ${matched.name}`
+        );
+      }
+      return toResolvedApi(matched);
+    }
+
+    // 其次：未超上限的任意模型（能力不完全匹配，沿用既有兜底行为）
+    if (available.length) {
+      const fallback = available[0];
+      console.warn(
+        `[ai] 无未超额模型同时具备 ${required.join("+")}，回退到未超额模型 ${fallback.name}（${parseAiCapabilities(fallback.capabilities).join("+")}）`
+      );
+      return toResolvedApi(fallback);
+    }
+
+    // 全部已达每日上限：按原优先级回退（能力匹配优先），保证服务不中断
+    const fallback = configured.find(matchesCap) ?? configured[0];
     console.warn(
-      `[ai] 无模型同时具备 ${required.join("+")}，回退到 ${fallback.name}（${parseAiCapabilities(fallback.capabilities).join("+")}）`
+      `[ai] 所有启用模型均已达到每日 Token 上限，仍回退到 ${fallback.name}（今日已用 ${usedByBucket.get(`api:${fallback.id}`) ?? 0} / 上限 ${fallback.dailyTokenLimit ?? "∞"}）`
     );
     return toResolvedApi(fallback);
   }

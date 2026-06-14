@@ -4,7 +4,7 @@ import { AIError } from "@/lib/ai";
 import { createSseResponse } from "@/lib/ai-trace";
 import { runIntakeTurn, type IntakeScope, type IntakeMessage } from "@/lib/ai-intake";
 
-const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profile", "training", "todo", "solution"];
+const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profile", "training", "solution"];
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();

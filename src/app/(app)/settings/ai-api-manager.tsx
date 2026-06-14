@@ -23,8 +23,14 @@ export type AiApiConfigForClient = {
   isDefault: boolean;
   keyTail: string;
   capabilities: AiCapability[];
+  dailyTokenLimit: number | null;
+  usedTodayTokens: number;
   createdAt: string;
 };
+
+function fmtNum(value: number) {
+  return new Intl.NumberFormat("zh-CN").format(value);
+}
 
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 const label = "text-xs font-medium text-zinc-500";
@@ -75,6 +81,17 @@ function ApiEditForm({
           <input name="apiKey" type="password" required={!api} placeholder={api ? "留空则沿用原 Key" : "sk-..."} className={input} autoComplete="off" />
         </label>
         <AiCapabilityFields defaultCapabilities={api?.capabilities} />
+        <label className="space-y-1 block">
+          <span className={label}>每日 Token 上限（可选，留空 = 不限）</span>
+          <input
+            name="dailyTokenLimit"
+            type="number"
+            min={0}
+            defaultValue={api?.dailyTokenLimit ?? ""}
+            placeholder="如 1000000；超过后自动切换到其他启用的模型"
+            className={input}
+          />
+        </label>
         <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
           <label className="inline-flex items-center gap-1.5">
             <input name="enabled" type="checkbox" defaultChecked={api?.enabled ?? true} className="rounded border-zinc-300" />
@@ -110,6 +127,17 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
             <div><span className="text-zinc-400">模型 </span><span className="font-mono text-zinc-700">{api.model}</span></div>
             <div><span className="text-zinc-400">Base URL </span><span className="font-mono text-zinc-700 break-all">{api.baseUrl}</span></div>
             <div><span className="text-zinc-400">Key 尾号 </span><span className="font-mono text-zinc-700">{api.keyTail}</span></div>
+            <div>
+              <span className="text-zinc-400">每日上限 </span>
+              {api.dailyTokenLimit ? (
+                <span className={`font-mono ${api.usedTodayTokens >= api.dailyTokenLimit ? "text-red-600" : "text-zinc-700"}`}>
+                  今日 {fmtNum(api.usedTodayTokens)} / {fmtNum(api.dailyTokenLimit)} Token
+                  {api.usedTodayTokens >= api.dailyTokenLimit ? "（已达上限，本日已切换）" : ""}
+                </span>
+              ) : (
+                <span className="font-mono text-zinc-400">不限</span>
+              )}
+            </div>
           </dl>
           <AiCapabilityBadges capabilities={api.capabilities} />
         </div>

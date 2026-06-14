@@ -192,6 +192,7 @@ model AiApiConfig {
   model       String
   extraConfig String? // JSON：火山引擎 Responses API 的 tools / instructions 等
   capabilities String? // JSON 数组：chat | vision | tools | json | reasoning
+  dailyTokenLimit Int? // 每日总 Token 上限；超过后自动切换到其他启用模型。null/0 表示不限
   enabled     Boolean             @default(true)
   isDefault   Boolean             @default(false)
   createdAt   DateTime            @default(now())

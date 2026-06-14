@@ -30,6 +30,15 @@ function cleanText(value: FormDataEntryValue | null) {
   return String(value ?? "").trim();
 }
 
+/** 解析每日 Token 上限：空 / 非正数 / 非法 → null（表示不限） */
+function parseDailyTokenLimit(value: FormDataEntryValue | null): number | null {
+  const raw = String(value ?? "").replace(/[,_\s]/g, "").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.floor(n);
+}
+
 async function makeOnlyDefault(id: string) {
   await db.aiApiConfig.updateMany({ where: { id: { not: id } }, data: { isDefault: false } });
   await db.aiApiConfig.update({ where: { id }, data: { isDefault: true, enabled: true } });
@@ -52,6 +61,7 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
   const capabilities = serializeAiCapabilities(parseCapabilitiesFromForm(formData));
+  const dailyTokenLimit = parseDailyTokenLimit(formData.get("dailyTokenLimit"));
 
   if (!name || !baseUrl || !model) return { error: "请填写名称、Base URL 和模型" };
   if (!id && !apiKey) return { error: "新增 API 时必须填写 API Key" };
@@ -65,6 +75,7 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
         model,
         enabled,
         capabilities,
+        dailyTokenLimit,
         ...(apiKey ? { apiKey } : {}),
       },
     });
@@ -83,6 +94,7 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
       apiKey,
       enabled,
       capabilities,
+      dailyTokenLimit,
       isDefault: isDefault || count === 0,
     },
   });
@@ -121,6 +133,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
   const capabilities = serializeAiCapabilities(parseCapabilitiesFromForm(formData));
+  const dailyTokenLimit = parseDailyTokenLimit(formData.get("dailyTokenLimit"));
 
   if (!id && !manualKey) return { error: "请填写 ARK API Key（从火山方舟控制台 → API Key 管理复制完整密钥）" };
   if (!id && !snippet) return { error: "请粘贴 curl 或 JSON 请求体" };
@@ -165,6 +178,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
         extraConfig,
         enabled,
         capabilities,
+        dailyTokenLimit,
         ...(finalKey ? { apiKey: finalKey } : {}),
       },
     });
@@ -185,6 +199,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
       extraConfig,
       enabled,
       capabilities,
+      dailyTokenLimit,
       isDefault: isDefault || count === 0,
     },
   });
