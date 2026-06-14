@@ -10,7 +10,8 @@ type Msg = { role: "user" | "assistant"; content: string };
 const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = {
   new_partner: {
     title: "AI 建档",
-    placeholder: "把公司介绍、会议记录、聊天记录粘进来，或直接描述这家公司，我来帮你建档。\n例如：刚见了迪拜一家叫 Acme Analytics 的公司，做 Power BI 实施，50 人左右，CEO 叫 Ali…",
+    placeholder:
+      "扔公司名、会议记录、聊天记录、KMS 链接都行——我会读 KMS，也会联网/领英查公开信息，多源叠加尽量填完整。\n例如：\n• 刚见了迪拜 Acme Analytics，做 Power BI 实施\n• https://kms.fineres.com/pages/viewpage.action?pageId=123456\n• 就一家叫 TechMantra 的公司，帮我建档",
   },
   powermap: {
     title: "AI 加人物",
@@ -22,7 +23,8 @@ const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = 
   },
   profile: {
     title: "AI 补全画像",
-    placeholder: "描述这家公司的情况，我来填进画像字段。\n例如：他们是微软金牌伙伴，主做 Power BI，客户有 DAMAC，差异化是 UAE+沙特双实体。",
+    placeholder:
+      "描述这家公司的情况，或粘贴 KMS 链接/会议记录，我会结合现有档案和联网调研补全字段。\n例如：他们是微软金牌伙伴，主做 Power BI，客户有 DAMAC，差异化是 UAE+沙特双实体。",
   },
   training: {
     title: "AI 加培训",
@@ -208,7 +210,7 @@ export function AiIntakePanel({
         <div className="px-5 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
           <div>
             <div className="text-sm font-semibold flex items-center gap-1.5">✦ {meta.title}</div>
-            <div className="text-xs text-indigo-200 mt-0.5">像聊天一样描述，我会边问边整理，确认后才入库</div>
+            <div className="text-xs text-indigo-200 mt-0.5">像聊天一样描述，我会自动调研并整理，确认后才入库</div>
           </div>
           <button onClick={onClose} className="text-indigo-100 hover:text-white text-xl leading-none">×</button>
         </div>
@@ -233,7 +235,9 @@ export function AiIntakePanel({
           ))}
           {loading && (
             <div className="flex justify-start">
-              <div className="bg-zinc-100 text-zinc-400 rounded-2xl px-3.5 py-2.5 text-sm">正在思考…</div>
+              <div className="bg-zinc-100 text-zinc-400 rounded-2xl px-3.5 py-2.5 text-sm">
+                {scope === "new_partner" || scope === "profile" ? "正在调研并整理…" : "正在思考…"}
+              </div>
             </div>
           )}
 

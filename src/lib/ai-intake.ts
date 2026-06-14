@@ -1,6 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
-import { chatCompletion, parseJsonLoose, type ChatMessage } from "./ai";
+import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
+import {
+  buildIntakeTools,
+  intakeEnrichmentSkillsForScope,
+  newSkillContext,
+  runSkill,
+} from "./skills";
 import {
   CATEGORY_LABELS,
   PARTNER_FIELD_LABELS,
@@ -92,10 +98,9 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
   new_partner: {
     title: "新建伙伴建档",
     intro:
-      "用户想新建一个候选伙伴。请从用户提供的会议记录/公司介绍/聊天中，抽取公司画像与可能提到的关键人物、商机。",
-    guide:
-      "建档至少要有：公司名（partnerName，必填）。建议补全：类别 category、所在国家/城市、核心业务 coreBusiness、核心能力 capability、已知客户 knownClients。这些缺了就友好地问一两个最关键的。",
-    schemaHint: `partnerName 填公司名；fields 填其余画像字段（字段名只能用：${FIELD_LIST}，category 取值：${CATEGORY_LIST}，pipelineStage 取 1-10：${STAGE_LIST}）；如文中提到人物则填 contacts，提到商机则填 opportunities。trainings/solutions 留空数组。`,
+      "用户想新建一个候选伙伴。输入可能是：仅公司名、会议/聊天长文、公司介绍、或帆软 KMS 链接（KMS 与联网/领英等调研应叠加使用，目标是把档案尽量补全）。",
+    guide: `建档至少要有：公司名（partnerName，必填）。尽量补全：category、country/city、headcount、website、coreBusiness、capability、knownClients、currentTools、certLevel、keyDifferentiator、playbook、fitScore、priority。缺关键项时可友好追问 1-2 点，但应先主动调研（见下方工具说明）。`,
+    schemaHint: `partnerName 填公司名；fields 填其余画像字段（字段名只能用：${FIELD_LIST}，category 取值：${CATEGORY_LIST}，pipelineStage 取 1-10：${STAGE_LIST}）；如文中或调研提到人物则填 contacts，提到商机则填 opportunities。trainings/solutions 留空数组。`,
   },
   powermap: {
     title: "添加权力地图人物",
@@ -112,8 +117,8 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
   },
   profile: {
     title: "补全伙伴画像",
-    intro: "用户想补全/更新这个伙伴的画像字段。",
-    guide: `把用户描述映射到画像字段。字段名只能用：${FIELD_LIST}（category 取值：${CATEGORY_LIST}）。`,
+    intro: "用户想补全/更新这个伙伴的画像字段。可能附带 KMS 链接或仅有零散描述，需结合现有档案与工具调研补全。",
+    guide: `把用户描述与调研结果映射到画像字段。字段名只能用：${FIELD_LIST}（category 取值：${CATEGORY_LIST}）。信息不足时先用工具调研再填。`,
     schemaHint: "只填 fields（FieldUpdate，oldValue 可留空）。其余留空数组。",
   },
   training: {
@@ -156,57 +161,24 @@ const OUTPUT_SCHEMA = `只输出一个 JSON 对象，结构：
   }
 }
 规则：
-- 只提取用户文本中有依据的内容，不要编造；每条尽量带 reason。
+- 只提取有依据的内容：用户原文、工具返回的公开/内部信息均可；reason 标注来源（用户原文/KMS/web_search/LinkedIn/search_knowledge 等）。不要编造工具未返回的内容。
 - ready 判断：核心必填项齐了就为 true（建议补全项缺失只做软提示，不要因此把 ready 设为 false）。用户明确说"就这些/直接录入/不知道了"时 ready 必须为 true。
 - proposal 要带上目前已确认的全部内容（累加，不要每轮清空之前已抽取的）。`;
 
-export async function runIntakeTurn(opts: {
-  scope: IntakeScope;
-  partnerId?: string;
-  messages: IntakeMessage[];
-  today: string;
-  userId?: string;
-}): Promise<IntakeTurn> {
-  const cfg = SCOPE_CONFIG[opts.scope];
-  let ctx = "";
-  if (opts.partnerId) {
-    ctx = `\n\n【当前伙伴档案（用于判断新增/更新、解析汇报关系）】\n${await partnerContext(opts.partnerId)}`;
-  }
+const RESEARCH_GUIDE = `【主动调研（重要）】
+目标：把建档所需信息尽量补全。各类输入（仅公司名、长文、KMS 链接、聊天记录）都要走「多源叠加」，不要只做一种调研就停。
+在输出 JSON 提案前，按下面策略组合使用工具（可并行、可多次调用）：
 
-  const system = `你是帆软软件（Fanruan，中国领先BI厂商，产品 FineReport/FineBI/FineDataLink）中东区伙伴管理系统的 AI 录入助手。
-今天日期：${opts.today}。
-当前任务：${cfg.title}。${cfg.intro}
+1. 用户给了 KMS 链接/pageId → 先 read_kms；读完仍要对文档里出现的公司名做 web_search + linkedin_search，补官网、规模、客户、关键人等 KMS 里没有的公开信息
+2. 从用户原文/KMS 中识别出公司名后 → search_partners 查重；web_search 查背景；linkedin_search 查高管/关键联系人
+3. 画像字段仍缺 category/playbook/帆软切入角度 → search_knowledge 检索团队知识库
+4. 每轮工具返回后对照建档字段清单，缺什么继续查，直到主要字段有依据或公开渠道确实查不到
+5. 工具失败或未配置（如无 KMS 令牌）时跳过该项，换其他工具继续，不要阻塞建档
+6. 调研完成后必须输出 JSON 提案（不要再调用工具）；reply 里用 1-2 句说明各来源查到了什么、还缺什么`;
 
-【引导规则（重要，但不要死板）】
-${cfg.guide}
-追问要像同事聊天一样自然简短，别像填表。用户提供的信息已经够用时，就直接给出提案并把 ready 设为 true，不要为了凑齐字段反复追问。
+const MAX_RESEARCH_STEPS = 8;
 
-【本次提案应填写的范围】
-${cfg.schemaHint}
-${ctx}
-
-${OUTPUT_SCHEMA}`;
-
-  const chat: ChatMessage[] = [{ role: "system", content: system }];
-  for (const m of opts.messages) chat.push({ role: m.role, content: m.content });
-
-  let content: string | null;
-  try {
-    ({ content } = await chatCompletion(chat, {
-      jsonMode: true,
-      temperature: 0.3,
-      feature: `AI 录入助手：${cfg.title}`,
-      userId: opts.userId,
-    }));
-  } catch {
-    chat[0].content += "\n\n务必只输出一个合法 JSON 对象。";
-    ({ content } = await chatCompletion(chat, {
-      temperature: 0.3,
-      feature: `AI 录入助手：${cfg.title}`,
-      userId: opts.userId,
-    }));
-  }
-  const raw = parseJsonLoose<Partial<IntakeTurn>>(content ?? "");
+function normalizeIntakeTurn(raw: Partial<IntakeTurn>): IntakeTurn {
   const p: Partial<IntakeProposal> = raw.proposal ?? {};
   return {
     reply: raw.reply || "我整理了一下，请确认。",
@@ -223,6 +195,124 @@ ${OUTPUT_SCHEMA}`;
       solutions: p.solutions ?? [],
     },
   };
+}
+
+async function extractIntakeJson(chat: ChatMessage[], feature: string, userId?: string): Promise<IntakeTurn> {
+  const extractChat = [...chat, { role: "user" as const, content: "请根据以上对话与调研结果，输出最终 JSON 提案（严格按 OUTPUT_SCHEMA，只输出 JSON）。" }];
+  let content: string | null;
+  try {
+    ({ content } = await chatCompletion(extractChat, {
+      jsonMode: true,
+      temperature: 0.3,
+      feature,
+      userId,
+    }));
+  } catch {
+    extractChat[0].content = (extractChat[0].content ?? "") + "\n\n务必只输出一个合法 JSON 对象。";
+    ({ content } = await chatCompletion(extractChat, {
+      temperature: 0.3,
+      feature,
+      userId,
+    }));
+  }
+  return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
+}
+
+async function runIntakeToolCall(tc: ToolCall, userId?: string): Promise<string> {
+  if (tc.function.name === "$web_search") {
+    return tc.function.arguments;
+  }
+  let args: Record<string, unknown> = {};
+  try {
+    args = JSON.parse(tc.function.arguments || "{}");
+  } catch {
+    /* ignore */
+  }
+  const ctx = newSkillContext({ mode: "assistant", userId: userId ?? null });
+  return runSkill(tc.function.name, args, ctx);
+}
+
+export async function runIntakeTurn(opts: {
+  scope: IntakeScope;
+  partnerId?: string;
+  messages: IntakeMessage[];
+  today: string;
+  userId?: string;
+}): Promise<IntakeTurn> {
+  const cfg = SCOPE_CONFIG[opts.scope];
+  let ctx = "";
+  if (opts.partnerId) {
+    ctx = `\n\n【当前伙伴档案（用于判断新增/更新、解析汇报关系）】\n${await partnerContext(opts.partnerId)}`;
+  }
+
+  const enrichmentSkills = intakeEnrichmentSkillsForScope(opts.scope);
+  const useResearch = enrichmentSkills.length > 0 && !!opts.userId;
+
+  const system = `你是帆软软件（Fanruan，中国领先BI厂商，产品 FineReport/FineBI/FineDataLink）中东区伙伴管理系统的 AI 录入助手。
+今天日期：${opts.today}。
+当前任务：${cfg.title}。${cfg.intro}
+
+【引导规则（重要，但不要死板）】
+${cfg.guide}
+追问要像同事聊天一样自然简短，别像填表。用户提供的信息已经够用时，就直接给出提案并把 ready 设为 true，不要为了凑齐字段反复追问。
+${useResearch ? `\n${RESEARCH_GUIDE}` : ""}
+
+【本次提案应填写的范围】
+${cfg.schemaHint}
+${ctx}
+
+${OUTPUT_SCHEMA}`;
+
+  const chat: ChatMessage[] = [{ role: "system", content: system }];
+  for (const m of opts.messages) chat.push({ role: m.role, content: m.content });
+
+  const feature = `AI 录入助手：${cfg.title}`;
+
+  if (useResearch) {
+    const tools = await buildIntakeTools(enrichmentSkills);
+    for (let i = 0; i < MAX_RESEARCH_STEPS; i++) {
+      const { content, toolCalls } = await chatCompletion(chat, {
+        tools,
+        temperature: 0.3,
+        feature,
+        userId: opts.userId,
+      });
+      if (!toolCalls.length) {
+        if (content?.trim().startsWith("{")) {
+          try {
+            return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content));
+          } catch {
+            /* fall through to forced extraction */
+          }
+        }
+        break;
+      }
+      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls });
+      for (const tc of toolCalls) {
+        const result = await runIntakeToolCall(tc, opts.userId);
+        chat.push({ role: "tool", content: result, tool_call_id: tc.id });
+      }
+    }
+    return extractIntakeJson(chat, feature, opts.userId);
+  }
+
+  let content: string | null;
+  try {
+    ({ content } = await chatCompletion(chat, {
+      jsonMode: true,
+      temperature: 0.3,
+      feature,
+      userId: opts.userId,
+    }));
+  } catch {
+    chat[0].content += "\n\n务必只输出一个合法 JSON 对象。";
+    ({ content } = await chatCompletion(chat, {
+      temperature: 0.3,
+      feature,
+      userId: opts.userId,
+    }));
+  }
+  return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
 }
 
 // ============ 应用 Intake 提案（人工确认后写库） ============

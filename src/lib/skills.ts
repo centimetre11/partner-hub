@@ -549,6 +549,38 @@ export const ASSISTANT_SKILLS = [
   "read_kms",
 ];
 
+/** AI 建档/补全画像时可用的只读调研工具（不含写库操作） */
+export const INTAKE_ENRICHMENT_SKILLS = [
+  "search_partners",
+  "get_partner",
+  "web_search",
+  "linkedin_search",
+  "read_kms",
+  "search_knowledge",
+] as const;
+
+export function intakeEnrichmentSkillsForScope(scope: string): string[] {
+  switch (scope) {
+    case "new_partner":
+    case "profile":
+      return [...INTAKE_ENRICHMENT_SKILLS];
+    case "powermap":
+      return ["linkedin_search", "web_search"];
+    case "opportunity":
+      return ["web_search", "search_knowledge"];
+    default:
+      return [];
+  }
+}
+
+export async function buildIntakeTools(skillNames: string[]): Promise<(ToolDef | Record<string, unknown>)[]> {
+  const volcSearch = await shouldUseVolcengineBuiltinSearch();
+  const names = volcSearch ? skillNames.filter((s) => s !== "web_search") : skillNames;
+  const tools: (ToolDef | Record<string, unknown>)[] = skillsToTools(names);
+  if (await shouldUseKimiBuiltinSearch()) tools.push(KIMI_BUILTIN_SEARCH);
+  return tools;
+}
+
 // Kimi（moonshot）平台的内置联网搜索：作为特殊工具注入，工具被调用时原样回传参数即可
 export const KIMI_BUILTIN_SEARCH = {
   type: "builtin_function" as const,
