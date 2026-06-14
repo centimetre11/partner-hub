@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import { PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { TODO_PRIORITY_LABELS } from "@/lib/constants";
 import { createTodoAction, deleteTodoAction, toggleTodoAction } from "@/lib/actions";
+import { TodoEditButton } from "@/components/todo-edit-button";
 
 export default async function TodosPage({
   searchParams,
@@ -85,14 +86,29 @@ export default async function TodosPage({
             {t.detail && ` · ${t.detail}`}
           </div>
         </div>
-        <form action={deleteTodoAction.bind(null, t.id)}>
-          <button
-            title="删除待办"
-            className="text-zinc-300 hover:text-red-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
-          >
-            ✕
-          </button>
-        </form>
+        <div className="flex items-center gap-2 pt-0.5">
+          <TodoEditButton
+            todo={{
+              id: t.id,
+              title: t.title,
+              detail: t.detail,
+              dueDate: t.dueDate,
+              priority: t.priority,
+              partnerId: t.partnerId,
+              assigneeId: t.assigneeId,
+            }}
+            partners={partners}
+            users={users}
+          />
+          <form action={deleteTodoAction.bind(null, t.id)}>
+            <button
+              title="删除待办"
+              className="text-zinc-300 hover:text-red-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
+            >
+              ✕
+            </button>
+          </form>
+        </div>
       </div>
     );
   };

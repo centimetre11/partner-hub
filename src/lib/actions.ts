@@ -410,6 +410,32 @@ export async function deleteTodoAction(todoId: string) {
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
 }
 
+export async function updateTodoAction(todoId: string, formData: FormData) {
+  const user = await requireUser();
+  const existing = await db.todoItem.findUniqueOrThrow({ where: { id: todoId } });
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return;
+  const due = String(formData.get("dueDate") ?? "");
+  const hasPartnerField = formData.has("partnerId");
+  const t = await db.todoItem.update({
+    where: { id: todoId },
+    data: {
+      title,
+      detail: String(formData.get("detail") ?? "") || null,
+      ...(hasPartnerField ? { partnerId: String(formData.get("partnerId") ?? "") || null } : {}),
+      assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
+      dueDate: due ? new Date(due) : null,
+      priority: String(formData.get("priority") ?? "MEDIUM"),
+    },
+  });
+  revalidatePath("/todos");
+  revalidatePath("/");
+  if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
+  if (existing.partnerId && existing.partnerId !== t.partnerId) {
+    revalidatePath(`/partners/${existing.partnerId}`);
+  }
+}
+
 // ============ 培训 ============
 
 export async function upsertTrainingAction(partnerId: string, formData: FormData) {

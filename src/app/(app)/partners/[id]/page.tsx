@@ -21,6 +21,7 @@ import { AiPanel } from "./ai-panel";
 import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { AiAddButton } from "@/components/ai-add-button";
+import { TodoEditButton } from "@/components/todo-edit-button";
 
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -534,14 +535,28 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                           {` · ${TODO_PRIORITY_LABELS[t.priority]}`}
                         </div>
                       </div>
-                      <form action={deleteTodoAction.bind(null, t.id)}>
-                        <button
-                          title="删除待办"
-                          className="text-zinc-300 hover:text-red-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
-                        >
-                          ✕
-                        </button>
-                      </form>
+                      <div className="flex items-center gap-1.5">
+                        <TodoEditButton
+                          todo={{
+                            id: t.id,
+                            title: t.title,
+                            detail: t.detail,
+                            dueDate: t.dueDate,
+                            priority: t.priority,
+                            partnerId: t.partnerId,
+                            assigneeId: t.assigneeId,
+                          }}
+                          users={users}
+                        />
+                        <form action={deleteTodoAction.bind(null, t.id)}>
+                          <button
+                            title="删除待办"
+                            className="text-zinc-300 hover:text-red-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
+                          >
+                            ✕
+                          </button>
+                        </form>
+                      </div>
                     </div>
                   );
                 };
