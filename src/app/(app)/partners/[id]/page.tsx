@@ -5,7 +5,7 @@ import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } fro
 import {
   ATTITUDE_LABELS, CATEGORY_LABELS, CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS,
   EVENT_TYPE_LABELS, PIPELINE_STAGES, POOL_FLAG_LABELS, STATUS_LABELS,
-  TODO_PRIORITY_LABELS, attitudeLabel, roleInfluence, stageName,
+  TODO_PRIORITY_LABELS, attitudeLabel, roleInfluence, CONTACT_ROLES_BY_INFLUENCE, stageName,
 } from "@/lib/constants";
 import { attitudeDotClass } from "@/components/power-map";
 import { PowerMapFlow } from "@/components/power-map-flow";
@@ -257,8 +257,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                       <input type="hidden" name="id" value={c.id} />
                       <input name="name" defaultValue={c.name} placeholder="姓名" className={input} />
                       <select name="role" defaultValue={c.role} className={input}>
-                        {Object.entries(CONTACT_ROLE_LABELS).map(([k, v]) => (
-                          <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {v}</option>
+                        {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
+                          <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {CONTACT_ROLE_LABELS[k]}</option>
                         ))}
                       </select>
                       <select name="attitude" defaultValue={c.attitude} className={input}>
@@ -294,8 +294,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 <form action={upsertContactAction.bind(null, p.id)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                   <input name="name" required placeholder="姓名 *" className={input} />
                   <select name="role" className={input}>
-                    {Object.entries(CONTACT_ROLE_LABELS).map(([k, v]) => (
-                      <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {v}</option>
+                    {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
+                      <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {CONTACT_ROLE_LABELS[k]}</option>
                     ))}
                   </select>
                   <select name="attitude" defaultValue="0" className={input}>
