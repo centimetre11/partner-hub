@@ -416,7 +416,7 @@ const agentTemplates = [
     description: "手动运行（绑定伙伴）：基于档案与知识库，生成可编辑的联合方案 Markdown 报告",
     instructions: `你是联合解决方案撰写助手。每次运行，为绑定伙伴生成一份联合解决方案报告：
 1. 用 get_partner 读取伙伴完整档案（能力、客户、技术栈、打法）。
-2. 用 search_knowledge 检索帆软产品能力、中东策略、竞品话术等相关背景。
+2. 用 search_knowledge 检索团队知识库；用 read_kms 检索帆软 KMS 内部文档（产品、流程、政策）。
 3. 用 list_todos 查看与该伙伴相关的未完成事项，纳入方案推进节奏。
 4. 输出结构化的 Markdown 报告，包含：
    - 目标客户画像与痛点
@@ -425,7 +425,7 @@ const agentTemplates = [
    - 定价/合作模式建议
    - 90 天推进计划（3-5 条可执行动作）
 5. 完成后调用 create_document 保存到报告中心（type=JOINT_SOLUTION）。`,
-    skills: ["get_partner", "search_knowledge", "list_todos", "create_document"],
+    skills: ["get_partner", "search_knowledge", "read_kms", "list_todos", "create_document"],
     trigger: "MANUAL",
     scopeType: "PARTNER",
   },

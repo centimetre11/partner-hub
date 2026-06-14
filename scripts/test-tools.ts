@@ -9,13 +9,15 @@ import { hasTavilyKey } from "../src/lib/web-search";
 const prisma = new PrismaClient();
 
 function classify(tool: string, out: string): "pass" | "skip" | "fail" {
-  if (out.includes("未配置 TAVILY") || out.includes("TAVILY_API_KEY")) {
+  if (out.includes("未配置 KMS") || out.includes("未配置 TAVILY") || out.includes("TAVILY_API_KEY")) {
+    if (tool === "read_kms") return process.env.KMS_TEST_TOKEN ? "fail" : "skip";
     return hasTavilyKey() ? "fail" : "skip";
   }
   if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败") || out.startsWith("Tavily")) {
     return "fail";
   }
   if (tool === "search_knowledge" && out.includes("未找到")) return "fail";
+  if (tool === "read_kms" && out.includes("KMS 中未找到")) return "fail";
   if (tool === "search_partners" && out === "没有符合条件的伙伴") return "fail";
   if (tool === "get_partner" && out.startsWith("找不到")) return "fail";
   return "pass";
@@ -23,6 +25,19 @@ function classify(tool: string, out: string): "pass" | "skip" | "fail" {
 
 async function main() {
   const ctx = newSkillContext({ mode: "agent", userId: null, agentName: "tool-test" });
+
+  if (process.env.KMS_TEST_TOKEN) {
+    const user = await prisma.user.findFirst();
+    if (user) {
+      await prisma.userKmsCredential.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id, accessToken: process.env.KMS_TEST_TOKEN, baseUrl: "https://kms.fineres.com" },
+        update: { accessToken: process.env.KMS_TEST_TOKEN },
+      });
+      ctx.userId = user.id;
+    }
+  }
+
   const partner = await prisma.partner.findFirst({ where: { name: { contains: "Beinex" } } });
   const partnerName = partner?.name ?? (await prisma.partner.findFirst())?.name ?? "Beinex";
 
@@ -33,6 +48,7 @@ async function main() {
     ["search_knowledge", { query: "中东" }],
     ["linkedin_search", { company: "Beinex", person: "Shantosh Sridhar", maxResults: 3 }],
     ["web_search", { query: "Beinex Dubai analytics partner news", maxResults: 3, topic: "news" }],
+    ["read_kms", { pageId: "1420741418" }],
   ];
 
   const results: { tool: string; status: string; preview: string }[] = [];

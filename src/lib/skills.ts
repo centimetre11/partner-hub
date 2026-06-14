@@ -4,6 +4,7 @@ import { PARTNER_FIELD_LABELS, stageName } from "./constants";
 import { partnerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
 import { generalWebSearch, linkedinSearch } from "./web-search";
+import { readKmsForUser } from "./kms";
 
 // ============ 技能执行上下文 ============
 
@@ -427,6 +428,37 @@ const searchKnowledge: Skill = {
   },
 };
 
+// ---- 读取公司 KMS（Confluence）----
+const readKms: Skill = {
+  name: "read_kms",
+  label: "读取 KMS 文档",
+  desc: "读取帆软内部 Confluence（kms.fineres.com）文档，按 pageId/链接或关键词搜索",
+  def: {
+    type: "function",
+    function: {
+      name: "read_kms",
+      description:
+        "读取帆软 KMS（Confluence）内部文档。可用 pageId、完整 URL，或 query 关键词搜索。需要用户已在设置中配置个人访问令牌。优先用于查产品说明、内部策略、流程规范。",
+      parameters: {
+        type: "object",
+        properties: {
+          pageId: { type: "string", description: "KMS 页面 ID，如 1420741418" },
+          url: { type: "string", description: "KMS 页面完整 URL" },
+          query: { type: "string", description: "全文搜索关键词，如 FineBI 定价、伙伴政策" },
+          limit: { type: "number", description: "搜索模式返回条数，默认 3" },
+        },
+      },
+    },
+  },
+  run: async (args, ctx) =>
+    readKmsForUser(ctx.userId, {
+      pageId: args.pageId ? String(args.pageId) : undefined,
+      url: args.url ? String(args.url) : undefined,
+      query: args.query ? String(args.query) : undefined,
+      limit: Number(args.limit) || 3,
+    }),
+};
+
 // ---- 写入报告中心 ----
 const createDocument: Skill = {
   name: "create_document",
@@ -487,6 +519,7 @@ export const SKILLS: Skill[] = [
   webSearch,
   addTimelineEvent,
   searchKnowledge,
+  readKms,
   createDocument,
 ];
 
@@ -500,6 +533,7 @@ export const DEFAULT_AGENT_SKILLS = [
   "add_timeline_event",
   "create_todo",
   "search_knowledge",
+  "read_kms",
 ];
 
 export const REPORT_AGENT_KEYWORDS = ["会前简报", "联合方案", "联合解决方案"];
@@ -512,6 +546,7 @@ export const ASSISTANT_SKILLS = [
   "list_todos",
   "linkedin_search",
   "web_search",
+  "read_kms",
 ];
 
 // Kimi（moonshot）平台的内置联网搜索：作为特殊工具注入，工具被调用时原样回传参数即可

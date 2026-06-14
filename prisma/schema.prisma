@@ -23,6 +23,7 @@ model User {
   knowledgeArticles KnowledgeArticle[]
   skills       Skill[]
   aiTokenUsages AiTokenUsage[]
+  kmsCredential UserKmsCredential?
 }
 
 model Partner {
@@ -399,4 +400,14 @@ model AgentSkill {
   agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
   skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
   @@id([agentId, skillId])
+}
+
+// 用户个人 KMS（Confluence）访问令牌，每人一份
+model UserKmsCredential {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseUrl     String   @default("https://kms.fineres.com")
+  accessToken String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

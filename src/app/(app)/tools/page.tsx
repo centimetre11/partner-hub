@@ -6,11 +6,13 @@ import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-regist
 import { hasTavilyKey } from "@/lib/web-search";
 
 export default async function ToolsPage() {
-  await requireUser();
+  const user = await requireUser();
   const equippedAgents = await db.agent.findMany({
     where: { isTemplate: false },
     select: { skills: true },
   });
+  const kmsCred = await db.userKmsCredential.findUnique({ where: { userId: user.id } });
+  const kmsConfigured = !!kmsCred?.accessToken;
   const usedToolNames = new Set<string>();
   for (const a of equippedAgents) {
     for (const name of JSON.parse(a.skills || "[]") as string[]) {
@@ -20,7 +22,7 @@ export default async function ToolsPage() {
 
   const tavilyReady = hasTavilyKey();
   const readyCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).filter(
-    (t) => getToolAvailability(t.name) === "ready"
+    (t) => getToolAvailability(t.name, { kmsConfigured }) === "ready"
   ).length;
   const totalCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).length;
 
@@ -47,7 +49,14 @@ export default async function ToolsPage() {
             <a href="https://tavily.com" className="underline" target="_blank" rel="noreferrer">
               免费注册
             </a>
-            ），然后重新部署。未配置前，档案/待办/知识库类工具仍正常可用。
+            ），然后重新部署。
+          </div>
+        )}
+        {!kmsConfigured && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+            <span className="font-medium">读取 KMS 需要个人访问令牌。</span>
+            请到 <a href="/settings" className="underline font-medium">团队设置 → KMS 文档访问</a> 填写一次，保存后{" "}
+            <code className="text-xs bg-indigo-100 px-1 rounded">read_kms</code> 工具即可使用。
           </div>
         )}
 
@@ -70,7 +79,7 @@ export default async function ToolsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {cat.tools.map((tool) => {
-                const status = getToolAvailability(tool.name);
+                const status = getToolAvailability(tool.name, { kmsConfigured });
                 return (
                   <div
                     key={tool.name}
@@ -88,8 +97,8 @@ export default async function ToolsPage() {
                         <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{tool.desc}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge tone={status === "ready" ? "green" : status === "needs_tavily" ? "amber" : "zinc"}>
-                          {status === "ready" ? "已验证" : status === "needs_tavily" ? "需 Tavily" : "未知"}
+                        <Badge tone={status === "ready" ? "green" : status === "needs_tavily" || status === "needs_kms" ? "amber" : "zinc"}>
+                          {status === "ready" ? "已验证" : status === "needs_tavily" ? "需 Tavily" : status === "needs_kms" ? "需 KMS 令牌" : "未知"}
                         </Badge>
                         {usedToolNames.has(tool.name) && <Badge tone="blue">已装备</Badge>}
                       </div>

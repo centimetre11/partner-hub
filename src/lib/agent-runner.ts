@@ -103,7 +103,7 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
 
 【工作规则】
 1. 用工具获取真实信息，不要编造。监测伙伴动态时优先 linkedin_search（公司+高管），再用 web_search 补充新闻。
-2. 需要帆软/中东策略背景时，用 search_knowledge 检索知识库。
+2. 需要帆软/中东策略背景时，先用 search_knowledge 检索团队知识库，再用 read_kms 查 KMS 内部文档（如已配置令牌）。
 3. 发现与某个伙伴相关的有价值动态时，用 add_timeline_event 记入该伙伴时间线（如有该工具）。
 4. 需要修改伙伴档案字段时调用 update_partner，系统会自动转为提案等人工确认。
 5. 会前简报、联合方案等报告类任务完成后，用 create_document 写入报告中心（如已启用该技能）。

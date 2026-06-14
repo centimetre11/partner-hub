@@ -3,7 +3,9 @@ import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDate, fmtDateTime } from "@/components/ui";
 import { RegisterForm } from "./register-form";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
+import { KmsSetup } from "./kms-setup";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
+import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 
 function maskKey(apiKey: string) {
@@ -16,13 +18,13 @@ function fmtTokens(value: number) {
 }
 
 export default async function SettingsPage() {
-  await requireUser();
+  const user = await requireUser();
   const today = new Date().toISOString().slice(0, 10);
   const since = new Date();
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, kmsCred] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -35,6 +37,7 @@ export default async function SettingsPage() {
       take: 20,
       include: { user: true },
     }),
+    db.userKmsCredential.findUnique({ where: { userId: user.id } }),
   ]);
 
   const apiConfigs: AiApiConfigForClient[] = aiApis.map((api) => ({
@@ -131,6 +134,17 @@ export default async function SettingsPage() {
 
         <Card title="大模型管理中心" className="lg:col-span-2">
           <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
+        </Card>
+
+        <Card title="KMS 文档访问" className="lg:col-span-2">
+          <KmsSetup
+            credential={{
+              configured: !!kmsCred,
+              keyTail: kmsCred?.accessToken ? kmsCred.accessToken.slice(-4) : "",
+              baseUrl: kmsCred?.baseUrl ?? KMS_DEFAULT_BASE_URL,
+              updatedAt: kmsCred?.updatedAt.toISOString(),
+            }}
+          />
         </Card>
 
         <Card title="最近 14 天每日 Token 用量" className="lg:col-span-2">

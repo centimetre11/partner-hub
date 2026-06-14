@@ -9,6 +9,8 @@ export type ToolMeta = {
   implemented: boolean;
   /** 是否需要 Tavily Key */
   requiresTavily?: boolean;
+  /** 是否需要用户配置 KMS 个人令牌 */
+  requiresKms?: boolean;
   /** 核心场景优先级 */
   priority: "core" | "standard" | "assistant";
 };
@@ -29,6 +31,7 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   linkedin_search: { implemented: true, requiresTavily: true, priority: "core" },
   web_search: { implemented: true, requiresTavily: true, priority: "core" },
   search_knowledge: { implemented: true, priority: "core" },
+  read_kms: { implemented: true, requiresKms: true, priority: "core" },
   create_document: { implemented: true, priority: "core" },
   list_todos: { implemented: true, priority: "standard" },
   update_partner: { implemented: true, priority: "assistant" },
@@ -44,14 +47,16 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   linkedin_search: "intel",
   web_search: "intel",
   search_knowledge: "content",
+  read_kms: "kms",
   create_document: "content",
 };
 
 const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
   { id: "partner", label: "伙伴档案", desc: "查询、读取、记录伙伴动态", icon: "◮" },
   { id: "intel", label: "外部情报", desc: "LinkedIn 与公开网络——监测伙伴/竞品/市场信号", icon: "📡" },
+  { id: "kms", label: "公司 KMS", desc: "帆软内部 Confluence 文档（需个人令牌）", icon: "🏢" },
   { id: "todo", label: "待办任务", desc: "创建和查询跟进待办", icon: "☑" },
-  { id: "content", label: "知识与报告", desc: "检索知识库、输出会前简报/联合方案", icon: "📄" },
+  { id: "content", label: "知识与报告", desc: "团队知识库、报告中心输出", icon: "📄" },
 ];
 
 function buildCategories(): ToolCategory[] {
@@ -85,10 +90,14 @@ export function isToolAvailable(name: string) {
   return true;
 }
 
-export function getToolAvailability(name: string): "ready" | "needs_tavily" | "unknown" {
+export function getToolAvailability(
+  name: string,
+  opts?: { kmsConfigured?: boolean }
+): "ready" | "needs_tavily" | "needs_kms" | "unknown" {
   if (!SKILLS.some((t) => t.name === name)) return "unknown";
   const meta = TOOL_META[name];
   if (meta?.requiresTavily && !hasTavilyKey()) return "needs_tavily";
+  if (meta?.requiresKms && !opts?.kmsConfigured) return "needs_kms";
   return "ready";
 }
 
