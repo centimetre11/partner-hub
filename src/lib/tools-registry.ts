@@ -1,44 +1,38 @@
 import { SKILLS } from "./skills";
+import { hasTavilyKey } from "./web-search";
+
+export type ToolMeta = {
+  name: string;
+  label: string;
+  desc: string;
+  /** 是否已在代码中注册且实现 */
+  implemented: boolean;
+  /** 是否需要 Tavily Key */
+  requiresTavily?: boolean;
+  /** 核心场景优先级 */
+  priority: "core" | "standard" | "assistant";
+};
 
 export type ToolCategory = {
   id: string;
   label: string;
   desc: string;
   icon: string;
-  tools: { name: string; label: string; desc: string }[];
+  tools: ToolMeta[];
 };
 
-/** 内置 Tool 分类，供工具背包 UI 展示 */
-export const TOOL_CATEGORIES: ToolCategory[] = [
-  {
-    id: "partner",
-    label: "伙伴档案",
-    desc: "查询、读取、更新伙伴数据与时间线",
-    icon: "◮",
-    tools: [],
-  },
-  {
-    id: "todo",
-    label: "待办任务",
-    desc: "创建和查询团队待办",
-    icon: "☑",
-    tools: [],
-  },
-  {
-    id: "web",
-    label: "网络信息",
-    desc: "联网搜索与网页内容抓取",
-    icon: "🌐",
-    tools: [],
-  },
-  {
-    id: "content",
-    label: "知识与报告",
-    desc: "检索知识库、写入报告中心",
-    icon: "📄",
-    tools: [],
-  },
-];
+const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
+  search_partners: { implemented: true, priority: "core" },
+  get_partner: { implemented: true, priority: "core" },
+  add_timeline_event: { implemented: true, priority: "core" },
+  create_todo: { implemented: true, priority: "core" },
+  linkedin_search: { implemented: true, requiresTavily: true, priority: "core" },
+  web_search: { implemented: true, requiresTavily: true, priority: "core" },
+  search_knowledge: { implemented: true, priority: "core" },
+  create_document: { implemented: true, priority: "core" },
+  list_todos: { implemented: true, priority: "standard" },
+  update_partner: { implemented: true, priority: "assistant" },
+};
 
 const CATEGORY_BY_TOOL: Record<string, string> = {
   search_partners: "partner",
@@ -47,20 +41,33 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   add_timeline_event: "partner",
   create_todo: "todo",
   list_todos: "todo",
-  web_search: "web",
-  fetch_url: "web",
+  linkedin_search: "intel",
+  web_search: "intel",
   search_knowledge: "content",
   create_document: "content",
 };
 
+const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
+  { id: "partner", label: "伙伴档案", desc: "查询、读取、记录伙伴动态", icon: "◮" },
+  { id: "intel", label: "外部情报", desc: "LinkedIn 与公开网络——监测伙伴/竞品/市场信号", icon: "📡" },
+  { id: "todo", label: "待办任务", desc: "创建和查询跟进待办", icon: "☑" },
+  { id: "content", label: "知识与报告", desc: "检索知识库、输出会前简报/联合方案", icon: "📄" },
+];
+
 function buildCategories(): ToolCategory[] {
-  const cats = TOOL_CATEGORIES.map((c) => ({ ...c, tools: [] as ToolCategory["tools"] }));
+  const cats = TOOL_CATEGORIES_TEMPLATE.map((c) => ({ ...c, tools: [] as ToolMeta[] }));
   const map = new Map(cats.map((c) => [c.id, c]));
   for (const t of SKILLS) {
     const catId = CATEGORY_BY_TOOL[t.name] ?? "partner";
-    map.get(catId)?.tools.push({ name: t.name, label: t.label, desc: t.desc });
+    const meta = TOOL_META[t.name] ?? { implemented: true, priority: "standard" as const };
+    map.get(catId)?.tools.push({
+      name: t.name,
+      label: t.label,
+      desc: t.desc,
+      ...meta,
+    });
   }
-  return cats;
+  return cats.filter((c) => c.tools.length > 0);
 }
 
 export const BUILTIN_TOOL_CATEGORIES = buildCategories();
@@ -70,3 +77,28 @@ export const BUILTIN_TOOL_COUNT = SKILLS.length;
 export function getToolLabel(name: string) {
   return SKILLS.find((t) => t.name === name)?.label ?? name;
 }
+
+export function isToolAvailable(name: string) {
+  const meta = TOOL_META[name];
+  if (!meta?.implemented) return false;
+  if (meta.requiresTavily && !hasTavilyKey()) return false;
+  return true;
+}
+
+export function getToolAvailability(name: string): "ready" | "needs_tavily" | "unknown" {
+  if (!SKILLS.some((t) => t.name === name)) return "unknown";
+  const meta = TOOL_META[name];
+  if (meta?.requiresTavily && !hasTavilyKey()) return "needs_tavily";
+  return "ready";
+}
+
+/** Agent 默认装备的核心工具（不含需 Tavily 的情报工具，由模板按需追加） */
+export const CORE_AGENT_TOOLS = [
+  "search_partners",
+  "get_partner",
+  "add_timeline_event",
+  "create_todo",
+  "search_knowledge",
+];
+
+export const INTEL_AGENT_TOOLS = ["linkedin_search", "web_search"];

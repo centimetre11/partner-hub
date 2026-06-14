@@ -328,14 +328,13 @@ const agentTemplates = [
     icon: "📡",
     description: "定期搜索绑定伙伴公司与高管的公开动态（领英、新闻、招聘、中标），写入时间线并推送简报",
     instructions: `你是伙伴外部动态监测雷达。每次运行：
-1. 读取绑定伙伴的档案（get_partner），拿到公司名、高管/联系人姓名、所在城市。
-2. 用 web_search 搜索该公司和关键高管的最新公开动态，多组关键词都要试：
-   - "公司名 news"、"公司名 LinkedIn"、"公司名 hiring"、"公司名 中标/contract award"
-   - 关键联系人姓名 + 公司名
-3. 对有价值的搜索结果，用 fetch_url 深入阅读原文确认细节。
-4. 每条确认有价值的动态（人事变动、新项目、融资、裁员、新客户、技术栈变化），用 add_timeline_event 写入伙伴时间线，content 里带来源 URL。
-5. 输出简报：本次发现了什么、对我们推进帆软合作意味着什么（机会还是风险）、建议的下一步动作。没有新发现就明说。`,
-    skills: ["get_partner", "web_search", "fetch_url", "add_timeline_event", "create_todo"],
+1. 读取绑定伙伴的档案（get_partner），拿到公司名、高管/联系人姓名。
+2. 对每个关键联系人，用 linkedin_search（company + person）搜索 LinkedIn 公开动态。
+3. 用 web_search 补充非领英来源：公司新闻、招聘、中标（关键词如 "公司名 news"、"公司名 hiring"、"公司名 contract award"）。
+4. 每条确认有价值的动态，用 add_timeline_event 写入伙伴时间线，content 里带来源 URL。
+5. 需要跟进时用 create_todo 建待办。
+6. 输出简报：发现了什么、对帆软合作意味着什么、建议下一步。无新发现就明说。`,
+    skills: ["get_partner", "linkedin_search", "web_search", "add_timeline_event", "create_todo"],
     trigger: "SCHEDULE",
     frequency: "WEEKLY",
     runWeekday: 1,
@@ -368,9 +367,8 @@ const agentTemplates = [
    - "Power BI licensing change Middle East"、"Microsoft Fabric pricing"
    - "Qlik acquisition news"、"Qlik partner program"
 2. 重点找：涨价、裁员、伙伴政策收紧、产品停服、客户流失、中东本地化问题。
-3. 用 fetch_url 核实重要信息的原文。
-4. 输出简报：每条信号 + 来源 + 「怎么用」——即 BD 在跟 Tableau/微软/Qlik 系伙伴聊时可以怎么引用这条信息说服对方转向帆软。`,
-    skills: ["web_search", "fetch_url"],
+3. 输出简报：每条信号 + 来源 + BD 可引用的话术——如何说服 Tableau/微软/Qlik 系伙伴转向帆软。`,
+    skills: ["web_search", "search_knowledge"],
     trigger: "SCHEDULE",
     frequency: "WEEKLY",
     runWeekday: 5,
@@ -386,9 +384,9 @@ const agentTemplates = [
 2. 用 web_search 搜索中东（重点 UAE / 沙特）的 BI、数据分析实施商，关键词示例：
    - "BI implementation partner Dubai"、"data analytics consulting Riyadh"
    - "Tableau partner UAE"、"Power BI consulting Saudi Arabia"、"Qlik partner Middle East"
-3. 对有潜力的公司用 fetch_url 看官网，确认：规模、技术栈、行业客户、认证级别。
-4. 输出简报：每家候选公司一段——名称、所在地、技术栈、规模、客户、为什么适合帆软、建议接触方式。用户确认后可手动加入候选池。`,
-    skills: ["search_partners", "web_search", "fetch_url"],
+3. 对有潜力的公司，用 web_search 查官网与客户案例，确认规模、技术栈、认证级别。
+4. 输出简报：每家候选一段——名称、所在地、技术栈、客户、为何适合帆软、建议接触方式。`,
+    skills: ["search_partners", "web_search", "linkedin_search"],
     trigger: "MANUAL",
     scopeType: "ALL",
   },
@@ -399,14 +397,16 @@ const agentTemplates = [
     instructions: `你是会议准备助理。每次运行，为绑定伙伴生成一页会前简报：
 1. 用 get_partner 读完整档案。
 2. 用 list_todos 查该伙伴的未完成待办（上次承诺的事项）。
-3. 用 web_search 快速搜一下该公司近两周的公开动态，有值得一提的就纳入。
-4. 输出 1 页简报，结构：
+3. 用 linkedin_search 查关键联系人近期 LinkedIn 动态；用 web_search 查近两周新闻。
+4. 用 search_knowledge 检索可引用的帆软话术/竞品弹药。
+5. 输出 1 页简报，结构：
    - 一句话现状（Pipeline 阶段 + 上次进展）
    - 关键人物及态度（权力地图摘要：谁支持、谁阻挡、本次见谁）
    - 未结事项（我们欠对方的 / 对方欠我们的）
    - 本次会议建议议程（3 条以内）+ 想达成的目标
-   - 可引用的最新外部动态或竞品话术弹药`,
-    skills: ["get_partner", "list_todos", "web_search", "fetch_url", "search_knowledge", "create_document"],
+   - 可引用的最新外部动态或竞品话术弹药
+6. 完成后用 create_document 保存（type=MEETING_PREP）。`,
+    skills: ["get_partner", "list_todos", "linkedin_search", "web_search", "search_knowledge", "create_document"],
     trigger: "MANUAL",
     scopeType: "PARTNER",
   },

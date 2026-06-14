@@ -102,7 +102,7 @@ ${scopeCtx}
 ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.promptFragments.join("\n\n")}` : ""}
 
 【工作规则】
-1. 用工具获取真实信息，不要编造。搜索类任务多换几个关键词（中英文都试）。
+1. 用工具获取真实信息，不要编造。监测伙伴动态时优先 linkedin_search（公司+高管），再用 web_search 补充新闻。
 2. 需要帆软/中东策略背景时，用 search_knowledge 检索知识库。
 3. 发现与某个伙伴相关的有价值动态时，用 add_timeline_event 记入该伙伴时间线（如有该工具）。
 4. 需要修改伙伴档案字段时调用 update_partner，系统会自动转为提案等人工确认。

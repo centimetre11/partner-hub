@@ -16,7 +16,8 @@ export type ResolvedAgentSkills = {
 
 /** 合并 Agent JSON skills 字段与 AgentSkill 关联，并收集 PROMPT 技能片段 */
 export async function resolveAgentSkills(agentId?: string, skillsJson = "[]"): Promise<ResolvedAgentSkills> {
-  const names = new Set<string>(JSON.parse(skillsJson || "[]") as string[]);
+  const validToolNames = new Set(SKILLS.map((s) => s.name));
+  const names = new Set<string>((JSON.parse(skillsJson || "[]") as string[]).filter((n) => validToolNames.has(n)));
   const promptFragments: string[] = [];
 
   if (agentId) {
@@ -28,6 +29,10 @@ export async function resolveAgentSkills(agentId?: string, skillsJson = "[]"): P
         names.add(skill.name);
       }
     }
+  }
+
+  for (const n of [...names]) {
+    if (!validToolNames.has(n)) names.delete(n);
   }
 
   const custom = await db.skill.findMany({

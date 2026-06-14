@@ -3,6 +3,7 @@ import type { ToolDef } from "./ai";
 import { PARTNER_FIELD_LABELS, stageName } from "./constants";
 import { partnerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
+import { generalWebSearch, linkedinSearch } from "./web-search";
 
 // ============ 技能执行上下文 ============
 
@@ -276,96 +277,67 @@ const listTodos: Skill = {
   },
 };
 
-// ---- 联网搜索 ----
-async function tavilySearch(query: string, maxResults: number): Promise<string> {
-  const res = await fetch("https://api.tavily.com/search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: process.env.TAVILY_API_KEY,
-      query,
-      max_results: maxResults,
-      include_answer: true,
-    }),
-  });
-  if (!res.ok) return `搜索失败（${res.status}）：${(await res.text()).slice(0, 200)}`;
-  const data = await res.json();
-  const items = (data.results ?? [])
-    .map(
-      (r: { title: string; url: string; content: string }, i: number) =>
-        `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.content?.slice(0, 300)}`
-    )
-    .join("\n");
-  return [data.answer && `摘要：${data.answer}`, items].filter(Boolean).join("\n\n") || "没有搜索结果";
-}
+// ---- 领英搜索 ----
+const linkedinSearchTool: Skill = {
+  name: "linkedin_search",
+  label: "领英搜索",
+  desc: "搜索 LinkedIn 上的公司页、高管动态与公开职业信息（监测伙伴关键人）",
+  def: {
+    type: "function",
+    function: {
+      name: "linkedin_search",
+      description:
+        "搜索 LinkedIn 公开内容：公司主页、高管/profile、近期动态。用于监测伙伴 CEO/CTO 动向、人事变动、发帖。优先传 company + person。",
+      parameters: {
+        type: "object",
+        properties: {
+          company: { type: "string", description: "公司名，如 Beinex、TechMantra" },
+          person: { type: "string", description: "联系人姓名，如 Shantosh Sridhar" },
+          topic: { type: "string", description: "附加关键词，如 hiring、partnership、Dubai" },
+          query: { type: "string", description: "或直接写完整搜索词" },
+          maxResults: { type: "number", description: "结果数，默认 5" },
+        },
+      },
+    },
+  },
+  run: async (args) => {
+    const result = await linkedinSearch({
+      company: args.company ? String(args.company) : undefined,
+      person: args.person ? String(args.person) : undefined,
+      topic: args.topic ? String(args.topic) : undefined,
+      query: args.query ? String(args.query) : undefined,
+      maxResults: Number(args.maxResults) || 5,
+    });
+    return result.ok ? result.text : result.error;
+  },
+};
 
+// ---- 联网搜索 ----
 const webSearch: Skill = {
   name: "web_search",
-  label: "联网搜索",
-  desc: "搜索公开网络信息（公司动态、新闻、招聘、领英公开内容）。需配置 TAVILY_API_KEY 或使用 Kimi 内置搜索",
+  label: "新闻搜索",
+  desc: "搜索公开新闻、招聘、中标、竞品动态（非 LinkedIn 专用场景）",
   def: {
     type: "function",
     function: {
       name: "web_search",
       description:
-        "搜索互联网公开信息：公司新闻、人事变动、招聘信号、LinkedIn 公开动态等。query 建议带公司名+英文关键词，如 'Beinex Dubai news 2026' 或 'site:linkedin.com Beinex'。",
+        "搜索互联网公开信息：公司新闻、人事变动、招聘信号、中标公告、竞品动态。query 建议带公司名+英文关键词，如 'Beinex Dubai contract award 2026'。",
       parameters: {
         type: "object",
         properties: {
           query: { type: "string", description: "搜索关键词" },
-          maxResults: { type: "number", description: "结果数量，默认5" },
+          maxResults: { type: "number", description: "结果数量，默认 5" },
+          topic: { type: "string", enum: ["general", "news"], description: "news=侧重新闻" },
         },
         required: ["query"],
       },
     },
   },
   run: async (args) => {
-    if (!process.env.TAVILY_API_KEY) {
-      return "未配置 TAVILY_API_KEY，无法使用独立搜索。（若使用 Kimi 模型，请改用内置 $web_search 工具，它会自动出现在工具列表中）";
-    }
-    return tavilySearch(String(args.query), Number(args.maxResults) || 5);
-  },
-};
-
-// ---- 抓网页 ----
-const fetchUrl: Skill = {
-  name: "fetch_url",
-  label: "读取网页",
-  desc: "抓取指定 URL 的正文内容（深入阅读搜索结果）",
-  def: {
-    type: "function",
-    function: {
-      name: "fetch_url",
-      description: "抓取网页正文文本（已去除HTML标签），用于深入阅读搜索到的页面。",
-      parameters: {
-        type: "object",
-        properties: { url: { type: "string", description: "完整 URL" } },
-        required: ["url"],
-      },
-    },
-  },
-  run: async (args) => {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(String(args.url), {
-        signal: controller.signal,
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; PartnerHub/1.0)" },
-      });
-      clearTimeout(timer);
-      if (!res.ok) return `抓取失败（${res.status}）`;
-      const html = await res.text();
-      const text = html
-        .replace(/<script[\s\S]*?<\/script>/gi, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/&nbsp;|&amp;|&lt;|&gt;|&quot;/g, " ")
-        .replace(/\s{2,}/g, " ")
-        .trim();
-      return text.slice(0, 6000) || "页面无正文内容";
-    } catch (e) {
-      return `抓取失败：${e instanceof Error ? e.message : e}`;
-    }
+    const topic = args.topic === "news" ? "news" : undefined;
+    const result = await generalWebSearch(String(args.query), Number(args.maxResults) || 5, topic);
+    return result.ok ? result.text : result.error;
   },
 };
 
@@ -511,8 +483,8 @@ export const SKILLS: Skill[] = [
   updatePartner,
   createTodo,
   listTodos,
+  linkedinSearchTool,
   webSearch,
-  fetchUrl,
   addTimelineEvent,
   searchKnowledge,
   createDocument,
@@ -523,8 +495,8 @@ export const SKILL_MAP = new Map(SKILLS.map((s) => [s.name, s]));
 export const DEFAULT_AGENT_SKILLS = [
   "search_partners",
   "get_partner",
+  "linkedin_search",
   "web_search",
-  "fetch_url",
   "add_timeline_event",
   "create_todo",
   "search_knowledge",
@@ -532,7 +504,15 @@ export const DEFAULT_AGENT_SKILLS = [
 
 export const REPORT_AGENT_KEYWORDS = ["会前简报", "联合方案", "联合解决方案"];
 
-export const ASSISTANT_SKILLS = ["search_partners", "get_partner", "update_partner", "create_todo", "list_todos", "web_search", "fetch_url"];
+export const ASSISTANT_SKILLS = [
+  "search_partners",
+  "get_partner",
+  "update_partner",
+  "create_todo",
+  "list_todos",
+  "linkedin_search",
+  "web_search",
+];
 
 // Kimi（moonshot）平台的内置联网搜索：作为特殊工具注入，工具被调用时原样回传参数即可
 export const KIMI_BUILTIN_SEARCH = {

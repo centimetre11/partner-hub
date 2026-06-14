@@ -1,0 +1,104 @@
+/**
+ * 内置工具冒烟测试
+ * 用法: npx tsx --env-file=.env scripts/test-tools.ts
+ */
+import { PrismaClient } from "@prisma/client";
+import { runSkill, newSkillContext, SKILLS } from "../src/lib/skills";
+import { hasTavilyKey } from "../src/lib/web-search";
+
+const prisma = new PrismaClient();
+
+function classify(tool: string, out: string): "pass" | "skip" | "fail" {
+  if (out.includes("未配置 TAVILY") || out.includes("TAVILY_API_KEY")) {
+    return hasTavilyKey() ? "fail" : "skip";
+  }
+  if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败") || out.startsWith("Tavily")) {
+    return "fail";
+  }
+  if (tool === "search_knowledge" && out.includes("未找到")) return "fail";
+  if (tool === "search_partners" && out === "没有符合条件的伙伴") return "fail";
+  if (tool === "get_partner" && out.startsWith("找不到")) return "fail";
+  return "pass";
+}
+
+async function main() {
+  const ctx = newSkillContext({ mode: "agent", userId: null, agentName: "tool-test" });
+  const partner = await prisma.partner.findFirst({ where: { name: { contains: "Beinex" } } });
+  const partnerName = partner?.name ?? (await prisma.partner.findFirst())?.name ?? "Beinex";
+
+  const cases: [string, Record<string, unknown>][] = [
+    ["search_partners", { tier: "A" }],
+    ["get_partner", { name: partnerName }],
+    ["list_todos", {}],
+    ["search_knowledge", { query: "中东" }],
+    ["linkedin_search", { company: "Beinex", person: "Shantosh Sridhar", maxResults: 3 }],
+    ["web_search", { query: "Beinex Dubai analytics partner news", maxResults: 3, topic: "news" }],
+  ];
+
+  const results: { tool: string; status: string; preview: string }[] = [];
+
+  for (const [tool, args] of cases) {
+    if (!SKILLS.some((s) => s.name === tool)) {
+      results.push({ tool, status: "fail", preview: "未注册" });
+      continue;
+    }
+    const out = await runSkill(tool, args, ctx);
+    results.push({
+      tool,
+      status: classify(tool, out),
+      preview: out.slice(0, 240).replace(/\s+/g, " "),
+    });
+  }
+
+  // 写操作测试（会清理）
+  const todoTitle = `[tool-test] ${Date.now()}`;
+  const todoOut = await runSkill("create_todo", { title: todoTitle, priority: "LOW" }, ctx);
+  const todoOk = todoOut.includes("已创建待办");
+  if (todoOk) {
+    await prisma.todoItem.deleteMany({ where: { title: todoTitle } });
+  }
+  results.push({ tool: "create_todo", status: todoOk ? "pass" : "fail", preview: todoOut });
+
+  const timelineOut = await runSkill(
+    "add_timeline_event",
+    { partnerName, title: "[tool-test] 可删除", content: "自动化测试" },
+    ctx
+  );
+  const timelineOk = timelineOut.includes("已写入");
+  if (timelineOk && partner) {
+    await prisma.timelineEvent.deleteMany({ where: { partnerId: partner.id, title: "[tool-test] 可删除" } });
+  }
+  results.push({ tool: "add_timeline_event", status: timelineOk ? "pass" : "fail", preview: timelineOut });
+
+  const docOut = await runSkill(
+    "create_document",
+    { title: `[tool-test] ${Date.now()}`, content: "# test", type: "CUSTOM" },
+    ctx
+  );
+  const docOk = docOut.includes("已写入报告中心");
+  if (docOk) {
+    const idMatch = docOut.match(/\/documents\/([a-z0-9]+)/i);
+    if (idMatch) await prisma.document.delete({ where: { id: idMatch[1] } }).catch(() => null);
+  }
+  results.push({ tool: "create_document", status: docOk ? "pass" : "fail", preview: docOut });
+
+  const summary = {
+    tavilyConfigured: hasTavilyKey(),
+    registeredTools: SKILLS.map((s) => s.name),
+    removedTools: ["fetch_url"],
+    results,
+    pass: results.filter((r) => r.status === "pass").length,
+    skip: results.filter((r) => r.status === "skip").length,
+    fail: results.filter((r) => r.status === "fail").length,
+  };
+
+  console.log(JSON.stringify(summary, null, 2));
+  await prisma.$disconnect();
+  if (summary.fail > 0) process.exit(1);
+}
+
+main().catch(async (e) => {
+  console.error(e);
+  await prisma.$disconnect();
+  process.exit(1);
+});

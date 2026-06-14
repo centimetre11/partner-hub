@@ -68,7 +68,7 @@ export function AgentForm({
             required
             defaultValue={agent.instructions}
             rows={7}
-            placeholder={`例如：\n你是负责监测伙伴外部动态的雷达。每次运行：\n1. 用 web_search 搜索绑定伙伴的公司名+高管名的最新公开动态（新闻、领英、招聘、中标）\n2. 有价值的发现用 add_timeline_event 写入伙伴时间线\n3. 输出简报：本周发现了什么、对我们推进合作意味着什么、建议动作`}
+            placeholder={`例如：\n你是负责监测伙伴外部动态的雷达。每次运行：\n1. 用 get_partner 读绑定伙伴档案与联系人\n2. 用 linkedin_search 搜高管 LinkedIn 动态\n3. 用 web_search 补充新闻/招聘/中标\n4. 有价值发现用 add_timeline_event 写入时间线\n5. 输出简报：发现了什么、意味着什么、建议动作`}
             className={input}
           />
         </label>

@@ -125,7 +125,7 @@ export async function runAgentBuilderTurn(opts: {
 1. 先理解业务目标、输入来源、触发时机、输出物、写库/推送需求、风险边界。
 2. 信息不足时，用“调研问卷”的方式一次性提出最关键的澄清问题，不要碎片化追问。
 3. 主动从工具清单选择合适工具（draft.skills）；从技能清单选择方法论（draft.skillIds）；优先少而准。
-4. 如果没有完全匹配的技能，不要卡住；在 missingSkillNotes 说明缺口，并把临时解决办法写入 instructions：先用已有知识库、伙伴档案、web_search/fetch_url、推理和透明限制说明尝试完成。
+4. 如果没有完全匹配的技能，不要卡住；在 missingSkillNotes 说明缺口，并把临时解决办法写入 instructions：先用 linkedin_search、web_search、知识库、档案和推理尝试完成。
 5. 如果任务需要公司策略/产品知识，建议选择 search_knowledge，并在指令里要求先查知识库。
 6. Agent 对伙伴档案字段的修改应走提案/人工确认；写时间线、建待办、创建文档可以作为执行动作。
 7. ready=true 只在草案足够创建时给出；如果仍缺目标/触发/输出/数据源这些核心信息，ready=false 并给 questionnaire。
