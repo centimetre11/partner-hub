@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireUser } from "./session";
 import { parseVolcengineSnippet, normalizeApiKeyInput } from "./volcengine-config";
+import { parseCapabilitiesFromForm, serializeAiCapabilities } from "./ai-capabilities";
 
 function resolveVolcengineApiKey(opts: {
   formKey?: string;
@@ -50,6 +51,7 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
   const apiKey = cleanText(formData.get("apiKey"));
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
+  const capabilities = serializeAiCapabilities(parseCapabilitiesFromForm(formData));
 
   if (!name || !baseUrl || !model) return { error: "请填写名称、Base URL 和模型" };
   if (!id && !apiKey) return { error: "新增 API 时必须填写 API Key" };
@@ -62,6 +64,7 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
         baseUrl,
         model,
         enabled,
+        capabilities,
         ...(apiKey ? { apiKey } : {}),
       },
     });
@@ -79,6 +82,7 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
       model,
       apiKey,
       enabled,
+      capabilities,
       isDefault: isDefault || count === 0,
     },
   });
@@ -116,6 +120,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
   const snippet = cleanText(formData.get("snippet"));
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
+  const capabilities = serializeAiCapabilities(parseCapabilitiesFromForm(formData));
 
   if (!id && !manualKey) return { error: "请填写 ARK API Key（从火山方舟控制台 → API Key 管理复制完整密钥）" };
   if (!id && !snippet) return { error: "请粘贴 curl 或 JSON 请求体" };
@@ -159,6 +164,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
         model,
         extraConfig,
         enabled,
+        capabilities,
         ...(finalKey ? { apiKey: finalKey } : {}),
       },
     });
@@ -178,6 +184,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
       apiKey: finalKey!,
       extraConfig,
       enabled,
+      capabilities,
       isDefault: isDefault || count === 0,
     },
   });

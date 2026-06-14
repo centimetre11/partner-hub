@@ -3,13 +3,14 @@
 import type { ReactNode } from "react";
 import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
 import type { AiTraceStep } from "@/lib/ai-trace";
+import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { normalizedToIntake } from "@/lib/proposal-normalize";
 import type { NormalizedProposal } from "@/lib/proposal-normalize";
 import { AiProcessTrace } from "@/components/ai-process-trace";
 import { LiveProposalDraft } from "@/components/live-proposal-draft";
 
-type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[] };
+type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
 
 export function AiWorkflowPanel({
   title,
@@ -32,6 +33,10 @@ export function AiWorkflowPanel({
   input,
   onInputChange,
   onSend,
+  onStop,
+  pendingImages = [],
+  onAddImages,
+  onRemoveImage,
   inputPlaceholder,
   sendDisabled,
   headerExtra,
@@ -58,6 +63,11 @@ export function AiWorkflowPanel({
   input: string;
   onInputChange: (v: string) => void;
   onSend: () => void;
+  /** 停止当前 AI 流式处理 */
+  onStop?: () => void;
+  pendingImages?: ChatImage[];
+  onAddImages?: (images: ChatImage[]) => void;
+  onRemoveImage?: (index: number) => void;
   inputPlaceholder?: string;
   sendDisabled?: boolean;
   headerExtra?: ReactNode;
@@ -103,7 +113,7 @@ export function AiWorkflowPanel({
       >
         {/* 左侧：找信息 */}
         <div className="flex flex-col min-h-0 border-r border-zinc-100">
-          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-4">
             {messages.map((m, i) => (
               <div key={i} className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}>
                 {m.role === "assistant" && m.trace && m.trace.length > 0 && (
@@ -114,6 +124,19 @@ export function AiWorkflowPanel({
                     m.role === "user" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-800"
                   }`}
                 >
+                  {m.images && m.images.length > 0 && (
+                    <div className={`flex flex-wrap gap-2 mb-2 ${m.role === "user" ? "" : ""}`}>
+                      {m.images.map((img, j) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={j}
+                          src={img.url}
+                          alt={img.name ?? "图片"}
+                          className="max-h-28 max-w-[140px] rounded-lg border border-white/20 object-cover"
+                        />
+                      ))}
+                    </div>
+                  )}
                   {m.content}
                 </div>
               </div>
@@ -132,7 +155,54 @@ export function AiWorkflowPanel({
           </div>
           <div className="shrink-0 border-t p-4">
             {leftFooter ?? (
-              <div className="flex gap-3 items-end">
+              <div className="space-y-2">
+                {pendingImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {pendingImages.map((img, i) => (
+                      <div key={i} className="relative">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.url} alt={img.name ?? "待发送"} className="h-16 w-16 rounded-lg object-cover border border-zinc-200" />
+                        {onRemoveImage && (
+                          <button
+                            type="button"
+                            onClick={() => onRemoveImage(i)}
+                            className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-zinc-800 text-white text-xs leading-none"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-3 items-end">
+                {onAddImages && (
+                  <label className="shrink-0 cursor-pointer rounded-xl border border-zinc-200 px-3 py-3 text-zinc-500 hover:border-indigo-300 hover:text-indigo-600" title="添加图片">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        const files = [...(e.target.files ?? [])];
+                        if (!files.length) return;
+                        void Promise.all(
+                          files.map(
+                            (file) =>
+                              new Promise<ChatImage>((resolve) => {
+                                const reader = new FileReader();
+                                reader.onload = () =>
+                                  resolve({ url: String(reader.result), name: file.name });
+                                reader.readAsDataURL(file);
+                              })
+                          )
+                        ).then((imgs) => onAddImages(imgs));
+                        e.target.value = "";
+                      }}
+                    />
+                    📷
+                  </label>
+                )}
                 <textarea
                   value={input}
                   onChange={(e) => onInputChange(e.target.value)}
@@ -146,13 +216,25 @@ export function AiWorkflowPanel({
                   placeholder={inputPlaceholder ?? "输入后按 ⌘/Ctrl + Enter 发送…"}
                   className="flex-1 rounded-xl border border-zinc-200 px-4 py-3 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
-                <button
-                  onClick={onSend}
-                  disabled={sendDisabled}
-                  className="rounded-xl bg-indigo-600 text-white px-6 py-3 text-[15px] font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
-                >
-                  发送
-                </button>
+                {loading && onStop ? (
+                  <button
+                    onClick={onStop}
+                    className="rounded-xl bg-red-500 text-white px-6 py-3 text-[15px] font-medium hover:bg-red-600 shrink-0 flex items-center gap-2"
+                    title="停止生成"
+                  >
+                    <span className="inline-block w-3 h-3 bg-white rounded-[2px]" />
+                    停止
+                  </button>
+                ) : (
+                  <button
+                    onClick={onSend}
+                    disabled={sendDisabled}
+                    className="rounded-xl bg-indigo-600 text-white px-6 py-3 text-[15px] font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
+                  >
+                    发送
+                  </button>
+                )}
+                </div>
               </div>
             )}
           </div>

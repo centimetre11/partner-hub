@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
+import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 
-type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[] };
+type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
 
 const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = {
   new_partner: {
@@ -59,7 +60,13 @@ export function AiIntakePanel({
   const [phase, setPhase] = useState("");
   const [phaseLabel, setPhaseLabel] = useState("");
   const [patchChanges, setPatchChanges] = useState<ProposalChanges | null>(null);
+  const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
+  const abortRef = useRef<AbortController | null>(null);
+
+  function stop() {
+    abortRef.current?.abort();
+  }
 
   function applyStream(state: AiStreamState) {
     setLiveTrace(state.trace);
@@ -74,37 +81,61 @@ export function AiIntakePanel({
 
   async function send() {
     const text = input.trim();
-    if (!text || loading) return;
-    const next = [...messages, { role: "user" as const, content: text }];
+    if ((!text && !pendingImages.length) || loading) return;
+    const next = [
+      ...messages,
+      {
+        role: "user" as const,
+        content: text || "请识别图片中的信息",
+        images: pendingImages.length ? pendingImages : undefined,
+      },
+    ];
     setMessages(next);
     setInput("");
+    setPendingImages([]);
     setLoading(true);
     setError(null);
     setLiveTrace([]);
     setReplyText("");
     setPatchChanges(null);
+    const ac = new AbortController();
+    abortRef.current = ac;
     try {
       const res = await fetch("/api/ai/intake", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({ scope, partnerId, messages: next, stream: true }),
+        signal: ac.signal,
       });
-      const { data, trace, replyText: finalReply } = await consumeAiSse(
+      const { data, trace, replyText: finalReply, aborted } = await consumeAiSse(
         res,
         (_ev, state) => applyStream(state),
         { excluded: excludedRef.current }
       );
+      if (aborted) {
+        const partial = (finalReply || "").trim();
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: partial ? `${partial}\n\n（已停止）` : "（已停止，右侧已找到的信息保留）", trace: [...trace] },
+        ]);
+        return;
+      }
       const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[] };
       setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace: [...trace] }]);
       setProposal(turn.proposal);
       setReady(turn.ready);
       setQuestions(turn.questions ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setMessages((m) => [...m, { role: "assistant", content: "（已停止）", trace: [...liveTrace] }]);
+      } else {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setLoading(false);
       // 保留 trace 在消息里，仅清空进行中的流式 reply
       setReplyText("");
+      abortRef.current = null;
     }
   }
 
@@ -144,8 +175,12 @@ export function AiIntakePanel({
           input={input}
           onInputChange={setInput}
           onSend={send}
+          onStop={stop}
+          pendingImages={pendingImages}
+          onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}
+          onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
           inputPlaceholder={proposal ? "继续补充，或右侧确认入库…" : undefined}
-          sendDisabled={loading || !input.trim()}
+          sendDisabled={loading || (!input.trim() && !pendingImages.length)}
       />
       {error && (
         <div className="absolute bottom-24 left-6 right-[62%] text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2 shadow-sm z-10">

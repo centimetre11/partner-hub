@@ -1,9 +1,18 @@
 // 统一的 OpenAI 兼容接口封装：Kimi / DeepSeek / 通义 / OpenAI 均可
 import { db } from "./db";
+import {
+  type AiCapability,
+  apiHasCapabilities,
+  DEFAULT_AI_CAPABILITIES,
+  parseAiCapabilities,
+} from "./ai-capabilities";
+
+export type ChatImage = { url: string; name?: string };
 
 export type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
   content: string | null;
+  images?: ChatImage[];
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   /** 火山 Responses API 上一轮 output，多轮 tool calling 时必须原样回放 */
@@ -40,30 +49,68 @@ type ResolvedAiApi = {
   apiKey: string;
   model: string;
   extraConfig: string | null;
+  capabilities: AiCapability[];
 };
 
-type TokenUsage = {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-};
+function toResolvedApi(row: {
+  id: string;
+  name: string;
+  provider: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  extraConfig: string | null;
+  capabilities?: string | null;
+}): ResolvedAiApi {
+  return {
+    id: row.id,
+    name: row.name,
+    bucketKey: `api:${row.id}`,
+    provider: row.provider,
+    baseUrl: row.baseUrl,
+    apiKey: row.apiKey,
+    model: row.model,
+    extraConfig: row.extraConfig,
+    capabilities: parseAiCapabilities(row.capabilities),
+  };
+}
 
-async function resolveAiApi(): Promise<ResolvedAiApi> {
-  const configured = await db.aiApiConfig.findFirst({
+export function messageHasImages(messages: ChatMessage[]): boolean {
+  return messages.some((m) => (m.images?.length ?? 0) > 0);
+}
+
+export function requiredCapabilitiesForChat(opts: {
+  messages: ChatMessage[];
+  tools?: (ToolDef | Record<string, unknown>)[];
+  jsonMode?: boolean;
+  capability?: AiCapability;
+}): AiCapability[] {
+  if (opts.capability) return [opts.capability];
+  const required: AiCapability[] = ["chat"];
+  if (opts.tools?.length) required.push("tools");
+  if (opts.jsonMode) required.push("json");
+  if (messageHasImages(opts.messages)) required.push("vision");
+  return required;
+}
+
+async function resolveAiApi(opts?: { capabilities?: AiCapability[] }): Promise<ResolvedAiApi> {
+  const required = opts?.capabilities ?? ["chat"];
+  const configured = await db.aiApiConfig.findMany({
     where: { enabled: true },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
   });
-  if (configured) {
-    return {
-      id: configured.id,
-      name: configured.name,
-      bucketKey: `api:${configured.id}`,
-      provider: configured.provider,
-      baseUrl: configured.baseUrl,
-      apiKey: configured.apiKey,
-      model: configured.model,
-      extraConfig: configured.extraConfig,
-    };
+
+  const matched = configured.find((api) =>
+    apiHasCapabilities(parseAiCapabilities(api.capabilities), required)
+  );
+  if (matched) return toResolvedApi(matched);
+
+  if (configured.length) {
+    const fallback = configured[0];
+    console.warn(
+      `[ai] 无模型同时具备 ${required.join("+")}，回退到 ${fallback.name}（${parseAiCapabilities(fallback.capabilities).join("+")}）`
+    );
+    return toResolvedApi(fallback);
   }
 
   const baseUrl = process.env.AI_BASE_URL || "https://api.openai.com/v1";
@@ -81,8 +128,15 @@ async function resolveAiApi(): Promise<ResolvedAiApi> {
     apiKey,
     model,
     extraConfig: null,
+    capabilities: [...DEFAULT_AI_CAPABILITIES, "vision"],
   };
 }
+
+type TokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
 
 function readTokenUsage(data: Record<string, unknown>): TokenUsage {
   const usage = (data.usage ?? {}) as Record<string, unknown>;
@@ -184,6 +238,30 @@ function toVolcengineTools(tools: (ToolDef | Record<string, unknown>)[]): Record
   return tools.map(toVolcengineTool);
 }
 
+function toOpenAiMessages(messages: ChatMessage[]): unknown[] {
+  return messages.map((m) => {
+    if (m.role === "tool") {
+      return { role: m.role, content: m.content ?? "", tool_call_id: m.tool_call_id };
+    }
+    if (m.role === "assistant") {
+      return {
+        role: m.role,
+        content: m.content ?? "",
+        ...(m.tool_calls?.length ? { tool_calls: m.tool_calls } : {}),
+      };
+    }
+    if (m.role === "user" && m.images?.length) {
+      const parts: unknown[] = [];
+      if (m.content?.trim()) parts.push({ type: "text", text: m.content });
+      for (const img of m.images) {
+        parts.push({ type: "image_url", image_url: { url: img.url } });
+      }
+      return { role: "user", content: parts };
+    }
+    return { role: m.role, content: m.content ?? "" };
+  });
+}
+
 function prepareVolcengineReplay(output: Array<Record<string, unknown>>): unknown[] {
   const statusTypes = new Set(["reasoning", "message", "function_call", "function_call_output", "web_search_call"]);
   return output.map((item) => {
@@ -198,10 +276,13 @@ function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
   for (const m of messages) {
     if (m.role === "system") continue;
     if (m.role === "user") {
-      input.push({
-        role: "user",
-        content: [{ type: "input_text", text: m.content ?? "" }],
-      });
+      const parts: unknown[] = [];
+      if (m.content?.trim()) parts.push({ type: "input_text", text: m.content });
+      for (const img of m.images ?? []) {
+        parts.push({ type: "input_image", image_url: img.url });
+      }
+      if (!parts.length) parts.push({ type: "input_text", text: "" });
+      input.push({ role: "user", content: parts });
       continue;
     }
     if (m.role === "assistant") {
@@ -537,7 +618,7 @@ async function openaiChatCompletionStream(
 ): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
   const body: Record<string, unknown> = {
     model: api.model,
-    messages,
+    messages: toOpenAiMessages(messages),
     temperature: opts.temperature ?? 0.2,
     stream: true,
   };
@@ -644,9 +725,13 @@ export async function chatCompletion(
     feature?: string;
     userId?: string;
     onDelta?: (delta: string) => void;
+    /** 强制按某一能力选模型（如 vision） */
+    capability?: AiCapability;
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
-  const api = await resolveAiApi();
+  const api = await resolveAiApi({
+    capabilities: requiredCapabilitiesForChat({ messages, tools: opts.tools, jsonMode: opts.jsonMode, capability: opts.capability }),
+  });
 
   if (api.provider === "volcengine") {
     // 有 onDelta 时走真·流式（边生成边推送），否则一次性返回
@@ -662,7 +747,7 @@ export async function chatCompletion(
 
   const body: Record<string, unknown> = {
     model: api.model,
-    messages,
+    messages: toOpenAiMessages(messages),
     temperature: opts.temperature ?? 0.2,
   };
   if (opts.tools?.length) body.tools = opts.tools;

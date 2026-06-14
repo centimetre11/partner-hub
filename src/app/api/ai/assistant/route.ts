@@ -45,7 +45,7 @@ async function runQueryAssistant(
   const tools = await resolveQueryTools();
   const chat: ChatMessage[] = [
     { role: "system", content: system },
-    ...messages.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
+    ...messages.map((m) => ({ role: m.role, content: m.content, images: m.images }) as ChatMessage),
   ];
   const ctx = newSkillContext({ mode: "assistant", userId: uid });
 

@@ -101,6 +101,7 @@ export function AiProcessTrace({
   const running = steps.some((s) => s.status === "running");
   const doneCount = steps.filter((s) => s.status === "done").length;
   const latestToolId = [...steps].reverse().find((s) => s.type === "tool")?.id;
+  const waiting = !!loading && !running;
 
   useEffect(() => {
     if (loading || running) {
@@ -114,12 +115,24 @@ export function AiProcessTrace({
 
   return (
     <div className={`rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-2.5 ${className}`}>
+      {(loading || running) && (
+        <div className="h-1 rounded-full bg-indigo-100 overflow-hidden mb-2 relative">
+          <div className="absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-full animate-pulse" />
+        </div>
+      )}
       <div className="flex items-center justify-between mb-2 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[11px] font-medium text-zinc-500 shrink-0">
             {loading || running ? "处理中" : "处理过程"}
             {toolCount > 0 && ` · ${toolCount} 步`}
+            {doneCount > 0 && (loading || running) && `（已完成 ${doneCount}）`}
           </span>
+          {(loading || running) && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+              AI 继续中
+            </span>
+          )}
           {phaseText && (
             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 truncate">
               {phaseText}
@@ -139,6 +152,12 @@ export function AiProcessTrace({
           <div className="flex items-center gap-2 text-xs text-zinc-400 px-1">
             <span className="inline-block w-3 h-3 border-2 border-zinc-200 border-t-indigo-500 rounded-full animate-spin" />
             正在思考…
+          </div>
+        )}
+        {waiting && steps.length > 0 && (
+          <div className="flex items-center gap-2 text-xs text-indigo-500/80 px-2 py-1.5 rounded-lg bg-indigo-50/60 border border-indigo-100/80">
+            <span className="inline-block w-3 h-3 border-2 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
+            {phaseText ? `${phaseText}…` : "等待下一步…"}
           </div>
         )}
         <div ref={endRef} />

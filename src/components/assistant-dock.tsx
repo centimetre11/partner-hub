@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
+import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
@@ -14,6 +15,7 @@ type Msg = {
   content: string;
   actions?: string[];
   trace?: AiTraceStep[];
+  images?: ChatImage[];
 };
 
 type ProposeResult = {
@@ -54,7 +56,13 @@ export function AssistantDock() {
   const [phaseLabel, setPhaseLabel] = useState("");
   const [patchChanges, setPatchChanges] = useState<ProposalChanges | null>(null);
   const [proposeMode, setProposeMode] = useState(false);
+  const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
+  const abortRef = useRef<AbortController | null>(null);
+
+  function stop() {
+    abortRef.current?.abort();
+  }
 
   const showDraft = proposeMode || !!proposal || (loading && proposeMode);
 
@@ -71,10 +79,18 @@ export function AssistantDock() {
 
   async function send(text?: string) {
     const content = (text ?? input).trim();
-    if (!content || loading) return;
-    const next: Msg[] = [...messages, { role: "user", content }];
+    if ((!content && !pendingImages.length) || loading) return;
+    const next: Msg[] = [
+      ...messages,
+      {
+        role: "user",
+        content: content || "请识别图片中的信息",
+        images: pendingImages.length ? pendingImages : undefined,
+      },
+    ];
     setMessages(next);
     setInput("");
+    setPendingImages([]);
     setLoading(true);
     setLiveTrace([]);
     setReplyText("");
@@ -84,21 +100,33 @@ export function AssistantDock() {
     setPatchChanges(null);
     const likelyPropose = /kms\.fineres|pageId=\d+|建档|补全画像|录入|创建伙伴/i.test(content);
     if (likelyPropose) setProposeMode(true);
+    const ac = new AbortController();
+    abortRef.current = ac;
     try {
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({
-          messages: next.map(({ role, content: c }) => ({ role, content: c })),
+          messages: next.map(({ role, content: c, images }) => ({ role, content: c, images })),
           stream: true,
           partnerId: proposePartnerId,
         }),
+        signal: ac.signal,
       });
-      const { data, trace, replyText: finalReply } = await consumeAiSse(
+      const { data, trace, replyText: finalReply, aborted } = await consumeAiSse(
         res,
         (_ev, state) => applyStream(state),
         { excluded: excludedRef.current }
       );
+
+      if (aborted) {
+        const partial = (finalReply || "").trim();
+        setMessages([
+          ...next,
+          { role: "assistant", content: partial ? `${partial}\n\n（已停止）` : "（已停止）", trace: [...trace] },
+        ]);
+        return;
+      }
 
       if ((data as ProposeResult).mode === "propose") {
         const p = data as ProposeResult;
@@ -114,13 +142,18 @@ export function AssistantDock() {
         if (q.actions?.length) router.refresh();
       }
     } catch (e) {
-      setMessages([
-        ...next,
-        { role: "assistant", content: `出错了：${e instanceof Error ? e.message : e}`, trace: liveTrace },
-      ]);
+      if (e instanceof DOMException && e.name === "AbortError") {
+        setMessages([...next, { role: "assistant", content: "（已停止）", trace: [...liveTrace] }]);
+      } else {
+        setMessages([
+          ...next,
+          { role: "assistant", content: `出错了：${e instanceof Error ? e.message : e}`, trace: liveTrace },
+        ]);
+      }
     } finally {
       setLoading(false);
       setReplyText("");
+      abortRef.current = null;
     }
   }
 
@@ -148,6 +181,7 @@ export function AssistantDock() {
             m.content +
             (m.actions?.length ? `\n\n${m.actions.map((a) => `✓ ${a}`).join("\n")}` : ""),
           trace: m.trace,
+          images: m.images,
         }));
 
   return (
@@ -186,8 +220,12 @@ export function AssistantDock() {
             input={input}
             onInputChange={setInput}
             onSend={() => send()}
+            onStop={stop}
+            pendingImages={pendingImages}
+            onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}
+            onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
             inputPlaceholder={showDraft ? "继续补充，或右侧确认入库…" : "问问题，或下达指令…"}
-            sendDisabled={loading || !input.trim()}
+            sendDisabled={loading || (!input.trim() && !pendingImages.length)}
             showDraftPanel={showDraft}
           />
         </AiFullscreenOverlay>

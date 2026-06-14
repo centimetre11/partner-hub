@@ -10,6 +10,8 @@ import {
   type AiApiActionState,
 } from "@/lib/ai-settings-actions";
 import { VolcengineApiSetup, type VolcengineApiForClient } from "./volcengine-api-setup";
+import { AiCapabilityBadges, AiCapabilityFields } from "./ai-capability-fields";
+import type { AiCapability } from "@/lib/ai-capabilities";
 
 export type AiApiConfigForClient = {
   id: string;
@@ -20,6 +22,7 @@ export type AiApiConfigForClient = {
   enabled: boolean;
   isDefault: boolean;
   keyTail: string;
+  capabilities: AiCapability[];
   createdAt: string;
 };
 
@@ -71,6 +74,7 @@ function ApiEditForm({
           <span className={label}>API Key{api ? `（当前尾号 ${api.keyTail}，留空不修改）` : ""}</span>
           <input name="apiKey" type="password" required={!api} placeholder={api ? "留空则沿用原 Key" : "sk-..."} className={input} autoComplete="off" />
         </label>
+        <AiCapabilityFields defaultCapabilities={api?.capabilities} />
         <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
           <label className="inline-flex items-center gap-1.5">
             <input name="enabled" type="checkbox" defaultChecked={api?.enabled ?? true} className="rounded border-zinc-300" />
@@ -107,6 +111,7 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
             <div><span className="text-zinc-400">Base URL </span><span className="font-mono text-zinc-700 break-all">{api.baseUrl}</span></div>
             <div><span className="text-zinc-400">Key 尾号 </span><span className="font-mono text-zinc-700">{api.keyTail}</span></div>
           </dl>
+          <AiCapabilityBadges capabilities={api.capabilities} />
         </div>
         <div className="flex flex-wrap justify-end gap-2 shrink-0">
           <button

@@ -17,6 +17,8 @@ import {
   VOLCENGINE_SNIPPET_PLACEHOLDER,
   type VolcengineExtraConfig,
 } from "@/lib/volcengine-config";
+import { AiCapabilityBadges, AiCapabilityFields } from "./ai-capability-fields";
+import type { AiCapability } from "@/lib/ai-capabilities";
 
 const monoInput =
   "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono";
@@ -40,6 +42,7 @@ export type VolcengineApiForClient = {
   keyTail: string;
   keyValid: boolean;
   extraConfig: VolcengineExtraConfig | null;
+  capabilities: AiCapability[];
   createdAt: string;
 };
 
@@ -136,6 +139,7 @@ function VolcengineConfigCard({
               ))}
             </ul>
           )}
+          <AiCapabilityBadges capabilities={cfg.capabilities} />
           {!cfg.keyValid && (
             <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
               API Key 未正确保存（可能是占位符或格式无效）。请点击「编辑」，在密钥框重新粘贴火山方舟控制台里的完整 Key 后保存。
@@ -252,6 +256,8 @@ function VolcengineEditForm({
         </label>
 
         <ParsePreview snippet={snippet} />
+
+        <AiCapabilityFields defaultCapabilities={existing?.capabilities} />
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
           <label className="inline-flex items-center gap-1.5">

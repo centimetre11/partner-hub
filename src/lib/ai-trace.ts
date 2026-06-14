@@ -249,6 +249,7 @@ export async function consumeAiSse(
   proposal: IntakeProposal | null;
   questions: string[];
   ready: boolean;
+  aborted: boolean;
 }> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -337,22 +338,34 @@ export async function consumeAiSse(
     });
   };
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      try {
-        await apply(JSON.parse(line.slice(6)) as AiStreamEvent);
-      } catch (e) {
-        if (e instanceof SyntaxError) continue;
-        throw e;
+  let aborted = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          await apply(JSON.parse(line.slice(6)) as AiStreamEvent);
+        } catch (e) {
+          if (e instanceof SyntaxError) continue;
+          throw e;
+        }
       }
     }
+  } catch (e) {
+    // 用户主动停止：保留已累积内容，不当作错误
+    if (e instanceof DOMException && e.name === "AbortError") {
+      aborted = true;
+    } else if (e instanceof Error && /aborted|abort/i.test(e.message)) {
+      aborted = true;
+    } else {
+      throw e;
+    }
   }
-  if (result === undefined) throw new Error("流式响应未返回结果");
-  return { data: result, trace, replyText, liveText: replyText, proposal, questions, ready };
+  if (!aborted && result === undefined) throw new Error("流式响应未返回结果");
+  return { data: result, trace, replyText, liveText: replyText, proposal, questions, ready, aborted };
 }

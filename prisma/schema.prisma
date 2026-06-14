@@ -169,6 +169,7 @@ model AiApiConfig {
   apiKey      String
   model       String
   extraConfig String? // JSON：火山引擎 Responses API 的 tools / instructions 等
+  capabilities String? // JSON 数组：chat | vision | tools | json | reasoning
   enabled     Boolean             @default(true)
   isDefault   Boolean             @default(false)
   createdAt   DateTime            @default(now())

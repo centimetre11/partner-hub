@@ -69,7 +69,11 @@ export type IntakeTurn = {
   proposal: IntakeProposal;
 };
 
-export type IntakeMessage = { role: "user" | "assistant"; content: string };
+export type IntakeMessage = {
+  role: "user" | "assistant";
+  content: string;
+  images?: { url: string; name?: string }[];
+};
 
 function emptyProposal(): IntakeProposal {
   return { summary: "", fields: [], contacts: [], opportunities: [], todos: [], trainings: [], solutions: [] };
@@ -293,7 +297,7 @@ ${ctx}
 ${OUTPUT_SCHEMA}`;
 
   const chat: ChatMessage[] = [{ role: "system", content: system }];
-  for (const m of opts.messages) chat.push({ role: m.role, content: m.content });
+  for (const m of opts.messages) chat.push({ role: m.role, content: m.content, images: m.images });
 
   const feature = `AI 录入助手：${cfg.title}`;
 

@@ -7,6 +7,7 @@ import { KmsSetup } from "./kms-setup";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
 import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
+import { parseAiCapabilities } from "@/lib/ai-capabilities";
 
 function maskKey(apiKey: string) {
   if (!apiKey) return "未填写";
@@ -49,6 +50,7 @@ export default async function SettingsPage() {
     enabled: api.enabled,
     isDefault: api.isDefault,
     keyTail: maskKey(api.apiKey),
+    capabilities: parseAiCapabilities(api.capabilities),
     createdAt: api.createdAt.toISOString(),
   }));
 
@@ -73,6 +75,7 @@ export default async function SettingsPage() {
         keyTail: maskKey(api.apiKey),
         keyValid: !!normalizeApiKeyInput(api.apiKey),
         extraConfig,
+        capabilities: parseAiCapabilities(api.capabilities),
         createdAt: api.createdAt.toISOString(),
       };
     });
