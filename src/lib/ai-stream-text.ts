@@ -1,6 +1,6 @@
 import type { ChatMessage } from "./ai";
 import { chatCompletion } from "./ai";
-import { emitTextChunks, type TraceEmitter } from "./ai-trace";
+import { emitReplyChunks, type TraceEmitter } from "./ai-trace";
 
 /** 单次文本生成 + SSE 流式输出（摘要、周报等） */
 export async function streamTextCompletion(
@@ -20,14 +20,14 @@ export async function streamTextCompletion(
     onDelta: opts.emit
       ? (delta) => {
           streamed += delta;
-          opts.emit!({ event: "text_delta", delta });
+          opts.emit!({ event: "reply_delta", delta });
         }
       : undefined,
   });
   const text = content ?? streamed;
   if (opts.emit) {
-    if (!streamed && text) emitTextChunks(opts.emit, text);
-    else opts.emit({ event: "text_done" });
+    if (!streamed && text) await emitReplyChunks(opts.emit, text);
+    else opts.emit({ event: "reply_done" });
   }
   return text;
 }

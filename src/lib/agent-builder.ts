@@ -1,5 +1,5 @@
 import { chatJson } from "./ai";
-import { emitTextChunks, type TraceEmitter } from "./ai-trace";
+import { emitReplyChunks, type TraceEmitter } from "./ai-trace";
 import { db } from "./db";
 import { resolveAgentSkills } from "./skill-resolver";
 
@@ -179,6 +179,6 @@ ${OUTPUT_SCHEMA}`;
       rationale: draft.rationale || "",
     },
   };
-  emitTextChunks(opts.emit, turn.reply);
+  await emitReplyChunks(opts.emit, turn.reply);
   return turn;
 }

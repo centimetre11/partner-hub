@@ -378,9 +378,18 @@ async function volcengineResponsesCompletion(
 
 function simulateTextDeltas(text: string | null, onDelta?: (delta: string) => void) {
   if (!text || !onDelta) return;
-  const size = 14;
+  const size = 8;
   for (let i = 0; i < text.length; i += size) {
     onDelta(text.slice(i, i + size));
+  }
+}
+
+async function simulateTextDeltasAsync(text: string | null, onDelta?: (delta: string) => void, delayMs = 20) {
+  if (!text || !onDelta) return;
+  const size = 8;
+  for (let i = 0; i < text.length; i += size) {
+    onDelta(text.slice(i, i + size));
+    if (delayMs > 0) await new Promise((r) => setTimeout(r, delayMs));
   }
 }
 
@@ -511,7 +520,7 @@ export async function chatCompletion(
 
   if (api.provider === "volcengine") {
     const result = await volcengineResponsesCompletion(api, messages, opts);
-    if (opts.onDelta && result.content) simulateTextDeltas(result.content, opts.onDelta);
+    if (opts.onDelta && result.content) await simulateTextDeltasAsync(result.content, opts.onDelta);
     return result;
   }
 

@@ -1,17 +1,17 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { AiStreamEvent, AiStreamState, AiTraceStep } from "@/lib/ai-trace";
+import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
 
 export function useAiStream() {
   const [loading, setLoading] = useState(false);
   const [trace, setTrace] = useState<AiTraceStep[]>([]);
-  const [liveText, setLiveText] = useState("");
+  const [replyText, setReplyText] = useState("");
 
   const reset = useCallback(() => {
     setTrace([]);
-    setLiveText("");
+    setReplyText("");
   }, []);
 
   const request = useCallback(
@@ -24,9 +24,9 @@ export function useAiStream() {
           headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
           body: JSON.stringify({ ...body, stream: true }),
         });
-        const result = await consumeAiSse(res, (ev: AiStreamEvent, state: AiStreamState) => {
+        const result = await consumeAiSse(res, (_ev, state: AiStreamState) => {
           setTrace(state.trace);
-          setLiveText(state.liveText);
+          setReplyText(state.replyText);
         });
         return result;
       } finally {
@@ -36,5 +36,5 @@ export function useAiStream() {
     [reset]
   );
 
-  return { loading, trace, liveText, request, reset };
+  return { loading, trace, replyText, liveText: replyText, request, reset };
 }

@@ -155,8 +155,8 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
       const appendix = `\n\n---\n已执行的动作：\n${ctx.actions.map((a) => `- ${a}`).join("\n")}`;
       output += appendix;
       if (emit) {
-        emit({ event: "text_delta", delta: appendix });
-        emit({ event: "text_done" });
+        emit({ event: "reply_delta", delta: appendix });
+        emit({ event: "reply_done" });
       }
     }
 

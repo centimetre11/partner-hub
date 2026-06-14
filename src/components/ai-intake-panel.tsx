@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
+import type { ProposalChanges } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
-import { AiProcessTrace } from "@/components/ai-process-trace";
-import { ProposalConfirmZone } from "@/components/proposal-confirm-zone";
+import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
+import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[] };
 
@@ -14,53 +15,24 @@ const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = 
   new_partner: {
     title: "AI 建档",
     placeholder:
-      "扔公司名、会议记录、聊天记录、KMS 链接都行——我会读 KMS，也会联网/领英查公开信息，多源叠加尽量填完整。\n例如：\n• 刚见了迪拜 Acme Analytics，做 Power BI 实施\n• https://kms.fineres.com/pages/viewpage.action?pageId=123456\n• 就一家叫 TechMantra 的公司，帮我建档",
+      "扔公司名、会议记录、聊天记录、KMS 链接都行——我会多源调研，找到的信息会实时出现在右侧。\n例如：\n• 刚见了迪拜 Acme Analytics\n• https://kms.fineres.com/pages/viewpage.action?pageId=123456",
   },
   powermap: {
     title: "AI 加人物",
-    placeholder: "描述要加的人，或粘贴名片/会议记录。\n例如：他们的 CTO 叫 Khalid，之前在 STC，对国产软件有点顾虑，汇报给 CEO Mosaab。",
+    placeholder: "描述要加的人，或粘贴名片/会议记录。",
   },
   opportunity: {
     title: "AI 加商机",
-    placeholder: "描述商机或粘贴相关沟通。\n例如：Purity IT 项目预算 $25K，7 月启动，现在在做需求诊断。",
+    placeholder: "描述商机或粘贴相关沟通。",
   },
   profile: {
     title: "AI 补全画像",
-    placeholder:
-      "描述这家公司的情况，或粘贴 KMS 链接/会议记录，我会结合现有档案和联网调研补全字段。\n例如：他们是微软金牌伙伴，主做 Power BI，客户有 DAMAC，差异化是 UAE+沙特双实体。",
+    placeholder: "描述公司情况或粘贴 KMS 链接，右侧会实时补全字段。",
   },
-  training: {
-    title: "AI 加培训",
-    placeholder: "描述要安排的培训/认证。\n例如：让他们两个工程师 8 月底前考下 FCA-FineBI 认证。",
-  },
-  todo: {
-    title: "AI 加待办",
-    placeholder: "说要跟进的事。\n例如：周五前给 Beinex 发 Arabic RTL 案例材料，下周二安排 Demo。",
-  },
-  solution: {
-    title: "AI 加联合方案",
-    placeholder: "描述这个联合方案。\n例如：针对零售客户，帆软出 FineReport 报表层，伙伴出数据集成和实施，按项目分成。",
-  },
+  training: { title: "AI 加培训", placeholder: "描述要安排的培训/认证。" },
+  todo: { title: "AI 加待办", placeholder: "说要跟进的事。" },
+  solution: { title: "AI 加联合方案", placeholder: "描述联合方案。" },
 };
-
-function applyStreamState(
-  state: AiStreamState,
-  setters: {
-    setLiveTrace: (v: AiTraceStep[]) => void;
-    setLiveText: (v: string) => void;
-    setProposal: (v: IntakeProposal | null) => void;
-    setQuestions: (v: string[]) => void;
-    setReady: (v: boolean) => void;
-  }
-) {
-  setters.setLiveTrace(state.trace);
-  setters.setLiveText(state.liveText);
-  if (state.proposal) {
-    setters.setProposal(state.proposal);
-    setters.setQuestions(state.questions);
-    setters.setReady(state.ready);
-  }
-}
 
 export function AiIntakePanel({
   scope,
@@ -83,14 +55,22 @@ export function AiIntakePanel({
   const [ready, setReady] = useState(false);
   const [questions, setQuestions] = useState<string[]>([]);
   const [liveTrace, setLiveTrace] = useState<AiTraceStep[]>([]);
-  const [liveText, setLiveText] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [replyText, setReplyText] = useState("");
+  const [phase, setPhase] = useState("");
+  const [phaseLabel, setPhaseLabel] = useState("");
+  const [patchChanges, setPatchChanges] = useState<ProposalChanges | null>(null);
+  const excludedRef = useRef(new Set<string>());
 
-  const showConfirm = !!proposal;
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading, liveTrace, liveText, proposal]);
+  function applyStream(state: AiStreamState) {
+    setLiveTrace(state.trace);
+    setReplyText(state.replyText);
+    setProposal(state.proposal);
+    setQuestions(state.questions);
+    setReady(state.ready);
+    setPhase(state.phase);
+    setPhaseLabel(state.phaseLabel);
+    if (state.lastPatchChanges) setPatchChanges(state.lastPatchChanges);
+  }
 
   async function send() {
     const text = input.trim();
@@ -101,19 +81,21 @@ export function AiIntakePanel({
     setLoading(true);
     setError(null);
     setLiveTrace([]);
-    setLiveText("");
+    setReplyText("");
+    setPatchChanges(null);
     try {
       const res = await fetch("/api/ai/intake", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({ scope, partnerId, messages: next, stream: true }),
       });
-      const streamSetters = { setLiveTrace, setLiveText, setProposal, setQuestions, setReady };
-      const { data, trace, liveText: finalText } = await consumeAiSse(res, (_ev, state) =>
-        applyStreamState(state, streamSetters)
+      const { data, trace, replyText: finalReply } = await consumeAiSse(
+        res,
+        (_ev, state) => applyStream(state),
+        { excluded: excludedRef.current }
       );
       const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[] };
-      setMessages((m) => [...m, { role: "assistant", content: finalText || turn.reply, trace }]);
+      setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace }]);
       setProposal(turn.proposal);
       setReady(turn.ready);
       setQuestions(turn.questions ?? []);
@@ -122,6 +104,7 @@ export function AiIntakePanel({
     } finally {
       setLoading(false);
       setLiveTrace([]);
+      setReplyText("");
     }
   }
 
@@ -134,96 +117,42 @@ export function AiIntakePanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
-      <div
-        className="bg-white w-[min(960px,94vw)] h-full shadow-2xl flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white shrink-0">
-          <div>
-            <div className="text-base font-semibold flex items-center gap-1.5">✦ {meta.title}</div>
-            <div className="text-xs text-indigo-200 mt-0.5">关键步骤即时输出 · 勾选确认后入库</div>
-          </div>
-          <button onClick={onClose} className="text-indigo-100 hover:text-white text-2xl leading-none">×</button>
+    <AiFullscreenOverlay onClose={onClose}>
+      <div className="relative h-full min-h-0 flex flex-col">
+      <AiWorkflowPanel
+          title={meta.title}
+          subtitle="左侧调研 · 右侧实时呈现"
+          onClose={onClose}
+          messages={
+            messages.length === 0
+              ? [{ role: "assistant", content: meta.placeholder }]
+              : messages
+          }
+          loading={loading}
+          liveTrace={liveTrace}
+          replyText={replyText}
+          phase={phase}
+          phaseLabel={phaseLabel}
+          proposal={proposal}
+          patchChanges={patchChanges}
+          questions={questions}
+          ready={ready}
+          scope={scope}
+          partnerId={partnerId}
+          sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
+          onApplied={handleApplied}
+          input={input}
+          onInputChange={setInput}
+          onSend={send}
+          inputPlaceholder={proposal ? "继续补充，或右侧确认入库…" : undefined}
+          sendDisabled={loading || !input.trim()}
+      />
+      {error && (
+        <div className="absolute bottom-24 left-6 right-[62%] text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2 shadow-sm z-10">
+          {error}
         </div>
-
-        <div
-          ref={scrollRef}
-          className={`overflow-y-auto px-6 py-4 space-y-3 min-h-0 ${showConfirm ? "flex-[0.9]" : "flex-1"}`}
-        >
-          {messages.length === 0 && (
-            <div className="text-sm text-zinc-400 whitespace-pre-wrap leading-relaxed bg-zinc-50 rounded-lg p-4">
-              {meta.placeholder}
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div key={i} className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}>
-              {m.role === "assistant" && m.trace && m.trace.length > 0 && (
-                <AiProcessTrace steps={m.trace} expandLatestDone className="w-full" />
-              )}
-              <div
-                className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
-                  m.role === "user" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-800"
-                }`}
-              >
-                {m.content}
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="w-full space-y-3">
-              <AiProcessTrace steps={liveTrace} loading expandLatestDone />
-              {liveText && (
-                <div className="rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800 border border-indigo-100">
-                  {liveText}
-                  <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
-                </div>
-              )}
-            </div>
-          )}
-          {error && <p className="text-sm text-red-600">{error}</p>}
-        </div>
-
-        {showConfirm && (
-          <div className="shrink-0 border-t px-5 py-4 min-h-[360px] max-h-[min(520px,52vh)] overflow-y-auto bg-zinc-50/50">
-            <ProposalConfirmZone
-              proposal={proposal}
-              scope={scope}
-              partnerId={partnerId}
-              questions={questions}
-              ready={ready}
-              onApplied={handleApplied}
-              spacious
-              sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
-            />
-          </div>
-        )}
-
-        <div className="border-t px-6 py-3 shrink-0">
-          <div className="flex gap-2 items-end">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              rows={2}
-              placeholder={proposal ? "继续补充，或确认下方入库…" : "输入后按 ⌘/Ctrl + Enter 发送…"}
-              className="flex-1 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-            <button
-              onClick={send}
-              disabled={loading || !input.trim()}
-              className="rounded-lg bg-indigo-600 text-white px-5 py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
-            >
-              发送
-            </button>
-          </div>
-        </div>
+      )}
       </div>
-    </div>
+    </AiFullscreenOverlay>
   );
 }

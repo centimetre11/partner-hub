@@ -1,7 +1,9 @@
 import { getToolLabel } from "./tools-registry";
 import type { IntakeProposal } from "./ai-intake";
+import type { ContactProposal, OpportunityProposal, TodoProposal } from "./proposals";
+import type { ProposalChanges } from "./proposal-merge";
 
-/** 单步 AI 过程轨迹（思维链 / 工具调用），与 ChatGPT、Claude、Vercel AI SDK tool-invocation 同类概念 */
+/** 单步 AI 过程轨迹 */
 export type AiTraceStep =
   | {
       type: "reasoning";
@@ -15,6 +17,7 @@ export type AiTraceStep =
       name: string;
       label: string;
       args: Record<string, unknown>;
+      argHint?: string;
       result?: string;
       status: "running" | "done" | "error";
       error?: string;
@@ -27,11 +30,35 @@ export type AiTracePatch = {
   error?: string;
 };
 
+export type ProposalPatchOp =
+  | { op: "set_partner"; name: string; source?: string }
+  | { op: "set_summary"; summary: string }
+  | {
+      op: "upsert_field";
+      key: string;
+      field: string;
+      label: string;
+      newValue: string;
+      oldValue?: string;
+      reason?: string;
+      source?: string;
+    }
+  | { op: "upsert_contact"; key: string; contact: ContactProposal; reason?: string }
+  | { op: "upsert_opportunity"; key: string; opportunity: OpportunityProposal }
+  | { op: "upsert_todo"; key: string; todo: TodoProposal }
+  | { op: "remove"; key: string };
+
+export type AiPhase = "idle" | "research" | "extract" | "reply";
+
 export type AiStreamEvent =
   | { event: "trace"; step: AiTraceStep }
   | { event: "trace_patch"; id: string; patch: AiTracePatch }
+  | { event: "phase"; phase: AiPhase; label?: string }
+  | { event: "reply_delta"; delta: string }
+  | { event: "reply_done" }
   | { event: "text_delta"; delta: string }
   | { event: "text_done" }
+  | { event: "proposal_patch"; ops: ProposalPatchOp[] }
   | {
       event: "proposal_update";
       proposal: IntakeProposal;
@@ -43,13 +70,17 @@ export type AiStreamEvent =
 
 export type AiStreamState = {
   trace: AiTraceStep[];
+  replyText: string;
   liveText: string;
   proposal: IntakeProposal | null;
   questions: string[];
   ready: boolean;
+  phase: AiPhase;
+  phaseLabel: string;
+  lastPatchChanges: ProposalChanges | null;
 };
 
-export type TraceEmitter = (ev: AiStreamEvent) => void;
+export type TraceEmitter = (ev: AiStreamEvent) => void | Promise<void>;
 
 let traceId = 0;
 export function nextTraceId(prefix = "t") {
@@ -57,95 +88,71 @@ export function nextTraceId(prefix = "t") {
   return `${prefix}-${traceId}`;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export async function yieldEventLoop() {
+  await new Promise<void>((r) => {
+    if (typeof setImmediate === "function") setImmediate(r);
+    else setTimeout(r, 0);
+  });
+}
+
 export function formatToolArgs(name: string, args: Record<string, unknown>): string {
   const q = args.query ?? args.q ?? args.keyword;
-  if (typeof q === "string" && q) return q;
+  if (typeof q === "string" && q) return q.length > 60 ? `${q.slice(0, 57)}…` : q;
   const partner = args.partnerName ?? args.name ?? args.partner;
   if (typeof partner === "string" && partner) return partner;
   if (name === "read_kms" && args.pageId) return `pageId: ${args.pageId}`;
   if (name === "update_partner" && args.field) return `${String(args.field)} → ${String(args.value ?? "")}`;
   const compact = JSON.stringify(args);
-  return compact.length > 80 ? `${compact.slice(0, 77)}…` : compact;
+  return compact.length > 60 ? `${compact.slice(0, 57)}…` : compact;
 }
 
-export function toolTraceStep(name: string, args: Record<string, unknown>, id?: string): Extract<AiTraceStep, { type: "tool" }> {
+export function summarizeToolResult(name: string, result: string): string {
+  const clean = result.replace(/\r/g, "").trim();
+  if (!clean) return "（无返回）";
+  const tool = name === "$web_search" ? "web_search" : name;
+
+  if (tool === "read_kms" || tool === "search_knowledge") {
+    const first = clean.split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "").trim() ?? "";
+    return `已读取 ${clean.length} 字${first ? `，含：${first.slice(0, 80)}` : ""}`;
+  }
+  if (tool === "web_search" || tool === "linkedin_search") {
+    const lines = clean.split("\n").filter((l) => l.trim());
+    const head = lines[0]?.slice(0, 80) ?? "";
+    return `找到 ${Math.max(1, lines.length)} 条${head ? `，首条：${head}` : ""}`;
+  }
+  if (tool === "get_partner" || tool === "list_partners" || tool === "search_partners") {
+    const m = clean.match(/(?:公司|伙伴|name)[：:\s]+([^\n]+)/i) ?? clean.match(/^([^\n]{4,60})/);
+    return m ? `匹配：${m[1].trim().slice(0, 80)}` : clean.slice(0, 120);
+  }
+  return clean.length > 120 ? `${clean.slice(0, 117)}…` : clean;
+}
+
+export function toolTraceStep(
+  name: string,
+  args: Record<string, unknown>,
+  id?: string
+): Extract<AiTraceStep, { type: "tool" }> {
+  const n = name === "$web_search" ? "web_search" : name;
   return {
     type: "tool",
     id: id ?? nextTraceId("tool"),
-    name,
-    label: getToolLabel(name === "$web_search" ? "web_search" : name),
+    name: n,
+    label: getToolLabel(n),
     args,
+    argHint: formatToolArgs(n, args),
     status: "running",
   };
 }
 
-/** 服务端 SSE：将 handler 中的 trace 事件推送给前端 */
-export function createSseResponse(handler: (emit: TraceEmitter) => Promise<void>) {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const emit: TraceEmitter = (ev) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
-      };
-      try {
-        await handler(emit);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        emit({ event: "error", message });
-      } finally {
-        controller.close();
-      }
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    },
-  });
+export function emitPhase(emit: TraceEmitter | undefined, phase: AiPhase, label?: string) {
+  emit?.({ event: "phase", phase, label });
 }
 
-/** 关键过程统一步骤推送（所有工具、阶段同一套规则，KMS 只是其中之一） */
-export function emitProcessStep(
-  emit: TraceEmitter | undefined,
-  kind: "start" | "done" | "error",
-  label: string,
-  hint?: string,
-  body?: string
-) {
-  if (!emit) return;
-  const head = hint ? `${label} · ${hint}` : label;
-  let delta: string;
-  if (kind === "start") {
-    delta = `\n\n▶ **${head}**…\n`;
-  } else if (kind === "error") {
-    delta = `\n\n✕ **${head}**\n${body?.trim() || "执行失败"}\n`;
-  } else {
-    const clean = (body ?? "").replace(/\r/g, "").trim();
-    if (!clean) {
-      delta = `\n\n✓ **${head}**（已完成）\n`;
-    } else {
-      const limit = 800;
-      const snippet = clean.slice(0, limit);
-      const suffix = clean.length > limit ? "\n…（完整结果已记录，后续步骤会纳入）" : "";
-      delta = `\n\n✓ **${head}**\n${snippet}${suffix}\n`;
-    }
-  }
-  emit({ event: "text_delta", delta });
-}
-
-/** @deprecated 请用 emitProcessStep；保留别名避免遗漏引用 */
-export function emitToolFinding(
-  emit: TraceEmitter | undefined,
-  name: string,
-  args: Record<string, unknown>,
-  result: string
-) {
-  if (!emit || !result.trim()) return;
-  const label = getToolLabel(name === "$web_search" ? "web_search" : name);
-  const argHint = formatToolArgs(name, args);
-  emitProcessStep(emit, "done", label, argHint, result);
+export function emitProposalPatch(emit: TraceEmitter | undefined, ops: ProposalPatchOp[]) {
+  if (!emit || !ops.length) return;
+  emit({ event: "proposal_patch", ops });
 }
 
 export function emitProposalUpdate(
@@ -161,22 +168,64 @@ export function emitProposalUpdate(
   });
 }
 
-/** 将完整文本分块模拟流式输出（火山等非 SSE 模型用） */
-export function emitTextChunks(emit: TraceEmitter | undefined, text: string, chunkSize = 12) {
+export async function emitReplyChunks(
+  emit: TraceEmitter | undefined,
+  text: string,
+  chunkSize = 8,
+  delayMs = 20
+) {
   if (!emit || !text) return;
   for (let i = 0; i < text.length; i += chunkSize) {
-    emit({ event: "text_delta", delta: text.slice(i, i + chunkSize) });
+    emit({ event: "reply_delta", delta: text.slice(i, i + chunkSize) });
+    if (delayMs > 0) await sleep(delayMs);
   }
-  emit({ event: "text_done" });
+  emit({ event: "reply_done" });
 }
 
-/** 客户端：消费 SSE 并维护 trace + liveText */
+export async function emitTextChunks(
+  emit: TraceEmitter | undefined,
+  text: string,
+  chunkSize = 8,
+  delayMs = 20
+) {
+  return emitReplyChunks(emit, text, chunkSize, delayMs);
+}
+
+export function createSseResponse(handler: (emit: TraceEmitter) => Promise<void>) {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const emit: TraceEmitter = async (ev) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
+        await yieldEventLoop();
+      };
+      try {
+        await handler(emit);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        await emit({ event: "error", message });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
+}
+
 export async function consumeAiSse(
   res: Response,
-  onEvent: (ev: AiStreamEvent, state: AiStreamState) => void
+  onEvent: (ev: AiStreamEvent, state: AiStreamState) => void,
+  opts?: { excluded?: Set<string> }
 ): Promise<{
   data: unknown;
   trace: AiTraceStep[];
+  replyText: string;
   liveText: string;
   proposal: IntakeProposal | null;
   questions: string[];
@@ -189,29 +238,59 @@ export async function consumeAiSse(
   const reader = res.body?.getReader();
   if (!reader) throw new Error("响应不支持流式读取");
 
+  const { mergeProposalPatch, mergeFinalProposal } = await import("./proposal-merge");
+
   const decoder = new TextDecoder();
   let buffer = "";
   let result: unknown;
   const trace: AiTraceStep[] = [];
-  let liveText = "";
+  let replyText = "";
   let proposal: IntakeProposal | null = null;
   let questions: string[] = [];
   let ready = false;
+  let phase: AiPhase = "idle";
+  let phaseLabel = "";
+  let lastPatchChanges: ProposalChanges | null = null;
+  const excluded = opts?.excluded ?? new Set<string>();
 
-  const state = (): AiStreamState => ({ trace: [...trace], liveText, proposal, questions, ready });
+  const state = (): AiStreamState => ({
+    trace: [...trace],
+    replyText,
+    liveText: replyText,
+    proposal,
+    questions,
+    ready,
+    phase,
+    phaseLabel,
+    lastPatchChanges: lastPatchChanges ? { ...lastPatchChanges, added: [...lastPatchChanges.added], updated: [...lastPatchChanges.updated], removed: [...lastPatchChanges.removed], aiReupdates: [...lastPatchChanges.aiReupdates] } : null,
+  });
 
   const apply = (ev: AiStreamEvent) => {
     if (ev.event === "trace") {
-      trace.push(ev.step);
+      if (ev.step.type === "reasoning") {
+        const last = trace[trace.length - 1];
+        if (last?.type === "reasoning" && last.status === "running") {
+          trace[trace.length - 1] = ev.step;
+        } else {
+          trace.push(ev.step);
+        }
+      } else {
+        trace.push(ev.step);
+      }
     } else if (ev.event === "trace_patch") {
       const idx = trace.findIndex((s) => s.id === ev.id);
       if (idx >= 0) trace[idx] = { ...trace[idx], ...ev.patch } as AiTraceStep;
-    } else if (ev.event === "text_delta") {
-      liveText += ev.delta;
-    } else if (ev.event === "text_done") {
-      /* keep liveText */
+    } else if (ev.event === "phase") {
+      phase = ev.phase;
+      if (ev.label) phaseLabel = ev.label;
+    } else if (ev.event === "reply_delta" || ev.event === "text_delta") {
+      replyText += ev.delta;
+    } else if (ev.event === "proposal_patch") {
+      const { draft, changes } = mergeProposalPatch(proposal, ev.ops, excluded);
+      proposal = draft;
+      lastPatchChanges = changes;
     } else if (ev.event === "proposal_update") {
-      proposal = ev.proposal;
+      proposal = mergeFinalProposal(proposal, ev.proposal, excluded);
       questions = ev.questions ?? [];
       ready = !!ev.ready;
     } else if (ev.event === "done") {
@@ -239,5 +318,5 @@ export async function consumeAiSse(
     }
   }
   if (result === undefined) throw new Error("流式响应未返回结果");
-  return { data: result, trace, liveText, proposal, questions, ready };
+  return { data: result, trace, replyText, liveText: replyText, proposal, questions, ready };
 }

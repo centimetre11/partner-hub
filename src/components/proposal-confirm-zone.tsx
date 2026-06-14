@@ -2,23 +2,23 @@
 
 import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
 import type { ExtractionProposal } from "@/lib/proposals";
+import type { ProposalChanges } from "@/lib/proposal-merge";
 import { normalizedToIntake, type NormalizedProposal } from "@/lib/proposal-normalize";
-import { ProposalView } from "@/components/proposal-view";
+import { LiveProposalDraft } from "@/components/live-proposal-draft";
 
 type Props = {
-  proposal: IntakeProposal | ExtractionProposal;
+  proposal: IntakeProposal | ExtractionProposal | null;
   scope?: IntakeScope;
   partnerId?: string;
   questions?: string[];
   ready?: boolean;
   onApplied?: (partnerId: string) => void;
-  compact?: boolean;
-  /** 更大字号与列表高度，适合 AI 建档侧栏 */
-  spacious?: boolean;
   sourceText?: string;
+  patchChanges?: ProposalChanges | null;
+  loading?: boolean;
 };
 
-/** 底部固定确认区：可勾选、可多轮补充后再入库 */
+/** 确认入库区（活草稿模式） */
 export function ProposalConfirmZone({
   proposal,
   scope = "new_partner",
@@ -26,9 +26,9 @@ export function ProposalConfirmZone({
   questions = [],
   ready = false,
   onApplied,
-  compact = false,
-  spacious = false,
   sourceText,
+  patchChanges,
+  loading = false,
 }: Props) {
   async function apply(filtered: NormalizedProposal) {
     const res = await fetch("/api/ai/intake/apply", {
@@ -46,24 +46,18 @@ export function ProposalConfirmZone({
     onApplied?.(data.partnerId);
   }
 
+  const intakeProposal =
+    proposal && "fields" in proposal ? (proposal as IntakeProposal) : null;
+
   return (
-    <div className={`rounded-xl border border-zinc-200 bg-zinc-50/80 ${spacious ? "p-4" : compact ? "p-2.5" : "p-4"}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className={`font-semibold text-zinc-600 ${spacious ? "text-sm" : "text-xs"}`}>待确认入库</div>
-        <div className={`text-zinc-400 ${spacious ? "text-xs" : "text-[10px]"}`}>可取消勾选 · 继续聊天可补充</div>
-      </div>
-      <ProposalView
-        proposal={proposal}
-        onConfirm={apply}
-        confirmLabel={ready ? "✓ 确认入库" : "信息够了，直接入库"}
-        compact={compact && !spacious}
-        spacious={spacious}
-      />
-      {questions.length > 0 && !ready && (
-        <div className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
-          补充这些会更完整：{questions.join("；")}
-        </div>
-      )}
-    </div>
+    <LiveProposalDraft
+      proposal={intakeProposal}
+      changes={patchChanges}
+      onConfirm={apply}
+      confirmLabel={ready ? "确认入库" : "信息够了，直接入库"}
+      questions={questions}
+      ready={ready}
+      loading={loading}
+    />
   );
 }

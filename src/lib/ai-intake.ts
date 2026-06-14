@@ -2,7 +2,8 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
-import { nextTraceId, emitTextChunks, emitProposalUpdate, emitProcessStep, type TraceEmitter } from "./ai-trace";
+import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
+import { extractPatchFromTool } from "./proposal-patch-extract";
 import {
   buildIntakeTools,
   intakeEnrichmentSkillsForScope,
@@ -206,13 +207,13 @@ async function extractIntakeJson(
   emit?: TraceEmitter
 ): Promise<IntakeTurn> {
   const extractId = nextTraceId("extract");
-  emitProcessStep(emit, "start", "生成提案", "结构化 JSON");
+  emitPhase(emit, "extract", "整理提案");
   emit?.({
     event: "trace",
     step: {
       type: "reasoning",
       id: extractId,
-      content: "调研完成，正在整理 JSON 提案…",
+      content: "正在整理可入库提案…",
       status: "running",
     },
   });
@@ -237,11 +238,11 @@ async function extractIntakeJson(
   emit?.({
     event: "trace_patch",
     id: extractId,
-    patch: { status: "done", content: "提案生成完成" },
+    patch: { status: "done", content: "提案整理完成" },
   });
-  emitProcessStep(emit, "done", "生成提案");
+  emitPhase(emit, "reply");
   emitProposalUpdate(emit, turn);
-  emitTextChunks(emit, turn.reply);
+  await emitReplyChunks(emit, turn.reply);
   return turn;
 }
 
@@ -299,13 +300,13 @@ ${OUTPUT_SCHEMA}`;
   if (useResearch) {
     const tools = await buildIntakeTools(enrichmentSkills);
     const planId = nextTraceId("plan");
-    emitProcessStep(opts.emit, "start", "多源调研", "KMS / 联网 / 领英 / 知识库等");
+    emitPhase(opts.emit, "research", "多源调研");
     opts.emit?.({
       event: "trace",
       step: {
         type: "reasoning",
         id: planId,
-        content: "开始多源调研（KMS、联网搜索、领英、知识库等）",
+        content: "多源调研中…",
         status: "running",
       },
     });
@@ -317,19 +318,22 @@ ${OUTPUT_SCHEMA}`;
       userId: opts.userId,
       maxSteps: MAX_RESEARCH_STEPS,
       emit: opts.emit,
+      onToolDone: async (tc, result) => {
+        const ops = await extractPatchFromTool(tc.function.name, result, opts.scope, opts.userId);
+        emitProposalPatch(opts.emit, ops);
+      },
       executeTool: (tc) => runIntakeToolCall(tc, opts.userId),
     });
     opts.emit?.({
       event: "trace_patch",
       id: planId,
-      patch: { status: "done", content: "多源调研完成" },
+      patch: { status: "done", content: "调研完成" },
     });
-    emitProcessStep(opts.emit, "start", "整理提案", "根据已收集信息生成入库字段");
     if (researchContent?.trim().startsWith("{")) {
       try {
         const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(researchContent));
         emitProposalUpdate(opts.emit, turn);
-        emitTextChunks(opts.emit, turn.reply);
+        await emitReplyChunks(opts.emit, turn.reply);
         return turn;
       } catch {
         /* fall through */
@@ -338,7 +342,7 @@ ${OUTPUT_SCHEMA}`;
     return extractIntakeJson(chat, feature, opts.userId, opts.emit);
   }
 
-  emitProcessStep(opts.emit, "start", "整理提案", "根据对话内容生成入库字段");
+  emitPhase(opts.emit, "extract", "整理提案");
   let content: string | null;
   try {
     ({ content } = await chatCompletion(chat, {
@@ -357,7 +361,7 @@ ${OUTPUT_SCHEMA}`;
   }
   const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
   emitProposalUpdate(opts.emit, turn);
-  emitTextChunks(opts.emit, turn.reply);
+  await emitReplyChunks(opts.emit, turn.reply);
   return turn;
 }
 
