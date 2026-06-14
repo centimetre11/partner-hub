@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -9,8 +9,12 @@ import {
   Handle,
   Position,
   MarkerType,
+  ConnectionMode,
+  ConnectionLineType,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  addEdge,
   type Node,
   type Edge,
   type Connection,
@@ -25,6 +29,7 @@ import {
   setReportsToAction,
   addContactLinkAction,
   removeContactLinkAction,
+  removeContactLinkBetweenAction,
   resetPowerMapLayoutAction,
 } from "@/lib/actions";
 
@@ -42,17 +47,17 @@ export type PowerMapLink = {
 
 const NODE_W = 190;
 const NODE_H = 120;
+const ARROW = { type: MarkerType.ArrowClosed, color: "#a1a1aa" } as const;
 
-// 节点数据载荷
 type NodeData = { c: PowerMapContact };
 
 // 自定义节点：复用权力地图卡片样式（左上角色代码、右上态度评分）
 function ContactNode({ data }: NodeProps<Node<NodeData>>) {
   const c = data.c;
   return (
-    <div className="relative">
+    <div className="relative pm-node">
       {/* 顶部：作为下级的连接点（上级连到这里） */}
-      <Handle type="target" position={Position.Top} className="!w-2.5 !h-2.5 !bg-zinc-400" />
+      <Handle type="target" position={Position.Top} className="pm-handle" />
       <span
         className="absolute -top-2 -left-2 w-5 h-5 rounded-sm bg-green-600 text-white text-[11px] font-bold flex items-center justify-center z-10"
         title={CONTACT_ROLE_LABELS[c.role] ?? c.role}
@@ -70,7 +75,7 @@ function ContactNode({ data }: NodeProps<Node<NodeData>>) {
         <div className="text-xs text-zinc-500 whitespace-nowrap">{c.department || c.title || "—"}</div>
       </div>
       {/* 底部：作为上级的连接点（从这里拖到下级） */}
-      <Handle type="source" position={Position.Bottom} className="!w-2.5 !h-2.5 !bg-zinc-400" />
+      <Handle type="source" position={Position.Bottom} className="pm-handle" />
     </div>
   );
 }
@@ -95,7 +100,6 @@ function autoLayout(contacts: PowerMapNodeContact[]): Map<string, { x: number; y
 
   const place = (id: string, depth: number): number => {
     if (placing.has(id)) {
-      // 兜底防环
       const x = leafX * NODE_W;
       leafX++;
       pos.set(id, { x, y: depth * NODE_H });
@@ -129,35 +133,26 @@ function buildNodes(contacts: PowerMapNodeContact[]): Node<NodeData>[] {
   const auto = autoLayout(contacts);
   return contacts.map((c) => {
     const fallback = auto.get(c.id) ?? { x: 0, y: 0 };
-    const position =
-      c.x != null && c.y != null ? { x: c.x, y: c.y } : fallback;
-    return {
-      id: c.id,
-      type: "contact",
-      position,
-      data: { c },
-    };
+    const position = c.x != null && c.y != null ? { x: c.x, y: c.y } : fallback;
+    return { id: c.id, type: "contact", position, data: { c } };
   });
 }
 
 function buildEdges(contacts: PowerMapNodeContact[], links: PowerMapLink[]): Edge[] {
   const ids = new Set(contacts.map((c) => c.id));
   const edges: Edge[] = [];
-  const arrow = { type: MarkerType.ArrowClosed, color: "#a1a1aa" } as const;
-  // 主汇报实线
   for (const c of contacts) {
     if (c.reportsToId && ids.has(c.reportsToId)) {
       edges.push({
         id: `r-${c.id}`,
         source: c.reportsToId,
         target: c.id,
-        markerEnd: arrow,
-        style: { stroke: "#a1a1aa" },
-        data: { origin: "reportsTo", childId: c.id },
+        markerEnd: ARROW,
+        style: { stroke: "#a1a1aa", strokeWidth: 1.5 },
+        data: { origin: "reportsTo", childId: c.id, superiorId: c.reportsToId },
       });
     }
   }
-  // 附加线（实线/虚线）
   for (const l of links) {
     if (!ids.has(l.subordinateId) || !ids.has(l.superiorId)) continue;
     const dotted = l.kind !== "SOLID";
@@ -165,11 +160,11 @@ function buildEdges(contacts: PowerMapNodeContact[], links: PowerMapLink[]): Edg
       id: `l-${l.id}`,
       source: l.superiorId,
       target: l.subordinateId,
-      markerEnd: arrow,
+      markerEnd: ARROW,
       style: dotted
-        ? { stroke: "#a1a1aa", strokeDasharray: "5 5" }
-        : { stroke: "#a1a1aa" },
-      data: { origin: "link", linkId: l.id },
+        ? { stroke: "#a1a1aa", strokeWidth: 1.5, strokeDasharray: "5 5" }
+        : { stroke: "#a1a1aa", strokeWidth: 1.5 },
+      data: { origin: "link", linkId: l.id, kind: l.kind, subId: l.subordinateId, supId: l.superiorId },
     });
   }
   return edges;
@@ -182,6 +177,45 @@ function signature(contacts: PowerMapNodeContact[], links: PowerMapLink[]) {
   ]);
 }
 
+// 画布样式：连接点放大+悬停脉冲、连线动画、选中连线高亮蚂蚁线
+const FLOW_CSS = `
+.pm-handle {
+  width: 11px !important;
+  height: 11px !important;
+  background: #fff !important;
+  border: 2px solid #6366f1 !important;
+  opacity: 0.55;
+  transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
+}
+.pm-node:hover .pm-handle { opacity: 1; transform: scale(1.25); }
+.pm-handle:hover {
+  opacity: 1 !important;
+  transform: scale(1.6) !important;
+  box-shadow: 0 0 0 4px rgba(99,102,241,0.25) !important;
+  animation: pm-pulse 1s ease-in-out infinite;
+}
+.react-flow__handle-connecting { background: #6366f1 !important; }
+.react-flow__handle-valid {
+  background: #22c55e !important;
+  border-color: #22c55e !important;
+  box-shadow: 0 0 0 6px rgba(34,197,94,0.25) !important;
+}
+@keyframes pm-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
+  50% { box-shadow: 0 0 0 7px rgba(99,102,241,0.35); }
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #6366f1 !important;
+  stroke-width: 2.5 !important;
+  stroke-dasharray: 6 !important;
+  animation: pm-dash 0.55s linear infinite;
+}
+@keyframes pm-dash { to { stroke-dashoffset: -12; } }
+.react-flow__edge:hover .react-flow__edge-path { stroke: #818cf8 !important; }
+`;
+
+type UndoEntry = { label: string; run: () => void };
+
 function FlowInner({
   partnerId,
   contacts,
@@ -192,18 +226,33 @@ function FlowInner({
   links: PowerMapLink[];
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<NodeData>>(buildNodes(contacts));
-  const [edges, setEdges] = useEdgesState<Edge>(buildEdges(contacts, links));
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(buildEdges(contacts, links));
   const [lineMode, setLineMode] = useState<"SOLID" | "DOTTED">("SOLID");
+  const [selectedEdges, setSelectedEdges] = useState<Edge[]>([]);
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [, startTransition] = useTransition();
+  const { deleteElements } = useReactFlow();
+
+  // 拖动起点位置（用于撤销摆放）
+  const dragStart = useRef<Map<string, { x: number; y: number }>>(new Map());
+  // 当前 reportsTo 映射（用于撤销改主汇报）
+  const reportsToMap = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const c of contacts) m.set(c.id, c.reportsToId ?? null);
+    return m;
+  }, [contacts]);
 
   const sig = useMemo(() => signature(contacts, links), [contacts, links]);
 
-  // 服务端数据变化（revalidate 后）同步到画布
   useEffect(() => {
     setNodes(buildNodes(contacts));
     setEdges(buildEdges(contacts, links));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
+
+  const pushUndo = useCallback((entry: UndoEntry) => {
+    setUndoStack((s) => [...s, entry].slice(-50));
+  }, []);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<Node<NodeData>>[]) => {
@@ -211,91 +260,216 @@ function FlowInner({
       for (const ch of changes) {
         if (ch.type === "position" && ch.dragging === false && ch.position) {
           const { x, y } = ch.position;
-          startTransition(() => {
-            void moveContactAction(partnerId, ch.id, x, y);
-          });
+          const prev = dragStart.current.get(ch.id);
+          const id = ch.id;
+          if (prev && (prev.x !== x || prev.y !== y)) {
+            const px = prev.x;
+            const py = prev.y;
+            pushUndo({
+              label: "移动",
+              run: () => startTransition(() => void moveContactAction(partnerId, id, px, py)),
+            });
+          }
+          dragStart.current.delete(id);
+          startTransition(() => void moveContactAction(partnerId, id, x, y));
         }
       }
     },
-    [onNodesChange, partnerId],
+    [onNodesChange, partnerId, pushUndo],
   );
+
+  const onNodeDragStart = useCallback((_: unknown, node: Node) => {
+    dragStart.current.set(node.id, { x: node.position.x, y: node.position.y });
+  }, []);
 
   const onConnect = useCallback(
     (conn: Connection) => {
-      const superiorId = conn.source; // 上级（底部拖出）
-      const subId = conn.target; // 下级（连到顶部）
+      const superiorId = conn.source;
+      const subId = conn.target;
       if (!superiorId || !subId || superiorId === subId) return;
-      startTransition(() => {
-        if (lineMode === "SOLID") {
-          void setReportsToAction(partnerId, subId, superiorId);
-        } else {
-          void addContactLinkAction(partnerId, subId, superiorId, "DOTTED");
-        }
-      });
+
+      if (lineMode === "SOLID") {
+        const oldSup = reportsToMap.get(subId) ?? null;
+        // 乐观反馈
+        setEdges((es) =>
+          addEdge(
+            {
+              id: `r-${subId}`,
+              source: superiorId,
+              target: subId,
+              markerEnd: ARROW,
+              style: { stroke: "#a1a1aa", strokeWidth: 1.5 },
+              data: { origin: "reportsTo", childId: subId, superiorId },
+            },
+            es.filter((e) => e.id !== `r-${subId}`),
+          ),
+        );
+        pushUndo({
+          label: "改主汇报",
+          run: () => startTransition(() => void setReportsToAction(partnerId, subId, oldSup)),
+        });
+        startTransition(() => void setReportsToAction(partnerId, subId, superiorId));
+      } else {
+        const tmpId = `tmp-${superiorId}-${subId}`;
+        setEdges((es) =>
+          addEdge(
+            {
+              id: tmpId,
+              source: superiorId,
+              target: subId,
+              markerEnd: ARROW,
+              style: { stroke: "#a1a1aa", strokeWidth: 1.5, strokeDasharray: "5 5" },
+              data: { origin: "link", kind: "DOTTED", subId, supId: superiorId },
+            },
+            es,
+          ),
+        );
+        pushUndo({
+          label: "附加虚线",
+          run: () =>
+            startTransition(() => void removeContactLinkBetweenAction(partnerId, subId, superiorId)),
+        });
+        startTransition(() => void addContactLinkAction(partnerId, subId, superiorId, "DOTTED"));
+      }
     },
-    [partnerId, lineMode],
+    [partnerId, lineMode, reportsToMap, setEdges, pushUndo],
   );
 
   const onEdgesDelete = useCallback(
     (deleted: Edge[]) => {
-      startTransition(() => {
-        for (const e of deleted) {
-          const origin = (e.data as { origin?: string } | undefined)?.origin;
-          if (origin === "reportsTo") {
-            const childId = (e.data as { childId?: string }).childId;
-            if (childId) void setReportsToAction(partnerId, childId, null);
-          } else if (origin === "link") {
-            const linkId = (e.data as { linkId?: string }).linkId;
-            if (linkId) void removeContactLinkAction(partnerId, linkId);
-          }
+      for (const e of deleted) {
+        const d = (e.data ?? {}) as {
+          origin?: string;
+          childId?: string;
+          superiorId?: string;
+          linkId?: string;
+          kind?: string;
+          subId?: string;
+          supId?: string;
+        };
+        if (d.origin === "reportsTo" && d.childId) {
+          const childId = d.childId;
+          const oldSup = d.superiorId ?? null;
+          pushUndo({
+            label: "删除主汇报",
+            run: () => startTransition(() => void setReportsToAction(partnerId, childId, oldSup)),
+          });
+          startTransition(() => void setReportsToAction(partnerId, childId, null));
+        } else if (d.origin === "link" && d.subId && d.supId) {
+          const sub = d.subId;
+          const sup = d.supId;
+          const kind = d.kind ?? "DOTTED";
+          pushUndo({
+            label: "删除附加线",
+            run: () => startTransition(() => void addContactLinkAction(partnerId, sub, sup, kind)),
+          });
+          if (d.linkId) startTransition(() => void removeContactLinkAction(partnerId, d.linkId!));
+          else startTransition(() => void removeContactLinkBetweenAction(partnerId, sub, sup));
         }
-      });
+      }
     },
-    [partnerId],
+    [partnerId, pushUndo],
   );
 
-  const onResetLayout = useCallback(() => {
-    startTransition(() => {
-      void resetPowerMapLayoutAction(partnerId);
+  const onSelectionChange = useCallback(
+    ({ edges: sel }: { edges: Edge[] }) => setSelectedEdges(sel),
+    [],
+  );
+
+  const deleteSelected = useCallback(() => {
+    if (!selectedEdges.length) return;
+    void deleteElements({ edges: selectedEdges.map((e) => ({ id: e.id })) });
+  }, [selectedEdges, deleteElements]);
+
+  const undo = useCallback(() => {
+    setUndoStack((s) => {
+      if (!s.length) return s;
+      const last = s[s.length - 1];
+      last.run();
+      return s.slice(0, -1);
     });
+  }, []);
+
+  const onResetLayout = useCallback(() => {
+    startTransition(() => void resetPowerMapLayoutAction(partnerId));
+    setUndoStack([]);
   }, [partnerId]);
+
+  // 键盘：Cmd/Ctrl+Z 撤销
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        undo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo]);
+
+  const btn = "rounded-md px-2.5 py-1 border transition-colors";
+  const btnIdle = "border-zinc-200 text-zinc-600 hover:border-zinc-300";
 
   return (
     <div>
+      <style>{FLOW_CSS}</style>
       <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
         <span className="text-zinc-400">连线类型：</span>
         <button
           type="button"
           onClick={() => setLineMode("SOLID")}
-          className={`rounded-md px-2.5 py-1 border ${lineMode === "SOLID" ? "bg-zinc-900 text-white border-zinc-900" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"}`}
+          className={`${btn} ${lineMode === "SOLID" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
         >
           实线 · 改主汇报
         </button>
         <button
           type="button"
           onClick={() => setLineMode("DOTTED")}
-          className={`rounded-md px-2.5 py-1 border ${lineMode === "DOTTED" ? "bg-zinc-900 text-white border-zinc-900" : "border-zinc-200 text-zinc-600 hover:border-zinc-300"}`}
+          className={`${btn} ${lineMode === "DOTTED" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
         >
           虚线 · 附加汇报
         </button>
         <span className="text-zinc-300">|</span>
         <button
           type="button"
-          onClick={onResetLayout}
-          className="rounded-md px-2.5 py-1 border border-zinc-200 text-zinc-600 hover:border-zinc-300"
+          onClick={undo}
+          disabled={!undoStack.length}
+          className={`${btn} ${btnIdle} disabled:opacity-40 disabled:cursor-not-allowed`}
+          title="撤销 (Cmd/Ctrl+Z)"
         >
+          ↩ 撤销{undoStack.length ? `（${undoStack.length}）` : ""}
+        </button>
+        <button
+          type="button"
+          onClick={deleteSelected}
+          disabled={!selectedEdges.length}
+          className={`${btn} border-red-200 text-red-600 hover:border-red-300 disabled:opacity-40 disabled:cursor-not-allowed`}
+        >
+          删除选中连线
+        </button>
+        <button type="button" onClick={onResetLayout} className={`${btn} ${btnIdle}`}>
           重新自动排版
         </button>
-        <span className="text-zinc-400 ml-1">提示：从一个人底部拖到另一人顶部建立汇报关系；选中连线按 Delete 删除。</span>
       </div>
+      <p className="text-[11px] text-zinc-400 mb-2">
+        提示：把鼠标移到人物卡的小圆点上，从一个人拖到另一个人即可连线（绿色高亮表示可连接）；点中连线后按 Delete/Backspace 或上方按钮删除。
+      </p>
       <div className="h-[460px] rounded-lg border border-zinc-100 bg-zinc-50/40">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
           onNodesChange={handleNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStart={onNodeDragStart}
           onConnect={onConnect}
           onEdgesDelete={onEdgesDelete}
+          onSelectionChange={onSelectionChange}
+          connectionMode={ConnectionMode.Loose}
+          connectionLineType={ConnectionLineType.SmoothStep}
+          connectionLineStyle={{ stroke: "#6366f1", strokeWidth: 2.5, strokeDasharray: "6 4" }}
+          connectionRadius={40}
+          deleteKeyCode={["Backspace", "Delete"]}
           fitView
           proOptions={{ hideAttribution: true }}
         >

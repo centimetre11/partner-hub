@@ -321,6 +321,19 @@ export async function removeContactLinkAction(partnerId: string, linkId: string)
   revalidatePath(`/partners/${partnerId}`);
 }
 
+// 按（下级, 上级）删除附加线，用于撤销「新增虚线」（此时拿不到 linkId）
+export async function removeContactLinkBetweenAction(
+  partnerId: string,
+  subId: string,
+  supId: string,
+) {
+  await requireUser();
+  await db.contactLink.deleteMany({
+    where: { partnerId, subordinateId: subId, superiorId: supId },
+  });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
 export async function resetPowerMapLayoutAction(partnerId: string) {
   await requireUser();
   await db.contact.updateMany({ where: { partnerId }, data: { x: null, y: null } });
