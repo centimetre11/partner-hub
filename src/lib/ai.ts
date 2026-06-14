@@ -160,6 +160,28 @@ function parseExtraConfig(extraConfig: string | null): Record<string, unknown> {
   }
 }
 
+/** 火山 Responses API 使用扁平 function 定义，不接受 OpenAI Chat Completions 的嵌套 function 字段 */
+function toVolcengineTool(tool: ToolDef | Record<string, unknown>): Record<string, unknown> {
+  if (typeof tool !== "object" || tool === null) return tool as Record<string, unknown>;
+  const t = tool as Record<string, unknown>;
+  if (t.type === "function" && t.function && typeof t.function === "object") {
+    const fn = t.function as Record<string, unknown>;
+    const flat: Record<string, unknown> = {
+      type: "function",
+      name: fn.name,
+      description: fn.description,
+      parameters: fn.parameters ?? { type: "object", properties: {} },
+    };
+    if (fn.strict !== undefined) flat.strict = fn.strict;
+    return flat;
+  }
+  return t;
+}
+
+function toVolcengineTools(tools: (ToolDef | Record<string, unknown>)[]): Record<string, unknown>[] {
+  return tools.map(toVolcengineTool);
+}
+
 function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
   const input: unknown[] = [];
   for (const m of messages) {
@@ -262,10 +284,10 @@ async function volcengineResponsesCompletion(
   const configuredInstructions = typeof extra.instructions === "string" ? extra.instructions : "";
   const instructions = [configuredInstructions, systemText].filter(Boolean).join("\n\n");
 
-  const tools = [
-    ...((extra.tools as unknown[]) ?? []),
+  const tools = toVolcengineTools([
+    ...((extra.tools as (ToolDef | Record<string, unknown>)[]) ?? []),
     ...(opts.tools ?? []),
-  ];
+  ]);
 
   const body: Record<string, unknown> = {
     model: api.model,
