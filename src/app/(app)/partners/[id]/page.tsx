@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
@@ -93,12 +92,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href={`/partners/${p.id}/meeting`}
-              className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
-            >
-              ● 会议模式
-            </Link>
             <AiAddButton
               scope="profile"
               partnerId={p.id}

@@ -130,7 +130,7 @@ export default async function SettingsPage() {
               优先使用下方启用且标记为默认的数据库 API；未添加数据库 API 时，兼容读取 <code className="bg-zinc-200 px-1 rounded">.env</code> 中的 AI_BASE_URL / AI_API_KEY / AI_MODEL。
             </div>
             <div className="text-xs text-zinc-400">
-              AI 能力：会议模式实时刷新 · 聊天记录导入 · 全局助手（查/改数据） · 补全提问清单 · 动态摘要 · 经营周报。每次模型调用都会记录功能来源、API、模型与 Token 用量。
+              AI 能力：聊天记录导入 · 全局助手（查/改数据） · 补全提问清单 · 动态摘要 · 经营周报。每次模型调用都会记录功能来源、API、模型与 Token 用量。
             </div>
           </div>
         </Card>
