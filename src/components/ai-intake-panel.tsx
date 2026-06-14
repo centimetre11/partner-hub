@@ -43,6 +43,25 @@ const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = 
   },
 };
 
+function applyStreamState(
+  state: AiStreamState,
+  setters: {
+    setLiveTrace: (v: AiTraceStep[]) => void;
+    setLiveText: (v: string) => void;
+    setProposal: (v: IntakeProposal | null) => void;
+    setQuestions: (v: string[]) => void;
+    setReady: (v: boolean) => void;
+  }
+) {
+  setters.setLiveTrace(state.trace);
+  setters.setLiveText(state.liveText);
+  if (state.proposal) {
+    setters.setProposal(state.proposal);
+    setters.setQuestions(state.questions);
+    setters.setReady(state.ready);
+  }
+}
+
 export function AiIntakePanel({
   scope,
   partnerId,
@@ -67,6 +86,8 @@ export function AiIntakePanel({
   const [liveText, setLiveText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const showConfirm = !!proposal;
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading, liveTrace, liveText, proposal]);
@@ -87,18 +108,12 @@ export function AiIntakePanel({
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({ scope, partnerId, messages: next, stream: true }),
       });
-      const { data, trace, liveText: finalText } = await consumeAiSse(
-        res,
-        (_ev, state: AiStreamState) => {
-          setLiveTrace(state.trace);
-          setLiveText(state.liveText);
-        }
+      const streamSetters = { setLiveTrace, setLiveText, setProposal, setQuestions, setReady };
+      const { data, trace, liveText: finalText } = await consumeAiSse(res, (_ev, state) =>
+        applyStreamState(state, streamSetters)
       );
       const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[] };
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", content: finalText || turn.reply, trace },
-      ]);
+      setMessages((m) => [...m, { role: "assistant", content: finalText || turn.reply, trace }]);
       setProposal(turn.proposal);
       setReady(turn.ready);
       setQuestions(turn.questions ?? []);
@@ -107,7 +122,6 @@ export function AiIntakePanel({
     } finally {
       setLoading(false);
       setLiveTrace([]);
-      setLiveText("");
     }
   }
 
@@ -122,18 +136,21 @@ export function AiIntakePanel({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
       <div
-        className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col"
+        className="bg-white w-[min(960px,94vw)] h-full shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white shrink-0">
+        <div className="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white shrink-0">
           <div>
-            <div className="text-sm font-semibold flex items-center gap-1.5">✦ {meta.title}</div>
-            <div className="text-xs text-indigo-200 mt-0.5">多源调研 · 流式输出 · 勾选确认后入库</div>
+            <div className="text-base font-semibold flex items-center gap-1.5">✦ {meta.title}</div>
+            <div className="text-xs text-indigo-200 mt-0.5">关键步骤即时输出 · 勾选确认后入库</div>
           </div>
-          <button onClick={onClose} className="text-indigo-100 hover:text-white text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-indigo-100 hover:text-white text-2xl leading-none">×</button>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
+        <div
+          ref={scrollRef}
+          className={`overflow-y-auto px-6 py-4 space-y-3 min-h-0 ${showConfirm ? "flex-[0.9]" : "flex-1"}`}
+        >
           {messages.length === 0 && (
             <div className="text-sm text-zinc-400 whitespace-pre-wrap leading-relaxed bg-zinc-50 rounded-lg p-4">
               {meta.placeholder}
@@ -142,10 +159,10 @@ export function AiIntakePanel({
           {messages.map((m, i) => (
             <div key={i} className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}>
               {m.role === "assistant" && m.trace && m.trace.length > 0 && (
-                <AiProcessTrace steps={m.trace} compact className="w-full max-w-[85%]" />
+                <AiProcessTrace steps={m.trace} expandLatestDone className="w-full" />
               )}
               <div
-                className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed ${
                   m.role === "user" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-800"
                 }`}
               >
@@ -154,10 +171,10 @@ export function AiIntakePanel({
             </div>
           ))}
           {loading && (
-            <div className="w-full max-w-[85%] space-y-2">
-              <AiProcessTrace steps={liveTrace} loading compact />
+            <div className="w-full space-y-3">
+              <AiProcessTrace steps={liveTrace} loading expandLatestDone />
               {liveText && (
-                <div className="rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800">
+                <div className="rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800 border border-indigo-100">
                   {liveText}
                   <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
                 </div>
@@ -167,8 +184,8 @@ export function AiIntakePanel({
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
-        {proposal && (
-          <div className="shrink-0 border-t px-4 py-3 max-h-[240px] overflow-y-auto">
+        {showConfirm && (
+          <div className="shrink-0 border-t px-5 py-4 min-h-[360px] max-h-[min(520px,52vh)] overflow-y-auto bg-zinc-50/50">
             <ProposalConfirmZone
               proposal={proposal}
               scope={scope}
@@ -176,12 +193,13 @@ export function AiIntakePanel({
               questions={questions}
               ready={ready}
               onApplied={handleApplied}
+              spacious
               sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
             />
           </div>
         )}
 
-        <div className="border-t px-5 py-3 shrink-0">
+        <div className="border-t px-6 py-3 shrink-0">
           <div className="flex gap-2 items-end">
             <textarea
               value={input}
@@ -194,12 +212,12 @@ export function AiIntakePanel({
               }}
               rows={2}
               placeholder={proposal ? "继续补充，或确认下方入库…" : "输入后按 ⌘/Ctrl + Enter 发送…"}
-              className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="flex-1 rounded-lg border border-zinc-200 px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button
               onClick={send}
               disabled={loading || !input.trim()}
-              className="rounded-lg bg-indigo-600 text-white px-4 py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
+              className="rounded-lg bg-indigo-600 text-white px-5 py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
             >
               发送
             </button>

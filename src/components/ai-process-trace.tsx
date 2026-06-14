@@ -16,8 +16,14 @@ function StatusIcon({ status }: { status: AiTraceStep["status"] }) {
   return <span className="text-emerald-500 shrink-0">✓</span>;
 }
 
-function ToolStepRow({ step }: { step: Extract<AiTraceStep, { type: "tool" }> }) {
-  const [open, setOpen] = useState(false);
+function ToolStepRow({
+  step,
+  defaultOpen = false,
+}: {
+  step: Extract<AiTraceStep, { type: "tool" }>;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   const summary = formatToolArgs(step.name, step.args);
   return (
     <div className="rounded-lg border border-zinc-200/80 bg-white overflow-hidden">
@@ -80,23 +86,37 @@ export function AiProcessTrace({
   steps,
   loading,
   compact,
+  expandLatestDone,
   className = "",
 }: {
   steps: AiTraceStep[];
   loading?: boolean;
   compact?: boolean;
+  /** 最新完成的工具步骤默认展开，便于边看结果边等后续 */
+  expandLatestDone?: boolean;
   className?: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const toolCount = steps.filter((s) => s.type === "tool").length;
   const running = steps.some((s) => s.status === "running");
+  const latestDoneToolId = [...steps]
+    .reverse()
+    .find((s) => s.type === "tool" && s.status === "done")?.id;
 
   if (!steps.length && !loading) return null;
 
   const inner = (
     <div className={`space-y-1.5 ${compact ? "text-xs" : ""}`}>
       {steps.map((s) =>
-        s.type === "tool" ? <ToolStepRow key={s.id} step={s} /> : <ReasoningRow key={s.id} step={s} />
+        s.type === "tool" ? (
+          <ToolStepRow
+            key={s.id}
+            step={s}
+            defaultOpen={!!expandLatestDone && s.id === latestDoneToolId}
+          />
+        ) : (
+          <ReasoningRow key={s.id} step={s} />
+        )
       )}
       {loading && running === false && steps.length === 0 && (
         <div className="flex items-center gap-2 text-xs text-zinc-400 px-1">

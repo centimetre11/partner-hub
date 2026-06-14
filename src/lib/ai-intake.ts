@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
-import { nextTraceId, emitTextChunks, type TraceEmitter } from "./ai-trace";
+import { nextTraceId, emitTextChunks, emitProposalUpdate, emitProcessStep, type TraceEmitter } from "./ai-trace";
 import {
   buildIntakeTools,
   intakeEnrichmentSkillsForScope,
@@ -205,11 +205,13 @@ async function extractIntakeJson(
   userId?: string,
   emit?: TraceEmitter
 ): Promise<IntakeTurn> {
+  const extractId = nextTraceId("extract");
+  emitProcessStep(emit, "start", "生成提案", "结构化 JSON");
   emit?.({
     event: "trace",
     step: {
       type: "reasoning",
-      id: nextTraceId("extract"),
+      id: extractId,
       content: "调研完成，正在整理 JSON 提案…",
       status: "running",
     },
@@ -232,6 +234,13 @@ async function extractIntakeJson(
     }));
   }
   const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
+  emit?.({
+    event: "trace_patch",
+    id: extractId,
+    patch: { status: "done", content: "提案生成完成" },
+  });
+  emitProcessStep(emit, "done", "生成提案");
+  emitProposalUpdate(emit, turn);
   emitTextChunks(emit, turn.reply);
   return turn;
 }
@@ -289,12 +298,14 @@ ${OUTPUT_SCHEMA}`;
 
   if (useResearch) {
     const tools = await buildIntakeTools(enrichmentSkills);
+    const planId = nextTraceId("plan");
+    emitProcessStep(opts.emit, "start", "多源调研", "KMS / 联网 / 领英 / 知识库等");
     opts.emit?.({
       event: "trace",
       step: {
         type: "reasoning",
-        id: nextTraceId("plan"),
-        content: "开始多源调研：KMS、联网搜索、领英、知识库等",
+        id: planId,
+        content: "开始多源调研（KMS、联网搜索、领英、知识库等）",
         status: "running",
       },
     });
@@ -308,27 +319,26 @@ ${OUTPUT_SCHEMA}`;
       emit: opts.emit,
       executeTool: (tc) => runIntakeToolCall(tc, opts.userId),
     });
+    opts.emit?.({
+      event: "trace_patch",
+      id: planId,
+      patch: { status: "done", content: "多源调研完成" },
+    });
+    emitProcessStep(opts.emit, "start", "整理提案", "根据已收集信息生成入库字段");
     if (researchContent?.trim().startsWith("{")) {
       try {
         const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(researchContent));
+        emitProposalUpdate(opts.emit, turn);
         emitTextChunks(opts.emit, turn.reply);
         return turn;
       } catch {
         /* fall through */
       }
     }
-    opts.emit?.({
-      event: "trace",
-      step: {
-        type: "reasoning",
-        id: nextTraceId("extract"),
-        content: "调研完成，正在整理 JSON 提案…",
-        status: "done",
-      },
-    });
     return extractIntakeJson(chat, feature, opts.userId, opts.emit);
   }
 
+  emitProcessStep(opts.emit, "start", "整理提案", "根据对话内容生成入库字段");
   let content: string | null;
   try {
     ({ content } = await chatCompletion(chat, {
@@ -346,6 +356,7 @@ ${OUTPUT_SCHEMA}`;
     }));
   }
   const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
+  emitProposalUpdate(opts.emit, turn);
   emitTextChunks(opts.emit, turn.reply);
   return turn;
 }

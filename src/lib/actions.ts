@@ -185,6 +185,15 @@ export async function restorePartnerAction(partnerId: string) {
   revalidatePath(`/partners/${partnerId}`);
 }
 
+export async function deletePartnerAction(partnerId: string) {
+  await requireUser();
+  await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
+  await db.notification.deleteMany({ where: { partnerId } });
+  await db.partner.delete({ where: { id: partnerId } });
+  revalidatePath("/pool");
+  revalidatePath("/partners");
+}
+
 export async function setPipelineStageAction(partnerId: string, stage: number) {
   const user = await requireUser();
   const p = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });

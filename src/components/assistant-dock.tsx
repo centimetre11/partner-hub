@@ -37,6 +37,25 @@ const SUGGESTIONS = [
   "把 DataPlus 的优先级改成 P0，并加一条待办：下周安排 Demo",
 ];
 
+function applyStreamState(
+  state: AiStreamState,
+  setters: {
+    setLiveTrace: (v: AiTraceStep[]) => void;
+    setLiveText: (v: string) => void;
+    setProposal: (v: IntakeProposal | null) => void;
+    setQuestions: (v: string[]) => void;
+    setReady: (v: boolean) => void;
+  }
+) {
+  setters.setLiveTrace(state.trace);
+  setters.setLiveText(state.liveText);
+  if (state.proposal) {
+    setters.setProposal(state.proposal);
+    setters.setQuestions(state.questions);
+    setters.setReady(state.ready);
+  }
+}
+
 export function AssistantDock() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -67,6 +86,9 @@ export function AssistantDock() {
     setLoading(true);
     setLiveTrace([]);
     setLiveText("");
+    setProposal(null);
+    setQuestions([]);
+    setReady(false);
     try {
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
@@ -77,12 +99,9 @@ export function AssistantDock() {
           partnerId: proposePartnerId,
         }),
       });
-      const { data, trace, liveText: finalText } = await consumeAiSse(
-        res,
-        (_ev, state: AiStreamState) => {
-          setLiveTrace(state.trace);
-          setLiveText(state.liveText);
-        }
+      const streamSetters = { setLiveTrace, setLiveText, setProposal, setQuestions, setReady };
+      const { data, trace, liveText: finalText } = await consumeAiSse(res, (_ev, state) =>
+        applyStreamState(state, streamSetters)
       );
 
       if ((data as ProposeResult).mode === "propose") {
@@ -91,16 +110,10 @@ export function AssistantDock() {
         setProposeScope(p.scope);
         setQuestions(p.questions ?? []);
         setReady(p.ready);
-        setMessages([
-          ...next,
-          { role: "assistant", content: finalText || p.reply, trace },
-        ]);
+        setMessages([...next, { role: "assistant", content: finalText || p.reply, trace }]);
       } else {
         const q = data as QueryResult;
-        setMessages([
-          ...next,
-          { role: "assistant", content: finalText || q.reply, actions: q.actions, trace },
-        ]);
+        setMessages([...next, { role: "assistant", content: finalText || q.reply, actions: q.actions, trace }]);
         if (q.actions?.length) router.refresh();
       }
     } catch (e) {
@@ -111,7 +124,6 @@ export function AssistantDock() {
     } finally {
       setLoading(false);
       setLiveTrace([]);
-      setLiveText("");
     }
   }
 
@@ -124,7 +136,8 @@ export function AssistantDock() {
     router.push(`/partners/${partnerId}`);
   }
 
-  const dockWidth = hasProposal ? 640 : 420;
+  const dockWidth = hasProposal ? 920 : 560;
+  const dockHeight = hasProposal ? "min(840px, 88vh)" : "min(680px, 82vh)";
 
   return (
     <>
@@ -139,17 +152,19 @@ export function AssistantDock() {
 
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-40 max-w-[calc(100vw-1.5rem)] h-[560px] bg-white rounded-2xl shadow-2xl border border-zinc-200 flex flex-col overflow-hidden transition-all duration-200"
-          style={{ width: dockWidth }}
+          className="fixed bottom-24 right-6 z-40 max-w-[calc(100vw-1.5rem)] bg-white rounded-2xl shadow-2xl border border-zinc-200 flex flex-col overflow-hidden transition-all duration-200"
+          style={{ width: dockWidth, height: dockHeight }}
         >
-          <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shrink-0">
+          <div className="px-5 py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shrink-0">
             <div className="text-sm font-semibold">✦ AI 助手</div>
             <div className="text-[11px] text-indigo-200">
-              处理过程实时可见；建档类操作需确认后入库
+              关键步骤即时输出；建档类操作需确认后入库
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+          <div
+            className={`overflow-y-auto p-4 space-y-3 min-h-0 ${hasProposal ? "flex-[0.85]" : "flex-1"}`}
+          >
             {messages.length === 0 && (
               <div className="space-y-2">
                 <div className="text-xs text-zinc-400 mb-2">试试这些：</div>
@@ -167,10 +182,10 @@ export function AssistantDock() {
             {messages.map((m, i) => (
               <div key={i} className={m.role === "user" ? "flex justify-end" : "flex flex-col items-start gap-2"}>
                 {m.role === "assistant" && m.trace && m.trace.length > 0 && (
-                  <AiProcessTrace steps={m.trace} compact className="w-full max-w-[92%]" />
+                  <AiProcessTrace steps={m.trace} expandLatestDone className="w-full max-w-[95%]" />
                 )}
                 <div
-                  className={`max-w-[92%] rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                  className={`max-w-[95%] rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
                     m.role === "user" ? "bg-indigo-600 text-white ml-auto" : "bg-zinc-100 text-zinc-800"
                   }`}
                 >
@@ -186,10 +201,10 @@ export function AssistantDock() {
               </div>
             ))}
             {loading && (
-              <div className="w-full max-w-[92%] space-y-2">
-                <AiProcessTrace steps={liveTrace} loading compact />
+              <div className="w-full max-w-[95%] space-y-2">
+                <AiProcessTrace steps={liveTrace} loading expandLatestDone />
                 {liveText && (
-                  <div className="rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800">
+                  <div className="rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800 border border-indigo-100">
                     {liveText}
                     <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
                   </div>
@@ -200,7 +215,7 @@ export function AssistantDock() {
           </div>
 
           {proposal && (
-            <div className="shrink-0 border-t border-zinc-100 px-3 py-2 max-h-[220px] overflow-y-auto bg-white">
+            <div className="shrink-0 border-t border-zinc-100 px-4 py-3 min-h-[320px] max-h-[min(520px,50vh)] overflow-y-auto bg-zinc-50/50">
               <ProposalConfirmZone
                 proposal={proposal}
                 scope={proposeScope}
@@ -208,6 +223,7 @@ export function AssistantDock() {
                 questions={questions}
                 ready={ready}
                 onApplied={onApplied}
+                spacious
                 sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
               />
             </div>

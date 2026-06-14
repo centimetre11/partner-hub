@@ -13,6 +13,8 @@ type Props = {
   ready?: boolean;
   onApplied?: (partnerId: string) => void;
   compact?: boolean;
+  /** 更大字号与列表高度，适合 AI 建档侧栏 */
+  spacious?: boolean;
   sourceText?: string;
 };
 
@@ -24,7 +26,8 @@ export function ProposalConfirmZone({
   questions = [],
   ready = false,
   onApplied,
-  compact = true,
+  compact = false,
+  spacious = false,
   sourceText,
 }: Props) {
   async function apply(filtered: NormalizedProposal) {
@@ -44,16 +47,17 @@ export function ProposalConfirmZone({
   }
 
   return (
-    <div className={`rounded-xl border border-zinc-200 bg-zinc-50/80 ${compact ? "p-2.5" : "p-4"}`}>
+    <div className={`rounded-xl border border-zinc-200 bg-zinc-50/80 ${spacious ? "p-4" : compact ? "p-2.5" : "p-4"}`}>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-xs font-semibold text-zinc-600">待确认入库</div>
-        <div className="text-[10px] text-zinc-400">可取消勾选 · 继续聊天可补充</div>
+        <div className={`font-semibold text-zinc-600 ${spacious ? "text-sm" : "text-xs"}`}>待确认入库</div>
+        <div className={`text-zinc-400 ${spacious ? "text-xs" : "text-[10px]"}`}>可取消勾选 · 继续聊天可补充</div>
       </div>
       <ProposalView
         proposal={proposal}
         onConfirm={apply}
         confirmLabel={ready ? "✓ 确认入库" : "信息够了，直接入库"}
-        compact={compact}
+        compact={compact && !spacious}
+        spacious={spacious}
       />
       {questions.length > 0 && !ready && (
         <div className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">

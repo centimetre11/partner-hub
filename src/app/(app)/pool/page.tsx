@@ -4,8 +4,9 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
 import { AI_VERIFIED_LABELS, CATEGORY_LABELS, POOL_FLAG_LABELS } from "@/lib/constants";
 import { computeCompleteness } from "@/lib/completeness";
-import { promotePartnerAction, restorePartnerAction, setPoolFlagAction } from "@/lib/actions";
+import { deletePartnerAction, promotePartnerAction, restorePartnerAction, setPoolFlagAction } from "@/lib/actions";
 import { AddPartnerForm } from "./add-partner-form";
+import { DeletePartnerButton } from "./delete-partner-button";
 
 const VIEWS = [
   { k: "prospect", label: "候选" },
@@ -209,6 +210,10 @@ export default async function PoolPage({
                             )}
                           </>
                         )}
+                        <DeletePartnerButton
+                          partnerName={p.name}
+                          action={deletePartnerAction.bind(null, p.id)}
+                        />
                       </div>
                     </td>
                   </tr>

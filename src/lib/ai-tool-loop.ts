@@ -1,8 +1,10 @@
 import type { ChatMessage, ToolCall, ToolDef } from "./ai";
 import { chatCompletion } from "./ai";
 import {
+  emitProcessStep,
   nextTraceId,
   toolTraceStep,
+  formatToolArgs,
   type TraceEmitter,
 } from "./ai-trace";
 
@@ -14,6 +16,8 @@ export type ToolLoopOptions = {
   userId?: string;
   maxSteps?: number;
   emit?: TraceEmitter;
+  /** 每步工具完成后立即推送摘要到对话区 */
+  emitToolFindings?: boolean;
   executeTool: (tc: ToolCall) => Promise<string>;
 };
 
@@ -55,6 +59,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
         event: "trace",
         step: { type: "reasoning", id: rid, content: content.trim(), status: "done" },
       });
+      opts.emit({ event: "text_delta", delta: `\n\n💭 **分析**\n${content.trim()}\n` });
       opts.emit({ event: "text_done" });
     }
 
@@ -64,6 +69,10 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
     for (const tc of toolCalls) {
       const args = parseToolArgs(tc);
       const step = toolTraceStep(tc.function.name, args);
+      const argHint = formatToolArgs(tc.function.name, args);
+      if (opts.emitToolFindings !== false) {
+        emitProcessStep(opts.emit, "start", step.label, argHint);
+      }
       opts.emit?.({ event: "trace", step });
 
       try {
@@ -73,10 +82,16 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
           id: step.id,
           patch: { status: "done", result: result.slice(0, 1200) },
         });
+        if (opts.emitToolFindings !== false) {
+          emitProcessStep(opts.emit, "done", step.label, argHint, result);
+        }
         opts.chat.push({ role: "tool", content: result, tool_call_id: tc.id });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         opts.emit?.({ event: "trace_patch", id: step.id, patch: { status: "error", error: msg } });
+        if (opts.emitToolFindings !== false) {
+          emitProcessStep(opts.emit, "error", step.label, argHint, msg);
+        }
         opts.chat.push({ role: "tool", content: `错误：${msg}`, tool_call_id: tc.id });
       }
     }

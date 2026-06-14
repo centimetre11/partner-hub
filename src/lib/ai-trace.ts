@@ -1,4 +1,5 @@
 import { getToolLabel } from "./tools-registry";
+import type { IntakeProposal } from "./ai-intake";
 
 /** 单步 AI 过程轨迹（思维链 / 工具调用），与 ChatGPT、Claude、Vercel AI SDK tool-invocation 同类概念 */
 export type AiTraceStep =
@@ -31,12 +32,21 @@ export type AiStreamEvent =
   | { event: "trace_patch"; id: string; patch: AiTracePatch }
   | { event: "text_delta"; delta: string }
   | { event: "text_done" }
+  | {
+      event: "proposal_update";
+      proposal: IntakeProposal;
+      questions?: string[];
+      ready?: boolean;
+    }
   | { event: "done"; data: unknown }
   | { event: "error"; message: string };
 
 export type AiStreamState = {
   trace: AiTraceStep[];
   liveText: string;
+  proposal: IntakeProposal | null;
+  questions: string[];
+  ready: boolean;
 };
 
 export type TraceEmitter = (ev: AiStreamEvent) => void;
@@ -96,6 +106,61 @@ export function createSseResponse(handler: (emit: TraceEmitter) => Promise<void>
   });
 }
 
+/** 关键过程统一步骤推送（所有工具、阶段同一套规则，KMS 只是其中之一） */
+export function emitProcessStep(
+  emit: TraceEmitter | undefined,
+  kind: "start" | "done" | "error",
+  label: string,
+  hint?: string,
+  body?: string
+) {
+  if (!emit) return;
+  const head = hint ? `${label} · ${hint}` : label;
+  let delta: string;
+  if (kind === "start") {
+    delta = `\n\n▶ **${head}**…\n`;
+  } else if (kind === "error") {
+    delta = `\n\n✕ **${head}**\n${body?.trim() || "执行失败"}\n`;
+  } else {
+    const clean = (body ?? "").replace(/\r/g, "").trim();
+    if (!clean) {
+      delta = `\n\n✓ **${head}**（已完成）\n`;
+    } else {
+      const limit = 800;
+      const snippet = clean.slice(0, limit);
+      const suffix = clean.length > limit ? "\n…（完整结果已记录，后续步骤会纳入）" : "";
+      delta = `\n\n✓ **${head}**\n${snippet}${suffix}\n`;
+    }
+  }
+  emit({ event: "text_delta", delta });
+}
+
+/** @deprecated 请用 emitProcessStep；保留别名避免遗漏引用 */
+export function emitToolFinding(
+  emit: TraceEmitter | undefined,
+  name: string,
+  args: Record<string, unknown>,
+  result: string
+) {
+  if (!emit || !result.trim()) return;
+  const label = getToolLabel(name === "$web_search" ? "web_search" : name);
+  const argHint = formatToolArgs(name, args);
+  emitProcessStep(emit, "done", label, argHint, result);
+}
+
+export function emitProposalUpdate(
+  emit: TraceEmitter | undefined,
+  turn: { proposal: IntakeProposal; questions?: string[]; ready?: boolean }
+) {
+  if (!emit) return;
+  emit({
+    event: "proposal_update",
+    proposal: turn.proposal,
+    questions: turn.questions,
+    ready: turn.ready,
+  });
+}
+
 /** 将完整文本分块模拟流式输出（火山等非 SSE 模型用） */
 export function emitTextChunks(emit: TraceEmitter | undefined, text: string, chunkSize = 12) {
   if (!emit || !text) return;
@@ -109,7 +174,14 @@ export function emitTextChunks(emit: TraceEmitter | undefined, text: string, chu
 export async function consumeAiSse(
   res: Response,
   onEvent: (ev: AiStreamEvent, state: AiStreamState) => void
-): Promise<{ data: unknown; trace: AiTraceStep[]; liveText: string }> {
+): Promise<{
+  data: unknown;
+  trace: AiTraceStep[];
+  liveText: string;
+  proposal: IntakeProposal | null;
+  questions: string[];
+  ready: boolean;
+}> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? "请求失败");
@@ -122,8 +194,11 @@ export async function consumeAiSse(
   let result: unknown;
   const trace: AiTraceStep[] = [];
   let liveText = "";
+  let proposal: IntakeProposal | null = null;
+  let questions: string[] = [];
+  let ready = false;
 
-  const state = (): AiStreamState => ({ trace: [...trace], liveText });
+  const state = (): AiStreamState => ({ trace: [...trace], liveText, proposal, questions, ready });
 
   const apply = (ev: AiStreamEvent) => {
     if (ev.event === "trace") {
@@ -135,6 +210,10 @@ export async function consumeAiSse(
       liveText += ev.delta;
     } else if (ev.event === "text_done") {
       /* keep liveText */
+    } else if (ev.event === "proposal_update") {
+      proposal = ev.proposal;
+      questions = ev.questions ?? [];
+      ready = !!ev.ready;
     } else if (ev.event === "done") {
       result = ev.data;
     } else if (ev.event === "error") {
@@ -160,5 +239,5 @@ export async function consumeAiSse(
     }
   }
   if (result === undefined) throw new Error("流式响应未返回结果");
-  return { data: result, trace, liveText };
+  return { data: result, trace, liveText, proposal, questions, ready };
 }

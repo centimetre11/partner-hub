@@ -16,12 +16,13 @@ type Props = {
   onCancel?: () => void;
   confirmLabel?: string;
   compact?: boolean;
+  spacious?: boolean;
 };
 
 type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution";
 
 // AI 提案 diff 预览：人工勾选确认后才入库
-export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "确认入库", compact }: Props) {
+export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "确认入库", compact, spacious }: Props) {
   const normalized = useMemo(() => normalizeProposal(proposal), [proposal]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
@@ -104,7 +105,7 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "�
           还没有可入库的内容，继续补充信息吧。
         </p>
       ) : (
-        <div className="space-y-1.5 max-h-48 overflow-y-auto">
+        <div className={`space-y-1.5 overflow-y-auto ${spacious ? "max-h-[min(480px,50vh)]" : compact ? "max-h-48" : "max-h-72"}`}>
           {normalized.partnerName && (
             <Row k="partner" tone="field">
               <span className="font-medium text-zinc-800">新建伙伴</span>
