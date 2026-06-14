@@ -4,8 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CONTACT_ROLE_LABELS, attitudeLabel } from "@/lib/constants";
 import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
+import type { AiTraceStep } from "@/lib/ai-trace";
+import { consumeAiSse } from "@/lib/ai-trace";
+import { AiProcessTrace } from "@/components/ai-process-trace";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[] };
 
 const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = {
   new_partner: {
@@ -138,11 +141,12 @@ export function AiIntakePanel({
   const [proposal, setProposal] = useState<IntakeProposal | null>(null);
   const [ready, setReady] = useState(false);
   const [questions, setQuestions] = useState<string[]>([]);
+  const [liveTrace, setLiveTrace] = useState<AiTraceStep[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, liveTrace]);
 
   async function send() {
     const text = input.trim();
@@ -152,22 +156,24 @@ export function AiIntakePanel({
     setInput("");
     setLoading(true);
     setError(null);
+    setLiveTrace([]);
     try {
       const res = await fetch("/api/ai/intake", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope, partnerId, messages: next }),
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ scope, partnerId, messages: next, stream: true }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "AI 处理失败");
-      setMessages((m) => [...m, { role: "assistant", content: data.reply }]);
-      setProposal(data.proposal);
-      setReady(data.ready);
-      setQuestions(data.questions ?? []);
+      const { data, trace } = await consumeAiSse(res, (_ev, steps) => setLiveTrace(steps));
+      const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[] };
+      setMessages((m) => [...m, { role: "assistant", content: turn.reply, trace }]);
+      setProposal(turn.proposal);
+      setReady(turn.ready);
+      setQuestions(turn.questions ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      setLiveTrace([]);
     }
   }
 
@@ -223,7 +229,10 @@ export function AiIntakePanel({
             </div>
           )}
           {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+            <div key={i} className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}>
+              {m.role === "assistant" && m.trace && m.trace.length > 0 && (
+                <AiProcessTrace steps={m.trace} compact className="w-full max-w-[85%]" />
+              )}
               <div
                 className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
                   m.role === "user" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-800"
@@ -234,10 +243,8 @@ export function AiIntakePanel({
             </div>
           ))}
           {loading && (
-            <div className="flex justify-start">
-              <div className="bg-zinc-100 text-zinc-400 rounded-2xl px-3.5 py-2.5 text-sm">
-                {scope === "new_partner" || scope === "profile" ? "正在调研并整理…" : "正在思考…"}
-              </div>
+            <div className="w-full max-w-[85%]">
+              <AiProcessTrace steps={liveTrace} loading compact />
             </div>
           )}
 

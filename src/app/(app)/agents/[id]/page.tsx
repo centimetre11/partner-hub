@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
+import { AiProcessTrace, toolLogToTrace } from "@/components/ai-process-trace";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { resolveAgentSkills } from "@/lib/skill-resolver";
 import { deleteAgentAction } from "@/lib/agent-actions";
@@ -95,15 +96,15 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                       )}
                       {r.toolLog && JSON.parse(r.toolLog).length > 0 && (
                         <details className="mt-2">
-                          <summary className="text-xs text-zinc-400 cursor-pointer">工具调用日志（{JSON.parse(r.toolLog).length} 次，可审计）</summary>
-                          <div className="mt-1.5 space-y-1.5">
-                            {(JSON.parse(r.toolLog) as { tool: string; args: unknown; result: string }[]).map((l, i) => (
-                              <div key={i} className="text-xs bg-zinc-50 rounded p-2">
-                                <span className="font-mono text-indigo-600">{l.tool}</span>
-                                <span className="text-zinc-400 ml-1.5">{JSON.stringify(l.args).slice(0, 120)}</span>
-                                <div className="text-zinc-500 mt-0.5 line-clamp-3">{l.result}</div>
-                              </div>
-                            ))}
+                          <summary className="text-xs text-zinc-500 cursor-pointer font-medium">
+                            工具调用过程（{JSON.parse(r.toolLog).length} 次）
+                          </summary>
+                          <div className="mt-2">
+                            <AiProcessTrace
+                              steps={toolLogToTrace(
+                                JSON.parse(r.toolLog) as { tool: string; args: unknown; result: string }[]
+                              )}
+                            />
                           </div>
                         </details>
                       )}

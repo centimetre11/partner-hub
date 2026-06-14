@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { AiTraceStep } from "@/lib/ai-trace";
+import { consumeAiSse } from "@/lib/ai-trace";
+import { AiProcessTrace } from "@/components/ai-process-trace";
 
-type Msg = { role: "user" | "assistant"; content: string; actions?: string[] };
+type Msg = { role: "user" | "assistant"; content: string; actions?: string[]; trace?: AiTraceStep[] };
 
 const SUGGESTIONS = [
   "哪些 Tier A 伙伴超过 2 周没跟进？",
@@ -18,11 +21,12 @@ export function AssistantDock() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [liveTrace, setLiveTrace] = useState<AiTraceStep[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, liveTrace]);
 
   async function send(text?: string) {
     const content = (text ?? input).trim();
@@ -31,20 +35,25 @@ export function AssistantDock() {
     setMessages(next);
     setInput("");
     setLoading(true);
+    setLiveTrace([]);
     try {
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next.map(({ role, content }) => ({ role, content })) }),
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({
+          messages: next.map(({ role, content }) => ({ role, content })),
+          stream: true,
+        }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "请求失败");
-      setMessages([...next, { role: "assistant", content: data.reply, actions: data.actions }]);
-      if (data.actions?.length) router.refresh();
+      const { data, trace } = await consumeAiSse(res, (_ev, steps) => setLiveTrace(steps));
+      const result = data as { reply: string; actions?: string[] };
+      setMessages([...next, { role: "assistant", content: result.reply, actions: result.actions, trace }]);
+      if (result.actions?.length) router.refresh();
     } catch (e) {
-      setMessages([...next, { role: "assistant", content: `出错了：${e instanceof Error ? e.message : e}` }]);
+      setMessages([...next, { role: "assistant", content: `出错了：${e instanceof Error ? e.message : e}`, trace: liveTrace }]);
     } finally {
       setLoading(false);
+      setLiveTrace([]);
     }
   }
 
@@ -63,7 +72,7 @@ export function AssistantDock() {
         <div className="fixed bottom-24 right-6 z-40 w-[420px] max-w-[calc(100vw-3rem)] h-[560px] bg-white rounded-2xl shadow-2xl border border-zinc-200 flex flex-col overflow-hidden">
           <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
             <div className="text-sm font-semibold">✦ AI 助手</div>
-            <div className="text-[11px] text-indigo-200">能查数据、改档案、建待办 — 直接用自然语言说</div>
+            <div className="text-[11px] text-indigo-200">能查数据、改档案、建待办 — 处理过程实时可见</div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -82,10 +91,13 @@ export function AssistantDock() {
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div key={i} className={m.role === "user" ? "flex justify-end" : "flex flex-col items-start gap-2"}>
+                {m.role === "assistant" && m.trace && m.trace.length > 0 && (
+                  <AiProcessTrace steps={m.trace} compact className="w-full max-w-[92%]" />
+                )}
                 <div
                   className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
-                    m.role === "user" ? "bg-indigo-600 text-white" : "bg-zinc-100 text-zinc-800"
+                    m.role === "user" ? "bg-indigo-600 text-white ml-auto" : "bg-zinc-100 text-zinc-800"
                   }`}
                 >
                   {m.content}
@@ -99,7 +111,11 @@ export function AssistantDock() {
                 </div>
               </div>
             ))}
-            {loading && <div className="text-xs text-zinc-400 animate-pulse">AI 思考中（可能在查数据）…</div>}
+            {loading && (
+              <div className="w-full max-w-[92%]">
+                <AiProcessTrace steps={liveTrace} loading compact />
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
 

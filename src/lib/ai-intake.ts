@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
+import { runToolLoop } from "./ai-tool-loop";
+import { nextTraceId, type TraceEmitter } from "./ai-trace";
 import {
   buildIntakeTools,
   intakeEnrichmentSkillsForScope,
@@ -238,6 +240,7 @@ export async function runIntakeTurn(opts: {
   messages: IntakeMessage[];
   today: string;
   userId?: string;
+  emit?: TraceEmitter;
 }): Promise<IntakeTurn> {
   const cfg = SCOPE_CONFIG[opts.scope];
   let ctx = "";
@@ -270,29 +273,41 @@ ${OUTPUT_SCHEMA}`;
 
   if (useResearch) {
     const tools = await buildIntakeTools(enrichmentSkills);
-    for (let i = 0; i < MAX_RESEARCH_STEPS; i++) {
-      const { content, toolCalls, volcengineReplay } = await chatCompletion(chat, {
-        tools,
-        temperature: 0.3,
-        feature,
-        userId: opts.userId,
-      });
-      if (!toolCalls.length) {
-        if (content?.trim().startsWith("{")) {
-          try {
-            return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content));
-          } catch {
-            /* fall through to forced extraction */
-          }
-        }
-        break;
-      }
-      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls, volcengineReplay });
-      for (const tc of toolCalls) {
-        const result = await runIntakeToolCall(tc, opts.userId);
-        chat.push({ role: "tool", content: result, tool_call_id: tc.id });
+    opts.emit?.({
+      event: "trace",
+      step: {
+        type: "reasoning",
+        id: nextTraceId("plan"),
+        content: "开始多源调研：KMS、联网搜索、领英、知识库等",
+        status: "running",
+      },
+    });
+    const researchContent = await runToolLoop({
+      chat,
+      tools,
+      temperature: 0.3,
+      feature,
+      userId: opts.userId,
+      maxSteps: MAX_RESEARCH_STEPS,
+      emit: opts.emit,
+      executeTool: (tc) => runIntakeToolCall(tc, opts.userId),
+    });
+    if (researchContent?.trim().startsWith("{")) {
+      try {
+        return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(researchContent));
+      } catch {
+        /* fall through */
       }
     }
+    opts.emit?.({
+      event: "trace",
+      step: {
+        type: "reasoning",
+        id: nextTraceId("extract"),
+        content: "调研完成，正在整理 JSON 提案…",
+        status: "done",
+      },
+    });
     return extractIntakeJson(chat, feature, opts.userId);
   }
 
