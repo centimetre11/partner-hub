@@ -30,6 +30,8 @@ export type AiTracePatch = {
   error?: string;
 };
 
+/** 工具步骤下方详情流式追加（见 trace_result_delta 事件） */
+
 export type ProposalPatchOp =
   | { op: "set_partner"; name: string; source?: string }
   | { op: "set_summary"; summary: string }
@@ -53,6 +55,7 @@ export type AiPhase = "idle" | "research" | "extract" | "reply";
 export type AiStreamEvent =
   | { event: "trace"; step: AiTraceStep }
   | { event: "trace_patch"; id: string; patch: AiTracePatch }
+  | { event: "trace_result_delta"; id: string; delta: string }
   | { event: "phase"; phase: AiPhase; label?: string }
   | { event: "reply_delta"; delta: string }
   | { event: "reply_done" }
@@ -168,6 +171,20 @@ export function emitProposalUpdate(
   });
 }
 
+export async function emitTraceResultChunks(
+  emit: TraceEmitter | undefined,
+  stepId: string,
+  text: string,
+  chunkSize = 6,
+  delayMs = 18
+) {
+  if (!emit || !text) return;
+  for (let i = 0; i < text.length; i += chunkSize) {
+    await emit({ event: "trace_result_delta", id: stepId, delta: text.slice(i, i + chunkSize) });
+    if (delayMs > 0) await sleep(delayMs);
+  }
+}
+
 export async function emitReplyChunks(
   emit: TraceEmitter | undefined,
   text: string,
@@ -214,6 +231,7 @@ export function createSseResponse(handler: (emit: TraceEmitter) => Promise<void>
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
 }
@@ -265,7 +283,7 @@ export async function consumeAiSse(
     lastPatchChanges: lastPatchChanges ? { ...lastPatchChanges, added: [...lastPatchChanges.added], updated: [...lastPatchChanges.updated], removed: [...lastPatchChanges.removed], aiReupdates: [...lastPatchChanges.aiReupdates] } : null,
   });
 
-  const apply = (ev: AiStreamEvent) => {
+  const apply = async (ev: AiStreamEvent) => {
     if (ev.event === "trace") {
       if (ev.step.type === "reasoning") {
         const last = trace[trace.length - 1];
@@ -276,6 +294,16 @@ export async function consumeAiSse(
         }
       } else {
         trace.push(ev.step);
+      }
+    } else if (ev.event === "trace_result_delta") {
+      const idx = trace.findIndex((s) => s.id === ev.id);
+      if (idx >= 0 && trace[idx].type === "tool") {
+        const cur = trace[idx];
+        trace[idx] = {
+          ...cur,
+          result: (cur.result ?? "") + ev.delta,
+          status: cur.status === "done" ? "done" : "running",
+        };
       }
     } else if (ev.event === "trace_patch") {
       const idx = trace.findIndex((s) => s.id === ev.id);
@@ -299,6 +327,11 @@ export async function consumeAiSse(
       throw new Error(ev.message);
     }
     onEvent(ev, state());
+    // 让出事件循环，保证 React 逐步渲染（避免一股脑吐出）
+    await new Promise<void>((r) => {
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => r());
+      else setTimeout(r, 0);
+    });
   };
 
   while (true) {
@@ -310,7 +343,7 @@ export async function consumeAiSse(
     for (const line of lines) {
       if (!line.startsWith("data: ")) continue;
       try {
-        apply(JSON.parse(line.slice(6)) as AiStreamEvent);
+        await apply(JSON.parse(line.slice(6)) as AiStreamEvent);
       } catch (e) {
         if (e instanceof SyntaxError) continue;
         throw e;

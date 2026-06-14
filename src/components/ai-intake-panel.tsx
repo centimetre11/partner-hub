@@ -95,7 +95,7 @@ export function AiIntakePanel({
         { excluded: excludedRef.current }
       );
       const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[] };
-      setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace }]);
+      setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace: [...trace] }]);
       setProposal(turn.proposal);
       setReady(turn.ready);
       setQuestions(turn.questions ?? []);
@@ -103,7 +103,7 @@ export function AiIntakePanel({
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
-      setLiveTrace([]);
+      // 保留 trace 在消息里，仅清空进行中的流式 reply
       setReplyText("");
     }
   }

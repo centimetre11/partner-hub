@@ -107,10 +107,10 @@ export function AssistantDock() {
         setProposeScope(p.scope);
         setQuestions(p.questions ?? []);
         setReady(p.ready);
-        setMessages([...next, { role: "assistant", content: p.reply || finalReply, trace }]);
+        setMessages([...next, { role: "assistant", content: p.reply || finalReply, trace: [...trace] }]);
       } else {
         const q = data as QueryResult;
-        setMessages([...next, { role: "assistant", content: q.reply || finalReply, actions: q.actions, trace }]);
+        setMessages([...next, { role: "assistant", content: q.reply || finalReply, actions: q.actions, trace: [...trace] }]);
         if (q.actions?.length) router.refresh();
       }
     } catch (e) {
@@ -120,7 +120,6 @@ export function AssistantDock() {
       ]);
     } finally {
       setLoading(false);
-      setLiveTrace([]);
       setReplyText("");
     }
   }

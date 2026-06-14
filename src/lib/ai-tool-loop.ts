@@ -2,6 +2,7 @@ import type { ChatMessage, ToolCall, ToolDef } from "./ai";
 import { chatCompletion } from "./ai";
 import {
   emitReplyChunks,
+  emitTraceResultChunks,
   nextTraceId,
   summarizeToolResult,
   toolTraceStep,
@@ -74,12 +75,14 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
       try {
         const result = await opts.executeTool(tc);
         const summary = summarizeToolResult(tc.function.name, result);
+        await emitTraceResultChunks(opts.emit, step.id, summary);
         opts.emit?.({
           event: "trace_patch",
           id: step.id,
-          patch: { status: "done", result: summary },
+          patch: { status: "done" },
         });
-        await opts.onToolDone?.(tc, result);
+        // 提案抽取不阻塞下一步工具/流式输出
+        void opts.onToolDone?.(tc, result);
         opts.chat.push({ role: "tool", content: result, tool_call_id: tc.id });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

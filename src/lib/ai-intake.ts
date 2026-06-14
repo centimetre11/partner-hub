@@ -318,9 +318,10 @@ ${OUTPUT_SCHEMA}`;
       userId: opts.userId,
       maxSteps: MAX_RESEARCH_STEPS,
       emit: opts.emit,
-      onToolDone: async (tc, result) => {
-        const ops = await extractPatchFromTool(tc.function.name, result, opts.scope, opts.userId);
-        emitProposalPatch(opts.emit, ops);
+      onToolDone: (tc, result) => {
+        void extractPatchFromTool(tc.function.name, result, opts.scope, opts.userId).then((ops) => {
+          emitProposalPatch(opts.emit, ops);
+        });
       },
       executeTool: (tc) => runIntakeToolCall(tc, opts.userId),
     });
