@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
-import { nextTraceId, type TraceEmitter } from "./ai-trace";
+import { nextTraceId, emitTextChunks, type TraceEmitter } from "./ai-trace";
 import {
   buildIntakeTools,
   intakeEnrichmentSkillsForScope,
@@ -199,7 +199,21 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>): IntakeTurn {
   };
 }
 
-async function extractIntakeJson(chat: ChatMessage[], feature: string, userId?: string): Promise<IntakeTurn> {
+async function extractIntakeJson(
+  chat: ChatMessage[],
+  feature: string,
+  userId?: string,
+  emit?: TraceEmitter
+): Promise<IntakeTurn> {
+  emit?.({
+    event: "trace",
+    step: {
+      type: "reasoning",
+      id: nextTraceId("extract"),
+      content: "调研完成，正在整理 JSON 提案…",
+      status: "running",
+    },
+  });
   const extractChat = [...chat, { role: "user" as const, content: "请根据以上对话与调研结果，输出最终 JSON 提案（严格按 OUTPUT_SCHEMA，只输出 JSON）。" }];
   let content: string | null;
   try {
@@ -217,7 +231,9 @@ async function extractIntakeJson(chat: ChatMessage[], feature: string, userId?: 
       userId,
     }));
   }
-  return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
+  const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
+  emitTextChunks(emit, turn.reply);
+  return turn;
 }
 
 async function runIntakeToolCall(tc: ToolCall, userId?: string): Promise<string> {
@@ -294,7 +310,9 @@ ${OUTPUT_SCHEMA}`;
     });
     if (researchContent?.trim().startsWith("{")) {
       try {
-        return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(researchContent));
+        const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(researchContent));
+        emitTextChunks(opts.emit, turn.reply);
+        return turn;
       } catch {
         /* fall through */
       }
@@ -308,7 +326,7 @@ ${OUTPUT_SCHEMA}`;
         status: "done",
       },
     });
-    return extractIntakeJson(chat, feature, opts.userId);
+    return extractIntakeJson(chat, feature, opts.userId, opts.emit);
   }
 
   let content: string | null;
@@ -327,7 +345,50 @@ ${OUTPUT_SCHEMA}`;
       userId: opts.userId,
     }));
   }
-  return normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
+  const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
+  emitTextChunks(opts.emit, turn.reply);
+  return turn;
+}
+
+/** 检测是否应走「提案确认」模式（KMS 建档 / 补全画像 / 提炼伙伴） */
+export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
+  const text = messages
+    .filter((m) => m.role === "user")
+    .map((m) => m.content)
+    .join("\n");
+  if (/kms\.fineres\.com|pageId=\d+/i.test(text)) return true;
+  if (/建档|补全画像|提炼.{0,6}伙伴|录入|创建伙伴|新公司|丰富.{0,4}档案|完善.{0,4}画像/i.test(text)) return true;
+  return false;
+}
+
+export function detectProposeScope(messages: IntakeMessage[], partnerId?: string): IntakeScope {
+  if (partnerId) return "profile";
+  const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  if (/人物|联系人|权力地图|CTO|CEO/i.test(last)) return "powermap";
+  if (/商机|opportunity/i.test(last)) return "opportunity";
+  return "new_partner";
+}
+
+export type ProposeTurn = IntakeTurn & { scope: IntakeScope; mode: "propose" };
+
+/** 助手 propose 模式：多源调研 + 结构化提案（确认后才写库） */
+export async function runProposeTurn(opts: {
+  messages: IntakeMessage[];
+  partnerId?: string;
+  userId?: string;
+  emit?: TraceEmitter;
+  scope?: IntakeScope;
+}): Promise<ProposeTurn> {
+  const scope = opts.scope ?? detectProposeScope(opts.messages, opts.partnerId);
+  const turn = await runIntakeTurn({
+    scope,
+    partnerId: opts.partnerId,
+    messages: opts.messages,
+    today: new Date().toISOString().slice(0, 10),
+    userId: opts.userId,
+    emit: opts.emit,
+  });
+  return { ...turn, scope, mode: "propose" };
 }
 
 // ============ 应用 Intake 提案（人工确认后写库） ============

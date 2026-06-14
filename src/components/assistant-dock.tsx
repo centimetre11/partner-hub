@@ -2,11 +2,33 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { AiTraceStep } from "@/lib/ai-trace";
+import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
+import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { AiProcessTrace } from "@/components/ai-process-trace";
+import { ProposalConfirmZone } from "@/components/proposal-confirm-zone";
 
-type Msg = { role: "user" | "assistant"; content: string; actions?: string[]; trace?: AiTraceStep[] };
+type Msg = {
+  role: "user" | "assistant";
+  content: string;
+  actions?: string[];
+  trace?: AiTraceStep[];
+};
+
+type ProposeResult = {
+  mode: "propose";
+  reply: string;
+  proposal: IntakeProposal;
+  questions: string[];
+  ready: boolean;
+  scope: IntakeScope;
+};
+
+type QueryResult = {
+  mode: "query";
+  reply: string;
+  actions?: string[];
+};
 
 const SUGGESTIONS = [
   "哪些 Tier A 伙伴超过 2 周没跟进？",
@@ -22,11 +44,19 @@ export function AssistantDock() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [liveTrace, setLiveTrace] = useState<AiTraceStep[]>([]);
+  const [liveText, setLiveText] = useState("");
+  const [proposal, setProposal] = useState<IntakeProposal | null>(null);
+  const [proposeScope, setProposeScope] = useState<IntakeScope>("new_partner");
+  const [proposePartnerId, setProposePartnerId] = useState<string | undefined>();
+  const [questions, setQuestions] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const hasProposal = !!proposal;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, liveTrace]);
+  }, [messages, loading, liveTrace, liveText, proposal]);
 
   async function send(text?: string) {
     const content = (text ?? input).trim();
@@ -36,26 +66,65 @@ export function AssistantDock() {
     setInput("");
     setLoading(true);
     setLiveTrace([]);
+    setLiveText("");
     try {
       const res = await fetch("/api/ai/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({
-          messages: next.map(({ role, content }) => ({ role, content })),
+          messages: next.map(({ role, content: c }) => ({ role, content: c })),
           stream: true,
+          partnerId: proposePartnerId,
         }),
       });
-      const { data, trace } = await consumeAiSse(res, (_ev, steps) => setLiveTrace(steps));
-      const result = data as { reply: string; actions?: string[] };
-      setMessages([...next, { role: "assistant", content: result.reply, actions: result.actions, trace }]);
-      if (result.actions?.length) router.refresh();
+      const { data, trace, liveText: finalText } = await consumeAiSse(
+        res,
+        (_ev, state: AiStreamState) => {
+          setLiveTrace(state.trace);
+          setLiveText(state.liveText);
+        }
+      );
+
+      if ((data as ProposeResult).mode === "propose") {
+        const p = data as ProposeResult;
+        setProposal(p.proposal);
+        setProposeScope(p.scope);
+        setQuestions(p.questions ?? []);
+        setReady(p.ready);
+        setMessages([
+          ...next,
+          { role: "assistant", content: finalText || p.reply, trace },
+        ]);
+      } else {
+        const q = data as QueryResult;
+        setMessages([
+          ...next,
+          { role: "assistant", content: finalText || q.reply, actions: q.actions, trace },
+        ]);
+        if (q.actions?.length) router.refresh();
+      }
     } catch (e) {
-      setMessages([...next, { role: "assistant", content: `出错了：${e instanceof Error ? e.message : e}`, trace: liveTrace }]);
+      setMessages([
+        ...next,
+        { role: "assistant", content: `出错了：${e instanceof Error ? e.message : e}`, trace: liveTrace },
+      ]);
     } finally {
       setLoading(false);
       setLiveTrace([]);
+      setLiveText("");
     }
   }
+
+  function onApplied(partnerId: string) {
+    setProposal(null);
+    setQuestions([]);
+    setReady(false);
+    setProposePartnerId(partnerId);
+    router.refresh();
+    router.push(`/partners/${partnerId}`);
+  }
+
+  const dockWidth = hasProposal ? 640 : 420;
 
   return (
     <>
@@ -69,13 +138,18 @@ export function AssistantDock() {
       </button>
 
       {open && (
-        <div className="fixed bottom-24 right-6 z-40 w-[420px] max-w-[calc(100vw-3rem)] h-[560px] bg-white rounded-2xl shadow-2xl border border-zinc-200 flex flex-col overflow-hidden">
-          <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+        <div
+          className="fixed bottom-24 right-6 z-40 max-w-[calc(100vw-1.5rem)] h-[560px] bg-white rounded-2xl shadow-2xl border border-zinc-200 flex flex-col overflow-hidden transition-all duration-200"
+          style={{ width: dockWidth }}
+        >
+          <div className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white shrink-0">
             <div className="text-sm font-semibold">✦ AI 助手</div>
-            <div className="text-[11px] text-indigo-200">能查数据、改档案、建待办 — 处理过程实时可见</div>
+            <div className="text-[11px] text-indigo-200">
+              处理过程实时可见；建档类操作需确认后入库
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
             {messages.length === 0 && (
               <div className="space-y-2">
                 <div className="text-xs text-zinc-400 mb-2">试试这些：</div>
@@ -96,7 +170,7 @@ export function AssistantDock() {
                   <AiProcessTrace steps={m.trace} compact className="w-full max-w-[92%]" />
                 )}
                 <div
-                  className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                  className={`max-w-[92%] rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
                     m.role === "user" ? "bg-indigo-600 text-white ml-auto" : "bg-zinc-100 text-zinc-800"
                   }`}
                 >
@@ -112,19 +186,39 @@ export function AssistantDock() {
               </div>
             ))}
             {loading && (
-              <div className="w-full max-w-[92%]">
+              <div className="w-full max-w-[92%] space-y-2">
                 <AiProcessTrace steps={liveTrace} loading compact />
+                {liveText && (
+                  <div className="rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800">
+                    {liveText}
+                    <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
+                  </div>
+                )}
               </div>
             )}
             <div ref={bottomRef} />
           </div>
 
-          <div className="p-3 border-t border-zinc-100 flex gap-2">
+          {proposal && (
+            <div className="shrink-0 border-t border-zinc-100 px-3 py-2 max-h-[220px] overflow-y-auto bg-white">
+              <ProposalConfirmZone
+                proposal={proposal}
+                scope={proposeScope}
+                partnerId={proposePartnerId}
+                questions={questions}
+                ready={ready}
+                onApplied={onApplied}
+                sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
+              />
+            </div>
+          )}
+
+          <div className="p-3 border-t border-zinc-100 flex gap-2 shrink-0">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()}
-              placeholder="问问题，或下达指令…"
+              placeholder={proposal ? "继续补充信息，或确认下方入库…" : "问问题，或下达指令…"}
               className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button

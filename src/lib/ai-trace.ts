@@ -29,8 +29,15 @@ export type AiTracePatch = {
 export type AiStreamEvent =
   | { event: "trace"; step: AiTraceStep }
   | { event: "trace_patch"; id: string; patch: AiTracePatch }
+  | { event: "text_delta"; delta: string }
+  | { event: "text_done" }
   | { event: "done"; data: unknown }
   | { event: "error"; message: string };
+
+export type AiStreamState = {
+  trace: AiTraceStep[];
+  liveText: string;
+};
 
 export type TraceEmitter = (ev: AiStreamEvent) => void;
 
@@ -89,11 +96,20 @@ export function createSseResponse(handler: (emit: TraceEmitter) => Promise<void>
   });
 }
 
-/** 客户端：消费 SSE 并维护 trace 列表 */
+/** 将完整文本分块模拟流式输出（火山等非 SSE 模型用） */
+export function emitTextChunks(emit: TraceEmitter | undefined, text: string, chunkSize = 12) {
+  if (!emit || !text) return;
+  for (let i = 0; i < text.length; i += chunkSize) {
+    emit({ event: "text_delta", delta: text.slice(i, i + chunkSize) });
+  }
+  emit({ event: "text_done" });
+}
+
+/** 客户端：消费 SSE 并维护 trace + liveText */
 export async function consumeAiSse(
   res: Response,
-  onEvent: (ev: AiStreamEvent, trace: AiTraceStep[]) => void
-): Promise<{ data: unknown; trace: AiTraceStep[] }> {
+  onEvent: (ev: AiStreamEvent, state: AiStreamState) => void
+): Promise<{ data: unknown; trace: AiTraceStep[]; liveText: string }> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? "请求失败");
@@ -105,6 +121,9 @@ export async function consumeAiSse(
   let buffer = "";
   let result: unknown;
   const trace: AiTraceStep[] = [];
+  let liveText = "";
+
+  const state = (): AiStreamState => ({ trace: [...trace], liveText });
 
   const apply = (ev: AiStreamEvent) => {
     if (ev.event === "trace") {
@@ -112,12 +131,16 @@ export async function consumeAiSse(
     } else if (ev.event === "trace_patch") {
       const idx = trace.findIndex((s) => s.id === ev.id);
       if (idx >= 0) trace[idx] = { ...trace[idx], ...ev.patch } as AiTraceStep;
+    } else if (ev.event === "text_delta") {
+      liveText += ev.delta;
+    } else if (ev.event === "text_done") {
+      /* keep liveText */
     } else if (ev.event === "done") {
       result = ev.data;
     } else if (ev.event === "error") {
       throw new Error(ev.message);
     }
-    onEvent(ev, [...trace]);
+    onEvent(ev, state());
   };
 
   while (true) {
@@ -137,5 +160,5 @@ export async function consumeAiSse(
     }
   }
   if (result === undefined) throw new Error("流式响应未返回结果");
-  return { data: result, trace };
+  return { data: result, trace, liveText };
 }

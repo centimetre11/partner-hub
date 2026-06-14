@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import type { AiStreamState } from "@/lib/ai-trace";
+import { consumeAiSse } from "@/lib/ai-trace";
 import { createAgentFromBuilderAction } from "@/lib/agent-actions";
 import type { AgentBuilderDraft, AgentBuilderMessage, AgentBuilderTurn } from "@/lib/agent-builder";
 
@@ -65,6 +67,7 @@ export function AgentBuilder() {
   const [turn, setTurn] = useState<AgentBuilderTurn | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [liveText, setLiveText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const draftJson = useMemo(() => JSON.stringify(turn?.draft ?? null), [turn]);
 
@@ -76,21 +79,26 @@ export function AgentBuilder() {
     setInputText("");
     setLoading(true);
     setError(null);
+    setLiveText("");
     try {
       const res = await fetch("/api/ai/agent-builder", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ messages: next, stream: true }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "构建失败");
-      setTurn(data);
-      setMessages([...next, { role: "assistant", content: data.reply }]);
+      const { data, liveText: finalText } = await consumeAiSse(res, (_ev, state: AiStreamState) => {
+        setLiveText(state.liveText);
+      });
+      const turn = data as AgentBuilderTurn;
+      if (!turn) throw new Error("构建失败");
+      setTurn(turn);
+      setMessages([...next, { role: "assistant", content: finalText || turn.reply }]);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
+      setLiveText("");
     }
   }
 
@@ -123,7 +131,18 @@ export function AgentBuilder() {
               </div>
             </div>
           ))}
-          {loading && <div className="text-xs text-zinc-400 animate-pulse">正在梳理目标、匹配工具与技能、生成草案...</div>}
+          {loading && (
+            <div className="space-y-2">
+              {liveText ? (
+                <div className="max-w-[86%] rounded-xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800">
+                  {liveText}
+                  <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
+                </div>
+              ) : (
+                <div className="text-xs text-zinc-400 animate-pulse">正在梳理目标、匹配工具与技能、生成草案...</div>
+              )}
+            </div>
+          )}
           {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
           <div ref={bottomRef} />
         </div>

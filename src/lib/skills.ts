@@ -547,6 +547,7 @@ export const ASSISTANT_SKILLS = [
   "linkedin_search",
   "web_search",
   "read_kms",
+  "search_knowledge",
 ];
 
 /** AI 建档/补全画像时可用的只读调研工具（不含写库操作） */

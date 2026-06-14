@@ -1,6 +1,8 @@
 import type { Agent } from "@prisma/client";
 import { db } from "./db";
-import { chatCompletion, type ChatMessage, type ToolDef } from "./ai";
+import type { ChatMessage, ToolDef } from "./ai";
+import { runToolLoop } from "./ai-tool-loop";
+import type { TraceEmitter } from "./ai-trace";
 import {
   KIMI_BUILTIN_SEARCH,
   newSkillContext,
@@ -70,7 +72,11 @@ async function pushWebhook(url: string, title: string, content: string) {
 
 // ============ Agent 执行 ============
 
-export async function runAgent(agentId: string, triggeredBy: "manual" | "schedule" = "manual"): Promise<string> {
+export async function runAgent(
+  agentId: string,
+  triggeredBy: "manual" | "schedule" = "manual",
+  emit?: TraceEmitter
+): Promise<string> {
   const agent = await db.agent.findUniqueOrThrow({ where: { id: agentId }, include: { partner: true, createdBy: true } });
 
   const run = await db.agentRun.create({ data: { agentId: agent.id, status: "RUNNING" } });
@@ -122,42 +128,36 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
       agentName: agent.name,
     });
 
-    let output = "";
-    for (let i = 0; i < MAX_STEPS; i++) {
-      const { content, toolCalls, volcengineReplay } = await chatCompletion(chat, {
-        tools,
-        temperature: 0.3,
-        feature: `Agent 运行：${agent.name}`,
-        userId: agent.createdById ?? undefined,
-      });
-      if (!toolCalls.length) {
-        output = content ?? "（无输出）";
-        break;
-      }
-      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls, volcengineReplay });
-      for (const tc of toolCalls) {
-        let result: string;
-        if (tc.function.name === "$web_search") {
-          // Kimi 内置搜索：原样回传参数，搜索由平台侧执行
-          result = tc.function.arguments;
-        } else {
-          let args: Record<string, unknown> = {};
-          try {
-            args = JSON.parse(tc.function.arguments || "{}");
-          } catch {}
-          result = await runSkill(tc.function.name, args, ctx);
-          toolLog.push({ tool: tc.function.name, args, result: result.slice(0, 500) });
-          if (tc.function.name === "create_document") documentSaved = true;
+    let output = (await runToolLoop({
+      chat,
+      tools,
+      temperature: 0.3,
+      feature: `Agent 运行：${agent.name}`,
+      userId: agent.createdById ?? undefined,
+      maxSteps: MAX_STEPS,
+      emit,
+      executeTool: async (tc) => {
+        if (tc.function.name === "$web_search") return tc.function.arguments;
+        let args: Record<string, unknown> = {};
+        try {
+          args = JSON.parse(tc.function.arguments || "{}");
+        } catch {
+          /* ignore */
         }
-        chat.push({ role: "tool", content: result, tool_call_id: tc.id });
-      }
-      if (i === MAX_STEPS - 1) {
-        output = "（执行步骤达到上限，任务可能未完成。已执行的动作见日志。）";
-      }
-    }
+        const result = await runSkill(tc.function.name, args, ctx);
+        toolLog.push({ tool: tc.function.name, args, result: result.slice(0, 500) });
+        if (tc.function.name === "create_document") documentSaved = true;
+        return result;
+      },
+    })) ?? "（执行步骤达到上限，任务可能未完成。已执行的动作见日志。）";
 
     if (ctx.actions.length) {
-      output += `\n\n---\n已执行的动作：\n${ctx.actions.map((a) => `- ${a}`).join("\n")}`;
+      const appendix = `\n\n---\n已执行的动作：\n${ctx.actions.map((a) => `- ${a}`).join("\n")}`;
+      output += appendix;
+      if (emit) {
+        emit({ event: "text_delta", delta: appendix });
+        emit({ event: "text_done" });
+      }
     }
 
     await db.agentRun.update({

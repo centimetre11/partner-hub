@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { AiStreamState } from "@/lib/ai-trace";
+import { consumeAiSse } from "@/lib/ai-trace";
 
 export function AiPanel({ partnerId, missing }: { partnerId: string; missing: string[] }) {
   const router = useRouter();
   const [questions, setQuestions] = useState<string[] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState<"q" | "s" | null>(null);
+  const [liveText, setLiveText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function genQuestions() {
@@ -32,20 +35,26 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
   async function genSummary() {
     setLoading("s");
     setError(null);
+    setLiveText("");
+    setSummary(null);
     try {
       const res = await fetch("/api/ai/summary", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partnerId }),
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+        body: JSON.stringify({ partnerId, stream: true }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "生成失败");
-      setSummary(data.summary);
+      const { data, liveText: finalText } = await consumeAiSse(res, (_ev, state: AiStreamState) => {
+        setLiveText(state.liveText);
+        setSummary(state.liveText);
+      });
+      const result = data as { summary: string };
+      setSummary(finalText || result.summary);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(null);
+      setLiveText("");
     }
   }
 
@@ -82,7 +91,16 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
           </ol>
         </div>
       )}
-      {summary && (
+      {loading === "s" && liveText && (
+        <div className="mt-4 bg-white/10 rounded-lg p-3.5">
+          <div className="text-xs font-semibold mb-2">动态摘要生成中…</div>
+          <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">
+            {liveText}
+            <span className="inline-block w-1 h-3 bg-indigo-200 ml-0.5 animate-pulse align-middle" />
+          </p>
+        </div>
+      )}
+      {summary && loading !== "s" && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
           <div className="text-xs font-semibold mb-2">动态摘要（已存入时间线）：</div>
           <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">{summary}</p>

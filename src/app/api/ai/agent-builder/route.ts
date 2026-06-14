@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AIError } from "@/lib/ai";
+import { createSseResponse } from "@/lib/ai-trace";
 import { runAgentBuilderTurn, type AgentBuilderMessage } from "@/lib/agent-builder";
 import { getSessionUserId } from "@/lib/session";
 
@@ -7,10 +8,16 @@ export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
-  const { messages } = (await req.json()) as { messages: AgentBuilderMessage[] };
+  const { messages, stream } = (await req.json()) as { messages: AgentBuilderMessage[]; stream?: boolean };
   if (!Array.isArray(messages)) return NextResponse.json({ error: "对话内容无效" }, { status: 400 });
 
   try {
+    if (stream) {
+      return createSseResponse(async (emit) => {
+        const turn = await runAgentBuilderTurn({ messages, userId: uid, emit });
+        emit({ event: "done", data: turn });
+      });
+    }
     const turn = await runAgentBuilderTurn({ messages, userId: uid });
     return NextResponse.json(turn);
   } catch (e) {

@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CONTACT_ROLE_LABELS, attitudeLabel } from "@/lib/constants";
 import type { IntakeProposal, IntakeScope } from "@/lib/ai-intake";
-import type { AiTraceStep } from "@/lib/ai-trace";
+import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { AiProcessTrace } from "@/components/ai-process-trace";
+import { ProposalConfirmZone } from "@/components/proposal-confirm-zone";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[] };
 
@@ -43,83 +43,6 @@ const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = 
   },
 };
 
-function Pill({ children, tone }: { children: React.ReactNode; tone: string }) {
-  return <span className={`inline-block text-[11px] px-1.5 py-0.5 rounded ${tone}`}>{children}</span>;
-}
-
-function ProposalPreview({ p }: { p: IntakeProposal }) {
-  const empty =
-    !p.partnerName &&
-    !p.fields.length &&
-    !p.contacts.length &&
-    !p.opportunities.length &&
-    !p.todos.length &&
-    !p.trainings.length &&
-    !p.solutions.length;
-  if (empty) return <p className="text-xs text-zinc-400">还没有可入库的内容，继续补充信息吧。</p>;
-
-  return (
-    <div className="space-y-1.5 text-sm">
-      {p.partnerName && (
-        <div className="border-l-4 border-l-indigo-400 bg-zinc-50 rounded px-2.5 py-1.5">
-          <Pill tone="bg-indigo-100 text-indigo-700">新建伙伴</Pill> <span className="font-medium">{p.partnerName}</span>
-        </div>
-      )}
-      {p.fields.map((f, i) => (
-        <div key={`f${i}`} className="border-l-4 border-l-amber-400 bg-zinc-50 rounded px-2.5 py-1.5">
-          <span className="font-medium text-zinc-800">{f.label}</span>
-          {f.oldValue ? <span className="text-zinc-400 line-through mx-1">{f.oldValue}</span> : null}
-          <span className="text-emerald-700">→ {f.newValue}</span>
-        </div>
-      ))}
-      {p.contacts.map((c, i) => (
-        <div key={`c${i}`} className="border-l-4 border-l-emerald-400 bg-zinc-50 rounded px-2.5 py-1.5">
-          <Pill tone="bg-emerald-100 text-emerald-700">{c.action === "update" ? "更新人物" : "人物"}</Pill>{" "}
-          <span className="font-medium">{c.name}</span>
-          <span className="text-zinc-500 text-xs ml-1">
-            {[
-              c.title,
-              c.department,
-              c.role && (CONTACT_ROLE_LABELS[c.role] ?? c.role),
-              typeof c.attitude === "number" && `态度:${attitudeLabel(c.attitude)}`,
-              c.reportsToName && `汇报给:${c.reportsToName}`,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        </div>
-      ))}
-      {p.opportunities.map((o, i) => (
-        <div key={`o${i}`} className="border-l-4 border-l-sky-400 bg-zinc-50 rounded px-2.5 py-1.5">
-          <Pill tone="bg-sky-100 text-sky-700">{o.action === "update" ? "更新商机" : "商机"}</Pill>{" "}
-          <span className="font-medium">{o.name}</span>
-          <span className="text-zinc-500 text-xs ml-1">
-            {[o.client && `客户:${o.client}`, o.amount, o.stage, o.nextStep && `下一步:${o.nextStep}`].filter(Boolean).join(" · ")}
-          </span>
-        </div>
-      ))}
-      {p.trainings.map((t, i) => (
-        <div key={`tr${i}`} className="border-l-4 border-l-orange-400 bg-zinc-50 rounded px-2.5 py-1.5">
-          <Pill tone="bg-orange-100 text-orange-700">培训</Pill> <span className="font-medium">{t.person}</span>
-          <span className="text-zinc-500 text-xs ml-1">{[t.targetCert, t.deadline].filter(Boolean).join(" · ")}</span>
-        </div>
-      ))}
-      {p.solutions.map((s, i) => (
-        <div key={`s${i}`} className="border-l-4 border-l-purple-400 bg-zinc-50 rounded px-2.5 py-1.5">
-          <Pill tone="bg-purple-100 text-purple-700">联合方案</Pill> <span className="font-medium">{s.name}</span>
-          <span className="text-zinc-500 text-xs ml-1">{s.targetCustomer}</span>
-        </div>
-      ))}
-      {p.todos.map((t, i) => (
-        <div key={`t${i}`} className="border-l-4 border-l-pink-400 bg-zinc-50 rounded px-2.5 py-1.5">
-          <Pill tone="bg-pink-100 text-pink-700">待办</Pill> <span>{t.title}</span>
-          {t.dueDate && <span className="text-zinc-400 text-xs ml-1">截止 {t.dueDate}</span>}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function AiIntakePanel({
   scope,
   partnerId,
@@ -136,17 +59,17 @@ export function AiIntakePanel({
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<IntakeProposal | null>(null);
   const [ready, setReady] = useState(false);
   const [questions, setQuestions] = useState<string[]>([]);
   const [liveTrace, setLiveTrace] = useState<AiTraceStep[]>([]);
+  const [liveText, setLiveText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading, liveTrace]);
+  }, [messages, loading, liveTrace, liveText, proposal]);
 
   async function send() {
     const text = input.trim();
@@ -157,15 +80,25 @@ export function AiIntakePanel({
     setLoading(true);
     setError(null);
     setLiveTrace([]);
+    setLiveText("");
     try {
       const res = await fetch("/api/ai/intake", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({ scope, partnerId, messages: next, stream: true }),
       });
-      const { data, trace } = await consumeAiSse(res, (_ev, steps) => setLiveTrace(steps));
+      const { data, trace, liveText: finalText } = await consumeAiSse(
+        res,
+        (_ev, state: AiStreamState) => {
+          setLiveTrace(state.trace);
+          setLiveText(state.liveText);
+        }
+      );
       const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[] };
-      setMessages((m) => [...m, { role: "assistant", content: turn.reply, trace }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", content: finalText || turn.reply, trace },
+      ]);
       setProposal(turn.proposal);
       setReady(turn.ready);
       setQuestions(turn.questions ?? []);
@@ -174,35 +107,15 @@ export function AiIntakePanel({
     } finally {
       setLoading(false);
       setLiveTrace([]);
+      setLiveText("");
     }
   }
 
-  async function apply() {
-    if (!proposal) return;
-    setApplying(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/ai/intake/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scope,
-          partnerId,
-          proposal,
-          sourceText: messages.filter((m) => m.role === "user").map((m) => m.content).join("\n"),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "写入失败");
-      if (onDone) onDone(data.partnerId);
-      else {
-        router.refresh();
-        onClose();
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setApplying(false);
+  function handleApplied(id: string) {
+    if (onDone) onDone(id);
+    else {
+      router.refresh();
+      onClose();
     }
   }
 
@@ -212,17 +125,15 @@ export function AiIntakePanel({
         className="bg-white w-full max-w-xl h-full shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 头 */}
-        <div className="px-5 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+        <div className="px-5 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white shrink-0">
           <div>
             <div className="text-sm font-semibold flex items-center gap-1.5">✦ {meta.title}</div>
-            <div className="text-xs text-indigo-200 mt-0.5">像聊天一样描述，我会自动调研并整理，确认后才入库</div>
+            <div className="text-xs text-indigo-200 mt-0.5">多源调研 · 流式输出 · 勾选确认后入库</div>
           </div>
           <button onClick={onClose} className="text-indigo-100 hover:text-white text-xl leading-none">×</button>
         </div>
 
-        {/* 对话 */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3 min-h-0">
           {messages.length === 0 && (
             <div className="text-sm text-zinc-400 whitespace-pre-wrap leading-relaxed bg-zinc-50 rounded-lg p-4">
               {meta.placeholder}
@@ -243,19 +154,12 @@ export function AiIntakePanel({
             </div>
           ))}
           {loading && (
-            <div className="w-full max-w-[85%]">
+            <div className="w-full max-w-[85%] space-y-2">
               <AiProcessTrace steps={liveTrace} loading compact />
-            </div>
-          )}
-
-          {/* 实时提案预览 */}
-          {proposal && (
-            <div className="mt-2 rounded-xl border border-zinc-200 p-3.5">
-              <div className="text-xs font-semibold text-zinc-500 mb-2">待录入内容预览</div>
-              <ProposalPreview p={proposal} />
-              {questions.length > 0 && !ready && (
-                <div className="mt-3 text-xs text-amber-700 bg-amber-50 rounded-lg p-2.5">
-                  补充这些会更完整：{questions.join("；")}
+              {liveText && (
+                <div className="rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-zinc-100 text-zinc-800">
+                  {liveText}
+                  <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
                 </div>
               )}
             </div>
@@ -263,19 +167,21 @@ export function AiIntakePanel({
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
-        {/* 输入区 */}
-        <div className="border-t px-5 py-3 space-y-2">
-          {proposal && (
-            <button
-              onClick={apply}
-              disabled={applying}
-              className={`w-full rounded-lg py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                ready ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-              }`}
-            >
-              {applying ? "写入中…" : ready ? "✓ 确认入库" : "信息够了，直接入库"}
-            </button>
-          )}
+        {proposal && (
+          <div className="shrink-0 border-t px-4 py-3 max-h-[240px] overflow-y-auto">
+            <ProposalConfirmZone
+              proposal={proposal}
+              scope={scope}
+              partnerId={partnerId}
+              questions={questions}
+              ready={ready}
+              onApplied={handleApplied}
+              sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
+            />
+          </div>
+        )}
+
+        <div className="border-t px-5 py-3 shrink-0">
           <div className="flex gap-2 items-end">
             <textarea
               value={input}
@@ -287,7 +193,7 @@ export function AiIntakePanel({
                 }
               }}
               rows={2}
-              placeholder="输入后按 ⌘/Ctrl + Enter 发送…"
+              placeholder={proposal ? "继续补充，或确认下方入库…" : "输入后按 ⌘/Ctrl + Enter 发送…"}
               className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             <button

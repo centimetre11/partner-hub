@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ExtractionProposal } from "@/lib/proposals";
 import { ProposalView } from "@/components/proposal-view";
+import { normalizedToExtraction, type NormalizedProposal } from "@/lib/proposal-normalize";
 import { CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS, attitudeLabel, stageName } from "@/lib/constants";
 import { attitudeDotClass } from "@/components/power-map";
 
@@ -48,15 +49,16 @@ export function MeetingClient({ partner }: { partner: MeetingPartner }) {
     }
   }
 
-  async function archive(filtered: ExtractionProposal) {
+  async function archive(filtered: NormalizedProposal) {
+    const proposalPayload = normalizedToExtraction(filtered, partner.id);
     const res = await fetch("/api/ai/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         partnerId: partner.id,
         proposal: {
-          ...filtered,
-          summaryTitle: filtered.summaryTitle || `会议纪要（${startedAt.toLocaleDateString("zh-CN")}）`,
+          ...proposalPayload,
+          summaryTitle: proposalPayload.summaryTitle || `会议纪要（${startedAt.toLocaleDateString("zh-CN")}）`,
         },
         eventType: "MEETING",
         sourceText: notes,

@@ -1,4 +1,5 @@
 import { chatJson } from "./ai";
+import { emitTextChunks, type TraceEmitter } from "./ai-trace";
 import { db } from "./db";
 import { resolveAgentSkills } from "./skill-resolver";
 
@@ -90,6 +91,7 @@ function clampWeekday(value: unknown) {
 export async function runAgentBuilderTurn(opts: {
   messages: AgentBuilderMessage[];
   userId?: string;
+  emit?: TraceEmitter;
 }): Promise<AgentBuilderTurn> {
   const [{ toolOptions, promptSkillOptions }, partners, knowledge] = await Promise.all([
     resolveAgentSkills(),
@@ -155,7 +157,7 @@ ${OUTPUT_SCHEMA}`;
   const skillIds = Array.isArray(draft.skillIds) ? draft.skillIds.filter((id) => promptSkillIds.has(id)) : [];
   const scopeType = draft.scopeType === "PARTNER" && partnerIds.has(draft.partnerId) ? "PARTNER" : "ALL";
 
-  return {
+  const turn: AgentBuilderTurn = {
     reply: raw.reply || "我先整理成一个 Agent 草案，请确认还需要补充什么。",
     questions: Array.isArray(raw.questions) ? raw.questions : [],
     ready: !!raw.ready && !!draft.name && !!draft.instructions,
@@ -165,10 +167,10 @@ ${OUTPUT_SCHEMA}`;
       skills,
       skillIds,
       trigger: draft.trigger === "SCHEDULE" ? "SCHEDULE" : "MANUAL",
-      frequency: ["HOURLY", "DAILY", "WEEKLY"].includes(draft.frequency) ? draft.frequency : "WEEKLY",
+      frequency: (["HOURLY", "DAILY", "WEEKLY"].includes(draft.frequency) ? draft.frequency : "WEEKLY") as AgentBuilderDraft["frequency"],
       runHour: clampHour(draft.runHour),
       runWeekday: clampWeekday(draft.runWeekday),
-      scopeType,
+      scopeType: scopeType as AgentBuilderDraft["scopeType"],
       partnerId: scopeType === "PARTNER" ? draft.partnerId : "",
       shared: draft.shared !== false,
       webhookUrl: draft.webhookUrl || "",
@@ -177,4 +179,6 @@ ${OUTPUT_SCHEMA}`;
       rationale: draft.rationale || "",
     },
   };
+  emitTextChunks(opts.emit, turn.reply);
+  return turn;
 }

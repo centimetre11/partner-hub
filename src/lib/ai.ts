@@ -376,6 +376,126 @@ async function volcengineResponsesCompletion(
   return parseVolcengineResponse(data);
 }
 
+function simulateTextDeltas(text: string | null, onDelta?: (delta: string) => void) {
+  if (!text || !onDelta) return;
+  const size = 14;
+  for (let i = 0; i < text.length; i += size) {
+    onDelta(text.slice(i, i + size));
+  }
+}
+
+async function openaiChatCompletionStream(
+  api: ResolvedAiApi,
+  messages: ChatMessage[],
+  opts: {
+    tools?: (ToolDef | Record<string, unknown>)[];
+    jsonMode?: boolean;
+    temperature?: number;
+    feature?: string;
+    userId?: string;
+    onDelta?: (delta: string) => void;
+  }
+): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+  const body: Record<string, unknown> = {
+    model: api.model,
+    messages,
+    temperature: opts.temperature ?? 0.2,
+    stream: true,
+  };
+  if (opts.tools?.length) body.tools = opts.tools;
+  if (opts.jsonMode) body.response_format = { type: "json_object" };
+
+  let res: Response;
+  try {
+    res = await fetch(`${api.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${api.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: msg });
+    throw new AIError(`AI 接口调用失败：${msg}`);
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    await recordBestEffort({
+      api,
+      feature: opts.feature ?? "未标注 AI 调用",
+      userId: opts.userId,
+      status: "FAILED",
+      error: `HTTP ${res.status}: ${text.slice(0, 500)}`,
+    });
+    throw new AIError(`AI 接口调用失败（${res.status}）：${text.slice(0, 500)}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new AIError("流式响应不可用");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  const toolAcc = new Map<number, ToolCall>();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(payload) as Record<string, unknown>;
+        const choice = (parsed.choices as Array<Record<string, unknown>> | undefined)?.[0];
+        const delta = choice?.delta as Record<string, unknown> | undefined;
+        if (!delta) continue;
+        if (typeof delta.content === "string" && delta.content) {
+          content += delta.content;
+          opts.onDelta?.(delta.content);
+        }
+        const tcs = delta.tool_calls as Array<Record<string, unknown>> | undefined;
+        if (tcs) {
+          for (const tc of tcs) {
+            const idx = Number(tc.index ?? 0);
+            if (!toolAcc.has(idx)) {
+              toolAcc.set(idx, {
+                id: "",
+                type: "function",
+                function: { name: "", arguments: "" },
+              });
+            }
+            const acc = toolAcc.get(idx)!;
+            if (tc.id) acc.id = String(tc.id);
+            const fn = tc.function as Record<string, unknown> | undefined;
+            if (fn?.name) acc.function.name += String(fn.name);
+            if (fn?.arguments) acc.function.arguments += String(fn.arguments);
+          }
+        }
+      } catch {
+        /* skip malformed chunk */
+      }
+    }
+  }
+
+  await recordBestEffort({
+    api,
+    feature: opts.feature ?? "未标注 AI 调用",
+    userId: opts.userId,
+    status: "SUCCESS",
+  });
+
+  const toolCalls = [...toolAcc.values()].filter((t) => t.function.name);
+  return { content: content || null, toolCalls };
+}
+
 export async function chatCompletion(
   messages: ChatMessage[],
   opts: {
@@ -384,12 +504,19 @@ export async function chatCompletion(
     temperature?: number;
     feature?: string;
     userId?: string;
+    onDelta?: (delta: string) => void;
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   const api = await resolveAiApi();
 
   if (api.provider === "volcengine") {
-    return volcengineResponsesCompletion(api, messages, opts);
+    const result = await volcengineResponsesCompletion(api, messages, opts);
+    if (opts.onDelta && result.content) simulateTextDeltas(result.content, opts.onDelta);
+    return result;
+  }
+
+  if (opts.onDelta) {
+    return openaiChatCompletionStream(api, messages, opts);
   }
 
   const body: Record<string, unknown> = {
