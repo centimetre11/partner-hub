@@ -6,6 +6,8 @@ export type ChatMessage = {
   content: string | null;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  /** 火山 Responses API 上一轮 output，多轮 tool calling 时必须原样回放 */
+  volcengineReplay?: unknown[];
 };
 
 export type ToolCall = {
@@ -182,6 +184,15 @@ function toVolcengineTools(tools: (ToolDef | Record<string, unknown>)[]): Record
   return tools.map(toVolcengineTool);
 }
 
+function prepareVolcengineReplay(output: Array<Record<string, unknown>>): unknown[] {
+  const statusTypes = new Set(["reasoning", "message", "function_call", "function_call_output", "web_search_call"]);
+  return output.map((item) => {
+    const replay: Record<string, unknown> = { ...item };
+    if (statusTypes.has(String(item.type)) && !replay.status) replay.status = "completed";
+    return replay;
+  });
+}
+
 function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
   const input: unknown[] = [];
   for (const m of messages) {
@@ -194,6 +205,10 @@ function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
       continue;
     }
     if (m.role === "assistant") {
+      if (m.volcengineReplay?.length) {
+        input.push(...m.volcengineReplay);
+        continue;
+      }
       if (m.tool_calls?.length) {
         for (const tc of m.tool_calls) {
           input.push({
@@ -201,13 +216,16 @@ function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
             call_id: tc.id,
             name: tc.function.name,
             arguments: tc.function.arguments,
+            status: "completed",
           });
         }
       }
       if (m.content) {
         input.push({
+          type: "message",
           role: "assistant",
           content: [{ type: "output_text", text: m.content }],
+          status: "completed",
         });
       }
       continue;
@@ -217,13 +235,18 @@ function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
         type: "function_call_output",
         call_id: m.tool_call_id,
         output: m.content ?? "",
+        status: "completed",
       });
     }
   }
   return input;
 }
 
-function parseVolcengineResponse(data: Record<string, unknown>): { content: string | null; toolCalls: ToolCall[] } {
+function parseVolcengineResponse(data: Record<string, unknown>): {
+  content: string | null;
+  toolCalls: ToolCall[];
+  volcengineReplay: unknown[];
+} {
   const output = (data.output ?? []) as Array<Record<string, unknown>>;
   const textParts: string[] = [];
   const toolCalls: ToolCall[] = [];
@@ -250,6 +273,7 @@ function parseVolcengineResponse(data: Record<string, unknown>): { content: stri
   return {
     content: textParts.length ? textParts.join("\n") : null,
     toolCalls,
+    volcengineReplay: prepareVolcengineReplay(output),
   };
 }
 
@@ -275,7 +299,7 @@ async function volcengineResponsesCompletion(
     feature?: string;
     userId?: string;
   }
-): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   const extra = parseExtraConfig(api.extraConfig);
   const systemText = messages
     .filter((m) => m.role === "system")
@@ -321,6 +345,10 @@ async function volcengineResponsesCompletion(
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    if (process.env.DEBUG_VOLC_REQUEST === "1") {
+      console.error("[volcengine] failed request input:", JSON.stringify(body.input).slice(0, 6000));
+      console.error("[volcengine] response:", text.slice(0, 2000));
+    }
     await recordBestEffort({
       api,
       feature: opts.feature ?? "未标注 AI 调用",
@@ -332,6 +360,11 @@ async function volcengineResponsesCompletion(
   }
 
   const data = (await res.json()) as Record<string, unknown>;
+  if (process.env.DEBUG_VOLC_REQUEST === "1") {
+    const output = (data.output ?? []) as Array<Record<string, unknown>>;
+    console.error("[volcengine] output types:", output.map((o) => o.type).join(", "));
+    console.error("[volcengine] output json:", JSON.stringify(output).slice(0, 4000));
+  }
   const usage = readVolcengineTokenUsage(data);
   await recordBestEffort({
     api,
@@ -352,7 +385,7 @@ export async function chatCompletion(
     feature?: string;
     userId?: string;
   } = {}
-): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   const api = await resolveAiApi();
 
   if (api.provider === "volcengine") {

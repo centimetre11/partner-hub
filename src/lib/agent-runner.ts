@@ -124,7 +124,7 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
 
     let output = "";
     for (let i = 0; i < MAX_STEPS; i++) {
-      const { content, toolCalls } = await chatCompletion(chat, {
+      const { content, toolCalls, volcengineReplay } = await chatCompletion(chat, {
         tools,
         temperature: 0.3,
         feature: `Agent 运行：${agent.name}`,
@@ -134,7 +134,7 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
         output = content ?? "（无输出）";
         break;
       }
-      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls });
+      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls, volcengineReplay });
       for (const tc of toolCalls) {
         let result: string;
         if (tc.function.name === "$web_search") {

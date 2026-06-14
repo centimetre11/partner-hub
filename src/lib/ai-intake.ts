@@ -271,7 +271,7 @@ ${OUTPUT_SCHEMA}`;
   if (useResearch) {
     const tools = await buildIntakeTools(enrichmentSkills);
     for (let i = 0; i < MAX_RESEARCH_STEPS; i++) {
-      const { content, toolCalls } = await chatCompletion(chat, {
+      const { content, toolCalls, volcengineReplay } = await chatCompletion(chat, {
         tools,
         temperature: 0.3,
         feature,
@@ -287,7 +287,7 @@ ${OUTPUT_SCHEMA}`;
         }
         break;
       }
-      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls });
+      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls, volcengineReplay });
       for (const tc of toolCalls) {
         const result = await runIntakeToolCall(tc, opts.userId);
         chat.push({ role: "tool", content: result, tool_call_id: tc.id });

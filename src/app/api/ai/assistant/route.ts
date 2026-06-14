@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   try {
     for (let i = 0; i < 8; i++) {
-      const { content, toolCalls } = await chatCompletion(chat, {
+      const { content, toolCalls, volcengineReplay } = await chatCompletion(chat, {
         tools,
         temperature: 0.3,
         feature: "全局 AI 助手",
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         }
         return NextResponse.json({ reply: content ?? "（无回复）", actions: ctx.actions });
       }
-      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls });
+      chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls, volcengineReplay });
       for (const tc of toolCalls) {
         let result: string;
         if (tc.function.name === "$web_search") {
