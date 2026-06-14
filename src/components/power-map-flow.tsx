@@ -22,8 +22,8 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS, attitudeLabel } from "@/lib/constants";
-import { attitudeDotClass, PowerMapLegend, type PowerMapContact } from "@/components/power-map";
+import { CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS, attitudeLabel, roleInfluence } from "@/lib/constants";
+import { attitudeDotClass, roleInfluenceStyle, PowerMapLegend, type PowerMapContact } from "@/components/power-map";
 import {
   moveContactAction,
   setReportsToAction,
@@ -54,13 +54,15 @@ type NodeData = { c: PowerMapContact };
 // 自定义节点：复用权力地图卡片样式（左上角色代码、右上态度评分）
 function ContactNode({ data }: NodeProps<Node<NodeData>>) {
   const c = data.c;
+  const s = roleInfluenceStyle(c.role);
   return (
     <div className="relative pm-node">
       {/* 顶部：作为下级的连接点（上级连到这里） */}
       <Handle type="target" position={Position.Top} className="pm-handle" />
+      {/* 角色代码：影响力越高颜色越深（D>A>E>I>S） */}
       <span
-        className="absolute -top-2 -left-2 w-5 h-5 rounded-sm bg-green-600 text-white text-[11px] font-bold flex items-center justify-center z-10"
-        title={CONTACT_ROLE_LABELS[c.role] ?? c.role}
+        className={`absolute -top-2 -left-2 rounded-sm text-white font-bold flex items-center justify-center z-10 ${s.badge}`}
+        title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role}（影响力 ${roleInfluence(c.role)}/5）`}
       >
         {CONTACT_ROLE_CODES[c.role] ?? "I"}
       </span>
@@ -70,9 +72,10 @@ function ContactNode({ data }: NodeProps<Node<NodeData>>) {
       >
         {c.attitude}
       </span>
-      <div className="border border-zinc-400 bg-white px-4 py-2 min-w-[120px] text-center shadow-sm rounded">
-        <div className="text-sm font-medium text-zinc-900 whitespace-nowrap">{c.name}</div>
-        <div className="text-xs text-zinc-500 whitespace-nowrap">{c.department || c.title || "—"}</div>
+      {/* 卡片大小随影响力变化 */}
+      <div className={`border bg-white text-center shadow-sm rounded ${s.card}`}>
+        <div className={`font-medium text-zinc-900 whitespace-nowrap ${s.name}`}>{c.name}</div>
+        <div className={`text-zinc-500 whitespace-nowrap ${s.sub}`}>{c.department || c.title || "—"}</div>
       </div>
       {/* 底部：作为上级的连接点（从这里拖到下级） */}
       <Handle type="source" position={Position.Bottom} className="pm-handle" />

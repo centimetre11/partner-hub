@@ -1,4 +1,11 @@
-import { CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS, ATTITUDE_LABELS, attitudeLabel } from "@/lib/constants";
+import {
+  CONTACT_ROLE_CODES,
+  CONTACT_ROLE_LABELS,
+  ATTITUDE_LABELS,
+  attitudeLabel,
+  roleInfluence,
+  CONTACT_ROLES_BY_INFLUENCE,
+} from "@/lib/constants";
 
 export type PowerMapContact = {
   id: string;
@@ -19,13 +26,58 @@ export function attitudeDotClass(a: number | null | undefined) {
   return "bg-zinc-400 text-white"; // 未接触或中立
 }
 
+// 角色影响力 → 节点视觉：影响力越高，卡片越大、角色徽标越深
+// D(决策者) > A(审批者) > E(评估者) > I(影响者) > S(支持者)
+export type RoleInfluenceStyle = { card: string; name: string; sub: string; badge: string };
+
+export function roleInfluenceStyle(role: string): RoleInfluenceStyle {
+  switch (roleInfluence(role)) {
+    case 5: // D 决策者
+      return {
+        card: "min-w-[160px] px-5 py-3 border-indigo-500 ring-2 ring-indigo-200",
+        name: "text-base",
+        sub: "text-xs",
+        badge: "w-7 h-7 text-sm bg-indigo-700",
+      };
+    case 4: // A 审批者
+      return {
+        card: "min-w-[144px] px-4 py-2.5 border-indigo-400",
+        name: "text-sm",
+        sub: "text-xs",
+        badge: "w-6 h-6 text-xs bg-indigo-600",
+      };
+    case 3: // E 评估者
+      return {
+        card: "min-w-[128px] px-4 py-2 border-zinc-400",
+        name: "text-sm",
+        sub: "text-xs",
+        badge: "w-5 h-5 text-[11px] bg-indigo-500",
+      };
+    case 2: // I 影响者
+      return {
+        card: "min-w-[116px] px-3.5 py-1.5 border-zinc-300",
+        name: "text-[13px]",
+        sub: "text-[11px]",
+        badge: "w-5 h-5 text-[10px] bg-indigo-400",
+      };
+    default: // S 支持者(1) / 未知(0)
+      return {
+        card: "min-w-[106px] px-3 py-1.5 border-zinc-300",
+        name: "text-xs",
+        sub: "text-[11px]",
+        badge: "w-4.5 h-4.5 text-[10px] bg-indigo-300",
+      };
+  }
+}
+
 function NodeCard({ c }: { c: PowerMapContact }) {
+  const s = roleInfluenceStyle(c.role);
   return (
     <div className="relative inline-block">
-      {/* 角色代码（左上角） */}
+      {/* 角色代码（左上角）：影响力越高颜色越深 */}
       <span
-        className="absolute -top-2 -left-2 w-5 h-5 rounded-sm bg-green-600 text-white text-[11px] font-bold flex items-center justify-center z-10"
-        title={CONTACT_ROLE_LABELS[c.role] ?? c.role}
+        className={`absolute -top-2 -left-2 rounded-sm text-white font-bold flex items-center justify-center z-10 ${s.badge}`}
+        title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role}（影响力 ${roleInfluence(c.role)}/5）`}
       >
         {CONTACT_ROLE_CODES[c.role] ?? "I"}
       </span>
@@ -36,9 +88,9 @@ function NodeCard({ c }: { c: PowerMapContact }) {
       >
         {c.attitude}
       </span>
-      <div className="border border-zinc-400 bg-white px-4 py-2 min-w-[110px] text-center shadow-sm">
-        <div className="text-sm font-medium text-zinc-900 whitespace-nowrap">{c.name}</div>
-        <div className="text-xs text-zinc-500 whitespace-nowrap">
+      <div className={`border bg-white text-center shadow-sm ${s.card}`}>
+        <div className={`font-medium text-zinc-900 whitespace-nowrap ${s.name}`}>{c.name}</div>
+        <div className={`text-zinc-500 whitespace-nowrap ${s.sub}`}>
           {c.department || c.title || "—"}
         </div>
       </div>
@@ -91,13 +143,21 @@ function TreeNode({
 export function PowerMapLegend() {
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-zinc-600">
-      <div className="flex items-center gap-2">
-        <span className="w-4 h-4 rounded-sm bg-green-600 text-white text-[10px] font-bold flex items-center justify-center">A</span>
-        <span>
-          {Object.entries(CONTACT_ROLE_CODES)
-            .map(([k, code]) => `${code}=${CONTACT_ROLE_LABELS[k]}`)
-            .join("  ")}
-        </span>
+      {/* 角色影响力：按 D>A>E>I>S 从高到低，徽标越深、节点越大代表影响力越强 */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-zinc-400 mr-0.5">影响力</span>
+        {CONTACT_ROLES_BY_INFLUENCE.map((k, i) => (
+          <span key={k} className="flex items-center gap-1">
+            {i > 0 && <span className="text-zinc-300">›</span>}
+            <span
+              className={`rounded-sm text-white font-bold flex items-center justify-center ${roleInfluenceStyle(k).badge}`}
+              title={`影响力 ${roleInfluence(k)}/5`}
+            >
+              {CONTACT_ROLE_CODES[k]}
+            </span>
+            <span>{CONTACT_ROLE_LABELS[k]}</span>
+          </span>
+        ))}
       </div>
       <div className="flex items-center gap-2.5">
         {([3, 2, 1, 0, -1] as const).map((v) => (

@@ -5,7 +5,7 @@ import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } fro
 import {
   ATTITUDE_LABELS, CATEGORY_LABELS, CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS,
   EVENT_TYPE_LABELS, PIPELINE_STAGES, POOL_FLAG_LABELS, STATUS_LABELS,
-  TODO_PRIORITY_LABELS, attitudeLabel, stageName,
+  TODO_PRIORITY_LABELS, attitudeLabel, roleInfluence, stageName,
 } from "@/lib/constants";
 import { attitudeDotClass } from "@/components/power-map";
 import { PowerMapFlow } from "@/components/power-map-flow";
@@ -220,7 +220,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </div>
             )}
             <div className="space-y-3">
-              {p.contacts.map((c) => (
+              {[...p.contacts]
+                .sort((a, b) => roleInfluence(b.role) - roleInfluence(a.role) || b.attitude - a.attitude)
+                .map((c) => (
                 <details key={c.id} className="group rounded-lg border border-zinc-100 hover:border-zinc-200">
                   <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
                     <div className="relative shrink-0">

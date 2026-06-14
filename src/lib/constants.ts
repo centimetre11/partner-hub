@@ -54,6 +54,25 @@ export const CONTACT_ROLE_CODES: Record<string, string> = {
   INFLUENCER: "I",
 };
 
+// 角色影响力排序：D(决策者) > A(审批者) > E(评估者) > I(影响者) > S(支持者)
+// 数值越大影响力越高，用于权力地图的节点大小/配色与列表排序
+export const CONTACT_ROLE_INFLUENCE: Record<string, number> = {
+  DECISION_MAKER: 5,
+  APPROVER: 4,
+  EVALUATOR: 3,
+  INFLUENCER: 2,
+  SUPPORTER: 1,
+};
+
+export function roleInfluence(role: string | null | undefined): number {
+  return CONTACT_ROLE_INFLUENCE[role ?? ""] ?? 0;
+}
+
+// 按影响力从高到低排序的角色 key（D、A、E、I、S）
+export const CONTACT_ROLES_BY_INFLUENCE = Object.keys(CONTACT_ROLE_INFLUENCE).sort(
+  (a, b) => CONTACT_ROLE_INFLUENCE[b] - CONTACT_ROLE_INFLUENCE[a],
+);
+
 // 态度评分：3教练 / 2支持并排他 / 1支持不排他 / 0未接触或中立 / -1反对
 export const ATTITUDE_LABELS: Record<number, string> = {
   3: "教练",
