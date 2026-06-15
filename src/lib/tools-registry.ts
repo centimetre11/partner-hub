@@ -1,5 +1,4 @@
 import { SKILLS } from "./skills";
-import { hasWebSearchKey } from "./web-search";
 
 export type ToolMeta = {
   name: string;
@@ -7,7 +6,7 @@ export type ToolMeta = {
   desc: string;
   /** 是否已在代码中注册且实现 */
   implemented: boolean;
-  /** 是否需要博查联网搜索 Key */
+/** 是否需要模型内置联网搜索（Kimi / 火山引擎） */
   requiresWebSearch?: boolean;
   /** 是否需要用户配置 KMS 个人令牌 */
   requiresKms?: boolean;
@@ -85,25 +84,25 @@ export function getToolLabel(name: string) {
   return SKILLS.find((t) => t.name === name)?.label ?? name;
 }
 
-export function isToolAvailable(name: string) {
+export function isToolAvailable(name: string, opts?: { webSearchReady?: boolean }) {
   const meta = TOOL_META[name];
   if (!meta?.implemented) return false;
-  if (meta.requiresWebSearch && !hasWebSearchKey()) return false;
+  if (meta.requiresWebSearch && !opts?.webSearchReady) return false;
   return true;
 }
 
 export function getToolAvailability(
   name: string,
-  opts?: { kmsConfigured?: boolean }
+  opts?: { kmsConfigured?: boolean; webSearchReady?: boolean },
 ): "ready" | "needs_web_search" | "needs_kms" | "unknown" {
   if (!SKILLS.some((t) => t.name === name)) return "unknown";
   const meta = TOOL_META[name];
-  if (meta?.requiresWebSearch && !hasWebSearchKey()) return "needs_web_search";
+  if (meta?.requiresWebSearch && !opts?.webSearchReady) return "needs_web_search";
   if (meta?.requiresKms && !opts?.kmsConfigured) return "needs_kms";
   return "ready";
 }
 
-/** Agent 默认装备的核心工具（不含需博查 Key 的情报工具，由模板按需追加） */
+/** Agent 默认装备的核心工具（不含需模型联网搜索的情报工具，由模板按需追加） */
 export const CORE_AGENT_TOOLS = [
   "search_partners",
   "get_partner",

@@ -3,19 +3,13 @@
 import type { MonitorSource, Partner } from "@prisma/client";
 import { db } from "./db";
 import { chatJson } from "./ai";
-import { runToolLoop } from "./ai-tool-loop";
-import { generalWebSearch, hasWebSearchKey, linkedinSearch } from "./web-search";
+import { generalWebSearch, isWebSearchAvailable, linkedinSearch } from "./web-search";
 import {
   fetchCompanyUpdates,
   hasNinjaPearKey,
   linkedInSlugToLabel,
   normalizeLinkedInCompanyUrl,
 } from "./ninjapearl";
-import {
-  KIMI_BUILTIN_SEARCH,
-  shouldUseKimiBuiltinSearch,
-  shouldUseVolcengineBuiltinSearch,
-} from "./builtin-search";
 import {
   MONITOR_DIMENSIONS,
   MONITOR_DIMENSION_KEYWORDS,
@@ -121,18 +115,25 @@ function dedupeKeyFor(item: ClassifiedItem): string {
   return `t:${item.title.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 120)}`;
 }
 
-/** 通过博查逐维度/逐自定义源抓取原始结果 */
-async function gatherViaBocha(
+/** 通过大模型内置联网搜索 + NinjaPear 抓取原始结果 */
+async function gatherViaModelSearch(
   partner: Pick<Partner, "name" | "country" | "city" | "website">,
   dims: string[],
   sources: MonitorSource[],
-  maxPerQuery: number,
 ): Promise<string[]> {
   const blocks: string[] = [];
+  const canSearch = await isWebSearchAvailable();
 
-  for (const { dimension, query, topic } of buildDimensionQueries(partner, dims)) {
-    const r = await generalWebSearch(query, maxPerQuery, topic);
-    if (r.ok) blocks.push(`### 维度提示：${MONITOR_DIMENSION_LABELS[dimension]}\n${r.text}`);
+  const dimQueries = buildDimensionQueries(partner, dims);
+  if (dimQueries.length && canSearch) {
+    const lines = dimQueries.map(
+      (q) => `[${MONITOR_DIMENSION_LABELS[q.dimension]}] ${q.query}${q.topic === "news" ? "（侧重新闻）" : ""}`,
+    );
+    const r = await generalWebSearch(
+      `合作伙伴「${partner.name}」（${partner.country ?? ""}）舆情检索：\n${lines.join("\n")}`,
+      8,
+    );
+    if (r.ok) blocks.push(`### 维度联网检索\n${r.text}`);
   }
 
   const nameToken = quoteName(partner.name);
@@ -142,7 +143,6 @@ async function gatherViaBocha(
     const isLinkedIn = s.sourceType === "LINKEDIN" || domain.includes("linkedin");
 
     if (isLinkedIn) {
-      // NinjaPear（原 Proxycurl）：按伙伴官网拉博客/X 等公开更新（不直接抓 LinkedIn posts）
       const website = partner.website?.trim();
       if (hasNinjaPearKey() && website) {
         const np = await fetchCompanyUpdates(website);
@@ -153,65 +153,30 @@ async function gatherViaBocha(
           );
           continue;
         }
-        // Key 无效或请求失败时记录原因，并回退博查
         blocks.push(`### 自定义监控源：${s.label}（${s.url}）\nNinjaPear：${np.error}`);
       }
 
-      const slugLabel = linkedInSlugToLabel(s.url);
-      const r = await linkedinSearch({
-        company: slugLabel || partner.name,
-        maxResults: maxPerQuery,
-      });
-      if (r.ok) blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
+      if (canSearch) {
+        const slugLabel = linkedInSlugToLabel(s.url);
+        const r = await linkedinSearch({
+          company: slugLabel || partner.name,
+          query: s.url,
+          maxResults: 6,
+        });
+        if (r.ok) blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
+      }
       continue;
     }
 
-    // 注意：博查不支持 site: 过滤，这里把域名作为关键词锚定，而非 site: 语法
-    const siteQuery = domain ? `${nameToken} ${domain}` : `${nameToken} ${s.label}`;
-    const r = await generalWebSearch(siteQuery, maxPerQuery);
+    if (!canSearch) continue;
+    const siteQuery = domain
+      ? `${nameToken} ${domain} site content updates`
+      : `${nameToken} ${s.label} ${s.url}`;
+    const r = await generalWebSearch(siteQuery, 5);
     if (r.ok) blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
   }
 
   return blocks;
-}
-
-/** 无博查 Key 时，借助模型内置联网搜索抓取原始结果 */
-async function gatherViaBuiltinSearch(
-  partner: Pick<Partner, "name" | "country" | "city" | "website">,
-  dims: string[],
-  sources: MonitorSource[],
-): Promise<string[]> {
-  const useVolc = await shouldUseVolcengineBuiltinSearch();
-  const useKimi = !useVolc && (await shouldUseKimiBuiltinSearch());
-  if (!useVolc && !useKimi) return [];
-
-  const queries = buildDimensionQueries(partner, dims).map((q) => q.query);
-  const sourceHints = sources
-    .filter((s) => s.enabled)
-    .map((s) => `${s.label}：${s.url}`)
-    .join("\n");
-
-  const tools = useKimi ? [KIMI_BUILTIN_SEARCH] : [];
-  const system = `你是舆情情报采集助手。请用联网搜索为合作伙伴「${partner.name}」检索以下方向的公开信息，把找到的标题、来源、链接、摘要原样整理输出（中文），不要分析。`;
-  const user = `检索方向：\n${queries.join("\n")}\n\n${sourceHints ? `重点关注以下来源：\n${sourceHints}` : ""}`;
-
-  const text = await runToolLoop({
-    chat: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-    tools,
-    temperature: 0.3,
-    feature: "舆情监控采集",
-    streamReply: false,
-    maxSteps: 8,
-    executeTool: async (tc) => {
-      if (tc.function.name === "$web_search") return tc.function.arguments;
-      return "（无可用工具）";
-    },
-  });
-
-  return text ? [text] : [];
 }
 
 /** 用 AI 把原始结果整理成结构化舆情条目 */
@@ -268,27 +233,23 @@ export async function scanPartnerSentiment(
 
   const dims = resolveDims(partner.monitorDims, opts.dims);
   const sources = partner.monitorSources;
-  const maxPerQuery = opts.maxPerQuery ?? 4;
 
   const hasEnabledSource = sources.some((s) => s.enabled);
   if (!dims.length && !hasEnabledSource) {
     return { ...empty, ok: true, error: "请先选择要监控的维度，或添加监控链接源" };
   }
 
-  let blocks: string[];
-  if (hasWebSearchKey()) {
-    blocks = await gatherViaBocha(partner, dims, sources, maxPerQuery);
-  } else {
-    blocks = await gatherViaBuiltinSearch(partner, dims, sources);
-    if (!blocks.length) {
-      return {
-        ...empty,
-        needsWebSearch: true,
-        error:
-          "未配置联网搜索能力（博查 BOCHA_API_KEY 或支持内置联网搜索的模型）。请在 .env / 设置中配置后重试。",
-      };
-    }
+  const canSearch = await isWebSearchAvailable();
+  const hasNp = hasNinjaPearKey() && !!partner.website?.trim();
+  if (dims.length && !canSearch && !(hasEnabledSource && hasNp)) {
+    return {
+      ...empty,
+      needsWebSearch: true,
+      error: "未配置支持联网搜索的大模型（Kimi 或火山引擎内置 web_search）。请在设置中配置后重试。",
+    };
   }
+
+  const blocks = await gatherViaModelSearch(partner, dims, sources);
 
   const raw = blocks.join("\n\n");
   if (!raw.trim()) {

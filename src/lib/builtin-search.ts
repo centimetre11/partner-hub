@@ -1,7 +1,6 @@
 /** 模型内置联网搜索能力探测（独立模块，避免 skills ↔ sentiment-monitor 循环依赖） */
 
 import { db } from "./db";
-import { hasWebSearchKey } from "./web-search";
 
 // Kimi（moonshot）平台的内置联网搜索：作为特殊工具注入，工具被调用时原样回传参数即可
 export const KIMI_BUILTIN_SEARCH = {
@@ -10,7 +9,6 @@ export const KIMI_BUILTIN_SEARCH = {
 };
 
 export async function shouldUseVolcengineBuiltinSearch(): Promise<boolean> {
-  if (hasWebSearchKey()) return false;
   const configured = await db.aiApiConfig.findFirst({
     where: { enabled: true },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
@@ -26,7 +24,6 @@ export async function shouldUseVolcengineBuiltinSearch(): Promise<boolean> {
 }
 
 export async function shouldUseKimiBuiltinSearch(): Promise<boolean> {
-  if (hasWebSearchKey()) return false;
   if (await shouldUseVolcengineBuiltinSearch()) return false;
   const configured = await db.aiApiConfig.findFirst({
     where: { enabled: true },

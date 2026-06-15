@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-registry";
-import { hasWebSearchKey } from "@/lib/web-search";
+import { isWebSearchAvailable, webSearchBackendLabel } from "@/lib/web-search";
 
 export default async function ToolsPage() {
   const user = await requireUser();
@@ -20,9 +20,10 @@ export default async function ToolsPage() {
     }
   }
 
-  const webSearchReady = hasWebSearchKey();
+  const webSearchReady = await isWebSearchAvailable();
+  const searchBackend = webSearchReady ? await webSearchBackendLabel() : null;
   const readyCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).filter(
-    (t) => getToolAvailability(t.name, { kmsConfigured }) === "ready"
+    (t) => getToolAvailability(t.name, { kmsConfigured, webSearchReady }) === "ready"
   ).length;
   const totalCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).length;
 
@@ -34,7 +35,9 @@ export default async function ToolsPage() {
         actions={
           <div className="flex items-center gap-2 text-xs">
             <Badge tone={webSearchReady ? "green" : "amber"}>
-              {webSearchReady ? `${readyCount}/${totalCount} 可用` : `${readyCount}/${totalCount} 可用（缺联网搜索 Key）`}
+              {webSearchReady
+                ? `${readyCount}/${totalCount} 可用（${searchBackend}）`
+                : `${readyCount}/${totalCount} 可用（缺模型联网搜索）`}
             </Badge>
           </div>
         }
@@ -43,13 +46,10 @@ export default async function ToolsPage() {
       <div className="px-8 max-w-5xl space-y-6">
         {!webSearchReady && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-medium">领英搜索 / 新闻搜索需要联网搜索 Key。</span>
-            在服务器 <code className="text-xs bg-amber-100 px-1 rounded">/opt/partner-hub/.env</code> 添加{" "}
-            <code className="text-xs bg-amber-100 px-1 rounded">BOCHA_API_KEY=sk-xxx</code>（
-            <a href="https://open.bocha.cn" className="underline" target="_blank" rel="noreferrer">
-              博查开放平台
-            </a>
-            ），然后重新部署。
+            <span className="font-medium">领英搜索 / 新闻搜索 / 舆情扫描需要支持联网的大模型。</span>
+            请在「团队设置 → 大模型管理中心」配置 <strong>Kimi（moonshot）</strong> 或{" "}
+            <strong>火山引擎</strong>（extra.tools 含 <code className="text-xs bg-amber-100 px-1 rounded">web_search</code>
+            ），然后重启服务。
           </div>
         )}
         {!kmsConfigured && (
@@ -79,7 +79,7 @@ export default async function ToolsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {cat.tools.map((tool) => {
-                const status = getToolAvailability(tool.name, { kmsConfigured });
+                const status = getToolAvailability(tool.name, { kmsConfigured, webSearchReady });
                 return (
                   <div
                     key={tool.name}
@@ -98,7 +98,7 @@ export default async function ToolsPage() {
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" ? "amber" : "zinc"}>
-                          {status === "ready" ? "已验证" : status === "needs_web_search" ? "需联网 Key" : status === "needs_kms" ? "需 KMS 令牌" : "未知"}
+                          {status === "ready" ? "已验证" : status === "needs_web_search" ? "需模型联网" : status === "needs_kms" ? "需 KMS 令牌" : "未知"}
                         </Badge>
                         {usedToolNames.has(tool.name) && <Badge tone="blue">已装备</Badge>}
                       </div>

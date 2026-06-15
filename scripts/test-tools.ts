@@ -4,16 +4,20 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { runSkill, newSkillContext, SKILLS } from "../src/lib/skills";
-import { hasWebSearchKey } from "../src/lib/web-search";
+import { isWebSearchAvailable } from "../src/lib/web-search";
 
 const prisma = new PrismaClient();
 
-function classify(tool: string, out: string): "pass" | "skip" | "fail" {
-  if (out.includes("未配置 KMS") || out.includes("未配置 BOCHA") || out.includes("BOCHA_API_KEY")) {
+function classify(tool: string, out: string, webSearchReady: boolean): "pass" | "skip" | "fail" {
+  if (
+    out.includes("未配置 KMS") ||
+    out.includes("未配置支持联网搜索") ||
+    out.includes("联网搜索的大模型")
+  ) {
     if (tool === "read_kms") return process.env.KMS_TEST_TOKEN ? "fail" : "skip";
-    return hasWebSearchKey() ? "fail" : "skip";
+    return webSearchReady ? "fail" : "skip";
   }
-  if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败") || out.startsWith("博查")) {
+  if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败")) {
     return "fail";
   }
   if (tool === "search_knowledge" && out.includes("未找到")) return "fail";
@@ -24,6 +28,7 @@ function classify(tool: string, out: string): "pass" | "skip" | "fail" {
 }
 
 async function main() {
+  const webSearchReady = await isWebSearchAvailable();
   const ctx = newSkillContext({ mode: "agent", userId: null, agentName: "tool-test" });
 
   if (process.env.KMS_TEST_TOKEN) {
@@ -61,7 +66,7 @@ async function main() {
     const out = await runSkill(tool, args, ctx);
     results.push({
       tool,
-      status: classify(tool, out),
+      status: classify(tool, out, webSearchReady),
       preview: out.slice(0, 240).replace(/\s+/g, " "),
     });
   }
@@ -99,7 +104,7 @@ async function main() {
   results.push({ tool: "create_document", status: docOk ? "pass" : "fail", preview: docOut });
 
   const summary = {
-    webSearchConfigured: hasWebSearchKey(),
+    webSearchConfigured: webSearchReady,
     registeredTools: SKILLS.map((s) => s.name),
     removedTools: ["fetch_url"],
     results,
