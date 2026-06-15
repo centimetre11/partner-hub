@@ -248,10 +248,12 @@ function FlowInner({
   const [selectedEdges, setSelectedEdges] = useState<Edge[]>([]);
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [, startTransition] = useTransition();
-  const { deleteElements } = useReactFlow();
+  const { deleteElements, fitView } = useReactFlow();
 
   // 拖动起点位置（用于撤销摆放）
   const dragStart = useRef<Map<string, { x: number; y: number }>>(new Map());
+  // 已知节点 id（用于检测新增人物后自动适配视图）
+  const knownIds = useRef<Set<string>>(new Set(contacts.map((c) => c.id)));
   // 当前 reportsTo 映射（用于撤销改主汇报）
   const reportsToMap = useMemo(() => {
     const m = new Map<string, string | null>();
@@ -264,6 +266,13 @@ function FlowInner({
   useEffect(() => {
     setNodes(buildNodes(contacts));
     setEdges(buildEdges(contacts, links));
+    // 有新人物加入时，自动把视图缩放到能看到所有人（含新加的）
+    const added = contacts.some((c) => !knownIds.current.has(c.id));
+    knownIds.current = new Set(contacts.map((c) => c.id));
+    if (added) {
+      const t = setTimeout(() => fitView({ duration: 400, padding: 0.2 }), 80);
+      return () => clearTimeout(t);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
 
