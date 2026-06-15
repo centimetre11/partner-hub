@@ -18,6 +18,158 @@ import {
   toggleMonitorSourceAction,
 } from "@/lib/monitor-actions";
 
+type ScanStepStatus = "ok" | "skip" | "fail" | "warn";
+
+type ScanStep = {
+  label: string;
+  status: ScanStepStatus;
+  detail?: string;
+  preview?: string;
+};
+
+type ScanMeta = {
+  searchBackend?: string;
+  classified?: number;
+  rawChars?: number;
+  created?: number;
+  scanned?: number;
+};
+
+const input =
+  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+
+const ALL_KEY = "__all__";
+
+const STEP_ICON: Record<ScanStepStatus, string> = {
+  ok: "✓",
+  warn: "!",
+  fail: "✕",
+  skip: "–",
+};
+
+const STEP_TONE: Record<ScanStepStatus, string> = {
+  ok: "text-emerald-600 bg-emerald-50",
+  warn: "text-amber-600 bg-amber-50",
+  fail: "text-red-600 bg-red-50",
+  skip: "text-zinc-400 bg-zinc-100",
+};
+
+function buildPlannedSteps(
+  dims: string[],
+  sources: MonitorSourceRow[],
+  dimKey: string,
+): ScanStep[] {
+  const targetDims = dimKey === ALL_KEY ? dims : [dimKey];
+  const enabled = sources.filter((s) => s.enabled);
+  const steps: ScanStep[] = [
+    { label: "准备", status: "ok", detail: "连接服务器，检查联网配置…" },
+  ];
+  for (const d of targetDims) {
+    steps.push({
+      label: `检索·${MONITOR_DIMENSION_LABELS[d] ?? d}`,
+      status: "ok",
+      detail: "联网搜索中…",
+    });
+  }
+  if (targetDims.length > 0) {
+    steps.push({ label: "补充·综合检索", status: "ok", detail: "若各维度结果较少则自动触发" });
+  }
+  for (const s of enabled) {
+    steps.push({ label: `源·${s.label}`, status: "ok", detail: s.url });
+  }
+  steps.push(
+    { label: "AI 分类", status: "ok", detail: "提炼结构化舆情…" },
+    { label: "去重入库", status: "ok", detail: "写入数据库…" },
+  );
+  return steps;
+}
+
+function ScanProgressPanel({
+  scanning,
+  steps,
+  meta,
+  scanMsg,
+  onScan,
+  canScan,
+  scanLabel,
+  partnerName,
+}: {
+  scanning: boolean;
+  steps: ScanStep[] | null;
+  meta: ScanMeta | null;
+  scanMsg: string | null;
+  onScan: () => void;
+  canScan: boolean;
+  scanLabel: string;
+  partnerName?: string;
+}) {
+  const showSteps = steps && steps.length > 0;
+  return (
+    <div className="mb-5 rounded-xl border border-indigo-100 bg-gradient-to-b from-indigo-50/80 to-white overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-indigo-100/80">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium text-zinc-800">
+            扫描进度{partnerName ? ` · ${partnerName}` : ""}
+          </div>
+          <div className="text-xs text-zinc-500 mt-0.5">
+            {scanning
+              ? "正在联网检索并分析，请稍候…"
+              : meta?.searchBackend
+                ? `联网后端：${meta.searchBackend}`
+                : "点击右侧按钮开始扫描，下方将展示每一步详情"}
+          </div>
+        </div>
+        <button
+          onClick={onScan}
+          disabled={scanning || !canScan}
+          title={!canScan ? "请先勾选要监控的维度" : "扫描所有已勾选维度"}
+          className="shrink-0 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {scanning ? "扫描中…" : scanLabel}
+        </button>
+      </div>
+
+      {scanMsg && (
+        <div className="mx-4 mt-3 rounded-lg bg-white border border-zinc-100 px-3 py-2 text-xs text-zinc-700">
+          {scanMsg}
+          {meta && (meta.rawChars !== undefined || meta.classified !== undefined) && (
+            <span className="text-zinc-400 ml-2">
+              · 抓取 {meta.rawChars ?? 0} 字 · 分类 {meta.classified ?? 0} 条 · 入库 {meta.created ?? 0} 条
+            </span>
+          )}
+        </div>
+      )}
+
+      {showSteps && (
+        <ol className="px-4 py-3 space-y-2 max-h-72 overflow-y-auto">
+          {steps!.map((st, i) => (
+            <li key={`${st.label}-${i}`} className="flex gap-2.5 text-xs">
+              <span
+                className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${STEP_TONE[st.status]}`}
+              >
+                {scanning && i === steps!.length - 1 ? "…" : STEP_ICON[st.status]}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-zinc-700">{st.label}</div>
+                {st.detail && <div className="text-zinc-500 mt-0.5 break-words">{st.detail}</div>}
+                {st.preview && (
+                  <div className="mt-1 rounded-md bg-zinc-50 border border-zinc-100 px-2 py-1.5 text-zinc-500 leading-relaxed">
+                    {st.preview}
+                  </div>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {scanning && !showSteps && (
+        <div className="px-4 py-6 text-center text-xs text-indigo-500 animate-pulse">初始化扫描任务…</div>
+      )}
+    </div>
+  );
+}
+
 export type MonitorSourceRow = {
   id: string;
   label: string;
@@ -41,18 +193,17 @@ export type MonitorItemRow = {
   createdAt: Date | string;
 };
 
-const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
-
-const ALL_KEY = "__all__";
-
 export function SentimentMonitorSection({
   partnerId,
+  partnerName,
+  partnerWebsite,
   sources,
   items,
   selectedDims,
 }: {
   partnerId: string;
+  partnerName?: string;
+  partnerWebsite?: string | null;
   sources: MonitorSourceRow[];
   items: MonitorItemRow[];
   selectedDims: string[];
@@ -60,6 +211,8 @@ export function SentimentMonitorSection({
   const [dims, setDims] = useState<string[]>(selectedDims);
   const [sentFilter, setSentFilter] = useState<string | null>(null);
   const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [scanSteps, setScanSteps] = useState<ScanStep[] | null>(null);
+  const [scanMeta, setScanMeta] = useState<ScanMeta | null>(null);
   const [scanningDim, setScanningDim] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const [savingDims, startDimTransition] = useTransition();
@@ -72,10 +225,20 @@ export function SentimentMonitorSection({
 
   function runScan(targetDims: string[] | null, dimKey: string) {
     setScanMsg(null);
+    setScanMeta(null);
+    setScanSteps(buildPlannedSteps(targetDims ?? dims, sources, dimKey));
     setScanningDim(dimKey);
     startTransition(async () => {
       try {
         const r = await runSentimentScanAction(partnerId, targetDims ?? undefined);
+        setScanSteps(r.steps ?? null);
+        setScanMeta({
+          searchBackend: r.searchBackend,
+          classified: r.classified,
+          rawChars: r.rawChars,
+          created: r.created,
+          scanned: r.scanned,
+        });
         if (!r.ok) {
           setScanMsg(r.error ?? "扫描失败");
         } else if (r.error && r.created === 0) {
@@ -84,8 +247,8 @@ export function SentimentMonitorSection({
           const label = dimKey === ALL_KEY ? "" : `「${MONITOR_DIMENSION_LABELS[dimKey] ?? dimKey}」`;
           setScanMsg(
             r.created > 0
-              ? `${label}本次新增 ${r.created} 条舆情（扫描 ${r.scanned} 个信息源）`
-              : `${label}本次无新发现（扫描 ${r.scanned} 个信息源）`,
+              ? `${label}本次新增 ${r.created} 条舆情（${r.scanned} 个信息源块）`
+              : `${label}本次无新发现（${r.scanned} 个信息源块，分类 ${r.classified ?? 0} 条）`,
           );
         }
       } finally {
@@ -106,24 +269,17 @@ export function SentimentMonitorSection({
   const scanning = scanningDim !== null;
 
   return (
-    <Card
-      title={`⑥ 舆情监控（${items.length}）`}
-      actions={
-        <button
-          onClick={() => runScan(dims, ALL_KEY)}
-          disabled={scanning || dims.length === 0}
-          title={dims.length === 0 ? "请先勾选要监控的维度" : "扫描所有已勾选维度"}
-          className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {scanningDim === ALL_KEY ? "扫描中…" : "📡 立即扫描"}
-        </button>
-      }
-    >
-      {scanMsg && (
-        <div className="mb-4 rounded-lg bg-zinc-50 border border-zinc-100 px-3 py-2 text-xs text-zinc-600">
-          {scanMsg}
-        </div>
-      )}
+    <Card title={`⑥ 舆情监控（${items.length}）`}>
+      <ScanProgressPanel
+        scanning={scanning}
+        steps={scanSteps}
+        meta={scanMeta}
+        scanMsg={scanMsg}
+        onScan={() => runScan(dims, ALL_KEY)}
+        canScan={dims.length > 0}
+        scanLabel="📡 立即扫描"
+        partnerName={partnerName}
+      />
 
       {/* 维度多选（订阅） */}
       <div className="mb-5">
@@ -156,7 +312,9 @@ export function SentimentMonitorSection({
         <div className="text-xs text-zinc-400 mb-2">
           监控链接源（领英 / Facebook 主页 / 官网 / 新闻源…）
           <span className="block mt-0.5 text-zinc-300">
-            领英链接：需配置 NINJAPEARL_API_KEY，且伙伴档案填写官网；将按官网拉取博客 / X 等公开更新（不直接抓领英帖子）
+            领英链接：需配置 NINJAPEARL_API_KEY，且伙伴档案填写官网（当前：
+            {partnerWebsite?.trim() ? partnerWebsite : "未填写"}
+            ）；将按官网拉取博客 / X 等公开更新
           </span>
         </div>
         <div className="space-y-2">

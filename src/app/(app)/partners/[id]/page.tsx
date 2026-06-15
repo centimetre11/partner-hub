@@ -346,6 +346,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
 
           <SentimentMonitorSection
             partnerId={p.id}
+            partnerName={p.name}
+            partnerWebsite={p.website}
             sources={p.monitorSources.map((s) => ({
               id: s.id, label: s.label, url: s.url, sourceType: s.sourceType,
               domain: s.domain, title: s.title, thumbnailUrl: s.thumbnailUrl, enabled: s.enabled,
