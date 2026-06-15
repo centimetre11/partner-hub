@@ -5,9 +5,10 @@ import { createPartnerAction } from "@/lib/actions";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { AiIntakePanel } from "@/components/ai-intake-panel";
 
-export function AddPartnerForm() {
+export function AddPartnerForm({ intent = "prospect" }: { intent?: "prospect" | "active" }) {
   const [open, setOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const isActive = intent === "active";
 
   return (
     <>
@@ -27,14 +28,15 @@ export function AddPartnerForm() {
       </div>
 
       {aiOpen && (
-        <AiIntakePanel scope="new_partner" onClose={() => setAiOpen(false)} onDone={(id) => (window.location.href = `/partners/${id}`)} />
+        <AiIntakePanel scope="new_partner" intent={intent} onClose={() => setAiOpen(false)} onDone={(id) => (window.location.href = `/partners/${id}`)} />
       )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-semibold mb-4">添加候选伙伴</h3>
+            <h3 className="text-base font-semibold mb-4">{isActive ? "添加正式伙伴" : "添加候选伙伴"}</h3>
             <form action={createPartnerAction} className="space-y-3">
+              <input type="hidden" name="intent" value={intent} />
               <input name="name" required placeholder="公司名称 *" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
               <select name="category" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm">
                 {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
@@ -53,7 +55,11 @@ export function AddPartnerForm() {
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">添加</button>
               </div>
             </form>
-            <p className="text-xs text-zinc-400 mt-3">不想填表？点上方「✦ AI 建档」，把会议记录或公司介绍丢给 AI 即可。</p>
+            <p className="text-xs text-zinc-400 mt-3">
+              {isActive
+                ? "将直接建为正式伙伴并生成起步待办。不想填表？点上方「✦ AI 建档」即可。"
+                : "不想填表？点上方「✦ AI 建档」，把会议记录或公司介绍丢给 AI 即可。"}
+            </p>
           </div>
         </div>
       )}

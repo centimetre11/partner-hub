@@ -17,6 +17,7 @@ export function AiCapabilityBadges({ capabilities }: { capabilities: AiCapabilit
     tools: "bg-indigo-50 text-indigo-700",
     json: "bg-amber-50 text-amber-700",
     reasoning: "bg-violet-50 text-violet-700",
+    fast: "bg-teal-50 text-teal-700",
   };
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">
@@ -56,6 +57,7 @@ export function AiCapabilityFields({ defaultCapabilities }: { defaultCapabilitie
       </div>
       <p className="text-[11px] text-zinc-400">
         例：DeepSeek V4 勾选「图片理解」；纯文本模型只勾「通用对话 / 工具 / JSON」。发图时会自动选带 vision 的模型。
+        轻量模型（如 mini/flash）建议勾选「轻量快速」，AI 加人、加商机等简单抽取会优先使用。
       </p>
     </fieldset>
   );

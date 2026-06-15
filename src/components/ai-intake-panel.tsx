@@ -37,11 +37,13 @@ const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = 
 export function AiIntakePanel({
   scope,
   partnerId,
+  intent,
   onClose,
   onDone,
 }: {
   scope: IntakeScope;
   partnerId?: string;
+  intent?: "prospect" | "active";
   onClose: () => void;
   onDone?: (partnerId: string) => void;
 }) {
@@ -175,6 +177,7 @@ export function AiIntakePanel({
           ready={ready}
           scope={scope}
           partnerId={partnerId}
+          intent={intent}
           sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
           onApplied={handleApplied}
           input={input}

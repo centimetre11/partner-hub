@@ -7,15 +7,60 @@ import { staleDays } from "@/lib/completeness";
 import { toggleTodoAction } from "@/lib/actions";
 import { WeeklyReport } from "./weekly-report";
 import { AiAddButton } from "@/components/ai-add-button";
+import { BoardOverview } from "./dashboard/board-overview";
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await requireUser();
+  const { tab } = await searchParams;
+  const isBoard = tab === "board";
   const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
+
+  const tabs = [
+    { key: "", label: "工作概览", href: "/" },
+    { key: "board", label: "经营看板", href: "/?tab=board" },
+  ];
+
+  return (
+    <div className="pb-16">
+      <div className="px-8 pt-7 pb-3">
+        <h1 className="text-xl font-bold text-zinc-900">
+          {greeting}，{user.name}
+        </h1>
+        <p className="text-sm text-zinc-500 mt-1">
+          {now.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })} · 中东伙伴经营工作台
+        </p>
+        <div className="mt-4 flex gap-1 border-b border-zinc-200">
+          {tabs.map((t) => {
+            const active = (t.key === "board") === isBoard;
+            return (
+              <Link
+                key={t.key}
+                href={t.href}
+                className={`px-3.5 py-2 text-sm -mb-px border-b-2 transition-colors ${
+                  active
+                    ? "border-indigo-600 text-indigo-600 font-medium"
+                    : "border-transparent text-zinc-500 hover:text-zinc-800"
+                }`}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+      {isBoard ? <BoardOverview /> : <WorkOverview userId={user.id} now={now} />}
+    </div>
+  );
+}
+
+async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
   const in7days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
 
   const [myTodos, overdueTodos, activePartners, prospectCount, activeCount, openTodoCount, unreadNotifications] = await Promise.all([
     db.todoItem.findMany({
-      where: { status: "OPEN", OR: [{ assigneeId: user.id }, { assigneeId: null }], dueDate: { lte: in7days } },
+      where: { status: "OPEN", OR: [{ assigneeId: userId }, { assigneeId: null }], dueDate: { lte: in7days } },
       include: { partner: true },
       orderBy: { dueDate: "asc" },
       take: 12,
@@ -46,20 +91,8 @@ export default async function HomePage() {
     .filter((x) => x.days > 30)
     .sort((a, b) => b.days - a.days);
 
-  const hour = now.getHours();
-  const greeting = hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
-
   return (
-    <div className="pb-16">
-      <div className="px-8 pt-7 pb-5">
-        <h1 className="text-xl font-bold text-zinc-900">
-          {greeting}，{user.name}
-        </h1>
-        <p className="text-sm text-zinc-500 mt-1">
-          {now.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })} · 中东伙伴经营工作台
-        </p>
-      </div>
-
+    <>
       <div className="px-8 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: "候选池", value: prospectCount, href: "/pool", tone: "text-sky-600" },
@@ -202,7 +235,7 @@ export default async function HomePage() {
                 <div className="font-medium text-zinc-800">◬ Tier A 候选</div>
                 <div className="text-xs text-zinc-400 mt-0.5">查看 10 家「立即打」的重点候选</div>
               </Link>
-              <Link href="/dashboard" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
+              <Link href="/?tab=board" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
                 <div className="font-medium text-zinc-800">◫ 经营看板</div>
                 <div className="text-xs text-zinc-400 mt-0.5">Pipeline 漏斗、转化、完整度排行</div>
               </Link>
@@ -210,6 +243,6 @@ export default async function HomePage() {
           </Card>
         </div>
       </div>
-    </div>
+    </>
   );
 }

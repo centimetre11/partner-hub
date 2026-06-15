@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
-  const { scope, partnerId, proposal, sourceText } = await req.json();
+  const { scope, partnerId, proposal, sourceText, intent } = await req.json();
   if (!proposal) return NextResponse.json({ error: "缺少提案" }, { status: 400 });
 
   try {
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       proposal: proposal as IntakeProposal,
       userId: uid,
       sourceText,
+      intent: intent === "active" ? "active" : "prospect",
     });
     revalidatePath("/pool");
     revalidatePath("/partners");

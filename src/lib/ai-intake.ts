@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
+import type { AiTaskTier } from "./ai-capabilities";
 import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
 import { extractPatchFromTool } from "./proposal-patch-extract";
@@ -17,6 +18,7 @@ import {
   SOLUTION_STATUS_LABELS,
 } from "./constants";
 import { partnerContext, type ContactProposal, type FieldUpdate, type OpportunityProposal, type TodoProposal } from "./proposals";
+import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 
 // ============ Intake 作用域 ============
 
@@ -158,6 +160,18 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     schemaHint: "只填 solutions。其余留空数组。",
   },
 };
+
+/** 轻量录入场景走快速模型（属性抽取，无需深度推理） */
+function intakeTaskTier(scope: IntakeScope): AiTaskTier {
+  switch (scope) {
+    case "powermap":
+    case "opportunity":
+    case "training":
+      return "fast";
+    default:
+      return "standard";
+  }
+}
 
 // ============ 多轮对话抽取 ============
 
@@ -397,6 +411,7 @@ ${OUTPUT_SCHEMA}`;
   }
 
   emitPhase(opts.emit, "extract", "整理提案");
+  const taskTier = intakeTaskTier(opts.scope);
   let content: string | null;
   try {
     ({ content } = await chatCompletion(chat, {
@@ -404,6 +419,7 @@ ${OUTPUT_SCHEMA}`;
       temperature: 0.3,
       feature,
       userId: opts.userId,
+      taskTier,
     }));
   } catch {
     chat[0].content += "\n\n务必只输出一个合法 JSON 对象。";
@@ -411,6 +427,7 @@ ${OUTPUT_SCHEMA}`;
       temperature: 0.3,
       feature,
       userId: opts.userId,
+      taskTier,
     }));
   }
   const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
@@ -470,6 +487,8 @@ export async function applyIntake(opts: {
   proposal: IntakeProposal;
   userId: string;
   sourceText?: string;
+  /** active：从「正式伙伴」页建档，直接建为正式伙伴；默认进候选 */
+  intent?: "prospect" | "active";
 }): Promise<{ applied: string[]; partnerId: string }> {
   const { scope, proposal, userId } = opts;
   const applied: string[] = [];
@@ -477,12 +496,15 @@ export async function applyIntake(opts: {
 
   // ---- 新建伙伴 ----
   if (scope === "new_partner") {
+    const asActive = opts.intent === "active";
     const name =
       proposal.partnerName ||
       proposal.fields.find((f) => f.field === "name")?.newValue ||
       "";
     if (!name.trim()) throw new Error("缺少公司名，无法建档");
-    const data: Record<string, unknown> = { name: name.trim(), status: "PROSPECT", poolFlag: "NEW" };
+    const data: Record<string, unknown> = asActive
+      ? { name: name.trim(), ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date() }
+      : { name: name.trim(), status: "PROSPECT", poolFlag: "NEW" };
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
       if (f.field === "fitScore" || f.field === "pipelineStage") {
@@ -494,17 +516,18 @@ export async function applyIntake(opts: {
     }
     const created = await db.partner.create({ data: data as Prisma.PartnerCreateInput });
     partnerId = created.id;
-    applied.push(`新建候选伙伴：${created.name}`);
+    applied.push(asActive ? `新建正式伙伴：${created.name}` : `新建候选伙伴：${created.name}`);
     await db.timelineEvent.create({
       data: {
         partnerId,
         type: "SYSTEM",
-        title: "AI 建档",
+        title: asActive ? "AI 建档（正式伙伴）" : "AI 建档",
         content: proposal.summary || "由 AI 录入助手建档",
         createdById: userId,
-        meta: JSON.stringify({ via: "ai-intake", sourceText: opts.sourceText?.slice(0, 8000) }),
+        meta: JSON.stringify({ via: "ai-intake", intent: asActive ? "active" : "prospect", sourceText: opts.sourceText?.slice(0, 8000) }),
       },
     });
+    if (asActive) await createStarterTodos(partnerId, created.name, userId);
   }
 
   if (!partnerId) throw new Error("缺少伙伴");

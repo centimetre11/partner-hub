@@ -2,6 +2,7 @@
 import { db } from "./db";
 import {
   type AiCapability,
+  type AiTaskTier,
   apiHasCapabilities,
   DEFAULT_AI_CAPABILITIES,
   parseAiCapabilities,
@@ -93,7 +94,7 @@ export function requiredCapabilitiesForChat(opts: {
   return required;
 }
 
-async function resolveAiApi(opts?: { capabilities?: AiCapability[] }): Promise<ResolvedAiApi> {
+async function resolveAiApi(opts?: { capabilities?: AiCapability[]; taskTier?: AiTaskTier }): Promise<ResolvedAiApi> {
   const required = opts?.capabilities ?? ["chat"];
   const configured = await db.aiApiConfig.findMany({
     where: { enabled: true },
@@ -120,14 +121,29 @@ async function resolveAiApi(opts?: { capabilities?: AiCapability[] }): Promise<R
 
     const available = configured.filter((api) => !isOverDailyLimit(api));
 
-    // 优先：未超每日上限且具备所需能力
-    const matched = available.find(matchesCap);
+    const pickBest = (pool: ConfiguredApi[]): ConfiguredApi | undefined => {
+      if (!pool.length) return undefined;
+      if (opts?.taskTier === "fast") {
+        const fastTagged = pool.filter((api) => parseAiCapabilities(api.capabilities).includes("fast"));
+        const fastMatch = fastTagged.find(matchesCap);
+        if (fastMatch) return fastMatch;
+        const nonReasoning = pool.filter((api) => !parseAiCapabilities(api.capabilities).includes("reasoning"));
+        const lightMatch = nonReasoning.find(matchesCap);
+        if (lightMatch) return lightMatch;
+      }
+      return pool.find(matchesCap);
+    };
+
+    // 优先：未超每日上限且具备所需能力（轻量任务优先 fast/非推理模型）
+    const matched = pickBest(available);
     if (matched) {
       const naturalChoice = configured.find(matchesCap);
       if (naturalChoice && naturalChoice.id !== matched.id) {
-        console.warn(
-          `[ai] ${naturalChoice.name} 已达每日 Token 上限（${usedByBucket.get(`api:${naturalChoice.id}`) ?? 0}/${naturalChoice.dailyTokenLimit}），自动切换到 ${matched.name}`
-        );
+        const reason =
+          opts?.taskTier === "fast" && matched.id !== naturalChoice.id
+            ? "轻量任务优先快速模型"
+            : `已达每日 Token 上限（${usedByBucket.get(`api:${naturalChoice.id}`) ?? 0}/${naturalChoice.dailyTokenLimit}）`;
+        console.warn(`[ai] ${naturalChoice.name} ${reason}，自动切换到 ${matched.name}`);
       }
       return toResolvedApi(matched);
     }
@@ -763,10 +779,13 @@ export async function chatCompletion(
     onDelta?: (delta: string) => void;
     /** 强制按某一能力选模型（如 vision） */
     capability?: AiCapability;
+    /** fast：属性抽取等轻量任务，优先选带「轻量快速」或未标深度推理的模型 */
+    taskTier?: AiTaskTier;
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   const api = await resolveAiApi({
     capabilities: requiredCapabilitiesForChat({ messages, tools: opts.tools, jsonMode: opts.jsonMode, capability: opts.capability }),
+    taskTier: opts.taskTier,
   });
 
   if (api.provider === "volcengine") {

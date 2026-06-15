@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
 import { CATEGORY_LABELS, stageName } from "@/lib/constants";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
+import { AddPartnerForm } from "../pool/add-partner-form";
 
 export default async function PartnersPage({
   searchParams,
@@ -31,6 +32,7 @@ export default async function PartnersPage({
       <PageHeader
         title="正式伙伴"
         desc={`${partners.length} 家正在经营的伙伴 · 按八大模块管理，跟踪 Pipeline 十阶段`}
+        actions={<AddPartnerForm intent="active" />}
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">

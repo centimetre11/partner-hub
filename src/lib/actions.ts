@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { createSession, destroySession, requireUser } from "./session";
 import { stageName } from "./constants";
+import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 
 // ============ 认证 ============
 
@@ -87,9 +88,11 @@ export async function updatePartnerAction(partnerId: string, formData: FormData)
 }
 
 export async function createPartnerAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
+  // intent=active：从「正式伙伴」页直建，跳过候选直接进入正式经营
+  const asActive = String(formData.get("intent") ?? "") === "active";
   const partner = await db.partner.create({
     data: {
       name,
@@ -97,14 +100,29 @@ export async function createPartnerAction(formData: FormData) {
       city: String(formData.get("city") ?? "") || null,
       country: String(formData.get("country") ?? "") || null,
       coreBusiness: String(formData.get("coreBusiness") ?? "") || null,
-      status: "PROSPECT",
-      poolFlag: "NEW",
+      ...(asActive
+        ? { ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date() }
+        : { status: "PROSPECT", poolFlag: "NEW" }),
     },
   });
-  await db.timelineEvent.create({
-    data: { partnerId: partner.id, type: "SYSTEM", title: "手动添加候选" },
-  });
+  if (asActive) {
+    await db.timelineEvent.create({
+      data: {
+        partnerId: partner.id,
+        type: "SYSTEM",
+        title: "新建正式伙伴",
+        content: `${partner.name} 直接建为正式伙伴，进入「${stageName(partner.pipelineStage)}」阶段。`,
+        createdById: user.id,
+      },
+    });
+    await createStarterTodos(partner.id, partner.name, user.id);
+  } else {
+    await db.timelineEvent.create({
+      data: { partnerId: partner.id, type: "SYSTEM", title: "手动添加候选" },
+    });
+  }
   revalidatePath("/pool");
+  revalidatePath("/partners");
   redirect(`/partners/${partner.id}`);
 }
 
@@ -131,18 +149,7 @@ export async function promotePartnerAction(partnerId: string) {
     },
   });
   // 转正自动生成起步待办
-  const starterTodos = [
-    { title: `完善 ${p.name} 的权力地图（决策者/把关人/商务）`, days: 7 },
-    { title: `确认 ${p.name} 的联合解决方案与切入点`, days: 10 },
-    { title: `安排 ${p.name} 技术 Demo（含 Arabic RTL）`, days: 14 },
-  ];
-  for (const t of starterTodos) {
-    const due = new Date();
-    due.setDate(due.getDate() + t.days);
-    await db.todoItem.create({
-      data: { title: t.title, partnerId, assigneeId: user.id, dueDate: due, priority: "HIGH", source: "SEED" },
-    });
-  }
+  await createStarterTodos(partnerId, p.name, user.id);
   revalidatePath("/pool");
   revalidatePath("/partners");
   revalidatePath(`/partners/${partnerId}`);

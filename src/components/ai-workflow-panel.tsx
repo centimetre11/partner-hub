@@ -44,6 +44,7 @@ export function AiWorkflowPanel({
   scope,
   partnerId,
   sourceText,
+  intent,
   onApplied,
   input,
   onInputChange,
@@ -76,6 +77,8 @@ export function AiWorkflowPanel({
   scope?: IntakeScope;
   partnerId?: string;
   sourceText?: string;
+  /** new_partner 场景：active 表示直接建为正式伙伴 */
+  intent?: "prospect" | "active";
   onApplied?: (partnerId: string) => void;
   input: string;
   onInputChange: (v: string) => void;
@@ -101,6 +104,7 @@ export function AiWorkflowPanel({
         partnerId,
         proposal: normalizedToIntake(filtered),
         sourceText,
+        intent,
       }),
     });
     const data = await res.json();
