@@ -6,6 +6,12 @@ import { chatJson } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
 import { generalWebSearch, hasWebSearchKey, linkedinSearch } from "./web-search";
 import {
+  fetchCompanyUpdates,
+  hasNinjaPearKey,
+  linkedInSlugToLabel,
+  normalizeLinkedInCompanyUrl,
+} from "./ninjapearl";
+import {
   KIMI_BUILTIN_SEARCH,
   shouldUseKimiBuiltinSearch,
   shouldUseVolcengineBuiltinSearch,
@@ -133,14 +139,36 @@ async function gatherViaBocha(
   for (const s of sources) {
     if (!s.enabled) continue;
     const domain = (s.domain ?? "").toLowerCase();
-    let r;
-    if (s.sourceType === "LINKEDIN" || domain.includes("linkedin")) {
-      r = await linkedinSearch({ company: partner.name, maxResults: maxPerQuery });
-    } else {
-      // 注意：博查不支持 site: 过滤，这里把域名作为关键词锚定，而非 site: 语法
-      const siteQuery = domain ? `${nameToken} ${domain}` : `${nameToken} ${s.label}`;
-      r = await generalWebSearch(siteQuery, maxPerQuery);
+    const isLinkedIn = s.sourceType === "LINKEDIN" || domain.includes("linkedin");
+
+    if (isLinkedIn) {
+      // NinjaPear（原 Proxycurl）：按伙伴官网拉博客/X 等公开更新（不直接抓 LinkedIn posts）
+      const website = partner.website?.trim();
+      if (hasNinjaPearKey() && website) {
+        const np = await fetchCompanyUpdates(website);
+        if (np.ok) {
+          blocks.push(
+            `### 自定义监控源：${s.label}（${normalizeLinkedInCompanyUrl(s.url)}）\n` +
+              `数据来源：NinjaPear 公司公开更新（官网 ${website}）\n${np.text}`,
+          );
+          continue;
+        }
+        // Key 无效或请求失败时记录原因，并回退博查
+        blocks.push(`### 自定义监控源：${s.label}（${s.url}）\nNinjaPear：${np.error}`);
+      }
+
+      const slugLabel = linkedInSlugToLabel(s.url);
+      const r = await linkedinSearch({
+        company: slugLabel || partner.name,
+        maxResults: maxPerQuery,
+      });
+      if (r.ok) blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
+      continue;
     }
+
+    // 注意：博查不支持 site: 过滤，这里把域名作为关键词锚定，而非 site: 语法
+    const siteQuery = domain ? `${nameToken} ${domain}` : `${nameToken} ${s.label}`;
+    const r = await generalWebSearch(siteQuery, maxPerQuery);
     if (r.ok) blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
   }
 

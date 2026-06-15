@@ -153,7 +153,12 @@ export function SentimentMonitorSection({
 
       {/* 自定义监控链接源 */}
       <div className="mb-5 pb-5 border-b border-zinc-100">
-        <div className="text-xs text-zinc-400 mb-2">监控链接源（领英 / Facebook 主页 / 官网 / 新闻源…）</div>
+        <div className="text-xs text-zinc-400 mb-2">
+          监控链接源（领英 / Facebook 主页 / 官网 / 新闻源…）
+          <span className="block mt-0.5 text-zinc-300">
+            领英链接：需配置 NINJAPEARL_API_KEY，且伙伴档案填写官网；将按官网拉取博客 / X 等公开更新（不直接抓领英帖子）
+          </span>
+        </div>
         <div className="space-y-2">
           {sources.map((s) => (
             <div key={s.id} className="flex items-center gap-3 rounded-lg border border-zinc-100 px-3 py-2">
@@ -197,7 +202,9 @@ export function SentimentMonitorSection({
             </div>
           ))}
           {sources.length === 0 && (
-            <p className="text-xs text-zinc-400">还没有自定义监控源。添加领英 / Facebook 主页后扫描会优先抓取。</p>
+            <p className="text-xs text-zinc-400">
+              还没有自定义监控源。添加领英主页后，扫描会通过 NinjaPear 按伙伴官网抓取公开动态（需填写官网 + API Key）。
+            </p>
           )}
         </div>
 
