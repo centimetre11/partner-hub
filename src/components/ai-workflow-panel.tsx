@@ -12,6 +12,19 @@ import { LiveProposalDraft } from "@/components/live-proposal-draft";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
 
+function fileToChatImage(file: File): Promise<ChatImage> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      resolve({ url: String(reader.result), name: file.name || "粘贴的图片.png" });
+    reader.readAsDataURL(file);
+  });
+}
+
+function filesToChatImages(files: File[]): Promise<ChatImage[]> {
+  return Promise.all(files.filter((f) => f.type.startsWith("image/")).map(fileToChatImage));
+}
+
 export function AiWorkflowPanel({
   title,
   subtitle,
@@ -190,17 +203,7 @@ export function AiWorkflowPanel({
                       onChange={(e) => {
                         const files = [...(e.target.files ?? [])];
                         if (!files.length) return;
-                        void Promise.all(
-                          files.map(
-                            (file) =>
-                              new Promise<ChatImage>((resolve) => {
-                                const reader = new FileReader();
-                                reader.onload = () =>
-                                  resolve({ url: String(reader.result), name: file.name });
-                                reader.readAsDataURL(file);
-                              })
-                          )
-                        ).then((imgs) => onAddImages(imgs));
+                        void filesToChatImages(files).then((imgs) => imgs.length && onAddImages(imgs));
                         e.target.value = "";
                       }}
                     />
@@ -216,8 +219,25 @@ export function AiWorkflowPanel({
                       onSend();
                     }
                   }}
+                  onPaste={(e) => {
+                    if (!onAddImages) return;
+                    const files = [...e.clipboardData.items]
+                      .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+                      .map((it) => it.getAsFile())
+                      .filter((f): f is File => !!f);
+                    if (!files.length) return;
+                    e.preventDefault();
+                    void filesToChatImages(files).then((imgs) => imgs.length && onAddImages(imgs));
+                  }}
+                  onDrop={(e) => {
+                    if (!onAddImages) return;
+                    const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+                    if (!files.length) return;
+                    e.preventDefault();
+                    void filesToChatImages(files).then((imgs) => imgs.length && onAddImages(imgs));
+                  }}
                   rows={3}
-                  placeholder={inputPlaceholder ?? "输入后按 ⌘/Ctrl + Enter 发送…"}
+                  placeholder={inputPlaceholder ?? "输入后按 ⌘/Ctrl + Enter 发送；可直接粘贴/拖入图片…"}
                   className="flex-1 rounded-xl border border-zinc-200 px-4 py-3 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 {loading && onStop ? (
