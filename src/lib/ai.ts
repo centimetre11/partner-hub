@@ -94,7 +94,12 @@ export function requiredCapabilitiesForChat(opts: {
   return required;
 }
 
-async function resolveAiApi(opts?: { capabilities?: AiCapability[]; taskTier?: AiTaskTier }): Promise<ResolvedAiApi> {
+async function resolveAiApi(opts?: {
+  capabilities?: AiCapability[];
+  taskTier?: AiTaskTier;
+  /** 强制使用指定 API（如联网搜索专用模型） */
+  apiConfigId?: string;
+}): Promise<ResolvedAiApi> {
   const required = opts?.capabilities ?? ["chat"];
   const configured = await db.aiApiConfig.findMany({
     where: { enabled: true },
@@ -103,6 +108,10 @@ async function resolveAiApi(opts?: { capabilities?: AiCapability[]; taskTier?: A
   });
 
   if (configured.length) {
+    if (opts?.apiConfigId) {
+      const forced = configured.find((a) => a.id === opts.apiConfigId);
+      if (forced) return toResolvedApi(forced);
+    }
     // 读取今日各模型已用 Token，用于判断是否触达每日上限
     const day = new Date().toISOString().slice(0, 10);
     const usages = await db.aiDailyTokenUsage.findMany({
@@ -781,11 +790,14 @@ export async function chatCompletion(
     capability?: AiCapability;
     /** fast：属性抽取等轻量任务，优先选带「轻量快速」或未标深度推理的模型 */
     taskTier?: AiTaskTier;
+    /** 强制使用指定 API 配置（如联网搜索走 Doubao/Kimi 专用条目） */
+    apiConfigId?: string;
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   const api = await resolveAiApi({
     capabilities: requiredCapabilitiesForChat({ messages, tools: opts.tools, jsonMode: opts.jsonMode, capability: opts.capability }),
     taskTier: opts.taskTier,
+    apiConfigId: opts.apiConfigId,
   });
 
   if (api.provider === "volcengine") {

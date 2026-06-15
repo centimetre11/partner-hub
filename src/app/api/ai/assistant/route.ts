@@ -11,20 +11,13 @@ import {
 } from "@/lib/ai-intake";
 import {
   ASSISTANT_SKILLS,
-  KIMI_BUILTIN_SEARCH,
   newSkillContext,
   runSkill,
-  shouldUseKimiBuiltinSearch,
-  shouldUseVolcengineBuiltinSearch,
   skillsToTools,
 } from "@/lib/skills";
 
 async function resolveQueryTools() {
-  const volcSearch = await shouldUseVolcengineBuiltinSearch();
-  const assistantSkills = volcSearch ? ASSISTANT_SKILLS.filter((s) => s !== "web_search") : ASSISTANT_SKILLS;
-  const tools: (ToolDef | Record<string, unknown>)[] = skillsToTools(assistantSkills);
-  if (await shouldUseKimiBuiltinSearch()) tools.push(KIMI_BUILTIN_SEARCH);
-  return tools;
+  return skillsToTools(ASSISTANT_SKILLS);
 }
 
 async function runQueryAssistant(

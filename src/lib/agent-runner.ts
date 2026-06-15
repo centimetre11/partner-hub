@@ -4,12 +4,9 @@ import type { ChatMessage, ToolDef } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
 import type { TraceEmitter } from "./ai-trace";
 import {
-  KIMI_BUILTIN_SEARCH,
   newSkillContext,
   REPORT_AGENT_KEYWORDS,
   runSkill,
-  shouldUseKimiBuiltinSearch,
-  shouldUseVolcengineBuiltinSearch,
 } from "./skills";
 import { partnerContext } from "./proposals";
 import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
@@ -86,11 +83,7 @@ export async function runAgent(
   try {
     const resolved = await resolveAgentSkills(agent.id, agent.skills);
     const skillNames = resolved.skillNames;
-    const volcSearch = skillNames.includes("web_search") && (await shouldUseVolcengineBuiltinSearch());
-    const effectiveSkillNames = volcSearch ? skillNames.filter((n) => n !== "web_search") : skillNames;
-    const tools: (ToolDef | Record<string, unknown>)[] = buildToolsForAgent(effectiveSkillNames);
-    const kimiSearch = skillNames.includes("web_search") && !volcSearch && (await shouldUseKimiBuiltinSearch());
-    if (kimiSearch) tools.push(KIMI_BUILTIN_SEARCH);
+    const tools: (ToolDef | Record<string, unknown>)[] = buildToolsForAgent(skillNames);
 
     // 作用域上下文
     let scopeCtx = "";

@@ -245,7 +245,7 @@ export async function scanPartnerSentiment(
     return {
       ...empty,
       needsWebSearch: true,
-      error: "未配置支持联网搜索的大模型（Kimi 或火山引擎内置 web_search）。请在设置中配置后重试。",
+      error: "未找到支持联网搜索的已启用模型。请添加并启用 Kimi 或火山 web_search 配置。",
     };
   }
 

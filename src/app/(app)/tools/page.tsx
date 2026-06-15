@@ -47,9 +47,10 @@ export default async function ToolsPage() {
         {!webSearchReady && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <span className="font-medium">领英搜索 / 新闻搜索 / 舆情扫描需要支持联网的大模型。</span>
-            请在「团队设置 → 大模型管理中心」配置 <strong>Kimi（moonshot）</strong> 或{" "}
-            <strong>火山引擎</strong>（extra.tools 含 <code className="text-xs bg-amber-100 px-1 rounded">web_search</code>
-            ），然后重启服务。
+            请在「团队设置 → 大模型管理中心」添加并<strong>启用</strong>支持联网的模型：{" "}
+            <strong>Kimi（moonshot）</strong> 或 <strong>火山引擎</strong>（tools 含{" "}
+            <code className="text-xs bg-amber-100 px-1 rounded">web_search</code>
+            ）。系统会从<strong>全部已启用</strong>的配置中自动选用，不必是默认模型。
           </div>
         )}
         {!kmsConfigured && (

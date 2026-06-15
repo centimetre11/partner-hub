@@ -1,15 +1,10 @@
 /**
  * 通过大模型内置联网搜索（Kimi $web_search / 火山引擎 web_search）执行公开信息检索。
- * 不再依赖博查等第三方搜索 API。
+ * 从全部已启用 API 中自动挑选支持联网的配置，不必是默认模型。
  */
 
 import { db } from "./db";
-import {
-  KIMI_BUILTIN_SEARCH,
-  shouldUseBuiltinWebSearch,
-  shouldUseKimiBuiltinSearch,
-  shouldUseVolcengineBuiltinSearch,
-} from "./builtin-search";
+import { findWebSearchBackend, KIMI_BUILTIN_SEARCH } from "./builtin-search";
 
 export type WebSearchResult =
   | { ok: true; text: string }
@@ -22,7 +17,7 @@ async function hasAiConfigured(): Promise<boolean> {
 /** 当前环境是否可用模型内置联网搜索 */
 export async function isWebSearchAvailable(): Promise<boolean> {
   if (!(await hasAiConfigured())) return false;
-  return shouldUseBuiltinWebSearch();
+  return !!(await findWebSearchBackend());
 }
 
 export type ModelSearchMode = "general" | "news" | "linkedin";
@@ -48,17 +43,18 @@ export async function modelWebSearch(
   const q = query.trim();
   if (!q) return { ok: false, error: "搜索词为空" };
 
-  if (!(await isWebSearchAvailable())) {
+  const backend = await findWebSearchBackend();
+  if (!backend) {
     return {
       ok: false,
       needsWebSearch: true,
       error:
-        "未配置支持联网搜索的大模型。请在设置中启用 Kimi（moonshot）或火山引擎（extra.tools 含 web_search）的 API。",
+        "未找到支持联网搜索的已启用模型。请在设置中添加 Kimi（moonshot）或火山引擎（tools 含 web_search）并启用。",
     };
   }
 
-  const useKimi = await shouldUseKimiBuiltinSearch();
-  const tools = useKimi ? [KIMI_BUILTIN_SEARCH] : [];
+  const tools = backend.kind === "kimi" ? [KIMI_BUILTIN_SEARCH] : [];
+  const apiConfigId = backend.source === "db" ? backend.apiId : undefined;
 
   const { runToolLoop } = await import("./ai-tool-loop");
   const text = await runToolLoop({
@@ -70,6 +66,7 @@ export async function modelWebSearch(
     temperature: 0.3,
     feature: opts.feature ?? "模型联网搜索",
     userId: opts.userId ?? undefined,
+    apiConfigId,
     streamReply: false,
     maxSteps: 8,
     executeTool: async (tc) => {
@@ -117,9 +114,14 @@ export async function linkedinSearch(args: {
   return modelWebSearch(q, { feature: "领英搜索", mode: "linkedin" });
 }
 
-/** 供日志/调试：当前使用的搜索后端 */
+/** 供 UI 展示：当前联网搜索实际使用的模型 */
 export async function webSearchBackendLabel(): Promise<string> {
-  if (await shouldUseVolcengineBuiltinSearch()) return "火山引擎内置 web_search";
-  if (await shouldUseKimiBuiltinSearch()) return "Kimi 内置 $web_search";
-  return "未配置";
+  const b = await findWebSearchBackend();
+  if (!b) return "未配置";
+  if (b.kind === "volcengine") {
+    const name = b.source === "db" ? b.name : "火山引擎";
+    return `${name}（内置 web_search）`;
+  }
+  const name = b.source === "db" ? b.name : "环境变量 Kimi";
+  return `${name}（$web_search）`;
 }

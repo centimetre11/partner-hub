@@ -16,6 +16,8 @@ export type ToolLoopOptions = {
   feature: string;
   userId?: string;
   maxSteps?: number;
+  /** 联网搜索等场景：强制走指定 API 配置 */
+  apiConfigId?: string;
   emit?: TraceEmitter;
   /** 是否把最终回复真·流式推送给前端（默认 true）。research/JSON 输出场景应设为 false */
   streamReply?: boolean;
@@ -54,6 +56,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
       temperature: opts.temperature ?? 0.3,
       feature: opts.feature,
       userId: opts.userId,
+      apiConfigId: opts.apiConfigId,
       // 真·流式：边生成边把文本增量推送给前端（仅 query 类场景；JSON 输出场景关闭）
       onDelta:
         opts.emit && streamReply

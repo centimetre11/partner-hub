@@ -627,11 +627,7 @@ export function intakeEnrichmentSkillsForScope(scope: string): string[] {
 }
 
 export async function buildIntakeTools(skillNames: string[]): Promise<(ToolDef | Record<string, unknown>)[]> {
-  const volcSearch = await shouldUseVolcengineBuiltinSearch();
-  const names = volcSearch ? skillNames.filter((s) => s !== "web_search") : skillNames;
-  const tools: (ToolDef | Record<string, unknown>)[] = skillsToTools(names);
-  if (await shouldUseKimiBuiltinSearch()) tools.push(KIMI_BUILTIN_SEARCH);
-  return tools;
+  return skillsToTools(skillNames);
 }
 
 // 内置联网搜索探测已移至 ./builtin-search，避免与 sentiment-monitor 形成循环依赖；此处再导出以兼容既有引用
