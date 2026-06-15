@@ -31,7 +31,7 @@ export function PartnerAgentsPanel({
   return (
     <Card title={`快捷 Agent（${agents.length}）`}>
       <p className="text-xs text-zinc-500 mb-4">
-        绑定本伙伴的自动化助手：会前简报、动态监测、联合方案报告等
+        绑定本伙伴的自动化助手：会前简报、动态监测、舆情监控、联合方案报告等
       </p>
       <div className="space-y-3">
         {agents.map((a) => (

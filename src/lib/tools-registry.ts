@@ -30,6 +30,7 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   create_todo: { implemented: true, priority: "core" },
   linkedin_search: { implemented: true, requiresWebSearch: true, priority: "core" },
   web_search: { implemented: true, requiresWebSearch: true, priority: "core" },
+  scan_sentiment: { implemented: true, requiresWebSearch: true, priority: "core" },
   search_knowledge: { implemented: true, priority: "core" },
   read_kms: { implemented: true, requiresKms: true, priority: "core" },
   create_document: { implemented: true, priority: "core" },
@@ -46,6 +47,7 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   list_todos: "todo",
   linkedin_search: "intel",
   web_search: "intel",
+  scan_sentiment: "intel",
   search_knowledge: "content",
   read_kms: "kms",
   create_document: "content",
@@ -110,4 +112,4 @@ export const CORE_AGENT_TOOLS = [
   "search_knowledge",
 ];
 
-export const INTEL_AGENT_TOOLS = ["linkedin_search", "web_search"];
+export const INTEL_AGENT_TOOLS = ["linkedin_search", "web_search", "scan_sentiment"];

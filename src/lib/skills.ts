@@ -3,8 +3,14 @@ import type { ToolDef } from "./ai";
 import { PARTNER_FIELD_LABELS, stageName } from "./constants";
 import { partnerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
-import { generalWebSearch, hasWebSearchKey, linkedinSearch } from "./web-search";
+import { generalWebSearch, linkedinSearch } from "./web-search";
 import { readKmsForUser } from "./kms";
+import {
+  KIMI_BUILTIN_SEARCH,
+  shouldUseKimiBuiltinSearch,
+  shouldUseVolcengineBuiltinSearch,
+} from "./builtin-search";
+import { MONITOR_DIMENSIONS, MONITOR_SENTIMENT_LABELS } from "./constants";
 
 // ============ 技能执行上下文 ============
 
@@ -382,6 +388,50 @@ const addTimelineEvent: Skill = {
   },
 };
 
+// ---- 舆情扫描 ----
+const scanSentiment: Skill = {
+  name: "scan_sentiment",
+  label: "舆情扫描",
+  desc: "对某个伙伴执行一次联网舆情扫描，按维度/情感分类后入库（含自定义监控链接源）",
+  def: {
+    type: "function",
+    function: {
+      name: "scan_sentiment",
+      description:
+        "对指定伙伴执行一次舆情监控扫描：联网抓取公司动态/人事/招聘/中标/融资/竞品/社媒/口碑/活动/生态/风险等维度，AI 判定情感后去重入库，并把负面/高风险写入伙伴时间线。返回本次新增条目摘要。",
+      parameters: {
+        type: "object",
+        properties: {
+          partnerName: { type: "string", description: "伙伴公司名（支持模糊匹配）" },
+          dimensions: {
+            type: "array",
+            items: { type: "string", enum: MONITOR_DIMENSIONS },
+            description: "可选：限定本次扫描的维度，不传则用该伙伴已勾选的维度或全部",
+          },
+        },
+        required: ["partnerName"],
+      },
+    },
+  },
+  run: async (args, ctx) => {
+    const p = await findPartnerByName(String(args.partnerName));
+    if (!p) return `找不到名为「${args.partnerName}」的伙伴`;
+    const dims = Array.isArray(args.dimensions) ? (args.dimensions as unknown[]).map(String) : undefined;
+    // 动态导入，避免 skills ↔ sentiment-monitor 在模块初始化期形成循环依赖
+    const { scanPartnerSentiment } = await import("./sentiment-monitor");
+    const r = await scanPartnerSentiment(p.id, { userId: ctx.userId, dims });
+    if (!r.ok) return r.error ?? "舆情扫描失败";
+    const breakdown = Object.entries(r.bySentiment)
+      .map(([k, v]) => `${MONITOR_SENTIMENT_LABELS[k] ?? k} ${v}`)
+      .join("、");
+    const msg = r.created
+      ? `已为 ${p.name} 扫描 ${r.scanned} 个信息源，新增 ${r.created} 条舆情（${breakdown || "—"}）`
+      : `已为 ${p.name} 扫描 ${r.scanned} 个信息源，本次无新发现`;
+    ctx.actions.push(msg);
+    return msg;
+  },
+};
+
 // ---- 检索知识库 ----
 const searchKnowledge: Skill = {
   name: "search_knowledge",
@@ -517,6 +567,7 @@ export const SKILLS: Skill[] = [
   listTodos,
   linkedinSearchTool,
   webSearch,
+  scanSentiment,
   addTimelineEvent,
   searchKnowledge,
   readKms,
@@ -583,42 +634,9 @@ export async function buildIntakeTools(skillNames: string[]): Promise<(ToolDef |
   return tools;
 }
 
-// Kimi（moonshot）平台的内置联网搜索：作为特殊工具注入，工具被调用时原样回传参数即可
-export const KIMI_BUILTIN_SEARCH = {
-  type: "builtin_function" as const,
-  function: { name: "$web_search" },
-};
-
-export async function shouldUseVolcengineBuiltinSearch(): Promise<boolean> {
-  if (hasWebSearchKey()) return false;
-  const configured = await db.aiApiConfig.findFirst({
-    where: { enabled: true },
-    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    select: { provider: true, extraConfig: true },
-  });
-  if (configured?.provider !== "volcengine") return false;
-  try {
-    const extra = JSON.parse(configured.extraConfig ?? "{}") as { tools?: Array<{ type?: string }> };
-    return (extra.tools ?? []).some((t) => t.type === "web_search");
-  } catch {
-    return false;
-  }
-}
-
-export async function shouldUseKimiBuiltinSearch(): Promise<boolean> {
-  if (hasWebSearchKey()) return false;
-  if (await shouldUseVolcengineBuiltinSearch()) return false;
-  const configured = await db.aiApiConfig.findFirst({
-    where: { enabled: true },
-    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
-    select: { baseUrl: true },
-  });
-  return ((configured?.baseUrl ?? process.env.AI_BASE_URL) ?? "").includes("moonshot");
-}
-
-export async function shouldUseBuiltinWebSearch(): Promise<boolean> {
-  return (await shouldUseVolcengineBuiltinSearch()) || (await shouldUseKimiBuiltinSearch());
-}
+// 内置联网搜索探测已移至 ./builtin-search，避免与 sentiment-monitor 形成循环依赖；此处再导出以兼容既有引用
+export { KIMI_BUILTIN_SEARCH, shouldUseVolcengineBuiltinSearch, shouldUseKimiBuiltinSearch };
+export { shouldUseBuiltinWebSearch } from "./builtin-search";
 
 export function skillsToTools(names: string[]): ToolDef[] {
   return names.map((n) => SKILL_MAP.get(n)?.def).filter(Boolean) as ToolDef[];

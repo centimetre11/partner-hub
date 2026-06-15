@@ -45,6 +45,7 @@ export type VolcengineApiForClient = {
   capabilities: AiCapability[];
   dailyTokenLimit: number | null;
   usedTodayTokens: number;
+  priority: number;
   createdAt: string;
 };
 
@@ -123,6 +124,9 @@ function VolcengineConfigCard({
             >
               {cfg.enabled ? "已启用" : "已停用"}
             </span>
+            {cfg.priority !== 0 && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">优先级 {cfg.priority}</span>
+            )}
           </div>
           <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
             <div>
@@ -276,17 +280,29 @@ function VolcengineEditForm({
 
         <AiCapabilityFields defaultCapabilities={existing?.capabilities} />
 
-        <label className="space-y-1 block">
-          <span className={label}>每日 Token 上限（可选，留空 = 不限）</span>
-          <input
-            name="dailyTokenLimit"
-            type="number"
-            min={0}
-            defaultValue={existing?.dailyTokenLimit ?? ""}
-            placeholder="如 1000000；超过后自动切换到其他启用的模型"
-            className={textInput}
-          />
-        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="space-y-1 block">
+            <span className={label}>优先级（数字越大越先用，默认 0）</span>
+            <input
+              name="priority"
+              type="number"
+              defaultValue={existing?.priority ?? 0}
+              placeholder="有免费额度的填更大值，先用完它"
+              className={textInput}
+            />
+          </label>
+          <label className="space-y-1 block">
+            <span className={label}>每日 Token 上限（可选，留空 = 不限）</span>
+            <input
+              name="dailyTokenLimit"
+              type="number"
+              min={0}
+              defaultValue={existing?.dailyTokenLimit ?? ""}
+              placeholder="如 1000000；超过后自动切换"
+              className={textInput}
+            />
+          </label>
+        </div>
 
         <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
           <label className="inline-flex items-center gap-1.5">

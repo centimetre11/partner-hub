@@ -102,6 +102,67 @@ export const EVENT_TYPE_LABELS: Record<string, string> = {
   CHANGE: "档案变更",
 };
 
+// ============ 舆情监控 ============
+
+// 11 个监控维度
+export const MONITOR_DIMENSION_LABELS: Record<string, string> = {
+  NEWS: "公司动态",
+  PEOPLE: "人事变动",
+  HIRING: "招聘信号",
+  DEALS: "中标/项目",
+  FUNDING: "融资/财务",
+  COMPETITOR: "竞品关系",
+  SOCIAL: "社媒动态",
+  REPUTATION: "口碑/评价",
+  EVENTS: "活动/会议",
+  ALLIANCE: "生态/认证",
+  RISK: "风险预警",
+};
+
+// 维度的搜索关键词（中英文混合，供构造联网搜索 query）
+export const MONITOR_DIMENSION_KEYWORDS: Record<string, string> = {
+  NEWS: "news announcement product launch 新闻 动态",
+  PEOPLE: "new CEO CTO appointment hire leadership change 高管 任命 离职",
+  HIRING: "hiring jobs careers recruitment BI data analyst 招聘",
+  DEALS: "contract award tender project win deployment 中标 项目 客户",
+  FUNDING: "funding round investment acquisition revenue 融资 收购",
+  COMPETITOR: "Power BI Tableau Qlik implementation partner 竞品",
+  SOCIAL: "LinkedIn Facebook post update 发帖 动态",
+  REPUTATION: "review rating Glassdoor reputation complaint 评价 口碑",
+  EVENTS: "event conference webinar exhibition summit 展会 会议",
+  ALLIANCE: "Microsoft AWS Google partnership certification 合作 认证",
+  RISK: "layoff lawsuit controversy scandal crisis 裁员 诉讼 负面",
+};
+
+export const MONITOR_DIMENSIONS = Object.keys(MONITOR_DIMENSION_LABELS);
+
+// 4 档情感
+export const MONITOR_SENTIMENT_LABELS: Record<string, string> = {
+  POSITIVE: "正面/机会",
+  NEUTRAL: "中性",
+  NEGATIVE: "负面",
+  RISK: "高风险",
+};
+
+export const MONITOR_SENTIMENT_TONE: Record<
+  string,
+  "green" | "zinc" | "amber" | "red"
+> = {
+  POSITIVE: "green",
+  NEUTRAL: "zinc",
+  NEGATIVE: "amber",
+  RISK: "red",
+};
+
+export const MONITOR_SOURCE_TYPE_LABELS: Record<string, string> = {
+  LINKEDIN: "领英",
+  FACEBOOK: "Facebook",
+  X: "X / Twitter",
+  WEBSITE: "官网",
+  NEWS: "新闻源",
+  CUSTOM: "自定义",
+};
+
 export const AI_VERIFIED_LABELS: Record<string, string> = {
   VERIFIED: "AI已验证",
   PARTIAL: "部分信息",

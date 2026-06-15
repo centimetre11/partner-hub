@@ -97,7 +97,8 @@ async function resolveAiApi(opts?: { capabilities?: AiCapability[] }): Promise<R
   const required = opts?.capabilities ?? ["chat"];
   const configured = await db.aiApiConfig.findMany({
     where: { enabled: true },
-    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    // priority 越大越先用（如先用完免费额度），其次默认、再次创建时间
+    orderBy: [{ priority: "desc" }, { isDefault: "desc" }, { createdAt: "asc" }],
   });
 
   if (configured.length) {

@@ -3,23 +3,23 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } from "@/components/ui";
 import {
-  ATTITUDE_LABELS, CATEGORY_LABELS, CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS,
-  EVENT_TYPE_LABELS, PIPELINE_STAGES, POOL_FLAG_LABELS, STATUS_LABELS,
-  TODO_PRIORITY_LABELS, attitudeLabel, roleInfluence, CONTACT_ROLES_BY_INFLUENCE, stageName,
+  CATEGORY_LABELS, EVENT_TYPE_LABELS, PIPELINE_STAGES,
+  POOL_FLAG_LABELS, STATUS_LABELS, TODO_PRIORITY_LABELS,
 } from "@/lib/constants";
-import { attitudeDotClass } from "@/components/power-map";
-import { PowerMapFlow } from "@/components/power-map-flow";
+import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import {
-  addNoteAction, archivePartnerAction, createTodoAction, deleteContactAction,
+  addNoteAction, archivePartnerAction, createTodoAction,
   deleteOpportunityAction, deleteTodoAction, deleteTrainingAction, promotePartnerAction,
   restorePartnerAction, setPipelineStageAction, toggleTodoAction, updatePartnerAction,
-  upsertContactAction, upsertOpportunityAction, upsertTrainingAction,
+  upsertOpportunityAction, upsertTrainingAction,
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
 import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
+import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
+import { MONITOR_DIMENSIONS } from "@/lib/constants";
 import { AiAddButton } from "@/components/ai-add-button";
 import { TodoEditButton } from "@/components/todo-edit-button";
 
@@ -35,6 +35,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
       events: { orderBy: { createdAt: "desc" }, include: { createdBy: true } },
       trainings: true,
       todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], include: { assignee: true } },
+      monitorSources: { orderBy: { createdAt: "desc" } },
+      monitorItems: {
+        where: { status: "NEW" },
+        orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+        take: 60,
+      },
       owner: true,
       solutions: {
         orderBy: { updatedAt: "desc" },
@@ -53,12 +59,21 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     select: { id: true, name: true, icon: true, description: true, enabled: true, lastRunAt: true },
   });
   const agentTemplates = await db.agent.findMany({
-    where: { isTemplate: true, OR: [{ name: { contains: "会前" } }, { name: { contains: "联合" } }, { name: { contains: "动态" } }] },
+    where: { isTemplate: true, OR: [{ name: { contains: "会前" } }, { name: { contains: "联合" } }, { name: { contains: "动态" } }, { name: { contains: "舆情" } }] },
     select: { id: true, name: true, icon: true, description: true },
     orderBy: { name: "asc" },
   });
   const completeness = computeCompleteness(p);
   const stale = staleDays(p);
+  let selectedDims: string[] = [];
+  if (p.monitorDims) {
+    try {
+      const parsed = JSON.parse(p.monitorDims);
+      if (Array.isArray(parsed)) selectedDims = parsed.map(String).filter((d) => MONITOR_DIMENSIONS.includes(d));
+    } catch {
+      /* ignore */
+    }
+  }
 
   const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
@@ -204,120 +219,18 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             title={`② 权力地图（${p.contacts.length} 人）`}
             actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI 加人" variant="soft" />}
           >
-            {p.contacts.length > 0 && (
-              <div className="mb-5 border-b border-zinc-100 pb-4">
-                <PowerMapFlow
-                  partnerId={p.id}
-                  contacts={p.contacts.map((c) => ({
-                    id: c.id, name: c.name, role: c.role, title: c.title,
-                    department: c.department, attitude: c.attitude, reportsToId: c.reportsToId,
-                    x: c.x, y: c.y,
-                  }))}
-                  links={p.contactLinks.map((l) => ({
-                    id: l.id, subordinateId: l.subordinateId, superiorId: l.superiorId, kind: l.kind,
-                  }))}
-                />
-              </div>
-            )}
-            <div className="space-y-3">
-              {[...p.contacts]
-                .sort((a, b) => roleInfluence(b.role) - roleInfluence(a.role) || b.attitude - a.attitude)
-                .map((c) => (
-                <details key={c.id} className="group rounded-lg border border-zinc-100 hover:border-zinc-200">
-                  <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
-                    <div className="relative shrink-0">
-                      <div className="w-9 h-9 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center text-sm font-semibold">
-                        {c.name.slice(0, 1)}
-                      </div>
-                      <span
-                        className={`absolute -top-1 -right-1.5 w-4.5 h-4.5 rounded-full text-[10px] font-bold flex items-center justify-center ${attitudeDotClass(c.attitude)}`}
-                      >
-                        {c.attitude}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium text-zinc-900">{c.name}</span>
-                        <Badge tone={c.role === "DECISION_MAKER" || c.role === "APPROVER" ? "red" : "zinc"}>
-                          {CONTACT_ROLE_CODES[c.role] ?? "I"} · {CONTACT_ROLE_LABELS[c.role] ?? c.role}
-                        </Badge>
-                        {c.title && <span className="text-xs text-zinc-500">{c.title}</span>}
-                        {c.department && <span className="text-xs text-zinc-400">{c.department}</span>}
-                      </div>
-                      <div className="text-xs text-zinc-400 mt-0.5">
-                        态度：{attitudeLabel(c.attitude)}
-                        {c.reportsToId && ` · 汇报给 ${p.contacts.find((x) => x.id === c.reportsToId)?.name ?? "?"}`}
-                        {c.contactInfo && ` · ${c.contactInfo}`}
-                      </div>
-                    </div>
-                    <span className="text-zinc-300 group-open:rotate-90 transition-transform">›</span>
-                  </summary>
-                  <div className="px-4 pb-4 pt-1 border-t border-zinc-50">
-                    <form action={upsertContactAction.bind(null, p.id)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                      <input type="hidden" name="id" value={c.id} />
-                      <input name="name" defaultValue={c.name} placeholder="姓名" className={input} />
-                      <select name="role" defaultValue={c.role} className={input}>
-                        {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
-                          <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {CONTACT_ROLE_LABELS[k]}</option>
-                        ))}
-                      </select>
-                      <select name="attitude" defaultValue={c.attitude} className={input}>
-                        {Object.entries(ATTITUDE_LABELS).sort((a, b) => Number(b[0]) - Number(a[0])).map(([k, v]) => (
-                          <option key={k} value={k}>{k} · {v}</option>
-                        ))}
-                      </select>
-                      <input name="title" defaultValue={c.title ?? ""} placeholder="职位" className={input} />
-                      <input name="department" defaultValue={c.department ?? ""} placeholder="部门" className={input} />
-                      <select name="reportsToId" defaultValue={c.reportsToId ?? ""} className={input}>
-                        <option value="">汇报上级（无 = 顶层）</option>
-                        {p.contacts.filter((x) => x.id !== c.id).map((x) => (
-                          <option key={x.id} value={x.id}>汇报给 {x.name}</option>
-                        ))}
-                      </select>
-                      <input name="contactInfo" defaultValue={c.contactInfo ?? ""} placeholder="联系方式" className={input} />
-                      <input name="approach" defaultValue={c.approach ?? ""} placeholder="最佳接触方式" className={input} />
-                      <input name="notes" defaultValue={c.notes ?? ""} placeholder="备注" className={input} />
-                      <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
-                        <button formAction={deleteContactAction.bind(null, p.id, c.id)} className="text-xs text-zinc-400 hover:text-red-600 px-2">
-                          删除
-                        </button>
-                        <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700">保存</button>
-                      </div>
-                    </form>
-                  </div>
-                </details>
-              ))}
-              {p.contacts.length === 0 && <EmptyState text="还没有关键人物。开会或导入聊天记录时 AI 会自动帮你建立权力地图。" />}
-
-              <details className="rounded-lg border border-dashed border-zinc-200">
-                <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ 手动添加人物</summary>
-                <form action={upsertContactAction.bind(null, p.id)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                  <input name="name" required placeholder="姓名 *" className={input} />
-                  <select name="role" className={input}>
-                    {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
-                      <option key={k} value={k}>{CONTACT_ROLE_CODES[k]} · {CONTACT_ROLE_LABELS[k]}</option>
-                    ))}
-                  </select>
-                  <select name="attitude" defaultValue="0" className={input}>
-                    {Object.entries(ATTITUDE_LABELS).sort((a, b) => Number(b[0]) - Number(a[0])).map(([k, v]) => (
-                      <option key={k} value={k}>{k} · {v}</option>
-                    ))}
-                  </select>
-                  <input name="title" placeholder="职位" className={input} />
-                  <input name="department" placeholder="部门" className={input} />
-                  <select name="reportsToId" className={input}>
-                    <option value="">汇报上级（无 = 顶层）</option>
-                    {p.contacts.map((x) => (
-                      <option key={x.id} value={x.id}>汇报给 {x.name}</option>
-                    ))}
-                  </select>
-                  <input name="contactInfo" placeholder="联系方式" className={input} />
-                  <div className="col-span-2 md:col-span-3 flex justify-end">
-                    <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs hover:bg-indigo-700">添加</button>
-                  </div>
-                </form>
-              </details>
-            </div>
+            <PowerMapSection
+              partnerId={p.id}
+              contacts={p.contacts.map((c) => ({
+                id: c.id, name: c.name, role: c.role, title: c.title,
+                department: c.department, attitude: c.attitude, reportsToId: c.reportsToId,
+                x: c.x, y: c.y,
+                contactInfo: c.contactInfo, approach: c.approach, notes: c.notes,
+              }))}
+              links={p.contactLinks.map((l) => ({
+                id: l.id, subordinateId: l.subordinateId, superiorId: l.superiorId, kind: l.kind,
+              }))}
+            />
           </Card>
 
           {/* 模块三/四：商机 Pipeline */}
@@ -430,6 +343,20 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />
+
+          <SentimentMonitorSection
+            partnerId={p.id}
+            sources={p.monitorSources.map((s) => ({
+              id: s.id, label: s.label, url: s.url, sourceType: s.sourceType,
+              domain: s.domain, title: s.title, thumbnailUrl: s.thumbnailUrl, enabled: s.enabled,
+            }))}
+            items={p.monitorItems.map((m) => ({
+              id: m.id, dimension: m.dimension, sentiment: m.sentiment, title: m.title,
+              summary: m.summary, url: m.url, sourceName: m.sourceName,
+              publishedAt: m.publishedAt, createdAt: m.createdAt,
+            }))}
+            selectedDims={selectedDims}
+          />
 
           {/* 时间线 */}
           <Card title={`⑤ 动态时间线（${p.events.length}）`}>

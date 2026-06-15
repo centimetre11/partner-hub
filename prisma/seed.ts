@@ -324,17 +324,14 @@ const weeklyActions: { week: number; title: string; partner?: string }[] = [
 // ===== Agent 模板库（幂等：按名称 upsert） =====
 const agentTemplates = [
   {
-    name: "领英/外部动态监测",
+    name: "舆情监控",
     icon: "📡",
-    description: "定期搜索绑定伙伴公司与高管的公开动态（领英、新闻、招聘、中标），写入时间线并推送简报",
-    instructions: `你是伙伴外部动态监测雷达。每次运行：
-1. 读取绑定伙伴的档案（get_partner），拿到公司名、高管/联系人姓名。
-2. 对每个关键联系人，用 linkedin_search（company + person）搜索 LinkedIn 公开动态。
-3. 用 web_search 补充非领英来源：公司新闻、招聘、中标（关键词如 "公司名 news"、"公司名 hiring"、"公司名 contract award"）。
-4. 每条确认有价值的动态，用 add_timeline_event 写入伙伴时间线，content 里带来源 URL。
-5. 需要跟进时用 create_todo 建待办。
-6. 输出简报：发现了什么、对帆软合作意味着什么、建议下一步。无新发现就明说。`,
-    skills: ["get_partner", "linkedin_search", "web_search", "add_timeline_event", "create_todo"],
+    description: "按该伙伴已勾选的维度，定期联网扫描舆情（公司动态/人事/招聘/中标/竞品/风险等），分类入库",
+    instructions: `你是伙伴舆情监控雷达，绑定单个伙伴运行。每次运行：
+1. 用 scan_sentiment（传 partnerName=绑定伙伴名）执行一次舆情扫描。扫描会按该伙伴在系统里已勾选的监控维度逐项联网搜索，并由系统自动判定情感（正面/中性/负面/风险）、去重后入库到该伙伴的舆情列表。
+2. 如果该伙伴还没有勾选任何监控维度，scan_sentiment 会返回提示——此时在简报里说明"该伙伴尚未配置监控维度"，并建议运营到伙伴页勾选维度或添加监控链接源。
+3. 输出简报：本次新增的舆情条数与情感分布、值得关注的负面/风险项、对帆软合作的影响与建议下一步。无新发现就明说。`,
+    skills: ["get_partner", "scan_sentiment"],
     trigger: "SCHEDULE",
     frequency: "WEEKLY",
     runWeekday: 1,
@@ -355,24 +352,6 @@ const agentTemplates = [
     trigger: "SCHEDULE",
     frequency: "DAILY",
     runHour: 8,
-    scopeType: "ALL",
-  },
-  {
-    name: "竞品信号雷达",
-    icon: "🎯",
-    description: "每周搜索 Tableau / Power BI / Qlik 在中东区的涨价、裁员、政策变化，整理成话术弹药",
-    instructions: `你是竞品情报分析员。帆软在中东的主要竞品是 Tableau（Salesforce）、Power BI（Microsoft）、Qlik。每次运行：
-1. 用 web_search 搜索竞品最新动态，关键词示例：
-   - "Tableau price increase 2026"、"Salesforce layoffs Tableau"、"Tableau partner program changes"
-   - "Power BI licensing change Middle East"、"Microsoft Fabric pricing"
-   - "Qlik acquisition news"、"Qlik partner program"
-2. 重点找：涨价、裁员、伙伴政策收紧、产品停服、客户流失、中东本地化问题。
-3. 输出简报：每条信号 + 来源 + BD 可引用的话术——如何说服 Tableau/微软/Qlik 系伙伴转向帆软。`,
-    skills: ["web_search", "search_knowledge"],
-    trigger: "SCHEDULE",
-    frequency: "WEEKLY",
-    runWeekday: 5,
-    runHour: 10,
     scopeType: "ALL",
   },
   {
@@ -517,6 +496,10 @@ async function seedKnowledgeAndMaterials() {
 }
 
 async function seedAgentTemplates() {
+  // 一次性清理：已被「舆情监控」覆盖的旧模板
+  await db.agent.deleteMany({
+    where: { isTemplate: true, name: { in: ["领英/外部动态监测", "竞品信号雷达"] } },
+  });
   for (const t of agentTemplates) {
     const exists = await db.agent.findFirst({ where: { name: t.name, isTemplate: true } });
     if (exists) continue;

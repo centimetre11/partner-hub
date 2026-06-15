@@ -22,7 +22,14 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { CONTACT_ROLE_CODES, CONTACT_ROLE_LABELS, attitudeLabel, roleInfluence } from "@/lib/constants";
+import {
+  CONTACT_ROLE_CODES,
+  CONTACT_ROLE_LABELS,
+  CONTACT_ROLES_BY_INFLUENCE,
+  ATTITUDE_LABELS,
+  attitudeLabel,
+  roleInfluence,
+} from "@/lib/constants";
 import { attitudeDotClass, roleInfluenceStyle, PowerMapLegend, type PowerMapContact } from "@/components/power-map";
 import {
   moveContactAction,
@@ -31,11 +38,16 @@ import {
   removeContactLinkAction,
   removeContactLinkBetweenAction,
   resetPowerMapLayoutAction,
+  upsertContactAction,
+  deleteContactAction,
 } from "@/lib/actions";
 
 export type PowerMapNodeContact = PowerMapContact & {
   x: number | null;
   y: number | null;
+  contactInfo?: string | null;
+  approach?: string | null;
+  notes?: string | null;
 };
 
 export type PowerMapLink = {
@@ -223,10 +235,12 @@ function FlowInner({
   partnerId,
   contacts,
   links,
+  onSelectContact,
 }: {
   partnerId: string;
   contacts: PowerMapNodeContact[];
   links: PowerMapLink[];
+  onSelectContact?: (id: string) => void;
 }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<NodeData>>(buildNodes(contacts));
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(buildEdges(contacts, links));
@@ -455,7 +469,7 @@ function FlowInner({
         </button>
       </div>
       <p className="text-[11px] text-zinc-400 mb-2">
-        提示：把鼠标移到人物卡的小圆点上，从一个人拖到另一个人即可连线（绿色高亮表示可连接）；点中连线后按 Delete/Backspace 或上方按钮删除。
+        提示：单击人物卡可编辑其信息；把鼠标移到卡片小圆点上，从一个人拖到另一个人即可连线（绿色高亮表示可连接）；点中连线后按 Delete/Backspace 或上方按钮删除。
       </p>
       <div className="h-[460px] rounded-lg border border-zinc-100 bg-zinc-50/40">
         <ReactFlow
@@ -468,6 +482,7 @@ function FlowInner({
           onConnect={onConnect}
           onEdgesDelete={onEdgesDelete}
           onSelectionChange={onSelectionChange}
+          onNodeClick={(_, node) => onSelectContact?.(node.id)}
           connectionMode={ConnectionMode.Loose}
           connectionLineType={ConnectionLineType.SmoothStep}
           connectionLineStyle={{ stroke: "#6366f1", strokeWidth: 2.5, strokeDasharray: "6 4" }}
@@ -484,7 +499,274 @@ function FlowInner({
   );
 }
 
-export function PowerMapFlow({
+// ============ 编辑抽屉：点节点 / 点列表行 → 就地编辑该人 ============
+
+const DRAWER_INPUT =
+  "w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none";
+
+function EditDrawer({
+  partnerId,
+  contact,
+  allContacts,
+  onClose,
+}: {
+  partnerId: string;
+  contact: PowerMapNodeContact | null; // null = 新增模式
+  allContacts: PowerMapNodeContact[];
+  onClose: () => void;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [pending, start] = useTransition();
+  const isNew = !contact;
+
+  const save = useCallback(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const fd = new FormData(form);
+    if (!String(fd.get("name") ?? "").trim()) return;
+    start(async () => {
+      await upsertContactAction(partnerId, fd);
+      onClose();
+    });
+  }, [partnerId, onClose]);
+
+  const remove = useCallback(() => {
+    if (!contact) return;
+    start(async () => {
+      await deleteContactAction(partnerId, contact.id);
+      onClose();
+    });
+  }, [partnerId, contact, onClose]);
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-[340px] max-w-[88vw] bg-white shadow-xl z-50 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
+          <span className="font-medium text-zinc-900">{isNew ? "添加人物" : `编辑：${contact?.name}`}</span>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">
+            ×
+          </button>
+        </div>
+        <form ref={formRef} className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
+          {!isNew && <input type="hidden" name="id" value={contact!.id} />}
+          <label className="block">
+            <span className="text-xs text-zinc-500">姓名</span>
+            <input name="name" defaultValue={contact?.name ?? ""} placeholder="姓名" className={DRAWER_INPUT} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">角色（影响力 D&gt;A&gt;E&gt;I&gt;S）</span>
+            <select name="role" defaultValue={contact?.role ?? "INFLUENCER"} className={DRAWER_INPUT}>
+              {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
+                <option key={k} value={k}>
+                  {CONTACT_ROLE_CODES[k]} · {CONTACT_ROLE_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">态度</span>
+            <select name="attitude" defaultValue={String(contact?.attitude ?? 0)} className={DRAWER_INPUT}>
+              {Object.entries(ATTITUDE_LABELS)
+                .sort((a, b) => Number(b[0]) - Number(a[0]))
+                .map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {k} · {v}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">职位</span>
+            <input name="title" defaultValue={contact?.title ?? ""} placeholder="职位" className={DRAWER_INPUT} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">部门</span>
+            <input name="department" defaultValue={contact?.department ?? ""} placeholder="部门" className={DRAWER_INPUT} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">汇报上级</span>
+            <select name="reportsToId" defaultValue={contact?.reportsToId ?? ""} className={DRAWER_INPUT}>
+              <option value="">（无 = 顶层）</option>
+              {allContacts
+                .filter((x) => x.id !== contact?.id)
+                .map((x) => (
+                  <option key={x.id} value={x.id}>
+                    汇报给 {x.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">联系方式</span>
+            <input name="contactInfo" defaultValue={contact?.contactInfo ?? ""} placeholder="联系方式" className={DRAWER_INPUT} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">最佳接触方式</span>
+            <input name="approach" defaultValue={contact?.approach ?? ""} placeholder="最佳接触方式" className={DRAWER_INPUT} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-zinc-500">备注</span>
+            <textarea name="notes" defaultValue={contact?.notes ?? ""} placeholder="备注" rows={3} className={DRAWER_INPUT} />
+          </label>
+        </form>
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-zinc-100">
+          {!isNew ? (
+            <button
+              type="button"
+              onClick={remove}
+              disabled={pending}
+              className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-40"
+            >
+              删除
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-300"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={pending}
+              className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700 disabled:opacity-50"
+            >
+              {pending ? "保存中…" : "保存"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============ 人员列表：搜索 + 可折叠 + 点行编辑 ============
+
+function ContactList({
+  contacts,
+  selectedId,
+  onSelect,
+  onAdd,
+}: {
+  contacts: PowerMapNodeContact[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+}) {
+  const [open, setOpen] = useState(contacts.length <= 8);
+  const [q, setQ] = useState("");
+
+  const sorted = useMemo(
+    () =>
+      [...contacts].sort(
+        (a, b) => roleInfluence(b.role) - roleInfluence(a.role) || b.attitude - a.attitude,
+      ),
+    [contacts],
+  );
+  const filtered = useMemo(() => {
+    const kw = q.trim().toLowerCase();
+    if (!kw) return sorted;
+    return sorted.filter((c) =>
+      [
+        c.name,
+        c.title ?? "",
+        c.department ?? "",
+        CONTACT_ROLE_LABELS[c.role] ?? "",
+        attitudeLabel(c.attitude),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(kw),
+    );
+  }, [sorted, q]);
+
+  return (
+    <div className="mt-4 rounded-lg border border-zinc-100">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-1 text-sm font-medium text-zinc-700"
+        >
+          <span className={`text-zinc-300 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+          关键人物（{contacts.length}）
+        </button>
+        <div className="flex-1" />
+        {open && (
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="搜索 姓名/职位/部门/角色/态度"
+            className="w-44 rounded-md border border-zinc-200 px-2.5 py-1 text-xs focus:border-indigo-400 focus:outline-none"
+          />
+        )}
+        <button
+          type="button"
+          onClick={onAdd}
+          className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700"
+        >
+          + 加人
+        </button>
+      </div>
+      {open && (
+        <div className="divide-y divide-zinc-50 max-h-[360px] overflow-y-auto">
+          {filtered.map((c) => {
+            const s = roleInfluenceStyle(c.role);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onSelect(c.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-zinc-50 ${
+                  selectedId === c.id ? "bg-indigo-50" : ""
+                }`}
+              >
+                <div className="relative shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center text-sm font-semibold">
+                    {c.name.slice(0, 1)}
+                  </div>
+                  <span
+                    className={`absolute -top-1 -right-1.5 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center ${attitudeDotClass(c.attitude)}`}
+                  >
+                    {c.attitude}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-zinc-900 truncate">{c.name}</span>
+                    <span
+                      className={`shrink-0 rounded-sm text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center ${s.badge}`}
+                      title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role}（影响力 ${roleInfluence(c.role)}/5）`}
+                    >
+                      {CONTACT_ROLE_CODES[c.role] ?? "I"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-400 truncate">
+                    {[c.title, c.department].filter(Boolean).join(" · ") || "—"}
+                  </div>
+                </div>
+                <span className="text-zinc-300 text-xs shrink-0">编辑 ›</span>
+              </button>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="px-3 py-6 text-center text-xs text-zinc-400">
+              {q ? "没有匹配的人物" : "还没有关键人物，点「+ 加人」添加。"}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function PowerMapSection({
   partnerId,
   contacts,
   links,
@@ -493,15 +775,43 @@ export function PowerMapFlow({
   contacts: PowerMapNodeContact[];
   links: PowerMapLink[];
 }) {
-  if (!contacts.length) return null;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  const selected = adding ? null : contacts.find((c) => c.id === selectedId) ?? null;
+  const drawerOpen = adding || !!selected;
+
+  const closeDrawer = useCallback(() => {
+    setAdding(false);
+    setSelectedId(null);
+  }, []);
+  const selectContact = useCallback((id: string) => {
+    setAdding(false);
+    setSelectedId(id);
+  }, []);
+  const startAdd = useCallback(() => {
+    setSelectedId(null);
+    setAdding(true);
+  }, []);
+
   return (
     <div>
       <div className="mb-3 rounded-lg bg-zinc-50/80 border border-zinc-100 px-4 py-3">
         <PowerMapLegend />
       </div>
-      <ReactFlowProvider>
-        <FlowInner partnerId={partnerId} contacts={contacts} links={links} />
-      </ReactFlowProvider>
+      {contacts.length > 0 ? (
+        <ReactFlowProvider>
+          <FlowInner partnerId={partnerId} contacts={contacts} links={links} onSelectContact={selectContact} />
+        </ReactFlowProvider>
+      ) : (
+        <div className="rounded-lg border border-dashed border-zinc-200 px-4 py-8 text-center text-sm text-zinc-400">
+          还没有关键人物。点下方「+ 加人」手动添加，或用上方「✦ AI 加人」从文字/图片提取。
+        </div>
+      )}
+      <ContactList contacts={contacts} selectedId={selectedId} onSelect={selectContact} onAdd={startAdd} />
+      {drawerOpen && (
+        <EditDrawer partnerId={partnerId} contact={selected} allContacts={contacts} onClose={closeDrawer} />
+      )}
     </div>
   );
 }

@@ -56,6 +56,7 @@ export default async function SettingsPage() {
     capabilities: parseAiCapabilities(api.capabilities),
     dailyTokenLimit: api.dailyTokenLimit ?? null,
     usedTodayTokens: usedTodayByBucket.get(`api:${api.id}`) ?? 0,
+    priority: api.priority,
     createdAt: api.createdAt.toISOString(),
   }));
 
@@ -83,6 +84,7 @@ export default async function SettingsPage() {
         capabilities: parseAiCapabilities(api.capabilities),
         dailyTokenLimit: api.dailyTokenLimit ?? null,
         usedTodayTokens: usedTodayByBucket.get(`api:${api.id}`) ?? 0,
+        priority: api.priority,
         createdAt: api.createdAt.toISOString(),
       };
     });

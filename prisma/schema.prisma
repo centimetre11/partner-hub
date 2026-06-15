@@ -56,6 +56,7 @@ model Partner {
   priority         String? // P0 / P1 / P2 / P3
   aiVerified       String? // VERIFIED / PARTIAL / UNKNOWN
   manualChecked    Boolean  @default(false)
+  monitorDims      String? // JSON 数组：舆情监控勾选的维度
   pipelineStage    Int      @default(1) // 1-10 十阶段
   ownerId          String?
   owner            User?    @relation(fields: [ownerId], references: [id])
@@ -73,6 +74,49 @@ model Partner {
   agents        Agent[]
   solutions     Solution[]
   documents     Document[]
+  monitorSources MonitorSource[]
+  monitorItems  MonitorItem[]
+}
+
+// 舆情监控：自定义监控链接源（领英/Facebook 主页、官网、新闻源等）
+model MonitorSource {
+  id           String   @id @default(cuid())
+  partnerId    String
+  partner      Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  label        String
+  url          String
+  // LINKEDIN / FACEBOOK / X / WEBSITE / NEWS / CUSTOM
+  sourceType   String   @default("CUSTOM")
+  domain       String? // 用于 site: 过滤
+  title        String? // 链接预览标题
+  thumbnailUrl String?
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([partnerId])
+}
+
+// 舆情监控：扫描并经 AI 分类后的舆情条目
+model MonitorItem {
+  id          String    @id @default(cuid())
+  partnerId   String
+  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // NEWS / PEOPLE / HIRING / DEALS / FUNDING / COMPETITOR / SOCIAL / REPUTATION / EVENTS / ALLIANCE / RISK
+  dimension   String    @default("NEWS")
+  // POSITIVE / NEUTRAL / NEGATIVE / RISK
+  sentiment   String    @default("NEUTRAL")
+  title       String
+  summary     String?
+  url         String?
+  sourceName  String?
+  sourceType  String    @default("web") // web / linkedin / custom
+  publishedAt DateTime?
+  dedupeKey   String
+  status      String    @default("NEW") // NEW / ARCHIVED
+  createdAt   DateTime  @default(now())
+
+  @@unique([partnerId, dedupeKey])
+  @@index([partnerId])
 }
 
 model Contact {
@@ -193,6 +237,7 @@ model AiApiConfig {
   extraConfig String? // JSON：火山引擎 Responses API 的 tools / instructions 等
   capabilities String? // JSON 数组：chat | vision | tools | json | reasoning
   dailyTokenLimit Int? // 每日总 Token 上限；超过后自动切换到其他启用模型。null/0 表示不限
+  priority    Int                 @default(0) // 调度优先级：数字越大越先用（适合先用完免费额度）。能力不匹配时自动跳过
   enabled     Boolean             @default(true)
   isDefault   Boolean             @default(false)
   createdAt   DateTime            @default(now())

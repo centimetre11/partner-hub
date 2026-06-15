@@ -25,6 +25,7 @@ export type AiApiConfigForClient = {
   capabilities: AiCapability[];
   dailyTokenLimit: number | null;
   usedTodayTokens: number;
+  priority: number;
   createdAt: string;
 };
 
@@ -81,17 +82,29 @@ function ApiEditForm({
           <input name="apiKey" type="password" required={!api} placeholder={api ? "留空则沿用原 Key" : "sk-..."} className={input} autoComplete="off" />
         </label>
         <AiCapabilityFields defaultCapabilities={api?.capabilities} />
-        <label className="space-y-1 block">
-          <span className={label}>每日 Token 上限（可选，留空 = 不限）</span>
-          <input
-            name="dailyTokenLimit"
-            type="number"
-            min={0}
-            defaultValue={api?.dailyTokenLimit ?? ""}
-            placeholder="如 1000000；超过后自动切换到其他启用的模型"
-            className={input}
-          />
-        </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="space-y-1 block">
+            <span className={label}>优先级（数字越大越先用，默认 0）</span>
+            <input
+              name="priority"
+              type="number"
+              defaultValue={api?.priority ?? 0}
+              placeholder="有免费额度的填更大值，先用完它"
+              className={input}
+            />
+          </label>
+          <label className="space-y-1 block">
+            <span className={label}>每日 Token 上限（可选，留空 = 不限）</span>
+            <input
+              name="dailyTokenLimit"
+              type="number"
+              min={0}
+              defaultValue={api?.dailyTokenLimit ?? ""}
+              placeholder="如 1000000；超过后自动切换"
+              className={input}
+            />
+          </label>
+        </div>
         <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
           <label className="inline-flex items-center gap-1.5">
             <input name="enabled" type="checkbox" defaultChecked={api?.enabled ?? true} className="rounded border-zinc-300" />
@@ -122,6 +135,9 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${api.enabled ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
               {api.enabled ? "已启用" : "已停用"}
             </span>
+            {api.priority !== 0 && (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">优先级 {api.priority}</span>
+            )}
           </div>
           <dl className="mt-2 space-y-1 text-xs">
             <div><span className="text-zinc-400">模型 </span><span className="font-mono text-zinc-700">{api.model}</span></div>
