@@ -53,15 +53,48 @@ export function resolveDims(monitorDims: string | null | undefined, optDims?: st
   return (dims ?? []).filter((d) => MONITOR_DIMENSIONS.includes(d));
 }
 
-/** 按维度构造中英文搜索词 */
+/** 从官网 URL 提取裸域名（去 www / 协议 / 路径），失败返回空 */
+function hostFromWebsite(website: string | null | undefined): string {
+  if (!website) return "";
+  try {
+    const h = new URL(website.startsWith("http") ? website : `https://${website}`).hostname;
+    return h.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/** 公司名含空格时加引号，做短语锚定，降低缩写/通用名误召回 */
+function quoteName(name: string): string {
+  const n = name.trim();
+  return /\s/.test(n) ? `"${n}"` : n;
+}
+
+/** 去掉所有非 ASCII（含中文），用于非中文地区伙伴，避免中文关键词把中国招标/资讯网拉成噪声 */
+function stripNonAscii(s: string): string {
+  return s.replace(/[^\x00-\x7F]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** 是否中文地区伙伴（仅这类保留中英混排关键词） */
+function isChineseRegion(country: string | null | undefined): boolean {
+  if (!country) return false;
+  return /中国|中華|中国大陆|大陆|香港|台湾|澳门|china|prc|hong\s?kong|taiwan|macau|\bcn\b|\bhk\b|\btw\b/i.test(country);
+}
+
+/** 按维度构造搜索词（中东等非中文地区用纯英文关键词） */
 export function buildDimensionQueries(
-  partner: Pick<Partner, "name" | "country" | "city">,
+  partner: Pick<Partner, "name" | "country" | "city" | "website">,
   dims: string[],
 ): { dimension: string; query: string; topic?: "news" }[] {
-  const region = [partner.city, partner.country].filter(Boolean).join(" ");
+  // 用「国家 + 官网域名」做上下文锚定；刻意不用中文城市名（如“利雅得”会被搜成足球俱乐部等噪声）
+  const host = hostFromWebsite(partner.website);
+  const ctx = [partner.country, host].filter(Boolean).join(" ");
+  const nameToken = quoteName(partner.name);
+  const cn = isChineseRegion(partner.country);
   return dims.map((dimension) => {
-    const kw = MONITOR_DIMENSION_KEYWORDS[dimension] ?? "";
-    const query = `${partner.name} ${region} ${kw}`.replace(/\s+/g, " ").trim();
+    const rawKw = MONITOR_DIMENSION_KEYWORDS[dimension] ?? "";
+    const kw = cn ? rawKw : stripNonAscii(rawKw);
+    const query = `${nameToken} ${ctx} ${kw}`.replace(/\s+/g, " ").trim();
     const topic = dimension === "NEWS" || dimension === "DEALS" || dimension === "RISK" ? "news" : undefined;
     return { dimension, query, topic };
   });
@@ -84,7 +117,7 @@ function dedupeKeyFor(item: ClassifiedItem): string {
 
 /** 通过博查逐维度/逐自定义源抓取原始结果 */
 async function gatherViaBocha(
-  partner: Pick<Partner, "name" | "country" | "city">,
+  partner: Pick<Partner, "name" | "country" | "city" | "website">,
   dims: string[],
   sources: MonitorSource[],
   maxPerQuery: number,
@@ -96,6 +129,7 @@ async function gatherViaBocha(
     if (r.ok) blocks.push(`### 维度提示：${MONITOR_DIMENSION_LABELS[dimension]}\n${r.text}`);
   }
 
+  const nameToken = quoteName(partner.name);
   for (const s of sources) {
     if (!s.enabled) continue;
     const domain = (s.domain ?? "").toLowerCase();
@@ -103,7 +137,8 @@ async function gatherViaBocha(
     if (s.sourceType === "LINKEDIN" || domain.includes("linkedin")) {
       r = await linkedinSearch({ company: partner.name, maxResults: maxPerQuery });
     } else {
-      const siteQuery = domain ? `${partner.name} site:${domain}` : `${partner.name} ${s.label}`;
+      // 注意：博查不支持 site: 过滤，这里把域名作为关键词锚定，而非 site: 语法
+      const siteQuery = domain ? `${nameToken} ${domain}` : `${nameToken} ${s.label}`;
       r = await generalWebSearch(siteQuery, maxPerQuery);
     }
     if (r.ok) blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
@@ -114,7 +149,7 @@ async function gatherViaBocha(
 
 /** 无博查 Key 时，借助模型内置联网搜索抓取原始结果 */
 async function gatherViaBuiltinSearch(
-  partner: Pick<Partner, "name" | "country" | "city">,
+  partner: Pick<Partner, "name" | "country" | "city" | "website">,
   dims: string[],
   sources: MonitorSource[],
 ): Promise<string[]> {
