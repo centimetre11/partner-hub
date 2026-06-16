@@ -18,7 +18,7 @@ import {
   PIPELINE_STAGES,
   SOLUTION_STATUS_LABELS,
 } from "./constants";
-import { partnerContext, type ContactProposal, type FieldUpdate, type OpportunityProposal, type TodoProposal } from "./proposals";
+import { partnerContext, powermapContext, type ContactProposal, type FieldUpdate, type OpportunityProposal, type TodoProposal } from "./proposals";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 
 // ============ Intake 作用域 ============
@@ -208,6 +208,78 @@ const OUTPUT_SCHEMA = `只输出一个 JSON 对象，结构：
   · 已经能确定或调研已查明的内容，不要再问。没有需要澄清的就给空数组 []。
   · options 用简短中文短语；id 用对应字段英文名（如 country/category/headcount）。`;
 
+/** AI 加人专用：精简 JSON 结构，减少 prompt 体积 */
+const OUTPUT_SCHEMA_POWERMAP = `只输出一个 JSON 对象：
+{
+  "reply": "你对用户说的话（中文，自然简短）",
+  "questions": [],
+  "clarifications": [
+    { "id":"reportsTo", "question":"{姓名}汇报给谁？", "options":["现有联系人姓名","顶层","暂不确定"], "multi":false, "allowOther":true }
+  ],
+  "ready": true/false,
+  "proposal": {
+    "summary": "一句话概述本次识别到的人物",
+    "fields": [],
+    "contacts": [{"action":"add|update","id":"（update时）","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"材料依据"}],
+    "opportunities": [],
+    "todos": [],
+    "trainings": [],
+    "solutions": []
+  }
+}
+规则：
+- 只填 contacts；fields/opportunities/todos/trainings/solutions 保持空数组。
+- 只提取材料（文字/图片）里有依据的信息，reason 标注来源；不要编造。
+- 对照【现有联系人】判断 add 或 update（update 必须带 id）。
+- 核心信息够用则 ready=true；仅汇报关系明显缺失时用 clarifications 追问。`;
+
+function outputSchemaForScope(scope: IntakeScope): string {
+  return scope === "powermap" ? OUTPUT_SCHEMA_POWERMAP : OUTPUT_SCHEMA;
+}
+
+async function partnerContextForScope(scope: IntakeScope, partnerId: string): Promise<string> {
+  if (scope === "powermap") return powermapContext(partnerId);
+  return partnerContext(partnerId);
+}
+
+/** 调用大模型抽取 JSON；有 emit 时走流式，边生成边推送 reply_delta */
+async function callIntakeExtract(
+  chat: ChatMessage[],
+  opts: { feature: string; userId?: string; taskTier: AiTaskTier; emit?: TraceEmitter },
+): Promise<string | null> {
+  const runOnce = async (retry: boolean): Promise<string | null> => {
+    if (retry) {
+      chat[0].content = (chat[0].content ?? "") + "\n\n务必只输出一个合法 JSON 对象。";
+    } else {
+      opts.emit?.({ event: "reply_reset" });
+    }
+    let streamed = "";
+    const onDelta = opts.emit
+      ? (d: string) => {
+          streamed += d;
+          opts.emit!({ event: "reply_delta", delta: d });
+        }
+      : undefined;
+
+    const { content } = await chatCompletion(chat, {
+      jsonMode: !retry,
+      temperature: 0.3,
+      feature: opts.feature,
+      userId: opts.userId,
+      taskTier: opts.taskTier,
+      onDelta,
+    });
+    if (opts.emit && streamed) opts.emit({ event: "reply_done" });
+    return content;
+  };
+
+  try {
+    return await runOnce(false);
+  } catch {
+    return await runOnce(true);
+  }
+}
+
 const RESEARCH_GUIDE = `【主动调研（重要）】
 目标：把建档所需信息尽量补全。各类输入（仅公司名、长文、KMS 链接、聊天记录）都要走「多源叠加」，不要只做一种调研就停。
 在输出 JSON 提案前，按下面策略组合使用工具（可并行、可多次调用）：
@@ -331,7 +403,7 @@ export async function runIntakeTurn(opts: {
   const cfg = SCOPE_CONFIG[opts.scope];
   let ctx = "";
   if (opts.partnerId) {
-    ctx = `\n\n【当前伙伴档案（用于判断新增/更新、解析汇报关系）】\n${await partnerContext(opts.partnerId)}`;
+    ctx = `\n\n${await partnerContextForScope(opts.scope, opts.partnerId)}`;
   }
 
   const enrichmentSkills = intakeEnrichmentSkillsForScope(opts.scope);
@@ -350,7 +422,7 @@ ${useResearch ? `\n${RESEARCH_GUIDE}` : ""}
 ${cfg.schemaHint}
 ${ctx}
 
-${OUTPUT_SCHEMA}`;
+${outputSchemaForScope(opts.scope)}`;
 
   const chat: ChatMessage[] = [{ role: "system", content: system }];
   for (const m of opts.messages) chat.push({ role: m.role, content: m.content, images: m.images });
@@ -417,27 +489,18 @@ ${OUTPUT_SCHEMA}`;
 
   emitPhase(opts.emit, "extract", "整理提案");
   const taskTier = intakeTaskTier(opts.scope);
-  let content: string | null;
-  try {
-    ({ content } = await chatCompletion(chat, {
-      jsonMode: true,
-      temperature: 0.3,
-      feature,
-      userId: opts.userId,
-      taskTier,
-    }));
-  } catch {
-    chat[0].content += "\n\n务必只输出一个合法 JSON 对象。";
-    ({ content } = await chatCompletion(chat, {
-      temperature: 0.3,
-      feature,
-      userId: opts.userId,
-      taskTier,
-    }));
-  }
+  const content = await callIntakeExtract(chat, {
+    feature,
+    userId: opts.userId,
+    taskTier,
+    emit: opts.emit,
+  });
   const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""));
   emitProposalUpdate(opts.emit, turn);
-  await emitReplyChunks(opts.emit, turn.reply);
+  if (opts.emit) {
+    opts.emit({ event: "reply_reset" });
+    await emitReplyChunks(opts.emit, turn.reply);
+  }
   return turn;
 }
 

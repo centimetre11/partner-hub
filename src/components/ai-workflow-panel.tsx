@@ -10,19 +10,12 @@ import type { NormalizedProposal } from "@/lib/proposal-normalize";
 import { AiProcessTrace } from "@/components/ai-process-trace";
 import { LiveProposalDraft } from "@/components/live-proposal-draft";
 
+import { compressImagesForAi } from "@/lib/compress-image";
+
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
 
-function fileToChatImage(file: File): Promise<ChatImage> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () =>
-      resolve({ url: String(reader.result), name: file.name || "粘贴的图片.png" });
-    reader.readAsDataURL(file);
-  });
-}
-
 function filesToChatImages(files: File[]): Promise<ChatImage[]> {
-  return Promise.all(files.filter((f) => f.type.startsWith("image/")).map(fileToChatImage));
+  return compressImagesForAi(files);
 }
 
 export function AiWorkflowPanel({

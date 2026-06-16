@@ -95,6 +95,31 @@ export async function partnerContext(partnerId: string): Promise<string> {
   return `【伙伴档案：${p.name}】\n${fields}\n\n【权力地图/关键人物】\n${contacts}\n\n【商机列表】\n${opps}`;
 }
 
+/** AI 加人专用：只传现有联系人名单，不含整份画像/商机 */
+export async function powermapContext(partnerId: string): Promise<string> {
+  const p = await db.partner.findUnique({
+    where: { id: partnerId },
+    select: {
+      name: true,
+      contacts: {
+        select: { id: true, name: true, role: true, title: true, department: true, reportsToId: true },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+  if (!p) return "（伙伴不存在）";
+  const byId = new Map(p.contacts.map((c) => [c.id, c.name]));
+  const lines = p.contacts.length
+    ? p.contacts
+        .map(
+          (c) =>
+            `- id=${c.id} ${c.name} | 角色:${c.role} | ${c.title ?? "—"} | ${c.department ?? "—"} | 汇报:${c.reportsToId ? byId.get(c.reportsToId) ?? "?" : "顶层"}`,
+        )
+        .join("\n")
+    : "（暂无，全部为新增）";
+  return `【伙伴：${p.name}】\n【现有联系人】\n${lines}`;
+}
+
 // ============ AI 抽取：从任意文本生成提案 ============
 
 const EXTRACT_SYSTEM = `你是帆软软件（Fanruan，中国领先的BI厂商，产品有 FineReport / FineBI / FineDataLink）中东区伙伴管理系统的信息抽取引擎。

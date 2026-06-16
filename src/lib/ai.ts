@@ -268,6 +268,9 @@ async function recordBestEffort(opts: Parameters<typeof recordAiTokenUsage>[0]) 
   }
 }
 
+/** 火山 API 请求超时（识图+JSON 通常 <60s；超时后快速失败而非长时间挂起） */
+const VOLCENGINE_FETCH_MS = 120_000;
+
 function parseExtraConfig(extraConfig: string | null): Record<string, unknown> {
   if (!extraConfig) return {};
   try {
@@ -478,6 +481,7 @@ async function volcengineResponsesCompletion(
         Authorization: `Bearer ${api.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(VOLCENGINE_FETCH_MS),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -568,6 +572,7 @@ async function volcengineResponsesStream(
         Accept: "text/event-stream",
       },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(VOLCENGINE_FETCH_MS),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
