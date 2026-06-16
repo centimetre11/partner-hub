@@ -13,6 +13,7 @@ import {
 } from "./skills";
 import {
   CATEGORY_LABELS,
+  INDUSTRY_LABELS,
   PARTNER_FIELD_LABELS,
   PIPELINE_STAGES,
   SOLUTION_STATUS_LABELS,
@@ -100,6 +101,10 @@ const CATEGORY_LIST = Object.entries(CATEGORY_LABELS)
   .map(([k, v]) => `${k}=${v}`)
   .join("，");
 
+const INDUSTRY_LIST = Object.entries(INDUSTRY_LABELS)
+  .map(([k, v]) => `${k}=${v}`)
+  .join("，");
+
 const STAGE_LIST = PIPELINE_STAGES.map((s) => `${s.stage}=${s.name}`).join("，");
 
 const ROLE_LINE = "role 角色：APPROVER(审批者)/DECISION_MAKER(决策者)/SUPPORTER(支持者)/EVALUATOR(评估者)/INFLUENCER(影响者)";
@@ -117,8 +122,8 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "新建伙伴建档",
     intro:
       "用户想新建一个候选伙伴。输入可能是：仅公司名、会议/聊天长文、公司介绍、或帆软 KMS 链接（KMS 与联网/领英等调研应叠加使用，目标是把档案尽量补全）。",
-    guide: `建档至少要有：公司名（partnerName，必填）。尽量补全：category、country/city、headcount、website、coreBusiness、capability、knownClients、currentTools、certLevel、keyDifferentiator、playbook、fitScore、priority。缺关键项时可友好追问 1-2 点，但应先主动调研（见下方工具说明）。`,
-    schemaHint: `partnerName 填公司名；fields 填其余画像字段（字段名只能用：${FIELD_LIST}，category 取值：${CATEGORY_LIST}，pipelineStage 取 1-10：${STAGE_LIST}）；如文中或调研提到人物则填 contacts，提到商机则填 opportunities。trainings/solutions 留空数组。`,
+    guide: `建档至少要有：公司名（partnerName，必填）。尽量补全：category、industry、country/city、headcount、website、coreBusiness、capability、knownClients、currentTools、certLevel、keyDifferentiator、playbook、fitScore、priority。缺关键项时可友好追问 1-2 点，但应先主动调研（见下方工具说明）。`,
+    schemaHint: `partnerName 填公司名；fields 填其余画像字段（字段名只能用：${FIELD_LIST}，category 取值：${CATEGORY_LIST}，industry 取值：${INDUSTRY_LIST}，pipelineStage 取 1-10：${STAGE_LIST}）；如文中或调研提到人物则填 contacts，提到商机则填 opportunities。trainings/solutions 留空数组。`,
   },
   powermap: {
     title: "添加权力地图人物",
@@ -143,7 +148,7 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
   profile: {
     title: "补全伙伴画像",
     intro: "用户想补全/更新这个伙伴的画像字段。可能附带 KMS 链接或仅有零散描述，需结合现有档案与工具调研补全。",
-    guide: `把用户描述与调研结果映射到画像字段。字段名只能用：${FIELD_LIST}（category 取值：${CATEGORY_LIST}）。信息不足时先用工具调研再填。`,
+    guide: `把用户描述与调研结果映射到画像字段。字段名只能用：${FIELD_LIST}（category 取值：${CATEGORY_LIST}，industry 取值：${INDUSTRY_LIST}）。信息不足时先用工具调研再填。`,
     schemaHint: "只填 fields（FieldUpdate，oldValue 可留空）。其余留空数组。",
   },
   training: {

@@ -24,6 +24,24 @@ export const CATEGORY_LABELS: Record<string, string> = {
   OTHER: "其他",
 };
 
+/** 伙伴主攻行业（与竞品基因 category 正交） */
+export const INDUSTRY_LABELS: Record<string, string> = {
+  BANKING: "银行金融",
+  GOVERNMENT: "政府公共",
+  OIL_GAS: "油气能源",
+  RETAIL: "零售快消",
+  MANUFACTURING: "制造工业",
+  HEALTHCARE: "医疗健康",
+  TELECOM: "电信",
+  REAL_ESTATE: "房地产",
+  LOGISTICS: "物流供应链",
+  HOSPITALITY: "酒店旅游",
+  EDUCATION: "教育",
+  MEDIA: "媒体广告",
+  CROSS: "跨行业",
+  OTHER: "其他/待判定",
+};
+
 export const POOL_FLAG_LABELS: Record<string, string> = {
   NEW: "新候选",
   ADVANCING: "推进中",
@@ -201,7 +219,8 @@ export const SOLUTION_STATUS_LABELS: Record<string, string> = {
 // 伙伴档案中允许 AI / 表单更新的字段（含中文标签，供 diff 展示和提示词使用）
 export const PARTNER_FIELD_LABELS: Record<string, string> = {
   name: "公司全称",
-  category: "类别",
+  category: "竞品基因",
+  industry: "主攻行业",
   tier: "Tier 分级",
   partnerArchetype: "伙伴类型",
   valuePattern: "联合价值模式",

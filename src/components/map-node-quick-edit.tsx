@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction, setPipelineStageAction } from "@/lib/actions";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { CATEGORY_LABELS, INDUSTRY_LABELS } from "@/lib/constants";
 import { PARTNER_ARCHETYPE_LABELS, VALUE_PATTERN_LABELS, type FrameworkMapNode } from "@/lib/partner-framework";
 
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -108,6 +108,17 @@ export function MapNodeQuickEdit({
                 <span className="text-xs text-zinc-500">竞品基因</span>
                 <select name="category" defaultValue={partner.category} className={input}>
                   {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {node.id === "industry" && (
+              <label className="block space-y-1">
+                <span className="text-xs text-zinc-500">主攻行业</span>
+                <select name="industry" defaultValue={partner.industry ?? ""} className={input}>
+                  <option value="">待判定</option>
+                  {Object.entries(INDUSTRY_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
                   ))}
                 </select>

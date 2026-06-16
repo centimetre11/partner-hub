@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } from "@/components/ui";
 import {
-  CATEGORY_LABELS, EVENT_TYPE_LABELS, PIPELINE_STAGES,
+  CATEGORY_LABELS, EVENT_TYPE_LABELS, INDUSTRY_LABELS, PIPELINE_STAGES,
   POOL_FLAG_LABELS, STATUS_LABELS, TODO_PRIORITY_LABELS,
 } from "@/lib/constants";
 import { PowerMapSection } from "@/components/power-map-flow";
@@ -104,6 +104,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               {p.tier && <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge>}
               {p.partnerArchetype && (
                 <Badge tone="indigo">{PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] ?? p.partnerArchetype}</Badge>
+              )}
+              {p.industry && (
+                <Badge tone="blue">{INDUSTRY_LABELS[p.industry] ?? p.industry}</Badge>
               )}
               {p.valuePattern && (
                 <Badge tone="purple">{VALUE_PATTERN_LABELS[p.valuePattern] ?? p.valuePattern}</Badge>
@@ -248,6 +251,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     ["Tier", p.tier ? `Tier ${p.tier}` : null],
                     ["伙伴类型", p.partnerArchetype ? PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] : null],
                     ["竞品基因", CATEGORY_LABELS[p.category]],
+                    ["主攻行业", p.industry ? INDUSTRY_LABELS[p.industry] : null],
                     ["专职人数", p.dedicatedHeadcount],
                     ["负责 BD", p.owner?.name],
                     ["优先级", p.priority],

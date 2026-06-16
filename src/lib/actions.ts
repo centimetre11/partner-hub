@@ -55,7 +55,7 @@ export async function logoutAction() {
 // ============ 伙伴 ============
 
 const EDITABLE_FIELDS = [
-  "name", "category", "partnerArchetype", "valuePattern",
+  "name", "category", "industry", "partnerArchetype", "valuePattern",
   "valuePartnerOffer", "valueFanruanOffer", "valueCustomerOutcome", "dedicatedHeadcount",
   "tier", "city", "country", "headcount", "website", "companyType",
   "coreBusiness", "capability", "knownClients", "certLevel", "currentTools",
@@ -99,6 +99,7 @@ export async function createPartnerAction(formData: FormData) {
     data: {
       name,
       category: String(formData.get("category") ?? "OTHER"),
+      industry: String(formData.get("industry") ?? "") || null,
       city: String(formData.get("city") ?? "") || null,
       country: String(formData.get("country") ?? "") || null,
       coreBusiness: String(formData.get("coreBusiness") ?? "") || null,

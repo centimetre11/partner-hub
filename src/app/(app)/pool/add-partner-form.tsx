@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createPartnerAction } from "@/lib/actions";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { CATEGORY_LABELS, INDUSTRY_LABELS } from "@/lib/constants";
 import { AiIntakePanel } from "@/components/ai-intake-panel";
 
 export function AddPartnerForm({ intent = "prospect" }: { intent?: "prospect" | "active" }) {
@@ -40,6 +40,12 @@ export function AddPartnerForm({ intent = "prospect" }: { intent?: "prospect" | 
               <input name="name" required placeholder="公司名称 *" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
               <select name="category" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm">
                 {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+              <select name="industry" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm">
+                <option value="">主攻行业（可选）</option>
+                {Object.entries(INDUSTRY_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>{v}</option>
                 ))}
               </select>

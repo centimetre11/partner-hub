@@ -2,14 +2,14 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
-import { CATEGORY_LABELS, stageName } from "@/lib/constants";
+import { CATEGORY_LABELS, INDUSTRY_LABELS, stageName } from "@/lib/constants";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { AddPartnerForm } from "../pool/add-partner-form";
 
 export default async function PartnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; owner?: string; tier?: string }>;
+  searchParams: Promise<{ q?: string; stage?: string; owner?: string; tier?: string; industry?: string }>;
 }) {
   await requireUser();
   const sp = await searchParams;
@@ -21,6 +21,7 @@ export default async function PartnersPage({
       ...(sp.stage ? { pipelineStage: parseInt(sp.stage, 10) } : {}),
       ...(sp.owner ? { ownerId: sp.owner } : {}),
       ...(sp.tier ? { tier: sp.tier } : {}),
+      ...(sp.industry ? { industry: sp.industry } : {}),
     },
     include: { contacts: true, opportunities: true, events: { orderBy: { createdAt: "desc" } }, trainings: true, owner: true },
     orderBy: { pipelineStage: "desc" },
@@ -56,6 +57,12 @@ export default async function PartnersPage({
             <option value="B">Tier B</option>
             <option value="C">Tier C</option>
           </select>
+          <select name="industry" defaultValue={sp.industry ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">全部行业</option>
+            {Object.entries(INDUSTRY_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
           <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">筛选</button>
         </form>
 
@@ -83,6 +90,7 @@ export default async function PartnersPage({
                         <span className="font-semibold text-zinc-900">{p.name}</span>
                         {p.tier && <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge>}
                         <Badge tone="zinc">{CATEGORY_LABELS[p.category]}</Badge>
+                        {p.industry && <Badge tone="blue">{INDUSTRY_LABELS[p.industry]}</Badge>}
                         {stale > 30 && <Badge tone="red">停滞 {stale} 天</Badge>}
                       </div>
                       <div className="text-xs text-zinc-400 mt-1">

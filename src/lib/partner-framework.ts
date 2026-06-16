@@ -1,5 +1,5 @@
 import type { Contact, Opportunity, Partner, Solution, TimelineEvent, Training } from "@prisma/client";
-import { CATEGORY_LABELS, PIPELINE_STAGES, stageName } from "./constants";
+import { CATEGORY_LABELS, INDUSTRY_LABELS, PIPELINE_STAGES, stageName } from "./constants";
 
 // ============ 枚举与标签 ============
 
@@ -59,6 +59,7 @@ export const INSTANCE_NODE_TARGETS: Record<string, { panel: WorkspacePanelId; ed
   stage: { panel: "positioning", editable: true },
   archetype: { panel: "positioning", editable: true },
   category: { panel: "positioning", editable: true },
+  industry: { panel: "positioning", editable: true },
   value_pattern: { panel: "positioning", editable: true },
   value_stack: { panel: "positioning", editable: true },
   playbook: { panel: "positioning", editable: true },
@@ -260,6 +261,7 @@ export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapN
   const archetypeLabel = p.partnerArchetype ? PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] : "待判定";
   const patternLabel = p.valuePattern ? VALUE_PATTERN_LABELS[p.valuePattern] : "待选定";
   const categoryLabel = CATEGORY_LABELS[p.category] ?? p.category;
+  const industryLabel = p.industry ? (INDUSTRY_LABELS[p.industry] ?? p.industry) : "待判定";
 
   const nodes: FrameworkMapNode[] = [
     // 定位层
@@ -267,6 +269,7 @@ export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapN
     { id: "stage", layer: "定位层", label: "Stage", hint: "关系进展", status: "current", value: `${stage}. ${stageName(stage)}` },
     { id: "archetype", layer: "定位层", label: "伙伴类型", hint: "怎么带", status: nodeStatus(!!p.partnerArchetype && p.partnerArchetype !== "OTHER", !!p.partnerArchetype), value: archetypeLabel },
     { id: "category", layer: "定位层", label: "竞品基因", hint: "出身", status: nodeStatus(p.category !== "OTHER"), value: categoryLabel },
+    { id: "industry", layer: "定位层", label: "主攻行业", hint: "打哪行", status: nodeStatus(!!p.industry && p.industry !== "OTHER", !!p.industry), value: industryLabel },
 
     // 打法层
     { id: "value_pattern", layer: "打法层", label: "价值模式", hint: "一起卖什么", status: nodeStatus(!!p.valuePattern), value: patternLabel },
@@ -356,6 +359,7 @@ export function buildFrameworkReferenceMap(): FrameworkMapNode[] {
         { id: "stage", label: "Stage 1–10", hint: "决定本阶段必做动作" },
         { id: "archetype", label: "伙伴类型", hint: "决定动作分支（继续/观察/停止）" },
         { id: "category", label: "竞品基因", hint: "PBI/Tableau/纯数据…" },
+        { id: "industry", label: "主攻行业", hint: "银行/政府/零售/制造…" },
       ],
     },
     {
