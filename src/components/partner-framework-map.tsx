@@ -43,7 +43,7 @@ function MapNode({
   onNodeClick?: (node: FrameworkMapNode) => void;
 }) {
   const s = STATUS_STYLES[node.status] ?? STATUS_STYLES.info;
-  const clickable = interactive && (node.scrollTo || node.editable || onNodeClick);
+  const clickable = interactive && onNodeClick;
 
   const inner = (
     <div

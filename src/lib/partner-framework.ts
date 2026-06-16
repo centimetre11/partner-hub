@@ -30,6 +30,16 @@ export const ACTION_DOMAIN_LABELS: Record<string, string> = {
   RELATIONSHIP: "关系经营",
 };
 
+export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "capability" | "relationship";
+
+export const WORKSPACE_PANELS: { id: WorkspacePanelId; label: string; desc: string }[] = [
+  { id: "guide", label: "阶段指导", desc: "本阶段动作 · 待办 · AI" },
+  { id: "positioning", label: "定位打法", desc: "Tier · 类型 · 价值模式 · 画像" },
+  { id: "pipeline", label: "商机推进", desc: "Pipeline 商机跟踪" },
+  { id: "capability", label: "能力建设", desc: "培训认证 · 联合方案" },
+  { id: "relationship", label: "关系经营", desc: "权力地图 · 动态 · 舆情" },
+];
+
 export type MapNodeStatus = "current" | "done" | "partial" | "missing" | "info";
 
 export type FrameworkMapNode = {
@@ -37,35 +47,38 @@ export type FrameworkMapNode = {
   layer: string;
   label: string;
   hint?: string;
-  href?: string;
-  scrollTo?: string;
+  panel?: WorkspacePanelId;
   editable?: boolean;
   status: MapNodeStatus;
   value?: string;
 };
 
-/** 实例地图节点 → 滚动目标 & 是否可快捷编辑 */
-export const INSTANCE_NODE_TARGETS: Record<string, { scrollTo: string; editable?: boolean }> = {
-  tier: { scrollTo: "profile", editable: true },
-  stage: { scrollTo: "pipeline-stages", editable: true },
-  archetype: { scrollTo: "profile", editable: true },
-  category: { scrollTo: "profile", editable: true },
-  value_pattern: { scrollTo: "profile", editable: true },
-  value_stack: { scrollTo: "profile", editable: true },
-  playbook: { scrollTo: "profile", editable: true },
-  pitch: { scrollTo: "profile", editable: true },
-  domain_commitment: { scrollTo: "profile", editable: true },
-  domain_capability: { scrollTo: "training", editable: false },
-  domain_pipeline: { scrollTo: "opportunities", editable: false },
-  domain_relationship: { scrollTo: "powermap", editable: false },
-  mod_profile: { scrollTo: "profile" },
-  mod_powermap: { scrollTo: "powermap" },
-  mod_opp: { scrollTo: "opportunities" },
-  mod_training: { scrollTo: "training" },
-  mod_solution: { scrollTo: "solutions" },
-  mod_timeline: { scrollTo: "timeline" },
-  stage_exit: { scrollTo: "guidance" },
+/** 实例地图节点 → 工作区面板 & 是否可快捷编辑 */
+export const INSTANCE_NODE_TARGETS: Record<string, { panel: WorkspacePanelId; editable?: boolean }> = {
+  tier: { panel: "positioning", editable: true },
+  stage: { panel: "positioning", editable: true },
+  archetype: { panel: "positioning", editable: true },
+  category: { panel: "positioning", editable: true },
+  value_pattern: { panel: "positioning", editable: true },
+  value_stack: { panel: "positioning", editable: true },
+  playbook: { panel: "positioning", editable: true },
+  pitch: { panel: "positioning", editable: true },
+  domain_commitment: { panel: "positioning", editable: true },
+  domain_capability: { panel: "capability" },
+  domain_pipeline: { panel: "pipeline" },
+  domain_relationship: { panel: "relationship" },
+  mod_profile: { panel: "positioning" },
+  mod_powermap: { panel: "relationship" },
+  mod_opp: { panel: "pipeline" },
+  mod_training: { panel: "capability" },
+  mod_solution: { panel: "capability" },
+  mod_timeline: { panel: "relationship" },
+  stage_exit: { panel: "guide" },
 };
+
+export function panelForNode(nodeId: string): WorkspacePanelId {
+  return INSTANCE_NODE_TARGETS[nodeId]?.panel ?? "guide";
+}
 
 export type StageGuidance = {
   stage: number;
@@ -326,9 +339,9 @@ export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapN
     if (!t) return n;
     return {
       ...n,
-      scrollTo: t.scrollTo,
+      panel: t.panel,
       editable: t.editable,
-      hint: `${n.hint ?? n.label} · 点击${t.editable ? "编辑" : "跳转"}`,
+      hint: `${n.hint ?? n.label} · 点击查看${t.editable ? " / 编辑" : ""}`,
     };
   });
 }
