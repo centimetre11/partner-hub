@@ -55,7 +55,9 @@ export async function logoutAction() {
 // ============ 伙伴 ============
 
 const EDITABLE_FIELDS = [
-  "name", "category", "tier", "city", "country", "headcount", "website", "companyType",
+  "name", "category", "partnerArchetype", "valuePattern",
+  "valuePartnerOffer", "valueFanruanOffer", "valueCustomerOutcome", "dedicatedHeadcount",
+  "tier", "city", "country", "headcount", "website", "companyType",
   "coreBusiness", "capability", "knownClients", "certLevel", "currentTools",
   "keyDifferentiator", "playbook", "pitch", "bestChannel", "priority", "notes",
 ] as const;

@@ -40,7 +40,7 @@ export function PartnerSolutionsSection({
 
   return (
     <Card
-      title={`⑥ 联合解决方案（${solutions.length}）`}
+      title={`打法落地 · 联合解决方案（${solutions.length}）`}
       actions={<AiAddButton scope="solution" partnerId={partnerId} label="✦ AI 加方案" variant="soft" />}
     >
       <div className="space-y-4">

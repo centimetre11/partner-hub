@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
@@ -8,6 +9,13 @@ import {
 } from "@/lib/constants";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
+import {
+  PARTNER_ARCHETYPE_LABELS,
+  VALUE_PATTERN_LABELS,
+  buildPartnerInstanceMap,
+} from "@/lib/partner-framework";
+import { PartnerFrameworkMap } from "@/components/partner-framework-map";
+import { PartnerStageGuidancePanel } from "@/components/partner-stage-guidance";
 import {
   addNoteAction, archivePartnerAction, createTodoAction,
   deleteOpportunityAction, deleteTodoAction, deleteTrainingAction, promotePartnerAction,
@@ -65,6 +73,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   });
   const completeness = computeCompleteness(p);
   const stale = staleDays(p);
+  const instanceMap = buildPartnerInstanceMap(p);
   let selectedDims: string[] = [];
   if (p.monitorDims) {
     try {
@@ -90,6 +99,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </Badge>
               {p.status === "PROSPECT" && <Badge tone="amber">{POOL_FLAG_LABELS[p.poolFlag]}</Badge>}
               {p.tier && <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge>}
+              {p.partnerArchetype && (
+                <Badge tone="indigo">{PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] ?? p.partnerArchetype}</Badge>
+              )}
+              {p.valuePattern && (
+                <Badge tone="purple">{VALUE_PATTERN_LABELS[p.valuePattern] ?? p.valuePattern}</Badge>
+              )}
               <Badge tone="zinc">{CATEGORY_LABELS[p.category]}</Badge>
               {stale > 30 && p.status === "ACTIVE" && <Badge tone="red">停滞 {stale} 天</Badge>}
             </div>
@@ -162,12 +177,27 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
+      <div className="px-8 pt-6">
+        <div className="flex items-center justify-end mb-2">
+          <Link href="/framework" className="text-xs text-indigo-600 hover:underline">
+            查看整体地图 →
+          </Link>
+        </div>
+        <PartnerFrameworkMap
+          nodes={instanceMap}
+          title={`${p.name} · 实例地图`}
+          subtitle="绿=就绪 · 黄=部分 · 灰=待补 · indigo=当前 Stage。落地层节点可点击跳转。"
+          compact
+        />
+      </div>
+
       <div className="px-8 pt-6 grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* ===== 左侧 2/3 ===== */}
         <div className="xl:col-span-2 space-y-5">
-          {/* 模块一：伙伴画像 */}
+          {/* 定位层 + 打法层：伙伴画像 */}
           <Card
-            title="① 伙伴画像"
+            id="profile"
+            title="定位 & 打法 · 伙伴画像"
             actions={
               <div className="flex items-center gap-2">
                 <AiAddButton scope="profile" partnerId={p.id} label="✦ AI 补全" variant="soft" />
@@ -175,8 +205,31 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </div>
             }
           >
+            {(p.valuePattern || p.valuePartnerOffer || p.valueFanruanOffer || p.valueCustomerOutcome) && (
+              <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 text-sm">
+                <div className="text-xs font-semibold text-indigo-700 mb-2">
+                  联合价值模式
+                  {p.valuePattern && ` · ${VALUE_PATTERN_LABELS[p.valuePattern] ?? p.valuePattern}`}
+                </div>
+                <dl className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {[
+                    ["伙伴提供", p.valuePartnerOffer],
+                    ["帆软提供", p.valueFanruanOffer],
+                    ["客户得到", p.valueCustomerOutcome],
+                  ].map(([k, v]) => (
+                    <div key={k as string}>
+                      <dt className="text-[10px] text-zinc-400">{k}</dt>
+                      <dd className={v ? "text-zinc-800 mt-0.5" : "text-zinc-300 mt-0.5"}>{v || "待补充"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
             <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 text-sm">
               {[
+                ["伙伴类型", p.partnerArchetype ? PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] : null],
+                ["专职人数", p.dedicatedHeadcount],
+                ["负责 BD", p.owner?.name],
                 ["公司规模", p.headcount],
                 ["公司类型", p.companyType],
                 ["核心业务", p.coreBusiness],
@@ -186,7 +239,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 ["已知客户", p.knownClients],
                 ["关键差异化", p.keyDifferentiator],
                 ["最佳接触渠道", p.bestChannel],
-                ["契合度评分", p.fitScore != null ? `${p.fitScore}/10` : null],
                 ["优先级", p.priority],
                 ["人工核对", p.manualChecked ? "☑ 已核对" : "☐ 待核对"],
               ].map(([k, v]) => (
@@ -214,9 +266,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             )}
           </Card>
 
-          {/* 模块二：权力地图 */}
+          {/* ④ 关系经营：权力地图 */}
           <Card
-            title={`② 权力地图（${p.contacts.length} 人）`}
+            id="powermap"
+            title={`关系经营 · 权力地图（${p.contacts.length} 人）`}
             actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI 加人" variant="soft" />}
           >
             <PowerMapSection
@@ -233,9 +286,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             />
           </Card>
 
-          {/* 模块三/四：商机 Pipeline */}
+          {/* ③ 商机推进 */}
           <Card
-            title={`③ 商机跟踪（${p.opportunities.filter((o) => o.status === "ACTIVE").length} 个进行中）`}
+            id="opportunities"
+            title={`商机推进 · 商机跟踪（${p.opportunities.filter((o) => o.status === "ACTIVE").length} 个进行中）`}
             actions={<AiAddButton scope="opportunity" partnerId={p.id} label="✦ AI 加商机" variant="soft" />}
           >
             <div className="space-y-3">
@@ -303,9 +357,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </div>
           </Card>
 
-          {/* 模块五：培训认证 */}
+          {/* ② 能力建设：培训 */}
           <Card
-            title={`④ 能力培训（${p.trainings.length}）`}
+            id="training"
+            title={`能力建设 · 培训认证（${p.trainings.length}）`}
             actions={<AiAddButton scope="training" partnerId={p.id} label="✦ AI 加培训" variant="soft" />}
           >
             <div className="space-y-2">
@@ -342,7 +397,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </div>
           </Card>
 
-          <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />
+          <div id="solutions">
+            <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />
+          </div>
 
           <SentimentMonitorSection
             partnerId={p.id}
@@ -360,8 +417,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             selectedDims={selectedDims}
           />
 
-          {/* 时间线 */}
-          <Card title={`⑤ 动态时间线（${p.events.length}）`}>
+          {/* 关系经营：时间线 */}
+          <Card id="timeline" title={`关系经营 · 动态时间线（${p.events.length}）`}>
             <form action={addNoteAction.bind(null, p.id)} className="flex gap-2 mb-5">
               <input name="content" required placeholder="记一条动态 / 接触记录 / 新闻…" className={input} />
               <select name="type" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0">
@@ -404,8 +461,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
 
         {/* ===== 右侧 1/3 ===== */}
         <div className="space-y-5">
-          {/* 信息完整度 */}
-          <Card title="信息完整度">
+          <PartnerStageGuidancePanel partner={p} />
+
+          {/* 档案完整度 */}
+          <Card title="档案完整度">
             <ScoreBar score={completeness.score} />
             {completeness.missing.length > 0 && (
               <div className="mt-4">

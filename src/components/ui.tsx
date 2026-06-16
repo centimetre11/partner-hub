@@ -65,14 +65,16 @@ export function Card({
   children,
   className = "",
   actions,
+  id,
 }: {
   title?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   actions?: React.ReactNode;
+  id?: string;
 }) {
   return (
-    <div className={`bg-white rounded-xl border border-zinc-200/80 shadow-sm ${className}`}>
+    <div id={id} className={`bg-white rounded-xl border border-zinc-200/80 shadow-sm ${className}`}>
       {(title || actions) && (
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100">
           <h3 className="text-sm font-semibold text-zinc-800">{title}</h3>

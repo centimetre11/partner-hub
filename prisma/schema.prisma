@@ -37,6 +37,14 @@ model Partner {
   poolFlag         String   @default("NEW")
   // PURE_DATA / POWER_BI / TABLEAU / QLIK / IT_INTEGRATOR / OTHER
   category         String   @default("OTHER")
+  // DATA_NATIVE / BI_MIGRATOR / IT_INTEGRATOR / IOT_INTEGRATOR / SALES_AGENT / SHELL_DATA / OTHER
+  partnerArchetype String?
+  // IOT_DASH / APP_REPORT / CLOUD_APP / DATA_BI / BI_COMPLEMENT / OEM_EMBED / GOV_BID
+  valuePattern     String?
+  valuePartnerOffer String? // 伙伴提供什么
+  valueFanruanOffer String? // 帆软提供什么
+  valueCustomerOutcome String? // 客户得到什么
+  dedicatedHeadcount String? // 专职做帆软/数据业务人数
   tier             String? // A / B / C
   city             String?
   country          String?

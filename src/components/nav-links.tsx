@@ -21,6 +21,7 @@ const nav: Entry[] = [
     ],
   },
   { href: "/partners", label: "正式伙伴", icon: "◮" },
+  { href: "/framework", label: "经营框架", icon: "◎" },
   {
     id: "work",
     label: "工作中心",

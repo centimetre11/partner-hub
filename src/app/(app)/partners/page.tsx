@@ -31,7 +31,7 @@ export default async function PartnersPage({
     <div className="pb-16">
       <PageHeader
         title="正式伙伴"
-        desc={`${partners.length} 家正在经营的伙伴 · 按八大模块管理，跟踪 Pipeline 十阶段`}
+        desc={`${partners.length} 家正在经营的伙伴 · 经营框架驱动动作，Pipeline 十阶段跟踪`}
         actions={<AddPartnerForm intent="active" />}
       />
       <div className="px-8">

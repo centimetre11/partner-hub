@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction } from "@/lib/actions";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { PARTNER_ARCHETYPE_LABELS, VALUE_PATTERN_LABELS } from "@/lib/partner-framework";
 
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
@@ -34,14 +35,6 @@ export function ProfileEditor({ partner: p, users }: { partner: Partner; users: 
                 <input name="name" defaultValue={p.name} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">类别</span>
-                <select name="category" defaultValue={p.category} className={input}>
-                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1">
                 <span className="text-xs text-zinc-500">Tier 分级</span>
                 <select name="tier" defaultValue={p.tier ?? ""} className={input}>
                   <option value="">未分级</option>
@@ -49,6 +42,48 @@ export function ProfileEditor({ partner: p, users }: { partner: Partner; users: 
                   <option value="B">B 重点打</option>
                   <option value="C">C 后续跟进</option>
                 </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-zinc-500">伙伴类型</span>
+                <select name="partnerArchetype" defaultValue={p.partnerArchetype ?? ""} className={input}>
+                  <option value="">待判定</option>
+                  {Object.entries(PARTNER_ARCHETYPE_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-zinc-500">竞品基因 / 类别</span>
+                <select name="category" defaultValue={p.category} className={input}>
+                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-zinc-500">联合价值模式</span>
+                <select name="valuePattern" defaultValue={p.valuePattern ?? ""} className={input}>
+                  <option value="">待选定</option>
+                  {Object.entries(VALUE_PATTERN_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-zinc-500">专职人数（帆软/数据）</span>
+                <input name="dedicatedHeadcount" defaultValue={p.dedicatedHeadcount ?? ""} placeholder="如 3 人全职" className={input} />
+              </label>
+              <label className="space-y-1 col-span-2 md:col-span-3">
+                <span className="text-xs text-zinc-500">伙伴提供（价值三行）</span>
+                <input name="valuePartnerOffer" defaultValue={p.valuePartnerOffer ?? ""} placeholder="如：Tableau 实施与客户关系" className={input} />
+              </label>
+              <label className="space-y-1 col-span-2 md:col-span-3">
+                <span className="text-xs text-zinc-500">帆软提供</span>
+                <input name="valueFanruanOffer" defaultValue={p.valueFanruanOffer ?? ""} placeholder="如：FineReport 复杂报表 + 驻场" className={input} />
+              </label>
+              <label className="space-y-1 col-span-2 md:col-span-3">
+                <span className="text-xs text-zinc-500">客户得到</span>
+                <input name="valueCustomerOutcome" defaultValue={p.valueCustomerOutcome ?? ""} placeholder="如：监管报表 + 自助分析双满足" className={input} />
               </label>
               <label className="space-y-1">
                 <span className="text-xs text-zinc-500">城市</span>
@@ -95,11 +130,11 @@ export function ProfileEditor({ partner: p, users }: { partner: Partner; users: 
                 <input name="keyDifferentiator" defaultValue={p.keyDifferentiator ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">核心打法 / 切入方案</span>
+                <span className="text-xs text-zinc-500">核心打法 / playbook</span>
                 <textarea name="playbook" defaultValue={p.playbook ?? ""} rows={2} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">话术</span>
+                <span className="text-xs text-zinc-500">话术 pitch</span>
                 <textarea name="pitch" defaultValue={p.pitch ?? ""} rows={2} className={input} />
               </label>
               <label className="space-y-1">
