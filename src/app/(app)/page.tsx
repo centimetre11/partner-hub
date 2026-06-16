@@ -58,7 +58,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
   const in7days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
 
-  const [myTodos, overdueTodos, activePartners, prospectCount, activeCount, openTodoCount, unreadNotifications] = await Promise.all([
+  const [myTodos, overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications] = await Promise.all([
     db.todoItem.findMany({
       where: { status: "OPEN", OR: [{ assigneeId: userId }, { assigneeId: null }], dueDate: { lte: in7days } },
       include: { partner: true },
@@ -75,9 +75,9 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
       where: { status: "ACTIVE" },
       include: { events: { orderBy: { createdAt: "desc" }, take: 1 } },
     }),
-    db.partner.count({ where: { status: "PROSPECT" } }),
     db.partner.count({ where: { status: "ACTIVE" } }),
     db.todoItem.count({ where: { status: "OPEN" } }),
+    db.opportunity.count({ where: { status: "ACTIVE", partner: { status: "ACTIVE" } } }),
     db.notification.findMany({
       where: { readAt: null },
       orderBy: { createdAt: "desc" },
@@ -91,13 +91,16 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
     .filter((x) => x.days > 30)
     .sort((a, b) => b.days - a.days);
 
+  const pocPlusCount = activePartners.filter((p) => p.pipelineStage >= 5).length;
+  const signedPlusCount = activePartners.filter((p) => p.pipelineStage >= 7).length;
+
   return (
     <>
       <div className="px-8 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "候选池", value: prospectCount, href: "/pool", tone: "text-sky-600" },
           { label: "正式伙伴", value: activeCount, href: "/partners", tone: "text-indigo-600" },
-          { label: "未完成待办", value: openTodoCount, href: "/todos", tone: "text-zinc-900" },
+          { label: "POC 及以后（≥5）", value: pocPlusCount, href: "/partners", tone: "text-purple-600" },
+          { label: "进行中商机", value: activeOppCount, href: "/partners", tone: "text-sky-600" },
           { label: "停滞伙伴（>30天）", value: stalePartners.length, href: "/partners", tone: stalePartners.length ? "text-red-600" : "text-emerald-600" },
         ].map((s) => (
           <Link key={s.label} href={s.href} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 hover:border-indigo-300 transition-colors">
@@ -106,6 +109,26 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
           </Link>
         ))}
       </div>
+
+      {(openTodoCount > 0 || overdueTodos.length > 0 || signedPlusCount > 0) && (
+        <div className="px-8 mb-4 flex flex-wrap gap-3 text-xs">
+          {openTodoCount > 0 && (
+            <Link href="/todos" className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-zinc-600 hover:border-indigo-300">
+              未完成待办 <span className="font-semibold text-zinc-900">{openTodoCount}</span>
+            </Link>
+          )}
+          {overdueTodos.length > 0 && (
+            <Link href="/todos" className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-red-700 hover:border-red-300">
+              逾期待办 <span className="font-semibold">{overdueTodos.length}</span>
+            </Link>
+          )}
+          {signedPlusCount > 0 && (
+            <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-indigo-700">
+              已签约 Onboarding+ <span className="font-semibold">{signedPlusCount}</span> 家
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="px-8 grid grid-cols-1 xl:grid-cols-3 gap-5">
         <div className="xl:col-span-2 space-y-5">
@@ -231,13 +254,16 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
                 <div className="text-xs text-zinc-400 mt-0.5 mb-2">扔会议记录或公司介绍，AI 对话式建档</div>
                 <AiAddButton scope="new_partner" label="开始建档" variant="soft" />
               </div>
-              <Link href="/pool?tier=A" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">◬ Tier A 候选</div>
-                <div className="text-xs text-zinc-400 mt-0.5">查看 10 家「立即打」的重点候选</div>
+              <Link href="/partners?tier=A" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
+                <div className="font-medium text-zinc-800">◮ Tier A 正式伙伴</div>
+                <div className="text-xs text-zinc-400 mt-0.5">查看正在重点经营的 Tier A 伙伴</div>
               </Link>
               <Link href="/?tab=board" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
                 <div className="font-medium text-zinc-800">◫ 经营看板</div>
-                <div className="text-xs text-zinc-400 mt-0.5">Pipeline 漏斗、转化、完整度排行</div>
+                <div className="text-xs text-zinc-400 mt-0.5">正式伙伴 Pipeline、完整度与停滞预警</div>
+              </Link>
+              <Link href="/pool" className="block rounded-lg border border-dashed border-zinc-200 px-4 py-2.5 hover:border-zinc-300 transition-colors">
+                <div className="text-xs text-zinc-500">候选资源池 →</div>
               </Link>
             </div>
           </Card>

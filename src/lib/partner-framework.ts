@@ -38,8 +38,33 @@ export type FrameworkMapNode = {
   label: string;
   hint?: string;
   href?: string;
+  scrollTo?: string;
+  editable?: boolean;
   status: MapNodeStatus;
   value?: string;
+};
+
+/** 实例地图节点 → 滚动目标 & 是否可快捷编辑 */
+export const INSTANCE_NODE_TARGETS: Record<string, { scrollTo: string; editable?: boolean }> = {
+  tier: { scrollTo: "profile", editable: true },
+  stage: { scrollTo: "pipeline-stages", editable: true },
+  archetype: { scrollTo: "profile", editable: true },
+  category: { scrollTo: "profile", editable: true },
+  value_pattern: { scrollTo: "profile", editable: true },
+  value_stack: { scrollTo: "profile", editable: true },
+  playbook: { scrollTo: "profile", editable: true },
+  pitch: { scrollTo: "profile", editable: true },
+  domain_commitment: { scrollTo: "profile", editable: true },
+  domain_capability: { scrollTo: "training", editable: false },
+  domain_pipeline: { scrollTo: "opportunities", editable: false },
+  domain_relationship: { scrollTo: "powermap", editable: false },
+  mod_profile: { scrollTo: "profile" },
+  mod_powermap: { scrollTo: "powermap" },
+  mod_opp: { scrollTo: "opportunities" },
+  mod_training: { scrollTo: "training" },
+  mod_solution: { scrollTo: "solutions" },
+  mod_timeline: { scrollTo: "timeline" },
+  stage_exit: { scrollTo: "guidance" },
 };
 
 export type StageGuidance = {
@@ -223,7 +248,7 @@ export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapN
   const patternLabel = p.valuePattern ? VALUE_PATTERN_LABELS[p.valuePattern] : "待选定";
   const categoryLabel = CATEGORY_LABELS[p.category] ?? p.category;
 
-  return [
+  const nodes: FrameworkMapNode[] = [
     // 定位层
     { id: "tier", layer: "定位层", label: "Tier", hint: "投入强度", status: nodeStatus(!!p.tier), value: tierLabel },
     { id: "stage", layer: "定位层", label: "Stage", hint: "关系进展", status: "current", value: `${stage}. ${stageName(stage)}` },
@@ -278,12 +303,12 @@ export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapN
     },
 
     // 落地层
-    { id: "mod_profile", layer: "落地层", label: "伙伴画像", status: nodeStatus(!!p.coreBusiness), value: "↓", href: "#profile" },
-    { id: "mod_powermap", layer: "落地层", label: "权力地图", status: nodeStatus(p.contacts.length > 0), value: `${p.contacts.length} 人`, href: "#powermap" },
-    { id: "mod_opp", layer: "落地层", label: "商机跟踪", status: nodeStatus(p.opportunities.length > 0), value: `${p.opportunities.length} 条`, href: "#opportunities" },
-    { id: "mod_training", layer: "落地层", label: "能力培训", status: nodeStatus(p.trainings.length > 0), value: `${p.trainings.length} 条`, href: "#training" },
-    { id: "mod_solution", layer: "落地层", label: "联合方案", status: nodeStatus(p.solutions.length > 0), value: `${p.solutions.length} 条`, href: "#solutions" },
-    { id: "mod_timeline", layer: "落地层", label: "动态时间线", status: nodeStatus(p.events.length > 0), value: `${p.events.length} 条`, href: "#timeline" },
+    { id: "mod_profile", layer: "落地层", label: "伙伴画像", status: nodeStatus(!!p.coreBusiness), value: "跳转 ↓" },
+    { id: "mod_powermap", layer: "落地层", label: "权力地图", status: nodeStatus(p.contacts.length > 0), value: `${p.contacts.length} 人` },
+    { id: "mod_opp", layer: "落地层", label: "商机跟踪", status: nodeStatus(p.opportunities.length > 0), value: `${p.opportunities.length} 条` },
+    { id: "mod_training", layer: "落地层", label: "能力培训", status: nodeStatus(p.trainings.length > 0), value: `${p.trainings.length} 条` },
+    { id: "mod_solution", layer: "落地层", label: "联合方案", status: nodeStatus(p.solutions.length > 0), value: `${p.solutions.length} 条` },
+    { id: "mod_timeline", layer: "落地层", label: "动态时间线", status: nodeStatus(p.events.length > 0), value: `${p.events.length} 条` },
 
     // 当前阶段准出（摘要节点）
     {
@@ -295,6 +320,17 @@ export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapN
       value: `${guidance.exitChecks.filter((c) => c.ok).length}/${guidance.exitChecks.length}`,
     },
   ];
+
+  return nodes.map((n) => {
+    const t = INSTANCE_NODE_TARGETS[n.id];
+    if (!t) return n;
+    return {
+      ...n,
+      scrollTo: t.scrollTo,
+      editable: t.editable,
+      hint: `${n.hint ?? n.label} · 点击${t.editable ? "编辑" : "跳转"}`,
+    };
+  });
 }
 
 /** 整体框架参考地图（无伙伴数据） */

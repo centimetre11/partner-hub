@@ -14,7 +14,7 @@ import {
   VALUE_PATTERN_LABELS,
   buildPartnerInstanceMap,
 } from "@/lib/partner-framework";
-import { PartnerFrameworkMap } from "@/components/partner-framework-map";
+import { PartnerInstanceMapInteractive } from "@/components/partner-instance-map-interactive";
 import { PartnerStageGuidancePanel } from "@/components/partner-stage-guidance";
 import {
   addNoteAction, archivePartnerAction, createTodoAction,
@@ -153,7 +153,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         </div>
 
         {/* Pipeline 十阶段 */}
-        <div className="mt-5 flex items-center gap-1 overflow-x-auto pb-1">
+        <div id="pipeline-stages" className="mt-5 flex items-center gap-1 overflow-x-auto pb-1 scroll-mt-24">
           {PIPELINE_STAGES.map((s) => {
             const current = p.pipelineStage === s.stage;
             const passed = p.pipelineStage > s.stage;
@@ -183,11 +183,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             查看整体地图 →
           </Link>
         </div>
-        <PartnerFrameworkMap
+        <PartnerInstanceMapInteractive
           nodes={instanceMap}
+          partner={p}
+          users={users}
+          pipelineStages={PIPELINE_STAGES.map((s) => ({ stage: s.stage, name: s.name }))}
           title={`${p.name} · 实例地图`}
-          subtitle="绿=就绪 · 黄=部分 · 灰=待补 · indigo=当前 Stage。落地层节点可点击跳转。"
-          compact
         />
       </div>
 
@@ -197,6 +198,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           {/* 定位层 + 打法层：伙伴画像 */}
           <Card
             id="profile"
+            className="scroll-mt-24"
             title="定位 & 打法 · 伙伴画像"
             actions={
               <div className="flex items-center gap-2">
@@ -269,6 +271,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           {/* ④ 关系经营：权力地图 */}
           <Card
             id="powermap"
+            className="scroll-mt-24"
             title={`关系经营 · 权力地图（${p.contacts.length} 人）`}
             actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI 加人" variant="soft" />}
           >
@@ -289,6 +292,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           {/* ③ 商机推进 */}
           <Card
             id="opportunities"
+            className="scroll-mt-24"
             title={`商机推进 · 商机跟踪（${p.opportunities.filter((o) => o.status === "ACTIVE").length} 个进行中）`}
             actions={<AiAddButton scope="opportunity" partnerId={p.id} label="✦ AI 加商机" variant="soft" />}
           >
@@ -360,6 +364,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           {/* ② 能力建设：培训 */}
           <Card
             id="training"
+            className="scroll-mt-24"
             title={`能力建设 · 培训认证（${p.trainings.length}）`}
             actions={<AiAddButton scope="training" partnerId={p.id} label="✦ AI 加培训" variant="soft" />}
           >
@@ -397,7 +402,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </div>
           </Card>
 
-          <div id="solutions">
+          <div id="solutions" className="scroll-mt-24">
             <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />
           </div>
 
@@ -418,7 +423,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           />
 
           {/* 关系经营：时间线 */}
-          <Card id="timeline" title={`关系经营 · 动态时间线（${p.events.length}）`}>
+          <Card id="timeline" className="scroll-mt-24" title={`关系经营 · 动态时间线（${p.events.length}）`}>
             <form action={addNoteAction.bind(null, p.id)} className="flex gap-2 mb-5">
               <input name="content" required placeholder="记一条动态 / 接触记录 / 新闻…" className={input} />
               <select name="type" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0">
@@ -461,7 +466,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
 
         {/* ===== 右侧 1/3 ===== */}
         <div className="space-y-5">
-          <PartnerStageGuidancePanel partner={p} />
+          <div id="guidance" className="scroll-mt-24">
+            <PartnerStageGuidancePanel partner={p} />
+          </div>
 
           {/* 档案完整度 */}
           <Card title="档案完整度">

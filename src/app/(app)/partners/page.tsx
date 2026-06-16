@@ -9,7 +9,7 @@ import { AddPartnerForm } from "../pool/add-partner-form";
 export default async function PartnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; owner?: string }>;
+  searchParams: Promise<{ q?: string; stage?: string; owner?: string; tier?: string }>;
 }) {
   await requireUser();
   const sp = await searchParams;
@@ -20,6 +20,7 @@ export default async function PartnersPage({
       ...(sp.q ? { name: { contains: sp.q } } : {}),
       ...(sp.stage ? { pipelineStage: parseInt(sp.stage, 10) } : {}),
       ...(sp.owner ? { ownerId: sp.owner } : {}),
+      ...(sp.tier ? { tier: sp.tier } : {}),
     },
     include: { contacts: true, opportunities: true, events: { orderBy: { createdAt: "desc" } }, trainings: true, owner: true },
     orderBy: { pipelineStage: "desc" },
@@ -48,6 +49,12 @@ export default async function PartnersPage({
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
+          </select>
+          <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">全部 Tier</option>
+            <option value="A">Tier A</option>
+            <option value="B">Tier B</option>
+            <option value="C">Tier C</option>
           </select>
           <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">筛选</button>
         </form>

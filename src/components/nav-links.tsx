@@ -10,18 +10,18 @@ type Entry = Leaf | Group;
 
 const nav: Entry[] = [
   { href: "/", label: "工作台", icon: "◧" },
+  { href: "/partners", label: "正式伙伴", icon: "◮" },
   {
     id: "resources",
     label: "资源中心",
     icon: "▦",
     children: [
+      { href: "/framework", label: "经营框架", icon: "◎" },
       { href: "/pool", label: "伙伴库", icon: "◬" },
       { href: "/documents", label: "报告中心", icon: "📄" },
       { href: "/materials", label: "物料中心", icon: "📦" },
     ],
   },
-  { href: "/partners", label: "正式伙伴", icon: "◮" },
-  { href: "/framework", label: "经营框架", icon: "◎" },
   {
     id: "work",
     label: "工作中心",

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import type { FrameworkMapNode } from "@/lib/partner-framework";
 import { groupMapByLayer } from "@/lib/partner-framework";
 
@@ -35,14 +34,22 @@ const STATUS_STYLES: Record<string, { box: string; dot: string; label: string }>
 function MapNode({
   node,
   compact,
+  interactive,
+  onNodeClick,
 }: {
   node: FrameworkMapNode;
   compact?: boolean;
+  interactive?: boolean;
+  onNodeClick?: (node: FrameworkMapNode) => void;
 }) {
   const s = STATUS_STYLES[node.status] ?? STATUS_STYLES.info;
+  const clickable = interactive && (node.scrollTo || node.editable || onNodeClick);
+
   const inner = (
     <div
-      className={`rounded-xl border px-3 py-2.5 transition-all ${s.box} ${compact ? "min-h-[72px]" : "min-h-[88px]"}`}
+      className={`rounded-xl border px-3 py-2.5 transition-all ${s.box} ${compact ? "min-h-[72px]" : "min-h-[88px]"} ${
+        clickable ? "cursor-pointer hover:brightness-[0.98] hover:shadow-sm active:scale-[0.99]" : ""
+      } ${node.editable && interactive ? "ring-1 ring-indigo-200/60" : ""}`}
       title={node.hint}
     >
       <div className="flex items-start justify-between gap-2">
@@ -59,14 +66,19 @@ function MapNode({
           {node.value}
         </div>
       )}
+      {node.editable && interactive && (
+        <div className={`mt-1 text-[10px] ${node.status === "current" ? "text-indigo-200" : "text-indigo-500"}`}>
+          可编辑
+        </div>
+      )}
     </div>
   );
 
-  if (node.href) {
+  if (clickable && onNodeClick) {
     return (
-      <Link href={node.href} className="block hover:opacity-90">
+      <button type="button" className="block w-full text-left" onClick={() => onNodeClick(node)}>
         {inner}
-      </Link>
+      </button>
     );
   }
   return inner;
@@ -89,12 +101,16 @@ export function PartnerFrameworkMap({
   subtitle,
   compact = false,
   legend = true,
+  interactive = false,
+  onNodeClick,
 }: {
   nodes: FrameworkMapNode[];
   title?: string;
   subtitle?: string;
   compact?: boolean;
   legend?: boolean;
+  interactive?: boolean;
+  onNodeClick?: (node: FrameworkMapNode) => void;
 }) {
   const grouped = groupMapByLayer(nodes);
 
@@ -117,7 +133,9 @@ export function PartnerFrameworkMap({
               {layer === "定位层" && <span className="text-xs text-zinc-400">跟谁 · 在哪 · 是什么类型</span>}
               {layer === "打法层" && <span className="text-xs text-zinc-400">一起卖什么 · 怎么讲</span>}
               {layer === "动作层" && <span className="text-xs text-zinc-400">四域必做动作</span>}
-              {layer === "落地层" && <span className="text-xs text-zinc-400">系统模块（点击跳转）</span>}
+              {layer === "落地层" && (
+                <span className="text-xs text-zinc-400">{interactive ? "系统模块 · 点击跳转" : "系统模块"}</span>
+              )}
               {layer === "阶段准出" && <span className="text-xs text-zinc-400">本阶段过关清单</span>}
             </div>
             <div
@@ -132,7 +150,13 @@ export function PartnerFrameworkMap({
               }`}
             >
               {layerNodes.map((n) => (
-                <MapNode key={n.id} node={n} compact={compact} />
+                <MapNode
+                  key={n.id}
+                  node={n}
+                  compact={compact}
+                  interactive={interactive}
+                  onNodeClick={onNodeClick}
+                />
               ))}
             </div>
             {idx < grouped.length - 1 && <LayerArrow />}
@@ -150,6 +174,12 @@ export function PartnerFrameworkMap({
                 {v.label}
               </span>
             ))}
+          {interactive && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full ring-1 ring-indigo-300 bg-indigo-50" />
+              可编辑
+            </span>
+          )}
         </div>
       )}
     </div>
