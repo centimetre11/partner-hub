@@ -9,8 +9,6 @@ import {
 } from "@/lib/content-actions";
 import { SolutionAssetUpload } from "@/components/solution-asset-upload";
 import { AssetCard } from "@/components/asset-link";
-import { AiAddButton } from "@/components/ai-add-button";
-
 type SolutionRow = {
   id: string;
   name: string;
@@ -39,10 +37,7 @@ export function PartnerSolutionsSection({
   const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
   return (
-    <Card
-      title={`Execution · joint solutions (${solutions.length})`}
-      actions={<AiAddButton scope="solution" partnerId={partnerId} label="✦ AI add solution" variant="soft" />}
-    >
+    <Card title={`Execution · joint solutions (${solutions.length})`}>
       <div className="space-y-4">
         {solutions.map((sol) => (
           <details key={sol.id} className="group rounded-lg border border-zinc-100 hover:border-zinc-200">

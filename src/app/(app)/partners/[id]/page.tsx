@@ -287,7 +287,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     ["Sales", p.salesUser?.name ?? p.owner?.name],
                     ["Pre-sales", p.presalesUser?.name],
                     ["Priority", p.priority],
-                    ["Certification level", p.certLevel],
                   ].map(([k, v]) => (
                     <div key={k as string} className="flex justify-between gap-3">
                       <dt className="text-zinc-400 shrink-0">{k}</dt>
@@ -300,12 +299,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                   {[
                     ["Company size", p.headcount],
-                    ["Company type", p.companyType],
                     ["Core business", p.coreBusiness],
                     ["Core capabilities", p.capability],
-                    ["Current BI tools", p.currentTools],
+                    ["当前工具", p.currentTools],
                     ["Known clients", p.knownClients],
-                    ["Key differentiator", p.keyDifferentiator],
                     ["Best outreach channel", p.bestChannel],
                   ].map(([k, v]) => (
                     <div key={k as string}>
@@ -330,10 +327,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         }
         capability={
           <div className="space-y-5">
-            <Card
-              title={`Training & certification (${p.trainings.length})`}
-              actions={<AiAddButton scope="training" partnerId={p.id} label="✦ AI add training" variant="soft" />}
-            >
+            <Card title={`Training & certification (${p.trainings.length})`}>
               <TrainingList partnerId={p.id} trainings={p.trainings} input={input} />
             </Card>
             <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />

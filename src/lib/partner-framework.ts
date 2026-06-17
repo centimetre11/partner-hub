@@ -148,7 +148,7 @@ export function getStageGuidance(p: PartnerFrameworkInput): StageGuidance {
       focus: "Quick screen: Are they a data player? Do they have a dedicated data team?",
       domains: {
         COMMITMENT: ["Assign our Owner", "Book first meeting with business lead"],
-        CAPABILITY: ["Learn existing BI tools and team structure", "No training scheduled yet"],
+        CAPABILITY: ["Learn existing tools and team structure", "No training scheduled yet"],
         PIPELINE: ["Ask about last 3 data-related projects", "Don't rush to create opportunities"],
         RELATIONSHIP: ["Start power map with 1–2 people", "Log first touchpoint"],
       },

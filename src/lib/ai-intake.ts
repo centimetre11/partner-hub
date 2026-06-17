@@ -123,7 +123,7 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "New partner onboarding",
     intro:
       "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
-    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, certLevel, keyDifferentiator, playbook, fitScore, priority. If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).`,
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, fitScore, priority. If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).`,
     schemaHint: `Set partnerName to the company name; fill other profile fields in fields (field names only: ${FIELD_LIST}; category values: ${CATEGORY_LIST}; industry values: ${INDUSTRY_LIST}; pipelineStage 1–10: ${STAGE_LIST}); add contacts if people appear in text/research, opportunities if deals are mentioned. Leave trainings/solutions as empty arrays.`,
   },
   powermap: {

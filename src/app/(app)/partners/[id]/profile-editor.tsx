@@ -114,14 +114,6 @@ export function ProfileEditor({
                 <span className="text-xs text-zinc-500">Website</span>
                 <input name="website" defaultValue={p.website ?? ""} className={input} />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Company type</span>
-                <input name="companyType" defaultValue={p.companyType ?? ""} placeholder="Consulting / reseller / SI…" className={input} />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Certification level</span>
-                <input name="certLevel" defaultValue={p.certLevel ?? ""} className={input} />
-              </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
                 <span className="text-xs text-zinc-500">Core business</span>
                 <input name="coreBusiness" defaultValue={p.coreBusiness ?? ""} className={input} />
@@ -134,13 +126,9 @@ export function ProfileEditor({
                 <span className="text-xs text-zinc-500">Known clients</span>
                 <input name="knownClients" defaultValue={p.knownClients ?? ""} className={input} />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Current BI tools</span>
+              <label className="space-y-1 col-span-2 md:col-span-3">
+                <span className="text-xs text-zinc-500">当前工具</span>
                 <input name="currentTools" defaultValue={p.currentTools ?? ""} className={input} />
-              </label>
-              <label className="space-y-1 col-span-2">
-                <span className="text-xs text-zinc-500">Key differentiator</span>
-                <input name="keyDifferentiator" defaultValue={p.keyDifferentiator ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
                 <span className="text-xs text-zinc-500">Core playbook</span>
@@ -149,24 +137,6 @@ export function ProfileEditor({
               <label className="space-y-1 col-span-2 md:col-span-3">
                 <span className="text-xs text-zinc-500">Pitch</span>
                 <textarea name="pitch" defaultValue={p.pitch ?? ""} rows={2} className={input} />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Best outreach channel</span>
-                <input name="bestChannel" defaultValue={p.bestChannel ?? ""} className={input} />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Fit score (1–10)</span>
-                <input name="fitScore" type="number" min={1} max={10} defaultValue={p.fitScore ?? ""} className={input} />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Priority</span>
-                <select name="priority" defaultValue={p.priority ?? ""} className={input}>
-                  <option value="">Not set</option>
-                  <option value="P0">P0 — immediate</option>
-                  <option value="P1">P1 — priority</option>
-                  <option value="P2">P2 — follow up</option>
-                  <option value="P3">P3 — watch</option>
-                </select>
               </label>
               <PartnerTeamFields
                 users={users}
