@@ -23,7 +23,15 @@ export default async function PartnersPage({
       status: "ACTIVE",
       ...(sp.q ? { name: { contains: sp.q } } : {}),
       ...(sp.stage ? { pipelineStage: parseInt(sp.stage, 10) } : {}),
-      ...(sp.owner ? { ownerId: sp.owner } : {}),
+      ...(sp.owner
+        ? {
+            OR: [
+              { salesUserId: sp.owner },
+              { ownerId: sp.owner },
+              { presalesUserId: sp.owner },
+            ],
+          }
+        : {}),
       ...(sp.tier ? { tier: sp.tier } : {}),
       ...(sp.industry
         ? {
@@ -34,7 +42,15 @@ export default async function PartnersPage({
           }
         : {}),
     },
-    include: { contacts: true, opportunities: true, events: { orderBy: { createdAt: "desc" } }, trainings: true, owner: true },
+    include: {
+      contacts: true,
+      opportunities: true,
+      events: { orderBy: { createdAt: "desc" } },
+      trainings: true,
+      owner: true,
+      salesUser: true,
+      presalesUser: true,
+    },
     orderBy: { pipelineStage: "desc" },
   });
 
@@ -57,7 +73,7 @@ export default async function PartnersPage({
             ))}
           </select>
           <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">All owners</option>
+            <option value="">All team members</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
@@ -107,7 +123,7 @@ export default async function PartnersPage({
                         {stale > 30 && <Badge tone="red">Stalled {stale} days</Badge>}
                       </div>
                       <div className="text-xs text-zinc-400 mt-1">
-                        {p.city ?? p.country ?? "—"} · Owner: {p.owner?.name ?? "Unassigned"}
+                        {p.city ?? p.country ?? "—"} · Sales: {p.salesUser?.name ?? p.owner?.name ?? "—"} · Pre-sales: {p.presalesUser?.name ?? "—"}
                       </div>
                     </div>
                     <div className="text-right shrink-0">

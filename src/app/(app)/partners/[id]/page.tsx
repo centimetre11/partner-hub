@@ -55,6 +55,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         take: 60,
       },
       owner: true,
+      salesUser: true,
+      presalesUser: true,
       solutions: {
         orderBy: { updatedAt: "desc" },
         include: {
@@ -149,8 +151,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   </a>
                 </>
               )}
-              {" · Owner: "}
-              {p.owner?.name ?? "Unassigned"}
+              {" · Sales: "}
+              {p.salesUser?.name ?? p.owner?.name ?? "Unassigned"}
+              {" · Pre-sales: "}
+              {p.presalesUser?.name ?? "Unassigned"}
               {" · Profile completeness "}
               {completeness.score}%
             </div>
@@ -280,7 +284,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     ["Competitive DNA", labelFromMap(labelMaps.CATEGORY, p.category)],
                     ["Primary industry", industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
                     ["Dedicated headcount", p.dedicatedHeadcount],
-                    ["Owner (BD)", p.owner?.name],
+                    ["Sales (销售)", p.salesUser?.name ?? p.owner?.name],
+                    ["Pre-sales (售前)", p.presalesUser?.name],
                     ["Priority", p.priority],
                     ["Certification level", p.certLevel],
                   ].map(([k, v]) => (

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDate, fmtDateTime } from "@/components/ui";
 import { RegisterForm } from "./register-form";
+import { MemberRow } from "./member-row";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
 import { KmsSetup } from "./kms-setup";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
@@ -98,17 +99,7 @@ export default async function SettingsPage() {
         <Card title={`Team members (${users.length})`}>
           <div className="space-y-3 mb-5">
             {users.map((u) => (
-              <div key={u.id} className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold">
-                  {u.name.slice(0, 1)}
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-zinc-800">{u.name}</div>
-                  <div className="text-xs text-zinc-400">
-                    {u.email} · Joined {fmtDate(u.createdAt)}
-                  </div>
-                </div>
-              </div>
+              <MemberRow key={u.id} user={u} />
             ))}
           </div>
           <RegisterForm />

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction, setPipelineStageAction } from "@/lib/actions";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
 import { type FrameworkMapNode } from "@/lib/partner-framework";
 
@@ -161,15 +162,12 @@ export function MapNodeQuickEdit({
             )}
             {node.id === "domain_commitment" && (
               <>
-                <label className="block space-y-1">
-                  <span className="text-xs text-zinc-500">Owner (BD)</span>
-                  <select name="ownerId" defaultValue={partner.ownerId ?? ""} className={input}>
-                    <option value="">Unassigned</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                </label>
+                <PartnerTeamFields
+                  users={users}
+                  salesUserId={partner.salesUserId ?? partner.ownerId}
+                  presalesUserId={partner.presalesUserId}
+                  className={input}
+                />
                 <label className="block space-y-1">
                   <span className="text-xs text-zinc-500">Dedicated headcount</span>
                   <input name="dedicatedHeadcount" defaultValue={partner.dedicatedHeadcount ?? ""} className={input} />

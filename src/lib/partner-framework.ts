@@ -97,6 +97,8 @@ export type PartnerFrameworkInput = Partner & {
   trainings: Training[];
   solutions: Solution[];
   owner?: { name: string } | null;
+  salesUser?: { name: string } | null;
+  presalesUser?: { name: string } | null;
 };
 
 // ============ Stage action cards (exit criteria) ============
@@ -116,7 +118,7 @@ function stageExitChecks(p: PartnerFrameworkInput): { id: string; label: string;
   const trainingActive = p.trainings.some((t) => t.status !== "PLANNED" || t.targetCert);
 
   const checks: { id: string; label: string; ok: boolean; minStage: number }[] = [
-    { id: "owner", label: "Both sides have a clear Owner (we own BD)", ok: !!p.ownerId, minStage: 2 },
+    { id: "owner", label: "Sales & pre-sales assigned", ok: !!(p.salesUserId || p.ownerId) && !!p.presalesUserId, minStage: 2 },
     { id: "archetype", label: "Partner type classified", ok: !!p.partnerArchetype && p.partnerArchetype !== "OTHER", minStage: 3 },
     { id: "data_team", label: "Dedicated data team confirmed (or flagged red to stop)", ok: !!p.dedicatedHeadcount || ["SALES_AGENT", "SHELL_DATA"].includes(p.partnerArchetype ?? ""), minStage: 3 },
     { id: "contacts", label: "Power map ≥2 people", ok: p.contacts.length >= 2, minStage: 3 },
@@ -298,9 +300,16 @@ export function buildPartnerInstanceMap(
       id: "domain_commitment",
       layer: "Actions",
       label: ACTION_DOMAIN_LABELS.COMMITMENT,
-      hint: "Dedicated staff / Owner",
-      status: nodeStatus(!!p.ownerId && !!p.dedicatedHeadcount, !!p.ownerId),
-      value: [p.owner?.name ?? "No BD", p.dedicatedHeadcount ? `${p.dedicatedHeadcount} people` : "Dedicated staff TBD"].filter(Boolean).join(" · "),
+      hint: "Dedicated staff / Sales & pre-sales",
+      status: nodeStatus(
+        !!(p.salesUserId || p.ownerId) && !!p.presalesUserId && !!p.dedicatedHeadcount,
+        !!(p.salesUserId || p.ownerId) || !!p.presalesUserId,
+      ),
+      value: [
+        p.salesUser?.name ?? p.owner?.name ?? "No sales",
+        p.presalesUser?.name ?? "No pre-sales",
+        p.dedicatedHeadcount ? `${p.dedicatedHeadcount} people` : "Dedicated staff TBD",
+      ].filter(Boolean).join(" · "),
     },
     {
       id: "domain_capability",

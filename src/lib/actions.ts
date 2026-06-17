@@ -8,6 +8,7 @@ import { createSession, destroySession, requireUser } from "./session";
 import { stageName } from "./constants";
 import { stringifyIndustries } from "./taxonomy";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
+import { normalizeUserRole } from "./user-roles";
 
 // ============ 认证 ============
 
@@ -21,7 +22,7 @@ export async function loginAction(_: unknown, formData: FormData) {
     // 首次使用：第一个登录的人自动成为管理员账号
     const name = String(formData.get("name") ?? "").trim() || email.split("@")[0];
     const user = await db.user.create({
-      data: { email, name, passwordHash: await bcrypt.hash(password, 10) },
+      data: { email, name, passwordHash: await bcrypt.hash(password, 10), role: "ADMIN" },
     });
     await createSession(user.id);
     redirect("/");
@@ -40,11 +41,31 @@ export async function registerAction(_: unknown, formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const role = normalizeUserRole(String(formData.get("role") ?? ""));
   if (!email || !name || password.length < 6) return { error: "Please fill in all fields; password must be at least 6 characters" };
   const exists = await db.user.findUnique({ where: { email } });
   if (exists) return { error: "This email is already registered" };
-  await db.user.create({ data: { email, name, passwordHash: await bcrypt.hash(password, 10) } });
+  await db.user.create({ data: { email, name, passwordHash: await bcrypt.hash(password, 10), role } });
   revalidatePath("/settings");
+  return { ok: true };
+}
+
+export async function updateUserAction(userId: string, formData: FormData) {
+  await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const role = normalizeUserRole(String(formData.get("role") ?? ""));
+  const password = String(formData.get("password") ?? "");
+  if (!name || !email) return { error: "Name and email are required" };
+  const existing = await db.user.findUnique({ where: { id: userId } });
+  if (!existing) return { error: "User not found" };
+  const emailTaken = await db.user.findFirst({ where: { email, NOT: { id: userId } } });
+  if (emailTaken) return { error: "This email is already used by another member" };
+  const data: { name: string; email: string; role: string; passwordHash?: string } = { name, email, role };
+  if (password.length >= 6) data.passwordHash = await bcrypt.hash(password, 10);
+  await db.user.update({ where: { id: userId }, data });
+  revalidatePath("/settings");
+  revalidatePath("/partners");
   return { ok: true };
 }
 
@@ -79,6 +100,16 @@ export async function updatePartnerAction(partnerId: string, formData: FormData)
   if (formData.has("ownerId")) {
     const v = String(formData.get("ownerId"));
     data.ownerId = v || null;
+    data.salesUserId = v || null;
+  }
+  if (formData.has("salesUserId")) {
+    const v = String(formData.get("salesUserId"));
+    data.salesUserId = v || null;
+    data.ownerId = v || null;
+  }
+  if (formData.has("presalesUserId")) {
+    const v = String(formData.get("presalesUserId"));
+    data.presalesUserId = v || null;
   }
   if (formData.has("manualChecked")) {
     data.manualChecked = formData.get("manualChecked") === "on";

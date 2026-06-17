@@ -12,8 +12,12 @@ model User {
   email        String          @unique
   name         String
   passwordHash String
+  // SALES 销售 / PRESALES 售前 / ADMIN 管理员 / OTHER 其他
+  role         String          @default("OTHER")
   createdAt    DateTime        @default(now())
   partners     Partner[]
+  salesPartners    Partner[] @relation("PartnerSalesUser")
+  presalesPartners Partner[] @relation("PartnerPresalesUser")
   todos        TodoItem[]
   events       TimelineEvent[]
   agents       Agent[]
@@ -73,6 +77,10 @@ model Partner {
   pipelineStage    Int      @default(1) // 1-10 十阶段
   ownerId          String?
   owner            User?    @relation(fields: [ownerId], references: [id])
+  salesUserId      String?
+  salesUser        User?    @relation("PartnerSalesUser", fields: [salesUserId], references: [id])
+  presalesUserId   String?
+  presalesUser     User?    @relation("PartnerPresalesUser", fields: [presalesUserId], references: [id])
   promotedAt       DateTime?
   notes            String?
   createdAt        DateTime @default(now())

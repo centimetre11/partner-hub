@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction } from "@/lib/actions";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
 
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -167,15 +168,12 @@ export function ProfileEditor({
                   <option value="P3">P3 — watch</option>
                 </select>
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Owner (BD)</span>
-                <select name="ownerId" defaultValue={p.ownerId ?? ""} className={input}>
-                  <option value="">Unassigned</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
-              </label>
+              <PartnerTeamFields
+                users={users}
+                salesUserId={p.salesUserId ?? p.ownerId}
+                presalesUserId={p.presalesUserId}
+                className={input}
+              />
               <label className="flex items-center gap-2 mt-5">
                 <input type="checkbox" name="manualChecked" defaultChecked={p.manualChecked} className="rounded" />
                 <span className="text-xs text-zinc-600">Manually verified</span>
