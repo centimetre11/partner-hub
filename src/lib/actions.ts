@@ -14,7 +14,7 @@ import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboardin
 export async function loginAction(_: unknown, formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  if (!email || !password) return { error: "请输入邮箱和密码" };
+  if (!email || !password) return { error: "Please enter email and password" };
 
   const userCount = await db.user.count();
   if (userCount === 0) {
@@ -29,7 +29,7 @@ export async function loginAction(_: unknown, formData: FormData) {
 
   const user = await db.user.findUnique({ where: { email } });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    return { error: "邮箱或密码错误" };
+    return { error: "Invalid email or password" };
   }
   await createSession(user.id);
   redirect("/");
@@ -40,9 +40,9 @@ export async function registerAction(_: unknown, formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  if (!email || !name || password.length < 6) return { error: "请填写完整信息，密码至少6位" };
+  if (!email || !name || password.length < 6) return { error: "Please fill in all fields; password must be at least 6 characters" };
   const exists = await db.user.findUnique({ where: { email } });
-  if (exists) return { error: "该邮箱已注册" };
+  if (exists) return { error: "This email is already registered" };
   await db.user.create({ data: { email, name, passwordHash: await bcrypt.hash(password, 10) } });
   revalidatePath("/settings");
   return { ok: true };
@@ -125,15 +125,15 @@ export async function createPartnerAction(formData: FormData) {
       data: {
         partnerId: partner.id,
         type: "SYSTEM",
-        title: "新建正式伙伴",
-        content: `${partner.name} 直接建为正式伙伴，进入「${stageName(partner.pipelineStage)}」阶段。`,
+        title: "New active partner",
+        content: `${partner.name} was created directly as an active partner, entering the "${stageName(partner.pipelineStage)}" stage.`,
         createdById: user.id,
       },
     });
     await createStarterTodos(partner.id, partner.name, user.id);
   } else {
     await db.timelineEvent.create({
-      data: { partnerId: partner.id, type: "SYSTEM", title: "手动添加候选" },
+      data: { partnerId: partner.id, type: "SYSTEM", title: "Manually added prospect" },
     });
   }
   revalidatePath("/pool");
@@ -158,8 +158,8 @@ export async function promotePartnerAction(partnerId: string) {
     data: {
       partnerId,
       type: "SYSTEM",
-      title: "转为正式伙伴",
-      content: `${p.name} 由候选池转入正式伙伴管理，进入「${stageName(p.pipelineStage)}」阶段。`,
+      title: "Promoted to active partner",
+      content: `${p.name} moved from prospect pool to active partner management, entering the "${stageName(p.pipelineStage)}" stage.`,
       createdById: user.id,
     },
   });
@@ -179,7 +179,7 @@ export async function archivePartnerAction(partnerId: string) {
     data: { status: "ARCHIVED", prevStatus: p.status, poolFlag: "DROPPED" },
   });
   await db.timelineEvent.create({
-    data: { partnerId, type: "SYSTEM", title: "归档", content: `归档前状态：${p.status}`, createdById: user.id },
+    data: { partnerId, type: "SYSTEM", title: "Archived", content: `Previous status: ${p.status}`, createdById: user.id },
   });
   revalidatePath("/pool");
   revalidatePath("/partners");
@@ -200,7 +200,7 @@ export async function restorePartnerAction(partnerId: string) {
     },
   });
   await db.timelineEvent.create({
-    data: { partnerId, type: "SYSTEM", title: "恢复归档", content: `恢复为：${target === "ACTIVE" ? "正式伙伴" : "候选"}`, createdById: user.id },
+    data: { partnerId, type: "SYSTEM", title: "Restored from archive", content: `Restored to: ${target === "ACTIVE" ? "active partner" : "prospect"}`, createdById: user.id },
   });
   revalidatePath("/pool");
   revalidatePath("/partners");
@@ -372,7 +372,7 @@ export async function upsertOpportunityAction(partnerId: string, formData: FormD
     name: String(formData.get("name") ?? "").trim(),
     client: String(formData.get("client") ?? "") || null,
     amount: String(formData.get("amount") ?? "") || null,
-    stage: String(formData.get("stage") ?? "需求诊断"),
+    stage: String(formData.get("stage") ?? "Needs Assessment"),
     nextStep: String(formData.get("nextStep") ?? "") || null,
     followUpAt: followUp ? new Date(followUp) : null,
     status: String(formData.get("status") ?? "ACTIVE"),

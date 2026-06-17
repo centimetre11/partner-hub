@@ -17,9 +17,9 @@ function panelBadge(nodes: FrameworkMapNode[], panelId: WorkspacePanelId) {
   if (related.length === 0) return null;
   const missing = related.filter((n) => n.status === "missing").length;
   const partial = related.filter((n) => n.status === "partial").length;
-  if (missing > 0) return { tone: "bg-amber-100 text-amber-800", text: `${missing} 待补` };
-  if (partial > 0) return { tone: "bg-amber-50 text-amber-700", text: "部分" };
-  return { tone: "bg-emerald-50 text-emerald-700", text: "就绪" };
+  if (missing > 0) return { tone: "bg-amber-100 text-amber-800", text: `${missing} to fill` };
+  if (partial > 0) return { tone: "bg-amber-50 text-amber-700", text: "Partial" };
+  return { tone: "bg-emerald-50 text-emerald-700", text: "Ready" };
 }
 
 export function PartnerWorkspaceShell({
@@ -75,12 +75,12 @@ export function PartnerWorkspaceShell({
 
   return (
     <div className="px-8 pt-5 pb-16">
-      {/* 主导航：五个工作区 */}
+      {/* Main nav: five workspaces */}
       <div className="flex flex-col gap-3 mb-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs text-zinc-500">点击模块进入对应工作区；地图节点同步切换，不再向下滚动。</p>
+          <p className="text-xs text-zinc-500">Click a module to open its workspace; map nodes sync without scrolling.</p>
           <Link href="/framework" className="text-xs text-indigo-600 hover:underline shrink-0">
-            经营框架说明 →
+            Framework guide →
           </Link>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
@@ -119,7 +119,7 @@ export function PartnerWorkspaceShell({
         </div>
       </div>
 
-      {/* 可折叠实例地图 */}
+      {/* Collapsible instance map */}
       <div className="mb-5">
         <button
           type="button"
@@ -127,7 +127,7 @@ export function PartnerWorkspaceShell({
           className="flex items-center gap-2 text-xs text-zinc-500 hover:text-indigo-600 mb-2"
         >
           <span className={`transition-transform ${mapOpen ? "rotate-90" : ""}`}>▸</span>
-          实例地图（点击节点切换工作区{badgeSummary(mapNodes)}）
+          Instance map (click nodes to switch workspace{badgeSummary(mapNodes)})
         </button>
         {mapOpen && (
           <PartnerFrameworkMap
@@ -150,7 +150,7 @@ export function PartnerWorkspaceShell({
         )}
       </div>
 
-      {/* 当前工作区内容 */}
+      {/* Active workspace content */}
       <div className="rounded-2xl border border-zinc-200/80 bg-white shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-zinc-100 bg-zinc-50/50">
           <h2 className="text-base font-semibold text-zinc-900">{activeMeta.label}</h2>
@@ -175,5 +175,5 @@ export function PartnerWorkspaceShell({
 
 function badgeSummary(nodes: FrameworkMapNode[]) {
   const missing = nodes.filter((n) => n.status === "missing").length;
-  return missing > 0 ? ` · ${missing} 项待补` : "";
+  return missing > 0 ? ` · ${missing} items to fill` : "";
 }

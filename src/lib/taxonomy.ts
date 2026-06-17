@@ -15,10 +15,10 @@ export const TAXONOMY_DIMENSION_META: Record<
   TaxonomyDimension,
   { label: string; libraryPath: string; hint: string }
 > = {
-  ARCHETYPE: { label: "伙伴类型", libraryPath: "/taxonomy?dim=ARCHETYPE", hint: "怎么带" },
-  INDUSTRY: { label: "主攻行业", libraryPath: "/taxonomy?dim=INDUSTRY", hint: "打哪行（可多选）" },
-  VALUE_PATTERN: { label: "联合价值模式", libraryPath: "/taxonomy?dim=VALUE_PATTERN", hint: "一起卖什么" },
-  CATEGORY: { label: "竞品基因", libraryPath: "/taxonomy?dim=CATEGORY", hint: "出身" },
+  ARCHETYPE: { label: "Partner archetype", libraryPath: "/taxonomy?dim=ARCHETYPE", hint: "How to engage" },
+  INDUSTRY: { label: "Target industries", libraryPath: "/taxonomy?dim=INDUSTRY", hint: "Which verticals (multi-select)" },
+  VALUE_PATTERN: { label: "Joint value pattern", libraryPath: "/taxonomy?dim=VALUE_PATTERN", hint: "What to sell together" },
+  CATEGORY: { label: "Competitor DNA", libraryPath: "/taxonomy?dim=CATEGORY", hint: "Background" },
 };
 
 const BUILTIN: Record<TaxonomyDimension, Record<string, string>> = {
@@ -74,7 +74,9 @@ export function normalizeIndustriesInput(raw: string): { industries: string | nu
   return { industries: stringifyIndustries(codes), industry: codes[0] ?? null };
 }
 
-/** 首次使用时把内置枚举写入维度库 */
+let builtinLabelsSynced = false;
+
+/** Seed builtin taxonomy options on first use */
 export async function ensureTaxonomySeed() {
   const count = await db.taxonomyOption.count();
   if (count > 0) return;
@@ -96,8 +98,23 @@ export async function ensureTaxonomySeed() {
   await db.taxonomyOption.createMany({ data: rows });
 }
 
-export async function getTaxonomyOptions(dimension: TaxonomyDimension): Promise<TaxonomyOptionRow[]> {
+/** Sync builtin option labels from code constants (e.g. after UI locale change) */
+async function syncBuiltinTaxonomyLabels() {
+  if (builtinLabelsSynced) return;
   await ensureTaxonomySeed();
+  for (const [dimension, map] of Object.entries(BUILTIN) as [TaxonomyDimension, Record<string, string>][]) {
+    for (const [code, label] of Object.entries(map)) {
+      await db.taxonomyOption.updateMany({
+        where: { dimension, code, isBuiltin: true },
+        data: { label },
+      });
+    }
+  }
+  builtinLabelsSynced = true;
+}
+
+export async function getTaxonomyOptions(dimension: TaxonomyDimension): Promise<TaxonomyOptionRow[]> {
+  await syncBuiltinTaxonomyLabels();
   const rows = await db.taxonomyOption.findMany({
     where: { dimension },
     orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
@@ -118,7 +135,7 @@ export async function getTaxonomyOptions(dimension: TaxonomyDimension): Promise<
 }
 
 export async function loadTaxonomyLabelMaps(): Promise<Record<TaxonomyDimension, Record<string, string>>> {
-  await ensureTaxonomySeed();
+  await syncBuiltinTaxonomyLabels();
   const rows = await db.taxonomyOption.findMany();
   const maps = {} as Record<TaxonomyDimension, Record<string, string>>;
   for (const dim of Object.keys(BUILTIN) as TaxonomyDimension[]) {
@@ -136,12 +153,12 @@ export function labelFromMap(map: Record<string, string>, code: string | null | 
   return map[code] ?? code;
 }
 
-export function labelsFromMap(map: Record<string, string>, codes: string[], fallback = "待判定") {
+export function labelsFromMap(map: Record<string, string>, codes: string[], fallback = "TBD") {
   if (codes.length === 0) return fallback;
   return codes.map((c) => map[c] ?? c).join(" · ");
 }
 
 export async function taxonomyListForAi(dimension: TaxonomyDimension) {
   const opts = await getTaxonomyOptions(dimension);
-  return opts.map((o) => `${o.code}=${o.label}`).join("，");
+  return opts.map((o) => `${o.code}=${o.label}`).join(", ");
 }

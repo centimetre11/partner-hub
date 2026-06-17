@@ -40,8 +40,8 @@ export function PartnerSolutionsSection({
 
   return (
     <Card
-      title={`打法落地 · 联合解决方案（${solutions.length}）`}
-      actions={<AiAddButton scope="solution" partnerId={partnerId} label="✦ AI 加方案" variant="soft" />}
+      title={`Execution · joint solutions (${solutions.length})`}
+      actions={<AiAddButton scope="solution" partnerId={partnerId} label="✦ AI add solution" variant="soft" />}
     >
       <div className="space-y-4">
         {solutions.map((sol) => (
@@ -52,11 +52,11 @@ export function PartnerSolutionsSection({
                   <span className="font-medium text-zinc-900">{sol.name}</span>
                   <Badge tone="indigo">{SOLUTION_STATUS_LABELS[sol.status] ?? sol.status}</Badge>
                   {sol.documents.length > 0 && (
-                    <Badge tone="zinc">{sol.documents.length} 份报告</Badge>
+                    <Badge tone="zinc">{sol.documents.length} reports</Badge>
                   )}
                 </div>
                 {sol.targetCustomer && (
-                  <div className="text-xs text-zinc-400 mt-0.5">目标客户：{sol.targetCustomer}</div>
+                  <div className="text-xs text-zinc-400 mt-0.5">Target customer: {sol.targetCustomer}</div>
                 )}
               </div>
               <span className="text-zinc-300 group-open:rotate-90 transition-transform">›</span>
@@ -65,44 +65,44 @@ export function PartnerSolutionsSection({
               <form action={upsertSolutionAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                 <input type="hidden" name="id" value={sol.id} />
                 <input name="name" required defaultValue={sol.name} className={input} />
-                <input name="targetCustomer" defaultValue={sol.targetCustomer ?? ""} placeholder="目标客户" className={input} />
+                <input name="targetCustomer" defaultValue={sol.targetCustomer ?? ""} placeholder="Target customer" className={input} />
                 <select name="status" defaultValue={sol.status} className={input}>
                   {Object.entries(SOLUTION_STATUS_LABELS).map(([k, v]) => (
                     <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
-                <input name="painPoint" defaultValue={sol.painPoint ?? ""} placeholder="客户痛点" className={input} />
-                <input name="fanruanOffer" defaultValue={sol.fanruanOffer ?? ""} placeholder="帆软提供" className={input} />
-                <input name="partnerOffer" defaultValue={sol.partnerOffer ?? ""} placeholder="伙伴提供" className={input} />
-                <input name="pricingModel" defaultValue={sol.pricingModel ?? ""} placeholder="定价模式" className={input} />
-                <textarea name="notes" defaultValue={sol.notes ?? ""} placeholder="备注" rows={2} className={`${input} md:col-span-3`} />
+                <input name="painPoint" defaultValue={sol.painPoint ?? ""} placeholder="Customer pain point" className={input} />
+                <input name="fanruanOffer" defaultValue={sol.fanruanOffer ?? ""} placeholder="FanRuan offers" className={input} />
+                <input name="partnerOffer" defaultValue={sol.partnerOffer ?? ""} placeholder="Partner offers" className={input} />
+                <input name="pricingModel" defaultValue={sol.pricingModel ?? ""} placeholder="Pricing model" className={input} />
+                <textarea name="notes" defaultValue={sol.notes ?? ""} placeholder="Notes" rows={2} className={`${input} md:col-span-3`} />
                 <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
                   <button formAction={deleteSolutionAction.bind(null, partnerId, sol.id)} className="text-xs text-zinc-400 hover:text-red-600 px-2">
-                    删除
+                    Delete
                   </button>
-                  <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700">保存</button>
+                  <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700">Save</button>
                 </div>
               </form>
 
               <div>
-                <div className="text-xs text-zinc-500 mb-2">附件（PPT、架构图、云盘链接等）</div>
+                <div className="text-xs text-zinc-500 mb-2">Attachments (decks, architecture diagrams, cloud links, etc.)</div>
                 <ul className="space-y-2 mb-2">
                   {sol.assets.map((a) => (
                     <li key={a.assetId} className="flex items-center gap-2">
                       <AssetCard asset={a.asset} label={a.label} />
                       <form action={unlinkSolutionAssetAction.bind(null, partnerId, sol.id, a.assetId)}>
-                        <button className="text-xs text-zinc-400 hover:text-red-600">移除</button>
+                        <button className="text-xs text-zinc-400 hover:text-red-600">Remove</button>
                       </form>
                     </li>
                   ))}
-                  {sol.assets.length === 0 && <li className="text-xs text-zinc-400">暂无附件</li>}
+                  {sol.assets.length === 0 && <li className="text-xs text-zinc-400">No attachments</li>}
                 </ul>
                 <SolutionAssetUpload partnerId={partnerId} solutionId={sol.id} action={linkSolutionAssetAction} />
               </div>
 
               {sol.documents.length > 0 && (
                 <div>
-                  <div className="text-xs text-zinc-500 mb-2">关联报告</div>
+                  <div className="text-xs text-zinc-500 mb-2">Linked reports</div>
                   <ul className="space-y-1">
                     {sol.documents.map((d) => (
                       <li key={d.id}>
@@ -120,23 +120,23 @@ export function PartnerSolutionsSection({
                 href={`/documents/new?partnerId=${partnerId}&solutionId=${sol.id}&type=JOINT_SOLUTION`}
                 className="text-sm text-indigo-600 hover:underline"
               >
-                + 新建联合方案报告
+                + New joint solution report
               </Link>
             </div>
           </details>
         ))}
         {solutions.length === 0 && (
-          <EmptyState text="还没有联合解决方案。与伙伴共创的打包方案、架构图、报价逻辑可在此沉淀。" />
+          <EmptyState text="No joint solutions yet. Co-created packages, architecture diagrams, and pricing logic can live here." />
         )}
 
         <details className="rounded-lg border border-dashed border-zinc-200">
-          <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ 添加联合解决方案</summary>
+          <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ Add joint solution</summary>
           <form action={upsertSolutionAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-            <input name="name" required placeholder="方案名称 *" className={input} />
-            <input name="targetCustomer" placeholder="目标客户" className={input} />
-            <input name="painPoint" placeholder="客户痛点" className={input} />
+            <input name="name" required placeholder="Solution name *" className={input} />
+            <input name="targetCustomer" placeholder="Target customer" className={input} />
+            <input name="painPoint" placeholder="Customer pain point" className={input} />
             <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs hover:bg-indigo-700 md:col-span-3 justify-self-end">
-              添加
+              Add
             </button>
           </form>
         </details>

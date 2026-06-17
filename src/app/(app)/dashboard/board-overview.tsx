@@ -32,13 +32,12 @@ export async function BoardOverview() {
   const active = all.filter((p) => p.status === "ACTIVE");
   const prospects = all.filter((p) => p.status === "PROSPECT");
 
-  // 正式伙伴经营漏斗（不含候选池）
   const funnel = [
-    { label: "正式伙伴", value: active.length },
-    { label: "需求诊断及以后（≥3）", value: active.filter((p) => p.pipelineStage >= 3).length },
-    { label: "POC 及以后（≥5）", value: active.filter((p) => p.pipelineStage >= 5).length },
-    { label: "已签约（≥7）", value: active.filter((p) => p.pipelineStage >= 7).length },
-    { label: "首单交付（≥8）", value: active.filter((p) => p.pipelineStage >= 8).length },
+    { label: "Active partners", value: active.length },
+    { label: "Needs assessment onward (≥3)", value: active.filter((p) => p.pipelineStage >= 3).length },
+    { label: "POC onward (≥5)", value: active.filter((p) => p.pipelineStage >= 5).length },
+    { label: "Signed (≥7)", value: active.filter((p) => p.pipelineStage >= 7).length },
+    { label: "First delivery (≥8)", value: active.filter((p) => p.pipelineStage >= 8).length },
   ];
 
   const stageDist = PIPELINE_STAGES.map((s) => ({
@@ -53,7 +52,7 @@ export async function BoardOverview() {
     .filter((x) => x.value > 0);
   const countryCount = new Map<string, number>();
   for (const p of active) {
-    const key = (p.country ?? "未知").split("/")[0].trim();
+    const key = (p.country ?? "Unknown").split("/")[0].trim();
     countryCount.set(key, (countryCount.get(key) ?? 0) + 1);
   }
   const countries = [...countryCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -64,7 +63,6 @@ export async function BoardOverview() {
     .sort((a, b) => b.stale - a.stale)
     .slice(0, 8);
 
-  // 完整度排行：仅正式伙伴
   const ranked = active
     .map((p) => ({ p, c: computeCompleteness(p), stale: staleDays(p) }))
     .sort((a, b) => a.c.score - b.c.score)
@@ -79,11 +77,11 @@ export async function BoardOverview() {
     <div className="px-8 space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: "正式伙伴", value: active.length, tone: "text-indigo-600" },
-          { label: "POC 及以后", value: pocPlus, tone: "text-purple-600" },
-          { label: "进行中商机", value: activeOppCount, tone: "text-sky-600" },
-          { label: "未完成待办", value: openTodos, tone: "text-zinc-900" },
-          { label: "逾期待办", value: overdueTodos, tone: overdueTodos ? "text-red-600" : "text-zinc-900" },
+          { label: "Active partners", value: active.length, tone: "text-indigo-600" },
+          { label: "POC onward", value: pocPlus, tone: "text-purple-600" },
+          { label: "Active opportunities", value: activeOppCount, tone: "text-sky-600" },
+          { label: "Open todos", value: openTodos, tone: "text-zinc-900" },
+          { label: "Overdue todos", value: overdueTodos, tone: overdueTodos ? "text-red-600" : "text-zinc-900" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-4">
             <div className={`text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</div>
@@ -94,16 +92,16 @@ export async function BoardOverview() {
 
       {prospects.length > 0 && (
         <p className="text-xs text-zinc-400">
-          候选资源池 {prospects.length} 家 ·{" "}
+          Prospect pool {prospects.length} ·{" "}
           <Link href="/pool" className="text-indigo-600 hover:underline">
-            前往伙伴库
+            Go to partner pool
           </Link>
-          （不作为经营看板主统计）
+          (not included in main board stats)
         </p>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <Card title="正式伙伴经营漏斗">
+        <Card title="Active partner funnel">
           <div className="space-y-2.5">
             {funnel.map((f, i) => (
               <Bar
@@ -117,7 +115,7 @@ export async function BoardOverview() {
           </div>
         </Card>
 
-        <Card title="正式伙伴 Pipeline 阶段分布">
+        <Card title="Active partner pipeline distribution">
           <div className="space-y-2">
             {stageDist.map((s) => (
               <Bar key={s.label} label={s.label} value={s.value} max={maxStage} />
@@ -125,7 +123,7 @@ export async function BoardOverview() {
           </div>
         </Card>
 
-        <Card title="Tier 与类别（正式伙伴）">
+        <Card title="Tier & category (active partners)">
           <div className="flex gap-3 mb-5">
             {tierDist.map(({ t, n }) => (
               <Link key={t} href={`/partners?tier=${t}`} className="flex-1 rounded-lg border border-zinc-100 p-3 text-center hover:border-indigo-300">
@@ -134,7 +132,7 @@ export async function BoardOverview() {
               </Link>
             ))}
             <div className="flex-1 rounded-lg border border-zinc-100 p-3 text-center">
-              <Badge tone="zinc">未分级</Badge>
+              <Badge tone="zinc">Not tiered</Badge>
               <div className="text-xl font-bold mt-1.5 tabular-nums">{noTier}</div>
             </div>
           </div>
@@ -145,7 +143,7 @@ export async function BoardOverview() {
           </div>
         </Card>
 
-        <Card title="国家/地区（正式伙伴）">
+        <Card title="Country / region (active partners)">
           <div className="space-y-2">
             {countries.map(([c, n]) => (
               <Bar key={c} label={c} value={n} max={maxCountry} tone="bg-amber-500" />
@@ -155,21 +153,21 @@ export async function BoardOverview() {
       </div>
 
       {staleActive.length > 0 && (
-        <Card title="停滞预警（正式伙伴 · 超 30 天无动态）">
+        <Card title="Stall alerts (active partners · no activity 30+ days)">
           <div className="divide-y divide-zinc-50">
             {staleActive.map(({ p, stale }) => (
               <div key={p.id} className="flex items-center justify-between gap-3 py-2.5">
                 <Link href={`/partners/${p.id}`} className="text-sm font-medium text-zinc-800 hover:text-indigo-600 truncate">
                   {p.name}
                 </Link>
-                <span className="text-xs text-red-500 shrink-0">{stale} 天无动态</span>
+                <span className="text-xs text-red-500 shrink-0">{stale} days idle</span>
               </div>
             ))}
           </div>
         </Card>
       )}
 
-      <Card title="档案完整度待提升（正式伙伴 Top 10）">
+      <Card title="Profile completeness gaps (active partners top 10)">
         <div className="divide-y divide-zinc-50">
           {ranked.map(({ p, c, stale }) => (
             <div key={p.id} className="flex items-center gap-4 py-3">
@@ -181,12 +179,12 @@ export async function BoardOverview() {
                 <ScoreBar score={c.score} />
               </div>
               <div className="flex-1 text-xs text-zinc-400 truncate">
-                缺：{c.missing.slice(0, 5).join("、")}{c.missing.length > 5 ? "…" : ""}
+                Missing: {c.missing.slice(0, 5).join(", ")}{c.missing.length > 5 ? "…" : ""}
               </div>
-              {stale > 30 && <span className="text-xs text-red-500 shrink-0">{stale}天无动态</span>}
+              {stale > 30 && <span className="text-xs text-red-500 shrink-0">{stale}d idle</span>}
             </div>
           ))}
-          {ranked.length === 0 && <p className="py-6 text-sm text-zinc-400 text-center">暂无正式伙伴</p>}
+          {ranked.length === 0 && <p className="py-6 text-sm text-zinc-400 text-center">No active partners yet</p>}
         </div>
       </Card>
     </div>

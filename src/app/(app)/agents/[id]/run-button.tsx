@@ -26,7 +26,7 @@ export function RunButton({ agentId, compact }: { agentId: string; compact?: boo
       });
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "运行失败");
+      setError(e instanceof Error ? e.message : "Run failed");
     } finally {
       setRunning(false);
     }
@@ -51,7 +51,7 @@ export function RunButton({ agentId, compact }: { agentId: string; compact?: boo
               : "rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
           }
         >
-          {running ? "运行中…" : compact ? "▶ 运行" : "▶ 立即运行"}
+          {running ? "Running…" : compact ? "▶ Run" : "▶ Run Now"}
         </button>
       </div>
     </div>

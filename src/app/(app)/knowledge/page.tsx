@@ -16,11 +16,11 @@ export default async function KnowledgePage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="知识库"
-        desc="沉淀帆软背景、中东策略、产品能力——Agent 通过 search_knowledge 工具检索引用"
+        title="Knowledge Base"
+        desc="Capture FanRuan background, Middle East strategy, and product capabilities — Agents retrieve via the search_knowledge tool"
         actions={
           <Link href="/knowledge/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            + 新建文章
+            + New article
           </Link>
         }
       />
@@ -36,11 +36,11 @@ export default async function KnowledgePage() {
               </div>
             </div>
             <form action={deleteKnowledgeAction.bind(null, a.id)}>
-              <button className="text-xs text-zinc-400 hover:text-red-600">删除</button>
+              <button className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
             </form>
           </div>
         ))}
-        {articles.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">知识库为空，先添加几篇基础文章</div>}
+        {articles.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">Knowledge base is empty — add a few foundational articles first</div>}
       </div>
     </div>
   );

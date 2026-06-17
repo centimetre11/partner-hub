@@ -21,8 +21,8 @@ type Props = {
 
 type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution";
 
-// AI 提案 diff 预览：人工勾选确认后才入库
-export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "确认入库", compact, spacious }: Props) {
+// AI proposal diff preview: save only after manual checkbox confirmation
+export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "Confirm & save", compact, spacious }: Props) {
   const normalized = useMemo(() => normalizeProposal(proposal), [proposal]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
@@ -102,13 +102,13 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "�
 
       {total === 0 ? (
         <p className={`text-zinc-400 text-center py-3 ${compact ? "text-xs" : "text-sm"}`}>
-          还没有可入库的内容，继续补充信息吧。
+          Nothing to save yet — keep adding information.
         </p>
       ) : (
         <div className={`space-y-1.5 overflow-y-auto ${spacious ? "max-h-[min(480px,50vh)]" : compact ? "max-h-48" : "max-h-72"}`}>
           {normalized.partnerName && (
             <Row k="partner" tone="field">
-              <span className="font-medium text-zinc-800">新建伙伴</span>
+              <span className="font-medium text-zinc-800">New partner</span>
               <span className="text-emerald-700 font-medium ml-1.5">{normalized.partnerName}</span>
             </Row>
           )}
@@ -119,62 +119,62 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "�
                 <span className="text-zinc-400 mx-1.5 line-through decoration-red-300">{f.oldValue}</span>
               ) : null}
               <span className="text-emerald-700 font-medium">→ {f.newValue}</span>
-              {f.reason && <div className="text-xs text-zinc-400 mt-0.5">依据：{f.reason}</div>}
+              {f.reason && <div className="text-xs text-zinc-400 mt-0.5">Source: {f.reason}</div>}
             </Row>
           ))}
           {normalized.contacts.map((c, i) => (
             <Row key={`c${i}`} k={`c${i}`} tone="contact">
               <span className="font-medium text-zinc-800">
-                {c.action === "update" ? "更新人物" : "人物"}：{c.name}
+                {c.action === "update" ? "Update contact" : "Contact"}: {c.name}
               </span>
               <span className="text-zinc-500 ml-1.5 text-xs">
                 {[
                   c.title,
                   c.department,
                   c.role && (CONTACT_ROLE_LABELS[c.role] ?? c.role),
-                  typeof c.attitude === "number" && `态度:${attitudeLabel(c.attitude)}`,
-                  c.reportsToName && `汇报给:${c.reportsToName}`,
+                  typeof c.attitude === "number" && `Attitude: ${attitudeLabel(c.attitude)}`,
+                  c.reportsToName && `Reports to: ${c.reportsToName}`,
                 ]
                   .filter(Boolean)
                   .join(" · ")}
               </span>
-              {c.reason && <div className="text-xs text-zinc-400 mt-0.5">依据：{c.reason}</div>}
+              {c.reason && <div className="text-xs text-zinc-400 mt-0.5">Source: {c.reason}</div>}
             </Row>
           ))}
           {normalized.opportunities.map((o, i) => (
             <Row key={`o${i}`} k={`o${i}`} tone="opp">
               <span className="font-medium text-zinc-800">
-                {o.action === "update" ? "更新商机" : "商机"}：{o.name}
+                {o.action === "update" ? "Update opportunity" : "Opportunity"}: {o.name}
               </span>
               <span className="text-zinc-500 ml-1.5 text-xs">
-                {[o.client && `客户:${o.client}`, o.amount, o.stage, o.nextStep && `下一步:${o.nextStep}`]
+                {[o.client && `Client: ${o.client}`, o.amount, o.stage, o.nextStep && `Next: ${o.nextStep}`]
                   .filter(Boolean)
                   .join(" · ")}
               </span>
-              {o.reason && <div className="text-xs text-zinc-400 mt-0.5">依据：{o.reason}</div>}
+              {o.reason && <div className="text-xs text-zinc-400 mt-0.5">Source: {o.reason}</div>}
             </Row>
           ))}
           {normalized.trainings.map((t, i) => (
             <Row key={`tr${i}`} k={`tr${i}`} tone="training">
-              <span className="font-medium text-zinc-800">培训：{t.person}</span>
+              <span className="font-medium text-zinc-800">Training: {t.person}</span>
               <span className="text-zinc-500 ml-1.5 text-xs">
                 {[t.targetCert, t.deadline].filter(Boolean).join(" · ")}
               </span>
-              {t.reason && <div className="text-xs text-zinc-400 mt-0.5">依据：{t.reason}</div>}
+              {t.reason && <div className="text-xs text-zinc-400 mt-0.5">Source: {t.reason}</div>}
             </Row>
           ))}
           {normalized.solutions.map((s, i) => (
             <Row key={`s${i}`} k={`s${i}`} tone="solution">
-              <span className="font-medium text-zinc-800">联合方案：{s.name}</span>
+              <span className="font-medium text-zinc-800">Joint solution: {s.name}</span>
               <span className="text-zinc-500 ml-1.5 text-xs">{s.targetCustomer}</span>
-              {s.reason && <div className="text-xs text-zinc-400 mt-0.5">依据：{s.reason}</div>}
+              {s.reason && <div className="text-xs text-zinc-400 mt-0.5">Source: {s.reason}</div>}
             </Row>
           ))}
           {normalized.todos.map((t, i) => (
             <Row key={`t${i}`} k={`t${i}`} tone="todo">
-              <span className="font-medium text-zinc-800">待办：{t.title}</span>
+              <span className="font-medium text-zinc-800">Todo: {t.title}</span>
               <span className="text-zinc-500 ml-1.5 text-xs">
-                {[t.dueDate && `截止 ${t.dueDate}`, t.priority].filter(Boolean).join(" · ")}
+                {[t.dueDate && `Due ${t.dueDate}`, t.priority].filter(Boolean).join(" · ")}
               </span>
             </Row>
           ))}
@@ -183,7 +183,7 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "�
 
       <div className={`flex items-center justify-between gap-2 ${compact ? "flex-col items-stretch" : ""}`}>
         <div className="text-xs text-zinc-400">
-          共 {total} 项 · 已排除 {excluded.size} 项
+          {total} item{total === 1 ? "" : "s"} · {excluded.size} excluded
         </div>
         <div className={`flex gap-2 ${compact ? "flex-col" : ""}`}>
           {onCancel && (
@@ -191,7 +191,7 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "�
               onClick={onCancel}
               className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
             >
-              放弃
+              Discard
             </button>
           )}
           <button
@@ -199,7 +199,7 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "�
             disabled={applying || total - excluded.size <= 0}
             className={`rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50 ${compact ? "px-3 py-2 text-sm" : "px-4 py-2 text-sm"}`}
           >
-            {applying ? "写入中…" : confirmLabel}
+            {applying ? "Saving…" : confirmLabel}
           </button>
         </div>
       </div>

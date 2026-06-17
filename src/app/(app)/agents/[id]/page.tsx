@@ -35,13 +35,13 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
     <div className="pb-16">
       <PageHeader
         title={`${agent.icon} ${agent.name}`}
-        desc={`${agent.createdBy?.name ?? "系统"} 创建 · ${agent.enabled ? "已启用" : "已停用"}${agent.nextRunAt ? ` · 下次运行 ${fmtDateTime(agent.nextRunAt)}` : ""}`}
+        desc={`Created by ${agent.createdBy?.name ?? "System"} · ${agent.enabled ? "Enabled" : "Disabled"}${agent.nextRunAt ? ` · Next run ${fmtDateTime(agent.nextRunAt)}` : ""}`}
         actions={
           <>
             <form
               action={deleteAgentAction.bind(null, agent.id)}
             >
-              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-500 hover:bg-red-50">删除</button>
+              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-500 hover:bg-red-50">Delete</button>
             </form>
             <RunButton agentId={agent.id} />
           </>
@@ -75,7 +75,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
         </div>
 
         <div className="xl:col-span-2 space-y-4">
-          <Card title={`运行历史（最近 ${agent.runs.length} 次）`}>
+          <Card title={`Run History (last ${agent.runs.length})`}>
             {agent.runs.length ? (
               <div className="space-y-4">
                 {agent.runs.map((r) => (
@@ -83,21 +83,21 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                     <summary className="flex items-center justify-between gap-2 px-3.5 py-2.5 cursor-pointer list-none">
                       <span className="flex items-center gap-2 text-sm">
                         <Badge tone={r.status === "SUCCESS" ? "green" : r.status === "FAILED" ? "red" : "amber"}>
-                          {r.status === "SUCCESS" ? "成功" : r.status === "FAILED" ? "失败" : "运行中"}
+                          {r.status === "SUCCESS" ? "Success" : r.status === "FAILED" ? "Failed" : "Running"}
                         </Badge>
                         <span className="text-zinc-600">{fmtDateTime(r.startedAt)}</span>
                       </span>
                       <span className="text-xs text-zinc-400 group-open:rotate-180 transition-transform">▾</span>
                     </summary>
                     <div className="px-3.5 pb-3 border-t border-zinc-100 pt-2.5">
-                      {r.error && <p className="text-xs text-red-500 mb-2">错误：{r.error}</p>}
+                      {r.error && <p className="text-xs text-red-500 mb-2">Error: {r.error}</p>}
                       {r.output && (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap font-sans bg-zinc-50 rounded-lg p-3 max-h-72 overflow-auto">{r.output}</pre>
                       )}
                       {r.toolLog && JSON.parse(r.toolLog).length > 0 && (
                         <details className="mt-2">
                           <summary className="text-xs text-zinc-500 cursor-pointer font-medium">
-                            工具调用过程（{JSON.parse(r.toolLog).length} 次）
+                            Tool call trace ({JSON.parse(r.toolLog).length} calls)
                           </summary>
                           <div className="mt-2">
                             <AiProcessTrace
@@ -113,7 +113,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                 ))}
               </div>
             ) : (
-              <EmptyState text="还没有运行过。点右上角「立即运行」试试" />
+              <EmptyState text="No runs yet. Click Run Now in the top right to try it." />
             )}
           </Card>
         </div>

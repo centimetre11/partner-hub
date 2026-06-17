@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-/** 全屏悬浮层：portal 到 body，占满视口，锁定背景滚动，避免穿透/闪烁 */
+/** Full-screen overlay: portaled to body, fills viewport, locks background scroll, avoids bleed-through/flicker */
 export function AiFullscreenOverlay({
   children,
   onClose,
@@ -15,12 +15,12 @@ export function AiFullscreenOverlay({
 }) {
   const [mounted, setMounted] = useState(false);
 
-  // 仅在客户端 portal，并锁定 body 滚动
+  // Portal on client only, and lock body scroll
   useEffect(() => {
     setMounted(true);
     const prevOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
-    // 补偿滚动条宽度，避免锁定时页面横向跳动
+    // Compensate scrollbar width to avoid horizontal jump when locking scroll
     const scrollbar = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (scrollbar > 0) document.body.style.paddingRight = `${scrollbar}px`;
@@ -30,7 +30,7 @@ export function AiFullscreenOverlay({
     };
   }, []);
 
-  // ESC 关闭
+  // ESC to close
   useEffect(() => {
     if (!onClose) return;
     const onKey = (e: KeyboardEvent) => {

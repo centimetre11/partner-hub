@@ -9,26 +9,26 @@ export default async function NewSkillPage() {
 
   return (
     <div className="pb-16">
-      <PageHeader title="新建技能" desc="编写方法论流程，Agent 运行时将注入系统指令，指导如何组合工具完成任务" />
+      <PageHeader title="New Skill" desc="Write methodology flows—injected into Agent system instructions at runtime to guide how tools are combined" />
       <AiCenterNav />
       <form action={upsertSkillAction} className="px-8 max-w-3xl space-y-4">
         <div className="bg-white rounded-xl border p-5 space-y-3">
-          <input name="name" required placeholder="标识名（英文，如 joint_solution_outline）" className={input} />
-          <input name="label" required placeholder="显示名称 *" className={input} />
-          <input name="description" placeholder="一句话说明" className={input} />
+          <input name="name" required placeholder="Identifier (English, e.g. joint_solution_outline)" className={input} />
+          <input name="label" required placeholder="Display name *" className={input} />
+          <input name="description" placeholder="One-line description" className={input} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="shared" defaultChecked className="rounded" />
-            团队共享
+            Share with team
           </label>
           <textarea
             name="promptBody"
             required
             rows={12}
-            placeholder="提示词正文：告诉 Agent 在特定场景下如何思考、输出什么结构…"
+            placeholder="Prompt body: tell the Agent how to think in a specific scenario and what structure to output…"
             className={input}
           />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">保存</button>
+        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">Save</button>
       </form>
     </div>
   );

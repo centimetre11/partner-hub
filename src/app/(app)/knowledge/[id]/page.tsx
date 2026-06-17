@@ -15,7 +15,7 @@ export default async function KnowledgeDetailPage({ params }: { params: Promise<
 
   return (
     <div className="pb-16">
-      <PageHeader title="编辑知识库文章" />
+      <PageHeader title="Edit knowledge article" />
       <form action={upsertKnowledgeAction} className="px-8 max-w-4xl space-y-4">
         <input type="hidden" name="id" value={a.id} />
         <div className="bg-white rounded-xl border p-5 space-y-3">
@@ -28,11 +28,11 @@ export default async function KnowledgeDetailPage({ params }: { params: Promise<
           </select>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="shared" defaultChecked={a.shared} className="rounded" />
-            团队共享
+            Team shared
           </label>
           <RichEditor defaultValue={a.content} />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">保存</button>
+        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">Save</button>
       </form>
     </div>
   );

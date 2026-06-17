@@ -35,11 +35,11 @@ export default async function TodosPage({
   const users = await db.user.findMany();
 
   const tabs = [
-    { k: "open", label: "未完成" },
-    { k: "mine", label: "我的" },
-    { k: "overdue", label: "已逾期" },
-    { k: "done", label: "已完成" },
-    { k: "all", label: "全部" },
+    { k: "open", label: "Open" },
+    { k: "mine", label: "Mine" },
+    { k: "overdue", label: "Overdue" },
+    { k: "done", label: "Done" },
+    { k: "all", label: "All" },
   ];
 
   const input = "rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -64,13 +64,13 @@ export default async function TodosPage({
           <div className={`text-sm ${t.status === "DONE" ? "line-through text-zinc-300" : "text-zinc-800"}`}>
             {t.title}
             {t.source === "AI" && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-purple-50 text-purple-600">AI</span>}
-            {t.source === "SEED" && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-sky-50 text-sky-600">计划</span>}
+            {t.source === "SEED" && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-sky-50 text-sky-600">Plan</span>}
           </div>
           <div className="text-xs text-zinc-400 mt-0.5">
             {t.dueDate && (
               <span className={overdue ? "text-red-500 font-medium" : ""}>
                 {fmtDate(t.dueDate)}
-                {overdue && " 已逾期"}
+                {overdue && " Overdue"}
               </span>
             )}
             {t.partner && (
@@ -82,7 +82,7 @@ export default async function TodosPage({
               </>
             )}
             {t.assignee && ` · ${t.assignee.name}`}
-            {` · ${TODO_PRIORITY_LABELS[t.priority]}优先级`}
+            {` · ${TODO_PRIORITY_LABELS[t.priority]} priority`}
             {t.detail && ` · ${t.detail}`}
           </div>
         </div>
@@ -102,7 +102,7 @@ export default async function TodosPage({
           />
           <form action={deleteTodoAction.bind(null, t.id)}>
             <button
-              title="删除待办"
+              title="Delete todo"
               className="text-zinc-300 hover:text-red-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
             >
               ✕
@@ -116,15 +116,15 @@ export default async function TodosPage({
   return (
     <div className="pb-16">
       <PageHeader
-        title="待办事项"
-        desc="关联伙伴与负责人，逾期自动标红 · 初始待办来自 12 周行动时间线"
+        title="Todos"
+        desc="Link partners and assignees; overdue items are highlighted in red · Initial todos from the 12-week action timeline"
       />
       <div className="px-8">
-        {/* 新建 */}
+        {/* Create */}
         <form action={createTodoAction} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-4 mb-5 flex flex-wrap gap-2">
-          <input name="title" required placeholder="新待办…" className={`${input} flex-1 min-w-[200px]`} />
+          <input name="title" required placeholder="New todo…" className={`${input} flex-1 min-w-[200px]`} />
           <select name="partnerId" className={input}>
-            <option value="">不关联伙伴</option>
+            <option value="">No partner</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -136,11 +136,11 @@ export default async function TodosPage({
           </select>
           <input name="dueDate" type="date" className={input} />
           <select name="priority" defaultValue="MEDIUM" className={input}>
-            <option value="HIGH">高</option>
-            <option value="MEDIUM">中</option>
-            <option value="LOW">低</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
           </select>
-          <button className="rounded-lg bg-indigo-600 text-white px-5 py-2 text-sm font-medium hover:bg-indigo-700">添加</button>
+          <button className="rounded-lg bg-indigo-600 text-white px-5 py-2 text-sm font-medium hover:bg-indigo-700">Add</button>
         </form>
 
         {/* Tab */}
@@ -158,10 +158,10 @@ export default async function TodosPage({
           ))}
         </div>
 
-        {/* 列表 */}
+        {/* List */}
         {todos.length === 0 ? (
           <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm">
-            <EmptyState text="没有符合条件的待办" />
+            <EmptyState text="No todos match this filter" />
           </div>
         ) : (
           <div className="space-y-4">
@@ -175,7 +175,7 @@ export default async function TodosPage({
               <details open={openTodos.length === 0} className="group/done bg-white rounded-xl border border-zinc-200/80 shadow-sm overflow-hidden">
                 <summary className="flex items-center gap-2 px-5 py-3 cursor-pointer select-none text-sm text-zinc-500 hover:bg-zinc-50 list-none">
                   <span className="transition-transform group-open/done:rotate-90 text-zinc-400">▸</span>
-                  已完成
+                  Done
                   <span className="text-xs text-zinc-400">({doneTodos.length})</span>
                 </summary>
                 <div className="divide-y divide-zinc-50 border-t border-zinc-100">

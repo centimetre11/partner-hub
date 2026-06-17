@@ -74,7 +74,7 @@ function ContactNode({ data }: NodeProps<Node<NodeData>>) {
       {/* 角色代码：影响力越高颜色越深（D>A>E>I>S） */}
       <span
         className={`absolute -top-2 -left-2 rounded-sm text-white font-bold flex items-center justify-center z-10 ${s.badge}`}
-        title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role}（影响力 ${roleInfluence(c.role)}/5）`}
+        title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role} (influence ${roleInfluence(c.role)}/5)`}
       >
         {CONTACT_ROLE_CODES[c.role] ?? "I"}
       </span>
@@ -292,7 +292,7 @@ function FlowInner({
             const px = prev.x;
             const py = prev.y;
             pushUndo({
-              label: "移动",
+              label: "Move",
               run: () => startTransition(() => void moveContactAction(partnerId, id, px, py)),
             });
           }
@@ -331,7 +331,7 @@ function FlowInner({
           ),
         );
         pushUndo({
-          label: "改主汇报",
+          label: "Change primary report",
           run: () => startTransition(() => void setReportsToAction(partnerId, subId, oldSup)),
         });
         startTransition(() => void setReportsToAction(partnerId, subId, superiorId));
@@ -351,7 +351,7 @@ function FlowInner({
           ),
         );
         pushUndo({
-          label: "附加虚线",
+          label: "Add dotted line",
           run: () =>
             startTransition(() => void removeContactLinkBetweenAction(partnerId, subId, superiorId)),
         });
@@ -377,7 +377,7 @@ function FlowInner({
           const childId = d.childId;
           const oldSup = d.superiorId ?? null;
           pushUndo({
-            label: "删除主汇报",
+            label: "Delete primary report",
             run: () => startTransition(() => void setReportsToAction(partnerId, childId, oldSup)),
           });
           startTransition(() => void setReportsToAction(partnerId, childId, null));
@@ -386,7 +386,7 @@ function FlowInner({
           const sup = d.supId;
           const kind = d.kind ?? "DOTTED";
           pushUndo({
-            label: "删除附加线",
+            label: "Delete auxiliary line",
             run: () => startTransition(() => void addContactLinkAction(partnerId, sub, sup, kind)),
           });
           if (d.linkId) startTransition(() => void removeContactLinkAction(partnerId, d.linkId!));
@@ -440,20 +440,20 @@ function FlowInner({
     <div>
       <style>{FLOW_CSS}</style>
       <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
-        <span className="text-zinc-400">连线类型：</span>
+        <span className="text-zinc-400">Connection type:</span>
         <button
           type="button"
           onClick={() => setLineMode("SOLID")}
           className={`${btn} ${lineMode === "SOLID" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
         >
-          实线 · 改主汇报
+          Solid · Change primary report
         </button>
         <button
           type="button"
           onClick={() => setLineMode("DOTTED")}
           className={`${btn} ${lineMode === "DOTTED" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
         >
-          虚线 · 附加汇报
+          Dotted · Add secondary report
         </button>
         <span className="text-zinc-300">|</span>
         <button
@@ -461,9 +461,9 @@ function FlowInner({
           onClick={undo}
           disabled={!undoStack.length}
           className={`${btn} ${btnIdle} disabled:opacity-40 disabled:cursor-not-allowed`}
-          title="撤销 (Cmd/Ctrl+Z)"
+          title="Undo (Cmd/Ctrl+Z)"
         >
-          ↩ 撤销{undoStack.length ? `（${undoStack.length}）` : ""}
+          ↩ Undo{undoStack.length ? ` (${undoStack.length})` : ""}
         </button>
         <button
           type="button"
@@ -471,14 +471,14 @@ function FlowInner({
           disabled={!selectedEdges.length}
           className={`${btn} border-red-200 text-red-600 hover:border-red-300 disabled:opacity-40 disabled:cursor-not-allowed`}
         >
-          删除选中连线
+          Delete selected connection
         </button>
         <button type="button" onClick={onResetLayout} className={`${btn} ${btnIdle}`}>
-          重新自动排版
+          Reset auto layout
         </button>
       </div>
       <p className="text-[11px] text-zinc-400 mb-2">
-        提示：单击人物卡可编辑其信息；把鼠标移到卡片小圆点上，从一个人拖到另一个人即可连线（绿色高亮表示可连接）；点中连线后按 Delete/Backspace 或上方按钮删除。
+        Tip: Click a contact card to edit; hover over the handle dots and drag from one person to another to connect (green highlight means valid); select a connection and press Delete/Backspace or use the button above to remove it.
       </p>
       <div className="h-[460px] rounded-lg border border-zinc-100 bg-zinc-50/40">
         <ReactFlow
@@ -552,7 +552,7 @@ function EditDrawer({
       <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
       <div className="fixed right-0 top-0 h-full w-[340px] max-w-[88vw] bg-white shadow-xl z-50 flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
-          <span className="font-medium text-zinc-900">{isNew ? "添加人物" : `编辑：${contact?.name}`}</span>
+          <span className="font-medium text-zinc-900">{isNew ? "Add contact" : `Edit: ${contact?.name}`}</span>
           <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">
             ×
           </button>
@@ -560,11 +560,11 @@ function EditDrawer({
         <form ref={formRef} className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
           {!isNew && <input type="hidden" name="id" value={contact!.id} />}
           <label className="block">
-            <span className="text-xs text-zinc-500">姓名</span>
-            <input name="name" defaultValue={contact?.name ?? ""} placeholder="姓名" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">Name</span>
+            <input name="name" defaultValue={contact?.name ?? ""} placeholder="Name" className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">角色（影响力 D&gt;A&gt;E&gt;I&gt;S）</span>
+            <span className="text-xs text-zinc-500">Role (influence D&gt;A&gt;E&gt;I&gt;S)</span>
             <select name="role" defaultValue={contact?.role ?? "INFLUENCER"} className={DRAWER_INPUT}>
               {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
                 <option key={k} value={k}>
@@ -574,7 +574,7 @@ function EditDrawer({
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">态度</span>
+            <span className="text-xs text-zinc-500">Attitude</span>
             <select name="attitude" defaultValue={String(contact?.attitude ?? 0)} className={DRAWER_INPUT}>
               {Object.entries(ATTITUDE_LABELS)
                 .sort((a, b) => Number(b[0]) - Number(a[0]))
@@ -586,37 +586,37 @@ function EditDrawer({
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">职位</span>
-            <input name="title" defaultValue={contact?.title ?? ""} placeholder="职位" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">Title</span>
+            <input name="title" defaultValue={contact?.title ?? ""} placeholder="Title" className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">部门</span>
-            <input name="department" defaultValue={contact?.department ?? ""} placeholder="部门" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">Department</span>
+            <input name="department" defaultValue={contact?.department ?? ""} placeholder="Department" className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">汇报上级</span>
+            <span className="text-xs text-zinc-500">Reports to</span>
             <select name="reportsToId" defaultValue={contact?.reportsToId ?? ""} className={DRAWER_INPUT}>
-              <option value="">（无 = 顶层）</option>
+              <option value="">(None = top level)</option>
               {allContacts
                 .filter((x) => x.id !== contact?.id)
                 .map((x) => (
                   <option key={x.id} value={x.id}>
-                    汇报给 {x.name}
+                    Reports to {x.name}
                   </option>
                 ))}
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">联系方式</span>
-            <input name="contactInfo" defaultValue={contact?.contactInfo ?? ""} placeholder="联系方式" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">Contact info</span>
+            <input name="contactInfo" defaultValue={contact?.contactInfo ?? ""} placeholder="Contact info" className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">最佳接触方式</span>
-            <input name="approach" defaultValue={contact?.approach ?? ""} placeholder="最佳接触方式" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">Best approach</span>
+            <input name="approach" defaultValue={contact?.approach ?? ""} placeholder="Best approach" className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">备注</span>
-            <textarea name="notes" defaultValue={contact?.notes ?? ""} placeholder="备注" rows={3} className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">Notes</span>
+            <textarea name="notes" defaultValue={contact?.notes ?? ""} placeholder="Notes" rows={3} className={DRAWER_INPUT} />
           </label>
         </form>
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-zinc-100">
@@ -627,7 +627,7 @@ function EditDrawer({
               disabled={pending}
               className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-40"
             >
-              删除
+              Delete
             </button>
           ) : (
             <span />
@@ -638,7 +638,7 @@ function EditDrawer({
               onClick={onClose}
               className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-300"
             >
-              取消
+              Cancel
             </button>
             <button
               type="button"
@@ -646,7 +646,7 @@ function EditDrawer({
               disabled={pending}
               className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700 disabled:opacity-50"
             >
-              {pending ? "保存中…" : "保存"}
+              {pending ? "Saving…" : "Save"}
             </button>
           </div>
         </div>
@@ -704,14 +704,14 @@ function ContactList({
           className="flex items-center gap-1 text-sm font-medium text-zinc-700"
         >
           <span className={`text-zinc-300 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
-          关键人物（{contacts.length}）
+          Key contacts ({contacts.length})
         </button>
         <div className="flex-1" />
         {open && (
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索 姓名/职位/部门/角色/态度"
+            placeholder="Search name/title/dept/role/attitude"
             className="w-44 rounded-md border border-zinc-200 px-2.5 py-1 text-xs focus:border-indigo-400 focus:outline-none"
           />
         )}
@@ -720,7 +720,7 @@ function ContactList({
           onClick={onAdd}
           className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700"
         >
-          + 加人
+          + Add contact
         </button>
       </div>
       {open && (
@@ -751,7 +751,7 @@ function ContactList({
                     <span className="font-medium text-zinc-900 truncate">{c.name}</span>
                     <span
                       className={`shrink-0 rounded-sm text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center ${s.badge}`}
-                      title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role}（影响力 ${roleInfluence(c.role)}/5）`}
+                      title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role} (influence ${roleInfluence(c.role)}/5)`}
                     >
                       {CONTACT_ROLE_CODES[c.role] ?? "I"}
                     </span>
@@ -760,13 +760,13 @@ function ContactList({
                     {[c.title, c.department].filter(Boolean).join(" · ") || "—"}
                   </div>
                 </div>
-                <span className="text-zinc-300 text-xs shrink-0">编辑 ›</span>
+                <span className="text-zinc-300 text-xs shrink-0">Edit ›</span>
               </button>
             );
           })}
           {filtered.length === 0 && (
             <div className="px-3 py-6 text-center text-xs text-zinc-400">
-              {q ? "没有匹配的人物" : "还没有关键人物，点「+ 加人」添加。"}
+              {q ? "No matching contacts" : "No key contacts yet. Click \"+ Add contact\" to add one."}
             </div>
           )}
         </div>
@@ -814,7 +814,7 @@ export function PowerMapSection({
         </ReactFlowProvider>
       ) : (
         <div className="rounded-lg border border-dashed border-zinc-200 px-4 py-8 text-center text-sm text-zinc-400">
-          还没有关键人物。点下方「+ 加人」手动添加，或用上方「✦ AI 加人」从文字/图片提取。
+          No key contacts yet. Click \"+ Add contact\" below to add manually, or use \"✦ AI Add\" above to extract from text/images.
         </div>
       )}
       <ContactList contacts={contacts} selectedId={selectedId} onSelect={selectContact} onAdd={startAdd} />

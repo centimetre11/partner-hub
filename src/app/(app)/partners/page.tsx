@@ -43,45 +43,45 @@ export default async function PartnersPage({
   return (
     <div className="pb-16">
       <PageHeader
-        title="正式伙伴"
-        desc={`${partners.length} 家正在经营的伙伴 · 经营框架驱动动作，Pipeline 十阶段跟踪`}
+        title="Active Partners"
+        desc={`${partners.length} active partners · Framework-driven actions, 10-stage pipeline tracking`}
         actions={<AddPartnerForm intent="active" taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />}
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          <input name="q" defaultValue={sp.q} placeholder="搜索公司名…" className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-44" />
+          <input name="q" defaultValue={sp.q} placeholder="Search company name…" className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-44" />
           <select name="stage" defaultValue={sp.stage ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">全部阶段</option>
+            <option value="">All stages</option>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((s) => (
               <option key={s} value={s}>{s}. {stageName(s)}</option>
             ))}
           </select>
           <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">全部负责人</option>
+            <option value="">All owners</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
           <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">全部 Tier</option>
+            <option value="">All tiers</option>
             <option value="A">Tier A</option>
             <option value="B">Tier B</option>
             <option value="C">Tier C</option>
           </select>
           <select name="industry" defaultValue={sp.industry ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">全部行业</option>
+            <option value="">All industries</option>
             {industryOptions.map((o) => (
               <option key={o.code} value={o.code}>{o.label}</option>
             ))}
           </select>
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">筛选</button>
+          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">Filter</button>
         </form>
 
         {partners.length === 0 ? (
           <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm">
-            <EmptyState text="还没有正式伙伴。去候选池把确认合作的伙伴「转正」吧。" />
+            <EmptyState text="No active partners yet. Go to the prospect pool to promote confirmed partners." />
             <div className="text-center pb-8 -mt-4">
-              <Link href="/pool" className="text-sm text-indigo-600 hover:underline">前往候选池 →</Link>
+              <Link href="/pool" className="text-sm text-indigo-600 hover:underline">Go to prospect pool →</Link>
             </div>
           </div>
         ) : (
@@ -104,14 +104,14 @@ export default async function PartnersPage({
                         {parseIndustries(p).map((code) => (
                           <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
                         ))}
-                        {stale > 30 && <Badge tone="red">停滞 {stale} 天</Badge>}
+                        {stale > 30 && <Badge tone="red">Stalled {stale} days</Badge>}
                       </div>
                       <div className="text-xs text-zinc-400 mt-1">
-                        {p.city ?? p.country ?? "—"} · 负责人：{p.owner?.name ?? "未指定"}
+                        {p.city ?? p.country ?? "—"} · Owner: {p.owner?.name ?? "Unassigned"}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-xs text-zinc-400">阶段 {p.pipelineStage}/10</div>
+                      <div className="text-xs text-zinc-400">Stage {p.pipelineStage}/10</div>
                       <div className="text-sm font-medium text-indigo-700">{stageName(p.pipelineStage)}</div>
                     </div>
                   </div>
@@ -120,7 +120,7 @@ export default async function PartnersPage({
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
                     <span>
-                      联系人 {p.contacts.length} · 商机 {p.opportunities.length} · 动态 {p.events.length}
+                      Contacts {p.contacts.length} · Opportunities {p.opportunities.length} · Activities {p.events.length}
                     </span>
                     <div className="w-32">
                       <ScoreBar score={c.score} />

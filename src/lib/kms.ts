@@ -39,8 +39,8 @@ export function parseKmsPageId(input: string): string | null {
 export function confluenceStorageToPlainText(storage: string, maxLen = 12000): string {
   let text = storage
     .replace(/<ac:structured-macro[\s\S]*?<\/ac:structured-macro>/gi, "")
-    .replace(/<ac:image[\s\S]*?<\/ac:image>/gi, "[图片]")
-    .replace(/<ri:attachment[^>]*\/>/gi, "[附件]")
+    .replace(/<ac:image[\s\S]*?<\/ac:image>/gi, "[image]")
+    .replace(/<ri:attachment[^>]*\/>/gi, "[attachment]")
     .replace(/<h([1-6])[^>]*>/gi, "\n\n## ")
     .replace(/<\/h[1-6]>/gi, "\n")
     .replace(/<li[^>]*>/gi, "\n- ")
@@ -54,7 +54,7 @@ export function confluenceStorageToPlainText(storage: string, maxLen = 12000): s
     .replace(/&quot;/g, '"')
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-  if (text.length > maxLen) text = `${text.slice(0, maxLen)}…（已截断）`;
+  if (text.length > maxLen) text = `${text.slice(0, maxLen)}… (truncated)`;
   return text;
 }
 
@@ -70,12 +70,12 @@ async function kmsFetch<T>(baseUrl: string, token: string, path: string): Promis
   if (!res.ok) {
     const errText = (await res.text()).slice(0, 300);
     if (res.status === 401 || res.status === 403) {
-      throw new Error(`KMS 认证失败（${res.status}）：个人访问令牌无效或已过期，请在团队设置中重新配置。`);
+      throw new Error(`KMS authentication failed (${res.status}): personal access token is invalid or expired. Reconfigure it in team settings.`);
     }
     if (res.status === 404) {
-      throw new Error(`KMS 页面不存在（404）：${path}`);
+      throw new Error(`KMS page not found (404): ${path}`);
     }
-    throw new Error(`KMS 请求失败（${res.status}）：${errText}`);
+    throw new Error(`KMS request failed (${res.status}): ${errText}`);
   }
   return res.json() as Promise<T>;
 }
@@ -90,7 +90,7 @@ function toKmsPage(baseUrl: string, data: ConfluenceContent): KmsPage {
     spaceName: data.space?.name ?? "",
     spaceKey: data.space?.key ?? "",
     webUrl: `${base}${webPath.startsWith("/") ? webPath : `/${webPath}`}`,
-    plainText: plain || "（页面无正文）",
+    plainText: plain || "(page has no body)",
     updatedAt: data.version?.when,
   };
 }
@@ -141,7 +141,7 @@ export async function readKmsForUser(
 ): Promise<string> {
   const cred = await getUserKmsCredential(userId);
   if (!cred?.accessToken) {
-    return "未配置 KMS 个人访问令牌。请登录后在「团队设置 → KMS 文档访问」中填写一次，之后 Agent 与助手将自动使用。";
+    return "KMS personal access token is not configured. After signing in, enter it once under Team Settings → KMS document access; the Agent and assistant will use it automatically.";
   }
 
   try {
@@ -167,21 +167,21 @@ export async function readKmsForUser(
         query: args.query,
         limit: args.limit ?? 5,
       });
-      if (!pages.length) return `KMS 中未找到与「${args.query}」相关的页面`;
+      if (!pages.length) return `No KMS pages found related to "${args.query}"`;
       return pages
         .map((p, i) => `${i + 1}. ${formatKmsPage(p, true)}`)
         .join("\n\n---\n\n");
     }
 
-    return "请提供 pageId、url 或 query 之一。例：pageId=1420741418，或 query=\"FineBI 中东\"";
+    return "Provide one of pageId, url, or query. Example: pageId=1420741418, or query=\"FineBI Middle East\"";
   } catch (e) {
     return e instanceof Error ? e.message : String(e);
   }
 }
 
 function formatKmsPage(page: KmsPage, excerpt = false) {
-  const meta = [`【${page.title}】`, `空间：${page.spaceName || page.spaceKey || "-"}`, `链接：${page.webUrl}`];
-  if (page.updatedAt) meta.push(`更新：${page.updatedAt}`);
+  const meta = [`[${page.title}]`, `Space: ${page.spaceName || page.spaceKey || "-"}`, `Link: ${page.webUrl}`];
+  if (page.updatedAt) meta.push(`Updated: ${page.updatedAt}`);
   const body = excerpt ? page.plainText.slice(0, 1200) : page.plainText;
   return `${meta.join("\n")}\n\n${body}`;
 }

@@ -13,7 +13,7 @@ import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
 
 const MAX_STEPS = 12;
 
-// ============ 调度时间计算 ============
+// ============ Schedule time calculation ============
 
 export function computeNextRunAt(agent: Pick<Agent, "frequency" | "runHour" | "runWeekday">, from = new Date()): Date {
   const next = new Date(from);
@@ -24,26 +24,26 @@ export function computeNextRunAt(agent: Pick<Agent, "frequency" | "runHour" | "r
   }
   if (agent.frequency === "WEEKLY") {
     next.setHours(agent.runHour, 0, 0, 0);
-    // JS: 0=周日…6=周六；存储：1=周一…7=周日
+    // JS: 0=Sun…6=Sat; stored: 1=Mon…7=Sun
     const targetDow = agent.runWeekday % 7;
     let delta = (targetDow - next.getDay() + 7) % 7;
     if (delta === 0 && next <= from) delta = 7;
     next.setDate(next.getDate() + delta);
     return next;
   }
-  // DAILY 默认
+  // DAILY default
   next.setHours(agent.runHour, 0, 0, 0);
   if (next <= from) next.setDate(next.getDate() + 1);
   return next;
 }
 
-// ============ Webhook 推送（兼容飞书/企微/Slack 的 text 格式） ============
+// ============ Webhook push (Feishu / WeCom / Slack text format) ============
 
 async function pushWebhook(url: string, title: string, content: string) {
   const text = `【${title}】\n${content.slice(0, 3500)}`;
   const bodies = [
-    { msg_type: "text", content: { text } }, // 飞书
-    { msgtype: "text", text: { content: text } }, // 企业微信/钉钉
+    { msg_type: "text", content: { text } }, // Feishu
+    { msgtype: "text", text: { content: text } }, // WeCom / DingTalk
     { text }, // Slack
   ];
   for (const body of bodies) {
@@ -56,18 +56,18 @@ async function pushWebhook(url: string, title: string, content: string) {
       });
       if (res.ok) {
         const data = await res.json().catch(() => null);
-        // 飞书/企微返回 code/errcode 非 0 表示格式不对，尝试下一种
+        // Feishu/WeCom non-zero code/errcode means wrong format; try next
         if (data && (data.code === 0 || data.errcode === 0 || (data.code === undefined && data.errcode === undefined))) {
           return;
         }
       }
     } catch {
-      // 尝试下一种格式
+      // Try next format
     }
   }
 }
 
-// ============ Agent 执行 ============
+// ============ Agent execution ============
 
 export async function runAgent(
   agentId: string,
@@ -85,33 +85,34 @@ export async function runAgent(
     const skillNames = resolved.skillNames;
     const tools: (ToolDef | Record<string, unknown>)[] = buildToolsForAgent(skillNames);
 
-    // 作用域上下文
+    // Scope context
     let scopeCtx = "";
     if (agent.scopeType === "PARTNER" && agent.partnerId) {
-      scopeCtx = `\n\n【你绑定的伙伴档案】\n${await partnerContext(agent.partnerId)}`;
+      scopeCtx = `\n\n【Bound partner profile】\n${await partnerContext(agent.partnerId)}`;
     }
 
-    const system = `你是帆软软件（Fanruan，中国领先BI厂商，产品 FineReport/FineBI/FineDataLink）中东区伙伴管理系统中的自动化 Agent，名叫「${agent.name}」。
-今天是 ${new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}。
-本次运行方式：${triggeredBy === "schedule" ? "定时自动触发" : "用户手动触发"}。
+    const system = `You are an automated Agent in Fanruan's Middle East partner management system (Fanruan — leading Chinese BI vendor; products FineReport/FineBI/FineDataLink). Your name is "${agent.name}".
+Today is ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}.
+This run: ${triggeredBy === "schedule" ? "scheduled automatic trigger" : "manual user trigger"}.
+Always reply in English.
 
-【你的任务指令】
+【Your task instructions】
 ${agent.instructions}
 ${scopeCtx}
-${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.promptFragments.join("\n\n")}` : ""}
+${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.promptFragments.join("\n\n")}` : ""}
 
-【工作规则】
-1. 用工具获取真实信息，不要编造。监测伙伴动态时优先 linkedin_search（公司+高管），再用 web_search 补充新闻。
-2. 需要帆软/中东策略背景时，先用 search_knowledge 检索团队知识库，再用 read_kms 查 KMS 内部文档（如已配置令牌）。
-3. 发现与某个伙伴相关的有价值动态时，用 add_timeline_event 记入该伙伴时间线（如有该工具）。
-4. 需要修改伙伴档案字段时调用 update_partner，系统会自动转为提案等人工确认。
-5. 会前简报、联合方案等报告类任务完成后，用 create_document 写入报告中心（如已启用该技能）。
-6. 完成任务后，输出最终简报（Markdown，中文）：开头一句话结论，然后分点列出发现/建议/已执行的动作。如果没有值得汇报的新发现，明确说"本次无新发现"并简述检查了什么。
-7. 简报就是你的最后一条消息，不需要调用工具来发送。`;
+【Working rules】
+1. Use tools for real data; do not fabricate. When monitoring partners, prefer linkedin_search (company + executives), then web_search for news.
+2. For Fanruan/Middle East strategy background, use search_knowledge first, then read_kms for internal docs (if token configured).
+3. When you find valuable partner-related signals, use add_timeline_event on that partner's timeline (if tool enabled).
+4. To change partner profile fields, call update_partner — the system converts to a proposal for human approval.
+5. For pre-meeting briefs, joint solutions, etc., save with create_document to the report center (if skill enabled).
+6. When done, output a final brief in Markdown (English): one-line conclusion first, then findings/recommendations/actions taken. If nothing new to report, say "No new findings this run" and summarize what was checked.
+7. The brief is your final message; no tool call needed to send it.`;
 
     const chat: ChatMessage[] = [
       { role: "system", content: system },
-      { role: "user", content: "开始执行任务。" },
+      { role: "user", content: "Start the task." },
     ];
 
     const ctx = newSkillContext({
@@ -125,7 +126,7 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
       chat,
       tools,
       temperature: 0.3,
-      feature: `Agent 运行：${agent.name}`,
+      feature: `Agent run: ${agent.name}`,
       userId: agent.createdById ?? undefined,
       maxSteps: MAX_STEPS,
       emit,
@@ -142,10 +143,10 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
         if (tc.function.name === "create_document") documentSaved = true;
         return result;
       },
-    })) ?? "（执行步骤达到上限，任务可能未完成。已执行的动作见日志。）";
+    })) ?? "(Step limit reached; task may be incomplete. See log for actions taken.)";
 
     if (ctx.actions.length) {
-      const appendix = `\n\n---\n已执行的动作：\n${ctx.actions.map((a) => `- ${a}`).join("\n")}`;
+      const appendix = `\n\n---\nActions taken:\n${ctx.actions.map((a) => `- ${a}`).join("\n")}`;
       output += appendix;
       if (emit) {
         emit({ event: "reply_delta", delta: appendix });
@@ -158,13 +159,13 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
       data: { status: "SUCCESS", output, toolLog: JSON.stringify(toolLog), finishedAt: new Date() },
     });
 
-    // 报告类 Agent 自动落库（若 Agent 未主动调用 create_document）
+    // Auto-save report agents if create_document was not called
     const isReportAgent = REPORT_AGENT_KEYWORDS.some((k) => agent.name.includes(k));
     if (isReportAgent && output && !documentSaved) {
-      const docType = agent.name.includes("联合") ? "JOINT_SOLUTION" : "MEETING_PREP";
+      const docType = /联合|joint/i.test(agent.name) ? "JOINT_SOLUTION" : "MEETING_PREP";
       await db.document.create({
         data: {
-          title: `${agent.icon} ${agent.name} · ${new Date().toLocaleDateString("zh-CN")}`,
+          title: `${agent.icon} ${agent.name} · ${new Date().toLocaleDateString("en-US")}`,
           type: docType,
           content: output,
           status: "DRAFT",
@@ -175,21 +176,21 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
       });
     }
 
-    // 收件箱通知
+    // Inbox notifications
     await db.notification.create({
       data: {
-        title: `${agent.icon} ${agent.name} 运行完成`,
+        title: `${agent.icon} ${agent.name} run completed`,
         content: output,
         agentRunId: run.id,
         partnerId: agent.partnerId,
       },
     });
-    // 待确认提案单独成条
+    // Separate notification per pending proposal
     for (const p of ctx.pendingProposals) {
       await db.notification.create({
         data: {
-          title: `${agent.icon} ${agent.name} 提议修改「${p.partnerName}」档案`,
-          content: p.fieldUpdates.map((f) => `${f.label}：${f.oldValue ?? "（空）"} → ${f.newValue}`).join("\n"),
+          title: `${agent.icon} ${agent.name} proposed changes to "${p.partnerName}" profile`,
+          content: p.fieldUpdates.map((f) => `${f.label}: ${f.oldValue ?? "(empty)"} → ${f.newValue}`).join("\n"),
           agentRunId: run.id,
           partnerId: p.partnerId,
           proposal: JSON.stringify(p),
@@ -197,7 +198,7 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
       });
     }
 
-    // Webhook 推送
+    // Webhook
     if (agent.webhookUrl) {
       await pushWebhook(agent.webhookUrl, `${agent.name}`, output);
     }
@@ -211,13 +212,13 @@ ${resolved.promptFragments.length ? `\n【附加技能提示】\n${resolved.prom
       data: { status: "FAILED", error: msg, toolLog: JSON.stringify(toolLog), finishedAt: new Date() },
     });
     await db.notification.create({
-      data: { title: `${agent.icon} ${agent.name} 运行失败`, content: msg, agentRunId: run.id },
+      data: { title: `${agent.icon} ${agent.name} run failed`, content: msg, agentRunId: run.id },
     });
     throw e;
   }
 }
 
-// ============ 调度器（每分钟由 instrumentation 调用） ============
+// ============ Scheduler (called every minute from instrumentation) ============
 
 let ticking = false;
 
@@ -234,7 +235,7 @@ export async function schedulerTick() {
       },
     });
     for (const agent of due) {
-      // 先推进 nextRunAt，避免运行慢导致重复触发
+      // Advance nextRunAt first to avoid duplicate triggers on slow runs
       await db.agent.update({
         where: { id: agent.id },
         data: { nextRunAt: computeNextRunAt(agent) },
@@ -242,11 +243,11 @@ export async function schedulerTick() {
       try {
         await runAgent(agent.id, "schedule");
       } catch (e) {
-        console.error(`[agent-scheduler] ${agent.name} 运行失败:`, e);
+        console.error(`[agent-scheduler] ${agent.name} run failed:`, e);
       }
     }
   } catch (e) {
-    console.error("[agent-scheduler] tick 出错:", e);
+    console.error("[agent-scheduler] tick error:", e);
   } finally {
     ticking = false;
   }

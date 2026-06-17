@@ -9,9 +9,9 @@ import type { AgentBuilderDraft, AgentBuilderMessage, AgentBuilderTurn } from "@
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
 const starters = [
-  "帮我做一个每天早上扫描停滞伙伴并建待办的 Agent",
-  "我想做一个会前简报 Agent：先查伙伴档案和知识库，再输出会议议程",
-  "做一个竞品信号雷达，每周找 Power BI / Tableau 的新闻并沉淀话术",
+  "Help me build an Agent that scans stalled partners every morning and creates todos",
+  "I want a pre-meeting brief Agent: look up partner profile and knowledge base, then output a meeting agenda",
+  "Build a competitor signal radar that finds Power BI / Tableau news weekly and captures talking points",
 ];
 
 function DraftPreview({ draft }: { draft: AgentBuilderDraft }) {
@@ -20,32 +20,32 @@ function DraftPreview({ draft }: { draft: AgentBuilderDraft }) {
       <div className="flex items-start gap-3">
         <div className="text-2xl">{draft.icon || "🤖"}</div>
         <div>
-          <div className="text-sm font-semibold text-zinc-900">{draft.name || "未命名 Agent"}</div>
-          <div className="text-xs text-zinc-500">{draft.description || "等待补全描述"}</div>
+          <div className="text-sm font-semibold text-zinc-900">{draft.name || "Untitled Agent"}</div>
+          <div className="text-xs text-zinc-500">{draft.description || "Waiting for description"}</div>
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
         <div className="rounded-lg bg-white p-2">
-          <div className="text-zinc-400">触发</div>
-          <div className="font-medium text-zinc-800">{draft.trigger === "SCHEDULE" ? "定时" : "手动"}</div>
+          <div className="text-zinc-400">Trigger</div>
+          <div className="font-medium text-zinc-800">{draft.trigger === "SCHEDULE" ? "Scheduled" : "Manual"}</div>
         </div>
         <div className="rounded-lg bg-white p-2">
-          <div className="text-zinc-400">作用域</div>
-          <div className="font-medium text-zinc-800">{draft.scopeType === "PARTNER" ? "绑定伙伴" : "全局"}</div>
+          <div className="text-zinc-400">Scope</div>
+          <div className="font-medium text-zinc-800">{draft.scopeType === "PARTNER" ? "Partner-bound" : "Global"}</div>
         </div>
         <div className="rounded-lg bg-white p-2">
-          <div className="text-zinc-400">工具</div>
+          <div className="text-zinc-400">Tools</div>
           <div className="font-medium text-zinc-800">{draft.skills.length}</div>
         </div>
         <div className="rounded-lg bg-white p-2">
-          <div className="text-zinc-400">技能</div>
+          <div className="text-zinc-400">Skills</div>
           <div className="font-medium text-zinc-800">{draft.skillIds.length}</div>
         </div>
       </div>
       {draft.rationale && <p className="text-xs text-zinc-500 leading-relaxed">{draft.rationale}</p>}
       {draft.missingSkillNotes.length > 0 && (
         <div className="rounded-lg bg-amber-50 border border-amber-100 p-3">
-          <div className="text-xs font-semibold text-amber-800 mb-1">技能缺口与临时处理</div>
+          <div className="text-xs font-semibold text-amber-800 mb-1">Skill gaps & interim handling</div>
           <ul className="list-disc list-inside text-xs text-amber-700 space-y-1">
             {draft.missingSkillNotes.map((note, i) => <li key={i}>{note}</li>)}
           </ul>
@@ -53,7 +53,7 @@ function DraftPreview({ draft }: { draft: AgentBuilderDraft }) {
       )}
       {draft.instructions && (
         <details className="text-xs">
-          <summary className="cursor-pointer text-indigo-700 font-medium">查看生成的任务指令</summary>
+          <summary className="cursor-pointer text-indigo-700 font-medium">View generated task instructions</summary>
           <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-3 text-zinc-600 leading-relaxed">{draft.instructions}</pre>
         </details>
       )}
@@ -90,7 +90,7 @@ export function AgentBuilder() {
         setLiveText(state.liveText);
       });
       const turn = data as AgentBuilderTurn;
-      if (!turn) throw new Error("构建失败");
+      if (!turn) throw new Error("Build failed");
       setTurn(turn);
       setMessages([...next, { role: "assistant", content: finalText || turn.reply }]);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -106,13 +106,13 @@ export function AgentBuilder() {
     <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
       <div className="xl:col-span-3 bg-white rounded-xl border border-zinc-200/80 shadow-sm flex flex-col min-h-[640px]">
         <div className="px-5 py-4 border-b border-zinc-100">
-          <div className="text-sm font-semibold text-zinc-900">对话式 Agent Builder</div>
-          <div className="text-xs text-zinc-400 mt-1">描述目标即可；信息不够时会生成调研问卷，并自动匹配工具与技能。</div>
+          <div className="text-sm font-semibold text-zinc-900">Conversational Agent Builder</div>
+          <div className="text-xs text-zinc-400 mt-1">Describe your goal; when info is missing, a survey is generated and tools/skills are matched automatically.</div>
         </div>
         <div className="flex-1 p-5 space-y-3 overflow-y-auto">
           {messages.length === 0 && (
             <div className="space-y-2">
-              <div className="text-xs text-zinc-400">可以这样开始：</div>
+              <div className="text-xs text-zinc-400">Try starting with:</div>
               {starters.map((s) => (
                 <button
                   key={s}
@@ -139,7 +139,7 @@ export function AgentBuilder() {
                   <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse align-middle" />
                 </div>
               ) : (
-                <div className="text-xs text-zinc-400 animate-pulse">正在梳理目标、匹配工具与技能、生成草案...</div>
+                <div className="text-xs text-zinc-400 animate-pulse">Clarifying goals, matching tools & skills, generating draft...</div>
               )}
             </div>
           )}
@@ -151,7 +151,7 @@ export function AgentBuilder() {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()}
-            placeholder="描述你想构建的 Agent，或回答上面的调研问题..."
+            placeholder="Describe the Agent you want to build, or answer the survey questions above..."
             className={input}
           />
           <button
@@ -159,7 +159,7 @@ export function AgentBuilder() {
             disabled={loading || !inputText.trim()}
             className="rounded-lg bg-indigo-600 text-white px-4 text-sm hover:bg-indigo-700 disabled:opacity-40"
           >
-            发送
+            Send
           </button>
         </div>
       </div>
@@ -170,7 +170,7 @@ export function AgentBuilder() {
             <DraftPreview draft={turn.draft} />
             {turn.questions.length > 0 && (
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
-                <div className="text-sm font-semibold text-amber-900 mb-2">调研问卷</div>
+                <div className="text-sm font-semibold text-amber-900 mb-2">Discovery Survey</div>
                 <ol className="list-decimal list-inside text-xs text-amber-800 space-y-1.5">
                   {turn.questions.map((q, i) => <li key={i}>{q}</li>)}
                 </ol>
@@ -179,19 +179,19 @@ export function AgentBuilder() {
             <form action={createAgentFromBuilderAction} className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
               <input type="hidden" name="draft" value={draftJson} />
               <p className="text-xs text-zinc-500 leading-relaxed">
-                草案确认后会创建一个可编辑 Agent；之后仍可进入详情页微调工具、技能、触发方式和指令。
+                After confirming the draft, an editable Agent is created; you can still fine-tune tools, skills, triggers, and instructions on the detail page.
               </p>
               <button
                 disabled={!turn.ready}
                 className="w-full rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm hover:bg-zinc-700 disabled:opacity-40"
               >
-                {turn.ready ? "确认并创建 Agent" : "回答问卷后再创建"}
+                {turn.ready ? "Confirm & Create Agent" : "Answer survey before creating"}
               </button>
             </form>
           </>
         ) : (
           <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-sm text-zinc-400">
-            这里会展示 Agent 草案、工具/技能匹配理由和需要确认的调研问卷。
+            Agent draft, tool/skill match rationale, and survey questions to confirm will appear here.
           </div>
         )}
       </div>

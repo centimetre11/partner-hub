@@ -52,29 +52,29 @@ const DEFAULT_DRAFT: AgentBuilderDraft = {
   rationale: "",
 };
 
-const OUTPUT_SCHEMA = `只输出一个 JSON 对象：
+const OUTPUT_SCHEMA = `Output exactly one JSON object:
 {
-  "reply": "给用户的中文回复，像产品顾问一样简洁说明当前理解和下一步",
-  "questions": ["还需要用户确认的问题，最多 5 个；如果信息已足够则为空"],
+  "reply": "English reply to the user; concise product-consultant tone explaining current understanding and next step",
+  "questions": ["Questions still needing user confirmation, max 5; empty array if enough info"],
   "ready": true/false,
   "draft": {
-    "name": "Agent 名称",
-    "icon": "一个 emoji",
-    "description": "一句话说明",
-    "instructions": "完整系统指令，说明身份、每次运行步骤、工具使用顺序、输出格式、遇到没有工具时如何先用已有资料和推理尝试解决并说明限制",
-    "skills": ["工具 name，如 web_search"],
-    "skillIds": ["技能 id"],
-    "trigger": "MANUAL 或 SCHEDULE",
+    "name": "Agent name",
+    "icon": "one emoji",
+    "description": "one-line description",
+    "instructions": "Full system instructions: identity, run steps each time, tool order, output format, how to proceed when a tool is missing using existing data and reasoning",
+    "skills": ["tool name, e.g. web_search"],
+    "skillIds": ["skill id"],
+    "trigger": "MANUAL or SCHEDULE",
     "frequency": "HOURLY/DAILY/WEEKLY",
     "runHour": 0-23,
     "runWeekday": 1-7,
-    "scopeType": "ALL 或 PARTNER",
-    "partnerId": "绑定伙伴 id 或空字符串",
+    "scopeType": "ALL or PARTNER",
+    "partnerId": "bound partner id or empty string",
     "shared": true,
     "webhookUrl": "",
-    "missingSkillNotes": ["没有合适技能时的说明和 Agent 将如何临时处理"],
-    "questionnaire": ["像调研问卷一样给用户确认的问题"],
-    "rationale": "为什么选这些工具和技能、以及触发方式"
+    "missingSkillNotes": ["When no matching skill exists, explain gap and interim approach"],
+    "questionnaire": ["Survey-style questions for user confirmation"],
+    "rationale": "Why these tools/skills and trigger mode were chosen"
   }
 }`;
 
@@ -114,43 +114,44 @@ export async function runAgentBuilderTurn(opts: {
   const partnerIds = new Set(partners.map((p) => p.id));
 
   const toolLines = toolOptions.map((t) => `TOOL name=${t.name} | ${t.label} | ${t.desc}`).join("\n");
-  const promptSkillLines = promptSkillOptions.map((s) => `SKILL id=${s.id} | ${s.label} | ${s.desc}`).join("\n") || "（暂无自定义技能）";
+  const promptSkillLines = promptSkillOptions.map((s) => `SKILL id=${s.id} | ${s.label} | ${s.desc}`).join("\n") || "(no custom skills yet)";
   const partnerLines = partners
     .map((p) => `${p.id} | ${p.name} | ${p.status}${p.tier ? ` | Tier ${p.tier}` : ""}${p.country ? ` | ${p.country}` : ""}`)
     .join("\n");
-  const knowledgeLines = knowledge.map((k) => `${k.category} | ${k.title}`).join("\n") || "（暂无共享知识）";
+  const knowledgeLines = knowledge.map((k) => `${k.category} | ${k.title}`).join("\n") || "(no shared knowledge yet)";
 
-  const system = `你是 AI Agent 平台里的「对话式 Agent 架构师」，参考 OpenClaw / Harness / Workbuddy 一类平台的体验。
-目标：通过对话帮用户构建可落地运行的 Agent，而不是让用户自己理解所有表单字段。
+  const system = `You are the conversational "Agent Architect" in the AI Agent platform (OpenClaw / Harness / Workbuddy style).
+Goal: help users build runnable Agents through dialogue, not by making them understand every form field.
+Always reply in English.
 
-工作方式：
-1. 先理解业务目标、输入来源、触发时机、输出物、写库/推送需求、风险边界。
-2. 信息不足时，用“调研问卷”的方式一次性提出最关键的澄清问题，不要碎片化追问。
-3. 主动从工具清单选择合适工具（draft.skills）；从技能清单选择方法论（draft.skillIds）；优先少而准。
-4. 如果没有完全匹配的技能，不要卡住；在 missingSkillNotes 说明缺口，并把临时解决办法写入 instructions：先用 linkedin_search、web_search、知识库、档案和推理尝试完成。
-5. 如果任务需要公司策略/产品知识，建议选择 search_knowledge，并在指令里要求先查知识库。
-6. Agent 对伙伴档案字段的修改应走提案/人工确认；写时间线、建待办、创建文档可以作为执行动作。
-7. ready=true 只在草案足够创建时给出；如果仍缺目标/触发/输出/数据源这些核心信息，ready=false 并给 questionnaire。
+How you work:
+1. Understand business goal, inputs, trigger timing, deliverables, write/push needs, risk boundaries.
+2. When info is insufficient, ask the most critical clarifying questions in one survey-style batch — avoid fragmented back-and-forth.
+3. Pick tools from the tool list (draft.skills) and methodology skills (draft.skillIds); prefer fewer, precise choices.
+4. If no skill fits exactly, don't block; note the gap in missingSkillNotes and write interim steps in instructions: try linkedin_search, web_search, knowledge base, profiles, and reasoning first.
+5. For company strategy/product knowledge, prefer search_knowledge and require checking the knowledge base in instructions.
+6. Partner profile field edits should go through proposals/human approval; timeline writes, todos, and document creation can be direct actions.
+7. ready=true only when the draft is sufficient to create; if goal/trigger/output/data source are still missing, ready=false with questionnaire.
 
-【可用工具（draft.skills 填 name）】
+【Available tools (draft.skills = name)】
 ${toolLines}
 
-【可用技能（draft.skillIds 填 id）】
+【Available skills (draft.skillIds = id)】
 ${promptSkillLines}
 
-【可绑定伙伴】
-${partnerLines || "（暂无伙伴）"}
+【Bindable partners】
+${partnerLines || "(no partners yet)"}
 
-【可引用知识库】
+【Citable knowledge base】
 ${knowledgeLines}
 
 ${OUTPUT_SCHEMA}`;
 
-  const conversation = opts.messages.map((m) => `${m.role === "user" ? "用户" : "助手"}：${m.content}`).join("\n\n");
+  const conversation = opts.messages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
   const raw = await chatJson<Partial<AgentBuilderTurn>>(
     system,
-    `【当前对话】\n${conversation || "用户还没有提供需求。请引导他说明想构建什么 Agent。"}`,
-    { feature: "对话式 Agent 构建器", userId: opts.userId, temperature: 0.2 }
+    `【Current conversation】\n${conversation || "User has not described a need yet. Guide them on what Agent they want to build."}`,
+    { feature: "Conversational Agent builder", userId: opts.userId, temperature: 0.2 }
   );
   const draft = { ...DEFAULT_DRAFT, ...(raw.draft ?? {}) } as AgentBuilderDraft;
   const skills = Array.isArray(draft.skills) ? draft.skills.filter((s) => builtinNames.has(s)) : [];
@@ -158,7 +159,7 @@ ${OUTPUT_SCHEMA}`;
   const scopeType = draft.scopeType === "PARTNER" && partnerIds.has(draft.partnerId) ? "PARTNER" : "ALL";
 
   const turn: AgentBuilderTurn = {
-    reply: raw.reply || "我先整理成一个 Agent 草案，请确认还需要补充什么。",
+    reply: raw.reply || "I've drafted an Agent outline — please confirm what else to add.",
     questions: Array.isArray(raw.questions) ? raw.questions : [],
     ready: !!raw.ready && !!draft.name && !!draft.instructions,
     draft: {

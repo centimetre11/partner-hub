@@ -22,7 +22,7 @@ function readFileAsDataUrl(file: File): Promise<ChatImage> {
     const reader = new FileReader();
     reader.onload = () =>
       resolve({ url: String(reader.result), name: file.name || "image.jpg" });
-    reader.onerror = () => reject(reader.error ?? new Error("读取图片失败"));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image"));
     reader.readAsDataURL(file);
   });
 }
@@ -72,7 +72,7 @@ export async function prepareChatImageFromFile(
     const url = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error ?? new Error("压缩后读取失败"));
+      reader.onerror = () => reject(reader.error ?? new Error("Failed to read compressed image"));
       reader.readAsDataURL(blob);
     });
 

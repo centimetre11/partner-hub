@@ -51,39 +51,39 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
       setMessage(null);
       setError(null);
       await deleteKmsCredentialAction();
-      setMessage("已清除 KMS 令牌");
+      setMessage("KMS token cleared");
     });
   }
 
   return (
     <div className="space-y-4 text-sm">
       <p className="text-xs text-zinc-500 leading-relaxed">
-        连接帆软 KMS（Confluence 7.x）。每人填写一次{" "}
+        Connect to FanRuan KMS (Confluence 7.x). Enter your{" "}
         <a href="https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html" className="text-indigo-600 hover:underline" target="_blank" rel="noreferrer">
           Personal Access Token
         </a>
-        ，保存后 Agent 与 AI 助手调用 <code className="text-xs bg-zinc-100 px-1 rounded">read_kms</code> 时自动使用，无需重复输入。
+        {" "}once; after saving, the Agent and AI assistant will use it automatically when calling <code className="text-xs bg-zinc-100 px-1 rounded">read_kms</code> — no need to re-enter it.
       </p>
 
       {credential.configured ? (
         <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
-          已配置（尾号 {credential.keyTail}）· {credential.baseUrl}
-          {credential.updatedAt && ` · 更新于 ${new Date(credential.updatedAt).toLocaleString("zh-CN")}`}
+          Configured (tail {credential.keyTail}) · {credential.baseUrl}
+          {credential.updatedAt && ` · Updated ${new Date(credential.updatedAt).toLocaleString("en-US")}`}
         </div>
       ) : (
         <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
-          尚未配置。保存后可读取你有权限的 KMS 页面。
+          Not configured yet. After saving, you can read KMS pages you have access to.
         </div>
       )}
 
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">个人访问令牌 {credential.configured && "（留空则仅更新其他项或测试已存令牌）"}</span>
+        <span className="text-xs text-zinc-500">Personal access token {credential.configured && "(leave blank to update other fields or test stored token)"}</span>
         <input
           name="accessToken"
           type="password"
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          placeholder={credential.configured ? "留空表示不修改已存令牌" : "粘贴 PAT，仅保存一次"}
+          placeholder={credential.configured ? "Leave blank to keep stored token" : "Paste PAT; saved once only"}
           className={input}
           autoComplete="off"
         />
@@ -96,7 +96,7 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
           onClick={() => run(saveKmsCredentialAction)}
           className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
         >
-          保存令牌
+          Save token
         </button>
         <button
           type="button"
@@ -104,15 +104,15 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
           onClick={() => run(testKmsCredentialAction)}
           className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:border-indigo-300 disabled:opacity-40"
         >
-          测试（pageId=1420741418）
+          Test (pageId=1420741418)
         </button>
         {credential.configured && (
           <>
             <button type="button" disabled={pending} onClick={testStored} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:border-indigo-300 disabled:opacity-40">
-              用已存令牌测试
+              Test with stored token
             </button>
             <button type="button" disabled={pending} onClick={remove} className="rounded-lg border border-red-200 text-red-600 px-4 py-2 text-sm hover:bg-red-50 disabled:opacity-40">
-              清除
+              Clear
             </button>
           </>
         )}

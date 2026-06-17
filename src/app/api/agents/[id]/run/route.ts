@@ -6,7 +6,7 @@ import { runAgent } from "@/lib/agent-runner";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const { id } = await params;
 
   let stream = false;

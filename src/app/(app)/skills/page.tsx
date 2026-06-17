@@ -19,37 +19,37 @@ export default async function SkillsPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="技能书"
-        desc="为 Agent 装备可复用的方法论和专业流程——告诉 Agent「怎么做」，而非「能做什么」"
+        title="Skill Library"
+        desc="Equip Agents with reusable methodology and professional workflows—tell the Agent how to work, not what it can do"
         actions={
           <Link href="/skills/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            + 新建技能
+            + New Skill
           </Link>
         }
       />
       <AiCenterNav />
       <div className="px-8 max-w-4xl space-y-4">
         <div className="rounded-xl border border-purple-100 bg-purple-50/40 px-4 py-3 text-sm text-purple-900/80">
-          <span className="font-medium">技能如何生效：</span>
-          勾选后，技能正文会注入 Agent 的系统指令。Agent 仍需要搭配
-          <Link href="/tools" className="text-purple-700 hover:underline mx-0.5">工具</Link>
-          才能执行具体操作。例：「深度调研」技能规定调研框架，「web_search」工具负责搜索。
+          <span className="font-medium">How skills take effect:</span>
+          When selected, skill content is injected into the Agent&apos;s system instructions. Agents still need
+          <Link href="/tools" className="text-purple-700 hover:underline mx-0.5">tools</Link>
+          to perform concrete actions. Example: the &quot;Deep Research&quot; skill defines the research framework; the &quot;web_search&quot; tool handles searching.
         </div>
 
         {skills.length === 0 ? (
           <div className="bg-white rounded-xl border border-zinc-200/80 p-8 text-center">
             <div className="text-2xl mb-2">⚡</div>
-            <div className="text-sm font-medium text-zinc-800">还没有自定义技能</div>
+            <div className="text-sm font-medium text-zinc-800">No custom skills yet</div>
             <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
-              把团队沉淀的方法论（会前简报结构、联合方案框架、竞品分析 SOP）写成技能，供 Agent 复用。
+              Capture team methodology (pre-meeting brief structure, joint solution framework, competitor analysis SOP) as skills for Agents to reuse.
             </p>
             <Link href="/skills/new" className="inline-block mt-4 text-sm text-indigo-600 hover:underline">
-              创建第一个技能 →
+              Create your first skill →
             </Link>
           </div>
         ) : (
           <>
-            <div className="text-xs text-zinc-400">{skills.length} 个技能 · {equippedCount} 次 Agent 装备</div>
+            <div className="text-xs text-zinc-400">{skills.length} skills · {equippedCount} Agent equip(s)</div>
             <div className="space-y-3">
               {skills.map((s) => (
                 <div key={s.id} className="bg-white rounded-xl border p-5 flex justify-between gap-3">
@@ -58,18 +58,18 @@ export default async function SkillsPage() {
                       <Link href={`/skills/${s.id}`} className="font-semibold text-zinc-900 hover:text-indigo-600">
                         {s.label}
                       </Link>
-                      <Badge tone="purple">方法论</Badge>
-                      {s.shared && <Badge tone="zinc">共享</Badge>}
+                      <Badge tone="purple">Methodology</Badge>
+                      {s.shared && <Badge tone="zinc">Shared</Badge>}
                     </div>
                     <div className="text-xs text-zinc-400 mt-1 font-mono">{s.name}</div>
                     {s.description && <p className="text-sm text-zinc-500 mt-2">{s.description}</p>}
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <form action={cloneSkillAction.bind(null, s.id)}>
-                      <button className="text-xs text-zinc-400 hover:text-indigo-600">克隆</button>
+                      <button className="text-xs text-zinc-400 hover:text-indigo-600">Clone</button>
                     </form>
                     <form action={deleteSkillAction.bind(null, s.id)}>
-                      <button className="text-xs text-zinc-400 hover:text-red-600">删除</button>
+                      <button className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
                     </form>
                   </div>
                 </div>

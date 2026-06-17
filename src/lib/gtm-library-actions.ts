@@ -102,11 +102,11 @@ export async function saveToGtmLibraryAction(
   const mode = String(formData.get("mode") ?? "new") as SaveToLibraryMode;
   const targetId = String(formData.get("targetId") ?? "").trim();
 
-  if (!title) return { error: "请填写标题" };
-  if (!playbook && !pitch) return { error: "playbook 和 pitch 至少填一项" };
+  if (!title) return { error: "Please enter a title" };
+  if (!playbook && !pitch) return { error: "Fill in at least one of playbook or pitch" };
 
   const partner = await db.partner.findUnique({ where: { id: partnerId } });
-  if (!partner) return { error: "伙伴不存在" };
+  if (!partner) return { error: "Partner not found" };
 
   const industryCodes = parseIndustries(partner);
   const meta = {
@@ -123,9 +123,9 @@ export async function saveToGtmLibraryAction(
   };
 
   if (mode === "replace") {
-    if (!targetId) return { error: "请选择要替换的条目" };
+    if (!targetId) return { error: "Please select an entry to replace" };
     const target = await db.gtmLibrary.findUnique({ where: { id: targetId } });
-    if (!target) return { error: "目标条目不存在" };
+    if (!target) return { error: "Target entry not found" };
     await db.gtmLibrary.update({
       where: { id: targetId },
       data: { title, ...meta },
@@ -136,9 +136,9 @@ export async function saveToGtmLibraryAction(
   }
 
   if (mode === "version") {
-    if (!targetId) return { error: "请选择要追加版本的条目" };
+    if (!targetId) return { error: "Please select an entry to add a version to" };
     const target = await db.gtmLibrary.findUnique({ where: { id: targetId } });
-    if (!target) return { error: "目标条目不存在" };
+    if (!target) return { error: "Target entry not found" };
     const maxVer = await db.gtmLibrary.aggregate({
       where: { groupId: target.groupId },
       _max: { version: true },

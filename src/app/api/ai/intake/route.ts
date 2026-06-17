@@ -8,12 +8,12 @@ const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profil
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const { scope, partnerId, messages, stream } = await req.json();
-  if (!SCOPES.includes(scope)) return NextResponse.json({ error: "无效的录入类型" }, { status: 400 });
+  if (!SCOPES.includes(scope)) return NextResponse.json({ error: "Invalid intake scope" }, { status: 400 });
   if (!Array.isArray(messages) || !messages.length) {
-    return NextResponse.json({ error: "对话内容为空" }, { status: 400 });
+    return NextResponse.json({ error: "Conversation is empty" }, { status: 400 });
   }
 
   const base = {
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const turn = await runIntakeTurn(base);
     return NextResponse.json(turn);
   } catch (e) {
-    const msg = e instanceof AIError ? e.message : `处理失败：${e instanceof Error ? e.message : e}`;
+    const msg = e instanceof AIError ? e.message : `Processing failed: ${e instanceof Error ? e.message : e}`;
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

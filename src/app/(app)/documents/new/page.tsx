@@ -22,10 +22,10 @@ export default async function NewDocumentPage({
 
   return (
     <div className="pb-16">
-      <PageHeader title="新建报告" desc="Markdown 文档，可绑定伙伴或联合方案" />
+      <PageHeader title="New report" desc="Markdown document; can be linked to a partner or joint solution" />
       <form action={upsertDocumentAction} className="px-8 max-w-4xl space-y-4">
         <div className="bg-white rounded-xl border p-5 space-y-3">
-          <input name="title" required placeholder="报告标题 *" className={input} />
+          <input name="title" required placeholder="Report title *" className={input} />
           <div className="grid grid-cols-2 gap-3">
             <select name="type" defaultValue={sp.type ?? "CUSTOM"} className={input}>
               {Object.entries(DOCUMENT_TYPE_LABELS).map(([k, v]) => (
@@ -33,12 +33,12 @@ export default async function NewDocumentPage({
               ))}
             </select>
             <select name="status" className={input}>
-              <option value="DRAFT">草稿</option>
-              <option value="FINAL">定稿</option>
+              <option value="DRAFT">Draft</option>
+              <option value="FINAL">Final</option>
             </select>
           </div>
           <select name="partnerId" defaultValue={sp.partnerId ?? ""} className={input}>
-            <option value="">不绑定伙伴</option>
+            <option value="">No partner</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -46,7 +46,7 @@ export default async function NewDocumentPage({
           {sp.solutionId && <input type="hidden" name="solutionId" value={sp.solutionId} />}
           <RichEditor />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-indigo-700">创建</button>
+        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-indigo-700">Create</button>
       </form>
     </div>
   );

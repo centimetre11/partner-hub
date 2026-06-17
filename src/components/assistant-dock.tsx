@@ -35,9 +35,9 @@ type QueryResult = {
 };
 
 const SUGGESTIONS = [
-  "哪些 Tier A 伙伴超过 2 周没跟进？",
-  "对比 Beinex 和 SEIDOR / Clariba，谁更适合先推进？",
-  "利雅得有哪些有政府客户资源的候选？",
+  "Which Tier A partners haven't been followed up in 2+ weeks?",
+  "Compare Beinex and SEIDOR / Clariba — which should we prioritize?",
+  "Which Riyadh candidates have government client resources?",
 ];
 
 export function AssistantDock() {
@@ -87,7 +87,7 @@ export function AssistantDock() {
       ...messages,
       {
         role: "user",
-        content: content || "请识别图片中的信息",
+        content: content || "Please identify the information in the image(s)",
         images: pendingImages.length ? pendingImages : undefined,
       },
     ];
@@ -102,7 +102,7 @@ export function AssistantDock() {
     setClarifications([]);
     setReady(false);
     setPatchChanges(null);
-    const likelyPropose = /kms\.fineres|pageId=\d+|建档|补全画像|录入|创建伙伴/i.test(content);
+    const likelyPropose = /kms\.fineres|pageId=\d+|onboard|create partner|complete profile|intake|建档|补全画像|录入|创建伙伴/i.test(content);
     if (likelyPropose) setProposeMode(true);
     const ac = new AbortController();
     abortRef.current = ac;
@@ -127,7 +127,7 @@ export function AssistantDock() {
         const partial = (finalReply || "").trim();
         setMessages([
           ...next,
-          { role: "assistant", content: partial ? `${partial}\n\n（已停止）` : "（已停止）", trace: [...trace] },
+          { role: "assistant", content: partial ? `${partial}\n\n(Stopped)` : "(Stopped)", trace: [...trace] },
         ]);
         return;
       }
@@ -148,11 +148,11 @@ export function AssistantDock() {
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setMessages([...next, { role: "assistant", content: "（已停止）", trace: [...liveTrace] }]);
+        setMessages([...next, { role: "assistant", content: "(Stopped)", trace: [...liveTrace] }]);
       } else {
         setMessages([
           ...next,
-          { role: "assistant", content: `出错了：${e instanceof Error ? e.message : e}`, trace: liveTrace },
+          { role: "assistant", content: `Error: ${e instanceof Error ? e.message : e}`, trace: liveTrace },
         ]);
       }
     } finally {
@@ -177,7 +177,7 @@ export function AssistantDock() {
       ? [
           {
             role: "assistant" as const,
-            content: `试试这些：\n\n${SUGGESTIONS.map((s) => `• ${s}`).join("\n")}`,
+            content: `Try these:\n\n${SUGGESTIONS.map((s) => `• ${s}`).join("\n")}`,
           },
         ]
       : messages.map((m) => ({
@@ -196,7 +196,7 @@ export function AssistantDock() {
           onClick={() => setOpen(true)}
           className="fixed bottom-6 right-6 z-50 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-xl flex items-center justify-center text-xl hover:scale-105 transition-transform"
           style={{ width: 56, height: 56 }}
-          title="AI 助手"
+          title="AI Assistant"
         >
           ✦
         </button>
@@ -205,8 +205,8 @@ export function AssistantDock() {
       {open && (
         <AiFullscreenOverlay onClose={() => setOpen(false)} zIndex={55}>
           <AiWorkflowPanel
-            title={showDraft ? "AI 助手 · 建档" : "AI 助手"}
-            subtitle={showDraft ? "左侧调研 · 右侧实时呈现" : "全屏对话 · 查询与指令"}
+            title={showDraft ? "AI Assistant · Onboarding" : "AI Assistant"}
+            subtitle={showDraft ? "Research on the left · live draft on the right" : "Full-screen chat · queries & commands"}
             onClose={() => setOpen(false)}
             messages={panelMessages}
             loading={loading}
@@ -231,7 +231,7 @@ export function AssistantDock() {
             pendingImages={pendingImages}
             onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}
             onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
-            inputPlaceholder={showDraft ? "继续补充，或右侧确认入库…" : "问问题，或下达指令…"}
+            inputPlaceholder={showDraft ? "Keep adding details, or confirm on the right…" : "Ask a question or give a command…"}
             sendDisabled={loading || (!input.trim() && !pendingImages.length)}
             showDraftPanel={showDraft}
           />

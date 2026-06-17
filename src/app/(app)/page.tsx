@@ -15,11 +15,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const isBoard = tab === "board";
   const now = new Date();
   const hour = now.getHours();
-  const greeting = hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   const tabs = [
-    { key: "", label: "工作概览", href: "/" },
-    { key: "board", label: "经营看板", href: "/?tab=board" },
+    { key: "", label: "Overview", href: "/" },
+    { key: "board", label: "Business Dashboard", href: "/?tab=board" },
   ];
 
   return (
@@ -29,7 +29,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           {greeting}，{user.name}
         </h1>
         <p className="text-sm text-zinc-500 mt-1">
-          {now.toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })} · 中东伙伴经营工作台
+          {now.toLocaleDateString("en-US", { month: "long", day: "numeric", weekday: "long" })} · MEA Partner Operations Hub
         </p>
         <div className="mt-4 flex gap-1 border-b border-zinc-200">
           {tabs.map((t) => {
@@ -98,10 +98,10 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
     <>
       <div className="px-8 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: "正式伙伴", value: activeCount, href: "/partners", tone: "text-indigo-600" },
-          { label: "POC 及以后（≥5）", value: pocPlusCount, href: "/partners", tone: "text-purple-600" },
-          { label: "进行中商机", value: activeOppCount, href: "/partners", tone: "text-sky-600" },
-          { label: "停滞伙伴（>30天）", value: stalePartners.length, href: "/partners", tone: stalePartners.length ? "text-red-600" : "text-emerald-600" },
+          { label: "Active Partners", value: activeCount, href: "/partners", tone: "text-indigo-600" },
+          { label: "POC & Beyond (≥5)", value: pocPlusCount, href: "/partners", tone: "text-purple-600" },
+          { label: "Active Opportunities", value: activeOppCount, href: "/partners", tone: "text-sky-600" },
+          { label: "Stale Partners (>30d)", value: stalePartners.length, href: "/partners", tone: stalePartners.length ? "text-red-600" : "text-emerald-600" },
         ].map((s) => (
           <Link key={s.label} href={s.href} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 hover:border-indigo-300 transition-colors">
             <div className={`text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</div>
@@ -114,17 +114,17 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
         <div className="px-8 mb-4 flex flex-wrap gap-3 text-xs">
           {openTodoCount > 0 && (
             <Link href="/todos" className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-zinc-600 hover:border-indigo-300">
-              未完成待办 <span className="font-semibold text-zinc-900">{openTodoCount}</span>
+              Open todos <span className="font-semibold text-zinc-900">{openTodoCount}</span>
             </Link>
           )}
           {overdueTodos.length > 0 && (
             <Link href="/todos" className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-red-700 hover:border-red-300">
-              逾期待办 <span className="font-semibold">{overdueTodos.length}</span>
+              Overdue todos <span className="font-semibold">{overdueTodos.length}</span>
             </Link>
           )}
           {signedPlusCount > 0 && (
             <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-indigo-700">
-              已签约 Onboarding+ <span className="font-semibold">{signedPlusCount}</span> 家
+              Signed Onboarding+ <span className="font-semibold">{signedPlusCount}</span> partners
             </span>
           )}
         </div>
@@ -134,7 +134,7 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
         <div className="xl:col-span-2 space-y-5">
           {/* 逾期警报 */}
           {overdueTodos.length > 0 && (
-            <Card title={`⚠ 逾期待办（${overdueTodos.length}）`} className="border-red-200">
+            <Card title={`⚠ Overdue Todos (${overdueTodos.length})`} className="border-red-200">
               <div className="space-y-2.5">
                 {overdueTodos.map((t) => (
                   <div key={t.id} className="flex items-start gap-2.5">
@@ -144,7 +144,7 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
                     <div className="min-w-0 flex-1">
                       <div className="text-sm text-zinc-800">{t.title}</div>
                       <div className="text-xs text-red-500">
-                        {fmtDate(t.dueDate)} 已逾期
+                        {fmtDate(t.dueDate)} overdue
                         {t.partner && (
                           <>
                             {" · "}
@@ -163,7 +163,7 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
           )}
 
           {/* 本周待办 */}
-          <Card title="近 7 天待办" actions={<Link href="/todos" className="text-xs text-indigo-600 hover:underline">全部 →</Link>}>
+          <Card title="Todos in Next 7 Days" actions={<Link href="/todos" className="text-xs text-indigo-600 hover:underline">View all →</Link>}>
             <div className="space-y-2.5">
               {myTodos.map((t) => {
                 const overdue = t.dueDate && new Date(t.dueDate) < now;
@@ -193,12 +193,12 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
                   </div>
                 );
               })}
-              {myTodos.length === 0 && <EmptyState text="近 7 天没有到期待办" />}
+              {myTodos.length === 0 && <EmptyState text="No todos due in the next 7 days" />}
             </div>
           </Card>
 
           {/* 停滞预警 */}
-          <Card title={`停滞伙伴预警（超 30 天无动态）`}>
+          <Card title="Stale Partner Alerts (no activity for 30+ days)">
             <div className="space-y-2.5">
               {stalePartners.map(({ p, days }) => (
                 <div key={p.id} className="flex items-center justify-between gap-3">
@@ -210,17 +210,17 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
                     <span className="text-xs text-zinc-400">{stageName(p.pipelineStage)}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-red-500 font-medium">{days} 天无动态</span>
+                    <span className="text-xs text-red-500 font-medium">{days}d no activity</span>
                     <Link
                       href={`/partners/${p.id}`}
                       className="text-xs rounded-md border border-zinc-200 px-2 py-1 text-zinc-600 hover:border-indigo-300 hover:text-indigo-600"
                     >
-                      去处理
+                      Review
                     </Link>
                   </div>
                 </div>
               ))}
-              {stalePartners.length === 0 && <EmptyState text="所有正式伙伴近期都有跟进，状态健康 ✓" />}
+              {stalePartners.length === 0 && <EmptyState text="All active partners have recent follow-ups — looking healthy ✓" />}
             </div>
           </Card>
         </div>
@@ -229,16 +229,16 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
         <div className="space-y-5">
           {unreadNotifications.length > 0 && (
             <Card
-              title={`✉ 收件箱未读（${unreadNotifications.length}）`}
+              title={`✉ Unread Inbox (${unreadNotifications.length})`}
               className="border-indigo-200"
-              actions={<Link href="/inbox" className="text-xs text-indigo-600 hover:underline">查看全部 →</Link>}
+              actions={<Link href="/inbox" className="text-xs text-indigo-600 hover:underline">View all →</Link>}
             >
               <div className="space-y-2.5">
                 {unreadNotifications.map((n) => (
                   <Link key={n.id} href="/inbox" className="block group">
                     <div className="text-sm text-zinc-800 group-hover:text-indigo-600 line-clamp-1">{n.title}</div>
                     <div className="text-xs text-zinc-400 line-clamp-1">
-                      {n.proposal && <span className="text-amber-600 mr-1">[待确认提案]</span>}
+                      {n.proposal && <span className="text-amber-600 mr-1">[Pending proposal]</span>}
                       {n.content?.slice(0, 80) ?? ""}
                     </div>
                   </Link>
@@ -247,23 +247,23 @@ async function WorkOverview({ userId, now }: { userId: string; now: Date }) {
             </Card>
           )}
           <WeeklyReport />
-          <Card title="快捷入口">
+          <Card title="Quick Links">
             <div className="space-y-2 text-sm">
               <div className="rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">✦ AI 建档</div>
-                <div className="text-xs text-zinc-400 mt-0.5 mb-2">扔会议记录或公司介绍，AI 对话式建档</div>
-                <AiAddButton scope="new_partner" label="开始建档" variant="soft" />
+                <div className="font-medium text-zinc-800">✦ AI Onboarding</div>
+                <div className="text-xs text-zinc-400 mt-0.5 mb-2">Drop meeting notes or company intro — AI-guided partner setup</div>
+                <AiAddButton scope="new_partner" label="Start onboarding" variant="soft" />
               </div>
               <Link href="/partners?tier=A" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">◮ Tier A 正式伙伴</div>
-                <div className="text-xs text-zinc-400 mt-0.5">查看正在重点经营的 Tier A 伙伴</div>
+                <div className="font-medium text-zinc-800">◮ Tier A Partners</div>
+                <div className="text-xs text-zinc-400 mt-0.5">View Tier A partners under active cultivation</div>
               </Link>
               <Link href="/?tab=board" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">◫ 经营看板</div>
-                <div className="text-xs text-zinc-400 mt-0.5">正式伙伴 Pipeline、完整度与停滞预警</div>
+                <div className="font-medium text-zinc-800">◫ Business Dashboard</div>
+                <div className="text-xs text-zinc-400 mt-0.5">Active partner pipeline, completeness & stale alerts</div>
               </Link>
               <Link href="/pool" className="block rounded-lg border border-dashed border-zinc-200 px-4 py-2.5 hover:border-zinc-300 transition-colors">
-                <div className="text-xs text-zinc-500">候选资源池 →</div>
+                <div className="text-xs text-zinc-500">Prospect Pool →</div>
               </Link>
             </div>
           </Card>

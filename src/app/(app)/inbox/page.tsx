@@ -21,18 +21,18 @@ export default async function InboxPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="收件箱"
-        desc={`Agent 运行简报与待确认提案${unread ? ` · ${unread} 条未读` : ""}`}
+        title="Inbox"
+        desc={`Agent run briefings and pending proposals${unread ? ` · ${unread} unread` : ""}`}
         actions={
           unread > 0 ? (
             <form action={markAllReadAction}>
-              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">全部已读</button>
+              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Mark all read</button>
             </form>
           ) : undefined
         }
       />
       <div className="px-8 max-w-4xl space-y-3">
-        {notifications.length === 0 && <EmptyState text="收件箱是空的。去 Agent 中心创建并运行一个 Agent 吧" />}
+        {notifications.length === 0 && <EmptyState text="Inbox is empty. Go to Agent Center to create and run an Agent." />}
         {notifications.map((n) => {
           const proposal: AgentFieldProposal | null = n.proposal ? JSON.parse(n.proposal) : null;
           return (
@@ -46,7 +46,7 @@ export default async function InboxPage() {
                     {!n.readAt && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />}
                     <h3 className="font-semibold text-zinc-900 text-sm">{n.title}</h3>
                     {proposal && (
-                      <Badge tone={n.appliedAt ? "green" : "amber"}>{n.appliedAt ? "已应用" : "待确认提案"}</Badge>
+                      <Badge tone={n.appliedAt ? "green" : "amber"}>{n.appliedAt ? "Applied" : "Pending proposal"}</Badge>
                     )}
                   </div>
                   <div className="text-xs text-zinc-400 mt-1">
@@ -73,11 +73,11 @@ export default async function InboxPage() {
                   <div className="flex gap-2 shrink-0">
                     {n.content && (
                       <form action={saveNotificationAsDocumentAction.bind(null, n.id)}>
-                        <button className="text-xs text-indigo-500 hover:text-indigo-700">存为报告</button>
+                        <button className="text-xs text-indigo-500 hover:text-indigo-700">Save as report</button>
                       </form>
                     )}
                     <form action={markReadAction.bind(null, n.id)}>
-                      <button className="text-xs text-zinc-400 hover:text-zinc-600">标为已读</button>
+                      <button className="text-xs text-zinc-400 hover:text-zinc-600">Mark read</button>
                     </form>
                   </div>
                 )}
@@ -90,20 +90,20 @@ export default async function InboxPage() {
               {proposal && !n.appliedAt && (
                 <div className="mt-3 border border-amber-200 bg-amber-50/50 rounded-lg p-3.5">
                   <p className="text-xs font-medium text-amber-800 mb-2">
-                    Agent 提议修改「{proposal.partnerName}」以下字段，确认后才会写入档案：
+                    Agent proposes updating the following fields for "{proposal.partnerName}". Changes are written to the profile only after confirmation:
                   </p>
                   <div className="space-y-1 mb-3">
                     {proposal.fieldUpdates.map((f, i) => (
                       <div key={i} className="text-xs text-zinc-700">
-                        <span className="font-medium">{f.label}</span>：
-                        <span className="line-through text-zinc-400 mx-1">{f.oldValue || "（空）"}</span>→
+                        <span className="font-medium">{f.label}</span>:
+                        <span className="line-through text-zinc-400 mx-1">{f.oldValue || "(empty)"}</span>→
                         <span className="text-emerald-700 font-medium ml-1">{f.newValue}</span>
                       </div>
                     ))}
                   </div>
                   <form action={applyAgentProposalAction.bind(null, n.id)} className="flex gap-2">
                     <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-indigo-700">
-                      ✓ 确认应用
+                      ✓ Confirm apply
                     </button>
                   </form>
                 </div>

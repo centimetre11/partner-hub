@@ -10,10 +10,10 @@ export const ACTIVE_PARTNER_DEFAULTS = {
 /** 转正/直建正式伙伴后自动生成的起步待办 */
 export async function createStarterTodos(partnerId: string, partnerName: string, assigneeId: string) {
   const starterTodos = [
-    { title: `判定 ${partnerName} 的伙伴类型（数据原生/竞品迁移/泛集成）`, days: 5 },
-    { title: `完善 ${partnerName} 的权力地图（决策者/教练/商务）`, days: 7 },
-    { title: `确定 ${partnerName} 的联合价值模式与价值三行`, days: 10 },
-    { title: `安排 ${partnerName} 技术 Demo（按价值模式，含 Arabic RTL）`, days: 14 },
+    { title: `Determine partner type for ${partnerName} (data-native / competitor migration / general integration)`, days: 5 },
+    { title: `Complete power map for ${partnerName} (decision-maker / coach / business)`, days: 7 },
+    { title: `Define joint value model and value trio for ${partnerName}`, days: 10 },
+    { title: `Schedule technical demo for ${partnerName} (per value model, incl. Arabic RTL)`, days: 14 },
   ];
   for (const t of starterTodos) {
     const due = new Date();

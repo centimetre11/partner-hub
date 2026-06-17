@@ -72,7 +72,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     select: { id: true, name: true, icon: true, description: true, enabled: true, lastRunAt: true },
   });
   const agentTemplates = await db.agent.findMany({
-    where: { isTemplate: true, OR: [{ name: { contains: "会前" } }, { name: { contains: "联合" } }, { name: { contains: "动态" } }, { name: { contains: "舆情" } }] },
+    where: {
+      isTemplate: true,
+      OR: [
+        { name: { contains: "Pre-meeting" } },
+        { name: { contains: "Joint Solution" } },
+        { name: { contains: "Sentiment" } },
+        { name: { contains: "Monitor" } },
+        // legacy Chinese names (pre-migration)
+        { name: { contains: "会前" } },
+        { name: { contains: "联合" } },
+        { name: { contains: "舆情" } },
+      ],
+    },
     select: { id: true, name: true, icon: true, description: true },
     orderBy: { name: "asc" },
   });
@@ -105,7 +117,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div>
-      {/* 顶栏：身份 + Pipeline */}
+      {/* Header: identity + pipeline */}
       <div className="px-8 pt-7 pb-5 border-b border-zinc-200/60 bg-white">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
@@ -125,10 +137,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               {p.valuePattern && (
                 <Badge tone="purple">{labelFromMap(labelMaps.VALUE_PATTERN, p.valuePattern)}</Badge>
               )}
-              {stale > 30 && p.status === "ACTIVE" && <Badge tone="red">停滞 {stale} 天</Badge>}
+              {stale > 30 && p.status === "ACTIVE" && <Badge tone="red">Stalled {stale} days</Badge>}
             </div>
             <div className="text-sm text-zinc-500 mt-1.5">
-              {[p.city, p.country].filter(Boolean).join(" · ") || "地区未知"}
+              {[p.city, p.country].filter(Boolean).join(" · ") || "Region unknown"}
               {p.website && (
                 <>
                   {" · "}
@@ -137,9 +149,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   </a>
                 </>
               )}
-              {" · 负责人："}
-              {p.owner?.name ?? "未指定"}
-              {" · 档案完整度 "}
+              {" · Owner: "}
+              {p.owner?.name ?? "Unassigned"}
+              {" · Profile completeness "}
               {completeness.score}%
             </div>
           </div>
@@ -147,26 +159,26 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             <AiAddButton
               scope="profile"
               partnerId={p.id}
-              label="✦ AI 录入"
+              label="✦ AI capture"
               className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
             />
             {p.status === "PROSPECT" && (
               <form action={promotePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-                  转为正式伙伴
+                  Promote to active partner
                 </button>
               </form>
             )}
             {p.status !== "ARCHIVED" ? (
               <form action={archivePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400 hover:text-red-600">
-                  归档
+                  Archive
                 </button>
               </form>
             ) : (
               <form action={restorePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-                  恢复{p.prevStatus === "ACTIVE" ? "为正式伙伴" : "为候选"}
+                  Restore{p.prevStatus === "ACTIVE" ? " as active partner" : " as prospect"}
                 </button>
               </form>
             )}
@@ -207,17 +219,17 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           <div className="space-y-5">
             <PartnerStageGuidancePanel partner={p} />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <Card title={`待办（${openTodos.length} 项未完成）`}>
+              <Card title={`Todos (${openTodos.length} open)`}>
                 <form action={createTodoAction} className="flex gap-2 mb-4">
                   <input type="hidden" name="partnerId" value={p.id} />
-                  <input name="title" required placeholder="添加待办…" className={input} />
+                  <input name="title" required placeholder="Add todo…" className={input} />
                   <input name="dueDate" type="date" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm w-36 shrink-0" />
                   <button className="rounded-lg bg-zinc-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-zinc-700">+</button>
                 </form>
                 <TodoList todos={p.todos} users={users} input={input} />
               </Card>
               <div className="space-y-5">
-                <Card title="档案缺口">
+                <Card title="Profile gaps">
                   <ScoreBar score={completeness.score} />
                   {completeness.missing.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -236,21 +248,21 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         positioning={
           <div className="space-y-5">
             <div className="flex items-center justify-end gap-2">
-              <AiAddButton scope="profile" partnerId={p.id} label="✦ AI 补全" variant="soft" />
+              <AiAddButton scope="profile" partnerId={p.id} label="✦ AI complete" variant="soft" />
               <ProfileEditor partner={p} users={users} taxonomy={taxonomy} />
             </div>
 
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-5">
-              <h3 className="text-sm font-semibold text-indigo-800 mb-3">联合价值模式</h3>
+              <h3 className="text-sm font-semibold text-indigo-800 mb-3">Joint value pattern</h3>
               <dl className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
                 {[
-                  ["伙伴提供", p.valuePartnerOffer],
-                  ["帆软提供", p.valueFanruanOffer],
-                  ["客户得到", p.valueCustomerOutcome],
+                  ["Partner offers", p.valuePartnerOffer],
+                  ["FanRuan offers", p.valueFanruanOffer],
+                  ["Customer gets", p.valueCustomerOutcome],
                 ].map(([k, v]) => (
                   <div key={k as string}>
                     <dt className="text-xs text-zinc-500">{k}</dt>
-                    <dd className={v ? "text-zinc-800 mt-1" : "text-zinc-300 mt-1"}>{v || "待补充 — 点击上方实例地图「价值模式」编辑"}</dd>
+                    <dd className={v ? "text-zinc-800 mt-1" : "text-zinc-300 mt-1"}>{v || "To be filled — edit Value pattern on the instance map above"}</dd>
                   </div>
                 ))}
               </dl>
@@ -260,17 +272,17 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              <Card title="定位标签" className="lg:col-span-1">
+              <Card title="Positioning tags" className="lg:col-span-1">
                 <dl className="space-y-3 text-sm">
                   {[
                     ["Tier", p.tier ? `Tier ${p.tier}` : null],
-                    ["伙伴类型", p.partnerArchetype ? labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype) : null],
-                    ["竞品基因", labelFromMap(labelMaps.CATEGORY, p.category)],
-                    ["主攻行业", industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
-                    ["专职人数", p.dedicatedHeadcount],
-                    ["负责 BD", p.owner?.name],
-                    ["优先级", p.priority],
-                    ["认证级别", p.certLevel],
+                    ["Partner type", p.partnerArchetype ? labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype) : null],
+                    ["Competitive DNA", labelFromMap(labelMaps.CATEGORY, p.category)],
+                    ["Primary industry", industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
+                    ["Dedicated headcount", p.dedicatedHeadcount],
+                    ["Owner (BD)", p.owner?.name],
+                    ["Priority", p.priority],
+                    ["Certification level", p.certLevel],
                   ].map(([k, v]) => (
                     <div key={k as string} className="flex justify-between gap-3">
                       <dt className="text-zinc-400 shrink-0">{k}</dt>
@@ -279,21 +291,21 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   ))}
                 </dl>
               </Card>
-              <Card title="公司画像" className="lg:col-span-2">
+              <Card title="Company profile" className="lg:col-span-2">
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                   {[
-                    ["公司规模", p.headcount],
-                    ["公司类型", p.companyType],
-                    ["核心业务", p.coreBusiness],
-                    ["核心能力", p.capability],
-                    ["现有 BI 工具", p.currentTools],
-                    ["已知客户", p.knownClients],
-                    ["关键差异化", p.keyDifferentiator],
-                    ["最佳接触渠道", p.bestChannel],
+                    ["Company size", p.headcount],
+                    ["Company type", p.companyType],
+                    ["Core business", p.coreBusiness],
+                    ["Core capabilities", p.capability],
+                    ["Current BI tools", p.currentTools],
+                    ["Known clients", p.knownClients],
+                    ["Key differentiator", p.keyDifferentiator],
+                    ["Best outreach channel", p.bestChannel],
                   ].map(([k, v]) => (
                     <div key={k as string}>
                       <dt className="text-xs text-zinc-400">{k}</dt>
-                      <dd className={v ? "text-zinc-800 mt-0.5" : "text-zinc-300 mt-0.5"}>{v || "待补充"}</dd>
+                      <dd className={v ? "text-zinc-800 mt-0.5" : "text-zinc-300 mt-0.5"}>{v || "To be filled"}</dd>
                     </div>
                   ))}
                 </dl>
@@ -305,8 +317,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         }
         pipeline={
           <Card
-            title={`商机列表（${p.opportunities.filter((o) => o.status === "ACTIVE").length} 个进行中）`}
-            actions={<AiAddButton scope="opportunity" partnerId={p.id} label="✦ AI 加商机" variant="soft" />}
+            title={`Opportunities (${p.opportunities.filter((o) => o.status === "ACTIVE").length} active)`}
+            actions={<AiAddButton scope="opportunity" partnerId={p.id} label="✦ AI add opportunity" variant="soft" />}
           >
             <OpportunityList partnerId={p.id} opportunities={p.opportunities} input={input} />
           </Card>
@@ -314,8 +326,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         capability={
           <div className="space-y-5">
             <Card
-              title={`培训认证（${p.trainings.length}）`}
-              actions={<AiAddButton scope="training" partnerId={p.id} label="✦ AI 加培训" variant="soft" />}
+              title={`Training & certification (${p.trainings.length})`}
+              actions={<AiAddButton scope="training" partnerId={p.id} label="✦ AI add training" variant="soft" />}
             >
               <TrainingList partnerId={p.id} trainings={p.trainings} input={input} />
             </Card>
@@ -325,8 +337,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         relationship={
           <div className="space-y-5">
             <Card
-              title={`权力地图（${p.contacts.length} 人）`}
-              actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI 加人" variant="soft" />}
+              title={`Power map (${p.contacts.length} people)`}
+              actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI add contact" variant="soft" />}
             >
               <PowerMapSection
                 partnerId={p.id}
@@ -341,14 +353,14 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 }))}
               />
             </Card>
-            <Card title={`动态时间线（${p.events.length}）`}>
+            <Card title={`Activity timeline (${p.events.length})`}>
               <form action={addNoteAction.bind(null, p.id)} className="flex gap-2 mb-5">
-                <input name="content" required placeholder="记一条动态 / 接触记录…" className={input} />
+                <input name="content" required placeholder="Log activity or touchpoint…" className={input} />
                 <select name="type" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0">
-                  <option value="NOTE">笔记</option>
-                  <option value="NEWS">外部动态</option>
+                  <option value="NOTE">Note</option>
+                  <option value="NEWS">External news</option>
                 </select>
-                <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm shrink-0 hover:bg-zinc-700">记录</button>
+                <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm shrink-0 hover:bg-zinc-700">Log</button>
               </form>
               <TimelineList events={p.events} />
             </Card>
@@ -407,7 +419,7 @@ function TodoList({
           <div className="text-xs text-zinc-400">
             {t.dueDate && (
               <span className={overdue ? "text-red-500 font-medium" : ""}>
-                {fmtDate(t.dueDate)}{overdue && " 已逾期"}
+                {fmtDate(t.dueDate)}{overdue && " overdue"}
               </span>
             )}
             {t.assignee && ` · ${t.assignee.name}`}
@@ -428,7 +440,7 @@ function TodoList({
             users={users}
           />
           <form action={deleteTodoAction.bind(null, t.id)}>
-            <button title="删除" className="text-zinc-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
+            <button title="Delete" className="text-zinc-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
           </form>
         </div>
       </div>
@@ -440,11 +452,11 @@ function TodoList({
       {openTodos.map(renderTodo)}
       {doneTodos.length > 0 && (
         <details className="group/done">
-          <summary className="text-xs text-zinc-400 cursor-pointer list-none py-1">已完成 ({doneTodos.length})</summary>
+          <summary className="text-xs text-zinc-400 cursor-pointer list-none py-1">Completed ({doneTodos.length})</summary>
           <div className="space-y-2 mt-1">{doneTodos.map(renderTodo)}</div>
         </details>
       )}
-      {todos.length === 0 && <EmptyState text="暂无待办" />}
+      {todos.length === 0 && <EmptyState text="No todos yet" />}
     </div>
   );
 }
@@ -467,13 +479,13 @@ function OpportunityList({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-zinc-900">{o.name}</span>
                 <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
-                  {o.status === "ACTIVE" ? "进行中" : o.status === "WON" ? "已赢单" : o.status === "LOST" ? "已丢单" : "暂停"}
+                  {o.status === "ACTIVE" ? "Active" : o.status === "WON" ? "Won" : o.status === "LOST" ? "Lost" : "Paused"}
                 </Badge>
                 <Badge tone="blue">{o.stage}</Badge>
               </div>
               <div className="text-xs text-zinc-400 mt-0.5">
-                客户：{o.client ?? "—"} · 金额：{o.amount ?? "—"}
-                {o.followUpAt && ` · 跟进：${fmtDate(o.followUpAt)}`}
+                Client: {o.client ?? "—"} · Amount: {o.amount ?? "—"}
+                {o.followUpAt && ` · Follow-up: ${fmtDate(o.followUpAt)}`}
               </div>
             </div>
             <span className="text-zinc-300 group-open:rotate-90 transition-transform">›</span>
@@ -482,37 +494,37 @@ function OpportunityList({
             <form action={upsertOpportunityAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
               <input type="hidden" name="id" value={o.id} />
               <input name="name" defaultValue={o.name} className={input} />
-              <input name="client" defaultValue={o.client ?? ""} placeholder="客户" className={input} />
-              <input name="amount" defaultValue={o.amount ?? ""} placeholder="金额" className={input} />
-              <input name="stage" defaultValue={o.stage} placeholder="阶段" className={input} />
-              <input name="nextStep" defaultValue={o.nextStep ?? ""} placeholder="下一步" className={input} />
+              <input name="client" defaultValue={o.client ?? ""} placeholder="Client" className={input} />
+              <input name="amount" defaultValue={o.amount ?? ""} placeholder="Amount" className={input} />
+              <input name="stage" defaultValue={o.stage} placeholder="Stage" className={input} />
+              <input name="nextStep" defaultValue={o.nextStep ?? ""} placeholder="Next step" className={input} />
               <input name="followUpAt" type="date" defaultValue={o.followUpAt ? new Date(o.followUpAt).toISOString().slice(0, 10) : ""} className={input} />
               <select name="status" defaultValue={o.status} className={input}>
-                <option value="ACTIVE">进行中</option>
-                <option value="WON">已赢单</option>
-                <option value="LOST">已丢单</option>
-                <option value="PAUSED">暂停</option>
+                <option value="ACTIVE">Active</option>
+                <option value="WON">Won</option>
+                <option value="LOST">Lost</option>
+                <option value="PAUSED">Paused</option>
               </select>
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
-                <button formAction={deleteOpportunityAction.bind(null, partnerId, o.id)} className="text-xs text-zinc-400 hover:text-red-600">删除</button>
-                <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs">保存</button>
+                <button formAction={deleteOpportunityAction.bind(null, partnerId, o.id)} className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
+                <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs">Save</button>
               </div>
             </form>
           </div>
         </details>
       ))}
-      {opportunities.length === 0 && <EmptyState text="还没有商机。Stage 5+ 建议绑定至少 1 个 ACTIVE 商机。" />}
+      {opportunities.length === 0 && <EmptyState text="No opportunities yet. At Stage 5+, bind at least 1 ACTIVE opportunity." />}
       <details className="rounded-lg border border-dashed border-zinc-200">
-        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ 添加商机</summary>
+        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ Add opportunity</summary>
         <form action={upsertOpportunityAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-          <input name="name" required placeholder="商机名称 *" className={input} />
-          <input name="client" placeholder="客户" className={input} />
-          <input name="amount" placeholder="金额" className={input} />
-          <input name="stage" placeholder="阶段" className={input} />
-          <input name="nextStep" placeholder="下一步" className={input} />
+          <input name="name" required placeholder="Opportunity name *" className={input} />
+          <input name="client" placeholder="Client" className={input} />
+          <input name="amount" placeholder="Amount" className={input} />
+          <input name="stage" placeholder="Stage" className={input} />
+          <input name="nextStep" placeholder="Next step" className={input} />
           <input name="followUpAt" type="date" className={input} />
           <div className="col-span-2 md:col-span-3 flex justify-end">
-            <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">添加</button>
+            <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">Add</button>
           </div>
         </form>
       </details>
@@ -535,28 +547,28 @@ function TrainingList({
         <form key={t.id} action={upsertTrainingAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm items-center">
           <input type="hidden" name="id" value={t.id} />
           <input name="person" defaultValue={t.person} className={input} />
-          <input name="currentSkill" defaultValue={t.currentSkill ?? ""} placeholder="当前能力" className={input} />
-          <input name="targetCert" defaultValue={t.targetCert ?? ""} placeholder="目标认证" className={input} />
+          <input name="currentSkill" defaultValue={t.currentSkill ?? ""} placeholder="Current skill" className={input} />
+          <input name="targetCert" defaultValue={t.targetCert ?? ""} placeholder="Target certification" className={input} />
           <input name="deadline" type="date" defaultValue={t.deadline ? new Date(t.deadline).toISOString().slice(0, 10) : ""} className={input} />
           <select name="status" defaultValue={t.status} className={input}>
-            <option value="PLANNED">待安排</option>
-            <option value="IN_PROGRESS">进行中</option>
-            <option value="DONE">已完成</option>
+            <option value="PLANNED">Planned</option>
+            <option value="IN_PROGRESS">In progress</option>
+            <option value="DONE">Completed</option>
           </select>
           <div className="flex gap-1 justify-end">
-            <button className="rounded-md bg-zinc-900 text-white px-2.5 py-1.5 text-xs">存</button>
-            <button formAction={deleteTrainingAction.bind(null, partnerId, t.id)} className="text-xs text-zinc-400 hover:text-red-600 px-1">删</button>
+            <button className="rounded-md bg-zinc-900 text-white px-2.5 py-1.5 text-xs">Save</button>
+            <button formAction={deleteTrainingAction.bind(null, partnerId, t.id)} className="text-xs text-zinc-400 hover:text-red-600 px-1">Del</button>
           </div>
         </form>
       ))}
       <details className="rounded-lg border border-dashed border-zinc-200">
-        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ 添加培训计划</summary>
+        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ Add training plan</summary>
         <form action={upsertTrainingAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
-          <input name="person" required placeholder="人员 *" className={input} />
-          <input name="currentSkill" placeholder="当前能力" className={input} />
-          <input name="targetCert" placeholder="目标认证" className={input} />
+          <input name="person" required placeholder="Person *" className={input} />
+          <input name="currentSkill" placeholder="Current skill" className={input} />
+          <input name="targetCert" placeholder="Target certification" className={input} />
           <input name="deadline" type="date" className={input} />
-          <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">添加</button>
+          <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">Add</button>
         </form>
       </details>
     </div>
@@ -596,7 +608,7 @@ function TimelineList({
           </div>
         </div>
       ))}
-      {events.length === 0 && <EmptyState text="暂无动态" />}
+      {events.length === 0 && <EmptyState text="No activity yet" />}
     </div>
   );
 }

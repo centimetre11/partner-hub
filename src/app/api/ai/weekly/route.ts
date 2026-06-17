@@ -9,7 +9,7 @@ import { staleDays } from "@/lib/completeness";
 
 export async function GET() {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const setting = await db.setting.findUnique({ where: { key: "weekly_report" } });
   return NextResponse.json(setting ? JSON.parse(setting.value) : null);
 }
@@ -32,27 +32,27 @@ async function generateWeekly(uid: string, emit?: Parameters<typeof streamTextCo
   const partnerLines = active
     .map((p) => {
       const opps = p.opportunities.filter((o) => o.status === "ACTIVE");
-      return `${p.name}：阶段${p.pipelineStage}(${stageName(p.pipelineStage)})，${opps.length}个商机，${staleDays(p)}天无动态`;
+      return `${p.name}: stage ${p.pipelineStage} (${stageName(p.pipelineStage)}), ${opps.length} opportunit${opps.length === 1 ? "y" : "ies"}, ${staleDays(p)} days without activity`;
     })
     .join("\n");
   const eventLines = recentEvents
-    .map((e) => `${new Date(e.createdAt).toLocaleDateString("zh-CN")} ${e.partner.name}：${e.title}`)
+    .map((e) => `${new Date(e.createdAt).toLocaleDateString("en-US")} ${e.partner.name}: ${e.title}`)
     .join("\n");
-  const overdueLines = overdue.map((t) => `${t.title}（${t.partner?.name ?? "-"}）`).join("\n");
+  const overdueLines = overdue.map((t) => `${t.title} (${t.partner?.name ?? "-"})`).join("\n");
 
   const content = await streamTextCompletion(
     [
       {
         role: "system",
         content:
-          "你是帆软中东伙伴业务的经营分析师。基于数据生成本周经营周报（中文），结构：1）整体进展（2-3句）；2）风险信号（停滞伙伴、逾期待办，点名道姓）；3）本周建议聚焦的3个伙伴及理由；4）下周关键动作（3-5条）。简洁直接，不要套话。",
+          "You are a business analyst for Fanruan Middle East partner operations. Based on the data, generate this week's business report (in English). Structure: 1) Overall progress (2-3 sentences); 2) Risk signals (stalled partners, overdue todos — name names); 3) Three partners to focus on this week and why; 4) Key actions for next week (3-5 items). Be concise and direct — no filler.",
       },
       {
         role: "user",
-        content: `候选池：${prospects} 家\n正式伙伴：${active.length} 家\n未完成待办：${openTodos} 项\n\n【正式伙伴状态】\n${partnerLines || "（无）"}\n\n【近7天动态】\n${eventLines || "（无）"}\n\n【逾期待办】\n${overdueLines || "（无）"}`,
+        content: `Prospect pool: ${prospects}\nActive partners: ${active.length}\nOpen todos: ${openTodos}\n\n[Active partner status]\n${partnerLines || "(none)"}\n\n[Last 7 days activity]\n${eventLines || "(none)"}\n\n[Overdue todos]\n${overdueLines || "(none)"}`,
       },
     ],
-    { feature: "AI 经营周报", userId: uid, emit }
+    { feature: "AI Weekly Report", userId: uid, emit }
   );
 
   const report = { content, generatedAt: new Date().toISOString() };
@@ -66,7 +66,7 @@ async function generateWeekly(uid: string, emit?: Parameters<typeof streamTextCo
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   let stream = false;
   try {
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     const result = await generateWeekly(uid);
     return NextResponse.json(result);
   } catch (e) {
-    const msg = e instanceof AIError ? e.message : "生成失败";
+    const msg = e instanceof AIError ? e.message : "Generation failed";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

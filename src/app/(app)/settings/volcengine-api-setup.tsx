@@ -28,7 +28,7 @@ const label = "text-xs font-medium text-zinc-500";
 
 function StateMessage({ state }: { state: AiApiActionState }) {
   if (state?.error) return <p className="text-xs text-red-600 whitespace-pre-wrap">{state.error}</p>;
-  if (state?.ok) return <p className="text-xs text-emerald-600 whitespace-pre-wrap">{state.message ?? "已保存"}</p>;
+  if (state?.ok) return <p className="text-xs text-emerald-600 whitespace-pre-wrap">{state.message ?? "Saved"}</p>;
   return null;
 }
 
@@ -50,7 +50,7 @@ export type VolcengineApiForClient = {
 };
 
 function fmtNum(value: number) {
-  return new Intl.NumberFormat("zh-CN").format(value);
+  return new Intl.NumberFormat("en-US").format(value);
 }
 
 function ParsePreview({ snippet }: { snippet: string }) {
@@ -60,7 +60,7 @@ function ParsePreview({ snippet }: { snippet: string }) {
   if (!parsed.ok) {
     return (
       <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
-        解析失败：{parsed.error}
+        Parse failed: {parsed.error}
       </div>
     );
   }
@@ -69,10 +69,10 @@ function ParsePreview({ snippet }: { snippet: string }) {
 
   return (
     <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
-      <div className="font-medium">已识别配置</div>
-      <div>Base URL：{parsed.data.baseUrl}</div>
-      <div>模型接入点：{parsed.data.model}</div>
-      {parsed.data.apiKey && <div>Key：已从片段读取（尾号 {parsed.data.apiKey.slice(-4)}）</div>}
+      <div className="font-medium">Recognized configuration</div>
+      <div>Base URL: {parsed.data.baseUrl}</div>
+      <div>Model endpoint: {parsed.data.model}</div>
+      {parsed.data.apiKey && <div>Key: read from snippet (tail {parsed.data.apiKey.slice(-4)})</div>}
       {summary.map((line) => (
         <div key={line}>{line}</div>
       ))}
@@ -92,7 +92,7 @@ function VolcengineTestButton({ configId }: { configId: string }) {
           disabled={pending}
           className="rounded-md border border-orange-200 px-2.5 py-1 text-xs text-orange-700 hover:bg-orange-50 disabled:opacity-50"
         >
-          {pending ? "测试中..." : "测试连通性"}
+          {pending ? "Testing..." : "Test connection"}
         </button>
       </div>
       <StateMessage state={state} />
@@ -115,41 +115,41 @@ function VolcengineConfigCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-zinc-900">{cfg.name}</span>
-            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700">火山引擎</span>
+            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700">Volcengine</span>
             {cfg.isDefault && (
-              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">默认</span>
+              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">Default</span>
             )}
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.enabled ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}
             >
-              {cfg.enabled ? "已启用" : "已停用"}
+              {cfg.enabled ? "Enabled" : "Disabled"}
             </span>
             {cfg.priority !== 0 && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">优先级 {cfg.priority}</span>
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Priority {cfg.priority}</span>
             )}
           </div>
           <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
             <div>
-              <dt className="text-zinc-400">接入点</dt>
+              <dt className="text-zinc-400">Endpoint</dt>
               <dd className="font-mono text-zinc-800 mt-0.5">{cfg.model}</dd>
             </div>
             <div>
               <dt className="text-zinc-400">API Key</dt>
-              <dd className="font-mono text-zinc-800 mt-0.5">尾号 {cfg.keyTail}</dd>
+              <dd className="font-mono text-zinc-800 mt-0.5">Tail {cfg.keyTail}</dd>
             </div>
             <div className="sm:col-span-2">
               <dt className="text-zinc-400">Base URL</dt>
               <dd className="font-mono text-zinc-800 mt-0.5 break-all">{cfg.baseUrl}</dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-zinc-400">每日 Token 上限</dt>
+              <dt className="text-zinc-400">Daily token limit</dt>
               {cfg.dailyTokenLimit ? (
                 <dd className={`font-mono mt-0.5 ${cfg.usedTodayTokens >= cfg.dailyTokenLimit ? "text-red-600" : "text-zinc-800"}`}>
-                  今日 {fmtNum(cfg.usedTodayTokens)} / {fmtNum(cfg.dailyTokenLimit)}
-                  {cfg.usedTodayTokens >= cfg.dailyTokenLimit ? "（已达上限，本日已切换到其他模型）" : ""}
+                  Today {fmtNum(cfg.usedTodayTokens)} / {fmtNum(cfg.dailyTokenLimit)}
+                  {cfg.usedTodayTokens >= cfg.dailyTokenLimit ? " (limit reached; switched to another model today)" : ""}
                 </dd>
               ) : (
-                <dd className="font-mono text-zinc-400 mt-0.5">不限</dd>
+                <dd className="font-mono text-zinc-400 mt-0.5">Unlimited</dd>
               )}
             </div>
           </dl>
@@ -163,7 +163,7 @@ function VolcengineConfigCard({
           <AiCapabilityBadges capabilities={cfg.capabilities} />
           {!cfg.keyValid && (
             <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              API Key 未正确保存（可能是占位符或格式无效）。请点击「编辑」，在密钥框重新粘贴火山方舟控制台里的完整 Key 后保存。
+              API Key was not saved correctly (possibly a placeholder or invalid format). Click &quot;Edit&quot;, paste the full key from the Volcengine Ark console into the key field, and save.
             </p>
           )}
         </div>
@@ -173,23 +173,23 @@ function VolcengineConfigCard({
             onClick={onEdit}
             className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-orange-300 hover:text-orange-700"
           >
-            编辑
+            Edit
           </button>
           {!cfg.isDefault && (
             <form action={setDefaultAiApiAction.bind(null, cfg.id)}>
               <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
-                设默认
+                Set default
               </button>
             </form>
           )}
           <form action={toggleAiApiAction.bind(null, cfg.id, !cfg.enabled)}>
             <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
-              {cfg.enabled ? "停用" : "启用"}
+              {cfg.enabled ? "Disable" : "Enable"}
             </button>
           </form>
           <form action={deleteAiApiAction.bind(null, cfg.id)}>
             <button className="rounded-md border border-red-100 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50">
-              删除
+              Delete
             </button>
           </form>
         </div>
@@ -219,13 +219,13 @@ function VolcengineEditForm({
   return (
     <div className="rounded-xl border border-orange-200 bg-orange-50/50 p-4 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-zinc-900">{existing ? "编辑火山引擎配置" : "添加火山引擎配置"}</div>
+        <div className="text-sm font-semibold text-zinc-900">{existing ? "Edit Volcengine configuration" : "Add Volcengine configuration"}</div>
         <button
           type="button"
           onClick={onCancel}
           className="text-xs text-zinc-500 hover:text-zinc-800"
         >
-          取消
+          Cancel
         </button>
       </div>
 
@@ -233,18 +233,18 @@ function VolcengineEditForm({
         {existing && <input type="hidden" name="id" value={existing.id} />}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1">
-            <span className={label}>配置名称</span>
+            <span className={label}>Configuration name</span>
             <input
               name="name"
               required
-              defaultValue={existing?.name ?? "火山方舟 Doubao"}
-              placeholder="火山方舟 Doubao"
+              defaultValue={existing?.name ?? "Volcengine Ark Doubao"}
+              placeholder="Volcengine Ark Doubao"
               className={textInput}
             />
           </label>
           <label className="space-y-1">
             <span className={label}>
-              ARK API Key{existing ? `（当前尾号 ${existing.keyTail}，留空不修改）` : "（必填）"}
+              ARK API Key{existing ? ` (current tail ${existing.keyTail}; leave blank to keep)` : " (required)"}
             </span>
             <input
               name="apiKey"
@@ -252,7 +252,7 @@ function VolcengineEditForm({
               required={!existing}
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder={existing ? "仅更换 Key 时填写" : "从火山方舟控制台 → API Key 管理 复制"}
+              placeholder={existing ? "Only fill in when replacing the key" : "Copy from Volcengine Ark console → API Key management"}
               className={textInput}
               autoComplete="off"
             />
@@ -260,7 +260,7 @@ function VolcengineEditForm({
         </div>
 
         <label className="space-y-1 block">
-          <span className={label}>curl 或 JSON 请求体</span>
+          <span className={label}>curl or JSON request body</span>
           <textarea
             name="snippet"
             required={!existing}
@@ -271,8 +271,8 @@ function VolcengineEditForm({
             className={`${monoInput} resize-y min-h-[220px]`}
           />
           <p className="text-[11px] text-zinc-500 leading-relaxed">
-            粘贴官方 curl 即可；<strong>密钥请填在上方输入框</strong>，curl 里的 <code className="bg-white px-1 rounded">$ARK_API_KEY</code> 只是示例占位符。
-            {existing ? " 若只改 Key，可不动下方内容。" : ""}
+            Paste the official curl; <strong>enter the key in the field above</strong>. The <code className="bg-white px-1 rounded">$ARK_API_KEY</code> in curl is only a placeholder.
+            {existing ? " To change only the key, you can leave the content below unchanged." : ""}
           </p>
         </label>
 
@@ -282,23 +282,23 @@ function VolcengineEditForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1 block">
-            <span className={label}>优先级（数字越大越先用，默认 0）</span>
+            <span className={label}>Priority (higher numbers are tried first; default 0)</span>
             <input
               name="priority"
               type="number"
               defaultValue={existing?.priority ?? 0}
-              placeholder="有免费额度的填更大值，先用完它"
+              placeholder="Use a higher value for free-tier quotas to use them first"
               className={textInput}
             />
           </label>
           <label className="space-y-1 block">
-            <span className={label}>每日 Token 上限（可选，留空 = 不限）</span>
+            <span className={label}>Daily token limit (optional; blank = unlimited)</span>
             <input
               name="dailyTokenLimit"
               type="number"
               min={0}
               defaultValue={existing?.dailyTokenLimit ?? ""}
-              placeholder="如 1000000；超过后自动切换"
+              placeholder="e.g. 1000000; auto-switch when exceeded"
               className={textInput}
             />
           </label>
@@ -307,11 +307,11 @@ function VolcengineEditForm({
         <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
           <label className="inline-flex items-center gap-1.5">
             <input name="enabled" type="checkbox" defaultChecked={existing?.enabled ?? true} className="rounded border-zinc-300" />
-            启用
+            Enabled
           </label>
           <label className="inline-flex items-center gap-1.5">
             <input name="isDefault" type="checkbox" defaultChecked={existing?.isDefault ?? !existing} className="rounded border-zinc-300" />
-            设为默认
+            Set as default
           </label>
         </div>
 
@@ -323,7 +323,7 @@ function VolcengineEditForm({
             disabled={pending}
             className="rounded-lg bg-orange-600 text-white px-4 py-2 text-sm hover:bg-orange-500 disabled:opacity-50"
           >
-            {pending ? "保存中..." : submitText}
+            {pending ? "Saving..." : submitText}
           </button>
         </div>
       </form>
@@ -338,10 +338,10 @@ function VolcengineEditForm({
             disabled={testing}
             className="rounded-lg border border-orange-300 bg-white px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 disabled:opacity-50"
           >
-            {testing ? "测试中..." : "测试当前表单（保存前）"}
+            {testing ? "Testing..." : "Test current form (before save)"}
           </button>
           <p className="text-xs text-zinc-500 flex-1 min-w-[200px]">
-            优先使用上方新填的 Key，否则读数据库；保存后请用卡片上的「测试连通性」。
+            Uses the new key above if provided; otherwise reads from the database. After saving, use &quot;Test connection&quot; on the card.
           </p>
           <div className="w-full">
             <StateMessage state={testState} />
@@ -360,12 +360,12 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-orange-600 text-white flex items-center justify-center text-sm font-bold shrink-0">
-            火
+            V
           </div>
           <div>
-            <div className="text-sm font-semibold text-zinc-900">火山引擎</div>
+            <div className="text-sm font-semibold text-zinc-900">Volcengine</div>
             <div className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-2xl">
-              Responses API + 内置联网搜索。配置列表与编辑表单分开：平时只看状态，需要改 Key 或 curl 时再点「编辑」。
+              Responses API with built-in web search. Configuration list and edit form are separate: view status normally, click &quot;Edit&quot; when you need to change the key or curl.
             </div>
           </div>
         </div>
@@ -375,18 +375,18 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
             onClick={() => setPanel("add")}
             className="rounded-lg bg-orange-600 text-white px-3 py-1.5 text-xs hover:bg-orange-500 shrink-0"
           >
-            + 添加配置
+            + Add configuration
           </button>
         )}
       </div>
 
       {panel === "add" && (
-        <VolcengineEditForm onCancel={() => setPanel("list")} submitText="保存火山引擎配置" />
+        <VolcengineEditForm onCancel={() => setPanel("list")} submitText="Save Volcengine configuration" />
       )}
 
       {panel !== "add" && configs.length === 0 && (
         <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-6 text-center text-sm text-zinc-500">
-          尚未配置火山引擎。点击右上角「添加配置」，填入 API Key 并粘贴 curl 即可。
+          Volcengine is not configured yet. Click &quot;Add configuration&quot; in the top right, enter your API key, and paste the curl.
         </div>
       )}
 
@@ -396,7 +396,7 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
             <VolcengineEditForm
               existing={cfg}
               onCancel={() => setPanel("list")}
-              submitText="保存修改"
+              submitText="Save changes"
             />
           ) : (
             <VolcengineConfigCard cfg={cfg} onEdit={() => setPanel(cfg.id)} />

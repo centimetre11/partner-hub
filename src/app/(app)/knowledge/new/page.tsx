@@ -11,11 +11,11 @@ export default async function NewKnowledgePage() {
 
   return (
     <div className="pb-16">
-      <PageHeader title="新建知识库文章" />
+      <PageHeader title="New knowledge article" />
       <form action={upsertKnowledgeAction} className="px-8 max-w-4xl space-y-4">
         <div className="bg-white rounded-xl border p-5 space-y-3">
-          <input name="title" required placeholder="标题 *" className={input} />
-          <input name="slug" placeholder="URL 别名（可选）" className={input} />
+          <input name="title" required placeholder="Title *" className={input} />
+          <input name="slug" placeholder="URL slug (optional)" className={input} />
           <select name="category" className={input}>
             {Object.entries(KNOWLEDGE_CATEGORY_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -23,11 +23,11 @@ export default async function NewKnowledgePage() {
           </select>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="shared" defaultChecked className="rounded" />
-            团队共享（Agent 可检索）
+            Team shared (searchable by Agents)
           </label>
           <RichEditor />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">发布</button>
+        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">Publish</button>
       </form>
     </div>
   );

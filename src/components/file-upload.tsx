@@ -35,7 +35,7 @@ export function FileUploadField({
       fd.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "上传失败");
+      if (!res.ok) throw new Error(data.error ?? "Upload failed");
       setAssetId(data.asset.id);
       setFilename(data.asset.filename);
       setLink(null);
@@ -58,7 +58,7 @@ export function FileUploadField({
         body: JSON.stringify({ url }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "解析失败");
+      if (!res.ok) throw new Error(data.error ?? "Parse failed");
       setAssetId(data.asset.id);
       setFilename(data.asset.filename);
       setLink({ url: data.asset.url, thumbnailUrl: data.asset.thumbnailUrl, provider: data.asset.provider });
@@ -81,14 +81,14 @@ export function FileUploadField({
           onClick={() => { setMode("file"); setError(null); }}
           className={`${tabBase} ${mode === "file" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"}`}
         >
-          上传文件
+          Upload file
         </button>
         <button
           type="button"
           onClick={() => { setMode("link"); setError(null); }}
           className={`${tabBase} ${mode === "link" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"}`}
         >
-          贴云盘链接
+          Paste cloud link
         </button>
       </div>
 
@@ -99,7 +99,7 @@ export function FileUploadField({
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="粘贴云盘 / 文档分享链接"
+            placeholder="Paste cloud / document share link"
             className="flex-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <button
@@ -108,12 +108,12 @@ export function FileUploadField({
             disabled={loading || !url.trim()}
             className="rounded-lg bg-zinc-900 text-white px-3 py-1.5 text-xs disabled:opacity-40"
           >
-            解析
+            Parse
           </button>
         </div>
       )}
 
-      {loading && <span className="text-xs text-zinc-400">{mode === "file" ? "上传中…" : "解析中…"}</span>}
+      {loading && <span className="text-xs text-zinc-400">{mode === "file" ? "Uploading…" : "Parsing…"}</span>}
       {error && <span className="block text-xs text-red-500">{error}</span>}
 
       {assetId && link && (
@@ -130,13 +130,13 @@ export function FileUploadField({
               {link.url}
             </a>
           </div>
-          <button type="button" onClick={reset} className="text-xs text-zinc-400 hover:text-red-600">清除</button>
+          <button type="button" onClick={reset} className="text-xs text-zinc-400 hover:text-red-600">Clear</button>
         </div>
       )}
       {assetId && !link && filename && (
         <span className="flex items-center gap-2 text-xs text-emerald-600">
-          已上传：{filename}
-          <button type="button" onClick={reset} className="text-zinc-400 hover:text-red-600">清除</button>
+          Uploaded: {filename}
+          <button type="button" onClick={reset} className="text-zinc-400 hover:text-red-600">Clear</button>
         </span>
       )}
     </div>

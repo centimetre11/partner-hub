@@ -43,7 +43,7 @@ function ToolStepRow({ step, active }: { step: Extract<AiTraceStep, { type: "too
               )}
             </div>
           ) : running ? (
-            <div className="text-xs text-zinc-400 animate-pulse">执行中…</div>
+            <div className="text-xs text-zinc-400 animate-pulse">Running…</div>
           ) : null}
           {step.error && <div className="text-xs text-red-600 mt-1">{step.error}</div>}
         </div>
@@ -63,7 +63,7 @@ function ReasoningRow({ step }: { step: Extract<AiTraceStep, { type: "reasoning"
     >
       <div className="flex items-center gap-2 px-3 py-2">
         <StatusIcon status={step.status} />
-        <span className="text-xs font-medium text-violet-800 shrink-0">思考</span>
+        <span className="text-xs font-medium text-violet-800 shrink-0">Thinking</span>
       </div>
       <div className="px-3 pb-2.5 text-xs text-violet-900/80 whitespace-pre-wrap leading-relaxed border-t border-violet-100/80 pt-2">
         {step.content}
@@ -74,9 +74,9 @@ function ReasoningRow({ step }: { step: Extract<AiTraceStep, { type: "reasoning"
 }
 
 const PHASE_LABELS: Record<string, string> = {
-  research: "调研中",
-  extract: "整理提案",
-  reply: "生成回复",
+  research: "Researching",
+  extract: "Building proposal",
+  reply: "Generating reply",
   idle: "",
 };
 
@@ -93,7 +93,7 @@ export function AiProcessTrace({
   phase?: string;
   phaseLabel?: string;
   className?: string;
-  /** 完成后是否默认收拢为一行摘要 */
+  /** Whether to collapse into a one-line summary when complete */
   defaultCollapsed?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
@@ -123,14 +123,14 @@ export function AiProcessTrace({
       <div className="flex items-center justify-between mb-2 gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-[11px] font-medium text-zinc-500 shrink-0">
-            {loading || running ? "处理中" : "处理过程"}
-            {toolCount > 0 && ` · ${toolCount} 步`}
-            {doneCount > 0 && (loading || running) && `（已完成 ${doneCount}）`}
+            {loading || running ? "Processing" : "Process trace"}
+            {toolCount > 0 && ` · ${toolCount} step${toolCount === 1 ? "" : "s"}`}
+            {doneCount > 0 && (loading || running) && ` (${doneCount} done)`}
           </span>
           {(loading || running) && (
             <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600">
               <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-              AI 继续中
+              AI working
             </span>
           )}
           {phaseText && (
@@ -151,13 +151,13 @@ export function AiProcessTrace({
         {loading && steps.length === 0 && (
           <div className="flex items-center gap-2 text-xs text-zinc-400 px-1">
             <span className="inline-block w-3 h-3 border-2 border-zinc-200 border-t-indigo-500 rounded-full animate-spin" />
-            正在思考…
+            Thinking…
           </div>
         )}
         {waiting && steps.length > 0 && (
           <div className="flex items-center gap-2 text-xs text-indigo-500/80 px-2 py-1.5 rounded-lg bg-indigo-50/60 border border-indigo-100/80">
             <span className="inline-block w-3 h-3 border-2 border-indigo-200 border-t-indigo-500 rounded-full animate-spin" />
-            {phaseText ? `${phaseText}…` : "等待下一步…"}
+            {phaseText ? `${phaseText}…` : "Waiting for next step…"}
           </div>
         )}
         <div ref={endRef} />

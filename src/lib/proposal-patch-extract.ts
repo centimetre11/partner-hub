@@ -15,7 +15,7 @@ const PATCH_TOOLS = new Set([
   "search_partners",
 ]);
 
-/** 工具返回里表示「没查到 / 未配置 / 出错」的无意义文本，绝不能当公司名或摘要 */
+/** Tool returns meaning "not found / not configured / error" — must not become company name or summary */
 const NO_RESULT_RE =
   /(未找到|没有找到|无结果|未查到|查不到|无相关|未配置|未授权|无权限|没有权限|失败|错误|超时|not\s*found|no\s*result|no\s*results|not\s*configured|unauthorized|error|failed|empty)/i;
 
@@ -28,7 +28,7 @@ function isMeaningless(text: string | undefined): boolean {
 
 function heuristicPatch(toolName: string, result: string): ProposalPatchOp[] {
   const ops: ProposalPatchOp[] = [];
-  // 整段返回若是「未找到」类提示，直接放弃，不产生任何 patch
+  // If entire return is a "not found" style message, skip — no patches
   if (isMeaningless(result) && result.trim().length < 120) return ops;
 
   const lines = result.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -62,7 +62,7 @@ function heuristicPatch(toolName: string, result: string): ProposalPatchOp[] {
         label: PARTNER_FIELD_LABELS[field as keyof typeof PARTNER_FIELD_LABELS],
         newValue: value,
         source: toolName,
-        reason: `${toolName} 提取`,
+        reason: `extracted from ${toolName}`,
       });
     }
   }
@@ -74,7 +74,7 @@ function heuristicPatch(toolName: string, result: string): ProposalPatchOp[] {
       ops.push({
         op: "upsert_contact",
         key: contactKey(person),
-        contact: { action: "add", name: person, reason: `${toolName} 提取` },
+        contact: { action: "add", name: person, reason: `extracted from ${toolName}` },
       });
     }
   }
@@ -91,31 +91,31 @@ export async function extractPatchFromTool(
   const name = toolName === "$web_search" ? "web_search" : toolName;
   if (!PATCH_TOOLS.has(name) && !PATCH_TOOLS.has(toolName)) return [];
   if (!result.trim()) return [];
-  // 「未找到 / 未配置」类短返回直接跳过，避免浪费 LLM 调用并产生噪声 patch
+  // Skip short "not found / not configured" returns to avoid wasted LLM calls and noise patches
   if (isMeaningless(result) && result.trim().length < 120) return [];
 
   const snippet = result.slice(0, 3500);
   const fieldList = Object.entries(PARTNER_FIELD_LABELS)
     .map(([f, l]) => `${f}=${l}`)
-    .join("、");
+    .join(", ");
 
   try {
     const { content } = await chatCompletion(
       [
         {
           role: "system",
-          content: `从工具返回中提取可入库的结构化片段。任务范围：${scope}。只输出 JSON：
+          content: `Extract structured fragments from tool output for database intake. Task scope: ${scope}. Output JSON only:
 { "ops": [
-  { "op":"set_partner","name":"公司名","source":"工具名" },
-  { "op":"set_summary","summary":"一句话" },
-  { "op":"upsert_field","key":"field:country","field":"country","label":"国家","newValue":"阿联酋","reason":"依据" },
-  { "op":"upsert_contact","key":"contact:姓名","contact":{"action":"add","name":"姓名","title":"职位","reason":"依据"} }
+  { "op":"set_partner","name":"Company name","source":"tool name" },
+  { "op":"set_summary","summary":"One sentence" },
+  { "op":"upsert_field","key":"field:country","field":"country","label":"Country","newValue":"UAE","reason":"evidence" },
+  { "op":"upsert_contact","key":"contact:Name","contact":{"action":"add","name":"Name","title":"Title","reason":"evidence"} }
 ]}
-字段名只能用：${fieldList}。没有可提取内容则 ops 为空数组。不要编造。`,
+Field codes only: ${fieldList}. Empty ops if nothing extractable. Do not fabricate. Reply in English for reason/summary text.`,
         },
-        { role: "user", content: `工具：${name}\n返回：\n${snippet}` },
+        { role: "user", content: `Tool: ${name}\nOutput:\n${snippet}` },
       ],
-      { jsonMode: true, temperature: 0, feature: `增量抽取·${name}`, userId }
+      { jsonMode: true, temperature: 0, feature: `Incremental extract·${name}`, userId }
     );
     const parsed = parseJsonLoose<{ ops?: ProposalPatchOp[] }>(content ?? "");
     if (Array.isArray(parsed.ops) && parsed.ops.length) return parsed.ops;

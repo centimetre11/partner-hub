@@ -16,34 +16,34 @@ export default async function FrameworkPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="伙伴经营框架"
-        desc="定位 → 打法 → 动作 → 落地。Stage 决定做什么，Tier 决定做多狠，类型与价值模式决定怎么做。"
+        title="Partner operating framework"
+        desc="Positioning → Playbook → Actions → Execution. Stage defines what to do; Tier defines intensity; type and value pattern define how."
       />
 
       <div className="px-8 space-y-6">
         <PartnerFrameworkMap
           nodes={refMap}
-          title="整体地图"
-          subtitle="所有伙伴共用同一套框架；打开任意伙伴详情页可看到该伙伴的实例地图（当前值 + 就绪状态）。"
+          title="Full map"
+          subtitle="All partners share the same framework; open any partner detail page to see their instance map (current values + readiness)."
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card title="三层定位 + 打法">
+          <Card title="Positioning + Playbook layers">
             <dl className="space-y-3 text-sm">
               <div>
-                <dt className="text-xs font-semibold text-indigo-700">定位层</dt>
+                <dt className="text-xs font-semibold text-indigo-700">Positioning</dt>
                 <dd className="text-zinc-600 mt-1">
-                  <strong>Tier</strong> 投入强度 · <strong>Stage</strong> 关系进展 · <strong>伙伴类型</strong> 动作分支 · <strong>竞品基因</strong> 出身背景
+                  <strong>Tier</strong> investment intensity · <strong>Stage</strong> relationship progress · <strong>Partner type</strong> action branch · <strong>Competitive DNA</strong> background
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-indigo-700">打法层</dt>
+                <dt className="text-xs font-semibold text-indigo-700">Playbook</dt>
                 <dd className="text-zinc-600 mt-1">
-                  <strong>联合价值模式</strong> 一起卖什么 · <strong>价值三行</strong> 伙伴/帆软/客户 · playbook + pitch
+                  <strong>Joint value pattern</strong> what we sell together · <strong>Value trio</strong> partner/FanRuan/customer · playbook + pitch
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-semibold text-indigo-700">动作层（四域）</dt>
+                <dt className="text-xs font-semibold text-indigo-700">Actions (four domains)</dt>
                 <dd className="text-zinc-600 mt-1">
                   {Object.values(ACTION_DOMAIN_LABELS).join(" · ")}
                 </dd>
@@ -51,7 +51,7 @@ export default async function FrameworkPage() {
             </dl>
           </Card>
 
-          <Card title="伙伴类型 → 动作分支">
+          <Card title="Partner type → action branch">
             <ul className="space-y-2 text-sm">
               {Object.entries(PARTNER_ARCHETYPE_LABELS).map(([k, v]) => (
                 <li key={k} className="flex gap-2">
@@ -61,12 +61,12 @@ export default async function FrameworkPage() {
               ))}
             </ul>
             <p className="text-xs text-zinc-400 mt-3">
-              纯渠道 / 空壳 → 动作是停止推进；泛集成 → 先确认 dedicated data team。
+              Pure channel / shell → stop advancing; general integrator → confirm dedicated data team first.
             </p>
           </Card>
         </div>
 
-        <Card title="联合价值模式">
+        <Card title="Joint value patterns">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.entries(VALUE_PATTERN_LABELS).map(([k, v]) => (
               <div key={k} className="rounded-lg border border-zinc-100 px-3 py-2 text-sm">
@@ -76,11 +76,11 @@ export default async function FrameworkPage() {
             ))}
           </div>
           <p className="text-xs text-zinc-500 mt-4">
-            Stage 3 初步判断 · Stage 4 定模式并 Demo · Stage 5 建 Solution 实例 · Stage 8 首单验证模式是否成立
+            Stage 3 initial assessment · Stage 4 set pattern and demo · Stage 5 build solution instance · Stage 8 first deal validates pattern
           </p>
         </Card>
 
-        <Card title="Pipeline 十阶段 · 各阶段焦点">
+        <Card title="Pipeline ten stages · focus per stage">
           <div className="space-y-2">
             {PIPELINE_STAGES.map((s) => (
               <div key={s.stage} className="flex gap-3 text-sm py-2 border-b border-zinc-50 last:border-0">
@@ -96,7 +96,7 @@ export default async function FrameworkPage() {
           </div>
         </Card>
 
-        <Card title="Tier 强度表（只改频率与资源，不改 Stage）">
+        <Card title="Tier intensity (frequency and resources only — does not change Stage)">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -109,11 +109,11 @@ export default async function FrameworkPage() {
               </thead>
               <tbody className="text-zinc-700">
                 {[
-                  ["接触频率", "≤7 天", "≤14 天", "≤30 天"],
-                  ["会议深度", "尽量见 D", "见 champion", "异步为主"],
-                  ["POC/驻场", "可申请驻场", "标准支持", "材料自助"],
-                  ["认证目标", "高（L3+）", "中（L2+）", "低（L2）"],
-                  ["停滞预警", "14 天", "21 天", "30 天"],
+                  ["Touch frequency", "≤7 days", "≤14 days", "≤30 days"],
+                  ["Meeting depth", "Meet decision maker", "Meet champion", "Async-first"],
+                  ["POC / onsite", "Onsite available", "Standard support", "Self-serve materials"],
+                  ["Certification target", "High (L3+)", "Medium (L2+)", "Low (L2)"],
+                  ["Stall alert", "14 days", "21 days", "30 days"],
                 ].map(([label, a, b, c]) => (
                   <tr key={label} className="border-b border-zinc-50">
                     <td className="py-2 pr-4 text-zinc-500">{label}</td>

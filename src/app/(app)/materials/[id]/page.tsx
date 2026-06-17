@@ -17,7 +17,7 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="pb-16">
-      <PageHeader title="编辑物料" />
+      <PageHeader title="Edit material" />
       <form action={upsertMaterialAction} className="px-8 max-w-4xl space-y-4">
         <input type="hidden" name="id" value={m.id} />
         <div className="bg-white rounded-xl border p-5 space-y-3">
@@ -30,18 +30,18 @@ export default async function MaterialDetailPage({ params }: { params: Promise<{
           </select>
           {m.asset && (
             <div className="space-y-1">
-              <p className="text-xs text-zinc-500">当前附件（重新上传或贴链接可替换）：</p>
+              <p className="text-xs text-zinc-500">Current attachment (upload or paste a link to replace):</p>
               <AssetCard asset={m.asset} />
             </div>
           )}
           <FileUploadField name="assetId" />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="shared" defaultChecked={m.shared} className="rounded" />
-            团队共享
+            Team shared
           </label>
           <RichEditor name="body" defaultValue={m.body ?? ""} />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">保存</button>
+        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">Save</button>
       </form>
     </div>
   );

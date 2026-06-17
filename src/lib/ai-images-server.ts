@@ -19,7 +19,7 @@ export function validateChatImagesForAi(images: ChatImage[]): void {
     const bytes = estimateDataUrlBytes(img.url);
     if (bytes > AI_IMAGE_MAX_DATA_URL_BYTES) {
       throw new AIError(
-        `图片过大（约 ${Math.round(bytes / 1024)}KB，上限 ${Math.round(AI_IMAGE_MAX_DATA_URL_BYTES / 1024)}KB）。请刷新页面后重新粘贴/上传，系统会自动压缩。`,
+        `Image too large (~${Math.round(bytes / 1024)}KB, limit ${Math.round(AI_IMAGE_MAX_DATA_URL_BYTES / 1024)}KB). Refresh the page and re-upload — the system will compress automatically.`,
       );
     }
   }

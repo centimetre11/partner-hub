@@ -149,7 +149,7 @@ export function mergeProposalPatch(
   return { draft: next, changes };
 }
 
-/** 最终 proposal_update 与草稿合并（保留用户 excluded，以最终提案为准校准） */
+/** Merge final proposal_update with draft (respect user excluded; calibrate to final proposal) */
 export function mergeFinalProposal(
   draft: IntakeProposal | null,
   final: IntakeProposal,
@@ -197,7 +197,7 @@ export type NormalizedRow = {
 export function proposalToRows(p: IntakeProposal): NormalizedRow[] {
   const rows: NormalizedRow[] = [];
   if (p.partnerName) {
-    rows.push({ key: "partner", tone: "partner", label: "新建伙伴", newValue: p.partnerName });
+    rows.push({ key: "partner", tone: "partner", label: "New partner", newValue: p.partnerName });
   }
   p.fields.forEach((f, i) => {
     rows.push({
@@ -213,7 +213,7 @@ export function proposalToRows(p: IntakeProposal): NormalizedRow[] {
     rows.push({
       key: contactKey(c.name) || `c${i}`,
       tone: "contact",
-      label: `${c.action === "update" ? "更新人物" : "人物"}：${c.name}`,
+      label: `${c.action === "update" ? "Update contact" : "Contact"}: ${c.name}`,
       detail: [c.title, c.role, c.reportsToName].filter(Boolean).join(" · "),
       reason: c.reason,
     });
@@ -222,7 +222,7 @@ export function proposalToRows(p: IntakeProposal): NormalizedRow[] {
     rows.push({
       key: oppKey(o.name) || `o${i}`,
       tone: "opp",
-      label: `${o.action === "update" ? "更新商机" : "商机"}：${o.name}`,
+      label: `${o.action === "update" ? "Update opportunity" : "Opportunity"}: ${o.name}`,
       detail: [o.client, o.amount, o.stage].filter(Boolean).join(" · "),
       reason: o.reason,
     });
@@ -231,7 +231,7 @@ export function proposalToRows(p: IntakeProposal): NormalizedRow[] {
     rows.push({
       key: todoKey(t.title) || `t${i}`,
       tone: "todo",
-      label: `待办：${t.title}`,
+      label: `Todo: ${t.title}`,
       detail: [t.dueDate, t.priority].filter(Boolean).join(" · "),
     });
   });

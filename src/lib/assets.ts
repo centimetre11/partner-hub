@@ -27,10 +27,10 @@ export function isAllowedFile(filename: string, mimeType: string) {
 
 export async function saveUploadedFile(file: File, userId: string | null) {
   if (!isAllowedFile(file.name, file.type || "")) {
-    throw new Error("不支持的文件类型");
+    throw new Error("Unsupported file type");
   }
   if (file.size > maxUploadBytes()) {
-    throw new Error(`文件超过 ${process.env.MAX_UPLOAD_MB || 20}MB 限制`);
+    throw new Error(`File exceeds ${process.env.MAX_UPLOAD_MB || 20}MB limit`);
   }
   const dir = uploadDir();
   await mkdir(dir, { recursive: true });
@@ -52,7 +52,7 @@ export async function saveUploadedFile(file: File, userId: string | null) {
 
 export async function saveLinkAsset(rawUrl: string, userId: string | null) {
   const url = rawUrl.trim();
-  if (!url) throw new Error("链接不能为空");
+  if (!url) throw new Error("URL cannot be empty");
   const preview = await fetchLinkPreview(url);
   return db.asset.create({
     data: {
@@ -71,7 +71,7 @@ export async function saveLinkAsset(rawUrl: string, userId: string | null) {
 export async function readAssetFile(assetId: string) {
   const asset = await db.asset.findUniqueOrThrow({ where: { id: assetId } });
   if (asset.kind === "LINK" || !asset.storageKey) {
-    throw new Error("LINK 类型无本地文件");
+    throw new Error("LINK assets have no local file");
   }
   const data = await readFile(path.join(uploadDir(), asset.storageKey));
   return { asset, data };

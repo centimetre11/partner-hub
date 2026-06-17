@@ -9,32 +9,32 @@ type Group = { id: string; label: string; icon: string; children: Leaf[] };
 type Entry = Leaf | Group;
 
 const nav: Entry[] = [
-  { href: "/", label: "工作台", icon: "◧" },
-  { href: "/partners", label: "正式伙伴", icon: "◮" },
+  { href: "/", label: "Dashboard", icon: "◧" },
+  { href: "/partners", label: "Active Partners", icon: "◮" },
   {
     id: "resources",
-    label: "资源中心",
+    label: "Resources",
     icon: "▦",
     children: [
-      { href: "/framework", label: "经营框架", icon: "◎" },
-      { href: "/taxonomy", label: "维度库", icon: "◇" },
-      { href: "/playbook-library", label: "打法库", icon: "◈" },
-      { href: "/pool", label: "伙伴库", icon: "◬" },
-      { href: "/documents", label: "报告中心", icon: "📄" },
-      { href: "/materials", label: "物料中心", icon: "📦" },
+      { href: "/framework", label: "Operating Framework", icon: "◎" },
+      { href: "/taxonomy", label: "Taxonomy", icon: "◇" },
+      { href: "/playbook-library", label: "Playbook Library", icon: "◈" },
+      { href: "/pool", label: "Partner Pool", icon: "◬" },
+      { href: "/documents", label: "Reports", icon: "📄" },
+      { href: "/materials", label: "Materials", icon: "📦" },
     ],
   },
   {
     id: "work",
-    label: "工作中心",
+    label: "Work",
     icon: "◳",
     children: [
-      { href: "/todos", label: "待办事项", icon: "☑" },
-      { href: "/inbox", label: "收件箱", icon: "✉", badge: "unread" },
+      { href: "/todos", label: "Todos", icon: "☑" },
+      { href: "/inbox", label: "Inbox", icon: "✉", badge: "unread" },
     ],
   },
-  { href: "/ai", label: "AI 中心", icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge"] },
-  { href: "/settings", label: "团队设置", icon: "⚙" },
+  { href: "/ai", label: "AI Hub", icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge"] },
+  { href: "/settings", label: "Team Settings", icon: "⚙" },
 ];
 
 function isGroup(e: Entry): e is Group {

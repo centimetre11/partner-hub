@@ -15,33 +15,33 @@ async function generateSummary(partnerId: string, uid: string, emit?: Parameters
       todos: { where: { status: "OPEN" } },
     },
   });
-  if (!partner) throw new AIError("伙伴不存在");
+  if (!partner) throw new AIError("Partner not found");
 
   const timeline = partner.events
-    .map((e) => `${new Date(e.createdAt).toLocaleDateString("zh-CN")} [${EVENT_TYPE_LABELS[e.type] ?? e.type}] ${e.title}${e.content ? `：${e.content.slice(0, 300)}` : ""}`)
+    .map((e) => `${new Date(e.createdAt).toLocaleDateString("en-US")} [${EVENT_TYPE_LABELS[e.type] ?? e.type}] ${e.title}${e.content ? `: ${e.content.slice(0, 300)}` : ""}`)
     .join("\n");
-  const opps = partner.opportunities.map((o) => `${o.name}（${o.stage}，${o.amount ?? "金额未知"}，${o.status}）`).join("；");
+  const opps = partner.opportunities.map((o) => `${o.name} (${o.stage}, ${o.amount ?? "amount unknown"}, ${o.status})`).join("; ");
 
   const summary = await streamTextCompletion(
     [
       {
         role: "system",
         content:
-          "你是帆软中东伙伴管理系统的分析师。基于伙伴的动态时间线生成简明摘要（中文），包含三部分：1）近期发生了什么（2-4句）；2）风险信号（如有）；3）建议动作（1-3条，具体可执行）。直接输出文本，不要用 markdown 标题。",
+          "You are an analyst for the Fanruan Middle East Partner Management System. Based on the partner's activity timeline, generate a concise summary (in English) with three parts: 1) What happened recently (2-4 sentences); 2) Risk signals (if any); 3) Recommended actions (1-3 specific, executable items). Output plain text — no markdown headings.",
       },
       {
         role: "user",
-        content: `伙伴：${partner.name}（Pipeline 阶段 ${partner.pipelineStage}/10）\n商机：${opps || "无"}\n未完成待办：${partner.todos.length} 项\n\n【动态时间线（新→旧）】\n${timeline || "（无动态）"}`,
+        content: `Partner: ${partner.name} (Pipeline stage ${partner.pipelineStage}/10)\nOpportunities: ${opps || "none"}\nOpen todos: ${partner.todos.length}\n\n[Activity timeline (newest first)]\n${timeline || "(no activity)"}`,
       },
     ],
-    { feature: "伙伴动态摘要", userId: uid, emit }
+    { feature: "Partner Activity Summary", userId: uid, emit }
   );
 
   await db.timelineEvent.create({
     data: {
       partnerId,
       type: "AI_SUMMARY",
-      title: "AI 动态摘要",
+      title: "AI Activity Summary",
       content: summary,
       createdById: uid,
     },
@@ -51,9 +51,9 @@ async function generateSummary(partnerId: string, uid: string, emit?: Parameters
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const { partnerId, stream } = await req.json();
-  if (!partnerId) return NextResponse.json({ error: "缺少 partnerId" }, { status: 400 });
+  if (!partnerId) return NextResponse.json({ error: "Missing partnerId" }, { status: 400 });
 
   try {
     if (stream) {
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     const result = await generateSummary(partnerId, uid);
     return NextResponse.json(result);
   } catch (e) {
-    const msg = e instanceof AIError ? e.message : "生成失败，请稍后重试";
+    const msg = e instanceof AIError ? e.message : "Generation failed — please try again later";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

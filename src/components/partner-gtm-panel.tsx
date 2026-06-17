@@ -125,7 +125,7 @@ export function PartnerGtmPanel({
             }}
             className="text-xs rounded-lg border border-zinc-200 px-3 py-1.5 text-zinc-600 hover:bg-zinc-50"
           >
-            从库参考
+            Browse library
           </button>
           <button
             type="button"
@@ -136,7 +136,7 @@ export function PartnerGtmPanel({
             }}
             className="text-xs rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-indigo-700 hover:bg-indigo-100"
           >
-            存入库
+            Save to library
           </button>
           <button
             type="button"
@@ -144,48 +144,48 @@ export function PartnerGtmPanel({
             disabled={pending}
             className="text-xs rounded-lg bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {saved ? "已保存" : pending ? "保存中…" : "保存到伙伴"}
+            {saved ? "Saved" : pending ? "Saving…" : "Save to partner"}
           </button>
         </div>
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-zinc-500">playbook · 怎么打</span>
+          <span className="text-xs font-medium text-zinc-500">playbook · how to win</span>
           <textarea
             value={playbook}
             onChange={(e) => setPlaybook(e.target.value)}
             rows={10}
-            placeholder="步骤、渠道、联合策略…"
+            placeholder="Steps, channels, joint strategy…"
             className={input}
           />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-zinc-500">pitch · 30 秒话术</span>
+          <span className="text-xs font-medium text-zinc-500">pitch · 30-second script</span>
           <textarea
             value={pitch}
             onChange={(e) => setPitch(e.target.value)}
             rows={10}
-            placeholder="对外一句话价值主张…"
+            placeholder="One-line value proposition…"
             className={input}
           />
         </label>
       </div>
 
-      {/* 从库参考 */}
+      {/* Browse library */}
       {refOpen && (
-        <Modal title="从打法库参考" onClose={() => setRefOpen(false)}>
+        <Modal title="Browse playbook library" onClose={() => setRefOpen(false)}>
           <input
             value={refQ}
             onChange={(e) => setRefQ(e.target.value)}
-            placeholder="搜索标题、内容、来源伙伴…"
+            placeholder="Search title, content, source partner…"
             className={`${input} mb-3`}
             autoFocus
           />
           {refLoading ? (
-            <p className="text-sm text-zinc-400 py-6 text-center">搜索中…</p>
+            <p className="text-sm text-zinc-400 py-6 text-center">Searching…</p>
           ) : refItems.length === 0 ? (
-            <p className="text-sm text-zinc-400 py-6 text-center">库中暂无匹配条目，可先写好内容再「存入库」</p>
+            <p className="text-sm text-zinc-400 py-6 text-center">No matching entries. Write content first, then use &quot;Save to library&quot;.</p>
           ) : (
             <ul className="max-h-80 overflow-y-auto space-y-2">
               {refItems.map((item) => (
@@ -199,7 +199,7 @@ export function PartnerGtmPanel({
                       <span className="font-medium text-sm text-zinc-900">{item.title}</span>
                       <Badge tone="zinc">v{item.version}</Badge>
                       {item.sourcePartnerName && (
-                        <span className="text-xs text-zinc-400">来自 {item.sourcePartnerName}</span>
+                        <span className="text-xs text-zinc-400">from {item.sourcePartnerName}</span>
                       )}
                     </div>
                     <p className="text-xs text-zinc-500 mt-1 line-clamp-2">
@@ -213,21 +213,21 @@ export function PartnerGtmPanel({
         </Modal>
       )}
 
-      {/* 存入库 */}
+      {/* Save to library */}
       {libOpen && (
-        <Modal title="存入打法库" onClose={() => setLibOpen(false)}>
+        <Modal title="Save to playbook library" onClose={() => setLibOpen(false)}>
           <div className="space-y-3 text-sm">
             <label className="block space-y-1">
-              <span className="text-xs text-zinc-500">标题 *</span>
+              <span className="text-xs text-zinc-500">Title *</span>
               <input value={libTitle} onChange={(e) => setLibTitle(e.target.value)} className={input} />
             </label>
             <fieldset className="space-y-2">
-              <legend className="text-xs text-zinc-500 mb-1">保存方式</legend>
+              <legend className="text-xs text-zinc-500 mb-1">Save mode</legend>
               {(
                 [
-                  ["new", "新建条目"],
-                  ["replace", "替换已有条目（覆盖内容，版本号不变）"],
-                  ["version", "保留新版本（同组追加 v+1）"],
+                  ["new", "New entry"],
+                  ["replace", "Replace existing entry (overwrite content, same version)"],
+                  ["version", "Keep new version (append v+1 to group)"],
                 ] as const
               ).map(([v, label]) => (
                 <label key={v} className="flex items-start gap-2 cursor-pointer">
@@ -244,13 +244,13 @@ export function PartnerGtmPanel({
             </fieldset>
             {(libMode === "replace" || libMode === "version") && (
               <label className="block space-y-1">
-                <span className="text-xs text-zinc-500">选择库中条目</span>
+                <span className="text-xs text-zinc-500">Select library entry</span>
                 <select
                   value={libTargetId}
                   onChange={(e) => setLibTargetId(e.target.value)}
                   className={input}
                 >
-                  <option value="">请选择…</option>
+                  <option value="">Select…</option>
                   {libraryItems.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.title} (v{item.version})
@@ -260,11 +260,11 @@ export function PartnerGtmPanel({
               </label>
             )}
             <label className="block space-y-1">
-              <span className="text-xs text-zinc-500">备注（可选）</span>
+              <span className="text-xs text-zinc-500">Notes (optional)</span>
               <input value={libNotes} onChange={(e) => setLibNotes(e.target.value)} className={input} />
             </label>
             <p className="text-xs text-zinc-400">
-              档案标签自动带入当前伙伴：
+              Profile tags auto-filled from current partner:
               {parseIndustries(partner).length > 0 &&
                 ` ${labelsFromMap(labelMaps.INDUSTRY, parseIndustries(partner))}`}
               {partner.valuePattern && ` · ${labelFromMap(labelMaps.VALUE_PATTERN, partner.valuePattern)}`}
@@ -274,7 +274,7 @@ export function PartnerGtmPanel({
             {libError && <p className="text-xs text-red-600">{libError}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setLibOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
-                取消
+                Cancel
               </button>
               <button
                 type="button"
@@ -282,7 +282,7 @@ export function PartnerGtmPanel({
                 disabled={pending}
                 className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-50"
               >
-                确认存入
+                Confirm save
               </button>
             </div>
           </div>

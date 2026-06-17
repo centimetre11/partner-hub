@@ -34,7 +34,7 @@ export function AiCapabilityFields({ defaultCapabilities }: { defaultCapabilitie
   const selected = new Set(defaultCapabilities ?? DEFAULT_AI_CAPABILITIES);
   return (
     <fieldset className="space-y-2">
-      <legend className={label}>模型能力（按场景自动选模型）</legend>
+      <legend className={label}>Model capabilities (auto-selected by scenario)</legend>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {ALL_AI_CAPABILITIES.map((cap) => (
           <label
@@ -56,8 +56,8 @@ export function AiCapabilityFields({ defaultCapabilities }: { defaultCapabilitie
         ))}
       </div>
       <p className="text-[11px] text-zinc-400">
-        例：DeepSeek V4 勾选「图片理解」；纯文本模型只勾「通用对话 / 工具 / JSON」。发图时会自动选带 vision 的模型。
-        轻量模型（如 mini/flash）建议勾选「轻量快速」，AI 加人、加商机等简单抽取会优先使用。
+        Example: check Vision for DeepSeek V4; text-only models only need General chat / Tools / JSON. When images are sent, a vision-capable model is chosen automatically.
+        Lightweight models (e.g. mini/flash) should check Lightweight & fast — simple extraction like AI add-contact is preferred on those.
       </p>
     </fieldset>
   );

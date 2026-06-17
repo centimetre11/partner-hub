@@ -5,10 +5,10 @@ import { applyIntake, type IntakeScope, type IntakeProposal } from "@/lib/ai-int
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const { scope, partnerId, proposal, sourceText, intent } = await req.json();
-  if (!proposal) return NextResponse.json({ error: "缺少提案" }, { status: 400 });
+  if (!proposal) return NextResponse.json({ error: "Missing proposal" }, { status: 400 });
 
   try {
     const result = await applyIntake({
@@ -25,6 +25,6 @@ export async function POST(req: NextRequest) {
     if (result.partnerId) revalidatePath(`/partners/${result.partnerId}`);
     return NextResponse.json(result);
   } catch (e) {
-    return NextResponse.json({ error: `写入失败：${e instanceof Error ? e.message : e}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to save: ${e instanceof Error ? e.message : e}` }, { status: 500 });
   }
 }

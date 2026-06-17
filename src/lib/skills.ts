@@ -12,7 +12,7 @@ import {
 } from "./builtin-search";
 import { MONITOR_DIMENSIONS, MONITOR_SENTIMENT_LABELS } from "./constants";
 
-// ============ 技能执行上下文 ============
+// ============ Skill execution context ============
 
 export type AgentFieldProposal = {
   partnerId: string;
@@ -25,9 +25,9 @@ export type SkillContext = {
   userId: string | null;
   agentId?: string;
   agentName?: string;
-  // agent 模式下收集的「待人工确认」提案
+  // Proposals awaiting human confirmation in agent mode
   pendingProposals: AgentFieldProposal[];
-  // 写操作记录（用于汇报）
+  // Write-action log (for reporting)
   actions: string[];
 };
 
@@ -35,12 +35,12 @@ export function newSkillContext(partial: Partial<SkillContext> & Pick<SkillConte
   return { userId: null, pendingProposals: [], actions: [], ...partial };
 }
 
-// ============ 技能定义 ============
+// ============ Skill definitions ============
 
 export type Skill = {
   name: string;
-  label: string; // 中文名（UI 展示）
-  desc: string; // 中文说明（UI 展示）
+  label: string; // Display name (UI)
+  desc: string; // Description (UI)
   def: ToolDef;
   run: (args: Record<string, unknown>, ctx: SkillContext) => Promise<string>;
 };
@@ -52,24 +52,24 @@ async function findPartnerByName(name: string) {
   );
 }
 
-// ---- 查伙伴 ----
+// ---- Search partners ----
 const searchPartners: Skill = {
   name: "search_partners",
-  label: "查询伙伴列表",
-  desc: "按名称/状态/Tier/国家/停滞天数筛选伙伴",
+  label: "Search partners",
+  desc: "Filter partners by name, status, tier, country, or stale days",
   def: {
     type: "function",
     function: {
       name: "search_partners",
-      description: "搜索/筛选伙伴列表。返回伙伴的基本信息、Pipeline阶段、完整度、停滞天数。",
+      description: "Search/filter partner list. Returns basics, pipeline stage, completeness, and stale days.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "公司名关键词（可选）" },
-          status: { type: "string", enum: ["PROSPECT", "ACTIVE", "ARCHIVED"], description: "PROSPECT候选/ACTIVE正式" },
+          query: { type: "string", description: "Company name keyword (optional)" },
+          status: { type: "string", enum: ["PROSPECT", "ACTIVE", "ARCHIVED"], description: "PROSPECT=candidate / ACTIVE=active" },
           tier: { type: "string", enum: ["A", "B", "C"] },
-          country: { type: "string", description: "国家关键词，如 KSA、UAE" },
-          staleDaysOver: { type: "number", description: "只返回超过N天无动态的伙伴" },
+          country: { type: "string", description: "Country keyword, e.g. KSA, UAE" },
+          staleDaysOver: { type: "number", description: "Only partners with no activity for N+ days" },
         },
       },
     },
@@ -90,52 +90,52 @@ const searchPartners: Skill = {
         const stale = staleDays(p);
         if (args.staleDaysOver && stale <= Number(args.staleDaysOver)) return null;
         const c = computeCompleteness(p);
-        return `${p.name} | ${p.status === "ACTIVE" ? "正式" : p.status === "PROSPECT" ? "候选" : "归档"} | Tier ${p.tier ?? "-"} | ${p.country ?? "?"} | 阶段${p.pipelineStage}(${stageName(p.pipelineStage)}) | 完整度${c.score}% | ${stale}天无动态 | 负责人:${p.owner?.name ?? "无"} | 客户:${(p.knownClients ?? "").slice(0, 50)}`;
+        return `${p.name} | ${p.status === "ACTIVE" ? "Active" : p.status === "PROSPECT" ? "Prospect" : "Archived"} | Tier ${p.tier ?? "-"} | ${p.country ?? "?"} | Stage ${p.pipelineStage}(${stageName(p.pipelineStage)}) | Completeness ${c.score}% | ${stale}d stale | Owner:${p.owner?.name ?? "none"} | Clients:${(p.knownClients ?? "").slice(0, 50)}`;
       })
       .filter(Boolean);
-    return rows.length ? rows.join("\n") : "没有符合条件的伙伴";
+    return rows.length ? rows.join("\n") : "No partners match the criteria";
   },
 };
 
-// ---- 读档案 ----
+// ---- Read profile ----
 const getPartner: Skill = {
   name: "get_partner",
-  label: "读取伙伴档案",
-  desc: "获取某个伙伴的完整档案（画像、权力地图、商机）",
+  label: "Read partner profile",
+  desc: "Get full partner profile (persona, power map, opportunities)",
   def: {
     type: "function",
     function: {
       name: "get_partner",
-      description: "按名称获取某个伙伴的完整档案（画像、权力地图、商机）。",
+      description: "Get a partner's full profile by name (persona, power map, opportunities).",
       parameters: {
         type: "object",
-        properties: { name: { type: "string", description: "公司名（支持模糊匹配）" } },
+        properties: { name: { type: "string", description: "Company name (fuzzy match supported)" } },
         required: ["name"],
       },
     },
   },
   run: async (args) => {
     const p = await findPartnerByName(String(args.name));
-    if (!p) return `找不到名为「${args.name}」的伙伴`;
+    if (!p) return `No partner found matching "${args.name}"`;
     return await partnerContext(p.id);
   },
 };
 
-// ---- 改档案 ----
+// ---- Update profile ----
 const updatePartner: Skill = {
   name: "update_partner",
-  label: "更新伙伴档案",
-  desc: "修改伙伴字段。AI 助手对话中直接生效；Agent 自动运行时转为提案，需人工确认",
+  label: "Update partner profile",
+  desc: "Edit partner fields. Applied directly in assistant chat; in agent runs becomes a proposal for human approval",
   def: {
     type: "function",
     function: {
       name: "update_partner",
-      description: `更新伙伴档案字段。可用字段：${Object.entries(PARTNER_FIELD_LABELS).map(([f, l]) => `${f}(${l})`).join("、")}。pipelineStage 为 1-10 的数字。`,
+      description: `Update partner profile fields. Available fields: ${Object.entries(PARTNER_FIELD_LABELS).map(([f, l]) => `${f}(${l})`).join(", ")}. pipelineStage is a number 1-10.`,
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string", description: "公司名" },
-          fields: { type: "object", description: "要更新的字段键值对，如 {\"pipelineStage\": 5, \"priority\": \"P0\"}" },
+          name: { type: "string", description: "Company name" },
+          fields: { type: "object", description: 'Field key-value pairs, e.g. {"pipelineStage": 5, "priority": "P0"}' },
         },
         required: ["name", "fields"],
       },
@@ -143,7 +143,7 @@ const updatePartner: Skill = {
   },
   run: async (args, ctx) => {
     const p = await findPartnerByName(String(args.name));
-    if (!p) return `找不到名为「${args.name}」的伙伴`;
+    if (!p) return `No partner found matching "${args.name}"`;
     const fields = (args.fields ?? {}) as Record<string, unknown>;
 
     const updates: FieldUpdate[] = [];
@@ -157,15 +157,15 @@ const updatePartner: Skill = {
         newValue: String(v),
       });
     }
-    if (!updates.length) return "没有可更新的有效字段";
+    if (!updates.length) return "No valid fields to update";
 
     if (ctx.mode === "agent") {
-      // Agent 自动运行：不直接写，转为提案待人工确认
+      // Agent run: don't write directly; create proposal for human approval
       ctx.pendingProposals.push({ partnerId: p.id, partnerName: p.name, fieldUpdates: updates });
-      return `已生成 ${p.name} 的变更提案（${updates.map((u) => u.label).join("、")}），将提交人工确认后生效。`;
+      return `Created change proposal for ${p.name} (${updates.map((u) => u.label).join(", ")}); pending human approval.`;
     }
 
-    // 助手模式：用户明确指令，直接执行 + 审计
+    // Assistant mode: explicit user instruction — apply directly + audit
     const data: Record<string, unknown> = {};
     const changes: string[] = [];
     for (const u of updates) {
@@ -185,34 +185,34 @@ const updatePartner: Skill = {
       data: {
         partnerId: p.id,
         type: "CHANGE",
-        title: "AI 助手更新档案",
-        content: changes.join("；"),
+        title: "AI assistant profile update",
+        content: changes.join("; "),
         createdById: ctx.userId,
         meta: JSON.stringify({ via: "assistant", fields }),
       },
     });
-    const msg = `已更新 ${p.name}：${changes.join("；")}`;
+    const msg = `Updated ${p.name}: ${changes.join("; ")}`;
     ctx.actions.push(msg);
     return msg;
   },
 };
 
-// ---- 建待办 ----
+// ---- Create todo ----
 const createTodo: Skill = {
   name: "create_todo",
-  label: "创建待办",
-  desc: "创建待办事项，可关联伙伴、设截止日期",
+  label: "Create todo",
+  desc: "Create a todo item, optionally linked to a partner with a due date",
   def: {
     type: "function",
     function: {
       name: "create_todo",
-      description: "创建待办事项。",
+      description: "Create a todo item.",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string" },
-          partnerName: { type: "string", description: "关联的伙伴公司名（可选）" },
-          dueDate: { type: "string", description: "截止日期 YYYY-MM-DD（可选）" },
+          partnerName: { type: "string", description: "Linked partner company name (optional)" },
+          dueDate: { type: "string", description: "Due date YYYY-MM-DD (optional)" },
           priority: { type: "string", enum: ["HIGH", "MEDIUM", "LOW"] },
           detail: { type: "string" },
         },
@@ -229,7 +229,7 @@ const createTodo: Skill = {
     const t = await db.todoItem.create({
       data: {
         title: String(args.title),
-        detail: args.detail ? String(args.detail) : ctx.agentName ? `由 Agent「${ctx.agentName}」创建` : null,
+        detail: args.detail ? String(args.detail) : ctx.agentName ? `Created by Agent "${ctx.agentName}"` : null,
         partnerId,
         assigneeId: ctx.userId,
         dueDate: args.dueDate ? new Date(String(args.dueDate)) : null,
@@ -237,27 +237,27 @@ const createTodo: Skill = {
         source: "AI",
       },
     });
-    const msg = `已创建待办：${t.title}${t.dueDate ? `（截止 ${t.dueDate.toISOString().slice(0, 10)}）` : ""}`;
+    const msg = `Created todo: ${t.title}${t.dueDate ? ` (due ${t.dueDate.toISOString().slice(0, 10)})` : ""}`;
     ctx.actions.push(msg);
     return msg;
   },
 };
 
-// ---- 查待办 ----
+// ---- List todos ----
 const listTodos: Skill = {
   name: "list_todos",
-  label: "查询待办",
-  desc: "查看未完成/逾期待办列表",
+  label: "List todos",
+  desc: "View open or overdue todo items",
   def: {
     type: "function",
     function: {
       name: "list_todos",
-      description: "查看待办事项列表。",
+      description: "List todo items.",
       parameters: {
         type: "object",
         properties: {
-          overdueOnly: { type: "boolean", description: "只看逾期的" },
-          partnerName: { type: "string", description: "按伙伴筛选" },
+          overdueOnly: { type: "boolean", description: "Overdue only" },
+          partnerName: { type: "string", description: "Filter by partner" },
         },
       },
     },
@@ -277,32 +277,32 @@ const listTodos: Skill = {
       ? todos
           .map(
             (t) =>
-              `[${t.priority}] ${t.title} | 伙伴:${t.partner?.name ?? "-"} | 截止:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | 负责:${t.assignee?.name ?? "-"}`
+              `[${t.priority}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
           )
           .join("\n")
-      : "没有未完成的待办";
+      : "No open todos";
   },
 };
 
-// ---- 领英搜索 ----
+// ---- LinkedIn search ----
 const linkedinSearchTool: Skill = {
   name: "linkedin_search",
-  label: "领英搜索",
-  desc: "搜索 LinkedIn 上的公司页、高管动态与公开职业信息（监测伙伴关键人）",
+  label: "LinkedIn search",
+  desc: "Search LinkedIn company pages, executive activity, and public career info (monitor key contacts)",
   def: {
     type: "function",
     function: {
       name: "linkedin_search",
       description:
-        "搜索 LinkedIn 公开内容：公司主页、高管/profile、近期动态。用于监测伙伴 CEO/CTO 动向、人事变动、发帖。优先传 company + person。",
+        "Search LinkedIn public content: company pages, executive profiles, recent posts. Monitor partner CEO/CTO moves, HR changes, posts. Prefer company + person.",
       parameters: {
         type: "object",
         properties: {
-          company: { type: "string", description: "公司名，如 Beinex、TechMantra" },
-          person: { type: "string", description: "联系人姓名，如 Shantosh Sridhar" },
-          topic: { type: "string", description: "附加关键词，如 hiring、partnership、Dubai" },
-          query: { type: "string", description: "或直接写完整搜索词" },
-          maxResults: { type: "number", description: "结果数，默认 5" },
+          company: { type: "string", description: "Company name, e.g. Beinex, TechMantra" },
+          person: { type: "string", description: "Contact name, e.g. Shantosh Sridhar" },
+          topic: { type: "string", description: "Extra keywords, e.g. hiring, partnership, Dubai" },
+          query: { type: "string", description: "Or provide a full search query" },
+          maxResults: { type: "number", description: "Result count, default 5" },
         },
       },
     },
@@ -319,23 +319,23 @@ const linkedinSearchTool: Skill = {
   },
 };
 
-// ---- 联网搜索 ----
+// ---- Web search ----
 const webSearch: Skill = {
   name: "web_search",
-  label: "新闻搜索",
-  desc: "搜索公开新闻、招聘、中标、竞品动态（非 LinkedIn 专用场景）",
+  label: "News search",
+  desc: "Search public news, hiring, awards, competitor activity (non-LinkedIn scenarios)",
   def: {
     type: "function",
     function: {
       name: "web_search",
       description:
-        "搜索互联网公开信息：公司新闻、人事变动、招聘信号、中标公告、竞品动态。query 建议带公司名+英文关键词，如 'Beinex Dubai contract award 2026'。",
+        "Search public web info: company news, personnel changes, hiring signals, contract awards, competitor moves. Query should include company name + English keywords, e.g. 'Beinex Dubai contract award 2026'.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "搜索关键词" },
-          maxResults: { type: "number", description: "结果数量，默认 5" },
-          topic: { type: "string", enum: ["general", "news"], description: "news=侧重新闻" },
+          query: { type: "string", description: "Search keywords" },
+          maxResults: { type: "number", description: "Result count, default 5" },
+          topic: { type: "string", enum: ["general", "news"], description: "news=news-focused" },
         },
         required: ["query"],
       },
@@ -348,22 +348,22 @@ const webSearch: Skill = {
   },
 };
 
-// ---- 写时间线 ----
+// ---- Add timeline event ----
 const addTimelineEvent: Skill = {
   name: "add_timeline_event",
-  label: "写入伙伴时间线",
-  desc: "把发现的外部动态/新闻记录到伙伴的动态时间线（直接生效，留审计）",
+  label: "Add partner timeline event",
+  desc: "Record external signals/news on a partner timeline (applied directly, audited)",
   def: {
     type: "function",
     function: {
       name: "add_timeline_event",
-      description: "把一条发现的动态/新闻/信号写入某个伙伴的时间线档案。",
+      description: "Add a discovered signal/news item to a partner's timeline.",
       parameters: {
         type: "object",
         properties: {
-          partnerName: { type: "string", description: "伙伴公司名" },
-          title: { type: "string", description: "动态标题（一句话）" },
-          content: { type: "string", description: "动态详情（含信息来源URL）" },
+          partnerName: { type: "string", description: "Partner company name" },
+          title: { type: "string", description: "Event title (one line)" },
+          content: { type: "string", description: "Details (include source URL)" },
         },
         required: ["partnerName", "title"],
       },
@@ -371,7 +371,7 @@ const addTimelineEvent: Skill = {
   },
   run: async (args, ctx) => {
     const p = await findPartnerByName(String(args.partnerName));
-    if (!p) return `找不到名为「${args.partnerName}」的伙伴`;
+    if (!p) return `No partner found matching "${args.partnerName}"`;
     await db.timelineEvent.create({
       data: {
         partnerId: p.id,
@@ -382,31 +382,31 @@ const addTimelineEvent: Skill = {
         meta: JSON.stringify({ via: ctx.mode, agentId: ctx.agentId, agentName: ctx.agentName }),
       },
     });
-    const msg = `已写入 ${p.name} 时间线：${args.title}`;
+    const msg = `Added to ${p.name} timeline: ${args.title}`;
     ctx.actions.push(msg);
     return msg;
   },
 };
 
-// ---- 舆情扫描 ----
+// ---- Sentiment scan ----
 const scanSentiment: Skill = {
   name: "scan_sentiment",
-  label: "舆情扫描",
-  desc: "对某个伙伴执行一次联网舆情扫描，按维度/情感分类后入库（含自定义监控链接源）",
+  label: "Sentiment scan",
+  desc: "Run a web sentiment scan for a partner by dimension/sentiment, including custom monitor sources",
   def: {
     type: "function",
     function: {
       name: "scan_sentiment",
       description:
-        "对指定伙伴执行一次舆情监控扫描：联网抓取公司动态/人事/招聘/中标/融资/竞品/社媒/口碑/活动/生态/风险等维度，AI 判定情感后去重入库，并把负面/高风险写入伙伴时间线。返回本次新增条目摘要。",
+        "Run sentiment monitoring for a partner: web scan across company news, HR, hiring, deals, funding, competitors, social, reputation, events, ecosystem, risk; AI classifies sentiment, dedupes, stores; negative/high-risk items go to partner timeline. Returns new-item summary.",
       parameters: {
         type: "object",
         properties: {
-          partnerName: { type: "string", description: "伙伴公司名（支持模糊匹配）" },
+          partnerName: { type: "string", description: "Partner company name (fuzzy match)" },
           dimensions: {
             type: "array",
             items: { type: "string", enum: MONITOR_DIMENSIONS },
-            description: "可选：限定本次扫描的维度，不传则用该伙伴已勾选的维度或全部",
+            description: "Optional: limit scan dimensions; defaults to partner-selected or all",
           },
         },
         required: ["partnerName"],
@@ -415,41 +415,41 @@ const scanSentiment: Skill = {
   },
   run: async (args, ctx) => {
     const p = await findPartnerByName(String(args.partnerName));
-    if (!p) return `找不到名为「${args.partnerName}」的伙伴`;
+    if (!p) return `No partner found matching "${args.partnerName}"`;
     const dims = Array.isArray(args.dimensions) ? (args.dimensions as unknown[]).map(String) : undefined;
-    // 动态导入，避免 skills ↔ sentiment-monitor 在模块初始化期形成循环依赖
+    // Dynamic import to avoid skills ↔ sentiment-monitor circular dependency at init
     const { scanPartnerSentiment } = await import("./sentiment-monitor");
     const r = await scanPartnerSentiment(p.id, { userId: ctx.userId, dims });
-    if (!r.ok) return r.error ?? "舆情扫描失败";
+    if (!r.ok) return r.error ?? "Sentiment scan failed";
     const breakdown = Object.entries(r.bySentiment)
       .map(([k, v]) => `${MONITOR_SENTIMENT_LABELS[k] ?? k} ${v}`)
-      .join("、");
+      .join(", ");
     const msg = r.created
-      ? `已为 ${p.name} 扫描 ${r.scanned} 个信息源，新增 ${r.created} 条舆情（${breakdown || "—"}）`
-      : `已为 ${p.name} 扫描 ${r.scanned} 个信息源，本次无新发现`;
+      ? `Scanned ${r.scanned} sources for ${p.name}, added ${r.created} sentiment items (${breakdown || "—"})`
+      : `Scanned ${r.scanned} sources for ${p.name}; no new findings this run`;
     ctx.actions.push(msg);
     return msg;
   },
 };
 
-// ---- 检索知识库 ----
+// ---- Search knowledge base ----
 const searchKnowledge: Skill = {
   name: "search_knowledge",
-  label: "检索知识库",
-  desc: "搜索团队知识库（帆软背景、中东策略、产品能力等）供引用",
+  label: "Search knowledge base",
+  desc: "Search team knowledge base (Fanruan background, Middle East strategy, product capabilities) for citations",
   def: {
     type: "function",
     function: {
       name: "search_knowledge",
-      description: "在团队知识库中搜索与查询相关的文章片段，用于撰写简报或方案时引用准确背景信息。",
+      description: "Search team knowledge base for relevant snippets when drafting briefs or proposals.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "搜索关键词" },
+          query: { type: "string", description: "Search keywords" },
           category: {
             type: "string",
             enum: ["COMPANY", "PRODUCT", "STRATEGY", "PLAYBOOK", "OTHER"],
-            description: "可选分类过滤",
+            description: "Optional category filter",
           },
         },
         required: ["query"],
@@ -458,7 +458,7 @@ const searchKnowledge: Skill = {
   },
   run: async (args) => {
     const q = String(args.query ?? "").trim();
-    if (!q) return "请提供搜索关键词";
+    if (!q) return "Please provide search keywords";
     const articles = await db.knowledgeArticle.findMany({
       where: {
         shared: true,
@@ -471,31 +471,31 @@ const searchKnowledge: Skill = {
       take: 5,
       orderBy: { updatedAt: "desc" },
     });
-    if (!articles.length) return `知识库中未找到与「${q}」相关的内容`;
+    if (!articles.length) return `No knowledge base content found for "${q}"`;
     return articles
-      .map((a, i) => `${i + 1}. 【${a.title}】(${a.category})\n${a.content.slice(0, 800)}${a.content.length > 800 ? "…" : ""}`)
+      .map((a, i) => `${i + 1}. [${a.title}] (${a.category})\n${a.content.slice(0, 800)}${a.content.length > 800 ? "…" : ""}`)
       .join("\n\n---\n\n");
   },
 };
 
-// ---- 读取公司 KMS（Confluence）----
+// ---- Read company KMS (Confluence) ----
 const readKms: Skill = {
   name: "read_kms",
-  label: "读取 KMS 文档",
-  desc: "读取帆软内部 Confluence（kms.fineres.com）文档，按 pageId/链接或关键词搜索",
+  label: "Read KMS documents",
+  desc: "Read Fanruan internal Confluence (kms.fineres.com) by pageId/URL or keyword search",
   def: {
     type: "function",
     function: {
       name: "read_kms",
       description:
-        "读取帆软 KMS（Confluence）内部文档。可用 pageId、完整 URL，或 query 关键词搜索。需要用户已在设置中配置个人访问令牌。优先用于查产品说明、内部策略、流程规范。",
+        "Read Fanruan KMS (Confluence) internal docs. Use pageId, full URL, or query keyword search. Requires personal access token in settings. Best for product docs, internal policy, process specs.",
       parameters: {
         type: "object",
         properties: {
-          pageId: { type: "string", description: "KMS 页面 ID，如 1420741418" },
-          url: { type: "string", description: "KMS 页面完整 URL" },
-          query: { type: "string", description: "全文搜索关键词，如 FineBI 定价、伙伴政策" },
-          limit: { type: "number", description: "搜索模式返回条数，默认 3" },
+          pageId: { type: "string", description: "KMS page ID, e.g. 1420741418" },
+          url: { type: "string", description: "Full KMS page URL" },
+          query: { type: "string", description: "Full-text search keywords, e.g. FineBI pricing, partner policy" },
+          limit: { type: "number", description: "Search result count, default 3" },
         },
       },
     },
@@ -509,27 +509,27 @@ const readKms: Skill = {
     }),
 };
 
-// ---- 写入报告中心 ----
+// ---- Save to report center ----
 const createDocument: Skill = {
   name: "create_document",
-  label: "写入报告中心",
-  desc: "将 Markdown 报告保存到报告中心，可关联伙伴",
+  label: "Save to report center",
+  desc: "Save a Markdown report to the report center, optionally linked to a partner",
   def: {
     type: "function",
     function: {
       name: "create_document",
-      description: "将完成的 Markdown 报告保存到报告中心。用于会前简报、联合解决方案报告等长期文档。",
+      description: "Save a completed Markdown report to the report center. For pre-meeting briefs, joint solution reports, etc.",
       parameters: {
         type: "object",
         properties: {
-          title: { type: "string", description: "报告标题" },
-          content: { type: "string", description: "Markdown 正文" },
+          title: { type: "string", description: "Report title" },
+          content: { type: "string", description: "Markdown body" },
           type: {
             type: "string",
             enum: ["AGENT_BRIEF", "JOINT_SOLUTION", "MEETING_PREP", "CUSTOM"],
-            description: "报告类型",
+            description: "Report type",
           },
-          partnerName: { type: "string", description: "关联伙伴名（可选）" },
+          partnerName: { type: "string", description: "Linked partner name (optional)" },
         },
         required: ["title", "content"],
       },
@@ -551,13 +551,13 @@ const createDocument: Skill = {
         createdById: ctx.userId,
       },
     });
-    const msg = `已写入报告中心：${doc.title}（/documents/${doc.id}）`;
+    const msg = `Saved to report center: ${doc.title} (/documents/${doc.id})`;
     ctx.actions.push(msg);
     return msg;
   },
 };
 
-// ============ 注册表 ============
+// ============ Registry ============
 
 export const SKILLS: Skill[] = [
   searchPartners,
@@ -587,7 +587,19 @@ export const DEFAULT_AGENT_SKILLS = [
   "read_kms",
 ];
 
-export const REPORT_AGENT_KEYWORDS = ["会前简报", "联合方案", "联合解决方案"];
+export const REPORT_AGENT_KEYWORDS = [
+  "Pre-meeting Brief",
+  "Joint Solution Report",
+  "Sentiment Monitor",
+  "pre-meeting brief",
+  "meeting prep",
+  "joint solution",
+  "joint solutions",
+  // legacy
+  "会前简报",
+  "联合方案",
+  "联合解决方案",
+];
 
 export const ASSISTANT_SKILLS = [
   "search_partners",
@@ -601,7 +613,7 @@ export const ASSISTANT_SKILLS = [
   "search_knowledge",
 ];
 
-/** AI 建档/补全画像时可用的只读调研工具（不含写库操作） */
+/** Read-only research tools for AI intake/profile enrichment (no write operations) */
 export const INTAKE_ENRICHMENT_SKILLS = [
   "search_partners",
   "get_partner",
@@ -617,7 +629,7 @@ export function intakeEnrichmentSkillsForScope(scope: string): string[] {
     case "profile":
       return [...INTAKE_ENRICHMENT_SKILLS];
     case "powermap":
-      // AI 加人保持最简：只从用户给的文字/图片里提取属性，不联网调研
+      // Keep AI contact add minimal: extract from user text/images only, no web research
       return [];
     case "opportunity":
       return ["web_search", "search_knowledge"];
@@ -630,7 +642,7 @@ export async function buildIntakeTools(skillNames: string[]): Promise<(ToolDef |
   return skillsToTools(skillNames);
 }
 
-// 内置联网搜索探测已移至 ./builtin-search，避免与 sentiment-monitor 形成循环依赖；此处再导出以兼容既有引用
+// Builtin web-search detection moved to ./builtin-search to avoid circular deps with sentiment-monitor; re-exported for compatibility
 export { KIMI_BUILTIN_SEARCH, shouldUseVolcengineBuiltinSearch, shouldUseKimiBuiltinSearch };
 export { shouldUseBuiltinWebSearch } from "./builtin-search";
 
@@ -640,10 +652,10 @@ export function skillsToTools(names: string[]): ToolDef[] {
 
 export async function runSkill(name: string, args: Record<string, unknown>, ctx: SkillContext): Promise<string> {
   const skill = SKILL_MAP.get(name);
-  if (!skill) return `未知工具：${name}`;
+  if (!skill) return `Unknown tool: ${name}`;
   try {
     return await skill.run(args, ctx);
   } catch (e) {
-    return `工具 ${name} 执行出错：${e instanceof Error ? e.message : e}`;
+    return `Tool ${name} failed: ${e instanceof Error ? e.message : e}`;
   }
 }

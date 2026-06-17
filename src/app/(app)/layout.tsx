@@ -13,10 +13,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <aside className="w-56 shrink-0 bg-zinc-900 text-zinc-300 flex flex-col fixed inset-y-0 z-30">
         <div className="px-5 py-5 flex items-center gap-2.5 border-b border-zinc-800">
           <div className="w-8 h-8 rounded-lg bg-indigo-500 text-white flex items-center justify-center font-bold">
-            帆
+            F
           </div>
           <div>
-            <div className="text-sm font-semibold text-white leading-tight">中东伙伴管理</div>
+            <div className="text-sm font-semibold text-white leading-tight">MEA Partner Hub</div>
             <div className="text-[10px] text-zinc-500">Fanruan MEA Partner Hub</div>
           </div>
         </div>
@@ -27,7 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
           <form action={logoutAction}>
             <button className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-              退出登录
+              Sign out
             </button>
           </form>
         </div>

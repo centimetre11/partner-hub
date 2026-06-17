@@ -7,27 +7,27 @@ const STATUS_STYLES: Record<string, { box: string; dot: string; label: string }>
   info: {
     box: "border-zinc-200 bg-zinc-50/80 text-zinc-700",
     dot: "bg-zinc-400",
-    label: "参考",
+    label: "Reference",
   },
   current: {
     box: "border-indigo-500 bg-indigo-600 text-white shadow-md shadow-indigo-200",
     dot: "bg-white",
-    label: "当前",
+    label: "Current",
   },
   done: {
     box: "border-emerald-200 bg-emerald-50 text-emerald-900",
     dot: "bg-emerald-500",
-    label: "就绪",
+    label: "Ready",
   },
   partial: {
     box: "border-amber-200 bg-amber-50 text-amber-900",
     dot: "bg-amber-500",
-    label: "部分",
+    label: "Partial",
   },
   missing: {
     box: "border-zinc-200 bg-white text-zinc-500",
     dot: "bg-zinc-300",
-    label: "待补",
+    label: "To fill",
   },
 };
 
@@ -68,7 +68,7 @@ function MapNode({
       )}
       {node.editable && interactive && (
         <div className={`mt-1 text-[10px] ${node.status === "current" ? "text-indigo-200" : "text-indigo-500"}`}>
-          可编辑
+          Editable
         </div>
       )}
     </div>
@@ -130,13 +130,13 @@ export function PartnerFrameworkMap({
               <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                 {layer}
               </span>
-              {layer === "定位层" && <span className="text-xs text-zinc-400">跟谁 · 在哪 · 是什么类型</span>}
-              {layer === "打法层" && <span className="text-xs text-zinc-400">一起卖什么 · 怎么讲</span>}
-              {layer === "动作层" && <span className="text-xs text-zinc-400">四域必做动作</span>}
-              {layer === "落地层" && (
-                <span className="text-xs text-zinc-400">{interactive ? "系统模块 · 点击跳转" : "系统模块"}</span>
+              {layer === "Positioning" && <span className="text-xs text-zinc-400">Who · Where · What type</span>}
+              {layer === "Playbook" && <span className="text-xs text-zinc-400">What we sell · How we pitch</span>}
+              {layer === "Actions" && <span className="text-xs text-zinc-400">Four-domain required actions</span>}
+              {layer === "Execution" && (
+                <span className="text-xs text-zinc-400">{interactive ? "System modules · click to navigate" : "System modules"}</span>
               )}
-              {layer === "阶段准出" && <span className="text-xs text-zinc-400">本阶段过关清单</span>}
+              {layer === "Stage exit" && <span className="text-xs text-zinc-400">Stage exit checklist</span>}
             </div>
             <div
               className={`grid gap-2 ${
@@ -177,7 +177,7 @@ export function PartnerFrameworkMap({
           {interactive && (
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full ring-1 ring-indigo-300 bg-indigo-50" />
-              可编辑
+              Editable
             </span>
           )}
         </div>

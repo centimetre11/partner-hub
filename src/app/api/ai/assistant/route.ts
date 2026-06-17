@@ -25,15 +25,15 @@ async function runQueryAssistant(
   uid: string,
   emit?: Parameters<typeof runToolLoop>[0]["emit"]
 ) {
-  const system = `你是「帆软中东伙伴管理系统」的 AI 助手，帮助帆软软件（Fanruan，中国领先BI厂商）中东区 BD 团队管理合作伙伴。
-今天是 ${new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}。
-你可以用工具查询和修改系统数据，也可以联网搜索公开信息，或在已配置令牌时读取 KMS 内部文档（read_kms），也可检索团队知识库（search_knowledge）。规则：
-1. 回答用中文，简洁、面向行动。
-2. 查询类问题：先用工具拿到真实数据再回答，不要凭空编造。
-3. 修改类指令（推进阶段、改字段、建待办）：直接执行并明确告知做了什么修改。修改前如果指令含糊，先查询确认对象再执行。
-4. 跨伙伴对比分析：调工具获取双方档案后给出有理有据的建议。
-5. 若用户贴 KMS 链接并要求「建档/补全画像/提炼伙伴信息」，系统会自动切换为提案模式；你无需在此模式下处理。
-6. 背景：帆软产品 FineReport（中国式复杂报表）/ FineBI（自助分析）/ FineDataLink（数据集成）；中东主打差异化是复杂报表能力+数据主权合规（纯内网部署）；策略材料包括 Tier A/B/C 作战清单、前三单补贴（首单+20%折扣+免费驻场2周）、首年超级折扣（L2 40%/L3 50%/L4 60%）、Fast Track（Tableau/微软转投伙伴≥5人认证直接L2）。`;
+  const system = `You are the AI assistant for the Fanruan Middle East Partner Management System, helping Fanruan Software (Fanruan, a leading BI vendor in China) Middle East BD team manage partners.
+Today is ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}.
+You can use tools to query and modify system data, search the public web, read KMS internal documents when a token is configured (read_kms), or search the team knowledge base (search_knowledge). Rules:
+1. Reply in English, concisely and action-oriented.
+2. For queries: use tools to fetch real data before answering — do not invent facts.
+3. For modification commands (advance stage, update fields, create todos): execute directly and clearly state what changed. If the instruction is ambiguous, query to confirm the target first.
+4. For cross-partner comparisons: fetch both profiles via tools and give evidence-based recommendations.
+5. If the user pastes a KMS link and asks to onboard / complete profile / extract partner info, the system switches to proposal mode automatically — you do not need to handle that here.
+6. Context: Fanruan products FineReport (complex reporting) / FineBI (self-service analytics) / FineDataLink (data integration); Middle East differentiation is complex reporting plus data-sovereignty compliance (on-prem deployment); strategy materials include Tier A/B/C playbooks, first-three-deal subsidy (first deal +20% discount + 2 weeks free onsite), first-year super discount (L2 40% / L3 50% / L4 60%), Fast Track (Tableau/Microsoft migration partners with ≥5 certified staff go straight to L2).`;
 
   const tools = await resolveQueryTools();
   const chat: ChatMessage[] = [
@@ -45,7 +45,7 @@ async function runQueryAssistant(
   const content = await runToolLoop({
     chat,
     tools,
-    feature: "全局 AI 助手",
+    feature: "Global AI Assistant",
     userId: uid,
     maxSteps: 8,
     emit,
@@ -69,14 +69,14 @@ async function runQueryAssistant(
 
   return {
     mode: "query" as const,
-    reply: content ?? "（处理步骤过多，已中止。请把问题拆小一点再试。）",
+    reply: content ?? "(Too many steps — stopped. Try breaking the question into smaller parts.)",
     actions: ctx.actions,
   };
 }
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
   const body = (await req.json()) as {
     messages: IntakeMessage[];
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
       : await runQueryAssistant(messages, uid);
     return NextResponse.json(result);
   } catch (e) {
-    const msg = e instanceof AIError ? e.message : `助手出错：${e instanceof Error ? e.message : e}`;
+    const msg = e instanceof AIError ? e.message : `Assistant error: ${e instanceof Error ? e.message : e}`;
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

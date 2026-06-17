@@ -324,13 +324,14 @@ const weeklyActions: { week: number; title: string; partner?: string }[] = [
 // ===== Agent 模板库（幂等：按名称 upsert） =====
 const agentTemplates = [
   {
-    name: "舆情监控",
+    name: "Sentiment Monitor",
     icon: "📡",
-    description: "按该伙伴已勾选的维度，定期联网扫描舆情（公司动态/人事/招聘/中标/竞品/风险等），分类入库",
-    instructions: `你是伙伴舆情监控雷达，绑定单个伙伴运行。每次运行：
-1. 用 scan_sentiment（传 partnerName=绑定伙伴名）执行一次舆情扫描。扫描会按该伙伴在系统里已勾选的监控维度逐项联网搜索，并由系统自动判定情感（正面/中性/负面/风险）、去重后入库到该伙伴的舆情列表。
-2. 如果该伙伴还没有勾选任何监控维度，scan_sentiment 会返回提示——此时在简报里说明"该伙伴尚未配置监控维度"，并建议运营到伙伴页勾选维度或添加监控链接源。
-3. 输出简报：本次新增的舆情条数与情感分布、值得关注的负面/风险项、对帆软合作的影响与建议下一步。无新发现就明说。`,
+    description:
+      "Scan subscribed dimensions on a schedule (news, people, hiring, deals, competitors, risk, etc.) and store results.",
+    instructions: `You are a partner sentiment monitoring radar, bound to a single partner. Each run:
+1. Call scan_sentiment (partnerName = bound partner). The scan searches by the partner's subscribed monitor dimensions and classifies sentiment (positive/neutral/negative/risk), deduplicates, and stores results.
+2. If no dimensions are configured, scan_sentiment returns a hint — explain in the brief that dimensions must be set on the partner page.
+3. Output a brief: new item count and sentiment breakdown, notable negative/risk items, impact on Fanruan partnership, and suggested next steps. Say clearly if nothing new was found.`,
     skills: ["get_partner", "scan_sentiment"],
     trigger: "SCHEDULE",
     frequency: "WEEKLY",
@@ -339,15 +340,16 @@ const agentTemplates = [
     scopeType: "PARTNER",
   },
   {
-    name: "停滞伙伴唤醒",
+    name: "Stale Partner Revival",
     icon: "⏰",
-    description: "每天扫描超 30 天无动态的正式伙伴，结合档案生成重启接触建议并自动建待办",
-    instructions: `你是伙伴跟进健康度监督员。每次运行：
-1. 用 search_partners 找出 status=ACTIVE 且超过 30 天无动态的伙伴（staleDaysOver=30）。
-2. 没有停滞伙伴就输出"全部健康"并结束。
-3. 对每个停滞伙伴，用 get_partner 读档案，结合其 Tier、Pipeline 阶段、上次进展和打法建议，给出一条具体的重启接触动作（找谁、用什么由头、说什么）。
-4. 对 Tier A 或 Pipeline 阶段 >= 4 的停滞伙伴，用 create_todo 建一条高优先级待办（标题写明伙伴名和具体动作）。
-5. 输出简报：停滞名单（按风险排序）+ 每家的唤醒建议 + 已建的待办。`,
+    description:
+      "Daily scan for active partners with no activity in 30+ days; suggest re-engagement and create high-priority todos.",
+    instructions: `You are a partner engagement health monitor. Each run:
+1. Use search_partners to find status=ACTIVE partners with no activity for 30+ days (staleDaysOver=30).
+2. If none, output "All healthy" and stop.
+3. For each stale partner, use get_partner and suggest one concrete re-engagement action (who to contact, hook, talking points) based on Tier, pipeline stage, and playbook.
+4. For Tier A or pipeline stage >= 4, use create_todo with a high-priority todo (title includes partner name and action).
+5. Output a brief: stale list by risk + revival suggestions + todos created.`,
     skills: ["search_partners", "get_partner", "create_todo", "list_todos"],
     trigger: "SCHEDULE",
     frequency: "DAILY",
@@ -355,55 +357,44 @@ const agentTemplates = [
     scopeType: "ALL",
   },
   {
-    name: "候选伙伴发现",
+    name: "Prospect Discovery",
     icon: "🔍",
-    description: "手动运行：按条件搜索新的潜在伙伴公司，输出调研简报供加入候选池",
-    instructions: `你是伙伴拓展研究员。每次运行：
-1. 先用 search_partners 列出系统里已有的伙伴，避免重复推荐。
-2. 用 web_search 搜索中东（重点 UAE / 沙特）的 BI、数据分析实施商，关键词示例：
-   - "BI implementation partner Dubai"、"data analytics consulting Riyadh"
-   - "Tableau partner UAE"、"Power BI consulting Saudi Arabia"、"Qlik partner Middle East"
-3. 对有潜力的公司，用 web_search 查官网与客户案例，确认规模、技术栈、认证级别。
-4. 输出简报：每家候选一段——名称、所在地、技术栈、客户、为何适合帆软、建议接触方式。`,
+    description: "Manual run: search for new potential partner companies and output a research brief for the pool.",
+    instructions: `You are a partner expansion researcher. Each run:
+1. Use search_partners to list existing partners and avoid duplicates.
+2. Use web_search for BI / data analytics implementers in the Middle East (UAE / KSA focus).
+3. For promising companies, web_search for website and case studies (size, stack, certifications).
+4. Output a brief per candidate: name, location, stack, clients, fit for Fanruan, suggested outreach.`,
     skills: ["search_partners", "web_search", "linkedin_search"],
     trigger: "MANUAL",
     scopeType: "ALL",
   },
   {
-    name: "会前简报",
+    name: "Pre-meeting Brief",
     icon: "📋",
-    description: "手动运行（绑定伙伴）：汇总档案 + 最新外部动态，生成 1 页会前 brief",
-    instructions: `你是会议准备助理。每次运行，为绑定伙伴生成一页会前简报：
-1. 用 get_partner 读完整档案。
-2. 用 list_todos 查该伙伴的未完成待办（上次承诺的事项）。
-3. 用 linkedin_search 查关键联系人近期 LinkedIn 动态；用 web_search 查近两周新闻。
-4. 用 search_knowledge 检索可引用的帆软话术/竞品弹药。
-5. 输出 1 页简报，结构：
-   - 一句话现状（Pipeline 阶段 + 上次进展）
-   - 关键人物及态度（权力地图摘要：谁支持、谁阻挡、本次见谁）
-   - 未结事项（我们欠对方的 / 对方欠我们的）
-   - 本次会议建议议程（3 条以内）+ 想达成的目标
-   - 可引用的最新外部动态或竞品话术弹药
-6. 完成后用 create_document 保存（type=MEETING_PREP）。`,
+    description: "Manual (partner-bound): compile profile + latest external updates into a one-page pre-meeting brief.",
+    instructions: `You are a meeting prep assistant. Each run, for the bound partner produce a one-page brief:
+1. get_partner for full profile.
+2. list_todos for open items (prior commitments).
+3. linkedin_search for key contacts; web_search for recent news (2 weeks).
+4. search_knowledge for Fanruan talk tracks / competitive ammo.
+5. Structure: one-line status; key people and attitudes; open items; suggested agenda (≤3) and goals; external updates or ammo.
+6. create_document (type=MEETING_PREP) when done.`,
     skills: ["get_partner", "list_todos", "linkedin_search", "web_search", "search_knowledge", "create_document"],
     trigger: "MANUAL",
     scopeType: "PARTNER",
   },
   {
-    name: "联合解决方案报告",
+    name: "Joint Solution Report",
     icon: "📝",
-    description: "手动运行（绑定伙伴）：基于档案与知识库，生成可编辑的联合方案 Markdown 报告",
-    instructions: `你是联合解决方案撰写助手。每次运行，为绑定伙伴生成一份联合解决方案报告：
-1. 用 get_partner 读取伙伴完整档案（能力、客户、技术栈、打法）。
-2. 用 search_knowledge 检索团队知识库；用 read_kms 检索帆软 KMS 内部文档（产品、流程、政策）。
-3. 用 list_todos 查看与该伙伴相关的未完成事项，纳入方案推进节奏。
-4. 输出结构化的 Markdown 报告，包含：
-   - 目标客户画像与痛点
-   - 联合价值主张（帆软提供 + 伙伴提供）
-   - 典型场景与架构思路（文字描述即可）
-   - 定价/合作模式建议
-   - 90 天推进计划（3-5 条可执行动作）
-5. 完成后调用 create_document 保存到报告中心（type=JOINT_SOLUTION）。`,
+    description:
+      "Manual (partner-bound): generate an editable joint solution Markdown report from profile and knowledge base.",
+    instructions: `You are a joint solution author. Each run for the bound partner:
+1. get_partner for full profile.
+2. search_knowledge and read_kms for internal Fanruan docs.
+3. list_todos for open partner-related items.
+4. Markdown report: target customer & pain; joint value prop; scenarios; pricing/co-op model; 90-day plan (3–5 actions).
+5. create_document (type=JOINT_SOLUTION) when done.`,
     skills: ["get_partner", "search_knowledge", "read_kms", "list_todos", "create_document"],
     trigger: "MANUAL",
     scopeType: "PARTNER",
@@ -498,7 +489,7 @@ async function seedKnowledgeAndMaterials() {
 async function seedAgentTemplates() {
   // 一次性清理：已被「舆情监控」覆盖的旧模板
   await db.agent.deleteMany({
-    where: { isTemplate: true, name: { in: ["领英/外部动态监测", "竞品信号雷达"] } },
+    where: { isTemplate: true, name: { in: ["领英/外部动态监测", "竞品信号雷达", "LinkedIn / External Monitor (deprecated)", "Competitor Signal Radar (deprecated)"] } },
   });
   for (const t of agentTemplates) {
     const exists = await db.agent.findFirst({ where: { name: t.name, isTemplate: true } });

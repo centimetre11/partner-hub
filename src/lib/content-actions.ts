@@ -236,7 +236,7 @@ export async function cloneSkillAction(sourceId: string) {
   const created = await db.skill.create({
     data: {
       name: `${src.name}_copy`,
-      label: `${src.label}（副本）`,
+      label: `${src.label} (copy)`,
       description: src.description,
       kind: src.kind,
       promptBody: src.promptBody,

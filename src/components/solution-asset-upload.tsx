@@ -24,7 +24,7 @@ export function SolutionAssetUpload({
       <input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        placeholder="附件说明（如：架构图）"
+        placeholder="Attachment label (e.g. architecture diagram)"
         className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm w-40"
       />
       <FileUploadField onUploaded={onUploaded} />

@@ -12,7 +12,7 @@ export function PartnerStageGuidancePanel({ partner }: { partner: PartnerFramewo
   const total = guidance.exitChecks.length;
 
   return (
-    <Card title={`本阶段指导 · ${guidance.stage}. ${guidance.name}`}>
+    <Card title={`Stage guidance · ${guidance.stage}. ${guidance.name}`}>
       <p className="text-sm text-zinc-600 mb-4">{guidance.focus}</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
@@ -35,9 +35,9 @@ export function PartnerStageGuidancePanel({ partner }: { partner: PartnerFramewo
 
       <div className="border-t border-zinc-100 pt-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-zinc-700">阶段准出 ({passed}/{total})</span>
+          <span className="text-xs font-medium text-zinc-700">Stage exit ({passed}/{total})</span>
           {passed === total && total > 0 && (
-            <span className="text-xs text-emerald-600 font-medium">可推进下一阶段</span>
+            <span className="text-xs text-emerald-600 font-medium">Ready to advance</span>
           )}
         </div>
         <ul className="space-y-1.5">

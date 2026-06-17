@@ -16,10 +16,10 @@ export type ToolLoopOptions = {
   feature: string;
   userId?: string;
   maxSteps?: number;
-  /** 联网搜索等场景：强制走指定 API 配置 */
+  /** Force specific API config (e.g. web search) */
   apiConfigId?: string;
   emit?: TraceEmitter;
-  /** 是否把最终回复真·流式推送给前端（默认 true）。research/JSON 输出场景应设为 false */
+  /** Stream final reply to frontend (default true). Set false for research/JSON output */
   streamReply?: boolean;
   onToolDone?: (tc: ToolCall, result: string) => void | Promise<void>;
   executeTool: (tc: ToolCall) => Promise<string>;
@@ -48,7 +48,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
 
   for (let i = 0; i < max; i++) {
     let streamed = "";
-    // 真流式模式：每轮开始清空回复缓冲，避免上一轮（工具轮）的中间文本残留
+    // True streaming: clear reply buffer each round to avoid leftover intermediate text from tool rounds
     if (opts.emit && streamReply) opts.emit({ event: "reply_reset" });
 
     const { content, toolCalls, volcengineReplay } = await chatCompletion(opts.chat, {
@@ -57,7 +57,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
       feature: opts.feature,
       userId: opts.userId,
       apiConfigId: opts.apiConfigId,
-      // 真·流式：边生成边把文本增量推送给前端（仅 query 类场景；JSON 输出场景关闭）
+      // True streaming: push text deltas to frontend while generating (query scenarios only; off for JSON)
       onDelta:
         opts.emit && streamReply
           ? (d) => {
@@ -70,14 +70,14 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
 
     if (!toolCalls.length) {
       if (opts.emit && streamReply) {
-        // 最终回复：真流式已实时推送完毕；若未触发增量（兜底），再模拟逐字
+        // Final reply: true streaming already pushed; if no deltas (fallback), simulate character-by-character
         if (!streamed && content?.trim()) {
           await emitReplyChunks(opts.emit, content.trim());
         } else {
           opts.emit({ event: "reply_done" });
         }
       } else if (opts.emit && content?.trim()) {
-        // 非流式回复场景：把内容作为思考轨迹（reply 由上层处理）
+        // Non-streaming reply: emit as reasoning trace (reply handled by caller)
         const rid = nextTraceId("reason");
         const snippet = content.trim().length > 80 ? `${content.trim().slice(0, 77)}…` : content.trim();
         opts.emit({ event: "trace", step: { type: "reasoning", id: rid, content: snippet, status: "done" } });
@@ -85,7 +85,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
       return content;
     }
 
-    // 本轮要调用工具：把已流式推送的中间文本撤回，并转成「思考」轨迹
+    // Tool round: retract streamed intermediate text and convert to reasoning trace
     if (opts.emit) {
       if (streamReply && streamed.trim()) opts.emit({ event: "reply_reset" });
       const reasoning = (streamed || content || "").trim();
@@ -114,7 +114,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
           id: step.id,
           patch: { status: "done" },
         });
-        // 提案抽取不阻塞下一步工具/流式输出
+        // Proposal extraction does not block next tool/stream output
         void opts.onToolDone?.(tc, result);
         opts.chat.push({ role: "tool", content: result, tool_call_id: tc.id });
       } catch (e) {
@@ -124,7 +124,7 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
           id: step.id,
           patch: { status: "error", error: msg.slice(0, 120) },
         });
-        opts.chat.push({ role: "tool", content: `错误：${msg}`, tool_call_id: tc.id });
+        opts.chat.push({ role: "tool", content: `Error: ${msg}`, tool_call_id: tc.id });
       }
     }
   }

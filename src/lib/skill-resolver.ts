@@ -24,7 +24,7 @@ export async function resolveAgentSkills(agentId?: string, skillsJson = "[]"): P
     const links = await db.agentSkill.findMany({ where: { agentId }, include: { skill: true } });
     for (const { skill } of links) {
       if (skill.kind === "PROMPT" && skill.promptBody) {
-        promptFragments.push(`【技能：${skill.label}】\n${skill.promptBody}`);
+        promptFragments.push(`[Skill: ${skill.label}]\n${skill.promptBody}`);
       } else if (skill.isBuiltin || skill.kind === "BUILTIN") {
         names.add(skill.name);
       }
@@ -49,7 +49,7 @@ export async function resolveAgentSkills(agentId?: string, skillsJson = "[]"): P
     id: s.id,
     name: s.name,
     label: s.label,
-    desc: s.description ?? "自定义方法论技能",
+    desc: s.description ?? "Custom methodology skill",
   }));
   const skillOptions: ResolvedAgentSkills["skillOptions"] = [
     ...toolOptions.map((t) => ({ ...t, kind: "BUILTIN" })),

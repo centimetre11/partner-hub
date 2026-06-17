@@ -47,23 +47,23 @@ export default async function PlaybookLibraryPage({
   return (
     <div className="pb-16">
       <PageHeader
-        title="打法库"
-        desc="团队共享的 playbook 与 pitch；从各伙伴沉淀，供其他伙伴参考选用"
+        title="Playbook Library"
+        desc="Team-shared playbooks and pitches — captured from partners for reference across the portfolio"
       />
       <div className="px-8 max-w-4xl">
         <form className="mb-4 flex gap-2">
           <input
             name="q"
             defaultValue={q}
-            placeholder="搜索标题、内容、来源伙伴…"
+            placeholder="Search title, content, source partner…"
             className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
           />
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm hover:bg-zinc-700">搜索</button>
+          <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm hover:bg-zinc-700">Search</button>
         </form>
 
         {grouped.length === 0 ? (
           <div className="text-center text-sm text-zinc-400 py-16 bg-white rounded-xl border">
-            库中暂无条目。在伙伴详情「定位打法」里写好 playbook/pitch 后，点「存入库」即可沉淀。
+            No entries yet. On a partner&apos;s Positioning &amp; Playbook tab, write playbook/pitch content and click &quot;Save to library&quot; to capture it here.
           </div>
         ) : (
           <div className="space-y-4">
@@ -76,9 +76,9 @@ export default async function PlaybookLibraryPage({
                       <div>
                         <h2 className="font-semibold text-zinc-900">{latest.title}</h2>
                         <div className="flex flex-wrap gap-1.5 mt-2">
-                          <Badge tone="indigo">最新 v{latest.version}</Badge>
+                          <Badge tone="indigo">Latest v{latest.version}</Badge>
                           {versions.length > 1 && (
-                            <Badge tone="zinc">{versions.length} 个版本</Badge>
+                            <Badge tone="zinc">{versions.length} versions</Badge>
                           )}
                           {(latest.industries ? parseIndustries({ industries: latest.industries }) : latest.industry ? [latest.industry] : []).map((code) => (
                             <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
@@ -92,7 +92,7 @@ export default async function PlaybookLibraryPage({
                           <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, latest.category ?? "OTHER")}</Badge>
                         </div>
                         <p className="text-xs text-zinc-400 mt-2">
-                          {latest.sourcePartnerName && <>来源：{latest.sourcePartnerName} · </>}
+                          {latest.sourcePartnerName && <>Source: {latest.sourcePartnerName} · </>}
                           {latest.createdBy?.name ?? "—"} · {fmtDateTime(latest.updatedAt)}
                           {latest.notes && <> · {latest.notes}</>}
                         </p>
@@ -116,7 +116,7 @@ export default async function PlaybookLibraryPage({
                   {versions.length > 1 && (
                     <details className="px-5 pb-4">
                       <summary className="text-xs text-indigo-600 cursor-pointer hover:underline">
-                        查看历史版本 ({versions.length - 1})
+                        View version history ({versions.length - 1})
                       </summary>
                       <ul className="mt-3 space-y-3 border-t border-zinc-50 pt-3">
                         {versions.slice(1).map((v) => (
@@ -124,7 +124,7 @@ export default async function PlaybookLibraryPage({
                             <div className="flex justify-between gap-2 items-start">
                               <span className="text-xs font-medium text-zinc-600">v{v.version} · {fmtDateTime(v.updatedAt)}</span>
                               <form action={deleteGtmLibraryAction.bind(null, v.id)}>
-                                <button className="text-xs text-zinc-400 hover:text-red-600">删除</button>
+                                <button className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
                               </form>
                             </div>
                             {v.playbook && (
@@ -137,7 +137,7 @@ export default async function PlaybookLibraryPage({
                   )}
                   <div className="px-5 py-3 bg-zinc-50/80 border-t border-zinc-100 flex justify-end">
                     <form action={deleteGtmLibraryAction.bind(null, latest.id)}>
-                      <button className="text-xs text-zinc-400 hover:text-red-600">删除最新版本</button>
+                      <button className="text-xs text-zinc-400 hover:text-red-600">Delete latest version</button>
                     </form>
                   </div>
                 </div>
@@ -147,8 +147,8 @@ export default async function PlaybookLibraryPage({
         )}
 
         <p className="text-xs text-zinc-400 mt-6">
-          在<Link href="/partners" className="text-indigo-600 hover:underline">伙伴详情 → 定位打法</Link>
-          中编辑内容，可「从库参考」或「存入库」（支持替换 / 新版本）。
+          On <Link href="/partners" className="text-indigo-600 hover:underline">partner details → Positioning &amp; Playbook</Link>
+          you can &quot;Reference from library&quot; or &quot;Save to library&quot; (replace or new version).
         </p>
       </div>
     </div>

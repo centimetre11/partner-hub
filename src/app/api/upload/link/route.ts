@@ -4,15 +4,15 @@ import { saveLinkAsset } from "@/lib/assets";
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   let url = "";
   try {
     const body = await req.json();
     url = String(body?.url ?? "").trim();
   } catch {
-    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request format" }, { status: 400 });
   }
-  if (!url) return NextResponse.json({ error: "缺少 url" }, { status: 400 });
+  if (!url) return NextResponse.json({ error: "Missing url" }, { status: 400 });
   try {
     const asset = await saveLinkAsset(url, uid);
     return NextResponse.json({

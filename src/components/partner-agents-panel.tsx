@@ -29,9 +29,9 @@ export function PartnerAgentsPanel({
   templates: TemplateRow[];
 }) {
   return (
-    <Card title={`快捷 Agent（${agents.length}）`}>
+    <Card title={`Quick Agents (${agents.length})`}>
       <p className="text-xs text-zinc-500 mb-4">
-        绑定本伙伴的自动化助手：会前简报、动态监测、舆情监控、联合方案报告等
+        Automation assistants bound to this partner: pre-meeting briefs, dynamic monitoring, sentiment tracking, joint solution reports, etc.
       </p>
       <div className="space-y-3">
         {agents.map((a) => (
@@ -42,18 +42,18 @@ export function PartnerAgentsPanel({
               </Link>
               {a.description && <p className="text-xs text-zinc-400 truncate">{a.description}</p>}
               {a.lastRunAt && (
-                <p className="text-xs text-zinc-400">上次运行 {fmtDateTime(a.lastRunAt)}</p>
+                <p className="text-xs text-zinc-400">Last run {fmtDateTime(a.lastRunAt)}</p>
               )}
             </div>
             <RunButton agentId={a.id} compact />
           </div>
         ))}
-        {agents.length === 0 && <EmptyState text="暂无绑定 Agent" />}
+        {agents.length === 0 && <EmptyState text="No agents bound yet" />}
       </div>
 
       {templates.length > 0 && (
         <div className="mt-5 pt-4 border-t border-zinc-100">
-          <div className="text-xs text-zinc-500 mb-2">从模板快速创建（绑定本伙伴）</div>
+          <div className="text-xs text-zinc-500 mb-2">Create quickly from template (bound to this partner)</div>
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <form key={t.id} action={clonePartnerAgentAction.bind(null, t.id, partnerId)}>
@@ -67,7 +67,7 @@ export function PartnerAgentsPanel({
       )}
 
       <Link href={`/agents/new?partnerId=${partnerId}`} className="mt-4 text-sm text-indigo-600 hover:underline block">
-        + 自定义 Agent
+        + Custom Agent
       </Link>
     </Card>
   );

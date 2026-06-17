@@ -12,7 +12,7 @@ export function TaxonomySelectField({
   name,
   value,
   options,
-  emptyLabel = "待选择",
+  emptyLabel = "Select…",
 }: {
   dimension: TaxonomyDimension;
   name: string;
@@ -30,7 +30,7 @@ export function TaxonomySelectField({
           target="_blank"
           className="text-xs text-indigo-600 hover:underline shrink-0"
         >
-          维度库 +
+          Taxonomy +
         </Link>
       </div>
       <select name={name} defaultValue={value} className={input}>
@@ -38,7 +38,7 @@ export function TaxonomySelectField({
         {options.map((o) => (
           <option key={o.code} value={o.code}>
             {o.label}
-            {!o.isBuiltin ? " (自定义)" : ""}
+            {!o.isBuiltin ? " (custom)" : ""}
           </option>
         ))}
       </select>
@@ -61,13 +61,13 @@ export function TaxonomyMultiField({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-zinc-500">{meta.label}（可多选）</span>
+        <span className="text-xs text-zinc-500">{meta.label} (multi-select)</span>
         <Link
           href={meta.libraryPath}
           target="_blank"
           className="text-xs text-indigo-600 hover:underline shrink-0"
         >
-          维度库 +
+          Taxonomy +
         </Link>
       </div>
       <div className="rounded-lg border border-zinc-200 p-2 max-h-36 overflow-y-auto grid grid-cols-2 gap-1">

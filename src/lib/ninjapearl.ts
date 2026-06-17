@@ -75,19 +75,19 @@ export function linkedInSlugToLabel(url: string): string | null {
 function formatUpdates(data: NinjaPearUpdatesResponse): string {
   const lines: string[] = [];
   if (data.x_profile) lines.push(`X/Twitter：${data.x_profile}`);
-  if (data.blogs?.length) lines.push(`博客源：${data.blogs.join(", ")}`);
-  if (data.youtube_channels?.length) lines.push(`YouTube：${data.youtube_channels.join(", ")}`);
+  if (data.blogs?.length) lines.push(`Blog sources: ${data.blogs.join(", ")}`);
+  if (data.youtube_channels?.length) lines.push(`YouTube: ${data.youtube_channels.join(", ")}`);
 
   const updates = data.updates ?? [];
   if (!updates.length) {
-    lines.push("（暂无博客 / X / YouTube 更新）");
+    lines.push("(No recent blog / X / YouTube updates)");
     return lines.join("\n");
   }
 
   updates.forEach((u, i) => {
     const date = u.timestamp ? u.timestamp.slice(0, 10) : "";
     const src = u.source ? ` [${u.source}]` : "";
-    lines.push(`${i + 1}. ${u.title ?? "无标题"}${src}${date ? ` · ${date}` : ""}`);
+    lines.push(`${i + 1}. ${u.title ?? "Untitled"}${src}${date ? ` · ${date}` : ""}`);
     if (u.url) lines.push(`   ${u.url}`);
     if (u.description) lines.push(`   ${u.description.slice(0, 400)}`);
   });
@@ -98,11 +98,11 @@ function formatUpdates(data: NinjaPearUpdatesResponse): string {
 export async function fetchCompanyUpdates(website: string): Promise<NinjaPearResult> {
   const key = getNinjaPearApiKey();
   if (!key) {
-    return { ok: false, error: "未配置 NINJAPEARL_API_KEY（或 PROXYCURL_API_KEY）" };
+    return { ok: false, error: "NINJAPEARL_API_KEY (or PROXYCURL_API_KEY) is not configured" };
   }
 
   let site = website.trim();
-  if (!site) return { ok: false, error: "缺少公司官网 URL" };
+  if (!site) return { ok: false, error: "Company website URL is required" };
   if (!/^https?:\/\//i.test(site)) site = `https://${site}`;
 
   try {
@@ -118,17 +118,17 @@ export async function fetchCompanyUpdates(website: string): Promise<NinjaPearRes
       if (res.status === 401) {
         return {
           ok: false,
-          error: "NinjaPear API Key 无效。Proxycurl 已下线，请到 https://nubela.co/dashboard 确认 Key 是否有效。",
+          error: "Invalid NinjaPear API Key. Proxycurl is deprecated — verify your key at https://nubela.co/dashboard",
         };
       }
-      if (res.status === 403) return { ok: false, error: "NinjaPear 余额不足" };
-      return { ok: false, error: `NinjaPear 请求失败：${msg}` };
+      if (res.status === 403) return { ok: false, error: "NinjaPear account balance insufficient" };
+      return { ok: false, error: `NinjaPear request failed: ${msg}` };
     }
 
     const text = formatUpdates(body);
-    if (!text.trim()) return { ok: false, error: "NinjaPear 未返回有效内容" };
+    if (!text.trim()) return { ok: false, error: "NinjaPear returned no usable content" };
     return { ok: true, data: body, text };
   } catch (e) {
-    return { ok: false, error: `NinjaPear 请求异常：${e instanceof Error ? e.message : String(e)}` };
+    return { ok: false, error: `NinjaPear request error: ${e instanceof Error ? e.message : String(e)}` };
   }
 }

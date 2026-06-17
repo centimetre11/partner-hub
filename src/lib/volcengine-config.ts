@@ -37,7 +37,7 @@ function extractJsonBlock(raw: string): string {
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
   if (start >= 0 && end > start) return raw.slice(start, end + 1);
-  throw new Error("未找到 JSON 请求体，请粘贴完整 curl 或 JSON");
+  throw new Error("JSON request body not found. Paste the full curl or JSON");
 }
 
 function extractUrl(raw: string): string | undefined {
@@ -94,7 +94,7 @@ export function buildVolcengineSnippetFromConfig(
   const body: Record<string, unknown> = {
     model,
     ...(extra ?? {}),
-    input: [{ role: "user", content: [{ type: "input_text", text: "示例问题" }] }],
+    input: [{ role: "user", content: [{ type: "input_text", text: "Sample question" }] }],
   };
   return `curl --location '${baseUrl.replace(/\/+$/, "")}/responses' \\
 --header "Authorization: Bearer $ARK_API_KEY" \\
@@ -104,7 +104,7 @@ export function buildVolcengineSnippetFromConfig(
 
 export function parseVolcengineSnippet(raw: string): { ok: true; data: VolcengineParsedConfig } | { ok: false; error: string } {
   const text = raw.trim();
-  if (!text) return { ok: false, error: "请粘贴 curl 命令或 JSON 请求体" };
+  if (!text) return { ok: false, error: "Paste the curl command or JSON request body" };
 
   try {
     let body: Record<string, unknown>;
@@ -116,7 +116,7 @@ export function parseVolcengineSnippet(raw: string): { ok: true; data: Volcengin
 
     const modelRaw = String(body.model ?? "").trim();
     const model = sanitizeVolcengineModel(modelRaw);
-    if (!model) return { ok: false, error: "请求体中缺少有效 model（应为 ep- 开头的推理接入点 ID）" };
+    if (!model) return { ok: false, error: "Request body is missing a valid model (should be an ep- inference endpoint ID)" };
 
     const url = extractUrl(text);
     const baseUrl = normalizeBaseUrl(url ?? DEFAULT_BASE_URL);
@@ -140,7 +140,7 @@ export function parseVolcengineSnippet(raw: string): { ok: true; data: Volcengin
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "解析失败，请检查格式" };
+    return { ok: false, error: e instanceof Error ? e.message : "Parse failed; check the format" };
   }
 }
 
@@ -148,16 +148,16 @@ export function summarizeVolcengineExtra(extra: VolcengineExtraConfig): string[]
   const lines: string[] = [];
   const webSearch = (extra.tools ?? []).find((t) => t.type === "web_search");
   if (webSearch) {
-    const maxKeyword = webSearch.max_keyword ?? "默认";
-    const limit = webSearch.limit ?? "默认";
-    const sources = Array.isArray(webSearch.sources) ? webSearch.sources.join(", ") : "默认";
-    lines.push(`联网搜索：max_keyword=${maxKeyword}，limit=${limit}，sources=${sources}`);
+    const maxKeyword = webSearch.max_keyword ?? "default";
+    const limit = webSearch.limit ?? "default";
+    const sources = Array.isArray(webSearch.sources) ? webSearch.sources.join(", ") : "default";
+    lines.push(`Web search: max_keyword=${maxKeyword}, limit=${limit}, sources=${sources}`);
   } else if (extra.tools?.length) {
-    lines.push(`工具：${extra.tools.map((t) => String(t.type ?? "unknown")).join(", ")}`);
+    lines.push(`Tools: ${extra.tools.map((t) => String(t.type ?? "unknown")).join(", ")}`);
   }
-  if (extra.instructions) lines.push(`系统指令：${String(extra.instructions).slice(0, 60)}…`);
-  if (extra.stream) lines.push("流式输出：开启（系统内调用默认非流式）");
-  if (extra.max_output_tokens) lines.push(`最大输出 Token：${extra.max_output_tokens}`);
+  if (extra.instructions) lines.push(`System instructions: ${String(extra.instructions).slice(0, 60)}…`);
+  if (extra.stream) lines.push("Streaming: enabled (in-app calls default to non-streaming)");
+  if (extra.max_output_tokens) lines.push(`Max output tokens: ${extra.max_output_tokens}`);
   return lines;
 }
 
@@ -165,8 +165,8 @@ export const VOLCENGINE_SNIPPET_PLACEHOLDER = `curl --location 'https://ark.cn-b
 --header "Authorization: Bearer $ARK_API_KEY" \\
 --header 'Content-Type: application/json' \\
 --data '{
-  "model": "ep-你的接入点ID",
+  "model": "ep-your-endpoint-id",
   "stream": true,
   "tools": [{ "type": "web_search", "max_keyword": 3 }],
-  "input": [{ "role": "user", "content": [{ "type": "input_text", "text": "今天有什么热点新闻" }] }]
+  "input": [{ "role": "user", "content": [{ "type": "input_text", "text": "What are today's trending news?" }] }]
 }'`;

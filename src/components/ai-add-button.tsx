@@ -8,7 +8,7 @@ import { AiIntakePanel } from "./ai-intake-panel";
 export function AiAddButton({
   scope,
   partnerId,
-  label = "✦ AI 加",
+  label = "✦ AI Add",
   variant = "ghost",
   className,
 }: {

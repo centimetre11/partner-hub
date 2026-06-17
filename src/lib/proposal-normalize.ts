@@ -22,7 +22,7 @@ export function normalizeProposal(p: IntakeProposal | ExtractionProposal): Norma
   if (isIntakeProposal(p)) {
     return {
       partnerName: p.partnerName,
-      summaryTitle: p.partnerName ? `新建伙伴：${p.partnerName}` : "待录入内容",
+      summaryTitle: p.partnerName ? `New partner: ${p.partnerName}` : "Pending intake",
       summary: p.summary,
       signals: [],
       fieldUpdates: p.fields,
@@ -80,7 +80,7 @@ export function normalizedToExtraction(p: NormalizedProposal, partnerId?: string
   return {
     partnerId,
     partnerName: p.partnerName,
-    summaryTitle: p.summaryTitle ?? "AI 提取",
+    summaryTitle: p.summaryTitle ?? "AI extraction",
     summary: p.summary,
     fieldUpdates: p.fieldUpdates,
     contacts: p.contacts,

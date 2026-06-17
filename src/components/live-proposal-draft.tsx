@@ -31,7 +31,7 @@ export function LiveProposalDraft({
   proposal,
   changes,
   onConfirm,
-  confirmLabel = "确认入库",
+  confirmLabel = "Confirm & save",
   questions = [],
   clarifications = [],
   onClarify,
@@ -108,8 +108,8 @@ export function LiveProposalDraft({
         <input type="checkbox" checked={!off} onChange={() => toggle(k)} className="mt-1 rounded" />
         <div className="min-w-0 flex-1 text-sm">
           {children}
-          {isNew && flash && <span className="ml-2 text-[10px] text-emerald-600 font-medium">新</span>}
-          {isUpdated && flash && <span className="ml-2 text-[10px] text-amber-600 font-medium">已更新</span>}
+          {isNew && flash && <span className="ml-2 text-[10px] text-emerald-600 font-medium">New</span>}
+          {isUpdated && flash && <span className="ml-2 text-[10px] text-amber-600 font-medium">Updated</span>}
         </div>
       </label>
     );
@@ -119,7 +119,7 @@ export function LiveProposalDraft({
     return (
       <div className="flex flex-col h-full min-h-0">
         <div className="flex-1 flex items-center justify-center text-base text-zinc-400 text-center px-8">
-          {loading ? "AI 正在调研，找到的信息会实时出现在这里…" : "AI 找到的信息会实时出现在这里"}
+          {loading ? "AI is researching — findings will appear here live…" : "AI findings will appear here live"}
         </div>
       </div>
     );
@@ -137,13 +137,13 @@ export function LiveProposalDraft({
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-center justify-between mb-3">
-        <div className="text-base font-semibold text-zinc-700">活草稿 · 待确认入库</div>
+        <div className="text-base font-semibold text-zinc-700">Live draft · pending confirmation</div>
         <div className="text-sm text-zinc-400">
-          已发现 {count} 项
+          Found {count} item{count === 1 ? "" : "s"}
           {changes && (changes.added.length > 0 || changes.updated.length > 0) && (
             <span className="text-emerald-600 ml-1">
-              · 刚刚 +{changes.added.length}
-              {changes.updated.length > 0 ? ` / 更新 ${changes.updated.length}` : ""}
+              · just now +{changes.added.length}
+              {changes.updated.length > 0 ? ` / updated ${changes.updated.length}` : ""}
             </span>
           )}
         </div>
@@ -162,7 +162,7 @@ export function LiveProposalDraft({
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
         {total === 0 ? (
-          <p className="text-sm text-zinc-400 text-center py-8">还没有可入库的内容…</p>
+          <p className="text-sm text-zinc-400 text-center py-8">Nothing to save yet…</p>
         ) : (
           <>
             {normalized.partnerName && (
@@ -172,7 +172,7 @@ export function LiveProposalDraft({
                 isNew={changes?.added.includes("partner")}
                 isUpdated={changes?.updated.includes("partner")}
               >
-                <span className="font-medium text-zinc-800">新建伙伴</span>
+                <span className="font-medium text-zinc-800">New partner</span>
                 <span className="text-emerald-700 font-medium ml-1.5">{normalized.partnerName}</span>
               </Row>
             )}
@@ -199,10 +199,10 @@ export function LiveProposalDraft({
               return (
                 <Row key={k} k={k} tone="contact" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
                   <span className="font-medium text-zinc-800">
-                    {c.action === "update" ? "更新人物" : "人物"}：{c.name}
+                    {c.action === "update" ? "Update contact" : "Contact"}: {c.name}
                   </span>
                   <span className="text-zinc-500 ml-1.5 text-xs">
-                    {[c.title, c.role && (CONTACT_ROLE_LABELS[c.role] ?? c.role), typeof c.attitude === "number" && `态度:${attitudeLabel(c.attitude)}`]
+                    {[c.title, c.role && (CONTACT_ROLE_LABELS[c.role] ?? c.role), typeof c.attitude === "number" && `Attitude: ${attitudeLabel(c.attitude)}`]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
@@ -214,7 +214,7 @@ export function LiveProposalDraft({
               return (
                 <Row key={k} k={k} tone="opp" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
                   <span className="font-medium text-zinc-800">
-                    {o.action === "update" ? "更新商机" : "商机"}：{o.name}
+                    {o.action === "update" ? "Update opportunity" : "Opportunity"}: {o.name}
                   </span>
                   <span className="text-zinc-500 ml-1.5 text-xs">
                     {[o.client, o.amount, o.stage].filter(Boolean).join(" · ")}
@@ -226,7 +226,7 @@ export function LiveProposalDraft({
               const k = todoKey(t.title) || `t${i}`;
               return (
                 <Row key={k} k={k} tone="todo" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
-                  <span className="font-medium text-zinc-800">待办：{t.title}</span>
+                  <span className="font-medium text-zinc-800">Todo: {t.title}</span>
                 </Row>
               );
             })}
@@ -241,20 +241,20 @@ export function LiveProposalDraft({
 
       {questions.length > 0 && !ready && clarifications.length === 0 && (
         <div className="shrink-0 mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
-          补充这些会更完整：{questions.join("；")}
+          Adding these would make the profile more complete: {questions.join("; ")}
         </div>
       )}
 
       <div className="shrink-0 sticky bottom-0 pt-3 mt-2 border-t border-zinc-100 bg-white/95 backdrop-blur-sm flex items-center justify-between gap-3">
         <div className="text-xs text-zinc-400">
-          共 {total} 项 · 已排除 {excluded.size} 项
+          {total} item{total === 1 ? "" : "s"} · {excluded.size} excluded
         </div>
         <button
           onClick={confirm}
           disabled={applying || total - excluded.size <= 0}
           className="rounded-lg bg-emerald-600 text-white font-medium px-5 py-2.5 text-sm hover:bg-emerald-700 disabled:opacity-50 shrink-0"
         >
-          {applying ? "写入中…" : ready ? `✓ ${confirmLabel}` : confirmLabel}
+          {applying ? "Saving…" : ready ? `✓ ${confirmLabel}` : confirmLabel}
         </button>
       </div>
     </div>
@@ -270,7 +270,7 @@ function ClarifyBlock({
   onClarify: (text: string) => void;
   disabled?: boolean;
 }) {
-  // 多选题的本地勾选状态：{ [clarifyId]: Set<option> }
+  // Local selection state for multi-select clarifications: { [clarifyId]: Set<option> }
   const [picked, setPicked] = useState<Record<string, Set<string>>>({});
 
   const togglePick = (id: string, opt: string) =>
@@ -292,15 +292,15 @@ function ClarifyBlock({
     if (disabled) return;
     const chosen = [...(picked[c.id] ?? [])];
     if (!chosen.length) return;
-    onClarify(`${c.question} ${chosen.join("、")}`);
+    onClarify(`${c.question} ${chosen.join(", ")}`);
     setPicked((prev) => ({ ...prev, [c.id]: new Set() }));
   };
 
   return (
     <div className="shrink-0 mt-2 space-y-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
       <div className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
-        <span>需要你帮忙澄清几点</span>
-        <span className="text-[10px] text-amber-500">（点选即可，也可在左侧直接补充）</span>
+        <span>Need your help clarifying a few things</span>
+        <span className="text-[10px] text-amber-500">(click to select, or add details on the left)</span>
       </div>
       {clarifications.map((c) => {
         const sel = picked[c.id] ?? new Set<string>();
@@ -327,7 +327,7 @@ function ClarifyBlock({
                 );
               })}
               {c.allowOther && !c.multi && (
-                <span className="text-[10px] text-amber-500 self-center">其他情况可在左侧输入</span>
+                <span className="text-[10px] text-amber-500 self-center">For other cases, type on the left</span>
               )}
             </div>
             {c.multi && (
@@ -337,7 +337,7 @@ function ClarifyBlock({
                 onClick={() => submitMulti(c)}
                 className="rounded-lg bg-amber-600 text-white px-3 py-1 text-xs hover:bg-amber-700 disabled:opacity-50"
               >
-                确认所选（{sel.size}）
+                Confirm selection ({sel.size})
               </button>
             )}
           </div>

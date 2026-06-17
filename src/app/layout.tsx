@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "帆软中东伙伴管理系统",
-  description: "AI 原生的中东区合作伙伴管理系统",
+  title: "Fanruan MEA Partner Hub",
+  description: "AI-native partner management for Fanruan Middle East & Africa",
 };
 
 export default function RootLayout({
@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full">{children}</body>
     </html>
   );

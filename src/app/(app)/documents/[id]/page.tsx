@@ -31,7 +31,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="pb-16">
-      <PageHeader title="编辑报告" desc={doc.partner ? `伙伴：${doc.partner.name}` : undefined} />
+      <PageHeader title="Edit report" desc={doc.partner ? `Partner: ${doc.partner.name}` : undefined} />
       <form action={upsertDocumentAction} className="px-8 max-w-4xl space-y-4">
         <input type="hidden" name="id" value={doc.id} />
         <div className="bg-white rounded-xl border p-5 space-y-3">
@@ -43,34 +43,34 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               ))}
             </select>
             <select name="status" defaultValue={doc.status} className={input}>
-              <option value="DRAFT">草稿</option>
-              <option value="FINAL">定稿</option>
+              <option value="DRAFT">Draft</option>
+              <option value="FINAL">Final</option>
             </select>
           </div>
           <select name="partnerId" defaultValue={doc.partnerId ?? ""} className={input}>
-            <option value="">不绑定伙伴</option>
+            <option value="">No partner</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
           <RichEditor defaultValue={doc.content} />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-indigo-700">保存</button>
+        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-indigo-700">Save</button>
       </form>
 
       <div className="px-8 max-w-4xl mt-4">
         <div className="bg-white rounded-xl border p-5 space-y-3">
-          <div className="text-sm font-medium text-zinc-700">附件（上传文件或贴云盘链接）</div>
+          <div className="text-sm font-medium text-zinc-700">Attachments (upload files or paste cloud drive links)</div>
           <ul className="space-y-2">
             {doc.assets.map((a) => (
               <li key={a.assetId} className="flex items-center gap-2">
                 <AssetCard asset={a.asset} label={a.label} />
                 <form action={unlinkDocumentAssetAction.bind(null, doc.id, a.assetId)}>
-                  <button className="text-xs text-zinc-400 hover:text-red-600">移除</button>
+                  <button className="text-xs text-zinc-400 hover:text-red-600">Remove</button>
                 </form>
               </li>
             ))}
-            {doc.assets.length === 0 && <li className="text-xs text-zinc-400">暂无附件</li>}
+            {doc.assets.length === 0 && <li className="text-xs text-zinc-400">No attachments</li>}
           </ul>
           <DocumentAssetUpload documentId={doc.id} action={linkDocumentAssetAction} />
         </div>

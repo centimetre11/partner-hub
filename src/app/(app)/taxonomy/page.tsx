@@ -36,8 +36,8 @@ export default async function TaxonomyPage({
   return (
     <div className="pb-16">
       <PageHeader
-        title="维度库"
-        desc="团队共用的分类词典：伙伴类型、行业、价值模式、竞品基因。伙伴实例从这里选值；不够用在此新增。"
+        title="Taxonomy Library"
+        desc="Shared team taxonomy: partner archetypes, industries, value patterns, and competitor DNA. Partners pick values from here; add new options when needed."
       />
 
       <div className="px-8 max-w-3xl">
@@ -58,34 +58,34 @@ export default async function TaxonomyPage({
         </div>
 
         <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 mb-6 text-sm text-indigo-900">
-          <p className="font-medium mb-1">和伙伴实例怎么配合？</p>
+          <p className="font-medium mb-1">How does this work with partner records?</p>
           <ul className="text-xs text-indigo-800/90 space-y-1 list-disc pl-4">
-            <li><strong>维度库</strong>定义「有哪些选项」——改这里，所有伙伴的下拉/多选立刻多出可选项</li>
-            <li><strong>伙伴实例</strong>只存选项编码（如 BANKING、BI_MIGRATOR），展示时查维度库拿中文名</li>
-            <li><strong>打法库</strong>存 playbook/pitch 时，会快照当时的维度标签，方便按行业/类型检索参考</li>
-            <li>内置选项不可删；自定义选项不用了可在此删除</li>
+            <li><strong>Taxonomy Library</strong> defines available options — changes here immediately add choices to all partner dropdowns and multi-selects</li>
+            <li><strong>Partner records</strong> store option codes only (e.g. BANKING, BI_MIGRATOR); display labels are looked up from the taxonomy library</li>
+            <li><strong>Playbook Library</strong> snapshots dimension labels when saving playbooks/pitches, so you can search by industry or archetype</li>
+            <li>Built-in options cannot be deleted; unused custom options can be removed here</li>
           </ul>
         </div>
 
         <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 mb-6">
-          <h2 className="text-sm font-semibold mb-3">添加 · {TAXONOMY_DIMENSION_META[activeDim].label}</h2>
+          <h2 className="text-sm font-semibold mb-3">Add · {TAXONOMY_DIMENSION_META[activeDim].label}</h2>
           <form action={createTaxonomyOptionAction} className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <input type="hidden" name="dimension" value={activeDim} />
             <label className="space-y-1 md:col-span-2">
-              <span className="text-xs text-zinc-500">显示名称 *</span>
-              <input name="label" required placeholder="如：云渠道联合" className={input} />
+              <span className="text-xs text-zinc-500">Display name *</span>
+              <input name="label" required placeholder="e.g. Cloud channel alliance" className={input} />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-zinc-500">编码（可选，留空自动生成）</span>
+              <span className="text-xs text-zinc-500">Code (optional, auto-generated if blank)</span>
               <input name="code" placeholder="CLOUD_CHANNEL" className={input} />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-zinc-500">说明（可选）</span>
-              <input name="description" placeholder="何时选用此类型" className={input} />
+              <span className="text-xs text-zinc-500">Description (optional)</span>
+              <input name="description" placeholder="When to use this option" className={input} />
             </label>
             <div className="md:col-span-2 flex justify-end">
               <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">
-                添加到维度库
+                Add to taxonomy library
               </button>
             </div>
           </form>
@@ -93,7 +93,7 @@ export default async function TaxonomyPage({
 
         <div className="space-y-2">
           <h2 className="text-sm font-semibold text-zinc-700">
-            当前选项（{options.length}）
+            Current options ({options.length})
           </h2>
           {options.map((o) => (
             <div
@@ -105,9 +105,9 @@ export default async function TaxonomyPage({
                   <span className="font-medium text-zinc-900">{o.label}</span>
                   <code className="text-xs text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded">{o.code}</code>
                   {o.isBuiltin ? (
-                    <Badge tone="zinc">内置</Badge>
+                    <Badge tone="zinc">Built-in</Badge>
                   ) : (
-                    <Badge tone="green">自定义</Badge>
+                    <Badge tone="green">Custom</Badge>
                   )}
                 </div>
                 {o.description && <p className="text-xs text-zinc-500 mt-1">{o.description}</p>}
@@ -119,7 +119,7 @@ export default async function TaxonomyPage({
               </div>
               {!o.isBuiltin && (
                 <form action={deleteTaxonomyOptionAction.bind(null, o.id)}>
-                  <button className="text-xs text-zinc-400 hover:text-red-600 shrink-0">删除</button>
+                  <button className="text-xs text-zinc-400 hover:text-red-600 shrink-0">Delete</button>
                 </form>
               )}
             </div>
@@ -127,8 +127,8 @@ export default async function TaxonomyPage({
         </div>
 
         <p className="text-xs text-zinc-400 mt-8">
-          回到<Link href="/partners" className="text-indigo-600 hover:underline">伙伴详情</Link>
-          编辑画像，下拉旁有「维度库 +」可跳转至此。
+          Return to <Link href="/partners" className="text-indigo-600 hover:underline">partner details</Link>
+          to edit profiles — each dropdown has a &quot;Taxonomy +&quot; link to jump here.
         </p>
       </div>
     </div>

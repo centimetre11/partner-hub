@@ -62,24 +62,24 @@ function buildPlannedSteps(
   const targetDims = dimKey === ALL_KEY ? dims : [dimKey];
   const enabled = sources.filter((s) => s.enabled);
   const steps: ScanStep[] = [
-    { label: "准备", status: "ok", detail: "连接服务器，检查联网配置…" },
+    { label: "Prepare", status: "ok", detail: "Connecting to server, checking network config…" },
   ];
   for (const d of targetDims) {
     steps.push({
-      label: `检索·${MONITOR_DIMENSION_LABELS[d] ?? d}`,
+      label: `Search · ${MONITOR_DIMENSION_LABELS[d] ?? d}`,
       status: "ok",
-      detail: "联网搜索中…",
+      detail: "Searching online…",
     });
   }
   if (targetDims.length > 0) {
-    steps.push({ label: "补充·综合检索", status: "ok", detail: "若各维度结果较少则自动触发" });
+    steps.push({ label: "Supplement · Broad search", status: "ok", detail: "Auto-triggered when dimension results are sparse" });
   }
   for (const s of enabled) {
-    steps.push({ label: `源·${s.label}`, status: "ok", detail: s.url });
+    steps.push({ label: `Source · ${s.label}`, status: "ok", detail: s.url });
   }
   steps.push(
-    { label: "AI 分类", status: "ok", detail: "提炼结构化舆情…" },
-    { label: "去重入库", status: "ok", detail: "写入数据库…" },
+    { label: "AI classification", status: "ok", detail: "Extracting structured sentiment…" },
+    { label: "Deduplicate & save", status: "ok", detail: "Writing to database…" },
   );
   return steps;
 }
@@ -109,23 +109,23 @@ function ScanProgressPanel({
       <div className="flex items-center gap-3 px-4 py-3 border-b border-indigo-100/80">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-zinc-800">
-            扫描进度{partnerName ? ` · ${partnerName}` : ""}
+            Scan progress{partnerName ? ` · ${partnerName}` : ""}
           </div>
           <div className="text-xs text-zinc-500 mt-0.5">
             {scanning
-              ? "正在联网检索并分析，请稍候…"
+              ? "Searching online and analyzing, please wait…"
               : meta?.searchBackend
-                ? `联网后端：${meta.searchBackend}`
-                : "点击右侧按钮开始扫描，下方将展示每一步详情"}
+                ? `Search backend: ${meta.searchBackend}`
+                : "Click the button on the right to start scanning; step details will appear below"}
           </div>
         </div>
         <button
           onClick={onScan}
           disabled={scanning || !canScan}
-          title={!canScan ? "请先勾选要监控的维度" : "扫描所有已勾选维度"}
+          title={!canScan ? "Please select dimensions to monitor first" : "Scan all selected dimensions"}
           className="shrink-0 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
         >
-          {scanning ? "扫描中…" : scanLabel}
+          {scanning ? "Scanning…" : scanLabel}
         </button>
       </div>
 
@@ -134,7 +134,7 @@ function ScanProgressPanel({
           {scanMsg}
           {meta && (meta.rawChars !== undefined || meta.classified !== undefined) && (
             <span className="text-zinc-400 ml-2">
-              · 抓取 {meta.rawChars ?? 0} 字 · 分类 {meta.classified ?? 0} 条 · 入库 {meta.created ?? 0} 条
+              · Fetched {meta.rawChars ?? 0} chars · Classified {meta.classified ?? 0} · Saved {meta.created ?? 0}
             </span>
           )}
         </div>
@@ -164,7 +164,7 @@ function ScanProgressPanel({
       )}
 
       {scanning && !showSteps && (
-        <div className="px-4 py-6 text-center text-xs text-indigo-500 animate-pulse">初始化扫描任务…</div>
+        <div className="px-4 py-6 text-center text-xs text-indigo-500 animate-pulse">Initializing scan task…</div>
       )}
     </div>
   );
@@ -240,15 +240,15 @@ export function SentimentMonitorSection({
           scanned: r.scanned,
         });
         if (!r.ok) {
-          setScanMsg(r.error ?? "扫描失败");
+          setScanMsg(r.error ?? "Scan failed");
         } else if (r.error && r.created === 0) {
           setScanMsg(r.error);
         } else {
-          const label = dimKey === ALL_KEY ? "" : `「${MONITOR_DIMENSION_LABELS[dimKey] ?? dimKey}」`;
+          const label = dimKey === ALL_KEY ? "" : `"${MONITOR_DIMENSION_LABELS[dimKey] ?? dimKey}" `;
           setScanMsg(
             r.created > 0
-              ? `${label}本次新增 ${r.created} 条舆情（${r.scanned} 个信息源块）`
-              : `${label}本次无新发现（${r.scanned} 个信息源块，分类 ${r.classified ?? 0} 条）`,
+              ? `${label}Added ${r.created} new sentiment item(s) (${r.scanned} source block(s))`
+              : `${label}No new findings (${r.scanned} source block(s), classified ${r.classified ?? 0})`,
           );
         }
       } finally {
@@ -269,7 +269,7 @@ export function SentimentMonitorSection({
   const scanning = scanningDim !== null;
 
   return (
-    <Card title={`⑥ 舆情监控（${items.length}）`}>
+    <Card title={`⑥ Sentiment Monitor (${items.length})`}>
       <ScanProgressPanel
         scanning={scanning}
         steps={scanSteps}
@@ -277,15 +277,15 @@ export function SentimentMonitorSection({
         scanMsg={scanMsg}
         onScan={() => runScan(dims, ALL_KEY)}
         canScan={dims.length > 0}
-        scanLabel="📡 立即扫描"
+        scanLabel="📡 Scan now"
         partnerName={partnerName}
       />
 
       {/* 维度多选（订阅） */}
       <div className="mb-5">
         <div className="text-xs text-zinc-400 mb-2">
-          选择要监控的维度（默认不选，按需勾选）
-          {savingDims && <span className="ml-2 text-zinc-300">保存中…</span>}
+          Select dimensions to monitor (none selected by default; check as needed)
+          {savingDims && <span className="ml-2 text-zinc-300">Saving…</span>}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {MONITOR_DIMENSIONS.map((d) => {
@@ -310,11 +310,11 @@ export function SentimentMonitorSection({
       {/* 自定义监控链接源 */}
       <div className="mb-5 pb-5 border-b border-zinc-100">
         <div className="text-xs text-zinc-400 mb-2">
-          监控链接源（领英 / Facebook 主页 / 官网 / 新闻源…）
+          Monitor link sources (LinkedIn / Facebook page / website / news…)
           <span className="block mt-0.5 text-zinc-300">
-            领英链接：需配置 NINJAPEARL_API_KEY，且伙伴档案填写官网（当前：
-            {partnerWebsite?.trim() ? partnerWebsite : "未填写"}
-            ）；将按官网拉取博客 / X 等公开更新
+            LinkedIn links: requires NINJAPEARL_API_KEY and partner website in profile (current:
+            {partnerWebsite?.trim() ? partnerWebsite : "not set"}
+            ); fetches public updates from blog / X etc. via website
           </span>
         </div>
         <div className="space-y-2">
@@ -325,7 +325,7 @@ export function SentimentMonitorSection({
                 <img src={s.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
               ) : (
                 <div className="w-8 h-8 rounded bg-zinc-100 flex items-center justify-center text-xs text-zinc-400 shrink-0">
-                  {MONITOR_SOURCE_TYPE_LABELS[s.sourceType]?.slice(0, 1) ?? "链"}
+                  {MONITOR_SOURCE_TYPE_LABELS[s.sourceType]?.slice(0, 1) ?? "L"}
                 </div>
               )}
               <div className="min-w-0 flex-1">
@@ -347,13 +347,13 @@ export function SentimentMonitorSection({
                   className={`text-xs px-2 py-1 rounded-md ${
                     s.enabled ? "text-emerald-600 hover:bg-emerald-50" : "text-zinc-400 hover:bg-zinc-50"
                   }`}
-                  title={s.enabled ? "已启用，点击停用" : "已停用，点击启用"}
+                  title={s.enabled ? "Enabled — click to disable" : "Disabled — click to enable"}
                 >
-                  {s.enabled ? "● 启用" : "○ 停用"}
+                  {s.enabled ? "● On" : "○ Off"}
                 </button>
               </form>
               <form action={deleteMonitorSourceAction.bind(null, partnerId, s.id)}>
-                <button className="text-zinc-300 hover:text-red-500 text-sm px-1" title="删除">
+                <button className="text-zinc-300 hover:text-red-500 text-sm px-1" title="Delete">
                   ✕
                 </button>
               </form>
@@ -361,22 +361,22 @@ export function SentimentMonitorSection({
           ))}
           {sources.length === 0 && (
             <p className="text-xs text-zinc-400">
-              还没有自定义监控源。添加领英主页后，扫描会通过 NinjaPear 按伙伴官网抓取公开动态（需填写官网 + API Key）。
+              No custom monitor sources yet. After adding a LinkedIn page, scans will fetch public updates via NinjaPear using the partner website (requires website + API key).
             </p>
           )}
         </div>
 
         <details className="mt-2 rounded-lg border border-dashed border-zinc-200">
-          <summary className="px-3 py-2 text-sm text-indigo-600 cursor-pointer list-none">+ 添加监控链接</summary>
+          <summary className="px-3 py-2 text-sm text-indigo-600 cursor-pointer list-none">+ Add monitor link</summary>
           <form
             action={addMonitorSourceAction.bind(null, partnerId)}
             className="px-3 pb-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm"
           >
-            <input name="url" required placeholder="链接 URL *（如领英/Facebook 主页）" className={`${input} md:col-span-2`} />
-            <input name="label" placeholder="备注名（可选）" className={input} />
+            <input name="url" required placeholder="Link URL * (e.g. LinkedIn/Facebook page)" className={`${input} md:col-span-2`} />
+            <input name="label" placeholder="Label (optional)" className={input} />
             <div className="md:col-span-3 flex justify-end">
               <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs hover:bg-indigo-700">
-                添加
+                Add
               </button>
             </div>
           </form>
@@ -392,7 +392,7 @@ export function SentimentMonitorSection({
               !sentFilter ? "border-zinc-400 text-zinc-700" : "border-zinc-200 text-zinc-400"
             }`}
           >
-            全部情感
+            All sentiments
           </button>
           {Object.keys(MONITOR_SENTIMENT_LABELS).map((s) => (
             <button
@@ -410,7 +410,7 @@ export function SentimentMonitorSection({
 
       {/* 按维度分区 */}
       {visibleDims.length === 0 ? (
-        <EmptyState text="请先在上方勾选要监控的维度，或添加监控链接源，然后点「立即扫描」。" />
+        <EmptyState text='Select dimensions to monitor above, or add monitor link sources, then click "Scan now".' />
       ) : (
         <div className="space-y-3">
           {visibleDims.map((d) => {
@@ -422,7 +422,7 @@ export function SentimentMonitorSection({
                   <span className="text-zinc-300 group-open:rotate-90 transition-transform">›</span>
                   <span className="text-sm font-medium text-zinc-800">{MONITOR_DIMENSION_LABELS[d]}</span>
                   <Badge tone="zinc">{total}</Badge>
-                  {!dims.includes(d) && <span className="text-[10px] text-zinc-300">未订阅</span>}
+                  {!dims.includes(d) && <span className="text-[10px] text-zinc-300">Not subscribed</span>}
                   <span className="flex-1" />
                   <button
                     onClick={(e) => {
@@ -432,7 +432,7 @@ export function SentimentMonitorSection({
                     disabled={scanning}
                     className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50"
                   >
-                    {scanningDim === d ? "扫描中…" : "扫描"}
+                    {scanningDim === d ? "Scanning…" : "Scan"}
                   </button>
                 </summary>
                 <div className="px-4 pb-3 pt-1 space-y-2.5 border-t border-zinc-50">
@@ -465,17 +465,17 @@ export function SentimentMonitorSection({
                         </div>
                         <form action={archiveMonitorItemAction.bind(null, partnerId, it.id)}>
                           <button
-                            title="归档"
+                            title="Archive"
                             className="text-zinc-300 hover:text-zinc-600 text-xs opacity-60 group-hover/item:opacity-100"
                           >
-                            归档
+                            Archive
                           </button>
                         </form>
                       </div>
                     </div>
                   ))}
-                  {total === 0 && <p className="text-xs text-zinc-400 py-1">未扫描，点右上「扫描」联网抓取该维度。</p>}
-                  {total > 0 && dimItems.length === 0 && <p className="text-xs text-zinc-400 py-1">当前情感筛选下无结果</p>}
+                  {total === 0 && <p className="text-xs text-zinc-400 py-1">Not scanned yet — click \"Scan\" above to fetch this dimension online.</p>}
+                  {total > 0 && dimItems.length === 0 && <p className="text-xs text-zinc-400 py-1">No results for current sentiment filter</p>}
                 </div>
               </details>
             );

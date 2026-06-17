@@ -6,7 +6,7 @@ const RichEditorInner = dynamic(() => import("./rich-editor-inner"), {
   ssr: false,
   loading: () => (
     <div className="rounded-lg border border-zinc-200 bg-white min-h-[340px] flex items-center justify-center text-sm text-zinc-300">
-      编辑器加载中…
+      Editor loading…
     </div>
   ),
 });

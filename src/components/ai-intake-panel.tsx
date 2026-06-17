@@ -14,24 +14,24 @@ type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[];
 
 const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = {
   new_partner: {
-    title: "AI 建档",
+    title: "AI Onboarding",
     placeholder:
-      "扔公司名、会议记录、聊天记录、KMS 链接都行——我会多源调研，找到的信息会实时出现在右侧。\n例如：\n• 刚见了迪拜 Acme Analytics\n• https://kms.fineres.com/pages/viewpage.action?pageId=123456",
+      "Drop a company name, meeting notes, chat logs, or a KMS link — I'll research from multiple sources and show findings live on the right.\nExamples:\n• Just met Acme Analytics in Dubai\n• https://kms.fineres.com/pages/viewpage.action?pageId=123456",
   },
   powermap: {
-    title: "AI 加人物",
-    placeholder: "描述要加的人，或粘贴名片/会议记录。",
+    title: "AI Add Contact",
+    placeholder: "Describe the person to add, or paste a business card / meeting notes.",
   },
   opportunity: {
-    title: "AI 加商机",
-    placeholder: "描述商机或粘贴相关沟通。",
+    title: "AI Add Opportunity",
+    placeholder: "Describe the opportunity or paste related communications.",
   },
   profile: {
-    title: "AI 补全画像",
-    placeholder: "描述公司情况或粘贴 KMS 链接，右侧会实时补全字段。",
+    title: "AI Complete Profile",
+    placeholder: "Describe the company or paste a KMS link — fields will update live on the right.",
   },
-  training: { title: "AI 加培训", placeholder: "描述要安排的培训/认证。" },
-  solution: { title: "AI 加联合方案", placeholder: "描述联合方案。" },
+  training: { title: "AI Add Training", placeholder: "Describe the training or certification to schedule." },
+  solution: { title: "AI Add Joint Solution", placeholder: "Describe the joint solution." },
 };
 
 export function AiIntakePanel({
@@ -89,7 +89,7 @@ export function AiIntakePanel({
       ...messages,
       {
         role: "user" as const,
-        content: text || "请识别图片中的信息",
+        content: text || "Please identify the information in the image(s)",
         images: pendingImages.length ? pendingImages : undefined,
       },
     ];
@@ -120,7 +120,7 @@ export function AiIntakePanel({
         const partial = (finalReply || "").trim();
         setMessages((m) => [
           ...m,
-          { role: "assistant", content: partial ? `${partial}\n\n（已停止）` : "（已停止，右侧已找到的信息保留）", trace: [...trace] },
+          { role: "assistant", content: partial ? `${partial}\n\n(Stopped)` : "(Stopped — gathered info on the right is preserved)", trace: [...trace] },
         ]);
         return;
       }
@@ -132,13 +132,13 @@ export function AiIntakePanel({
       setClarifications(turn.clarifications ?? []);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setMessages((m) => [...m, { role: "assistant", content: "（已停止）", trace: [...liveTrace] }]);
+        setMessages((m) => [...m, { role: "assistant", content: "(Stopped)", trace: [...liveTrace] }]);
       } else {
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
       setLoading(false);
-      // 保留 trace 在消息里，仅清空进行中的流式 reply
+      // Keep trace in messages; clear only the in-flight streaming reply
       setReplyText("");
       abortRef.current = null;
     }
@@ -157,7 +157,7 @@ export function AiIntakePanel({
       <div className="relative h-full min-h-0 flex flex-col">
       <AiWorkflowPanel
           title={meta.title}
-          subtitle="左侧调研 · 右侧实时呈现"
+          subtitle="Research on the left · live draft on the right"
           onClose={onClose}
           messages={
             messages.length === 0
@@ -187,7 +187,7 @@ export function AiIntakePanel({
           pendingImages={pendingImages}
           onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}
           onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
-          inputPlaceholder={proposal ? "继续补充，或右侧确认入库…" : undefined}
+          inputPlaceholder={proposal ? "Keep adding details, or confirm on the right…" : undefined}
           sendDisabled={loading || (!input.trim() && !pendingImages.length)}
       />
       {error && (

@@ -22,7 +22,7 @@ export function DocumentAssetUpload({
       <input
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        placeholder="附件说明（可选）"
+        placeholder="Attachment label (optional)"
         className="rounded-lg border border-zinc-200 px-3 py-1.5 text-sm w-40"
       />
       <FileUploadField onUploaded={onUploaded} />

@@ -16,11 +16,11 @@ export default async function MaterialsPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="物料中心"
-        desc="团队共享的销售/运营资料：等级制度、产品对比、推介材料等"
+        title="Materials"
+        desc="Team-shared sales and ops resources: tier guides, product comparisons, pitch decks, and more"
         actions={
           <Link href="/materials/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            + 添加物料
+            + Add material
           </Link>
         }
       />
@@ -38,12 +38,12 @@ export default async function MaterialsPage() {
                 {m.asset && <div className="mt-2"><AssetCard asset={m.asset} /></div>}
               </div>
               <form action={deleteMaterialAction.bind(null, m.id)}>
-                <button className="text-xs text-zinc-400 hover:text-red-600">删除</button>
+                <button className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
               </form>
             </div>
           </div>
         ))}
-        {items.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">暂无物料</div>}
+        {items.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">No materials yet</div>}
       </div>
     </div>
   );

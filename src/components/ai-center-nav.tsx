@@ -4,11 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const tabs = [
-  { href: "/ai", label: "总览", icon: "✦", exact: true },
+  { href: "/ai", label: "Overview", icon: "✦", exact: true },
   { href: "/agents", label: "Agent", icon: "❖" },
-  { href: "/tools", label: "工具", icon: "🔧" },
-  { href: "/skills", label: "技能", icon: "⚡" },
-  { href: "/knowledge", label: "知识库", icon: "📚" },
+  { href: "/tools", label: "Tools", icon: "🔧" },
+  { href: "/skills", label: "Skills", icon: "⚡" },
+  { href: "/knowledge", label: "Knowledge", icon: "📚" },
 ];
 
 export function AiCenterNav() {

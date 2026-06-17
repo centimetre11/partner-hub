@@ -5,7 +5,7 @@ import { readAssetFile } from "@/lib/assets";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const { id } = await params;
   const linkAsset = await db.asset.findUnique({ where: { id } });
   if (linkAsset?.kind === "LINK" && linkAsset.url) {
@@ -20,6 +20,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       },
     });
   } catch {
-    return NextResponse.json({ error: "文件不存在" }, { status: 404 });
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 }

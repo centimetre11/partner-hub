@@ -18,7 +18,7 @@ type Props = {
   loading?: boolean;
 };
 
-/** 确认入库区（活草稿模式） */
+/** Confirm & save zone (live draft mode) */
 export function ProposalConfirmZone({
   proposal,
   scope = "new_partner",
@@ -42,7 +42,7 @@ export function ProposalConfirmZone({
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? "写入失败");
+    if (!res.ok) throw new Error(data.error ?? "Failed to save");
     onApplied?.(data.partnerId);
   }
 
@@ -54,7 +54,7 @@ export function ProposalConfirmZone({
       proposal={intakeProposal}
       changes={patchChanges}
       onConfirm={apply}
-      confirmLabel={ready ? "确认入库" : "信息够了，直接入库"}
+      confirmLabel={ready ? "Confirm & save" : "Looks good — save now"}
       questions={questions}
       ready={ready}
       loading={loading}

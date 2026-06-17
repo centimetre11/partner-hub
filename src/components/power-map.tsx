@@ -77,7 +77,7 @@ function NodeCard({ c }: { c: PowerMapContact }) {
       {/* 角色代码（左上角）：影响力越高颜色越深 */}
       <span
         className={`absolute -top-2 -left-2 rounded-sm text-white font-bold flex items-center justify-center z-10 ${s.badge}`}
-        title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role}（影响力 ${roleInfluence(c.role)}/5）`}
+        title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role} (influence ${roleInfluence(c.role)}/5)`}
       >
         {CONTACT_ROLE_CODES[c.role] ?? "I"}
       </span>
@@ -145,13 +145,13 @@ export function PowerMapLegend() {
     <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-zinc-600">
       {/* 角色影响力：按 D>A>E>I>S 从高到低，徽标越深、节点越大代表影响力越强 */}
       <div className="flex items-center gap-1.5">
-        <span className="text-zinc-400 mr-0.5">影响力</span>
+        <span className="text-zinc-400 mr-0.5">Influence</span>
         {CONTACT_ROLES_BY_INFLUENCE.map((k, i) => (
           <span key={k} className="flex items-center gap-1">
             {i > 0 && <span className="text-zinc-300">›</span>}
             <span
               className={`rounded-sm text-white font-bold flex items-center justify-center ${roleInfluenceStyle(k).badge}`}
-              title={`影响力 ${roleInfluence(k)}/5`}
+              title={`Influence ${roleInfluence(k)}/5`}
             >
               {CONTACT_ROLE_CODES[k]}
             </span>

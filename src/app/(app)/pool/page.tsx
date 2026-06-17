@@ -10,9 +10,9 @@ import { AddPartnerForm } from "./add-partner-form";
 import { DeletePartnerButton } from "./delete-partner-button";
 
 const VIEWS = [
-  { k: "prospect", label: "候选" },
-  { k: "archived", label: "归档" },
-  { k: "all", label: "全部" },
+  { k: "prospect", label: "Prospects" },
+  { k: "archived", label: "Archived" },
+  { k: "all", label: "All" },
 ];
 
 export default async function PoolPage({
@@ -67,8 +67,8 @@ export default async function PoolPage({
   return (
     <div className="pb-16">
       <PageHeader
-        title="伙伴库"
-        desc="候选伙伴与已归档伙伴；正式伙伴请到「正式伙伴」页管理"
+        title="Partner Pool"
+        desc="Prospects and archived partners; manage active partners on the Active Partners page"
         actions={<AddPartnerForm taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />}
       />
 
@@ -99,39 +99,39 @@ export default async function PoolPage({
           <input
             name="q"
             defaultValue={sp.q}
-            placeholder="搜索公司名…"
+            placeholder="Search company name…"
             className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <select name="category" defaultValue={sp.category ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">全部类别</option>
+            <option value="">All categories</option>
             {categoryOptions.map((o) => (
               <option key={o.code} value={o.code}>{o.label}</option>
             ))}
           </select>
           <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">全部 Tier</option>
-            <option value="A">Tier A 立即打</option>
-            <option value="B">Tier B 重点打</option>
-            <option value="C">Tier C 后续跟进</option>
+            <option value="">All tiers</option>
+            <option value="A">Tier A — pursue now</option>
+            <option value="B">Tier B — high priority</option>
+            <option value="C">Tier C — follow up later</option>
           </select>
           {view !== "archived" && (
             <select name="flag" defaultValue={sp.flag ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-              <option value="">全部状态</option>
+              <option value="">All statuses</option>
               {Object.entries(POOL_FLAG_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
           )}
           <select name="country" defaultValue={sp.country ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">全部国家</option>
+            <option value="">All countries</option>
             {countries.filter((c) => c.country).map((c) => (
               <option key={c.country!} value={c.country!}>{c.country}</option>
             ))}
           </select>
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">筛选</button>
+          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">Filter</button>
           {(sp.q || sp.category || sp.tier || sp.flag || sp.country) && (
             <Link href={qs({ q: undefined, category: undefined, tier: undefined, country: undefined, flag: undefined })} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
-              清空
+              Clear
             </Link>
           )}
         </form>
@@ -141,14 +141,14 @@ export default async function PoolPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-100 text-left text-xs text-zinc-500">
-                <th className="px-4 py-3 font-medium">公司</th>
-                <th className="px-3 py-3 font-medium">类别</th>
-                <th className="px-3 py-3 font-medium">地区</th>
+                <th className="px-4 py-3 font-medium">Company</th>
+                <th className="px-3 py-3 font-medium">Category</th>
+                <th className="px-3 py-3 font-medium">Region</th>
                 <th className="px-3 py-3 font-medium">Tier</th>
-                <th className="px-3 py-3 font-medium">验证</th>
-                <th className="px-3 py-3 font-medium">信息完整度</th>
-                <th className="px-3 py-3 font-medium">状态</th>
-                <th className="px-3 py-3 font-medium text-right">操作</th>
+                <th className="px-3 py-3 font-medium">Verification</th>
+                <th className="px-3 py-3 font-medium">Completeness</th>
+                <th className="px-3 py-3 font-medium">Status</th>
+                <th className="px-3 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -178,7 +178,7 @@ export default async function PoolPage({
                     <td className="px-3 py-3"><ScoreBar score={c.score} /></td>
                     <td className="px-3 py-3">
                       {archived ? (
-                        <Badge tone="zinc">已归档</Badge>
+                        <Badge tone="zinc">Archived</Badge>
                       ) : (
                         <Badge tone={flagTone(p.poolFlag)}>{POOL_FLAG_LABELS[p.poolFlag]}</Badge>
                       )}
@@ -187,29 +187,29 @@ export default async function PoolPage({
                       <div className="flex items-center justify-end gap-1.5">
                         {archived ? (
                           <form action={restorePartnerAction.bind(null, p.id)}>
-                            <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title={`恢复为${p.prevStatus === "ACTIVE" ? "正式伙伴" : "候选"}`}>
-                              恢复{p.prevStatus === "ACTIVE" ? "为正式" : "为候选"}
+                            <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title={`Restore as ${p.prevStatus === "ACTIVE" ? "active partner" : "prospect"}`}>
+                              Restore{p.prevStatus === "ACTIVE" ? " as active" : " as prospect"}
                             </button>
                           </form>
                         ) : (
                           <>
                             <form action={promotePartnerAction.bind(null, p.id)}>
-                              <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title="转为正式伙伴">
-                                转正
+                              <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title="Promote to active partner">
+                                Promote
                               </button>
                             </form>
                             {p.poolFlag !== "WATCHING" && (
                               <form action={setPoolFlagAction.bind(null, p.id, "WATCHING")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">观察</button>
+                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">Watch</button>
                               </form>
                             )}
                             {p.poolFlag !== "DROPPED" ? (
                               <form action={setPoolFlagAction.bind(null, p.id, "DROPPED")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-600 hover:border-red-200">放弃</button>
+                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-600 hover:border-red-200">Drop</button>
                               </form>
                             ) : (
                               <form action={setPoolFlagAction.bind(null, p.id, "NEW")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">恢复</button>
+                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">Restore</button>
                               </form>
                             )}
                           </>
@@ -225,7 +225,7 @@ export default async function PoolPage({
               })}
             </tbody>
           </table>
-          {partners.length === 0 && <EmptyState text={view === "archived" ? "没有归档的伙伴" : "没有符合条件的伙伴"} />}
+          {partners.length === 0 && <EmptyState text={view === "archived" ? "No archived partners" : "No partners match your filters"} />}
         </div>
       </div>
     </div>

@@ -4,11 +4,11 @@ import { saveUploadedFile } from "@/lib/assets";
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
-  if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   const form = await req.formData();
   const file = form.get("file");
   if (!file || !(file instanceof File)) {
-    return NextResponse.json({ error: "缺少 file 字段" }, { status: 400 });
+    return NextResponse.json({ error: "Missing file field" }, { status: 400 });
   }
   try {
     const asset = await saveUploadedFile(file, uid);

@@ -23,14 +23,14 @@ export default async function NewAgentPage({
 
   return (
     <div className="pb-16">
-      <PageHeader title="创建 Agent" desc="用对话生成草案，或手动配置指令、工具背包与技能书" />
+      <PageHeader title="Create Agent" desc="Generate a draft via chat, or manually configure instructions, tool kit, and skill library" />
       <AiCenterNav />
       <div className="px-8 space-y-8">
         <AgentBuilder />
         <div className="max-w-3xl">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-zinc-800">手动创建</h2>
-            <p className="text-xs text-zinc-400 mt-1">适合你已经明确知道要勾选哪些工具、技能，以及如何写任务指令。</p>
+            <h2 className="text-sm font-semibold text-zinc-800">Manual Create</h2>
+            <p className="text-xs text-zinc-400 mt-1">Best when you already know which tools and skills to select and how to write task instructions.</p>
           </div>
           <AgentForm
             agent={{

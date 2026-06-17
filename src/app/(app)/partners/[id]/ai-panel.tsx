@@ -23,7 +23,7 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
         body: JSON.stringify({ partnerId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "生成失败");
+      if (!res.ok) throw new Error(data.error ?? "Generation failed");
       setQuestions(data.questions);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -60,9 +60,9 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
 
   return (
     <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-sm p-5 text-white">
-      <h3 className="text-sm font-semibold flex items-center gap-1.5">✦ AI 助理</h3>
+      <h3 className="text-sm font-semibold flex items-center gap-1.5">✦ AI Assistant</h3>
       <p className="text-xs text-indigo-200 mt-1 mb-4">
-        基于档案缺口生成接触问题清单；或把近期动态整理成摘要。
+        Generate contact questions from profile gaps; or summarize recent activity.
       </p>
       <div className="flex gap-2">
         <button
@@ -70,20 +70,20 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
           disabled={loading !== null}
           className="flex-1 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
         >
-          {loading === "q" ? "生成中…" : `补全助手（缺${missing.length}项）`}
+          {loading === "q" ? "Generating…" : `Fill gaps (${missing.length} missing)`}
         </button>
         <button
           onClick={genSummary}
           disabled={loading !== null}
           className="flex-1 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
         >
-          {loading === "s" ? "生成中…" : "生成动态摘要"}
+          {loading === "s" ? "Generating…" : "Generate activity summary"}
         </button>
       </div>
       {error && <p className="text-xs text-amber-200 mt-3">{error}</p>}
       {questions && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
-          <div className="text-xs font-semibold mb-2">下次接触该问什么：</div>
+          <div className="text-xs font-semibold mb-2">Questions for next contact:</div>
           <ol className="text-xs space-y-1.5 list-decimal list-inside text-indigo-50">
             {questions.map((q, i) => (
               <li key={i}>{q}</li>
@@ -93,7 +93,7 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
       )}
       {loading === "s" && liveText && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
-          <div className="text-xs font-semibold mb-2">动态摘要生成中…</div>
+          <div className="text-xs font-semibold mb-2">Generating activity summary…</div>
           <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">
             {liveText}
             <span className="inline-block w-1 h-3 bg-indigo-200 ml-0.5 animate-pulse align-middle" />
@@ -102,7 +102,7 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
       )}
       {summary && loading !== "s" && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
-          <div className="text-xs font-semibold mb-2">动态摘要（已存入时间线）：</div>
+          <div className="text-xs font-semibold mb-2">Activity summary (saved to timeline):</div>
           <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">{summary}</p>
         </div>
       )}

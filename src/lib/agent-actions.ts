@@ -127,7 +127,7 @@ export async function cloneAgentAction(sourceId: string) {
   const src = await db.agent.findUniqueOrThrow({ where: { id: sourceId } });
   const created = await db.agent.create({
     data: {
-      name: src.isTemplate ? src.name : `${src.name}（副本）`,
+      name: src.isTemplate ? src.name : `${src.name} (copy)`,
       icon: src.icon,
       description: src.description,
       instructions: src.instructions,
@@ -215,8 +215,8 @@ export async function applyAgentProposalAction(notificationId: string) {
   await applyProposal({
     partnerId: p.partnerId,
     proposal: {
-      summaryTitle: `Agent 提案：${n.title}`,
-      summary: "经人工确认后应用的 Agent 档案变更提案。",
+      summaryTitle: `Agent proposal: ${n.title}`,
+      summary: "Agent profile change proposal applied after manual confirmation.",
       fieldUpdates: p.fieldUpdates,
       contacts: [],
       opportunities: [],

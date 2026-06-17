@@ -13,11 +13,11 @@ export default async function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white text-2xl font-bold mb-4 shadow-lg shadow-indigo-200">
-            帆
+            F
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900">帆软中东伙伴管理系统</h1>
+          <h1 className="text-2xl font-bold text-zinc-900">Fanruan MEA Partner Hub</h1>
           <p className="text-sm text-zinc-500 mt-2">
-            {firstRun ? "首次使用：创建管理员账号" : "AI 原生 · 候选池 · 权力地图"}
+            {firstRun ? "First-time setup: create an admin account" : "AI-native · Prospect Pool · Power Map"}
           </p>
         </div>
         <LoginForm firstRun={firstRun} />

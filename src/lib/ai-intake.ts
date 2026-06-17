@@ -22,7 +22,7 @@ import { taxonomyListForAi, normalizeIndustriesInput } from "./taxonomy";
 import { partnerContext, powermapContext, type ContactProposal, type FieldUpdate, type OpportunityProposal, type TodoProposal } from "./proposals";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 
-// ============ Intake 作用域 ============
+// ============ Intake scopes ============
 
 export type IntakeScope =
   | "new_partner"
@@ -65,20 +65,20 @@ export type IntakeProposal = {
   solutions: SolutionProposal[];
 };
 
-/** 结构化澄清：信息不全时给出可点选的候选项，辅助用户快速澄清 */
+/** Structured clarification: selectable options when info is incomplete */
 export type IntakeClarification = {
   id: string;
-  question: string; // 要澄清的点（一句话）
-  options: string[]; // 候选项（用户点选即回填）
-  multi?: boolean; // 是否允许多选
-  allowOther?: boolean; // 是否允许「其他/手动补充」
+  question: string; // One-line clarification question
+  options: string[]; // Options (user tap to fill back)
+  multi?: boolean; // Allow multi-select
+  allowOther?: boolean; // Allow "Other / manual entry"
 };
 
 export type IntakeTurn = {
-  reply: string; // AI 对用户说的话（自然语气，可含追问）
-  questions: string[]; // 待澄清要点（引导用）
-  clarifications: IntakeClarification[]; // 结构化选项澄清
-  ready: boolean; // 信息是否足以入库
+  reply: string; // AI message to user (natural tone, may include follow-ups)
+  questions: string[]; // Open clarification points (guidance)
+  clarifications: IntakeClarification[]; // Structured option clarifications
+  ready: boolean; // Whether info is sufficient to save
   proposal: IntakeProposal;
 };
 
@@ -92,7 +92,7 @@ function emptyProposal(): IntakeProposal {
   return { summary: "", fields: [], contacts: [], opportunities: [], todos: [], trainings: [], solutions: [] };
 }
 
-// ============ 各作用域的提示词配置 ============
+// ============ Per-scope prompt config ============
 
 const FIELD_LIST = Object.entries(PARTNER_FIELD_LABELS)
   .map(([f, l]) => `${f}(${l})`)
@@ -108,66 +108,66 @@ const INDUSTRY_LIST = Object.entries(INDUSTRY_LABELS)
 
 const STAGE_LIST = PIPELINE_STAGES.map((s) => `${s.stage}=${s.name}`).join("，");
 
-const ROLE_LINE = "role 角色：APPROVER(审批者)/DECISION_MAKER(决策者)/SUPPORTER(支持者)/EVALUATOR(评估者)/INFLUENCER(影响者)";
-const ATTITUDE_LINE = "attitude 态度评分：3=教练(主动帮我们)/2=支持并排他/1=支持不排他/0=未接触或中立/-1=反对";
+const ROLE_LINE = "role: APPROVER/DECISION_MAKER/SUPPORTER/EVALUATOR/INFLUENCER";
+const ATTITUDE_LINE = "attitude score: 3=champion (proactive)/2=supportive exclusive/1=supportive non-exclusive/0=neutral or not engaged/-1=opposed";
 
 type ScopeConfig = {
   title: string;
   intro: string;
-  guide: string; // 引导补全清单（软性）
-  schemaHint: string; // proposal 里该 scope 应填哪些键
+  guide: string; // Soft completion checklist
+  schemaHint: string; // Which proposal keys to fill for this scope
 };
 
 const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
   new_partner: {
-    title: "新建伙伴建档",
+    title: "New partner onboarding",
     intro:
-      "用户想新建一个候选伙伴。输入可能是：仅公司名、会议/聊天长文、公司介绍、或帆软 KMS 链接（KMS 与联网/领英等调研应叠加使用，目标是把档案尽量补全）。",
-    guide: `建档至少要有：公司名（partnerName，必填）。尽量补全：category、industry、country/city、headcount、website、coreBusiness、capability、knownClients、currentTools、certLevel、keyDifferentiator、playbook、fitScore、priority。缺关键项时可友好追问 1-2 点，但应先主动调研（见下方工具说明）。`,
-    schemaHint: `partnerName 填公司名；fields 填其余画像字段（字段名只能用：${FIELD_LIST}，category 取值：${CATEGORY_LIST}，industry 取值：${INDUSTRY_LIST}，pipelineStage 取 1-10：${STAGE_LIST}）；如文中或调研提到人物则填 contacts，提到商机则填 opportunities。trainings/solutions 留空数组。`,
+      "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, certLevel, keyDifferentiator, playbook, fitScore, priority. If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).`,
+    schemaHint: `Set partnerName to the company name; fill other profile fields in fields (field names only: ${FIELD_LIST}; category values: ${CATEGORY_LIST}; industry values: ${INDUSTRY_LIST}; pipelineStage 1–10: ${STAGE_LIST}); add contacts if people appear in text/research, opportunities if deals are mentioned. Leave trainings/solutions as empty arrays.`,
   },
   powermap: {
-    title: "添加权力地图人物",
+    title: "Add power map contact",
     intro:
-      "用户想往这个伙伴的权力地图里加人/更新人。任务很简单：直接从用户提供的文字或图片（名片、会议记录、组织架构图、聊天截图等）里把人物属性提取出来，不需要联网调研。",
-    guide: `只提取材料（文字/图片）里有依据的信息，不要编造、不要猜测、不要联网查。每个人尽量提取：
-- 姓名 name
-- 职位 title、所属部门 department
+      "The user wants to add or update people on this partner's power map. Extract person attributes directly from user text or images (business cards, meeting notes, org charts, chat screenshots). No web research needed.",
+    guide: `Extract only what is supported by the material (text/image). Do not invent, guess, or search the web. For each person try to extract:
+- name
+- title, department
 - ${ROLE_LINE}
 - ${ATTITUDE_LINE}
-- 汇报上级 reportsToName（材料里能看出谁向谁汇报/隶属关系时填；尽量对应下方【权力地图/关键人物】现有名单里的人）
-对照现有名单判断是新增（action=add）还是更新已有人（action=update 带 id）。材料里没提到的字段就留空，别追问太多。只有当汇报关系明显缺失且需要确认时，才用一条结构化澄清「{这个人}汇报给谁？」，options 用现有联系人姓名 +「顶层」+「暂不确定」。`,
+- reportsToName (when reporting/line-of-command is clear; prefer names from existing contacts below)
+Decide add (action=add) vs update (action=update with id) against the existing list. Leave unknown fields empty; don't over-ask. Only when reporting line is clearly missing, use one structured clarification: "Who does {name} report to?" with options = existing contact names + "Top level" + "Unknown".`,
     schemaHint:
-      "只填 contacts（action=add 新增 / update 更新并带 id）。fields/opportunities/todos/trainings/solutions 全部留空数组。",
+      "Fill contacts only (action=add or update with id). Leave fields/opportunities/todos/trainings/solutions as empty arrays.",
   },
   opportunity: {
-    title: "添加商机",
-    intro: "用户想往这个伙伴加商机或更新商机进展。",
-    guide: "商机建议补全：客户 client、金额 amount、阶段 stage、下一步 nextStep。缺关键信息就问一句。",
-    schemaHint: "只填 opportunities。其余留空数组。",
+    title: "Add opportunity",
+    intro: "The user wants to add or update an opportunity for this partner.",
+    guide: "For each opportunity try: client, amount, stage, nextStep. Ask one question if key info is missing.",
+    schemaHint: "Fill opportunities only. Leave others as empty arrays.",
   },
   profile: {
-    title: "补全伙伴画像",
-    intro: "用户想补全/更新这个伙伴的画像字段。可能附带 KMS 链接或仅有零散描述，需结合现有档案与工具调研补全。",
-    guide: `把用户描述与调研结果映射到画像字段。字段名只能用：${FIELD_LIST}（category 取值：${CATEGORY_LIST}，industry 取值：${INDUSTRY_LIST}）。信息不足时先用工具调研再填。`,
-    schemaHint: "只填 fields（FieldUpdate，oldValue 可留空）。其余留空数组。",
+    title: "Complete partner profile",
+    intro: "The user wants to fill or update profile fields. May include a KMS link or scattered notes; combine existing record with tool research.",
+    guide: `Map user input and research to profile fields. Field names only: ${FIELD_LIST} (category: ${CATEGORY_LIST}; industry: ${INDUSTRY_LIST}). Use tools when info is insufficient.`,
+    schemaHint: "Fill fields only (FieldUpdate; oldValue may be empty). Leave others as empty arrays.",
   },
   training: {
-    title: "添加培训计划",
-    intro: "用户想给这个伙伴安排能力培训/认证计划。帆软认证如 FCA-FineBI、FCA-FineReport。",
+    title: "Add training plan",
+    intro: "The user wants to schedule capability training/certification for this partner (e.g. FCA-FineBI, FCA-FineReport).",
     guide:
-      "每条培训建议补全：人员 person（必填）、当前能力 currentSkill、目标认证 targetCert、截止 deadline(YYYY-MM-DD)、状态 status(PLANNED/IN_PROGRESS/DONE)。缺人员就问。",
-    schemaHint: "只填 trainings。其余留空数组。",
+      "Per training try: person (required), currentSkill, targetCert, deadline (YYYY-MM-DD), status (PLANNED/IN_PROGRESS/DONE). Ask if person is missing.",
+    schemaHint: "Fill trainings only. Leave others as empty arrays.",
   },
   solution: {
-    title: "添加联合解决方案",
-    intro: "用户想沉淀一个与该伙伴共创的联合解决方案。",
-    guide: `每个方案建议补全：方案名 name（必填）、目标客户 targetCustomer、客户痛点 painPoint、帆软提供 fanruanOffer、伙伴提供 partnerOffer、定价/合作模式 pricingModel、状态 status(${Object.keys(SOLUTION_STATUS_LABELS).join("/")})。`,
-    schemaHint: "只填 solutions。其余留空数组。",
+    title: "Add joint solution",
+    intro: "The user wants to capture a co-created joint solution with this partner.",
+    guide: `Per solution try: name (required), targetCustomer, painPoint, fanruanOffer, partnerOffer, pricingModel, status (${Object.keys(SOLUTION_STATUS_LABELS).join("/")}).`,
+    schemaHint: "Fill solutions only. Leave others as empty arrays.",
   },
 };
 
-/** 轻量录入场景走快速模型（属性抽取，无需深度推理） */
+/** Lightweight intake scopes use the fast model (attribute extraction, no deep reasoning) */
 function intakeTaskTier(scope: IntakeScope): AiTaskTier {
   switch (scope) {
     case "powermap":
@@ -179,60 +179,58 @@ function intakeTaskTier(scope: IntakeScope): AiTaskTier {
   }
 }
 
-// ============ 多轮对话抽取 ============
+// ============ Multi-turn extraction ============
 
-const OUTPUT_SCHEMA = `只输出一个 JSON 对象，结构：
+const OUTPUT_SCHEMA = `Output a single JSON object only. Reply in English. Structure:
 {
-  "reply": "你对用户说的话（中文，自然口语，如需澄清就在这里友好地问，一次最多问1-2个最关键的点）",
-  "questions": ["待澄清要点1", "..."],
+  "reply": "Your message to the user (English, natural tone; ask clarifications here, at most 1–2 key points)",
+  "questions": ["clarification point 1", "..."],
   "clarifications": [
-    { "id":"country", "question":"这家公司主要在哪个国家？", "options":["阿联酋","沙特","卡塔尔","埃及"], "multi":false, "allowOther":true }
+    { "id":"country", "question":"Which country is this company primarily in?", "options":["UAE","Saudi Arabia","Qatar","Egypt"], "multi":false, "allowOther":true }
   ],
   "ready": true/false,
   "proposal": {
-    "partnerName": "（仅 new_partner 用，公司名）",
-    "summary": "一句话概述本次要录入的内容",
-    "fields": [{"field":"...","label":"...","oldValue":"...","newValue":"...","reason":"原文依据"}],
-    "contacts": [{"action":"add|update","id":"（update时）","name":"...","role":"...","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
+    "partnerName": "(new_partner only: company name)",
+    "summary": "One-line summary of what will be saved",
+    "fields": [{"field":"...","label":"...","oldValue":"...","newValue":"...","reason":"source in text"}],
+    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"...","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
     "opportunities": [{"action":"add|update","id":"...","name":"...","client":"...","amount":"...","stage":"...","nextStep":"...","status":"...","reason":"..."}],
     "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","detail":"..."}],
     "trainings": [{"person":"...","currentSkill":"...","targetCert":"...","deadline":"YYYY-MM-DD","status":"PLANNED|IN_PROGRESS|DONE","reason":"..."}],
     "solutions": [{"name":"...","targetCustomer":"...","painPoint":"...","fanruanOffer":"...","partnerOffer":"...","pricingModel":"...","status":"...","reason":"..."}]
   }
 }
-规则：
-- 只提取有依据的内容：用户原文、工具返回的公开/内部信息均可；reason 标注来源（用户原文/KMS/web_search/LinkedIn/search_knowledge 等）。不要编造工具未返回的内容。
-- ready 判断：核心必填项齐了就为 true（建议补全项缺失只做软提示，不要因此把 ready 设为 false）。用户明确说"就这些/直接录入/不知道了"时 ready 必须为 true。
-- proposal 要带上目前已确认的全部内容（累加，不要每轮清空之前已抽取的）。
-- clarifications（重要）：当某些关键信息缺失、且你能合理枚举出可能的取值时，给出 1-3 个带候选项的选择题，方便用户一键点选澄清，而不是只用文字提问。
-  · 每个 clarification 给 2-5 个最可能的候选项（基于已掌握的线索推断，例如根据城市推断国家、根据业务推断 category）。
-  · 已经能确定或调研已查明的内容，不要再问。没有需要澄清的就给空数组 []。
-  · options 用简短中文短语；id 用对应字段英文名（如 country/category/headcount）。`;
+Rules:
+- Extract only supported content from user text or tool results; cite reason (user text/KMS/web_search/LinkedIn/search_knowledge). Do not invent beyond tools.
+- ready: true when required fields are present (missing nice-to-haves = soft hint only, not ready=false). If user says "that's all / save now / don't know", ready must be true.
+- proposal accumulates confirmed content each turn (do not clear prior extractions).
+- clarifications: when key info is missing and you can enumerate options, give 1–3 multiple-choice items (id = English field name e.g. country/category/headcount; options = short English phrases).
+- Do not ask about fields already confirmed. Empty clarifications array if none needed.`;
 
-/** AI 加人专用：精简 JSON 结构，减少 prompt 体积 */
-const OUTPUT_SCHEMA_POWERMAP = `只输出一个 JSON 对象：
+/** Power map intake: compact JSON schema to reduce prompt size */
+const OUTPUT_SCHEMA_POWERMAP = `Output a single JSON object. Reply in English:
 {
-  "reply": "你对用户说的话（中文，自然简短）",
+  "reply": "Your message to the user (English, brief)",
   "questions": [],
   "clarifications": [
-    { "id":"reportsTo", "question":"{姓名}汇报给谁？", "options":["现有联系人姓名","顶层","暂不确定"], "multi":false, "allowOther":true }
+    { "id":"reportsTo", "question":"Who does {name} report to?", "options":["existing contact name","Top level","Unknown"], "multi":false, "allowOther":true }
   ],
   "ready": true/false,
   "proposal": {
-    "summary": "一句话概述本次识别到的人物",
+    "summary": "One-line summary of people identified",
     "fields": [],
-    "contacts": [{"action":"add|update","id":"（update时）","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"材料依据"}],
+    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"source in material"}],
     "opportunities": [],
     "todos": [],
     "trainings": [],
     "solutions": []
   }
 }
-规则：
-- 只填 contacts；fields/opportunities/todos/trainings/solutions 保持空数组。
-- 只提取材料（文字/图片）里有依据的信息，reason 标注来源；不要编造。
-- 对照【现有联系人】判断 add 或 update（update 必须带 id）。
-- 核心信息够用则 ready=true；仅汇报关系明显缺失时用 clarifications 追问。`;
+Rules:
+- Fill contacts only; keep fields/opportunities/todos/trainings/solutions as empty arrays.
+- Extract only from material (text/image); cite reason; do not invent.
+- Match [Existing contacts] for add vs update (update must include id).
+- ready=true when core info is enough; use clarifications only for missing reporting lines.`;
 
 function outputSchemaForScope(scope: IntakeScope): string {
   return scope === "powermap" ? OUTPUT_SCHEMA_POWERMAP : OUTPUT_SCHEMA;
@@ -243,14 +241,14 @@ async function partnerContextForScope(scope: IntakeScope, partnerId: string): Pr
   return partnerContext(partnerId);
 }
 
-/** 调用大模型抽取 JSON；有 emit 时走流式，边生成边推送 reply_delta */
+/** Call LLM for JSON extraction; streams reply_delta when emit is set */
 async function callIntakeExtract(
   chat: ChatMessage[],
   opts: { feature: string; userId?: string; taskTier: AiTaskTier; emit?: TraceEmitter },
 ): Promise<string | null> {
   const runOnce = async (retry: boolean): Promise<string | null> => {
     if (retry) {
-      chat[0].content = (chat[0].content ?? "") + "\n\n务必只输出一个合法 JSON 对象。";
+      chat[0].content = (chat[0].content ?? "") + "\n\nYou must output one valid JSON object only.";
     } else {
       opts.emit?.({ event: "reply_reset" });
     }
@@ -281,16 +279,16 @@ async function callIntakeExtract(
   }
 }
 
-const RESEARCH_GUIDE = `【主动调研（重要）】
-目标：把建档所需信息尽量补全。各类输入（仅公司名、长文、KMS 链接、聊天记录）都要走「多源叠加」，不要只做一种调研就停。
-在输出 JSON 提案前，按下面策略组合使用工具（可并行、可多次调用）：
+const RESEARCH_GUIDE = `[Proactive research (important)]
+Goal: fill onboarding fields as completely as possible. All inputs (name only, long text, KMS link, chat) should use multi-source stacking—not one source only.
+Before outputting the JSON proposal, combine tools as below (parallel OK, multiple calls OK):
 
-1. 用户给了 KMS 链接/pageId → 先 read_kms；读完仍要对文档里出现的公司名做 web_search + linkedin_search，补官网、规模、客户、关键人等 KMS 里没有的公开信息
-2. 从用户原文/KMS 中识别出公司名后 → search_partners 查重；web_search 查背景；linkedin_search 查高管/关键联系人
-3. 画像字段仍缺 category/playbook/帆软切入角度 → search_knowledge 检索团队知识库
-4. 每轮工具返回后对照建档字段清单，缺什么继续查，直到主要字段有依据或公开渠道确实查不到
-5. 工具失败或未配置（如无 KMS 令牌）时跳过该项，换其他工具继续，不要阻塞建档
-6. 调研完成后必须输出 JSON 提案（不要再调用工具）；reply 里用 1-2 句说明各来源查到了什么、还缺什么`;
+1. User gave KMS link/pageId → read_kms first; then web_search + linkedin_search on company names from the doc for website, size, clients, key people not in KMS
+2. After identifying company name from user/KMS → search_partners dedupe; web_search background; linkedin_search executives/contacts
+3. Still missing category/playbook/Fanruan angle → search_knowledge team knowledge base
+4. After each tool round, check field checklist; keep researching until major fields are sourced or public channels truly have nothing
+5. If a tool fails or is unconfigured (e.g. no KMS token), skip and use others—do not block onboarding
+6. After research, output JSON proposal (no more tools); in reply briefly note what each source found and what is still missing`;
 
 const MAX_RESEARCH_STEPS = 8;
 
@@ -316,7 +314,7 @@ function normalizeClarifications(raw: unknown): IntakeClarification[] {
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>): IntakeTurn {
   const p: Partial<IntakeProposal> = raw.proposal ?? {};
   return {
-    reply: raw.reply || "我整理了一下，请确认。",
+    reply: raw.reply || "I've put this together—please review.",
     questions: Array.isArray(raw.questions) ? raw.questions : [],
     clarifications: normalizeClarifications(raw.clarifications),
     ready: !!raw.ready,
@@ -340,17 +338,17 @@ async function extractIntakeJson(
   emit?: TraceEmitter
 ): Promise<IntakeTurn> {
   const extractId = nextTraceId("extract");
-  emitPhase(emit, "extract", "整理提案");
+  emitPhase(emit, "extract", "Building proposal");
   emit?.({
     event: "trace",
     step: {
       type: "reasoning",
       id: extractId,
-      content: "正在整理可入库提案…",
+      content: "Building save-ready proposal…",
       status: "running",
     },
   });
-  const extractChat = [...chat, { role: "user" as const, content: "请根据以上对话与调研结果，输出最终 JSON 提案（严格按 OUTPUT_SCHEMA，只输出 JSON）。" }];
+  const extractChat = [...chat, { role: "user" as const, content: "Based on the conversation and research above, output the final JSON proposal (strict OUTPUT_SCHEMA, JSON only)." }];
   let content: string | null;
   try {
     ({ content } = await chatCompletion(extractChat, {
@@ -360,7 +358,7 @@ async function extractIntakeJson(
       userId,
     }));
   } catch {
-    extractChat[0].content = (extractChat[0].content ?? "") + "\n\n务必只输出一个合法 JSON 对象。";
+    extractChat[0].content = (extractChat[0].content ?? "") + "\n\nYou must output one valid JSON object only.";
     ({ content } = await chatCompletion(extractChat, {
       temperature: 0.3,
       feature,
@@ -371,7 +369,7 @@ async function extractIntakeJson(
   emit?.({
     event: "trace_patch",
     id: extractId,
-    patch: { status: "done", content: "提案整理完成" },
+    patch: { status: "done", content: "Proposal ready" },
   });
   emitPhase(emit, "reply");
   emitProposalUpdate(emit, turn);
@@ -408,7 +406,7 @@ export async function runIntakeTurn(opts: {
     taxonomyListForAi("ARCHETYPE"),
     taxonomyListForAi("VALUE_PATTERN"),
   ]);
-  const taxonomyHint = `维度取值（来自维度库，industries 为 JSON 数组可多选）：category=${categoryList}；industries=${industryList}；partnerArchetype=${archetypeList}；valuePattern=${valuePatternList}`;
+  const taxonomyHint = `Taxonomy values (from library; industries is JSON array, multi-select OK): category=${categoryList}; industries=${industryList}; partnerArchetype=${archetypeList}; valuePattern=${valuePatternList}`;
   let ctx = "";
   if (opts.partnerId) {
     ctx = `\n\n${await partnerContextForScope(opts.scope, opts.partnerId)}`;
@@ -417,16 +415,17 @@ export async function runIntakeTurn(opts: {
   const enrichmentSkills = intakeEnrichmentSkillsForScope(opts.scope);
   const useResearch = enrichmentSkills.length > 0 && !!opts.userId;
 
-  const system = `你是帆软软件（Fanruan，中国领先BI厂商，产品 FineReport/FineBI/FineDataLink）中东区伙伴管理系统的 AI 录入助手。
-今天日期：${opts.today}。
-当前任务：${cfg.title}。${cfg.intro}
+  const system = `You are the AI intake assistant for Fanruan Software (Fanruan, leading BI vendor in China; products FineReport/FineBI/FineDataLink) Middle East partner management.
+Always reply in English. Use English field codes and enum values in JSON.
+Today's date: ${opts.today}.
+Current task: ${cfg.title}. ${cfg.intro}
 
-【引导规则（重要，但不要死板）】
+[Guidance rules (important, not rigid)]
 ${cfg.guide}
-追问要像同事聊天一样自然简短，别像填表。用户提供的信息已经够用时，就直接给出提案并把 ready 设为 true，不要为了凑齐字段反复追问。
+Follow-ups should feel like a colleague—natural and brief, not a form. When the user has given enough, produce the proposal and set ready=true; don't chase optional fields.
 ${useResearch ? `\n${RESEARCH_GUIDE}` : ""}
 
-【本次提案应填写的范围】
+[Proposal scope for this task]
 ${cfg.schemaHint}
 ${taxonomyHint}
 ${ctx}
@@ -436,23 +435,22 @@ ${outputSchemaForScope(opts.scope)}`;
   const chat: ChatMessage[] = [{ role: "system", content: system }];
   for (const m of opts.messages) chat.push({ role: m.role, content: m.content, images: m.images });
 
-  const feature = `AI 录入助手：${cfg.title}`;
+  const feature = `AI intake: ${cfg.title}`;
 
   if (useResearch) {
     const tools = await buildIntakeTools(enrichmentSkills);
     const planId = nextTraceId("plan");
-    emitPhase(opts.emit, "research", "多源调研");
+    emitPhase(opts.emit, "research", "Multi-source research");
     opts.emit?.({
       event: "trace",
       step: {
         type: "reasoning",
         id: planId,
-        content: "多源调研中…",
+        content: "Multi-source research in progress…",
         status: "running",
       },
     });
-    // 收集每个工具完成后的「增量抽取」promise；调研结束后统一 await，
-    // 确保 proposal_patch 在 SSE 流关闭前全部发出（否则右侧草稿收不到实时增量）
+    // Collect incremental extract promises after each tool; await before SSE closes
     const pendingPatches: Promise<void>[] = [];
     const researchContent = await runToolLoop({
       chat,
@@ -470,18 +468,18 @@ ${outputSchemaForScope(opts.scope)}`;
               emitProposalPatch(opts.emit, ops);
             })
             .catch(() => {
-              /* 单条抽取失败不影响整体 */
+              /* single extract failure should not block overall flow */
             })
         );
       },
       executeTool: (tc) => runIntakeToolCall(tc, opts.userId),
     });
-    // 等所有增量抽取落地，保证草稿增量不丢
+    // Wait for all incremental extracts so draft patches are not lost
     if (pendingPatches.length) await Promise.allSettled(pendingPatches);
     opts.emit?.({
       event: "trace_patch",
       id: planId,
-      patch: { status: "done", content: "调研完成" },
+      patch: { status: "done", content: "Research complete" },
     });
     if (researchContent?.trim().startsWith("{")) {
       try {
@@ -496,7 +494,7 @@ ${outputSchemaForScope(opts.scope)}`;
     return extractIntakeJson(chat, feature, opts.userId, opts.emit);
   }
 
-  emitPhase(opts.emit, "extract", "整理提案");
+  emitPhase(opts.emit, "extract", "Building proposal");
   const taskTier = intakeTaskTier(opts.scope);
   const content = await callIntakeExtract(chat, {
     feature,
@@ -513,28 +511,28 @@ ${outputSchemaForScope(opts.scope)}`;
   return turn;
 }
 
-/** 检测是否应走「提案确认」模式（KMS 建档 / 补全画像 / 提炼伙伴） */
+/** Detect propose-confirm mode (KMS onboarding / profile completion / partner enrichment) */
 export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   const text = messages
     .filter((m) => m.role === "user")
     .map((m) => m.content)
     .join("\n");
   if (/kms\.fineres\.com|pageId=\d+/i.test(text)) return true;
-  if (/建档|补全画像|提炼.{0,6}伙伴|录入|创建伙伴|新公司|丰富.{0,4}档案|完善.{0,4}画像/i.test(text)) return true;
+  if (/建档|补全画像|提炼.{0,6}伙伴|录入|创建伙伴|新公司|丰富.{0,4}档案|完善.{0,4}画像|onboard|create partner|new partner|enrich.{0,8}profile|complete.{0,8}profile|intake/i.test(text)) return true;
   return false;
 }
 
 export function detectProposeScope(messages: IntakeMessage[], partnerId?: string): IntakeScope {
   if (partnerId) return "profile";
   const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  if (/人物|联系人|权力地图|CTO|CEO/i.test(last)) return "powermap";
+  if (/人物|联系人|权力地图|contact|power map|CTO|CEO/i.test(last)) return "powermap";
   if (/商机|opportunity/i.test(last)) return "opportunity";
   return "new_partner";
 }
 
 export type ProposeTurn = IntakeTurn & { scope: IntakeScope; mode: "propose" };
 
-/** 助手 propose 模式：多源调研 + 结构化提案（确认后才写库） */
+/** Assistant propose mode: multi-source research + structured proposal (saved only after confirm) */
 export async function runProposeTurn(opts: {
   messages: IntakeMessage[];
   partnerId?: string;
@@ -554,7 +552,7 @@ export async function runProposeTurn(opts: {
   return { ...turn, scope, mode: "propose" };
 }
 
-// ============ 应用 Intake 提案（人工确认后写库） ============
+// ============ Apply intake proposal (after human confirm) ============
 
 const VALID_ROLES = ["APPROVER", "DECISION_MAKER", "SUPPORTER", "EVALUATOR", "INFLUENCER"];
 
@@ -564,21 +562,21 @@ export async function applyIntake(opts: {
   proposal: IntakeProposal;
   userId: string;
   sourceText?: string;
-  /** active：从「正式伙伴」页建档，直接建为正式伙伴；默认进候选 */
+  /** active: onboard from Active Partners page as ACTIVE; default is PROSPECT */
   intent?: "prospect" | "active";
 }): Promise<{ applied: string[]; partnerId: string }> {
   const { scope, proposal, userId } = opts;
   const applied: string[] = [];
   let partnerId = opts.partnerId ?? "";
 
-  // ---- 新建伙伴 ----
+  // ---- New partner ----
   if (scope === "new_partner") {
     const asActive = opts.intent === "active";
     const name =
       proposal.partnerName ||
       proposal.fields.find((f) => f.field === "name")?.newValue ||
       "";
-    if (!name.trim()) throw new Error("缺少公司名，无法建档");
+    if (!name.trim()) throw new Error("Company name is required for onboarding");
     const data: Record<string, unknown> = asActive
       ? { name: name.trim(), ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date() }
       : { name: name.trim(), status: "PROSPECT", poolFlag: "NEW" };
@@ -597,13 +595,13 @@ export async function applyIntake(opts: {
     }
     const created = await db.partner.create({ data: data as Prisma.PartnerCreateInput });
     partnerId = created.id;
-    applied.push(asActive ? `新建正式伙伴：${created.name}` : `新建候选伙伴：${created.name}`);
+    applied.push(asActive ? `Created active partner: ${created.name}` : `Created prospect: ${created.name}`);
     await db.timelineEvent.create({
       data: {
         partnerId,
         type: "SYSTEM",
-        title: asActive ? "AI 建档（正式伙伴）" : "AI 建档",
-        content: proposal.summary || "由 AI 录入助手建档",
+        title: asActive ? "AI onboarding (active partner)" : "AI onboarding",
+        content: proposal.summary || "Onboarded via AI intake assistant",
         createdById: userId,
         meta: JSON.stringify({ via: "ai-intake", intent: asActive ? "active" : "prospect", sourceText: opts.sourceText?.slice(0, 8000) }),
       },
@@ -611,9 +609,9 @@ export async function applyIntake(opts: {
     if (asActive) await createStarterTodos(partnerId, created.name, userId);
   }
 
-  if (!partnerId) throw new Error("缺少伙伴");
+  if (!partnerId) throw new Error("Partner is required");
 
-  // ---- 画像字段（非建档场景）----
+  // ---- Profile fields (non-onboarding) ----
   if (scope !== "new_partner" && proposal.fields.length) {
     const data: Record<string, unknown> = {};
     for (const f of proposal.fields) {
@@ -628,15 +626,14 @@ export async function applyIntake(opts: {
       } else {
         data[f.field] = f.newValue;
       }
-      applied.push(`字段「${f.label || PARTNER_FIELD_LABELS[f.field]}」→ ${f.newValue}`);
+      applied.push(`Field "${f.label || PARTNER_FIELD_LABELS[f.field]}" → ${f.newValue}`);
     }
     if (Object.keys(data).length) {
       await db.partner.update({ where: { id: partnerId }, data: data as Prisma.PartnerUpdateInput });
     }
   }
 
-  // ---- 联系人（两遍：先落库，再解析汇报关系） ----
-  // 第一遍：create/update 所有人，暂不算 reportsToId，记录每个人的姓名→落库 id
+  // ---- Contacts (two passes: save first, then resolve reporting lines) ----
   const contactIdByName = new Map<string, string>();
   for (const c of proposal.contacts) {
     const payload = {
@@ -657,21 +654,21 @@ export async function applyIntake(opts: {
     if (existing) {
       await db.contact.update({ where: { id: existing.id }, data: clean });
       savedId = existing.id;
-      applied.push(`更新联系人：${c.name}`);
+      applied.push(`Updated contact: ${c.name}`);
     } else {
       const created = await db.contact.create({ data: { partnerId, ...clean, name: c.name } });
       savedId = created.id;
-      applied.push(`新增联系人：${c.name}`);
+      applied.push(`Added contact: ${c.name}`);
     }
     contactIdByName.set(c.name, savedId);
   }
 
-  // 第二遍：解析 reportsToName → reportsToId（含同批新增的上级、以及现有人改挂到新人下）
+  // Second pass: resolve reportsToName → reportsToId
   for (const c of proposal.contacts) {
     if (!c.reportsToName) continue;
     const subId = contactIdByName.get(c.name);
     if (!subId) continue;
-    // 先用本批落库的人匹配，再回退到数据库里既有的同伙伴联系人
+    // Match batch first, then existing DB contacts
     let bossId = contactIdByName.get(c.reportsToName);
     if (!bossId) {
       const boss = await db.contact.findFirst({
@@ -684,13 +681,13 @@ export async function applyIntake(opts: {
     }
   }
 
-  // ---- 商机 ----
+  // ---- Opportunities ----
   for (const o of proposal.opportunities) {
     const payload = {
       name: o.name,
       client: o.client,
       amount: o.amount,
-      stage: o.stage ?? "需求诊断",
+      stage: o.stage ?? "Needs Discovery",
       nextStep: o.nextStep,
       status: o.status ?? "ACTIVE",
       notes: o.notes,
@@ -701,14 +698,14 @@ export async function applyIntake(opts: {
       (await db.opportunity.findFirst({ where: { partnerId, name: o.name } }));
     if (existing) {
       await db.opportunity.update({ where: { id: existing.id }, data: clean });
-      applied.push(`更新商机：${o.name}`);
+      applied.push(`Updated opportunity: ${o.name}`);
     } else {
       await db.opportunity.create({ data: { partnerId, ...clean, name: o.name } });
-      applied.push(`新增商机：${o.name}`);
+      applied.push(`Added opportunity: ${o.name}`);
     }
   }
 
-  // ---- 培训 ----
+  // ---- Training ----
   for (const t of proposal.trainings) {
     if (!t.person?.trim()) continue;
     await db.training.create({
@@ -722,10 +719,10 @@ export async function applyIntake(opts: {
         status: t.status && ["PLANNED", "IN_PROGRESS", "DONE"].includes(t.status) ? t.status : "PLANNED",
       },
     });
-    applied.push(`新增培训：${t.person}${t.targetCert ? ` → ${t.targetCert}` : ""}`);
+    applied.push(`Added training: ${t.person}${t.targetCert ? ` → ${t.targetCert}` : ""}`);
   }
 
-  // ---- 联合方案 ----
+  // ---- Joint solutions ----
   for (const s of proposal.solutions) {
     if (!s.name?.trim()) continue;
     await db.solution.create({
@@ -741,10 +738,10 @@ export async function applyIntake(opts: {
         notes: s.notes,
       },
     });
-    applied.push(`新增联合方案：${s.name}`);
+    applied.push(`Added joint solution: ${s.name}`);
   }
 
-  // ---- 待办 ----
+  // ---- Todos ----
   for (const t of proposal.todos) {
     await db.todoItem.create({
       data: {
@@ -757,16 +754,16 @@ export async function applyIntake(opts: {
         source: "AI",
       },
     });
-    applied.push(`新增待办：${t.title}`);
+    applied.push(`Added todo: ${t.title}`);
   }
 
-  // ---- 时间线审计（非建档场景；建档已写）----
+  // ---- Timeline audit (non-onboarding; onboarding already logged) ----
   if (scope !== "new_partner" && partnerId) {
     await db.timelineEvent.create({
       data: {
         partnerId,
         type: "AI_SUMMARY",
-        title: `AI 录入：${SCOPE_CONFIG[scope].title}`,
+        title: `AI intake: ${SCOPE_CONFIG[scope].title}`,
         content: proposal.summary || applied.join("；"),
         createdById: userId,
         meta: JSON.stringify({ via: "ai-intake", scope, applied, sourceText: opts.sourceText?.slice(0, 8000) }),

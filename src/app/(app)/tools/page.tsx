@@ -30,14 +30,14 @@ export default async function ToolsPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="工具背包"
-        desc="经测试可用的 Agent 能力单元——中东伙伴拓展场景优先：档案、领英、新闻、待办、知识库"
+        title="Tool Kit"
+        desc="Tested Agent capability units—Middle East partner expansion first: profiles, LinkedIn, news, todos, knowledge base"
         actions={
           <div className="flex items-center gap-2 text-xs">
             <Badge tone={webSearchReady ? "green" : "amber"}>
               {webSearchReady
-                ? `${readyCount}/${totalCount} 可用（${searchBackend}）`
-                : `${readyCount}/${totalCount} 可用（缺模型联网搜索）`}
+                ? `${readyCount}/${totalCount} available (${searchBackend})`
+                : `${readyCount}/${totalCount} available (web search model missing)`}
             </Badge>
           </div>
         }
@@ -46,26 +46,26 @@ export default async function ToolsPage() {
       <div className="px-8 max-w-5xl space-y-6">
         {!webSearchReady && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-medium">领英搜索 / 新闻搜索 / 舆情扫描需要支持联网的大模型。</span>
-            请在「团队设置 → 大模型管理中心」添加并<strong>启用</strong>支持联网的模型：{" "}
-            <strong>Kimi（moonshot）</strong> 或 <strong>火山引擎</strong>（tools 含{" "}
+            <span className="font-medium">LinkedIn search / news search / sentiment scan require a web-enabled LLM.</span>
+            Add and <strong>enable</strong> a web-capable model in Team Settings → LLM Management Center:{" "}
+            <strong>Kimi (moonshot)</strong> or <strong>Volcano Engine</strong> (tools include{" "}
             <code className="text-xs bg-amber-100 px-1 rounded">web_search</code>
-            ）。系统会从<strong>全部已启用</strong>的配置中自动选用，不必是默认模型。
+            ). The system auto-selects from <strong>all enabled</strong> configs—it does not have to be the default model.
           </div>
         )}
         {!kmsConfigured && (
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-            <span className="font-medium">读取 KMS 需要个人访问令牌。</span>
-            请到 <a href="/settings" className="underline font-medium">团队设置 → KMS 文档访问</a> 填写一次，保存后{" "}
-            <code className="text-xs bg-indigo-100 px-1 rounded">read_kms</code> 工具即可使用。
+            <span className="font-medium">Reading KMS requires a personal access token.</span>
+            Go to <a href="/settings" className="underline font-medium">Team Settings → KMS Document Access</a> to enter it once; after saving, the{" "}
+            <code className="text-xs bg-indigo-100 px-1 rounded">read_kms</code> tool becomes available.
           </div>
         )}
 
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 text-sm text-indigo-900/80">
-          <span className="font-medium">场景优先级：</span>
-          监测雷达 → linkedin_search + web_search + add_timeline_event；
-          会前简报 → get_partner + search_knowledge + create_document；
-          停滞唤醒 → search_partners + create_todo。
+          <span className="font-medium">Scenario priority:</span>
+          Monitoring radar → linkedin_search + web_search + add_timeline_event;
+          Pre-meeting brief → get_partner + search_knowledge + create_document;
+          Stalled partner wake-up → search_partners + create_todo.
         </div>
 
         {BUILTIN_TOOL_CATEGORIES.map((cat) => (
@@ -76,7 +76,7 @@ export default async function ToolsPage() {
                 <h2 className="text-sm font-semibold text-zinc-800">{cat.label}</h2>
                 <p className="text-xs text-zinc-400">{cat.desc}</p>
               </div>
-              <Badge tone="zinc">{cat.tools.length} 个</Badge>
+              <Badge tone="zinc">{cat.tools.length}</Badge>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {cat.tools.map((tool) => {
@@ -92,16 +92,16 @@ export default async function ToolsPage() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="text-sm font-semibold text-zinc-900">{tool.label}</div>
-                          {tool.priority === "core" && <Badge tone="indigo">核心</Badge>}
+                          {tool.priority === "core" && <Badge tone="indigo">Core</Badge>}
                         </div>
                         <div className="text-xs text-zinc-400 font-mono mt-0.5">{tool.name}</div>
                         <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{tool.desc}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" ? "amber" : "zinc"}>
-                          {status === "ready" ? "已验证" : status === "needs_web_search" ? "需模型联网" : status === "needs_kms" ? "需 KMS 令牌" : "未知"}
+                          {status === "ready" ? "Verified" : status === "needs_web_search" ? "Needs web search" : status === "needs_kms" ? "Needs KMS token" : "Unknown"}
                         </Badge>
-                        {usedToolNames.has(tool.name) && <Badge tone="blue">已装备</Badge>}
+                        {usedToolNames.has(tool.name) && <Badge tone="blue">Equipped</Badge>}
                       </div>
                     </div>
                   </div>

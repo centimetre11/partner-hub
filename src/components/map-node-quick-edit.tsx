@@ -45,7 +45,7 @@ export function MapNodeQuickEdit({
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-base font-semibold text-zinc-900">编辑 · {node.label}</h3>
+            <h3 className="text-base font-semibold text-zinc-900">Edit · {node.label}</h3>
             <p className="text-xs text-zinc-500 mt-0.5">{node.hint}</p>
           </div>
           <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">
@@ -55,7 +55,7 @@ export function MapNodeQuickEdit({
 
         {node.id === "stage" ? (
           <>
-            <p className="text-xs text-zinc-500 mb-3">选择 Pipeline 阶段（点击即保存）</p>
+            <p className="text-xs text-zinc-500 mb-3">Select pipeline stage (click to save)</p>
             <div className="flex flex-wrap gap-1.5 max-h-52 overflow-y-auto">
               {pipelineStages.map((s) => (
                 <form key={s.stage} action={setPipelineStageAction.bind(null, partner.id, s.stage)}>
@@ -74,7 +74,7 @@ export function MapNodeQuickEdit({
             </div>
             <div className="flex justify-end pt-4">
               <button type="button" onClick={onClose} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
-                关闭
+                Close
               </button>
             </div>
           </>
@@ -90,10 +90,10 @@ export function MapNodeQuickEdit({
               <label className="block space-y-1">
                 <span className="text-xs text-zinc-500">Tier</span>
                 <select name="tier" defaultValue={partner.tier ?? ""} className={input}>
-                  <option value="">未分级</option>
-                  <option value="A">A 立即打</option>
-                  <option value="B">B 重点打</option>
-                  <option value="C">C 后续跟进</option>
+                  <option value="">Not tiered</option>
+                  <option value="A">A — immediate</option>
+                  <option value="B">B — priority</option>
+                  <option value="C">C — follow up later</option>
                 </select>
               </label>
             )}
@@ -103,7 +103,7 @@ export function MapNodeQuickEdit({
                 name="partnerArchetype"
                 value={partner.partnerArchetype ?? ""}
                 options={taxonomy.ARCHETYPE}
-                emptyLabel="待判定"
+                emptyLabel="To be determined"
               />
             )}
             {node.id === "category" && (
@@ -128,21 +128,21 @@ export function MapNodeQuickEdit({
                 name="valuePattern"
                 value={partner.valuePattern ?? ""}
                 options={taxonomy.VALUE_PATTERN}
-                emptyLabel="待选定"
+                emptyLabel="To be selected"
               />
             )}
             {node.id === "value_stack" && (
               <>
                 <label className="block space-y-1">
-                  <span className="text-xs text-zinc-500">伙伴提供</span>
+                  <span className="text-xs text-zinc-500">Partner offers</span>
                   <input name="valuePartnerOffer" defaultValue={partner.valuePartnerOffer ?? ""} className={input} />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-xs text-zinc-500">帆软提供</span>
+                  <span className="text-xs text-zinc-500">FanRuan offers</span>
                   <input name="valueFanruanOffer" defaultValue={partner.valueFanruanOffer ?? ""} className={input} />
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-xs text-zinc-500">客户得到</span>
+                  <span className="text-xs text-zinc-500">Customer gets</span>
                   <input name="valueCustomerOutcome" defaultValue={partner.valueCustomerOutcome ?? ""} className={input} />
                 </label>
               </>
@@ -162,25 +162,25 @@ export function MapNodeQuickEdit({
             {node.id === "domain_commitment" && (
               <>
                 <label className="block space-y-1">
-                  <span className="text-xs text-zinc-500">负责 BD</span>
+                  <span className="text-xs text-zinc-500">Owner (BD)</span>
                   <select name="ownerId" defaultValue={partner.ownerId ?? ""} className={input}>
-                    <option value="">未指定</option>
+                    <option value="">Unassigned</option>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-xs text-zinc-500">专职人数</span>
+                  <span className="text-xs text-zinc-500">Dedicated headcount</span>
                   <input name="dedicatedHeadcount" defaultValue={partner.dedicatedHeadcount ?? ""} className={input} />
                 </label>
               </>
             )}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={onClose} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
-                取消
+                Cancel
               </button>
-              <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">保存</button>
+              <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">Save</button>
             </div>
           </form>
         )}

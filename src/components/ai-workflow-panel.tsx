@@ -66,13 +66,13 @@ export function AiWorkflowPanel({
   scope?: IntakeScope;
   partnerId?: string;
   sourceText?: string;
-  /** new_partner 场景：active 表示直接建为正式伙伴 */
+  /** new_partner: active = create as a formal partner immediately */
   intent?: "prospect" | "active";
   onApplied?: (partnerId: string) => void;
   input: string;
   onInputChange: (v: string) => void;
   onSend: () => void;
-  /** 停止当前 AI 流式处理 */
+  /** Stop the current AI stream */
   onStop?: () => void;
   pendingImages?: ChatImage[];
   onAddImages?: (images: ChatImage[]) => void;
@@ -81,7 +81,7 @@ export function AiWorkflowPanel({
   sendDisabled?: boolean;
   headerExtra?: ReactNode;
   leftFooter?: ReactNode;
-  /** 是否显示右侧活草稿栏（查询模式可关闭） */
+  /** Whether to show the right-hand live draft panel (can hide in query mode) */
   showDraftPanel?: boolean;
 }) {
   async function apply(filtered: NormalizedProposal) {
@@ -97,7 +97,7 @@ export function AiWorkflowPanel({
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error ?? "写入失败");
+    if (!res.ok) throw new Error(data.error ?? "Failed to save");
     onApplied?.(data.partnerId);
   }
 
@@ -121,7 +121,7 @@ export function AiWorkflowPanel({
       <div
         className={`flex-1 min-h-0 grid grid-cols-1 ${showDraftPanel ? "md:grid-cols-[38%_62%]" : ""}`}
       >
-        {/* 左侧：找信息 */}
+        {/* Left: research */}
         <div className="flex flex-col min-h-0 border-r border-zinc-100">
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-4">
             {messages.map((m, i) => (
@@ -141,7 +141,7 @@ export function AiWorkflowPanel({
                         <img
                           key={j}
                           src={img.url}
-                          alt={img.name ?? "图片"}
+                          alt={img.name ?? "Image"}
                           className="max-h-28 max-w-[140px] rounded-lg border border-white/20 object-cover"
                         />
                       ))}
@@ -171,7 +171,7 @@ export function AiWorkflowPanel({
                     {pendingImages.map((img, i) => (
                       <div key={i} className="relative">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img.url} alt={img.name ?? "待发送"} className="h-16 w-16 rounded-lg object-cover border border-zinc-200" />
+                        <img src={img.url} alt={img.name ?? "Pending"} className="h-16 w-16 rounded-lg object-cover border border-zinc-200" />
                         {onRemoveImage && (
                           <button
                             type="button"
@@ -187,7 +187,7 @@ export function AiWorkflowPanel({
                 )}
                 <div className="flex gap-3 items-end">
                 {onAddImages && (
-                  <label className="shrink-0 cursor-pointer rounded-xl border border-zinc-200 px-3 py-3 text-zinc-500 hover:border-indigo-300 hover:text-indigo-600" title="添加图片">
+                  <label className="shrink-0 cursor-pointer rounded-xl border border-zinc-200 px-3 py-3 text-zinc-500 hover:border-indigo-300 hover:text-indigo-600" title="Add image">
                     <input
                       type="file"
                       accept="image/*"
@@ -230,17 +230,17 @@ export function AiWorkflowPanel({
                     void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
                   }}
                   rows={3}
-                  placeholder={inputPlaceholder ?? "输入后按 ⌘/Ctrl + Enter 发送；可直接粘贴/拖入图片…"}
+                  placeholder={inputPlaceholder ?? "Press ⌘/Ctrl + Enter to send; paste or drop images…"}
                   className="flex-1 rounded-xl border border-zinc-200 px-4 py-3 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 {loading && onStop ? (
                   <button
                     onClick={onStop}
                     className="rounded-xl bg-red-500 text-white px-6 py-3 text-[15px] font-medium hover:bg-red-600 shrink-0 flex items-center gap-2"
-                    title="停止生成"
+                    title="Stop generation"
                   >
                     <span className="inline-block w-3 h-3 bg-white rounded-[2px]" />
-                    停止
+                    Stop
                   </button>
                 ) : (
                   <button
@@ -248,7 +248,7 @@ export function AiWorkflowPanel({
                     disabled={sendDisabled}
                     className="rounded-xl bg-indigo-600 text-white px-6 py-3 text-[15px] font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                   >
-                    发送
+                    Send
                   </button>
                 )}
                 </div>
@@ -257,14 +257,14 @@ export function AiWorkflowPanel({
           </div>
         </div>
 
-        {/* 右侧：活草稿 */}
+        {/* Right: live draft */}
         {showDraftPanel && (
         <div className="flex flex-col min-h-0 p-5 md:p-6 bg-zinc-50/50">
           <LiveProposalDraft
             proposal={proposal}
             changes={patchChanges}
             onConfirm={apply}
-            confirmLabel={ready ? "确认入库" : "信息够了，直接入库"}
+            confirmLabel={ready ? "Confirm & save" : "Looks good — save now"}
             questions={questions}
             clarifications={clarifications}
             onClarify={onClarify}

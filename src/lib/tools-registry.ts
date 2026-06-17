@@ -4,13 +4,13 @@ export type ToolMeta = {
   name: string;
   label: string;
   desc: string;
-  /** 是否已在代码中注册且实现 */
+  /** Whether implemented and registered in code */
   implemented: boolean;
-/** 是否需要模型内置联网搜索（Kimi / 火山引擎） */
+/** Requires model builtin web search (Kimi / Volcengine) */
   requiresWebSearch?: boolean;
-  /** 是否需要用户配置 KMS 个人令牌 */
+  /** Requires user-configured KMS personal token */
   requiresKms?: boolean;
-  /** 核心场景优先级 */
+  /** Core scenario priority */
   priority: "core" | "standard" | "assistant";
 };
 
@@ -53,11 +53,11 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
 };
 
 const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
-  { id: "partner", label: "伙伴档案", desc: "查询、读取、记录伙伴动态", icon: "◮" },
-  { id: "intel", label: "外部情报", desc: "LinkedIn 与公开网络——监测伙伴/竞品/市场信号", icon: "📡" },
-  { id: "kms", label: "公司 KMS", desc: "帆软内部 Confluence 文档（需个人令牌）", icon: "🏢" },
-  { id: "todo", label: "待办任务", desc: "创建和查询跟进待办", icon: "☑" },
-  { id: "content", label: "知识与报告", desc: "团队知识库、报告中心输出", icon: "📄" },
+  { id: "partner", label: "Partner profiles", desc: "Search, read, and log partner activity", icon: "◮" },
+  { id: "intel", label: "External intelligence", desc: "LinkedIn and public web — monitor partners, competitors, market signals", icon: "📡" },
+  { id: "kms", label: "Company KMS", desc: "Fanruan internal Confluence docs (personal token required)", icon: "🏢" },
+  { id: "todo", label: "Tasks", desc: "Create and list follow-up todos", icon: "☑" },
+  { id: "content", label: "Knowledge & reports", desc: "Team knowledge base and report center output", icon: "📄" },
 ];
 
 function buildCategories(): ToolCategory[] {
@@ -102,7 +102,7 @@ export function getToolAvailability(
   return "ready";
 }
 
-/** Agent 默认装备的核心工具（不含需模型联网搜索的情报工具，由模板按需追加） */
+/** Default core tools for Agents (intel tools requiring web search are appended by template as needed) */
 export const CORE_AGENT_TOOLS = [
   "search_partners",
   "get_partner",

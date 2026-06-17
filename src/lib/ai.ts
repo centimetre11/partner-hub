@@ -1,4 +1,4 @@
-// 统一的 OpenAI 兼容接口封装：Kimi / DeepSeek / 通义 / OpenAI 均可
+// Unified OpenAI-compatible API wrapper: Kimi / DeepSeek / Tongyi / OpenAI, etc.
 import { db } from "./db";
 import {
   type AiCapability,
@@ -17,7 +17,7 @@ export type ChatMessage = {
   images?: ChatImage[];
   tool_calls?: ToolCall[];
   tool_call_id?: string;
-  /** 火山 Responses API 上一轮 output，多轮 tool calling 时必须原样回放 */
+  /** Volcengine Responses API prior output; must be replayed verbatim for multi-turn tool calling */
   volcengineReplay?: unknown[];
 };
 
@@ -98,13 +98,13 @@ export function requiredCapabilitiesForChat(opts: {
 async function resolveAiApi(opts?: {
   capabilities?: AiCapability[];
   taskTier?: AiTaskTier;
-  /** 强制使用指定 API（如联网搜索专用模型） */
+  /** Force a specific API (e.g. web-search-only model) */
   apiConfigId?: string;
 }): Promise<ResolvedAiApi> {
   const required = opts?.capabilities ?? ["chat"];
   const configured = await db.aiApiConfig.findMany({
     where: { enabled: true },
-    // priority 越大越先用（如先用完免费额度），其次默认、再次创建时间
+    // Higher priority first (e.g. exhaust free quota), then default, then createdAt
     orderBy: [{ priority: "desc" }, { isDefault: "desc" }, { createdAt: "asc" }],
   });
 
@@ -113,7 +113,7 @@ async function resolveAiApi(opts?: {
       const forced = configured.find((a) => a.id === opts.apiConfigId);
       if (forced) return toResolvedApi(forced);
     }
-    // 读取今日各模型已用 Token，用于判断是否触达每日上限
+    // Read today's token usage per model to check daily limits
     const day = new Date().toISOString().slice(0, 10);
     const usages = await db.aiDailyTokenUsage.findMany({
       where: { day, bucketKey: { in: configured.map((api) => `api:${api.id}`) } },
@@ -123,7 +123,7 @@ async function resolveAiApi(opts?: {
     type ConfiguredApi = (typeof configured)[number];
     const isOverDailyLimit = (api: ConfiguredApi) => {
       const limit = api.dailyTokenLimit ?? 0;
-      if (limit <= 0) return false; // null 或 0 视为不限
+      if (limit <= 0) return false; // null or 0 means unlimited
       return (usedByBucket.get(`api:${api.id}`) ?? 0) >= limit;
     };
     const matchesCap = (api: ConfiguredApi) =>
@@ -144,33 +144,33 @@ async function resolveAiApi(opts?: {
       return pool.find(matchesCap);
     };
 
-    // 优先：未超每日上限且具备所需能力（轻量任务优先 fast/非推理模型）
+    // Prefer: under daily limit and has required capabilities (fast/non-reasoning for light tasks)
     const matched = pickBest(available);
     if (matched) {
       const naturalChoice = configured.find(matchesCap);
       if (naturalChoice && naturalChoice.id !== matched.id) {
         const reason =
           opts?.taskTier === "fast" && matched.id !== naturalChoice.id
-            ? "轻量任务优先快速模型"
-            : `已达每日 Token 上限（${usedByBucket.get(`api:${naturalChoice.id}`) ?? 0}/${naturalChoice.dailyTokenLimit}）`;
-        console.warn(`[ai] ${naturalChoice.name} ${reason}，自动切换到 ${matched.name}`);
+            ? "light task prefers fast model"
+            : `daily token limit reached (${usedByBucket.get(`api:${naturalChoice.id}`) ?? 0}/${naturalChoice.dailyTokenLimit})`;
+        console.warn(`[ai] ${naturalChoice.name} ${reason}, auto-switching to ${matched.name}`);
       }
       return toResolvedApi(matched);
     }
 
-    // 其次：未超上限的任意模型（能力不完全匹配，沿用既有兜底行为）
+    // Next: any model under limit (capabilities may not fully match; legacy fallback)
     if (available.length) {
       const fallback = available[0];
       console.warn(
-        `[ai] 无未超额模型同时具备 ${required.join("+")}，回退到未超额模型 ${fallback.name}（${parseAiCapabilities(fallback.capabilities).join("+")}）`
+        `[ai] no under-limit model has all ${required.join("+")}, falling back to ${fallback.name} (${parseAiCapabilities(fallback.capabilities).join("+")})`
       );
       return toResolvedApi(fallback);
     }
 
-    // 全部已达每日上限：按原优先级回退（能力匹配优先），保证服务不中断
+    // All at daily limit: fall back by priority (capability match first) to keep service up
     const fallback = configured.find(matchesCap) ?? configured[0];
     console.warn(
-      `[ai] 所有启用模型均已达到每日 Token 上限，仍回退到 ${fallback.name}（今日已用 ${usedByBucket.get(`api:${fallback.id}`) ?? 0} / 上限 ${fallback.dailyTokenLimit ?? "∞"}）`
+      `[ai] all enabled models hit daily token limit, still falling back to ${fallback.name} (used today ${usedByBucket.get(`api:${fallback.id}`) ?? 0} / limit ${fallback.dailyTokenLimit ?? "∞"})`
     );
     return toResolvedApi(fallback);
   }
@@ -179,11 +179,11 @@ async function resolveAiApi(opts?: {
   const apiKey = process.env.AI_API_KEY;
   const model = process.env.AI_MODEL || "gpt-4o-mini";
   if (!apiKey) {
-    throw new AIError("AI 尚未配置：请在设置页添加大模型 API，或在 .env 中填写 AI_API_KEY（以及 AI_BASE_URL、AI_MODEL）后重启服务。");
+    throw new AIError("AI is not configured: add a model API in Settings, or set AI_API_KEY (and AI_BASE_URL, AI_MODEL) in .env and restart.");
   }
   return {
     id: null,
-    name: "环境变量 API",
+    name: "Environment variable API",
     bucketKey: `env:${baseUrl}:${model}`,
     provider: "openai",
     baseUrl,
@@ -265,11 +265,11 @@ async function recordBestEffort(opts: Parameters<typeof recordAiTokenUsage>[0]) 
   try {
     await recordAiTokenUsage(opts);
   } catch (e) {
-    console.error("[ai-token-usage] 记录失败:", e);
+    console.error("[ai-token-usage] record failed:", e);
   }
 }
 
-/** 火山 API 请求超时（识图+JSON 通常 <60s；超时后快速失败而非长时间挂起） */
+/** Volcengine API request timeout (vision+JSON usually <60s; fail fast instead of hanging) */
 const VOLCENGINE_FETCH_MS = 120_000;
 
 function parseExtraConfig(extraConfig: string | null): Record<string, unknown> {
@@ -281,7 +281,7 @@ function parseExtraConfig(extraConfig: string | null): Record<string, unknown> {
   }
 }
 
-/** 火山 Responses API 使用扁平 function 定义，不接受 OpenAI Chat Completions 的嵌套 function 字段 */
+/** Volcengine Responses API uses flat function defs, not OpenAI Chat Completions nested function field */
 function toVolcengineTool(tool: ToolDef | Record<string, unknown>): Record<string, unknown> {
   if (typeof tool !== "object" || tool === null) return tool as Record<string, unknown>;
   const t = tool as Record<string, unknown>;
@@ -486,8 +486,8 @@ async function volcengineResponsesCompletion(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: msg });
-    throw new AIError(`火山引擎接口调用失败：${msg}`);
+    await recordBestEffort({ api, feature: opts.feature ?? "Unlabeled AI call", userId: opts.userId, status: "FAILED", error: msg });
+    throw new AIError(`Volcengine API call failed: ${msg}`);
   }
 
   if (!res.ok) {
@@ -498,12 +498,12 @@ async function volcengineResponsesCompletion(
     }
     await recordBestEffort({
       api,
-      feature: opts.feature ?? "未标注 AI 调用",
+      feature: opts.feature ?? "Unlabeled AI call",
       userId: opts.userId,
       status: "FAILED",
       error: `HTTP ${res.status}: ${text.slice(0, 500)}`,
     });
-    throw new AIError(`火山引擎接口调用失败（${res.status}）：${text.slice(0, 500)}`);
+    throw new AIError(`Volcengine API call failed (${res.status}): ${text.slice(0, 500)}`);
   }
 
   const data = (await res.json()) as Record<string, unknown>;
@@ -515,7 +515,7 @@ async function volcengineResponsesCompletion(
   const usage = readVolcengineTokenUsage(data);
   await recordBestEffort({
     api,
-    feature: opts.feature ?? "未标注 AI 调用",
+    feature: opts.feature ?? "Unlabeled AI call",
     userId: opts.userId,
     usage,
     status: "SUCCESS",
@@ -523,7 +523,7 @@ async function volcengineResponsesCompletion(
   return parseVolcengineResponse(data);
 }
 
-/** 火山 Responses API 真·流式：边生成边通过 onDelta 推送文本增量；最终用 response.completed 的完整 output 解析权威结果 */
+/** Volcengine Responses API true streaming: push text deltas via onDelta; parse authoritative result from response.completed output */
 async function volcengineResponsesStream(
   api: ResolvedAiApi,
   messages: ChatMessage[],
@@ -577,24 +577,24 @@ async function volcengineResponsesStream(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: msg });
-    throw new AIError(`火山引擎接口调用失败：${msg}`);
+    await recordBestEffort({ api, feature: opts.feature ?? "Unlabeled AI call", userId: opts.userId, status: "FAILED", error: msg });
+    throw new AIError(`Volcengine API call failed: ${msg}`);
   }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     await recordBestEffort({
       api,
-      feature: opts.feature ?? "未标注 AI 调用",
+      feature: opts.feature ?? "Unlabeled AI call",
       userId: opts.userId,
       status: "FAILED",
       error: `HTTP ${res.status}: ${text.slice(0, 500)}`,
     });
-    throw new AIError(`火山引擎接口调用失败（${res.status}）：${text.slice(0, 500)}`);
+    throw new AIError(`Volcengine API call failed (${res.status}): ${text.slice(0, 500)}`);
   }
 
   const reader = res.body?.getReader();
-  if (!reader) throw new AIError("流式响应不可用");
+  if (!reader) throw new AIError("Streaming response unavailable");
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -619,7 +619,7 @@ async function volcengineResponsesStream(
         continue;
       }
       const type = String(parsed.type ?? "");
-      // 文本增量：真·流式逐字推送
+      // Text delta: true streaming character-by-character push
       if (type === "response.output_text.delta") {
         const delta = parsed.delta;
         if (typeof delta === "string" && delta) {
@@ -631,8 +631,8 @@ async function volcengineResponsesStream(
         if (r && typeof r === "object") finalResponse = r as Record<string, unknown>;
       } else if (type === "error" || type === "response.failed") {
         const errMsg = (parsed.message as string) ?? JSON.stringify(parsed);
-        await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: errMsg.slice(0, 500) });
-        throw new AIError(`火山引擎流式出错：${errMsg.slice(0, 500)}`);
+        await recordBestEffort({ api, feature: opts.feature ?? "Unlabeled AI call", userId: opts.userId, status: "FAILED", error: errMsg.slice(0, 500) });
+        throw new AIError(`Volcengine streaming error: ${errMsg.slice(0, 500)}`);
       }
     }
   }
@@ -641,7 +641,7 @@ async function volcengineResponsesStream(
     const usage = readVolcengineTokenUsage(finalResponse);
     await recordBestEffort({
       api,
-      feature: opts.feature ?? "未标注 AI 调用",
+      feature: opts.feature ?? "Unlabeled AI call",
       userId: opts.userId,
       usage,
       status: "SUCCESS",
@@ -649,8 +649,8 @@ async function volcengineResponsesStream(
     return parseVolcengineResponse(finalResponse);
   }
 
-  // 未收到 response.completed：用累计文本兜底
-  await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "SUCCESS" });
+  // No response.completed: fall back to accumulated text
+  await recordBestEffort({ api, feature: opts.feature ?? "Unlabeled AI call", userId: opts.userId, status: "SUCCESS" });
   return { content: fallbackText || null, toolCalls: [], volcengineReplay: [] };
 }
 
@@ -704,24 +704,24 @@ async function openaiChatCompletionStream(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: msg });
-    throw new AIError(`AI 接口调用失败：${msg}`);
+    await recordBestEffort({ api, feature: opts.feature ?? "Unlabeled AI call", userId: opts.userId, status: "FAILED", error: msg });
+    throw new AIError(`AI API call failed: ${msg}`);
   }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     await recordBestEffort({
       api,
-      feature: opts.feature ?? "未标注 AI 调用",
+      feature: opts.feature ?? "Unlabeled AI call",
       userId: opts.userId,
       status: "FAILED",
       error: `HTTP ${res.status}: ${text.slice(0, 500)}`,
     });
-    throw new AIError(`AI 接口调用失败（${res.status}）：${text.slice(0, 500)}`);
+    throw new AIError(`AI API call failed (${res.status}): ${text.slice(0, 500)}`);
   }
 
   const reader = res.body?.getReader();
-  if (!reader) throw new AIError("流式响应不可用");
+  if (!reader) throw new AIError("Streaming response unavailable");
 
   const decoder = new TextDecoder();
   let buffer = "";
@@ -774,7 +774,7 @@ async function openaiChatCompletionStream(
 
   await recordBestEffort({
     api,
-    feature: opts.feature ?? "未标注 AI 调用",
+    feature: opts.feature ?? "Unlabeled AI call",
     userId: opts.userId,
     status: "SUCCESS",
   });
@@ -792,11 +792,11 @@ export async function chatCompletion(
     feature?: string;
     userId?: string;
     onDelta?: (delta: string) => void;
-    /** 强制按某一能力选模型（如 vision） */
+    /** Force model selection by capability (e.g. vision) */
     capability?: AiCapability;
-    /** fast：属性抽取等轻量任务，优先选带「轻量快速」或未标深度推理的模型 */
+    /** fast: light tasks like attribute extraction; prefer models tagged fast or without deep reasoning */
     taskTier?: AiTaskTier;
-    /** 强制使用指定 API 配置（如联网搜索走 Doubao/Kimi 专用条目） */
+    /** Force a specific API config (e.g. web search via Doubao/Kimi entry) */
     apiConfigId?: string;
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
@@ -808,7 +808,7 @@ export async function chatCompletion(
   });
 
   if (api.provider === "volcengine") {
-    // 有 onDelta 时走真·流式（边生成边推送），否则一次性返回
+    // With onDelta: true streaming (push while generating); otherwise return once
     if (opts.onDelta) {
       return volcengineResponsesStream(api, messages, opts);
     }
@@ -839,27 +839,27 @@ export async function chatCompletion(
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await recordBestEffort({ api, feature: opts.feature ?? "未标注 AI 调用", userId: opts.userId, status: "FAILED", error: msg });
-    throw new AIError(`AI 接口调用失败：${msg}`);
+    await recordBestEffort({ api, feature: opts.feature ?? "Unlabeled AI call", userId: opts.userId, status: "FAILED", error: msg });
+    throw new AIError(`AI API call failed: ${msg}`);
   }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     await recordBestEffort({
       api,
-      feature: opts.feature ?? "未标注 AI 调用",
+      feature: opts.feature ?? "Unlabeled AI call",
       userId: opts.userId,
       status: "FAILED",
       error: `HTTP ${res.status}: ${text.slice(0, 500)}`,
     });
-    throw new AIError(`AI 接口调用失败（${res.status}）：${text.slice(0, 500)}`);
+    throw new AIError(`AI API call failed (${res.status}): ${text.slice(0, 500)}`);
   }
 
   const data = await res.json();
   const usage = readTokenUsage(data);
   await recordBestEffort({
     api,
-    feature: opts.feature ?? "未标注 AI 调用",
+    feature: opts.feature ?? "Unlabeled AI call",
     userId: opts.userId,
     usage,
     status: "SUCCESS",
@@ -871,7 +871,7 @@ export async function chatCompletion(
   };
 }
 
-// 从模型输出中尽力解析 JSON（兼容 ```json 包裹等情况）
+// Best-effort parse JSON from model output (handles ```json fences, etc.)
 export function parseJsonLoose<T>(text: string): T {
   const trimmed = text.trim();
   try {
@@ -886,7 +886,7 @@ export function parseJsonLoose<T>(text: string): T {
     if (start >= 0 && end > start) {
       return JSON.parse(trimmed.slice(start, end + 1)) as T;
     }
-    throw new AIError("AI 返回内容无法解析为 JSON：" + trimmed.slice(0, 200));
+    throw new AIError("AI response could not be parsed as JSON: " + trimmed.slice(0, 200));
   }
 }
 
@@ -895,7 +895,7 @@ export async function chatJson<T>(
   user: string,
   opts: { feature?: string; userId?: string; temperature?: number } = {}
 ): Promise<T> {
-  // 部分兼容接口不支持 response_format，失败时退回普通模式
+  // Some compatible APIs don't support response_format; fall back to plain mode
   try {
     const { content } = await chatCompletion(
       [
@@ -908,7 +908,7 @@ export async function chatJson<T>(
   } catch (e) {
     if (e instanceof AIError && /response_format|json_object|400/.test(e.message)) {
       const { content } = await chatCompletion([
-        { role: "system", content: system + "\n\n务必只输出一个合法 JSON 对象，不要输出任何其他文字。" },
+        { role: "system", content: system + "\n\nOutput exactly one valid JSON object only. Do not output any other text." },
         { role: "user", content: user },
       ], { feature: opts.feature, userId: opts.userId, temperature: opts.temperature });
       return parseJsonLoose<T>(content ?? "");

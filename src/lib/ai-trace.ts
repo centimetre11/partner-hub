@@ -3,7 +3,7 @@ import type { IntakeProposal, IntakeClarification } from "./ai-intake";
 import type { ContactProposal, OpportunityProposal, TodoProposal } from "./proposals";
 import type { ProposalChanges } from "./proposal-merge";
 
-/** 单步 AI 过程轨迹 */
+/** Single-step AI process trace */
 export type AiTraceStep =
   | {
       type: "reasoning";
@@ -30,7 +30,7 @@ export type AiTracePatch = {
   error?: string;
 };
 
-/** 工具步骤下方详情流式追加（见 trace_result_delta 事件） */
+/** Stream detail append under tool step (see trace_result_delta event) */
 
 export type ProposalPatchOp =
   | { op: "set_partner"; name: string; source?: string }
@@ -116,21 +116,21 @@ export function formatToolArgs(name: string, args: Record<string, unknown>): str
 
 export function summarizeToolResult(name: string, result: string): string {
   const clean = result.replace(/\r/g, "").trim();
-  if (!clean) return "（无返回）";
+  if (!clean) return "(no output)";
   const tool = name === "$web_search" ? "web_search" : name;
 
   if (tool === "read_kms" || tool === "search_knowledge") {
     const first = clean.split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "").trim() ?? "";
-    return `已读取 ${clean.length} 字${first ? `，含：${first.slice(0, 80)}` : ""}`;
+    return `Read ${clean.length} chars${first ? `, includes: ${first.slice(0, 80)}` : ""}`;
   }
   if (tool === "web_search" || tool === "linkedin_search") {
     const lines = clean.split("\n").filter((l) => l.trim());
     const head = lines[0]?.slice(0, 80) ?? "";
-    return `找到 ${Math.max(1, lines.length)} 条${head ? `，首条：${head}` : ""}`;
+    return `Found ${Math.max(1, lines.length)} result(s)${head ? `, first: ${head}` : ""}`;
   }
   if (tool === "get_partner" || tool === "list_partners" || tool === "search_partners") {
-    const m = clean.match(/(?:公司|伙伴|name)[：:\s]+([^\n]+)/i) ?? clean.match(/^([^\n]{4,60})/);
-    return m ? `匹配：${m[1].trim().slice(0, 80)}` : clean.slice(0, 120);
+    const m = clean.match(/(?:company|partner|name)[:：\s]+([^\n]+)/i) ?? clean.match(/^([^\n]{4,60})/);
+    return m ? `Match: ${m[1].trim().slice(0, 80)}` : clean.slice(0, 120);
   }
   return clean.length > 120 ? `${clean.slice(0, 117)}…` : clean;
 }
@@ -257,10 +257,10 @@ export async function consumeAiSse(
 }> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error ?? "请求失败");
+    throw new Error((err as { error?: string }).error ?? "Request failed");
   }
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("响应不支持流式读取");
+  if (!reader) throw new Error("Response does not support streaming");
 
   const { mergeProposalPatch, mergeFinalProposal } = await import("./proposal-merge");
 
@@ -338,7 +338,7 @@ export async function consumeAiSse(
       throw new Error(ev.message);
     }
     onEvent(ev, state());
-    // 让出事件循环，保证 React 逐步渲染（避免一股脑吐出）
+    // Yield event loop so React can render incrementally (avoid dumping all at once)
     await new Promise<void>((r) => {
       if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => r());
       else setTimeout(r, 0);
@@ -364,7 +364,7 @@ export async function consumeAiSse(
       }
     }
   } catch (e) {
-    // 用户主动停止：保留已累积内容，不当作错误
+    // User-initiated stop: keep accumulated content, not an error
     if (e instanceof DOMException && e.name === "AbortError") {
       aborted = true;
     } else if (e instanceof Error && /aborted|abort/i.test(e.message)) {
@@ -373,6 +373,6 @@ export async function consumeAiSse(
       throw e;
     }
   }
-  if (!aborted && result === undefined) throw new Error("流式响应未返回结果");
+  if (!aborted && result === undefined) throw new Error("Stream ended without a result");
   return { data: result, trace, replyText, liveText: replyText, proposal, questions, clarifications, ready, aborted };
 }

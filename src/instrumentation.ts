@@ -5,6 +5,6 @@ export async function register() {
     setInterval(() => {
       schedulerTick();
     }, 60 * 1000);
-    console.log("[agent-scheduler] 已启动，每分钟检查定时 Agent");
+    console.log("[agent-scheduler] Started — checking scheduled agents every minute");
   }
 }

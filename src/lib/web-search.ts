@@ -1,6 +1,6 @@
 /**
- * 通过大模型内置联网搜索（Kimi $web_search / 火山引擎 web_search）执行公开信息检索。
- * 从全部已启用 API 中自动挑选支持联网的配置，不必是默认模型。
+ * Web search via model builtin search (Kimi $web_search / Volcengine web_search).
+ * Auto-picks a web-capable enabled API — not necessarily the default model.
  */
 
 import { db } from "./db";
@@ -14,7 +14,7 @@ async function hasAiConfigured(): Promise<boolean> {
   return !!process.env.AI_API_KEY || (await db.aiApiConfig.count({ where: { enabled: true } })) > 0;
 }
 
-/** 当前环境是否可用模型内置联网搜索 */
+/** Whether model builtin web search is available in this environment */
 export async function isWebSearchAvailable(): Promise<boolean> {
   if (!(await hasAiConfigured())) return false;
   return !!(await findWebSearchBackend());
@@ -24,24 +24,24 @@ export type ModelSearchMode = "general" | "news" | "linkedin";
 
 function systemPrompt(mode: ModelSearchMode): string {
   if (mode === "linkedin") {
-    return `你是 LinkedIn 公开信息检索助手。请用联网搜索查找目标公司/高管在 LinkedIn 上的公开页面、职业信息与近期动态摘要。
-要求：只输出与检索目标直接相关的结果；每条含标题、链接、摘要、日期（如有）；中文整理；不要分析或编造。`;
+    return `You are a LinkedIn public information search assistant. Use web search to find target company/executive LinkedIn pages, career info, and recent activity summaries.
+Requirements: only results directly related to the search target; each item with title, link, summary, date (if any); format in English; do not analyze or fabricate.`;
   }
   if (mode === "news") {
-    return `你是新闻与公开信息检索助手。请用联网搜索查找与检索词相关的最新新闻、公告与公开报道。
-要求：只输出直接相关结果；每条含标题、链接、摘要、日期；中文整理；不要分析或编造。`;
+    return `You are a news and public information search assistant. Use web search for latest news, announcements, and public coverage related to the query.
+Requirements: only directly related results; each item with title, link, summary, date; format in English; do not analyze or fabricate.`;
   }
-  return `你是公开信息检索助手。请用联网搜索查找与检索词相关的公开网页信息。
-要求：只输出直接相关结果；每条含标题、链接、摘要、日期（如有）；中文整理；不要分析或编造。`;
+  return `You are a public web information search assistant. Use web search for public pages related to the query.
+Requirements: only directly related results; each item with title, link, summary, date (if any); format in English; do not analyze or fabricate.`;
 }
 
-/** 调用支持联网的大模型执行一次搜索，返回整理后的文本 */
+/** Run one search via a web-capable model; returns formatted text */
 export async function modelWebSearch(
   query: string,
   opts: { feature?: string; mode?: ModelSearchMode; userId?: string | null } = {},
 ): Promise<WebSearchResult> {
   const q = query.trim();
-  if (!q) return { ok: false, error: "搜索词为空" };
+  if (!q) return { ok: false, error: "Search query is empty" };
 
   const backend = await findWebSearchBackend();
   if (!backend) {
@@ -49,7 +49,7 @@ export async function modelWebSearch(
       ok: false,
       needsWebSearch: true,
       error:
-        "未找到支持联网搜索的已启用模型。请在设置中添加 Kimi（moonshot）或火山引擎（tools 含 web_search）并启用。",
+        "No enabled model with web search found. Add Kimi (moonshot) or Volcengine (tools include web_search) in Settings and enable it.",
     };
   }
 
@@ -64,41 +64,41 @@ export async function modelWebSearch(
     ],
     tools,
     temperature: 0.3,
-    feature: opts.feature ?? "模型联网搜索",
+    feature: opts.feature ?? "Model web search",
     userId: opts.userId ?? undefined,
     apiConfigId,
     streamReply: false,
     maxSteps: 8,
     executeTool: async (tc) => {
       if (tc.function.name === "$web_search") return tc.function.arguments;
-      return "（无可用工具）";
+      return "(no tools available)";
     },
   });
 
   if (!text?.trim()) {
-    return { ok: false, error: "搜索未返回结果，请换一组关键词重试" };
+    return { ok: false, error: "Search returned no results; try different keywords" };
   }
   return { ok: true, text: text.trim() };
 }
 
-/** @deprecated 兼容旧名；语义改为「模型联网搜索是否可用」 */
+/** @deprecated Legacy alias; means whether model web search is available */
 export async function hasWebSearchKey(): Promise<boolean> {
   return isWebSearchAvailable();
 }
 
-/** 通用公开网络搜索 */
+/** General public web search */
 export async function generalWebSearch(
   query: string,
   _maxResults = 5,
   topic?: "news",
 ): Promise<WebSearchResult> {
   return modelWebSearch(query, {
-    feature: "新闻搜索",
+    feature: "News search",
     mode: topic === "news" ? "news" : "general",
   });
 }
 
-/** 领英公开内容搜索 */
+/** LinkedIn public content search */
 export async function linkedinSearch(args: {
   query?: string;
   company?: string;
@@ -108,20 +108,20 @@ export async function linkedinSearch(args: {
 }): Promise<WebSearchResult> {
   const parts = [args.company, args.person, args.topic, args.query].filter(Boolean).map(String);
   if (!parts.length) {
-    return { ok: false, error: "请提供 company、person 或 query 至少一项" };
+    return { ok: false, error: "Provide at least one of company, person, or query" };
   }
   const q = `${parts.join(" ")} LinkedIn`.trim();
-  return modelWebSearch(q, { feature: "领英搜索", mode: "linkedin" });
+  return modelWebSearch(q, { feature: "LinkedIn search", mode: "linkedin" });
 }
 
-/** 供 UI 展示：当前联网搜索实际使用的模型 */
+/** For UI: which model actually handles web search */
 export async function webSearchBackendLabel(): Promise<string> {
   const b = await findWebSearchBackend();
-  if (!b) return "未配置";
+  if (!b) return "Not configured";
   if (b.kind === "volcengine") {
-    const name = b.source === "db" ? b.name : "火山引擎";
-    return `${name}（内置 web_search）`;
+    const name = b.source === "db" ? b.name : "Volcengine";
+    return `${name} (builtin web_search)`;
   }
-  const name = b.source === "db" ? b.name : "环境变量 Kimi";
-  return `${name}（$web_search）`;
+  const name = b.source === "db" ? b.name : "Environment Kimi";
+  return `${name} ($web_search)`;
 }

@@ -6,8 +6,8 @@ import { cloneAgentAction, toggleAgentAction } from "@/lib/agent-actions";
 import { getToolLabel } from "@/lib/tools-registry";
 import { AiCenterNav } from "@/components/ai-center-nav";
 
-const FREQ_LABELS: Record<string, string> = { HOURLY: "每小时", DAILY: "每天", WEEKLY: "每周" };
-const WEEKDAYS = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+const FREQ_LABELS: Record<string, string> = { HOURLY: "Hourly", DAILY: "Daily", WEEKLY: "Weekly" };
+const WEEKDAYS = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export default async function AgentsPage() {
   const user = await requireUser();
@@ -39,7 +39,7 @@ export default async function AgentsPage() {
           <form action={toggleAgentAction.bind(null, a.id)}>
             <button
               className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${a.enabled ? "bg-indigo-600" : "bg-zinc-200"}`}
-              title={a.enabled ? "已启用，点击停用" : "已停用，点击启用"}
+              title={a.enabled ? "Enabled — click to disable" : "Disabled — click to enable"}
             >
               <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${a.enabled ? "left-[18px]" : "left-0.5"}`} />
             </button>
@@ -48,10 +48,10 @@ export default async function AgentsPage() {
         <div className="mt-3 flex items-center gap-1.5 flex-wrap">
           <Badge tone={a.trigger === "SCHEDULE" ? "purple" : "zinc"}>
             {a.trigger === "SCHEDULE"
-              ? `${FREQ_LABELS[a.frequency ?? "DAILY"]}${a.frequency === "WEEKLY" ? WEEKDAYS[a.runWeekday] : ""}${a.frequency !== "HOURLY" ? ` ${a.runHour}:00` : ""}`
-              : "手动触发"}
+              ? `${FREQ_LABELS[a.frequency ?? "DAILY"]}${a.frequency === "WEEKLY" ? ` ${WEEKDAYS[a.runWeekday]}` : ""}${a.frequency !== "HOURLY" ? ` ${a.runHour}:00` : ""}`
+              : "Manual trigger"}
           </Badge>
-          {a.partner && <Badge tone="blue">绑定 {a.partner.name}</Badge>}
+          {a.partner && <Badge tone="blue">Bound to {a.partner.name}</Badge>}
           {a.webhookUrl && <Badge tone="green">Webhook</Badge>}
           {skills.slice(0, 3).map((s) => (
             <Badge key={s} tone="zinc">{getToolLabel(s)}</Badge>
@@ -60,15 +60,15 @@ export default async function AgentsPage() {
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
           <span>
-            {a.createdBy?.name ?? "系统"} · 上次运行 {lastRun ? fmtDateTime(lastRun.startedAt) : "从未"}
-            {lastRun?.status === "FAILED" && <span className="text-red-500 ml-1">失败</span>}
+            {a.createdBy?.name ?? "System"} · Last run {lastRun ? fmtDateTime(lastRun.startedAt) : "never"}
+            {lastRun?.status === "FAILED" && <span className="text-red-500 ml-1">Failed</span>}
           </span>
           <span className="flex gap-2">
             <form action={cloneAgentAction.bind(null, a.id)}>
-              <button className="text-zinc-400 hover:text-indigo-600">克隆</button>
+              <button className="text-zinc-400 hover:text-indigo-600">Clone</button>
             </form>
             <Link href={`/agents/${a.id}`} className="text-indigo-600 hover:underline">
-              详情 →
+              Details →
             </Link>
           </span>
         </div>
@@ -79,21 +79,21 @@ export default async function AgentsPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="Agent 中心"
-        desc="编排自动化 Agent：装备工具（能做什么）+ 技能（怎么做），配置触发与作用域"
+        title="Agent Center"
+        desc="Orchestrate automation Agents: equip tools (what it can do) + skills (how to do it), configure triggers and scope"
         actions={
           <>
             <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-              对话构建 Agent
+              Build Agent via Chat
             </Link>
           </>
         }
       />
       <AiCenterNav />
       <div className="px-8 space-y-7">
-        {/* 模板库 */}
+        {/* Template library */}
         <div>
-          <h2 className="text-sm font-semibold text-zinc-700 mb-3">模板库 — 一键创建</h2>
+          <h2 className="text-sm font-semibold text-zinc-700 mb-3">Template Library — One-Click Create</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {templates.map((t) => (
               <div key={t.id} className="bg-gradient-to-br from-zinc-50 to-indigo-50/50 rounded-xl border border-dashed border-zinc-300 p-4 flex items-start gap-3">
@@ -103,7 +103,7 @@ export default async function AgentsPage() {
                   <div className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{t.description}</div>
                   <form action={cloneAgentAction.bind(null, t.id)} className="mt-2">
                     <button className="text-xs rounded-md bg-white border border-zinc-200 px-2.5 py-1 text-indigo-600 hover:border-indigo-300">
-                      用此模板创建
+                      Create from template
                     </button>
                   </form>
                 </div>
@@ -112,9 +112,9 @@ export default async function AgentsPage() {
           </div>
         </div>
 
-        {/* 我的 */}
+        {/* Mine */}
         <div>
-          <h2 className="text-sm font-semibold text-zinc-700 mb-3">我的 Agent（{mine.length}）</h2>
+          <h2 className="text-sm font-semibold text-zinc-700 mb-3">My Agents ({mine.length})</h2>
           {mine.length ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {mine.map((a) => (
@@ -123,15 +123,15 @@ export default async function AgentsPage() {
             </div>
           ) : (
             <div className="text-sm text-zinc-400 bg-white rounded-xl border border-zinc-200/80 p-6 text-center">
-              还没有 Agent。用上面的模板一键创建，或自己从零组装一个。
+              No Agents yet. Use a template above for one-click create, or build one from scratch.
             </div>
           )}
         </div>
 
-        {/* 团队共享 */}
+        {/* Team shared */}
         {shared.length > 0 && (
           <div>
-            <h2 className="text-sm font-semibold text-zinc-700 mb-3">团队共享（{shared.length}）</h2>
+            <h2 className="text-sm font-semibold text-zinc-700 mb-3">Team Shared ({shared.length})</h2>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {shared.map((a) => (
                 <AgentCard key={a.id} a={a} />

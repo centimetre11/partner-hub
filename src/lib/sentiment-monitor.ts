@@ -1,4 +1,4 @@
-/** 舆情监控核心：联网扫描伙伴公开信息 → AI 判定维度/情感 → 去重入库 */
+/** Sentiment monitoring core: web scan partner public info → AI classify dimension/sentiment → dedupe and store */
 
 import type { MonitorSource, Partner } from "@prisma/client";
 import { db } from "./db";
@@ -23,7 +23,7 @@ export type ScanStep = {
   label: string;
   status: ScanStepStatus;
   detail?: string;
-  /** 抓取内容摘要（调试用） */
+  /** Content preview summary (debug) */
   preview?: string;
 };
 
@@ -31,16 +31,16 @@ export type ScanResult = {
   ok: boolean;
   error?: string;
   needsWebSearch?: boolean;
-  scanned: number; // 抓取到的原始结果块数
-  created: number; // 新入库条目数
+  scanned: number; // raw result blocks fetched
+  created: number; // new items stored
   bySentiment: Record<string, number>;
-  /** 扫描过程日志（展示给用户） */
+  /** Scan process log (shown to user) */
   steps?: ScanStep[];
-  /** AI 分类出的条目数（含去重前） */
+  /** Items classified by AI (before dedupe) */
   classified?: number;
-  /** 使用的联网搜索后端 */
+  /** Web search backend in use */
   searchBackend?: string;
-  /** 原始抓取总字符数 */
+  /** Total raw character count */
   rawChars?: number;
 };
 
@@ -57,7 +57,7 @@ type ClassifiedItem = {
 const VALID_SENTIMENTS = Object.keys(MONITOR_SENTIMENT_LABELS);
 const MAX_RAW_CHARS = 24000;
 
-/** 只保留合法维度；空即空（由用户/调用方显式指定，不再默认全部） */
+/** Keep only valid dimensions; empty means empty (caller must specify explicitly, no default-all) */
 export function resolveDims(monitorDims: string | null | undefined, optDims?: string[]): string[] {
   let dims = optDims;
   if (!dims && monitorDims) {
@@ -71,7 +71,7 @@ export function resolveDims(monitorDims: string | null | undefined, optDims?: st
   return (dims ?? []).filter((d) => MONITOR_DIMENSIONS.includes(d));
 }
 
-/** 从官网 URL 提取裸域名（去 www / 协议 / 路径），失败返回空 */
+/** Extract bare domain from website URL (strip www / protocol / path); empty on failure */
 function hostFromWebsite(website: string | null | undefined): string {
   if (!website) return "";
   try {
@@ -82,29 +82,29 @@ function hostFromWebsite(website: string | null | undefined): string {
   }
 }
 
-/** 公司名含空格时加引号，做短语锚定，降低缩写/通用名误召回 */
+/** Quote company name when it contains spaces for phrase anchoring */
 function quoteName(name: string): string {
   const n = name.trim();
   return /\s/.test(n) ? `"${n}"` : n;
 }
 
-/** 去掉所有非 ASCII（含中文），用于非中文地区伙伴，避免中文关键词把中国招标/资讯网拉成噪声 */
+/** Strip non-ASCII (incl. Chinese) for non-Chinese-region partners to avoid CN noise */
 function stripNonAscii(s: string): string {
   return s.replace(/[^\x00-\x7F]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-/** 是否中文地区伙伴（仅这类保留中英混排关键词） */
+/** Chinese-region partner (only these keep mixed CN/EN keywords) */
 function isChineseRegion(country: string | null | undefined): boolean {
   if (!country) return false;
   return /中国|中華|中国大陆|大陆|香港|台湾|澳门|china|prc|hong\s?kong|taiwan|macau|\bcn\b|\bhk\b|\btw\b/i.test(country);
 }
 
-/** 按维度构造搜索词（中东等非中文地区用纯英文关键词） */
+/** Build search queries per dimension (non-Chinese regions use English-only keywords) */
 export function buildDimensionQueries(
   partner: Pick<Partner, "name" | "country" | "city" | "website">,
   dims: string[],
 ): { dimension: string; query: string; topic?: "news" }[] {
-  // 用「国家 + 官网域名」做上下文锚定；刻意不用中文城市名（如“利雅得”会被搜成足球俱乐部等噪声）
+  // Anchor with country + website domain; avoid Chinese city names (e.g. "Riyadh" in Chinese matches football club noise)
   const host = hostFromWebsite(partner.website);
   const ctx = [partner.country, host].filter(Boolean).join(" ");
   const nameToken = quoteName(partner.name);
@@ -138,7 +138,7 @@ function previewText(text: string, max = 280): string {
   return t.length <= max ? t : `${t.slice(0, max)}…`;
 }
 
-/** 档案未填官网时，从已启用监控源域名推断 */
+/** Infer website from enabled monitor source domains when profile has none */
 function effectiveWebsite(
   partner: Pick<Partner, "website">,
   sources: MonitorSource[],
@@ -158,18 +158,18 @@ function effectiveWebsite(
 function searchContextLine(partner: Pick<Partner, "name" | "country" | "website">): string {
   const host = hostFromWebsite(partner.website);
   return [
-    `公司全称：${partner.name}`,
-    partner.country ? `国家/地区：${partner.country}` : null,
-    partner.website ? `官网：${partner.website}` : null,
-    host ? `域名锚点：${host}` : null,
+    `Legal name: ${partner.name}`,
+    partner.country ? `Country/region: ${partner.country}` : null,
+    partner.website ? `Website: ${partner.website}` : null,
+    host ? `Domain anchor: ${host}` : null,
   ]
     .filter(Boolean)
-    .join("；");
+    .join("; ");
 }
 
 type GatherResult = { blocks: string[]; steps: ScanStep[] };
 
-/** 通过大模型内置联网搜索 + NinjaPear 抓取原始结果（逐步记录日志） */
+/** Gather raw results via model builtin web search + NinjaPear (step-by-step logging) */
 async function gatherViaModelSearch(
   partner: Pick<Partner, "name" | "country" | "city" | "website">,
   dims: string[],
@@ -182,12 +182,12 @@ async function gatherViaModelSearch(
   const enabledSources = sources.filter((s) => s.enabled);
 
   steps.push({
-    label: "准备",
+    label: "Prepare",
     status: canSearch || hasNinjaPearKey() ? "ok" : "warn",
     detail: [
-      canSearch ? `联网：${backendLabel}` : "无联网后端",
-      `维度 ${dims.length} 个`,
-      `自定义源 ${enabledSources.length} 个`,
+      canSearch ? `Web: ${backendLabel}` : "No web backend",
+      `${dims.length} dimensions`,
+      `${enabledSources.length} custom sources`,
     ].join(" · "),
   });
 
@@ -197,9 +197,9 @@ async function gatherViaModelSearch(
 
   if (inferredWebsite && !partner.website?.trim()) {
     steps.push({
-      label: "推断官网",
+      label: "Infer website",
       status: "ok",
-      detail: `档案未填官网，从监控源推断：${inferredWebsite}`,
+      detail: `No website on profile; inferred from monitor source: ${inferredWebsite}`,
     });
   }
 
@@ -207,7 +207,7 @@ async function gatherViaModelSearch(
   const dimQueries = buildDimensionQueries(searchPartner, dims);
 
   if (dimQueries.length && !canSearch) {
-    steps.push({ label: "维度检索", status: "skip", detail: "无联网后端，已跳过各维度检索" });
+    steps.push({ label: "Dimension search", status: "skip", detail: "No web backend; skipped dimension searches" });
   }
 
   for (const { dimension, query, topic } of dimQueries) {
@@ -215,46 +215,46 @@ async function gatherViaModelSearch(
     if (!canSearch) continue;
 
     const userQuery =
-      `只搜索与以下合作伙伴直接相关的公开信息，排除同名无关公司、中国国内无关新闻、体育/娱乐噪声。\n` +
-      `${ctxLine}\n检索方向：${query}`;
+      `Search only for public information directly related to this partner; exclude unrelated same-name companies, irrelevant China domestic news, sports/entertainment noise.\n` +
+      `${ctxLine}\nSearch focus: ${query}`;
 
     const r = await generalWebSearch(userQuery, 5, topic);
     if (r.ok) {
-      blocks.push(`### [${dimLabel}] 维度检索\n${r.text}`);
+      blocks.push(`### [${dimLabel}] dimension search\n${r.text}`);
       steps.push({
-        label: `检索·${dimLabel}`,
+        label: `Search·${dimLabel}`,
         status: "ok",
-        detail: `查询：${query.slice(0, 140)}${query.length > 140 ? "…" : ""}`,
+        detail: `Query: ${query.slice(0, 140)}${query.length > 140 ? "…" : ""}`,
         preview: previewText(r.text),
       });
     } else {
       steps.push({
-        label: `检索·${dimLabel}`,
+        label: `Search·${dimLabel}`,
         status: "fail",
         detail: r.error,
       });
     }
   }
 
-  // 各维度结果过少时，补一次公司综合检索
-  const dimRaw = blocks.filter((b) => b.includes("维度检索")).join("\n");
+  // When per-dimension results are sparse, run one broad company search
+  const dimRaw = blocks.filter((b) => b.includes("dimension search")).join("\n");
   if (canSearch && dims.length > 0 && dimRaw.length < 800) {
     const host = hostFromWebsite(searchPartner.website);
     const fallbackQ = `${quoteName(partner.name)} ${partner.country ?? ""} ${host} company profile news updates`;
     const r = await generalWebSearch(
-      `补充综合检索：${ctxLine}\n关键词：${fallbackQ}`,
+      `Supplemental broad search: ${ctxLine}\nKeywords: ${fallbackQ}`,
       6,
     );
     if (r.ok && r.text.trim()) {
-      blocks.push(`### 综合补充检索\n${r.text}`);
+      blocks.push(`### Broad supplemental search\n${r.text}`);
       steps.push({
-        label: "补充·综合检索",
+        label: "Supplement·broad search",
         status: "ok",
-        detail: "各维度结果较少，已追加一次公司综合搜索",
+        detail: "Sparse dimension results; ran one broad company search",
         preview: previewText(r.text),
       });
     } else if (!r.ok) {
-      steps.push({ label: "补充·综合检索", status: "warn", detail: r.error });
+      steps.push({ label: "Supplement·broad search", status: "warn", detail: r.error });
     }
   }
 
@@ -269,33 +269,33 @@ async function gatherViaModelSearch(
         const np = await fetchCompanyUpdates(website);
         if (np.ok) {
           blocks.push(
-            `### 自定义监控源：${s.label}（${normalizeLinkedInCompanyUrl(s.url)}）\n` +
-              `数据来源：NinjaPear 公司公开更新（官网 ${website}）\n${np.text}`,
+            `### Custom monitor source: ${s.label} (${normalizeLinkedInCompanyUrl(s.url)})\n` +
+              `Source: NinjaPear public company updates (website ${website})\n${np.text}`,
           );
           steps.push({
-            label: `源·${s.label}`,
+            label: `Source·${s.label}`,
             status: "ok",
-            detail: `NinjaPear 按官网 ${website} 拉取`,
+            detail: `NinjaPear fetch by website ${website}`,
             preview: previewText(np.text),
           });
           continue;
         }
         steps.push({
-          label: `源·${s.label}`,
+          label: `Source·${s.label}`,
           status: "fail",
-          detail: `NinjaPear：${np.error}`,
+          detail: `NinjaPear: ${np.error}`,
         });
       } else if (!hasNinjaPearKey()) {
         steps.push({
-          label: `源·${s.label}`,
+          label: `Source·${s.label}`,
           status: "warn",
-          detail: "未配置 NINJAPEARL_API_KEY，无法按官网拉取",
+          detail: "NINJAPEARL_API_KEY not configured; cannot fetch by website",
         });
       } else if (!website) {
         steps.push({
-          label: `源·${s.label}`,
+          label: `Source·${s.label}`,
           status: "warn",
-          detail: "伙伴档案未填官网且无法从监控源推断，NinjaPear 跳过",
+          detail: "No website on profile and cannot infer from monitor source; NinjaPear skipped",
         });
       }
 
@@ -307,22 +307,22 @@ async function gatherViaModelSearch(
           maxResults: 6,
         });
         if (r.ok) {
-          blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
+          blocks.push(`### Custom monitor source: ${s.label} (${s.url})\n${r.text}`);
           steps.push({
-            label: `源·${s.label}（联网）`,
+            label: `Source·${s.label} (web)`,
             status: "ok",
-            detail: `LinkedIn 公开页检索：${s.url}`,
+            detail: `LinkedIn public page search: ${s.url}`,
             preview: previewText(r.text),
           });
         } else {
-          steps.push({ label: `源·${s.label}（联网）`, status: "fail", detail: r.error });
+          steps.push({ label: `Source·${s.label} (web)`, status: "fail", detail: r.error });
         }
       }
       continue;
     }
 
     if (!canSearch) {
-      steps.push({ label: `源·${s.label}`, status: "skip", detail: "无联网后端" });
+      steps.push({ label: `Source·${s.label}`, status: "skip", detail: "No web backend" });
       continue;
     }
     const siteQuery = domain
@@ -330,45 +330,46 @@ async function gatherViaModelSearch(
       : `${nameToken} ${s.label} ${s.url}`;
     const r = await generalWebSearch(siteQuery, 5);
     if (r.ok) {
-      blocks.push(`### 自定义监控源：${s.label}（${s.url}）\n${r.text}`);
+      blocks.push(`### Custom monitor source: ${s.label} (${s.url})\n${r.text}`);
       steps.push({
-        label: `源·${s.label}`,
+        label: `Source·${s.label}`,
         status: "ok",
         detail: siteQuery.slice(0, 120),
         preview: previewText(r.text),
       });
     } else {
-      steps.push({ label: `源·${s.label}`, status: "fail", detail: r.error });
+      steps.push({ label: `Source·${s.label}`, status: "fail", detail: r.error });
     }
   }
 
   if (enabledSources.length === 0 && dims.length === 0) {
-    steps.push({ label: "监控源", status: "skip", detail: "无已启用自定义源" });
+    steps.push({ label: "Monitor sources", status: "skip", detail: "No enabled custom sources" });
   }
 
   return { blocks, steps };
 }
 
-/** 用 AI 把原始结果整理成结构化舆情条目 */
+/** Use AI to structure raw results into sentiment items */
 async function classify(
   partner: Pick<Partner, "name" | "country">,
   dims: string[],
   raw: string,
 ): Promise<ClassifiedItem[]> {
   const allowed = dims.length ? dims : MONITOR_DIMENSIONS;
-  const dimList = allowed.map((d) => `${d}(${MONITOR_DIMENSION_LABELS[d]})`).join("、");
-  const system = `你是 BI 厂商帆软的中东伙伴舆情分析助手。下面是关于合作伙伴「${partner.name}」（${partner.country ?? "中东"}）的联网搜索原始结果。
-请提炼出与该公司**直接相关**的舆情条目，剔除无关、重复、纯目录页结果。
-- dimension 只能取：${dimList}
-- sentiment 取：POSITIVE(正面/机会)、NEUTRAL(中性)、NEGATIVE(负面)、RISK(高风险预警)
-- title 用一句中文概括；summary 写 1-2 句中文要点；url 用原文链接；sourceName 写来源站点；publishedAt 若有日期写 YYYY-MM-DD，否则留空。
-- 若结果含该公司官网页、LinkedIn 公司页、行业名录中的公司介绍，可记为 NEUTRAL 入库
-- 若无新闻报道，可收录官网产品/服务/团队页面的公开信息摘要
-- 公开信息较少时，只要有与该公司直接相关的一手公开内容就应收录，不要因条目少而返回空数组
-只输出 JSON：{"items":[{"dimension","sentiment","title","summary","url","sourceName","publishedAt"}]}。最多 30 条，确实无任何相关内容则 items 为空数组。`;
+  const dimList = allowed.map((d) => `${d}(${MONITOR_DIMENSION_LABELS[d]})`).join(", ");
+  const system = `You are a Middle East partner sentiment analyst for BI vendor Fanruan. Below are raw web search results about partner "${partner.name}" (${partner.country ?? "Middle East"}).
+Extract sentiment items **directly related** to this company; drop irrelevant, duplicate, or directory-only hits.
+Reply in English for title and summary.
+- dimension must be one of: ${dimList}
+- sentiment: POSITIVE (opportunity), NEUTRAL, NEGATIVE, RISK (high-risk alert)
+- title: one-line English headline; summary: 1-2 English sentences; url: source link; sourceName: site name; publishedAt: YYYY-MM-DD if known, else empty
+- Official site pages, LinkedIn company pages, or directory profiles may be NEUTRAL
+- If no news, public product/service/team page summaries are acceptable
+- When public info is sparse, include any directly related first-party content; don't return empty just because there are few items
+Output JSON only: {"items":[{"dimension","sentiment","title","summary","url","sourceName","publishedAt"}]}. Max 30 items; empty items array if nothing relevant.`;
 
   const { items } = await chatJson<{ items?: ClassifiedItem[] }>(system, raw.slice(0, MAX_RAW_CHARS), {
-    feature: "舆情监控分类",
+    feature: "Sentiment monitor classification",
     temperature: 0.2,
   });
   if (!Array.isArray(items)) return [];
@@ -385,7 +386,7 @@ async function classify(
     }));
 }
 
-/** 对单个伙伴执行一次舆情扫描 */
+/** Run one sentiment scan for a single partner */
 export async function scanPartnerSentiment(
   partnerId: string,
   opts: { dims?: string[]; userId?: string | null; maxPerQuery?: number } = {},
@@ -395,21 +396,21 @@ export async function scanPartnerSentiment(
   const hasAi =
     !!process.env.AI_API_KEY || (await db.aiApiConfig.count({ where: { enabled: true } })) > 0;
   if (!hasAi) {
-    return { ...empty, error: "未配置 AI 模型，无法分析舆情。请先在设置中配置 AI API。" };
+    return { ...empty, error: "AI model not configured. Configure an AI API in Settings first." };
   }
 
   const partner = await db.partner.findUnique({
     where: { id: partnerId },
     include: { monitorSources: true },
   });
-  if (!partner) return { ...empty, error: "找不到该伙伴" };
+  if (!partner) return { ...empty, error: "Partner not found" };
 
   const dims = resolveDims(partner.monitorDims, opts.dims);
   const sources = partner.monitorSources;
 
   const hasEnabledSource = sources.some((s) => s.enabled);
   if (!dims.length && !hasEnabledSource) {
-    return { ...empty, ok: true, error: "请先选择要监控的维度，或添加监控链接源" };
+    return { ...empty, ok: true, error: "Select monitor dimensions or add monitor link sources first" };
   }
 
   const canSearch = await isWebSearchAvailable();
@@ -420,7 +421,7 @@ export async function scanPartnerSentiment(
       ...empty,
       needsWebSearch: true,
       searchBackend,
-      error: "未找到支持联网搜索的已启用模型。请添加并启用 Kimi 或火山 web_search 配置。",
+      error: "No enabled model with web search found. Add and enable Kimi or Volcengine web_search config.",
     };
   }
 
@@ -430,9 +431,9 @@ export async function scanPartnerSentiment(
   const rawChars = raw.length;
   if (!raw.trim()) {
     steps.push({
-      label: "AI 分类",
+      label: "AI classification",
       status: "skip",
-      detail: "无原始内容，跳过",
+      detail: "No raw content; skipped",
     });
     return {
       ...empty,
@@ -440,21 +441,21 @@ export async function scanPartnerSentiment(
       steps,
       searchBackend,
       rawChars: 0,
-      error: "本次未抓取到公开信息（详见下方扫描日志）",
+      error: "No public information fetched this run (see scan log below)",
     };
   }
 
   const items = await classify(partner, dims, raw);
   steps.push({
-    label: "AI 分类",
+    label: "AI classification",
     status: items.length ? "ok" : "warn",
     detail: items.length
-      ? `提炼 ${items.length} 条与该公司相关的舆情`
-      : `未提炼出有效条目（原始 ${rawChars} 字，可能为噪声或公开信息过少）`,
+      ? `Extracted ${items.length} company-related sentiment items`
+      : `No valid items extracted (raw ${rawChars} chars — possible noise or sparse public info)`,
     preview: items.length ? undefined : previewText(raw, 400),
   });
 
-  // 去重：库内已有 + 本批内
+  // Dedupe: existing in DB + within this batch
   const existing = await db.monitorItem.findMany({
     where: { partnerId },
     select: { dedupeKey: true },
@@ -498,14 +499,14 @@ export async function scanPartnerSentiment(
   }
 
   steps.push({
-    label: "去重入库",
+    label: "Dedupe & store",
     status: created > 0 ? "ok" : skippedDup > 0 ? "warn" : "warn",
     detail:
       created > 0
-        ? `新增 ${created} 条${skippedDup ? `，跳过重复 ${skippedDup} 条` : ""}`
+        ? `Added ${created}${skippedDup ? `, skipped ${skippedDup} duplicates` : ""}`
         : skippedDup > 0
-          ? `${items.length} 条均已存在，无新增`
-          : "无可入库条目",
+          ? `All ${items.length} items already exist; nothing new`
+          : "No items to store",
   });
 
   return {
