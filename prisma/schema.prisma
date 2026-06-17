@@ -22,6 +22,7 @@ model User {
   materials    Material[]
   knowledgeArticles KnowledgeArticle[]
   gtmLibraryItems   GtmLibrary[]
+  taxonomyOptions   TaxonomyOption[]
   skills       Skill[]
   aiTokenUsages AiTokenUsage[]
   kmsCredential UserKmsCredential?
@@ -38,8 +39,9 @@ model Partner {
   poolFlag         String   @default("NEW")
   // PURE_DATA / POWER_BI / TABLEAU / QLIK / IT_INTEGRATOR / OTHER
   category         String   @default("OTHER")
-  // BANKING / GOVERNMENT / OIL_GAS / RETAIL / MANUFACTURING / HEALTHCARE / TELECOM / REAL_ESTATE / LOGISTICS / HOSPITALITY / EDUCATION / MEDIA / CROSS / OTHER
+  // BANKING / … / OTHER（兼容旧数据；新数据用 industries）
   industry         String?
+  industries       String?  // JSON 数组，主攻行业多选
   // DATA_NATIVE / BI_MIGRATOR / IT_INTEGRATOR / IOT_INTEGRATOR / SALES_AGENT / SHELL_DATA / OTHER
   partnerArchetype String?
   // IOT_DASH / APP_REPORT / CLOUD_APP / DATA_BI / BI_COMPLEMENT / OEM_EMBED / GOV_BID
@@ -96,6 +98,7 @@ model GtmLibrary {
   playbook         String?
   pitch            String?
   industry         String?
+  industries       String?
   valuePattern     String?
   partnerArchetype String?
   category         String?
@@ -111,6 +114,24 @@ model GtmLibrary {
 
   @@index([groupId])
   @@index([title])
+}
+
+// 维度库：伙伴类型 / 行业 / 价值模式 / 竞品基因 的可扩展选项
+model TaxonomyOption {
+  id          String   @id @default(cuid())
+  dimension   String   // ARCHETYPE | INDUSTRY | VALUE_PATTERN | CATEGORY
+  code        String
+  label       String
+  description String?
+  sortOrder   Int      @default(0)
+  isBuiltin   Boolean  @default(false)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([dimension, code])
+  @@index([dimension])
 }
 
 // 舆情监控：自定义监控链接源（领英/Facebook 主页、官网、新闻源等）

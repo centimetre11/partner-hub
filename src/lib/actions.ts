@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { createSession, destroySession, requireUser } from "./session";
 import { stageName } from "./constants";
+import { stringifyIndustries } from "./taxonomy";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 
 // ============ 认证 ============
@@ -55,7 +56,7 @@ export async function logoutAction() {
 // ============ 伙伴 ============
 
 const EDITABLE_FIELDS = [
-  "name", "category", "industry", "partnerArchetype", "valuePattern",
+  "name", "category", "partnerArchetype", "valuePattern",
   "valuePartnerOffer", "valueFanruanOffer", "valueCustomerOutcome", "dedicatedHeadcount",
   "tier", "city", "country", "headcount", "website", "companyType",
   "coreBusiness", "capability", "knownClients", "certLevel", "currentTools",
@@ -82,6 +83,15 @@ export async function updatePartnerAction(partnerId: string, formData: FormData)
   if (formData.has("manualChecked")) {
     data.manualChecked = formData.get("manualChecked") === "on";
   }
+  if (formData.has("industries")) {
+    const codes = formData.getAll("industries").map(String).filter(Boolean);
+    data.industries = stringifyIndustries(codes);
+    data.industry = codes[0] ?? null;
+  } else if (formData.has("industry")) {
+    const v = String(formData.get("industry") ?? "").trim();
+    data.industry = v || null;
+    data.industries = v ? JSON.stringify([v]) : null;
+  }
   if (!data.name) delete data.name;
   await db.partner.update({ where: { id: partnerId }, data });
   revalidatePath(`/partners/${partnerId}`);
@@ -95,11 +105,13 @@ export async function createPartnerAction(formData: FormData) {
   if (!name) return;
   // intent=active：从「正式伙伴」页直建，跳过候选直接进入正式经营
   const asActive = String(formData.get("intent") ?? "") === "active";
+  const industryCodes = formData.getAll("industries").map(String).filter(Boolean);
   const partner = await db.partner.create({
     data: {
       name,
       category: String(formData.get("category") ?? "OTHER"),
-      industry: String(formData.get("industry") ?? "") || null,
+      industries: stringifyIndustries(industryCodes),
+      industry: industryCodes[0] ?? null,
       city: String(formData.get("city") ?? "") || null,
       country: String(formData.get("country") ?? "") || null,
       coreBusiness: String(formData.get("coreBusiness") ?? "") || null,

@@ -3,13 +3,10 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
 import {
-  CATEGORY_LABELS,
-  INDUSTRY_LABELS,
-} from "@/lib/constants";
-import {
-  PARTNER_ARCHETYPE_LABELS,
-  VALUE_PATTERN_LABELS,
-} from "@/lib/partner-framework";
+  labelFromMap,
+  loadTaxonomyLabelMaps,
+  parseIndustries,
+} from "@/lib/taxonomy";
 import { deleteGtmLibraryAction } from "@/lib/gtm-library-actions";
 
 export default async function PlaybookLibraryPage({
@@ -20,6 +17,7 @@ export default async function PlaybookLibraryPage({
   await requireUser();
   const sp = await searchParams;
   const q = sp.q?.trim() ?? "";
+  const labelMaps = await loadTaxonomyLabelMaps();
 
   const all = await db.gtmLibrary.findMany({
     where: q
@@ -82,16 +80,16 @@ export default async function PlaybookLibraryPage({
                           {versions.length > 1 && (
                             <Badge tone="zinc">{versions.length} 个版本</Badge>
                           )}
-                          {latest.industry && (
-                            <Badge tone="blue">{INDUSTRY_LABELS[latest.industry] ?? latest.industry}</Badge>
-                          )}
+                          {(latest.industries ? parseIndustries({ industries: latest.industries }) : latest.industry ? [latest.industry] : []).map((code) => (
+                            <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
+                          ))}
                           {latest.valuePattern && (
-                            <Badge tone="purple">{VALUE_PATTERN_LABELS[latest.valuePattern] ?? latest.valuePattern}</Badge>
+                            <Badge tone="purple">{labelFromMap(labelMaps.VALUE_PATTERN, latest.valuePattern)}</Badge>
                           )}
                           {latest.partnerArchetype && (
-                            <Badge tone="indigo">{PARTNER_ARCHETYPE_LABELS[latest.partnerArchetype] ?? latest.partnerArchetype}</Badge>
+                            <Badge tone="indigo">{labelFromMap(labelMaps.ARCHETYPE, latest.partnerArchetype)}</Badge>
                           )}
-                          <Badge tone="zinc">{CATEGORY_LABELS[latest.category ?? "OTHER"] ?? latest.category}</Badge>
+                          <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, latest.category ?? "OTHER")}</Badge>
                         </div>
                         <p className="text-xs text-zinc-400 mt-2">
                           {latest.sourcePartnerName && <>来源：{latest.sourcePartnerName} · </>}

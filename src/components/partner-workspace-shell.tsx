@@ -27,6 +27,7 @@ export function PartnerWorkspaceShell({
   partner,
   users,
   pipelineStages,
+  taxonomy,
   guide,
   positioning,
   pipeline,
@@ -37,6 +38,7 @@ export function PartnerWorkspaceShell({
   partner: Partner;
   users: User[];
   pipelineStages: { stage: number; name: string }[];
+  taxonomy: import("@/components/map-node-quick-edit").TaxonomyOptionsMap;
   guide: ReactNode;
   positioning: ReactNode;
   pipeline: ReactNode;
@@ -163,6 +165,7 @@ export function PartnerWorkspaceShell({
           partner={partner}
           users={users}
           pipelineStages={pipelineStages}
+          taxonomy={taxonomy}
           onClose={() => setEditNode(null)}
         />
       )}

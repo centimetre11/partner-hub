@@ -2,8 +2,9 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
-import { CATEGORY_LABELS, INDUSTRY_LABELS, stageName } from "@/lib/constants";
+import { stageName } from "@/lib/constants";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
+import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
 
 export default async function PartnersPage({
@@ -13,6 +14,9 @@ export default async function PartnersPage({
 }) {
   await requireUser();
   const sp = await searchParams;
+  const labelMaps = await loadTaxonomyLabelMaps();
+  const industryOptions = await getTaxonomyOptions("INDUSTRY");
+  const categoryOptions = await getTaxonomyOptions("CATEGORY");
 
   const partners = await db.partner.findMany({
     where: {
@@ -21,7 +25,14 @@ export default async function PartnersPage({
       ...(sp.stage ? { pipelineStage: parseInt(sp.stage, 10) } : {}),
       ...(sp.owner ? { ownerId: sp.owner } : {}),
       ...(sp.tier ? { tier: sp.tier } : {}),
-      ...(sp.industry ? { industry: sp.industry } : {}),
+      ...(sp.industry
+        ? {
+            OR: [
+              { industry: sp.industry },
+              { industries: { contains: `"${sp.industry}"` } },
+            ],
+          }
+        : {}),
     },
     include: { contacts: true, opportunities: true, events: { orderBy: { createdAt: "desc" } }, trainings: true, owner: true },
     orderBy: { pipelineStage: "desc" },
@@ -34,7 +45,7 @@ export default async function PartnersPage({
       <PageHeader
         title="正式伙伴"
         desc={`${partners.length} 家正在经营的伙伴 · 经营框架驱动动作，Pipeline 十阶段跟踪`}
-        actions={<AddPartnerForm intent="active" />}
+        actions={<AddPartnerForm intent="active" taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />}
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
@@ -59,8 +70,8 @@ export default async function PartnersPage({
           </select>
           <select name="industry" defaultValue={sp.industry ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">全部行业</option>
-            {Object.entries(INDUSTRY_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
+            {industryOptions.map((o) => (
+              <option key={o.code} value={o.code}>{o.label}</option>
             ))}
           </select>
           <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">筛选</button>
@@ -89,8 +100,10 @@ export default async function PartnersPage({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-zinc-900">{p.name}</span>
                         {p.tier && <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge>}
-                        <Badge tone="zinc">{CATEGORY_LABELS[p.category]}</Badge>
-                        {p.industry && <Badge tone="blue">{INDUSTRY_LABELS[p.industry]}</Badge>}
+                        <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, p.category)}</Badge>
+                        {parseIndustries(p).map((code) => (
+                          <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
+                        ))}
                         {stale > 30 && <Badge tone="red">停滞 {stale} 天</Badge>}
                       </div>
                       <div className="text-xs text-zinc-400 mt-1">

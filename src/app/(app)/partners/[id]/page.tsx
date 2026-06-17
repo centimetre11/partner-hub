@@ -4,16 +4,19 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } from "@/components/ui";
 import {
-  CATEGORY_LABELS, EVENT_TYPE_LABELS, INDUSTRY_LABELS, PIPELINE_STAGES,
+  EVENT_TYPE_LABELS, PIPELINE_STAGES,
   POOL_FLAG_LABELS, STATUS_LABELS, TODO_PRIORITY_LABELS,
 } from "@/lib/constants";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
+import { buildPartnerInstanceMap } from "@/lib/partner-framework";
 import {
-  PARTNER_ARCHETYPE_LABELS,
-  VALUE_PATTERN_LABELS,
-  buildPartnerInstanceMap,
-} from "@/lib/partner-framework";
+  getTaxonomyOptions,
+  labelFromMap,
+  labelsFromMap,
+  loadTaxonomyLabelMaps,
+  parseIndustries,
+} from "@/lib/taxonomy";
 import { PartnerGtmPanel } from "@/components/partner-gtm-panel";
 import { searchGtmLibraryAction } from "@/lib/gtm-library-actions";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
@@ -75,7 +78,15 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   });
   const completeness = computeCompleteness(p);
   const stale = staleDays(p);
-  const instanceMap = buildPartnerInstanceMap(p);
+  const labelMaps = await loadTaxonomyLabelMaps();
+  const taxonomy = {
+    ARCHETYPE: await getTaxonomyOptions("ARCHETYPE"),
+    INDUSTRY: await getTaxonomyOptions("INDUSTRY"),
+    VALUE_PATTERN: await getTaxonomyOptions("VALUE_PATTERN"),
+    CATEGORY: await getTaxonomyOptions("CATEGORY"),
+  };
+  const industryCodes = parseIndustries(p);
+  const instanceMap = buildPartnerInstanceMap(p, labelMaps);
   const gtmLibraryItems = await searchGtmLibraryAction("");
   let selectedDims: string[] = [];
   if (p.monitorDims) {
@@ -106,13 +117,13 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               {p.status === "PROSPECT" && <Badge tone="amber">{POOL_FLAG_LABELS[p.poolFlag]}</Badge>}
               {p.tier && <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge>}
               {p.partnerArchetype && (
-                <Badge tone="indigo">{PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] ?? p.partnerArchetype}</Badge>
+                <Badge tone="indigo">{labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype)}</Badge>
               )}
-              {p.industry && (
-                <Badge tone="blue">{INDUSTRY_LABELS[p.industry] ?? p.industry}</Badge>
-              )}
+              {industryCodes.map((code) => (
+                <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
+              ))}
               {p.valuePattern && (
-                <Badge tone="purple">{VALUE_PATTERN_LABELS[p.valuePattern] ?? p.valuePattern}</Badge>
+                <Badge tone="purple">{labelFromMap(labelMaps.VALUE_PATTERN, p.valuePattern)}</Badge>
               )}
               {stale > 30 && p.status === "ACTIVE" && <Badge tone="red">停滞 {stale} 天</Badge>}
             </div>
@@ -191,6 +202,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         partner={p}
         users={users}
         pipelineStages={PIPELINE_STAGES.map((s) => ({ stage: s.stage, name: s.name }))}
+        taxonomy={taxonomy}
         guide={
           <div className="space-y-5">
             <PartnerStageGuidancePanel partner={p} />
@@ -225,7 +237,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           <div className="space-y-5">
             <div className="flex items-center justify-end gap-2">
               <AiAddButton scope="profile" partnerId={p.id} label="✦ AI 补全" variant="soft" />
-              <ProfileEditor partner={p} users={users} />
+              <ProfileEditor partner={p} users={users} taxonomy={taxonomy} />
             </div>
 
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-5">
@@ -243,7 +255,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 ))}
               </dl>
               {p.valuePattern && (
-                <Badge tone="purple">{VALUE_PATTERN_LABELS[p.valuePattern] ?? p.valuePattern}</Badge>
+                <Badge tone="purple">{labelFromMap(labelMaps.VALUE_PATTERN, p.valuePattern)}</Badge>
               )}
             </div>
 
@@ -252,9 +264,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 <dl className="space-y-3 text-sm">
                   {[
                     ["Tier", p.tier ? `Tier ${p.tier}` : null],
-                    ["伙伴类型", p.partnerArchetype ? PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] : null],
-                    ["竞品基因", CATEGORY_LABELS[p.category]],
-                    ["主攻行业", p.industry ? INDUSTRY_LABELS[p.industry] : null],
+                    ["伙伴类型", p.partnerArchetype ? labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype) : null],
+                    ["竞品基因", labelFromMap(labelMaps.CATEGORY, p.category)],
+                    ["主攻行业", industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
                     ["专职人数", p.dedicatedHeadcount],
                     ["负责 BD", p.owner?.name],
                     ["优先级", p.priority],
@@ -288,7 +300,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </Card>
             </div>
 
-            <PartnerGtmPanel partner={p} libraryItems={gtmLibraryItems} />
+            <PartnerGtmPanel partner={p} libraryItems={gtmLibraryItems} labelMaps={labelMaps} />
           </div>
         }
         pipeline={

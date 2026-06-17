@@ -3,12 +3,22 @@
 import { useState } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction } from "@/lib/actions";
-import { CATEGORY_LABELS, INDUSTRY_LABELS } from "@/lib/constants";
-import { PARTNER_ARCHETYPE_LABELS, VALUE_PATTERN_LABELS } from "@/lib/partner-framework";
+import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
 
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
-export function ProfileEditor({ partner: p, users }: { partner: Partner; users: User[] }) {
+export type TaxonomyOptionsMap = Record<TaxonomyDimension, TaxonomyOptionRow[]>;
+
+export function ProfileEditor({
+  partner: p,
+  users,
+  taxonomy,
+}: {
+  partner: Partner;
+  users: User[];
+  taxonomy: TaxonomyOptionsMap;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -43,41 +53,34 @@ export function ProfileEditor({ partner: p, users }: { partner: Partner; users: 
                   <option value="C">C 后续跟进</option>
                 </select>
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">伙伴类型</span>
-                <select name="partnerArchetype" defaultValue={p.partnerArchetype ?? ""} className={input}>
-                  <option value="">待判定</option>
-                  {Object.entries(PARTNER_ARCHETYPE_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">竞品基因</span>
-                <select name="category" defaultValue={p.category} className={input}>
-                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">主攻行业</span>
-                <select name="industry" defaultValue={p.industry ?? ""} className={input}>
-                  <option value="">待判定</option>
-                  {Object.entries(INDUSTRY_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-zinc-500">联合价值模式</span>
-                <select name="valuePattern" defaultValue={p.valuePattern ?? ""} className={input}>
-                  <option value="">待选定</option>
-                  {Object.entries(VALUE_PATTERN_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
+              <TaxonomySelectField
+                dimension="ARCHETYPE"
+                name="partnerArchetype"
+                value={p.partnerArchetype ?? ""}
+                options={taxonomy.ARCHETYPE}
+                emptyLabel="待判定"
+              />
+              <TaxonomySelectField
+                dimension="CATEGORY"
+                name="category"
+                value={p.category}
+                options={taxonomy.CATEGORY}
+              />
+              <div className="md:col-span-2">
+                <TaxonomyMultiField
+                  dimension="INDUSTRY"
+                  name="industries"
+                  selected={parseIndustries(p)}
+                  options={taxonomy.INDUSTRY}
+                />
+              </div>
+              <TaxonomySelectField
+                dimension="VALUE_PATTERN"
+                name="valuePattern"
+                value={p.valuePattern ?? ""}
+                options={taxonomy.VALUE_PATTERN}
+                emptyLabel="待选定"
+              />
               <label className="space-y-1">
                 <span className="text-xs text-zinc-500">专职人数（帆软/数据）</span>
                 <input name="dedicatedHeadcount" defaultValue={p.dedicatedHeadcount ?? ""} placeholder="如 3 人全职" className={input} />

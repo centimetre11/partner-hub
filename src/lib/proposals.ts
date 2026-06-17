@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatJson } from "./ai";
 import { PARTNER_FIELD_LABELS, PIPELINE_STAGES, attitudeLabel, stageName } from "./constants";
+import { normalizeIndustriesInput } from "./taxonomy";
 
 // ============ 提案（diff 预览）数据结构 ============
 
@@ -203,6 +204,10 @@ export async function applyProposal(opts: {
     if (f.field === "pipelineStage" || f.field === "fitScore") {
       const n = parseInt(f.newValue, 10);
       if (!Number.isNaN(n)) data[f.field] = n;
+    } else if (f.field === "industries" || f.field === "industry") {
+      const norm = normalizeIndustriesInput(f.newValue);
+      data.industries = norm.industries;
+      data.industry = norm.industry;
     } else {
       data[f.field] = f.newValue;
     }

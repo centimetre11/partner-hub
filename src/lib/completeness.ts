@@ -1,4 +1,5 @@
 import type { Contact, Opportunity, Partner, TimelineEvent, Training } from "@prisma/client";
+import { parseIndustries } from "./taxonomy";
 
 export type PartnerWithRelations = Partner & {
   contacts: Contact[];
@@ -26,7 +27,7 @@ const CHECKS: Check[] = [
   { label: "联合价值模式", weight: 5, ok: (p) => !!p.valuePattern },
   { label: "价值三行", weight: 5, ok: (p) => !!(p.valuePartnerOffer && p.valueFanruanOffer && p.valueCustomerOutcome) },
   { label: "伙伴类型", weight: 4, ok: (p) => !!p.partnerArchetype && p.partnerArchetype !== "OTHER" },
-  { label: "主攻行业", weight: 4, ok: (p) => !!p.industry && p.industry !== "OTHER" },
+  { label: "主攻行业", weight: 4, ok: (p) => parseIndustries(p).some((c) => c && c !== "OTHER") },
   { label: "专职人数", weight: 4, ok: (p) => !!p.dedicatedHeadcount },
   { label: "核心打法/playbook", weight: 5, ok: (p) => !!p.playbook },
   { label: "契合度评分", weight: 4, ok: (p) => p.fitScore != null },

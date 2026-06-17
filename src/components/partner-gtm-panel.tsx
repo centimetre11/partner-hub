@@ -4,13 +4,11 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import type { Partner } from "@prisma/client";
 import { Badge, Card } from "@/components/ui";
 import {
-  CATEGORY_LABELS,
-  INDUSTRY_LABELS,
-} from "@/lib/constants";
-import {
-  PARTNER_ARCHETYPE_LABELS,
-  VALUE_PATTERN_LABELS,
-} from "@/lib/partner-framework";
+  labelFromMap,
+  labelsFromMap,
+  parseIndustries,
+  type TaxonomyDimension,
+} from "@/lib/taxonomy";
 import {
   savePartnerGtmAction,
   saveToGtmLibraryAction,
@@ -25,9 +23,11 @@ const input =
 export function PartnerGtmPanel({
   partner,
   libraryItems,
+  labelMaps,
 }: {
   partner: Partner;
   libraryItems: GtmLibraryRow[];
+  labelMaps: Record<TaxonomyDimension, Record<string, string>>;
 }) {
   const [playbook, setPlaybook] = useState(partner.playbook ?? "");
   const [pitch, setPitch] = useState(partner.pitch ?? "");
@@ -90,7 +90,8 @@ export function PartnerGtmPanel({
     fd.set("mode", libMode);
     fd.set("targetId", libTargetId);
     fd.set("notes", libNotes);
-    fd.set("industry", partner.industry ?? "");
+    fd.set("industry", parseIndustries(partner)[0] ?? "");
+    fd.set("industries", partner.industries ?? (partner.industry ? JSON.stringify([partner.industry]) : ""));
     fd.set("valuePattern", partner.valuePattern ?? "");
     fd.set("partnerArchetype", partner.partnerArchetype ?? "");
     fd.set("category", partner.category ?? "");
@@ -264,10 +265,11 @@ export function PartnerGtmPanel({
             </label>
             <p className="text-xs text-zinc-400">
               档案标签自动带入当前伙伴：
-              {partner.industry && ` ${INDUSTRY_LABELS[partner.industry] ?? partner.industry}`}
-              {partner.valuePattern && ` · ${VALUE_PATTERN_LABELS[partner.valuePattern] ?? partner.valuePattern}`}
-              {partner.partnerArchetype && ` · ${PARTNER_ARCHETYPE_LABELS[partner.partnerArchetype] ?? partner.partnerArchetype}`}
-              {` · ${CATEGORY_LABELS[partner.category]}`}
+              {parseIndustries(partner).length > 0 &&
+                ` ${labelsFromMap(labelMaps.INDUSTRY, parseIndustries(partner))}`}
+              {partner.valuePattern && ` · ${labelFromMap(labelMaps.VALUE_PATTERN, partner.valuePattern)}`}
+              {partner.partnerArchetype && ` · ${labelFromMap(labelMaps.ARCHETYPE, partner.partnerArchetype)}`}
+              {` · ${labelFromMap(labelMaps.CATEGORY, partner.category)}`}
             </p>
             {libError && <p className="text-xs text-red-600">{libError}</p>}
             <div className="flex justify-end gap-2 pt-2">

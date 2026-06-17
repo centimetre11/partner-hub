@@ -220,7 +220,8 @@ export const SOLUTION_STATUS_LABELS: Record<string, string> = {
 export const PARTNER_FIELD_LABELS: Record<string, string> = {
   name: "公司全称",
   category: "竞品基因",
-  industry: "主攻行业",
+  industry: "主攻行业（单值，兼容）",
+  industries: "主攻行业",
   tier: "Tier 分级",
   partnerArchetype: "伙伴类型",
   valuePattern: "联合价值模式",

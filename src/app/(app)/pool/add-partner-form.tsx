@@ -1,11 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createPartnerAction } from "@/lib/actions";
-import { CATEGORY_LABELS, INDUSTRY_LABELS } from "@/lib/constants";
+import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { AiIntakePanel } from "@/components/ai-intake-panel";
 
-export function AddPartnerForm({ intent = "prospect" }: { intent?: "prospect" | "active" }) {
+export function AddPartnerForm({
+  intent = "prospect",
+  taxonomy,
+}: {
+  intent?: "prospect" | "active";
+  taxonomy?: { CATEGORY: TaxonomyOptionRow[]; INDUSTRY: TaxonomyOptionRow[] };
+}) {
   const [open, setOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const isActive = intent === "active";
@@ -38,17 +46,16 @@ export function AddPartnerForm({ intent = "prospect" }: { intent?: "prospect" | 
             <form action={createPartnerAction} className="space-y-3">
               <input type="hidden" name="intent" value={intent} />
               <input name="name" required placeholder="公司名称 *" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
-              <select name="category" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm">
-                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-              <select name="industry" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm">
-                <option value="">主攻行业（可选）</option>
-                {Object.entries(INDUSTRY_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
+              {taxonomy ? (
+                <>
+                  <TaxonomySelectField dimension="CATEGORY" name="category" value="OTHER" options={taxonomy.CATEGORY} />
+                  <TaxonomyMultiField dimension="INDUSTRY" name="industries" selected={[]} options={taxonomy.INDUSTRY} />
+                </>
+              ) : (
+                <p className="text-xs text-zinc-400">
+                  分类选项请刷新页面加载，或到<Link href="/taxonomy" className="text-indigo-600 hover:underline">维度库</Link>管理
+                </p>
+              )}
               <div className="flex gap-2">
                 <input name="city" placeholder="城市" className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
                 <input name="country" placeholder="国家" className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm" />

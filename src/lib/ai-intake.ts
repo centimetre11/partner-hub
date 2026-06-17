@@ -18,6 +18,7 @@ import {
   PIPELINE_STAGES,
   SOLUTION_STATUS_LABELS,
 } from "./constants";
+import { taxonomyListForAi, normalizeIndustriesInput } from "./taxonomy";
 import { partnerContext, powermapContext, type ContactProposal, type FieldUpdate, type OpportunityProposal, type TodoProposal } from "./proposals";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 
@@ -401,6 +402,13 @@ export async function runIntakeTurn(opts: {
   emit?: TraceEmitter;
 }): Promise<IntakeTurn> {
   const cfg = SCOPE_CONFIG[opts.scope];
+  const [categoryList, industryList, archetypeList, valuePatternList] = await Promise.all([
+    taxonomyListForAi("CATEGORY"),
+    taxonomyListForAi("INDUSTRY"),
+    taxonomyListForAi("ARCHETYPE"),
+    taxonomyListForAi("VALUE_PATTERN"),
+  ]);
+  const taxonomyHint = `维度取值（来自维度库，industries 为 JSON 数组可多选）：category=${categoryList}；industries=${industryList}；partnerArchetype=${archetypeList}；valuePattern=${valuePatternList}`;
   let ctx = "";
   if (opts.partnerId) {
     ctx = `\n\n${await partnerContextForScope(opts.scope, opts.partnerId)}`;
@@ -420,6 +428,7 @@ ${useResearch ? `\n${RESEARCH_GUIDE}` : ""}
 
 【本次提案应填写的范围】
 ${cfg.schemaHint}
+${taxonomyHint}
 ${ctx}
 
 ${outputSchemaForScope(opts.scope)}`;
@@ -578,6 +587,10 @@ export async function applyIntake(opts: {
       if (f.field === "fitScore" || f.field === "pipelineStage") {
         const n = parseInt(f.newValue, 10);
         if (!Number.isNaN(n)) data[f.field] = n;
+      } else if (f.field === "industries" || f.field === "industry") {
+        const norm = normalizeIndustriesInput(f.newValue);
+        data.industries = norm.industries;
+        data.industry = norm.industry;
       } else {
         data[f.field] = f.newValue;
       }
@@ -608,6 +621,10 @@ export async function applyIntake(opts: {
       if (f.field === "fitScore" || f.field === "pipelineStage") {
         const n = parseInt(f.newValue, 10);
         if (!Number.isNaN(n)) data[f.field] = n;
+      } else if (f.field === "industries" || f.field === "industry") {
+        const norm = normalizeIndustriesInput(f.newValue);
+        data.industries = norm.industries;
+        data.industry = norm.industry;
       } else {
         data[f.field] = f.newValue;
       }

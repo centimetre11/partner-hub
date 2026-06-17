@@ -3,22 +3,27 @@
 import { useEffect } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction, setPipelineStageAction } from "@/lib/actions";
-import { CATEGORY_LABELS, INDUSTRY_LABELS } from "@/lib/constants";
-import { PARTNER_ARCHETYPE_LABELS, VALUE_PATTERN_LABELS, type FrameworkMapNode } from "@/lib/partner-framework";
+import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
+import { type FrameworkMapNode } from "@/lib/partner-framework";
 
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+
+export type TaxonomyOptionsMap = Record<TaxonomyDimension, TaxonomyOptionRow[]>;
 
 export function MapNodeQuickEdit({
   node,
   partner,
   users,
   pipelineStages,
+  taxonomy,
   onClose,
 }: {
   node: FrameworkMapNode;
   partner: Partner;
   users: User[];
   pipelineStages: { stage: number; name: string }[];
+  taxonomy: TaxonomyOptionsMap;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -93,47 +98,38 @@ export function MapNodeQuickEdit({
               </label>
             )}
             {node.id === "archetype" && (
-              <label className="block space-y-1">
-                <span className="text-xs text-zinc-500">伙伴类型</span>
-                <select name="partnerArchetype" defaultValue={partner.partnerArchetype ?? ""} className={input}>
-                  <option value="">待判定</option>
-                  {Object.entries(PARTNER_ARCHETYPE_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
+              <TaxonomySelectField
+                dimension="ARCHETYPE"
+                name="partnerArchetype"
+                value={partner.partnerArchetype ?? ""}
+                options={taxonomy.ARCHETYPE}
+                emptyLabel="待判定"
+              />
             )}
             {node.id === "category" && (
-              <label className="block space-y-1">
-                <span className="text-xs text-zinc-500">竞品基因</span>
-                <select name="category" defaultValue={partner.category} className={input}>
-                  {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
+              <TaxonomySelectField
+                dimension="CATEGORY"
+                name="category"
+                value={partner.category}
+                options={taxonomy.CATEGORY}
+              />
             )}
             {node.id === "industry" && (
-              <label className="block space-y-1">
-                <span className="text-xs text-zinc-500">主攻行业</span>
-                <select name="industry" defaultValue={partner.industry ?? ""} className={input}>
-                  <option value="">待判定</option>
-                  {Object.entries(INDUSTRY_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
+              <TaxonomyMultiField
+                dimension="INDUSTRY"
+                name="industries"
+                selected={parseIndustries(partner)}
+                options={taxonomy.INDUSTRY}
+              />
             )}
             {node.id === "value_pattern" && (
-              <label className="block space-y-1">
-                <span className="text-xs text-zinc-500">联合价值模式</span>
-                <select name="valuePattern" defaultValue={partner.valuePattern ?? ""} className={input}>
-                  <option value="">待选定</option>
-                  {Object.entries(VALUE_PATTERN_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
+              <TaxonomySelectField
+                dimension="VALUE_PATTERN"
+                name="valuePattern"
+                value={partner.valuePattern ?? ""}
+                options={taxonomy.VALUE_PATTERN}
+                emptyLabel="待选定"
+              />
             )}
             {node.id === "value_stack" && (
               <>

@@ -1,5 +1,6 @@
 import type { Contact, Opportunity, Partner, Solution, TimelineEvent, Training } from "@prisma/client";
 import { CATEGORY_LABELS, INDUSTRY_LABELS, PIPELINE_STAGES, stageName } from "./constants";
+import { labelsFromMap, labelFromMap, parseIndustries, type TaxonomyDimension } from "./taxonomy";
 
 // ============ 枚举与标签 ============
 
@@ -252,16 +253,24 @@ function nodeStatus(ok: boolean, partial?: boolean, current?: boolean): MapNodeS
   return "missing";
 }
 
-export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapNode[] {
+export function buildPartnerInstanceMap(
+  p: PartnerFrameworkInput,
+  labelMaps?: Partial<Record<TaxonomyDimension, Record<string, string>>>,
+): FrameworkMapNode[] {
   const activeOpps = p.opportunities.filter((o) => o.status === "ACTIVE");
   const stage = p.pipelineStage;
   const guidance = getStageGuidance(p);
 
   const tierLabel = p.tier ? `Tier ${p.tier}` : "未分级";
-  const archetypeLabel = p.partnerArchetype ? PARTNER_ARCHETYPE_LABELS[p.partnerArchetype] : "待判定";
-  const patternLabel = p.valuePattern ? VALUE_PATTERN_LABELS[p.valuePattern] : "待选定";
-  const categoryLabel = CATEGORY_LABELS[p.category] ?? p.category;
-  const industryLabel = p.industry ? (INDUSTRY_LABELS[p.industry] ?? p.industry) : "待判定";
+  const archetypeLabel = labelFromMap(
+    labelMaps?.ARCHETYPE ?? PARTNER_ARCHETYPE_LABELS,
+    p.partnerArchetype,
+    "待判定",
+  );
+  const patternLabel = labelFromMap(labelMaps?.VALUE_PATTERN ?? VALUE_PATTERN_LABELS, p.valuePattern, "待选定");
+  const categoryLabel = labelFromMap(labelMaps?.CATEGORY ?? CATEGORY_LABELS, p.category, p.category);
+  const industryCodes = parseIndustries(p);
+  const industryLabel = labelsFromMap(labelMaps?.INDUSTRY ?? INDUSTRY_LABELS, industryCodes, "待判定");
 
   const nodes: FrameworkMapNode[] = [
     // 定位层
@@ -269,7 +278,7 @@ export function buildPartnerInstanceMap(p: PartnerFrameworkInput): FrameworkMapN
     { id: "stage", layer: "定位层", label: "Stage", hint: "关系进展", status: "current", value: `${stage}. ${stageName(stage)}` },
     { id: "archetype", layer: "定位层", label: "伙伴类型", hint: "怎么带", status: nodeStatus(!!p.partnerArchetype && p.partnerArchetype !== "OTHER", !!p.partnerArchetype), value: archetypeLabel },
     { id: "category", layer: "定位层", label: "竞品基因", hint: "出身", status: nodeStatus(p.category !== "OTHER"), value: categoryLabel },
-    { id: "industry", layer: "定位层", label: "主攻行业", hint: "打哪行", status: nodeStatus(!!p.industry && p.industry !== "OTHER", !!p.industry), value: industryLabel },
+    { id: "industry", layer: "定位层", label: "主攻行业", hint: "打哪行", status: nodeStatus(industryCodes.length > 0 && !industryCodes.every((c) => c === "OTHER"), industryCodes.length > 0), value: industryLabel },
 
     // 打法层
     { id: "value_pattern", layer: "打法层", label: "价值模式", hint: "一起卖什么", status: nodeStatus(!!p.valuePattern), value: patternLabel },

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireUser } from "./session";
+import { parseIndustries, stringifyIndustries } from "./taxonomy";
 
 export type GtmLibraryRow = {
   id: string;
@@ -107,10 +108,12 @@ export async function saveToGtmLibraryAction(
   const partner = await db.partner.findUnique({ where: { id: partnerId } });
   if (!partner) return { error: "伙伴不存在" };
 
+  const industryCodes = parseIndustries(partner);
   const meta = {
     playbook: playbook || null,
     pitch: pitch || null,
-    industry: String(formData.get("industry") ?? "").trim() || partner.industry || null,
+    industries: stringifyIndustries(industryCodes),
+    industry: industryCodes[0] ?? null,
     valuePattern: String(formData.get("valuePattern") ?? "").trim() || partner.valuePattern || null,
     partnerArchetype: String(formData.get("partnerArchetype") ?? "").trim() || partner.partnerArchetype || null,
     category: String(formData.get("category") ?? "").trim() || partner.category || null,

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
-import { AI_VERIFIED_LABELS, CATEGORY_LABELS, POOL_FLAG_LABELS } from "@/lib/constants";
+import { AI_VERIFIED_LABELS, POOL_FLAG_LABELS } from "@/lib/constants";
+import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps } from "@/lib/taxonomy";
 import { computeCompleteness } from "@/lib/completeness";
 import { deletePartnerAction, promotePartnerAction, restorePartnerAction, setPoolFlagAction } from "@/lib/actions";
 import { AddPartnerForm } from "./add-partner-form";
@@ -21,6 +22,9 @@ export default async function PoolPage({
 }) {
   await requireUser();
   const sp = await searchParams;
+  const labelMaps = await loadTaxonomyLabelMaps();
+  const categoryOptions = await getTaxonomyOptions("CATEGORY");
+  const industryOptions = await getTaxonomyOptions("INDUSTRY");
   const view = VIEWS.some((v) => v.k === sp.view) ? sp.view! : "prospect";
 
   const statusWhere =
@@ -65,7 +69,7 @@ export default async function PoolPage({
       <PageHeader
         title="伙伴库"
         desc="候选伙伴与已归档伙伴；正式伙伴请到「正式伙伴」页管理"
-        actions={<AddPartnerForm />}
+        actions={<AddPartnerForm taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />}
       />
 
       <div className="px-8">
@@ -100,8 +104,8 @@ export default async function PoolPage({
           />
           <select name="category" defaultValue={sp.category ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">全部类别</option>
-            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
+            {categoryOptions.map((o) => (
+              <option key={o.code} value={o.code}>{o.label}</option>
             ))}
           </select>
           <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
@@ -161,7 +165,7 @@ export default async function PoolPage({
                         <div className="text-xs text-zinc-400 mt-0.5 max-w-[260px] truncate">{p.knownClients}</div>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-zinc-600">{CATEGORY_LABELS[p.category] ?? p.category}</td>
+                    <td className="px-3 py-3 text-zinc-600">{labelFromMap(labelMaps.CATEGORY, p.category)}</td>
                     <td className="px-3 py-3 text-zinc-600 whitespace-nowrap">{p.city ?? p.country ?? "—"}</td>
                     <td className="px-3 py-3">
                       {p.tier ? <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge> : <span className="text-zinc-300">—</span>}
