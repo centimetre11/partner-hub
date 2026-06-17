@@ -1,0 +1,22 @@
+---
+description: Partner Hub user-facing text must be English
+alwaysApply: true
+---
+
+# English UI (Partner Hub)
+
+All **user-facing** text in Partner Hub must be **English**:
+
+- Navigation labels, page titles, form labels, placeholders, buttons, empty states, toasts, errors
+- `<select>` / dropdown option text (roles, tiers, statuses, etc.)
+- Table headers and badge text shown in the app
+
+Do **not** mix Chinese into the UI (e.g. avoid `Sales (销售)` — use `Sales` only).
+
+**Exceptions** (Chinese is OK):
+
+- User-entered content (partner names, notes, contacts)
+- Seed/demo data in research materials outside the app
+- Internal code comments (optional; English preferred for consistency)
+
+When adding labels for enums/constants, define English strings in shared maps (e.g. `USER_ROLE_LABELS`) rather than inline Chinese.

@@ -2,6 +2,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
+import { isSuperAdmin } from "./user-roles";
 
 const COOKIE = "ph_session";
 
@@ -50,5 +51,11 @@ export async function getCurrentUser() {
 export async function requireUser() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  return user;
+}
+
+export async function requireSuperAdmin() {
+  const user = await requireUser();
+  if (!isSuperAdmin(user)) redirect("/");
   return user;
 }

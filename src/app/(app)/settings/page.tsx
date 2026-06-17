@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/session";
+import { requireSuperAdmin } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDate, fmtDateTime } from "@/components/ui";
 import { RegisterForm } from "./register-form";
 import { MemberRow } from "./member-row";
@@ -20,7 +20,7 @@ function fmtTokens(value: number) {
 }
 
 export default async function SettingsPage() {
-  const user = await requireUser();
+  const user = await requireSuperAdmin();
   const today = new Date().toISOString().slice(0, 10);
   const since = new Date();
   since.setDate(since.getDate() - 13);

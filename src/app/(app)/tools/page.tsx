@@ -4,6 +4,7 @@ import { Badge, PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-registry";
 import { isWebSearchAvailable, webSearchBackendLabel } from "@/lib/web-search";
+import { isSuperAdmin } from "@/lib/user-roles";
 
 export default async function ToolsPage() {
   const user = await requireUser();
@@ -22,6 +23,7 @@ export default async function ToolsPage() {
 
   const webSearchReady = await isWebSearchAvailable();
   const searchBackend = webSearchReady ? await webSearchBackendLabel() : null;
+  const admin = isSuperAdmin(user);
   const readyCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).filter(
     (t) => getToolAvailability(t.name, { kmsConfigured, webSearchReady }) === "ready"
   ).length;
@@ -47,7 +49,13 @@ export default async function ToolsPage() {
         {!webSearchReady && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <span className="font-medium">LinkedIn search / news search / sentiment scan require a web-enabled LLM.</span>
-            Add and <strong>enable</strong> a web-capable model in Team Settings → LLM Management Center:{" "}
+            Add and <strong>enable</strong> a web-capable model in{" "}
+            {admin ? (
+              <>Team Settings → LLM Management Center</>
+            ) : (
+              <>LLM Management Center (ask a Super Admin)</>
+            )}
+            :{" "}
             <strong>Kimi (moonshot)</strong> or <strong>Volcano Engine</strong> (tools include{" "}
             <code className="text-xs bg-amber-100 px-1 rounded">web_search</code>
             ). The system auto-selects from <strong>all enabled</strong> configs—it does not have to be the default model.
@@ -56,7 +64,7 @@ export default async function ToolsPage() {
         {!kmsConfigured && (
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
             <span className="font-medium">Reading KMS requires a personal access token.</span>
-            Go to <a href="/settings" className="underline font-medium">Team Settings → KMS Document Access</a> to enter it once; after saving, the{" "}
+            Go to <a href="/settings/kms" className="underline font-medium">KMS document access</a> to enter it once; after saving, the{" "}
             <code className="text-xs bg-indigo-100 px-1 rounded">read_kms</code> tool becomes available.
           </div>
         )}

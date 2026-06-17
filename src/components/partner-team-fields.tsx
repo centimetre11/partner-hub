@@ -22,7 +22,7 @@ export function PartnerTeamFields({
   return (
     <>
       <label className="space-y-1">
-        <span className="text-xs text-zinc-500">Sales (销售)</span>
+        <span className="text-xs text-zinc-500">Sales</span>
         <select name="salesUserId" defaultValue={salesUserId ?? ""} className={className}>
           <option value="">Unassigned</option>
           {salesUsers.map((u) => (
@@ -31,7 +31,7 @@ export function PartnerTeamFields({
         </select>
       </label>
       <label className="space-y-1">
-        <span className="text-xs text-zinc-500">Pre-sales (售前)</span>
+        <span className="text-xs text-zinc-500">Pre-sales</span>
         <select name="presalesUserId" defaultValue={presalesUserId ?? ""} className={className}>
           <option value="">Unassigned</option>
           {presalesUsers.map((u) => (

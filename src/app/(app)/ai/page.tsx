@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, Card, PageHeader, fmtDateTime } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_COUNT } from "@/lib/tools-registry";
+import { isSuperAdmin } from "@/lib/user-roles";
 
 function fmtTokens(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
@@ -26,6 +27,8 @@ export default async function AiCenterPage() {
     }),
   ]);
   const todayTokens = todayUsage.reduce((sum, row) => sum + row.totalTokens, 0);
+  const admin = isSuperAdmin(user);
+  const settingsHref = admin ? "/settings" : "/ai";
 
   return (
     <div className="pb-16">
@@ -69,7 +72,7 @@ export default async function AiCenterPage() {
             { label: "Tools", value: BUILTIN_TOOL_COUNT, href: "/tools", desc: "Built-in capabilities", tone: "text-sky-600" },
             { label: "Skills", value: promptSkills, href: "/skills", desc: "Methodology flows", tone: "text-purple-600" },
             { label: "Knowledge", value: knowledge, href: "/knowledge", desc: "Agent searchable", tone: "text-emerald-600" },
-            { label: "Today's Tokens", value: fmtTokens(todayTokens), href: "/settings", desc: "By API", tone: "text-amber-600" },
+            { label: "Today's Tokens", value: fmtTokens(todayTokens), href: settingsHref, desc: admin ? "By API" : "Super Admin only", tone: "text-amber-600" },
           ].map((item) => (
             <Link key={item.label} href={item.href} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 hover:border-indigo-300 transition-colors">
               <div className={`text-2xl font-bold tabular-nums ${item.tone}`}>{item.value}</div>
@@ -124,7 +127,16 @@ export default async function AiCenterPage() {
             </div>
           </Card>
 
-          <Card title="LLM API Status" actions={<Link href="/settings" className="text-xs text-indigo-600 hover:underline">Manage →</Link>}>
+          <Card
+            title="LLM API Status"
+            actions={
+              admin ? (
+                <Link href="/settings" className="text-xs text-indigo-600 hover:underline">Manage →</Link>
+              ) : (
+                <span className="text-xs text-zinc-400">Super Admin only</span>
+              )
+            }
+          >
             <div className="space-y-3">
               {apiConfigs.map((api) => (
                 <div key={api.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 px-3 py-2">

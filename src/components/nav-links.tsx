@@ -49,7 +49,15 @@ function Badge({ count }: { count: number }) {
   );
 }
 
-export function NavLinks({ unread = 0, onNavigate }: { unread?: number; onNavigate?: () => void }) {
+export function NavLinks({
+  unread = 0,
+  onNavigate,
+  showTeamSettings = false,
+}: {
+  unread?: number;
+  onNavigate?: () => void;
+  showTeamSettings?: boolean;
+}) {
   const pathname = usePathname();
 
   const leafActive = (l: Leaf) =>
@@ -59,7 +67,9 @@ export function NavLinks({ unread = 0, onNavigate }: { unread?: number; onNaviga
 
   return (
     <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-      {nav.map((entry) =>
+      {nav
+        .filter((entry) => !isGroup(entry) && entry.href === "/settings" ? showTeamSettings : true)
+        .map((entry) =>
         isGroup(entry) ? (
           <NavGroup key={entry.id} group={entry} leafActive={leafActive} unread={unread} onNavigate={onNavigate} />
         ) : (

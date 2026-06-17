@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      <AppShell user={{ name: user.name, email: user.email }} unread={unread}>
+      <AppShell user={{ name: user.name, email: user.email, role: user.role }} unread={unread}>
         {children}
       </AppShell>
       <AssistantDock />

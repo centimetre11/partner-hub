@@ -284,8 +284,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     ["Competitive DNA", labelFromMap(labelMaps.CATEGORY, p.category)],
                     ["Primary industry", industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
                     ["Dedicated headcount", p.dedicatedHeadcount],
-                    ["Sales (销售)", p.salesUser?.name ?? p.owner?.name],
-                    ["Pre-sales (售前)", p.presalesUser?.name],
+                    ["Sales", p.salesUser?.name ?? p.owner?.name],
+                    ["Pre-sales", p.presalesUser?.name],
                     ["Priority", p.priority],
                     ["Certification level", p.certLevel],
                   ].map(([k, v]) => (

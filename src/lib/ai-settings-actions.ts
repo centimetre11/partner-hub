@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
-import { requireUser } from "./session";
+import { requireSuperAdmin } from "./session";
 import { parseVolcengineSnippet, normalizeApiKeyInput } from "./volcengine-config";
 import { parseCapabilitiesFromForm, serializeAiCapabilities } from "./ai-capabilities";
 
@@ -61,7 +61,7 @@ async function ensureDefaultApi() {
 }
 
 export async function upsertAiApiAction(_: AiApiActionState, formData: FormData): Promise<AiApiActionState> {
-  await requireUser();
+  await requireSuperAdmin();
   const id = cleanText(formData.get("id"));
   const name = cleanText(formData.get("name"));
   const baseUrl = cleanText(formData.get("baseUrl")).replace(/\/+$/, "");
@@ -117,27 +117,27 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
 }
 
 export async function setDefaultAiApiAction(id: string) {
-  await requireUser();
+  await requireSuperAdmin();
   await makeOnlyDefault(id);
   revalidatePath("/settings");
 }
 
 export async function toggleAiApiAction(id: string, enabled: boolean) {
-  await requireUser();
+  await requireSuperAdmin();
   await db.aiApiConfig.update({ where: { id }, data: { enabled } });
   await ensureDefaultApi();
   revalidatePath("/settings");
 }
 
 export async function deleteAiApiAction(id: string) {
-  await requireUser();
+  await requireSuperAdmin();
   await db.aiApiConfig.delete({ where: { id } });
   await ensureDefaultApi();
   revalidatePath("/settings");
 }
 
 export async function upsertVolcengineApiAction(_: AiApiActionState, formData: FormData): Promise<AiApiActionState> {
-  await requireUser();
+  await requireSuperAdmin();
   const id = cleanText(formData.get("id"));
   const name = cleanText(formData.get("name")) || "火山方舟 Doubao";
   const manualKey = normalizeApiKeyInput(cleanText(formData.get("apiKey")));
@@ -225,7 +225,7 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
 }
 
 export async function testVolcengineApiAction(_: AiApiActionState, formData: FormData): Promise<AiApiActionState> {
-  await requireUser();
+  await requireSuperAdmin();
   const id = cleanText(formData.get("id"));
   const snippet = cleanText(formData.get("snippet"));
   const formKeyRaw = cleanText(formData.get("apiKey"));

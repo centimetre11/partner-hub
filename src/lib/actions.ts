@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { createSession, destroySession, requireUser } from "./session";
+import { createSession, destroySession, requireUser, requireSuperAdmin } from "./session";
 import { stageName } from "./constants";
 import { stringifyIndustries } from "./taxonomy";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
@@ -37,7 +37,7 @@ export async function loginAction(_: unknown, formData: FormData) {
 }
 
 export async function registerAction(_: unknown, formData: FormData) {
-  await requireUser(); // 仅已登录用户可添加成员
+  await requireSuperAdmin();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -51,7 +51,7 @@ export async function registerAction(_: unknown, formData: FormData) {
 }
 
 export async function updateUserAction(userId: string, formData: FormData) {
-  await requireUser();
+  await requireSuperAdmin();
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = normalizeUserRole(String(formData.get("role") ?? ""));

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/lib/actions";
 import { NavLinks } from "@/components/nav-links";
+import { isSuperAdmin } from "@/lib/user-roles";
 
 export function AppShell({
   children,
@@ -11,7 +12,7 @@ export function AppShell({
   unread,
 }: {
   children: React.ReactNode;
-  user: { name: string; email: string };
+  user: { name: string; email: string; role?: string | null };
   unread: number;
 }) {
   const pathname = usePathname();
@@ -94,7 +95,7 @@ export function AppShell({
             </svg>
           </button>
         </div>
-        <NavLinks unread={unread} onNavigate={() => setNavOpen(false)} />
+        <NavLinks unread={unread} onNavigate={() => setNavOpen(false)} showTeamSettings={isSuperAdmin(user)} />
         <div className="mt-auto border-t border-zinc-800 px-5 py-4">
           <div className="text-xs text-zinc-400 mb-2 truncate">
             {user.name} · {user.email}

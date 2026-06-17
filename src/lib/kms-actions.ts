@@ -24,6 +24,7 @@ export async function saveKmsCredentialAction(formData: FormData) {
   });
 
   revalidatePath("/settings");
+  revalidatePath("/settings/kms");
   revalidatePath("/tools");
   return { ok: true, message: "KMS token saved. You won't need to enter it again." };
 }
@@ -57,6 +58,7 @@ export async function deleteKmsCredentialAction() {
   const user = await requireUser();
   await db.userKmsCredential.deleteMany({ where: { userId: user.id } });
   revalidatePath("/settings");
+  revalidatePath("/settings/kms");
   revalidatePath("/tools");
   return { ok: true };
 }
