@@ -103,10 +103,10 @@ export function AiWorkflowPanel({
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-white">
-      <div className="shrink-0 px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
-        <div className="min-w-0">
-          <div className="text-base font-semibold truncate">✦ {title}</div>
-          {subtitle && <div className="text-xs text-indigo-200 mt-0.5">{subtitle}</div>}
+      <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b flex items-center justify-between bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+        <div className="min-w-0 flex-1 pr-2">
+          <div className="text-sm sm:text-base font-semibold truncate">✦ {title}</div>
+          {subtitle && <div className="text-[11px] sm:text-xs text-indigo-200 mt-0.5 line-clamp-2">{subtitle}</div>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {headerExtra}

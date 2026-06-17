@@ -24,8 +24,8 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 
   return (
     <div className="pb-16">
-      <div className="px-8 pt-7 pb-3">
-        <h1 className="text-xl font-bold text-zinc-900">
+      <div className="px-8 pt-5 sm:pt-7 pb-3">
+        <h1 className="text-lg sm:text-xl font-bold text-zinc-900">
           {greeting}，{user.name}
         </h1>
         <p className="text-sm text-zinc-500 mt-1">

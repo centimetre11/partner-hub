@@ -120,11 +120,11 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   return (
     <div>
       {/* Header: identity + pipeline */}
-      <div className="px-8 pt-7 pb-5 border-b border-zinc-200/60 bg-white">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
+      <div className="px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-zinc-200/60 bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-zinc-900">{p.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 break-words">{p.name}</h1>
               <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "ARCHIVED" ? "zinc" : "blue"}>
                 {STATUS_LABELS[p.status]}
               </Badge>
@@ -159,7 +159,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               {completeness.score}%
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <AiAddButton
               scope="profile"
               partnerId={p.id}

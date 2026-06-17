@@ -50,12 +50,12 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 px-8 pt-7 pb-5">
-      <div>
-        <h1 className="text-xl font-bold text-zinc-900">{title}</h1>
+    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 pb-4 sm:pb-5">
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-xl font-bold text-zinc-900">{title}</h1>
         {desc && <p className="text-sm text-zinc-500 mt-1">{desc}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+      {actions && <div className="flex items-center gap-2 shrink-0 flex-wrap">{actions}</div>}
     </div>
   );
 }
@@ -76,12 +76,12 @@ export function Card({
   return (
     <div id={id} className={`bg-white rounded-xl border border-zinc-200/80 shadow-sm ${className}`}>
       {(title || actions) && (
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100">
-          <h3 className="text-sm font-semibold text-zinc-800">{title}</h3>
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-3.5 border-b border-zinc-100">
+          <h3 className="text-sm font-semibold text-zinc-800 min-w-0">{title}</h3>
           {actions}
         </div>
       )}
-      <div className="p-5">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </div>
   );
 }

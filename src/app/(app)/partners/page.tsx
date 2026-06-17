@@ -65,7 +65,7 @@ export default async function PartnersPage({
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          <input name="q" defaultValue={sp.q} placeholder="Search company name…" className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-44" />
+          <input name="q" defaultValue={sp.q} placeholder="Search company name…" className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44" />
           <select name="stage" defaultValue={sp.stage ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">All stages</option>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((s) => (

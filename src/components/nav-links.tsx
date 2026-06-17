@@ -49,7 +49,7 @@ function Badge({ count }: { count: number }) {
   );
 }
 
-export function NavLinks({ unread = 0 }: { unread?: number }) {
+export function NavLinks({ unread = 0, onNavigate }: { unread?: number; onNavigate?: () => void }) {
   const pathname = usePathname();
 
   const leafActive = (l: Leaf) =>
@@ -61,19 +61,32 @@ export function NavLinks({ unread = 0 }: { unread?: number }) {
     <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
       {nav.map((entry) =>
         isGroup(entry) ? (
-          <NavGroup key={entry.id} group={entry} leafActive={leafActive} unread={unread} />
+          <NavGroup key={entry.id} group={entry} leafActive={leafActive} unread={unread} onNavigate={onNavigate} />
         ) : (
-          <NavLeaf key={entry.href} leaf={entry} active={leafActive(entry)} unread={unread} />
+          <NavLeaf key={entry.href} leaf={entry} active={leafActive(entry)} unread={unread} onNavigate={onNavigate} />
         ),
       )}
     </nav>
   );
 }
 
-function NavLeaf({ leaf, active, unread, nested = false }: { leaf: Leaf; active: boolean; unread: number; nested?: boolean }) {
+function NavLeaf({
+  leaf,
+  active,
+  unread,
+  nested = false,
+  onNavigate,
+}: {
+  leaf: Leaf;
+  active: boolean;
+  unread: number;
+  nested?: boolean;
+  onNavigate?: () => void;
+}) {
   return (
     <Link
       href={leaf.href}
+      onClick={onNavigate}
       className={`flex items-center gap-3 ${nested ? "pl-9 pr-3" : "px-3"} py-2 rounded-lg text-sm transition-colors ${
         active ? "bg-indigo-600/20 text-indigo-300 font-medium" : "hover:bg-zinc-800 hover:text-white"
       }`}
@@ -85,7 +98,17 @@ function NavLeaf({ leaf, active, unread, nested = false }: { leaf: Leaf; active:
   );
 }
 
-function NavGroup({ group, leafActive, unread }: { group: Group; leafActive: (l: Leaf) => boolean; unread: number }) {
+function NavGroup({
+  group,
+  leafActive,
+  unread,
+  onNavigate,
+}: {
+  group: Group;
+  leafActive: (l: Leaf) => boolean;
+  unread: number;
+  onNavigate?: () => void;
+}) {
   const hasActiveChild = group.children.some(leafActive);
   const [open, setOpen] = useState(true);
   const expanded = open || hasActiveChild;
@@ -108,7 +131,7 @@ function NavGroup({ group, leafActive, unread }: { group: Group; leafActive: (l:
       {expanded && (
         <div className="mt-1 space-y-1">
           {group.children.map((c) => (
-            <NavLeaf key={c.href} leaf={c} active={leafActive(c)} unread={unread} nested />
+            <NavLeaf key={c.href} leaf={c} active={leafActive(c)} unread={unread} nested onNavigate={onNavigate} />
           ))}
         </div>
       )}

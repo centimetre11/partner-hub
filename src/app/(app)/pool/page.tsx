@@ -74,7 +74,7 @@ export default async function PoolPage({
 
       <div className="px-8">
         {/* 状态 Tab */}
-        <div className="flex items-center gap-1 mb-4 border-b border-zinc-200">
+        <div className="flex items-center gap-1 mb-4 border-b border-zinc-200 overflow-x-auto pb-px -mx-1 px-1">
           {VIEWS.map((v) => {
             const active = v.k === view;
             const badge = v.k === "prospect" ? counts.prospect : v.k === "archived" ? counts.archived : counts.prospect + counts.archived;
@@ -100,7 +100,7 @@ export default async function PoolPage({
             name="q"
             defaultValue={sp.q}
             placeholder="Search company name…"
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <select name="category" defaultValue={sp.category ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">All categories</option>
@@ -138,7 +138,8 @@ export default async function PoolPage({
 
         {/* 列表 */}
         <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-zinc-100 text-left text-xs text-zinc-500">
                 <th className="px-4 py-3 font-medium">Company</th>
@@ -226,6 +227,7 @@ export default async function PoolPage({
             </tbody>
           </table>
           {partners.length === 0 && <EmptyState text={view === "archived" ? "No archived partners" : "No partners match your filters"} />}
+          </div>
         </div>
       </div>
     </div>
