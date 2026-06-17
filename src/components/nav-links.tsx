@@ -17,6 +17,7 @@ const nav: Entry[] = [
     icon: "▦",
     children: [
       { href: "/framework", label: "经营框架", icon: "◎" },
+      { href: "/playbook-library", label: "打法库", icon: "◈" },
       { href: "/pool", label: "伙伴库", icon: "◬" },
       { href: "/documents", label: "报告中心", icon: "📄" },
       { href: "/materials", label: "物料中心", icon: "📦" },

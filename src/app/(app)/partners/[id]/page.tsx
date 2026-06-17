@@ -14,6 +14,8 @@ import {
   VALUE_PATTERN_LABELS,
   buildPartnerInstanceMap,
 } from "@/lib/partner-framework";
+import { PartnerGtmPanel } from "@/components/partner-gtm-panel";
+import { searchGtmLibraryAction } from "@/lib/gtm-library-actions";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
 import { PartnerStageGuidancePanel } from "@/components/partner-stage-guidance";
 import {
@@ -74,6 +76,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   const completeness = computeCompleteness(p);
   const stale = staleDays(p);
   const instanceMap = buildPartnerInstanceMap(p);
+  const gtmLibraryItems = await searchGtmLibraryAction("");
   let selectedDims: string[] = [];
   if (p.monitorDims) {
     try {
@@ -285,20 +288,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </Card>
             </div>
 
-            {(p.playbook || p.pitch) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {p.playbook && (
-                  <Card title="playbook · 怎么打">
-                    <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{p.playbook}</p>
-                  </Card>
-                )}
-                {p.pitch && (
-                  <Card title="pitch · 30 秒话术">
-                    <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{p.pitch}</p>
-                  </Card>
-                )}
-              </div>
-            )}
+            <PartnerGtmPanel partner={p} libraryItems={gtmLibraryItems} />
           </div>
         }
         pipeline={

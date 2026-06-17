@@ -21,6 +21,7 @@ model User {
   documents    Document[]
   materials    Material[]
   knowledgeArticles KnowledgeArticle[]
+  gtmLibraryItems   GtmLibrary[]
   skills       Skill[]
   aiTokenUsages AiTokenUsage[]
   kmsCredential UserKmsCredential?
@@ -86,6 +87,30 @@ model Partner {
   documents     Document[]
   monitorSources MonitorSource[]
   monitorItems  MonitorItem[]
+}
+
+// 打法库：playbook + pitch 存档（支持同标题多版本）
+model GtmLibrary {
+  id               String   @id @default(cuid())
+  title            String
+  playbook         String?
+  pitch            String?
+  industry         String?
+  valuePattern     String?
+  partnerArchetype String?
+  category         String?
+  notes            String?
+  version          Int      @default(1)
+  groupId          String   // 同一组 = 同一打法的不同版本
+  sourcePartnerId  String?
+  sourcePartnerName String?
+  createdById      String?
+  createdBy        User?    @relation(fields: [createdById], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([title])
 }
 
 // 舆情监控：自定义监控链接源（领英/Facebook 主页、官网、新闻源等）
