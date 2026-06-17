@@ -230,7 +230,7 @@ export const PARTNER_FIELD_LABELS: Record<string, string> = {
   coreBusiness: "Core Business",
   capability: "Core Capability",
   knownClients: "Known Clients",
-  currentTools: "当前工具",
+  currentTools: "Current Tools",
   playbook: "Core Playbook",
   pitch: "Pitch",
   bestChannel: "Best Contact Channel",

@@ -21,7 +21,7 @@ const CHECKS: Check[] = [
   { label: "Website", weight: 3, ok: (p) => !!p.website },
   { label: "Core business / capability", weight: 6, ok: (p) => !!(p.coreBusiness || p.capability) },
   { label: "Known clients", weight: 6, ok: (p) => !!p.knownClients },
-  { label: "当前工具", weight: 5, ok: (p) => !!p.currentTools },
+  { label: "Current tools", weight: 5, ok: (p) => !!p.currentTools },
   { label: "Joint value pattern", weight: 5, ok: (p) => !!p.valuePattern },
   { label: "Value proposition (3 lines)", weight: 5, ok: (p) => !!(p.valuePartnerOffer && p.valueFanruanOffer && p.valueCustomerOutcome) },
   { label: "Partner archetype", weight: 4, ok: (p) => !!p.partnerArchetype && p.partnerArchetype !== "OTHER" },

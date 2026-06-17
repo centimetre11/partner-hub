@@ -301,7 +301,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     ["Company size", p.headcount],
                     ["Core business", p.coreBusiness],
                     ["Core capabilities", p.capability],
-                    ["当前工具", p.currentTools],
+                    ["Current tools", p.currentTools],
                     ["Known clients", p.knownClients],
                     ["Best outreach channel", p.bestChannel],
                   ].map(([k, v]) => (

@@ -127,7 +127,7 @@ export function ProfileEditor({
                 <input name="knownClients" defaultValue={p.knownClients ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">当前工具</span>
+                <span className="text-xs text-zinc-500">Current tools</span>
                 <input name="currentTools" defaultValue={p.currentTools ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
