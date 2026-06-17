@@ -7,6 +7,7 @@ import {
   DEFAULT_AI_CAPABILITIES,
   parseAiCapabilities,
 } from "./ai-capabilities";
+import { normalizeMessagesForAi } from "./ai-images-server";
 
 export type ChatImage = { url: string; name?: string };
 
@@ -799,6 +800,7 @@ export async function chatCompletion(
     apiConfigId?: string;
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
+  messages = normalizeMessagesForAi(messages);
   const api = await resolveAiApi({
     capabilities: requiredCapabilitiesForChat({ messages, tools: opts.tools, jsonMode: opts.jsonMode, capability: opts.capability }),
     taskTier: opts.taskTier,

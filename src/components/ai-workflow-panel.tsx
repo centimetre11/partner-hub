@@ -10,13 +10,9 @@ import type { NormalizedProposal } from "@/lib/proposal-normalize";
 import { AiProcessTrace } from "@/components/ai-process-trace";
 import { LiveProposalDraft } from "@/components/live-proposal-draft";
 
-import { compressImagesForAi } from "@/lib/compress-image";
+import { prepareChatImagesFromFiles } from "@/lib/ai-images";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
-
-function filesToChatImages(files: File[]): Promise<ChatImage[]> {
-  return compressImagesForAi(files);
-}
 
 export function AiWorkflowPanel({
   title,
@@ -200,7 +196,7 @@ export function AiWorkflowPanel({
                       onChange={(e) => {
                         const files = [...(e.target.files ?? [])];
                         if (!files.length) return;
-                        void filesToChatImages(files).then((imgs) => imgs.length && onAddImages(imgs));
+                        void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
                         e.target.value = "";
                       }}
                     />
@@ -224,14 +220,14 @@ export function AiWorkflowPanel({
                       .filter((f): f is File => !!f);
                     if (!files.length) return;
                     e.preventDefault();
-                    void filesToChatImages(files).then((imgs) => imgs.length && onAddImages(imgs));
+                    void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
                   }}
                   onDrop={(e) => {
                     if (!onAddImages) return;
                     const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
                     if (!files.length) return;
                     e.preventDefault();
-                    void filesToChatImages(files).then((imgs) => imgs.length && onAddImages(imgs));
+                    void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
                   }}
                   rows={3}
                   placeholder={inputPlaceholder ?? "输入后按 ⌘/Ctrl + Enter 发送；可直接粘贴/拖入图片…"}
