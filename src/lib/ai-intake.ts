@@ -5,7 +5,7 @@ import type { AiTaskTier } from "./ai-capabilities";
 import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
 import { extractPatchFromTool } from "./proposal-patch-extract";
-import { isKmsConfiguredForUser } from "./kms";
+import { isKmsConfiguredForUser, prefetchKmsFromText } from "./kms";
 import {
   buildIntakeTools,
   intakeEnrichmentSkillsForScope,
@@ -317,9 +317,48 @@ export async function runIntakeTurn(opts: {
   const feature = `AI intake: ${opts.scope}`;
 
   if (useResearch) {
+    const userText = opts.messages
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .join("\n");
+    const kmsPrefetch = kmsConfigured ? await prefetchKmsFromText(opts.userId, userText) : null;
+    if (kmsPrefetch?.ok) {
+      const prefetchId = nextTraceId("tool");
+      emitPhase(opts.emit, "research", "Multi-source research");
+      opts.emit?.({
+        event: "trace",
+        step: {
+          type: "tool",
+          id: prefetchId,
+          name: "read_kms",
+          label: "Read KMS documents",
+          args: { urls: kmsPrefetch.urls },
+          argHint: `${kmsPrefetch.urls.length} link(s)`,
+          status: "running",
+        },
+      });
+      chat.push({
+        role: "user",
+        content:
+          locale === "zh"
+            ? `[系统已自动读取 KMS，以下内容可直接用于建档，勿说 KMS 未配置]\n\n${kmsPrefetch.content}`
+            : `[System pre-fetched KMS — use directly for onboarding; do NOT say KMS is unconfigured]\n\n${kmsPrefetch.content}`,
+      });
+      opts.emit?.({
+        event: "trace_patch",
+        id: prefetchId,
+        patch: {
+          status: "done",
+          content: `Read ${kmsPrefetch.content.length} chars from ${kmsPrefetch.urls.length} KMS link(s)`,
+        },
+      });
+    }
+
     const tools = await buildIntakeTools(enrichmentSkills);
     const planId = nextTraceId("plan");
-    emitPhase(opts.emit, "research", "Multi-source research");
+    if (!kmsPrefetch?.ok) {
+      emitPhase(opts.emit, "research", "Multi-source research");
+    }
     opts.emit?.({
       event: "trace",
       step: {

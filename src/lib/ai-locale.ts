@@ -207,11 +207,11 @@ Before outputting the JSON proposal, combine tools as below (parallel OK, multip
 function kmsStatusBlock(locale: Locale, configured: boolean): string {
   if (locale === "zh") {
     return configured
-      ? "【KMS 令牌状态】已配置。用户提供 KMS 链接或 pageId 时，必须先调用 read_kms；不要假定未配置而跳过。"
+      ? "【KMS 令牌状态】已配置。用户提供 KMS 链接时，系统会自动预读并注入内容；也可调用 read_kms（支持 pageId 与 /display/ 链接）。禁止说「KMS 未配置」。"
       : "【KMS 令牌状态】未配置。跳过 read_kms，改用 web_search、linkedin_search 等公开渠道。";
   }
   return configured
-    ? "[KMS token status] Configured. When the user provides a KMS link or pageId, you MUST call read_kms first; do not assume it is unconfigured and skip."
+    ? "[KMS token status] Configured. KMS links are auto pre-fetched; you may also call read_kms (pageId and /display/ URLs). Do NOT say KMS is unconfigured."
     : "[KMS token status] Not configured. Skip read_kms; use web_search, linkedin_search, and other public sources.";
 }
 

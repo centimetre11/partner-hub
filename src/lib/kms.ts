@@ -35,6 +35,21 @@ export function parseKmsPageId(input: string): string | null {
   return null;
 }
 
+/** Confluence 友好 URL：/display/{spaceKey}/{pageTitle} */
+export function parseKmsDisplayUrl(input: string): { spaceKey: string; title: string } | null {
+  const trimmed = input.trim();
+  const m = trimmed.match(/\/display\/([^/?#]+)\/([^?#]+)/i);
+  if (!m) return null;
+  const decode = (s: string) => decodeURIComponent(s.replace(/\+/g, " "));
+  return { spaceKey: decode(m[1]), title: decode(m[2]) };
+}
+
+/** 从用户文本中提取所有 KMS 链接 */
+export function extractKmsUrls(text: string): string[] {
+  const re = /https?:\/\/kms\.fineres\.com[^\s)\]>"'，。；、]+/gi;
+  return [...new Set((text.match(re) ?? []).map((u) => u.replace(/[.,;，。；、]+$/, "")))];
+}
+
 /** Confluence storage HTML/XHTML → 纯文本 */
 export function confluenceStorageToPlainText(storage: string, maxLen = 12000): string {
   let text = storage
@@ -118,6 +133,62 @@ export async function fetchKmsPageById(opts: {
   return toKmsPage(opts.baseUrl, data);
 }
 
+export async function fetchKmsPageBySpaceTitle(opts: {
+  baseUrl: string;
+  token: string;
+  spaceKey: string;
+  title: string;
+}): Promise<KmsPage> {
+  const params = new URLSearchParams({
+    spaceKey: opts.spaceKey,
+    title: opts.title,
+    expand: "body.storage,space,version",
+  });
+  const data = await kmsFetch<{ results?: ConfluenceContent[]; size?: number }>(
+    opts.baseUrl,
+    opts.token,
+    `/rest/api/content?${params}`
+  );
+  const hit = data.results?.[0];
+  if (!hit) {
+    throw new Error(`KMS page not found in space "${opts.spaceKey}" with title "${opts.title}"`);
+  }
+  return toKmsPage(opts.baseUrl, hit);
+}
+
+/** 统一解析 pageId / viewpage URL / display URL */
+export async function fetchKmsPageFromUrl(opts: {
+  baseUrl: string;
+  token: string;
+  url: string;
+}): Promise<KmsPage> {
+  const pageId = parseKmsPageId(opts.url);
+  if (pageId) {
+    return fetchKmsPageById({ baseUrl: opts.baseUrl, token: opts.token, pageId });
+  }
+  const display = parseKmsDisplayUrl(opts.url);
+  if (display) {
+    try {
+      return await fetchKmsPageBySpaceTitle({ baseUrl: opts.baseUrl, token: opts.token, ...display });
+    } catch {
+      // display URL 标题可能与实际页面略有出入（如 AI vs Al），按空间内搜索兜底
+      const hits = await searchKmsPages({
+        baseUrl: opts.baseUrl,
+        token: opts.token,
+        query: display.title,
+        limit: 5,
+      });
+      const inSpace = hits.filter((p) => p.spaceKey === display.spaceKey);
+      const pool = inSpace.length ? inSpace : hits;
+      if (!pool.length) {
+        throw new Error(`KMS page not found for URL: ${opts.url}`);
+      }
+      return pool[0];
+    }
+  }
+  throw new Error(`Unrecognized KMS URL: ${opts.url}`);
+}
+
 export async function searchKmsPages(opts: {
   baseUrl: string;
   token: string;
@@ -150,18 +221,13 @@ export async function readKmsForUser(
   }
 
   try {
-    const pageId = args.pageId
-      ? parseKmsPageId(args.pageId)
-      : args.url
-        ? parseKmsPageId(args.url)
-        : null;
+    const rawInput = args.pageId ? String(args.pageId) : args.url ? String(args.url) : null;
 
-    if (pageId) {
-      const page = await fetchKmsPageById({
-        baseUrl: cred.baseUrl,
-        token: cred.accessToken,
-        pageId,
-      });
+    if (rawInput) {
+      const pageId = parseKmsPageId(rawInput);
+      const page = pageId
+        ? await fetchKmsPageById({ baseUrl: cred.baseUrl, token: cred.accessToken, pageId })
+        : await fetchKmsPageFromUrl({ baseUrl: cred.baseUrl, token: cred.accessToken, url: rawInput });
       return formatKmsPage(page);
     }
 
@@ -189,6 +255,35 @@ function formatKmsPage(page: KmsPage, excerpt = false) {
   if (page.updatedAt) meta.push(`Updated: ${page.updatedAt}`);
   const body = excerpt ? page.plainText.slice(0, 1200) : page.plainText;
   return `${meta.join("\n")}\n\n${body}`;
+}
+
+/** 建档前自动预读用户消息里的 KMS 链接（不依赖模型是否调用 read_kms） */
+export async function prefetchKmsFromText(
+  userId: string | null | undefined,
+  text: string,
+): Promise<{ ok: true; content: string; urls: string[] } | { ok: false; reason: "not_configured" | "no_urls" }> {
+  const cred = await getUserKmsCredential(userId);
+  if (!cred?.accessToken) return { ok: false, reason: "not_configured" };
+
+  const urls = extractKmsUrls(text);
+  if (!urls.length) return { ok: false, reason: "no_urls" };
+
+  const parts: string[] = [];
+  for (const url of urls) {
+    try {
+      const page = await fetchKmsPageFromUrl({
+        baseUrl: cred.baseUrl,
+        token: cred.accessToken,
+        url,
+      });
+      parts.push(formatKmsPage(page));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      parts.push(`[Failed: ${url}]\n${msg}`);
+    }
+  }
+
+  return { ok: true, content: parts.join("\n\n---\n\n"), urls };
 }
 
 /** 连通性测试（默认测试页 1420741418） */

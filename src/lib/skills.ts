@@ -493,7 +493,7 @@ const readKms: Skill = {
         type: "object",
         properties: {
           pageId: { type: "string", description: "KMS page ID, e.g. 1420741418" },
-          url: { type: "string", description: "Full KMS page URL" },
+          url: { type: "string", description: "Full KMS page URL (viewpage.action?pageId=… or /display/{space}/{title})" },
           query: { type: "string", description: "Full-text search keywords, e.g. FineBI pricing, partner policy" },
           limit: { type: "number", description: "Search result count, default 3" },
         },
