@@ -707,7 +707,7 @@ export const messagesZh: Messages = {
   },
   account: {
     title: "个人中心",
-    desc: "管理你的显示名称、密码、KMS 访问令牌与 CRM 用户匹配",
+    desc: "管理你的显示名称、密码、KMS 访问令牌、CRM 用户匹配与企业微信 userid",
     profile: "基本资料",
     displayName: "显示名称",
     email: "登录邮箱",
@@ -725,6 +725,24 @@ export const messagesZh: Messages = {
     kmsSourceAdmin: "管理员统一令牌",
     kmsFallbackHint: "优先级：个人令牌 → 团队回退（管理员在团队设置配置）→ 环境变量 KMS_SYSTEM_TOKEN → 管理员已保存的统一令牌。配置后 read_kms / write_kms 可在 AI 中心与助手中使用。",
     crmTitle: "CRM 用户匹配",
+    wecomTitle: "企业微信 userid",
+  },
+  wecom: {
+    userMappingHint:
+      "填写你在企业微信中的成员 userid（账号 ID，不是中文昵称）。机器人在群里 @ 待办负责人时会使用此 ID。",
+    howToFindTitle: "如何查看我的 userid？",
+    howToFindAdmin:
+      "管理后台：登录 work.weixin.qq.com → 通讯录 → 点击你的成员卡片 → 查看「账号」字段（即 userid）。",
+    howToFindProfile:
+      "客户端：我 → 设置 → 账号，部分企业会显示账号 ID；若没有，请联系管理员或在群里 @ 机器人发一条消息。",
+    howToFindBot:
+      "群聊验证：在已绑定机器人的群里 @ 机器人发消息，管理员可在服务器 wecom-bot 日志中看到 from.userid。",
+    userMapped: "已绑定企业微信 userid：{id}",
+    userNotMapped: "尚未绑定企业微信 userid，机器人在群里无法 @ 提醒你。",
+    userIdLabel: "企业微信 userid",
+    userIdPlaceholder: "例如 Kyle 或 Sean.song",
+    userIdHint: "区分大小写；留空并保存可清除绑定。",
+    saveMapping: "保存企业微信绑定",
   },
   crm: {
     syncTitle: "CRM 客户数据同步",

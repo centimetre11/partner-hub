@@ -4,6 +4,7 @@ import { KmsSetup } from "../settings/kms-setup";
 import { ProfileSetup } from "./profile-setup";
 import { PasswordSetup } from "./password-setup";
 import { CrmUserSetup } from "@/components/crm-user-setup";
+import { WecomUserSetup } from "@/components/wecom-user-setup";
 import { getKmsConfigStatus, getUserKmsCredential, KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { getCrmSalesmenAction } from "@/lib/crm-actions";
 import { db } from "@/lib/db";
@@ -16,7 +17,7 @@ export default async function AccountPage() {
   const personalKms = await getUserKmsCredential(user.id);
   const freshUser = await db.user.findUnique({
     where: { id: user.id },
-    select: { crmSalesmanName: true },
+    select: { crmSalesmanName: true, wecomUserId: true },
   });
   const salesmen = await getCrmSalesmenAction();
   const am = m.account;
@@ -85,6 +86,10 @@ export default async function AccountPage() {
             crmSalesmanName={freshUser?.crmSalesmanName ?? null}
             salesmen={salesmen}
           />
+        </Card>
+
+        <Card title={am.wecomTitle}>
+          <WecomUserSetup wecomUserId={freshUser?.wecomUserId ?? null} />
         </Card>
       </div>
     </div>

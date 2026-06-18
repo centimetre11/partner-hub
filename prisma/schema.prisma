@@ -32,6 +32,7 @@ model User {
   kmsCredential UserKmsCredential?
   businessRecords BusinessRecord[]
   crmSalesmanName String? // 帆软 CRM 销售英文名，对应 com_salesman（如 Fay.Wen）
+  wecomUserId     String? // 企业微信成员 userid，用于群聊 @ 提醒（如 Kyle、Sean.song）
 }
 
 model Partner {

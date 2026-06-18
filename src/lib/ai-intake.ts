@@ -594,13 +594,32 @@ export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   return PROPOSE_INTENT_RE.test(text);
 }
 
+/** Strip partner-binding suffix appended to WeCom user messages before scope detection. */
+export function stripIntakeSystemHint(content: string): string {
+  const zh = content.indexOf("\n\n（系统提示：");
+  if (zh >= 0) return content.slice(0, zh).trim();
+  const en = content.indexOf("\n\n[System ");
+  if (en >= 0) return content.slice(0, en).trim();
+  return content.trim();
+}
+
 export function detectProposeScope(messages: IntakeMessage[], partnerId?: string): IntakeScope {
   const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  if (/待办|创建待办|记待办|加待办|添加待办|create todo|add todo|log todo/i.test(last)) {
-    return "todo";
-  }
-  if (/商务记录|拜访记录|会议纪要|跟进记录|见面|记录拜访|记录会议|business record|meeting log|visit log/i.test(last)) {
+  const text = stripIntakeSystemHint(last);
+  // Business record before todo — bound-group hints may mention 待办; user may say 记个商务记录.
+  if (
+    /商务记录|拜访记录|会议纪要|跟进记录|见面|记录拜访|记录会议|记.{0,4}商务|拜访|business record|meeting log|visit log|log.{0,6}visit/i.test(
+      text
+    )
+  ) {
     return "business_record";
+  }
+  if (
+    /记.{0,4}待办|创建待办|加待办|添加待办|^待办[：:，,\s]|待办[：:，,]|create todo|add todo|log todo/i.test(
+      text
+    )
+  ) {
+    return "todo";
   }
   if (/商机|添加商机|新建商机|opportunity|pipeline/i.test(last)) return "opportunity";
   if (/联系人|权力地图|加联系人|添加联系人|新联系人|contact|power map|名片|CTO|CEO/i.test(last)) {

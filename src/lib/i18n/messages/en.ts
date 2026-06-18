@@ -707,7 +707,7 @@ export const messagesEn = {
   },
   account: {
     title: "Account",
-    desc: "Manage your display name, password, KMS token, and CRM user mapping",
+    desc: "Manage your display name, password, KMS token, CRM mapping, and WeCom userid",
     profile: "Profile",
     displayName: "Display name",
     email: "Login email",
@@ -725,6 +725,24 @@ export const messagesEn = {
     kmsSourceAdmin: "admin shared token",
     kmsFallbackHint: "Priority: personal token → team fallback (admin configures in Team Settings) → KMS_SYSTEM_TOKEN env → admin's saved shared token. Then read_kms / write_kms work in AI Hub and the assistant.",
     crmTitle: "CRM user mapping",
+    wecomTitle: "WeCom userid",
+  },
+  wecom: {
+    userMappingHint:
+      "Your WeCom member userid (account ID, not your Chinese display name). Used when the bot @mentions assignees in group chats.",
+    howToFindTitle: "How do I find my userid?",
+    howToFindAdmin:
+      "Admin console: work.weixin.qq.com → Contacts → open your profile → see the Account field (that is your userid).",
+    howToFindProfile:
+      "WeCom app: Me → Settings → Account — some tenants show the account ID; otherwise ask an admin or @ the bot in a group.",
+    howToFindBot:
+      "Group test: @ the bot in a bound group; an admin can read from.userid in wecom-bot server logs.",
+    userMapped: "WeCom userid saved: {id}",
+    userNotMapped: "No WeCom userid yet — the bot cannot @mention you in groups.",
+    userIdLabel: "WeCom userid",
+    userIdPlaceholder: "e.g. Kyle or Sean.song",
+    userIdHint: "Case-sensitive. Save empty to clear.",
+    saveMapping: "Save WeCom binding",
   },
   crm: {
     syncTitle: "CRM customer sync",

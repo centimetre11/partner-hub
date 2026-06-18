@@ -118,7 +118,7 @@ function withPartnerHint(
       role: "user" as const,
       content:
         last.content +
-        `\n\n（系统提示：当前会话已绑定伙伴「${boundPartnerName}」。商务记录、商机、联系人、待办、培训等均默认归属该伙伴；「这个伙伴/该客户」均指该伙伴。）`,
+        `\n\n（系统提示：当前会话已绑定伙伴「${boundPartnerName}」。商务记录、商机、联系人、培训、联合方案等均默认归属该伙伴；「这个伙伴/该客户」均指该伙伴。）`,
     },
   ];
 }
