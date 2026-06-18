@@ -176,8 +176,6 @@ export const labelsEn: LabelsBundle = {
     "Target industries",
     "Dedicated headcount",
     "Core playbook",
-    "Fit score",
-    "Priority",
     "Sales owner",
     "Pre-sales owner",
     "At least 1 key contact",

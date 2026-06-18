@@ -283,7 +283,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     [m.partnerDetail.dedicatedHeadcount, p.dedicatedHeadcount],
                     [m.partners.salesOwner, p.salesUser?.name ?? p.owner?.name],
                     [m.partners.presalesOwner, p.presalesUser?.name],
-                    [m.common.priority, p.priority],
                   ].map(([k, v]) => (
                     <div key={k as string} className="flex justify-between gap-3">
                       <dt className="text-zinc-400 shrink-0">{k}</dt>
@@ -300,7 +299,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     [m.partnerDetail.coreCapabilities, p.capability],
                     [m.partnerDetail.currentTools, p.currentTools],
                     [m.partnerDetail.knownClients, p.knownClients],
-                    [m.partnerDetail.bestChannel, p.bestChannel],
                   ].map(([k, v]) => (
                     <div key={k as string}>
                       <dt className="text-xs text-zinc-400">{k}</dt>
