@@ -432,11 +432,12 @@ export async function createTodoAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
   const due = String(formData.get("dueDate") ?? "");
+  const partnerId = String(formData.get("partnerId") ?? "") || null;
   await db.todoItem.create({
     data: {
       title,
       detail: String(formData.get("detail") ?? "") || null,
-      partnerId: String(formData.get("partnerId") ?? "") || null,
+      partnerId,
       assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
       dueDate: due ? new Date(due) : null,
       priority: String(formData.get("priority") ?? "MEDIUM"),
@@ -444,6 +445,7 @@ export async function createTodoAction(formData: FormData) {
   });
   revalidatePath("/todos");
   revalidatePath("/");
+  if (partnerId) revalidatePath(`/partners/${partnerId}`);
 }
 
 export async function toggleTodoAction(todoId: string) {

@@ -36,7 +36,7 @@ import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import type { Messages } from "@/lib/i18n/messages/en";
 
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const user = await requireUser();
   const { labels, messages: m, bcp47 } = await getServerI18n();
   const L = labelConstants(labels);
   const monitorDimensions = Object.keys(L.MONITOR_DIMENSION_LABELS);
@@ -226,9 +226,14 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             <PartnerStageGuidancePanel partner={p} labels={labels} messages={m} />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos.length))}>
-                <form action={createTodoAction} className="flex gap-2 mb-4">
+                <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4">
                   <input type="hidden" name="partnerId" value={p.id} />
-                  <input name="title" required placeholder={m.partnerDetail.addTodoPlaceholder} className={input} />
+                  <input name="title" required placeholder={m.partnerDetail.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
+                  <select name="assigneeId" defaultValue={user.id} className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0" aria-label={m.common.owner}>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
                   <input name="dueDate" type="date" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm w-36 shrink-0" />
                   <button className="rounded-lg bg-zinc-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-zinc-700">+</button>
                 </form>

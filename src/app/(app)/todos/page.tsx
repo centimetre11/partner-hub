@@ -127,7 +127,7 @@ export default async function TodosPage({
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          <select name="assigneeId" defaultValue={user.id} className={input}>
+          <select name="assigneeId" defaultValue={user.id} className={input} aria-label={m.common.owner} title={m.common.owner}>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
