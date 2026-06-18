@@ -48,7 +48,11 @@ export default async function AccountPage() {
               <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
                 {am.kmsUsingFallback.replace(
                   "{source}",
-                  kms.source === "env" ? am.kmsSourceEnv : am.kmsSourceSystem,
+                  kms.source === "env"
+                    ? am.kmsSourceEnv
+                    : kms.source === "admin"
+                      ? am.kmsSourceAdmin
+                      : am.kmsSourceSystem,
                 )}
               </div>
             )}

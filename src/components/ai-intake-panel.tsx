@@ -16,35 +16,9 @@ import {
 } from "@/lib/clarification-apply";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
+import { useMessages } from "@/lib/i18n/context";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
-
-const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = {
-  new_partner: {
-    title: "AI Onboarding",
-    placeholder:
-      "Drop a company name, meeting notes, chat logs, or a KMS link — I'll research from multiple sources and show findings live on the right.\nExamples:\n• Just met Acme Analytics in Dubai\n• https://kms.fineres.com/pages/viewpage.action?pageId=123456",
-  },
-  powermap: {
-    title: "AI Add Contact",
-    placeholder: "Describe the person to add, or paste a business card / meeting notes.",
-  },
-  opportunity: {
-    title: "AI Add Opportunity",
-    placeholder: "Describe the opportunity or paste related communications.",
-  },
-  profile: {
-    title: "AI Complete Profile",
-    placeholder: "Describe the company or paste a KMS link — fields will update live on the right.",
-  },
-  training: { title: "AI Add Training", placeholder: "Describe the training or certification to schedule." },
-  solution: { title: "AI Add Joint Solution", placeholder: "Describe the joint solution." },
-  business_record: {
-    title: "AI Log Business Milestone",
-    placeholder:
-      "Paste meeting notes, WeCom chat, or describe what happened — I'll extract and save as business record(s).\nExamples:\n• Visited their VP yesterday, discussed L2 cert plan\n• Scheduled FineBI L2 training on 3/15 with Faisal",
-  },
-};
 
 export function AiIntakePanel({
   scope,
@@ -60,7 +34,8 @@ export function AiIntakePanel({
   onDone?: (partnerId: string) => void;
 }) {
   const router = useRouter();
-  const meta = SCOPE_META[scope];
+  const { intakePanel: ip, assistant: am } = useMessages();
+  const meta = ip.scopes[scope];
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -122,7 +97,7 @@ export function AiIntakePanel({
       ...messages,
       {
         role: "user" as const,
-        content: text || "Please identify the information in the image(s)",
+        content: text || am.imageFallback,
         images: pendingImages.length ? pendingImages : undefined,
       },
     ];
@@ -153,7 +128,11 @@ export function AiIntakePanel({
         const partial = (finalReply || "").trim();
         setMessages((m) => [
           ...m,
-          { role: "assistant", content: partial ? `${partial}\n\n(Stopped)` : "(Stopped — gathered info on the right is preserved)", trace: [...trace] },
+          {
+            role: "assistant",
+            content: partial ? `${partial}\n\n${am.stopped}` : ip.stoppedPreserve,
+            trace: [...trace],
+          },
         ]);
         return;
       }
@@ -165,13 +144,12 @@ export function AiIntakePanel({
       setClarifications(turn.clarifications ?? []);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setMessages((m) => [...m, { role: "assistant", content: "(Stopped)", trace: [...liveTrace] }]);
+        setMessages((m) => [...m, { role: "assistant", content: am.stopped, trace: [...liveTrace] }]);
       } else {
         setError(e instanceof Error ? e.message : String(e));
       }
     } finally {
       setLoading(false);
-      // Keep trace in messages; clear only the in-flight streaming reply
       setReplyText("");
       abortRef.current = null;
     }
@@ -188,14 +166,12 @@ export function AiIntakePanel({
   return (
     <AiFullscreenOverlay onClose={onClose}>
       <div className="relative h-full min-h-0 flex flex-col">
-      <AiWorkflowPanel
+        <AiWorkflowPanel
           title={meta.title}
-          subtitle="Research on the left · live draft on the right"
+          subtitle={ip.subtitle}
           onClose={onClose}
           messages={
-            messages.length === 0
-              ? [{ role: "assistant", content: meta.placeholder }]
-              : messages
+            messages.length === 0 ? [{ role: "assistant", content: meta.placeholder }] : messages
           }
           loading={loading}
           liveTrace={liveTrace}
@@ -222,14 +198,14 @@ export function AiIntakePanel({
           pendingImages={pendingImages}
           onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}
           onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
-          inputPlaceholder={proposal ? "Keep adding details, or confirm on the right…" : undefined}
+          inputPlaceholder={proposal ? am.inputDraft : undefined}
           sendDisabled={loading || (!input.trim() && !pendingImages.length)}
-      />
-      {error && (
-        <div className="absolute bottom-24 left-6 right-[62%] text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2 shadow-sm z-10">
-          {error}
-        </div>
-      )}
+        />
+        {error && (
+          <div className="absolute bottom-24 left-6 right-[62%] text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2 shadow-sm z-10">
+            {error}
+          </div>
+        )}
       </div>
     </AiFullscreenOverlay>
   );

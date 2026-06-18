@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "./session";
 import { db } from "./db";
-import { KMS_DEFAULT_BASE_URL, testKmsConnection } from "./kms";
+import { KMS_DEFAULT_BASE_URL, resolveKmsCredential, testKmsConnection, upsertSystemKmsCredential } from "./kms";
+import { isSuperAdmin } from "./user-roles";
 
 function cleanToken(raw: FormDataEntryValue | null) {
   const v = String(raw ?? "").trim();
@@ -23,6 +24,11 @@ export async function saveKmsCredentialAction(formData: FormData) {
     update: { accessToken, baseUrl },
   });
 
+  // 管理员保存个人令牌时，同步为团队统一回退令牌
+  if (isSuperAdmin(user)) {
+    await upsertSystemKmsCredential(accessToken, baseUrl);
+  }
+
   revalidatePath("/settings");
   revalidatePath("/settings/kms");
   revalidatePath("/account");
@@ -37,12 +43,15 @@ export async function testKmsCredentialAction(formData: FormData) {
 
   let token = accessToken;
   if (!token && stored === "1") {
-    const cred = await db.userKmsCredential.findUnique({ where: { userId: user.id } });
-    token = cred?.accessToken ?? null;
+    const resolved = await resolveKmsCredential(user.id);
+    token = resolved?.accessToken ?? null;
   }
   if (!token) return { error: "Enter a token, or save one first and then test the stored token." };
 
-  const baseUrl = cleanToken(formData.get("baseUrl")) ?? KMS_DEFAULT_BASE_URL;
+  const baseUrl =
+    cleanToken(formData.get("baseUrl")) ??
+    (stored === "1" ? (await resolveKmsCredential(user.id))?.baseUrl : null) ??
+    KMS_DEFAULT_BASE_URL;
 
   try {
     const result = await testKmsConnection({ baseUrl, token });

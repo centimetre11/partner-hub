@@ -320,7 +320,7 @@ function toKmsPage(baseUrl: string, data: ConfluenceContent): KmsPage {
   };
 }
 
-export type KmsCredentialSource = "personal" | "system" | "env";
+export type KmsCredentialSource = "personal" | "system" | "env" | "admin";
 
 export type ResolvedKmsCredential = {
   accessToken: string;
@@ -333,7 +333,43 @@ export async function getUserKmsCredential(userId: string | null | undefined) {
   return db.userKmsCredential.findUnique({ where: { userId } });
 }
 
-/** 个人令牌 → 团队系统令牌(DB) → 环境变量 KMS_SYSTEM_TOKEN */
+/** 将令牌写入团队回退表（管理员保存个人令牌时同步） */
+export async function upsertSystemKmsCredential(accessToken: string, baseUrl: string) {
+  await db.systemKmsCredential.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton", accessToken, baseUrl },
+    update: { accessToken, baseUrl },
+  });
+}
+
+async function findAdminKmsFallback(): Promise<ResolvedKmsCredential | null> {
+  const adminWithCred = await db.user.findFirst({
+    where: { role: "ADMIN", kmsCredential: { isNot: null } },
+    orderBy: { createdAt: "asc" },
+    include: { kmsCredential: true },
+  });
+  if (adminWithCred?.kmsCredential?.accessToken) {
+    return {
+      accessToken: adminWithCred.kmsCredential.accessToken,
+      baseUrl: adminWithCred.kmsCredential.baseUrl,
+      source: "admin",
+    };
+  }
+  // 无 ADMIN 角色时：使用任意已配置 KMS 的成员令牌作为团队回退（通常是实际管理员）
+  const anyWithCred = await db.userKmsCredential.findFirst({
+    orderBy: { updatedAt: "desc" },
+  });
+  if (anyWithCred?.accessToken) {
+    return {
+      accessToken: anyWithCred.accessToken,
+      baseUrl: anyWithCred.baseUrl,
+      source: "admin",
+    };
+  }
+  return null;
+}
+
+/** 个人令牌 → 团队回退(DB) → 环境变量 → 管理员/已配置成员的令牌 */
 export async function resolveKmsCredential(
   userId: string | null | undefined,
 ): Promise<ResolvedKmsCredential | null> {
@@ -354,6 +390,14 @@ export async function resolveKmsCredential(
       baseUrl: process.env.KMS_SYSTEM_BASE_URL?.trim() || KMS_DEFAULT_BASE_URL,
       source: "env",
     };
+  }
+  const adminFallback = await findAdminKmsFallback();
+  if (adminFallback) {
+    // 懒同步：将已有管理员令牌写入团队回退表，避免其他用户每次查库
+    if (!system?.accessToken) {
+      await upsertSystemKmsCredential(adminFallback.accessToken, adminFallback.baseUrl);
+    }
+    return adminFallback;
   }
   return null;
 }

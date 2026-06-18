@@ -12,6 +12,7 @@ import { AiProcessTrace } from "@/components/ai-process-trace";
 import { LiveProposalDraft } from "@/components/live-proposal-draft";
 
 import { prepareChatImagesFromFiles } from "@/lib/ai-images";
+import { useMessages } from "@/lib/i18n/context";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
 
@@ -89,6 +90,8 @@ export function AiWorkflowPanel({
   /** Whether to show the right-hand live draft panel (can hide in query mode) */
   showDraftPanel?: boolean;
 }) {
+  const { intakePanel: ip } = useMessages();
+
   async function apply(filtered: NormalizedProposal) {
     const res = await fetch("/api/ai/intake/apply", {
       method: "POST",
@@ -192,7 +195,7 @@ export function AiWorkflowPanel({
                 )}
                 <div className="flex gap-3 items-end">
                 {onAddImages && (
-                  <label className="shrink-0 cursor-pointer rounded-xl border border-zinc-200 px-3 py-3 text-zinc-500 hover:border-indigo-300 hover:text-indigo-600" title="Add image">
+                  <label className="shrink-0 cursor-pointer rounded-xl border border-zinc-200 px-3 py-3 text-zinc-500 hover:border-indigo-300 hover:text-indigo-600" title={ip.addImageTitle}>
                     <input
                       type="file"
                       accept="image/*"
@@ -235,17 +238,17 @@ export function AiWorkflowPanel({
                     void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
                   }}
                   rows={3}
-                  placeholder={inputPlaceholder ?? "Press ⌘/Ctrl + Enter to send; paste or drop images…"}
+                  placeholder={inputPlaceholder ?? ip.inputDefault}
                   className="flex-1 rounded-xl border border-zinc-200 px-4 py-3 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 {loading && onStop ? (
                   <button
                     onClick={onStop}
                     className="rounded-xl bg-red-500 text-white px-6 py-3 text-[15px] font-medium hover:bg-red-600 shrink-0 flex items-center gap-2"
-                    title="Stop generation"
+                    title={ip.stopTitle}
                   >
                     <span className="inline-block w-3 h-3 bg-white rounded-[2px]" />
-                    Stop
+                    {ip.stop}
                   </button>
                 ) : (
                   <button
@@ -253,7 +256,7 @@ export function AiWorkflowPanel({
                     disabled={sendDisabled}
                     className="rounded-xl bg-indigo-600 text-white px-6 py-3 text-[15px] font-medium hover:bg-indigo-700 disabled:opacity-50 shrink-0"
                   >
-                    Send
+                    {ip.send}
                   </button>
                 )}
                 </div>
@@ -269,7 +272,7 @@ export function AiWorkflowPanel({
             proposal={proposal}
             changes={patchChanges}
             onConfirm={apply}
-            confirmLabel={ready ? "Confirm & save" : "Looks good — save now"}
+            confirmLabel={ready ? ip.confirmReady : ip.confirmDraft}
             questions={questions}
             clarifications={clarifications}
             onDirectClarify={onDirectClarify}

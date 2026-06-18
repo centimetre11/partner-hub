@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IntakeProposal, IntakeClarification } from "@/lib/ai-intake";
-import { CONTACT_ROLE_LABELS, attitudeLabel } from "@/lib/constants";
 import {
   countProposalItems,
   fieldKey,
@@ -22,7 +21,8 @@ import {
   type ClarificationAnswer,
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
-import { useMessages } from "@/lib/i18n/context";
+import { useLabels, useMessages } from "@/lib/i18n/context";
+import { attitudeLabelFromLabels } from "@/lib/i18n/labels";
 
 type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution" | "business" | "partner";
 
@@ -44,7 +44,7 @@ export function LiveProposalDraft({
   proposal,
   changes,
   onConfirm,
-  confirmLabel = "Confirm & save",
+  confirmLabel,
   questions = [],
   clarifications = [],
   onDirectClarify,
@@ -53,7 +53,9 @@ export function LiveProposalDraft({
   ready = false,
   loading = false,
 }: Props) {
-  const am = useMessages().assistant;
+  const { assistant: am, intakePanel: ip } = useMessages();
+  const labels = useLabels();
+  const confirmBtn = confirmLabel ?? ip.confirmReady;
   const normalized = useMemo(
     () => (proposal ? normalizeProposal(proposal) : null),
     [proposal]
@@ -131,8 +133,8 @@ export function LiveProposalDraft({
         <input type="checkbox" checked={!off} onChange={() => toggle(k)} className="mt-1 rounded" />
         <div className="min-w-0 flex-1 text-sm">
           {children}
-          {isNew && flash && <span className="ml-2 text-[10px] text-emerald-600 font-medium">New</span>}
-          {isUpdated && flash && <span className="ml-2 text-[10px] text-amber-600 font-medium">Updated</span>}
+          {isNew && flash && <span className="ml-2 text-[10px] text-emerald-600 font-medium">{ip.badgeNew}</span>}
+          {isUpdated && flash && <span className="ml-2 text-[10px] text-amber-600 font-medium">{ip.badgeUpdated}</span>}
         </div>
       </label>
     );
@@ -142,7 +144,7 @@ export function LiveProposalDraft({
     return (
       <div className="flex flex-col h-full min-h-0">
         <div className="flex-1 flex items-center justify-center text-base text-zinc-400 text-center px-8">
-          {loading ? "AI is researching — findings will appear here live…" : "AI findings will appear here live"}
+          {loading ? ip.liveLoading : ip.liveEmpty}
         </div>
       </div>
     );
@@ -163,13 +165,13 @@ export function LiveProposalDraft({
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-center justify-between mb-3">
-        <div className="text-base font-semibold text-zinc-700">Live draft · pending confirmation</div>
+        <div className="text-base font-semibold text-zinc-700">{ip.liveTitle}</div>
         <div className="text-sm text-zinc-400">
-          Found {count} item{count === 1 ? "" : "s"}
+          {ip.foundItems.replace("{count}", String(count))}
           {changes && (changes.added.length > 0 || changes.updated.length > 0) && (
             <span className="text-emerald-600 ml-1">
-              · just now +{changes.added.length}
-              {changes.updated.length > 0 ? ` / updated ${changes.updated.length}` : ""}
+              {ip.justNowAdded.replace("{added}", String(changes.added.length))}
+              {changes.updated.length > 0 ? ip.justNowUpdated.replace("{updated}", String(changes.updated.length)) : ""}
             </span>
           )}
         </div>
@@ -198,7 +200,7 @@ export function LiveProposalDraft({
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
         {total === 0 ? (
-          <p className="text-sm text-zinc-400 text-center py-8">Nothing to save yet…</p>
+          <p className="text-sm text-zinc-400 text-center py-8">{ip.nothingToSave}</p>
         ) : (
           <>
             {(normalized.partnerName || onProposalEdit) && (
@@ -287,10 +289,10 @@ export function LiveProposalDraft({
               return (
                 <Row key={k} k={k} tone="contact" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
                   <span className="font-medium text-zinc-800">
-                    {c.action === "update" ? "Update contact" : "Contact"}: {c.name}
+                    {c.action === "update" ? ip.updateContact : ip.contact}: {c.name}
                   </span>
                   <span className="text-zinc-500 ml-1.5 text-xs">
-                    {[c.title, c.role && (CONTACT_ROLE_LABELS[c.role] ?? c.role), typeof c.attitude === "number" && `Attitude: ${attitudeLabel(c.attitude)}`]
+                    {[c.title, c.role && (labels.contactRoleLabels[c.role] ?? c.role), typeof c.attitude === "number" && `${ip.attitude}: ${attitudeLabelFromLabels(labels, c.attitude)}`]
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
@@ -302,7 +304,7 @@ export function LiveProposalDraft({
               return (
                 <Row key={k} k={k} tone="opp" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
                   <span className="font-medium text-zinc-800">
-                    {o.action === "update" ? "Update opportunity" : "Opportunity"}: {o.name}
+                    {o.action === "update" ? ip.updateOpportunity : ip.opportunity}: {o.name}
                   </span>
                   <span className="text-zinc-500 ml-1.5 text-xs">
                     {[o.client, o.amount, o.stage].filter(Boolean).join(" · ")}
@@ -314,7 +316,7 @@ export function LiveProposalDraft({
               const k = todoKey(t.title) || `t${i}`;
               return (
                 <Row key={k} k={k} tone="todo" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
-                  <span className="font-medium text-zinc-800">Todo: {t.title}</span>
+                  <span className="font-medium text-zinc-800">{ip.todo}: {t.title}</span>
                 </Row>
               );
             })}
@@ -322,7 +324,7 @@ export function LiveProposalDraft({
               const k = businessRecordKey(r.title) || `br${i}`;
               return (
                 <Row key={k} k={k} tone="business" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
-                  <span className="font-medium text-zinc-800">Milestone: {r.title}</span>
+                  <span className="font-medium text-zinc-800">{ip.milestone}: {r.title}</span>
                   <span className="text-zinc-500 ml-1.5 text-xs">
                     {[r.category, r.occurredAt, r.contactName].filter(Boolean).join(" · ")}
                   </span>
@@ -346,7 +348,7 @@ export function LiveProposalDraft({
 
       {questions.length > 0 && !ready && clarifications.length === 0 && (
         <div className="shrink-0 mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
-          Adding these would make the profile more complete: {questions.join("; ")}
+          {ip.questionsHint.replace("{questions}", questions.join("; "))}
         </div>
       )}
 
@@ -362,14 +364,14 @@ export function LiveProposalDraft({
         )}
         <div className="flex items-center justify-between gap-3">
           <div className="text-xs text-zinc-400">
-            {total} item{total === 1 ? "" : "s"} · {excluded.size} excluded
+            {ip.itemsSummary.replace("{total}", String(total)).replace("{excluded}", String(excluded.size))}
           </div>
           <button
             onClick={confirm}
             disabled={saveDisabled}
             className="rounded-lg bg-emerald-600 text-white font-medium px-5 py-2.5 text-sm hover:bg-emerald-700 disabled:opacity-50 shrink-0"
           >
-            {applying ? "Saving…" : ready ? `✓ ${confirmLabel}` : confirmLabel}
+            {applying ? ip.saving : ready ? `✓ ${confirmBtn}` : confirmBtn}
           </button>
         </div>
       </div>

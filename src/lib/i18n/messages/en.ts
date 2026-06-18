@@ -704,7 +704,8 @@ export const messagesEn = {
     kmsUsingFallback: "No personal token — currently using {source}.",
     kmsSourceSystem: "team fallback token",
     kmsSourceEnv: "environment fallback token",
-    kmsFallbackHint: "Priority: personal token → team fallback (admin configures in Team Settings) → KMS_SYSTEM_TOKEN env. Once available, read_kms and write_kms work in AI Hub and the assistant.",
+    kmsSourceAdmin: "admin shared token",
+    kmsFallbackHint: "Priority: personal token → team fallback (admin configures in Team Settings) → KMS_SYSTEM_TOKEN env → admin's saved shared token. Then read_kms / write_kms work in AI Hub and the assistant.",
   },
   monitor: {
     title: "⑥ Sentiment Monitor ({count})",
@@ -856,6 +857,68 @@ export const messagesEn = {
     crmCustomerIdHint: "For quick links or future CRM sync",
     save: "Save settings",
     saved: "Saved",
+  },
+  intakePanel: {
+    subtitle: "Research on the left · live draft on the right",
+    send: "Send",
+    stop: "Stop",
+    stopTitle: "Stop generation",
+    inputDefault: "Press ⌘/Ctrl + Enter to send; paste or drop images…",
+    confirmReady: "Confirm & save",
+    confirmDraft: "Looks good — save now",
+    stoppedPreserve: "(Stopped — gathered info on the right is preserved)",
+    addImageTitle: "Add image",
+    liveEmpty: "AI findings will appear here live",
+    liveLoading: "AI is researching — findings will appear here live…",
+    liveTitle: "Live draft · pending confirmation",
+    foundItems: "Found {count} items",
+    justNowAdded: "· just now +{added}",
+    justNowUpdated: " / updated {updated}",
+    nothingToSave: "Nothing to save yet…",
+    badgeNew: "New",
+    badgeUpdated: "Updated",
+    updateContact: "Update contact",
+    contact: "Contact",
+    updateOpportunity: "Update opportunity",
+    opportunity: "Opportunity",
+    todo: "Todo",
+    milestone: "Milestone",
+    attitude: "Attitude",
+    questionsHint: "Adding these would make the profile more complete: {questions}",
+    saving: "Saving…",
+    itemsSummary: "{total} items · {excluded} excluded",
+    scopes: {
+      new_partner: {
+        title: "AI Onboarding",
+        placeholder:
+          "Drop a company name, meeting notes, chat logs, or a KMS link — I'll research from multiple sources and show findings live on the right.\nExamples:\n• Just met Acme Analytics in Dubai\n• https://kms.fineres.com/pages/viewpage.action?pageId=123456",
+      },
+      powermap: {
+        title: "AI Add Contact",
+        placeholder: "Describe the person to add, or paste a business card / meeting notes.",
+      },
+      opportunity: {
+        title: "AI Add Opportunity",
+        placeholder: "Describe the opportunity or paste related communications.",
+      },
+      profile: {
+        title: "AI Complete Profile",
+        placeholder: "Describe the company or paste a KMS link — fields will update live on the right.",
+      },
+      training: {
+        title: "AI Add Training",
+        placeholder: "Describe the training or certification to schedule.",
+      },
+      solution: {
+        title: "AI Add Joint Solution",
+        placeholder: "Describe the joint solution.",
+      },
+      business_record: {
+        title: "AI Log Business Milestone",
+        placeholder:
+          "Paste meeting notes, WeCom chat, or describe what happened — I'll extract and save as business record(s).\nExamples:\n• Visited their VP yesterday, discussed L2 cert plan\n• Scheduled FineBI L2 training on 3/15 with Faisal",
+      },
+    },
   },
   assistant: {
     title: "AI Assistant",
