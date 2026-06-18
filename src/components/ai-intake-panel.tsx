@@ -6,6 +6,7 @@ import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
+import { countProposalItems, mergeFinalProposal } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
 import {
   applyDirectClarification,
@@ -138,10 +139,14 @@ export function AiIntakePanel({
       }
       const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[]; clarifications?: IntakeClarification[] };
       setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace: [...trace] }]);
-      setProposal(turn.proposal);
+      setProposal((prev) =>
+        turn.proposal && countProposalItems(turn.proposal) > 0
+          ? mergeFinalProposal(prev, turn.proposal, excludedRef.current)
+          : prev
+      );
       setReady(turn.ready);
-      setQuestions(turn.questions ?? []);
-      setClarifications(turn.clarifications ?? []);
+      setQuestions((prev) => (turn.questions?.length ? turn.questions : prev));
+      setClarifications((prev) => (turn.clarifications?.length ? turn.clarifications : prev));
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setMessages((m) => [...m, { role: "assistant", content: am.stopped, trace: [...liveTrace] }]);

@@ -15,7 +15,6 @@ import { filterNormalized, normalizeProposal, type NormalizedProposal } from "@/
 import {
   getClarificationMode,
   hasBlockingClarifications,
-  isIdentityClarification,
   isOpenEndedClarificationOption,
   partitionClarifications,
   type ClarificationAnswer,
@@ -25,6 +24,104 @@ import { useLabels, useMessages } from "@/lib/i18n/context";
 import { attitudeLabelFromLabels } from "@/lib/i18n/labels";
 
 type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution" | "business" | "partner";
+
+const ROW_COLORS: Record<RowTone, string> = {
+  field: "border-l-amber-400",
+  contact: "border-l-emerald-400",
+  opp: "border-l-sky-400",
+  todo: "border-l-purple-400",
+  training: "border-l-orange-400",
+  solution: "border-l-violet-400",
+  business: "border-l-amber-500",
+  partner: "border-l-indigo-400",
+};
+
+function DraftRow({
+  k,
+  children,
+  tone,
+  isNew,
+  isUpdated,
+  excluded,
+  flashKeys,
+  onToggle,
+  badgeNew,
+  badgeUpdated,
+}: {
+  k: string;
+  children: React.ReactNode;
+  tone: RowTone;
+  isNew?: boolean;
+  isUpdated?: boolean;
+  excluded: Set<string>;
+  flashKeys: Set<string>;
+  onToggle: (key: string) => void;
+  badgeNew: string;
+  badgeUpdated: string;
+}) {
+  const off = excluded.has(k);
+  const flash = flashKeys.has(k);
+  return (
+    <div
+      className={`flex items-start gap-2.5 rounded-lg border border-zinc-100 border-l-4 ${ROW_COLORS[tone]} px-3 py-2.5 transition-all duration-300 ${off ? "opacity-40" : ""} ${flash && isNew ? "bg-emerald-50/80 animate-in slide-in-from-right-2" : ""} ${flash && isUpdated ? "bg-amber-50/80" : ""}`}
+    >
+      <input
+        type="checkbox"
+        checked={!off}
+        onChange={() => onToggle(k)}
+        className="mt-1 rounded shrink-0"
+      />
+      <div className="min-w-0 flex-1 text-sm">
+        {children}
+        {isNew && flash && <span className="ml-2 text-[10px] text-emerald-600 font-medium">{badgeNew}</span>}
+        {isUpdated && flash && <span className="ml-2 text-[10px] text-amber-600 font-medium">{badgeUpdated}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** Local draft state — commits on blur / Enter only (avoids remount + per-keystroke parent updates) */
+function DraftInlineEdit({
+  value,
+  placeholder,
+  onCommit,
+  className,
+}: {
+  value: string;
+  placeholder?: string;
+  onCommit: (value: string) => void;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  function commit() {
+    const next = draft.trim();
+    if (next !== value.trim()) onCommit(next);
+  }
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+          e.preventDefault();
+          commit();
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
 
 type Props = {
   proposal: IntakeProposal | null;
@@ -68,6 +165,9 @@ export function LiveProposalDraft({
   const count = proposal ? countProposalItems(proposal) : 0;
   const identityBlocked = hasBlockingClarifications(clarifications);
   const websiteField = normalized?.fieldUpdates.find((f) => f.field === "website");
+  const partnerNameClarifyPending = clarifications.some(
+    (c) => c.blocking && (c.id === "partnerName" || c.id === "name")
+  );
 
   useEffect(() => {
     if (!changes) return;
@@ -100,45 +200,6 @@ export function LiveProposalDraft({
       setApplying(false);
     }
   }
-
-  const Row = ({
-    k,
-    children,
-    tone,
-    isNew,
-    isUpdated,
-  }: {
-    k: string;
-    children: React.ReactNode;
-    tone: RowTone;
-    isNew?: boolean;
-    isUpdated?: boolean;
-  }) => {
-    const colors: Record<RowTone, string> = {
-      field: "border-l-amber-400",
-      contact: "border-l-emerald-400",
-      opp: "border-l-sky-400",
-      todo: "border-l-purple-400",
-      training: "border-l-orange-400",
-      solution: "border-l-violet-400",
-      business: "border-l-amber-500",
-      partner: "border-l-indigo-400",
-    };
-    const off = excluded.has(k);
-    const flash = flashKeys.has(k);
-    return (
-      <label
-        className={`flex items-start gap-2.5 rounded-lg border border-zinc-100 border-l-4 ${colors[tone]} px-3 py-2.5 cursor-pointer transition-all duration-300 ${off ? "opacity-40" : ""} ${flash && isNew ? "bg-emerald-50/80 animate-in slide-in-from-right-2" : ""} ${flash && isUpdated ? "bg-amber-50/80" : ""}`}
-      >
-        <input type="checkbox" checked={!off} onChange={() => toggle(k)} className="mt-1 rounded" />
-        <div className="min-w-0 flex-1 text-sm">
-          {children}
-          {isNew && flash && <span className="ml-2 text-[10px] text-emerald-600 font-medium">{ip.badgeNew}</span>}
-          {isUpdated && flash && <span className="ml-2 text-[10px] text-amber-600 font-medium">{ip.badgeUpdated}</span>}
-        </div>
-      </label>
-    );
-  };
 
   if (!proposal || !normalized) {
     return (
@@ -183,7 +244,6 @@ export function LiveProposalDraft({
           onDirectClarify={onDirectClarify}
           onAiClarify={onAiClarify}
           disabled={loading}
-          variant="identity-first"
         />
       )}
 
@@ -203,40 +263,48 @@ export function LiveProposalDraft({
           <p className="text-sm text-zinc-400 text-center py-8">{ip.nothingToSave}</p>
         ) : (
           <>
-            {(normalized.partnerName || onProposalEdit) && (
-              <Row
+            {(normalized.partnerName || (onProposalEdit && !partnerNameClarifyPending)) && (
+              <DraftRow
                 k="partner"
                 tone="partner"
                 isNew={changes?.added.includes("partner")}
                 isUpdated={changes?.updated.includes("partner")}
+                excluded={excluded}
+                flashKeys={flashKeys}
+                onToggle={toggle}
+                badgeNew={ip.badgeNew}
+                badgeUpdated={ip.badgeUpdated}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full">
                   <span className="font-medium text-zinc-800 shrink-0">{am.editPartnerName}</span>
                   {onProposalEdit ? (
-                    <input
-                      type="text"
+                    <DraftInlineEdit
                       value={normalized.partnerName ?? ""}
-                      onClick={(e) => e.preventDefault()}
-                      onChange={(e) => onProposalEdit({ type: "partnerName", value: e.target.value })}
                       placeholder={am.editPartnerName}
+                      onCommit={(v) => onProposalEdit({ type: "partnerName", value: v })}
                       className="flex-1 min-w-0 rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm text-emerald-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                     />
                   ) : (
                     <span className="text-emerald-700 font-medium">{normalized.partnerName}</span>
                   )}
                 </div>
-              </Row>
+              </DraftRow>
             )}
             {normalized.fieldUpdates.map((f, i) => {
               const k = fieldKey(f.field) || `f${i}`;
               const editableWebsite = f.field === "website" && onProposalEdit;
               return (
-                <Row
+                <DraftRow
                   key={k}
                   k={k}
                   tone="field"
                   isNew={changes?.added.includes(k)}
                   isUpdated={changes?.updated.includes(k)}
+                  excluded={excluded}
+                  flashKeys={flashKeys}
+                  onToggle={toggle}
+                  badgeNew={ip.badgeNew}
+                  badgeUpdated={ip.badgeUpdated}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full">
                     <span className="font-medium text-zinc-800 shrink-0">{f.label}</span>
@@ -244,41 +312,27 @@ export function LiveProposalDraft({
                       <span className="text-zinc-400 line-through decoration-red-300 text-xs">{f.oldValue}</span>
                     ) : null}
                     {editableWebsite ? (
-                      <input
-                        type="text"
+                      <DraftInlineEdit
                         value={f.newValue}
-                        onClick={(e) => e.preventDefault()}
-                        onChange={(e) =>
-                          onProposalEdit({ type: "field", field: "website", value: e.target.value })
-                        }
                         placeholder={am.editWebsite}
+                        onCommit={(v) => onProposalEdit({ type: "field", field: "website", value: v })}
                         className="flex-1 min-w-0 rounded-md border border-amber-200 bg-white px-2 py-1 text-sm text-emerald-800 focus:outline-none focus:ring-1 focus:ring-amber-400"
                       />
                     ) : (
                       <span className="text-emerald-700 font-medium">→ {f.newValue}</span>
                     )}
                   </div>
-                </Row>
+                </DraftRow>
               );
             })}
             {!websiteField && onProposalEdit && (
               <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/40 px-3 py-2.5">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
                   <span className="text-sm font-medium text-zinc-700 shrink-0">{am.editWebsite}</span>
-                  <input
-                    type="text"
-                    defaultValue=""
-                    onBlur={(e) => {
-                      const v = e.target.value.trim();
-                      if (v) onProposalEdit({ type: "field", field: "website", value: v });
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        const v = (e.target as HTMLInputElement).value.trim();
-                        if (v) onProposalEdit({ type: "field", field: "website", value: v });
-                      }
-                    }}
+                  <DraftInlineEdit
+                    value=""
                     placeholder="example.com"
+                    onCommit={(v) => onProposalEdit({ type: "field", field: "website", value: v })}
                     className="flex-1 min-w-0 rounded-md border border-amber-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                 </div>
@@ -287,7 +341,18 @@ export function LiveProposalDraft({
             {normalized.contacts.map((c, i) => {
               const k = contactKey(c.name) || `c${i}`;
               return (
-                <Row key={k} k={k} tone="contact" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
+                <DraftRow
+                  key={k}
+                  k={k}
+                  tone="contact"
+                  isNew={changes?.added.includes(k)}
+                  isUpdated={changes?.updated.includes(k)}
+                  excluded={excluded}
+                  flashKeys={flashKeys}
+                  onToggle={toggle}
+                  badgeNew={ip.badgeNew}
+                  badgeUpdated={ip.badgeUpdated}
+                >
                   <span className="font-medium text-zinc-800">
                     {c.action === "update" ? ip.updateContact : ip.contact}: {c.name}
                   </span>
@@ -296,55 +361,78 @@ export function LiveProposalDraft({
                       .filter(Boolean)
                       .join(" · ")}
                   </span>
-                </Row>
+                </DraftRow>
               );
             })}
             {normalized.opportunities.map((o, i) => {
               const k = oppKey(o.name) || `o${i}`;
               return (
-                <Row key={k} k={k} tone="opp" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
+                <DraftRow
+                  key={k}
+                  k={k}
+                  tone="opp"
+                  isNew={changes?.added.includes(k)}
+                  isUpdated={changes?.updated.includes(k)}
+                  excluded={excluded}
+                  flashKeys={flashKeys}
+                  onToggle={toggle}
+                  badgeNew={ip.badgeNew}
+                  badgeUpdated={ip.badgeUpdated}
+                >
                   <span className="font-medium text-zinc-800">
                     {o.action === "update" ? ip.updateOpportunity : ip.opportunity}: {o.name}
                   </span>
                   <span className="text-zinc-500 ml-1.5 text-xs">
                     {[o.client, o.amount, o.stage].filter(Boolean).join(" · ")}
                   </span>
-                </Row>
+                </DraftRow>
               );
             })}
             {normalized.todos.map((t, i) => {
               const k = todoKey(t.title) || `t${i}`;
               return (
-                <Row key={k} k={k} tone="todo" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
+                <DraftRow
+                  key={k}
+                  k={k}
+                  tone="todo"
+                  isNew={changes?.added.includes(k)}
+                  isUpdated={changes?.updated.includes(k)}
+                  excluded={excluded}
+                  flashKeys={flashKeys}
+                  onToggle={toggle}
+                  badgeNew={ip.badgeNew}
+                  badgeUpdated={ip.badgeUpdated}
+                >
                   <span className="font-medium text-zinc-800">{ip.todo}: {t.title}</span>
-                </Row>
+                </DraftRow>
               );
             })}
             {normalized.businessRecords.map((r, i) => {
               const k = businessRecordKey(r.title) || `br${i}`;
               return (
-                <Row key={k} k={k} tone="business" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
+                <DraftRow
+                  key={k}
+                  k={k}
+                  tone="business"
+                  isNew={changes?.added.includes(k)}
+                  isUpdated={changes?.updated.includes(k)}
+                  excluded={excluded}
+                  flashKeys={flashKeys}
+                  onToggle={toggle}
+                  badgeNew={ip.badgeNew}
+                  badgeUpdated={ip.badgeUpdated}
+                >
                   <span className="font-medium text-zinc-800">{ip.milestone}: {r.title}</span>
                   <span className="text-zinc-500 ml-1.5 text-xs">
                     {[r.category, r.occurredAt, r.contactName].filter(Boolean).join(" · ")}
                   </span>
-                </Row>
+                </DraftRow>
               );
             })}
           </>
         )}
         <div ref={bottomRef} />
       </div>
-
-      {(clarifications.length > 0 && (onDirectClarify || onAiClarify)) && (
-        <ClarifyPanels
-          clarifications={clarifications}
-          onDirectClarify={onDirectClarify}
-          onAiClarify={onAiClarify}
-          disabled={loading}
-          variant="field-only"
-        />
-      )}
 
       {questions.length > 0 && !ready && clarifications.length === 0 && (
         <div className="shrink-0 mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
@@ -379,20 +467,16 @@ export function LiveProposalDraft({
   );
 }
 
-type ClarifyVariant = "identity-first" | "field-only" | "all";
-
 function ClarifyPanels({
   clarifications,
   onDirectClarify,
   onAiClarify,
   disabled,
-  variant = "all",
 }: {
   clarifications: IntakeClarification[];
   onDirectClarify?: (id: string, value: string) => void;
   onAiClarify?: (answers: ClarificationAnswer[]) => void;
   disabled?: boolean;
-  variant?: ClarifyVariant;
 }) {
   const am = useMessages().assistant;
   const { identity, direct, ai } = partitionClarifications(clarifications);
@@ -401,9 +485,6 @@ function ClarifyPanels({
   const [otherOpen, setOtherOpen] = useState<Record<string, boolean>>({});
   const [otherText, setOtherText] = useState<Record<string, string>>({});
 
-  const showIdentity = variant === "identity-first" || variant === "all";
-  const showField = variant === "field-only" || variant === "all";
-
   const aiAnsweredCount = ai.filter((c) => {
     const v = aiPicked[c.id];
     if (c.multi) return v instanceof Set && v.size > 0;
@@ -411,17 +492,27 @@ function ClarifyPanels({
   }).length;
   const aiAllAnswered = ai.length > 0 && aiAnsweredCount === ai.length;
 
+  const identityAi = identity.filter((c) => getClarificationMode(c) === "ai");
+  const identityDirect = identity.filter((c) => getClarificationMode(c) === "direct");
+
   function applyDirect(c: IntakeClarification, value: string) {
     if (!onDirectClarify || disabled) return;
     onDirectClarify(c.id, value);
     setDirectDone((prev) => new Set(prev).add(c.id));
     setOtherOpen((prev) => ({ ...prev, [c.id]: false }));
+    setOtherText((prev) => ({ ...prev, [c.id]: "" }));
   }
 
   function applyAi(c: IntakeClarification, value: string) {
     if (!onAiClarify || disabled) return;
     onAiClarify([{ id: c.id, question: c.question, value }]);
     setOtherOpen((prev) => ({ ...prev, [c.id]: false }));
+    setOtherText((prev) => ({ ...prev, [c.id]: "" }));
+    setAiPicked((prev) => {
+      const next = { ...prev };
+      delete next[c.id];
+      return next;
+    });
   }
 
   function pickOption(c: IntakeClarification, opt: string, mode: "direct" | "ai") {
@@ -437,9 +528,6 @@ function ClarifyPanels({
   function pickAiSingle(c: IntakeClarification, opt: string) {
     if (disabled) return;
     setAiPicked((prev) => ({ ...prev, [c.id]: opt }));
-    if (isIdentityClarification(c) && !c.multi) {
-      onAiClarify?.([{ id: c.id, question: c.question, value: opt }]);
-    }
   }
 
   function toggleAiMulti(id: string, opt: string) {
@@ -459,7 +547,13 @@ function ClarifyPanels({
     if (!text || disabled) return;
     if (getClarificationMode(c) === "direct") applyDirect(c, text);
     else applyAi(c, text);
-    setOtherText((prev) => ({ ...prev, [c.id]: "" }));
+  }
+
+  function submitAiSingle(c: IntakeClarification) {
+    const v = aiPicked[c.id];
+    const value = typeof v === "string" ? v : "";
+    if (!value.trim()) return;
+    applyAi(c, value);
   }
 
   function submitAiBatch() {
@@ -503,7 +597,7 @@ function ClarifyPanels({
               </button>
             );
           })}
-          {c.allowOther && (
+          {c.allowOther && !otherOpen[c.id] && (
             <button
               type="button"
               disabled={disabled || (mode === "direct" && done)}
@@ -515,63 +609,65 @@ function ClarifyPanels({
           )}
         </div>
         {otherOpen[c.id] && (
-          <div className="flex gap-1.5 items-center">
+          <div className="flex gap-1.5 items-center" onMouseDown={(e) => e.stopPropagation()}>
             <input
               type="text"
               value={otherText[c.id] ?? ""}
               onChange={(e) => setOtherText((prev) => ({ ...prev, [c.id]: e.target.value }))}
-              onKeyDown={(e) => e.key === "Enter" && submitOther(c)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  submitOther(c);
+                }
+              }}
               placeholder={am.clarifyOtherPlaceholder}
-              className="flex-1 min-w-0 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-              autoFocus
+              className="flex-1 min-w-0 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
             />
             <button
               type="button"
               disabled={disabled || !otherText[c.id]?.trim()}
               onClick={() => submitOther(c)}
-              className="rounded-md bg-zinc-800 text-white px-3 py-1 text-xs font-medium hover:bg-zinc-900 disabled:opacity-40"
+              className="rounded-md bg-zinc-800 text-white px-3 py-1.5 text-xs font-medium hover:bg-zinc-900 disabled:opacity-40 shrink-0"
             >
               {am.clarifyOtherConfirm}
             </button>
           </div>
+        )}
+        {mode === "ai" && !c.multi && !otherOpen[c.id] && typeof v === "string" && v.length > 0 && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => submitAiSingle(c)}
+            className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
+          >
+            {am.clarifyOtherConfirm}
+          </button>
         )}
       </div>
     );
   }
 
   const identityPanel =
-    showIdentity && identity.length > 0 && (onDirectClarify || onAiClarify) ? (
+    identity.length > 0 && (onDirectClarify || onAiClarify) ? (
       <div className="rounded-xl border-2 border-amber-300 bg-amber-50/90 p-3 space-y-2.5 mb-3">
         <div>
           <div className="text-xs font-semibold text-amber-900">{am.clarifyIdentityTitle}</div>
           <div className="text-[10px] text-amber-800/90 mt-0.5">{am.clarifyIdentityHint}</div>
         </div>
-        {identity.map((c) => {
+        {[...identityDirect, ...identityAi].map((c) => {
           const mode = getClarificationMode(c);
           const done = directDone.has(c.id);
-          if (mode === "ai") {
-            return (
-              <div key={c.id} className="space-y-1.5">
-                <div className="text-xs text-zinc-800 font-medium">{c.question}</div>
-                {renderOptions(
-                  c,
-                  "ai",
-                  false,
-                  "border-amber-600 bg-amber-600 text-white",
-                  "border-amber-400 bg-white text-amber-950 hover:border-amber-600 hover:bg-amber-100"
-                )}
-              </div>
-            );
-          }
           return (
             <div key={c.id} className="space-y-1.5">
               <div className="text-xs text-zinc-800 flex items-center gap-2 font-medium">
                 <span>{c.question}</span>
-                {done && <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>}
+                {mode === "direct" && done && (
+                  <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
+                )}
               </div>
               {renderOptions(
                 c,
-                "direct",
+                mode,
                 done,
                 "border-amber-600 bg-amber-600 text-white",
                 "border-amber-400 bg-white text-amber-950 hover:border-amber-600 hover:bg-amber-100"
@@ -583,7 +679,7 @@ function ClarifyPanels({
     ) : null;
 
   const directPanel =
-    showField && direct.length > 0 && onDirectClarify ? (
+    direct.length > 0 && onDirectClarify ? (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 space-y-2.5">
         <div>
           <div className="text-xs font-semibold text-emerald-900">{am.clarifyDirectTitle}</div>
@@ -610,7 +706,7 @@ function ClarifyPanels({
     ) : null;
 
   const aiPanel =
-    showField && ai.length > 0 && onAiClarify ? (
+    ai.length > 0 && onAiClarify ? (
       <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 space-y-2.5">
         <div>
           <div className="text-xs font-semibold text-indigo-900">{am.clarifyAiTitle}</div>

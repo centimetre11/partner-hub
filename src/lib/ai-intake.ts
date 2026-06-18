@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
-import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
+import { chatCompletion, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import type { AiTaskTier } from "./ai-capabilities";
 import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
@@ -38,6 +38,7 @@ import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
 import { persistBusinessRecord } from "./business-record-core";
+import { countProposalItems } from "./proposal-merge";
 
 export type IntakeScope = AiLocaleScope;
 
@@ -209,6 +210,75 @@ function asTrimmedString(v: unknown): string {
   return String(v).trim();
 }
 
+function intakeParseErrorReply(locale: Locale, detail: string): string {
+  const short = detail.slice(0, 160);
+  return locale === "zh"
+    ? `抱歉，AI 返回的内容格式有误，没能完整解析。右侧已保留当前草稿，你可以继续补充或在右侧修改后保存。\n\n（${short}）`
+    : `Sorry — the AI response had a format error. Your draft on the right is preserved; add more detail or edit before saving.\n\n(${short})`;
+}
+
+function fallbackIntakeTurn(locale: Locale, detail: string, partial?: Partial<IntakeTurn>): IntakeTurn {
+  const base = normalizeIntakeTurn(partial ?? {}, locale);
+  return {
+    ...base,
+    reply: intakeParseErrorReply(locale, detail),
+    ready: false,
+    clarifications: base.clarifications.length ? base.clarifications : [],
+  };
+}
+
+async function parseIntakeTurnFromContent(
+  content: string,
+  locale: Locale,
+  opts?: {
+    chat?: ChatMessage[];
+    feature?: string;
+    userId?: string;
+  }
+): Promise<IntakeTurn> {
+  const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
+  if (direct) {
+    try {
+      return normalizeIntakeTurn(direct, locale);
+    } catch {
+      /* normalize failed — try repair below */
+    }
+  }
+
+  if (opts?.chat?.length && opts.feature) {
+    try {
+      const fixChat: ChatMessage[] = [
+        ...opts.chat,
+        {
+          role: "user",
+          content:
+            "The JSON below is invalid. Output ONLY one corrected valid JSON object (same schema, same extracted facts). No markdown.\n\n" +
+            content.slice(0, 14000),
+        },
+      ];
+      const { content: fixed } = await chatCompletion(fixChat, {
+        jsonMode: true,
+        temperature: 0.1,
+        feature: `${opts.feature} (json repair)`,
+        userId: opts.userId,
+      });
+      const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
+      if (repaired) return normalizeIntakeTurn(repaired, locale);
+    } catch {
+      /* repair call failed */
+    }
+  }
+
+  let detail = "Invalid JSON";
+  try {
+    parseJsonLoose(content);
+  } catch (e) {
+    detail = e instanceof Error ? e.message : String(e);
+  }
+  const partial = direct ?? undefined;
+  return fallbackIntakeTurn(locale, detail, partial);
+}
+
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale): IntakeTurn {
   const p: Partial<IntakeProposal> = raw.proposal ?? {};
   const coerceField = (f: FieldUpdate): FieldUpdate => ({
@@ -282,7 +352,11 @@ async function extractIntakeJson(
       userId,
     }));
   }
-  const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""), locale);
+  const turn = await parseIntakeTurnFromContent(content ?? "", locale, {
+    chat: extractChat,
+    feature,
+    userId,
+  });
   emit?.({
     event: "trace_patch",
     id: extractId,
@@ -433,13 +507,15 @@ export async function runIntakeTurn(opts: {
       patch: { status: "done", content: "Research complete" },
     });
     if (researchContent?.trim().startsWith("{")) {
-      try {
-        const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(researchContent), locale);
+      const turn = await parseIntakeTurnFromContent(researchContent, locale, {
+        chat,
+        feature,
+        userId: opts.userId,
+      });
+      if (turn.proposal.summary || turn.proposal.partnerName || countProposalItems(turn.proposal) > 0) {
         emitProposalUpdate(opts.emit, turn);
         await emitReplyChunks(opts.emit, turn.reply);
         return turn;
-      } catch {
-        /* fall through */
       }
     }
     return extractIntakeJson(chat, feature, locale, opts.userId, opts.emit);
@@ -453,7 +529,11 @@ export async function runIntakeTurn(opts: {
     taskTier,
     emit: opts.emit,
   });
-  const turn = normalizeIntakeTurn(parseJsonLoose<Partial<IntakeTurn>>(content ?? ""), locale);
+  const turn = await parseIntakeTurnFromContent(content ?? "", locale, {
+    chat,
+    feature,
+    userId: opts.userId,
+  });
   emitProposalUpdate(opts.emit, turn);
   if (opts.emit) {
     opts.emit({ event: "reply_reset" });

@@ -1,4 +1,4 @@
-import { chatCompletion, parseJsonLoose } from "./ai";
+import { chatCompletion, safeParseJsonLoose } from "./ai";
 import { PARTNER_FIELD_LABELS } from "./constants";
 import type { IntakeScope } from "./ai-intake";
 import type { ProposalPatchOp } from "./ai-trace";
@@ -111,8 +111,8 @@ export async function extractPatchFromTool(
       ],
       { jsonMode: true, temperature: 0, feature: `Incremental extract·${name}`, userId }
     );
-    const parsed = parseJsonLoose<{ ops?: ProposalPatchOp[] }>(content ?? "");
-    if (Array.isArray(parsed.ops) && parsed.ops.length) {
+    const parsed = safeParseJsonLoose<{ ops?: ProposalPatchOp[] }>(content ?? "");
+    if (parsed && Array.isArray(parsed.ops) && parsed.ops.length) {
       return parsed.ops.map((op) => {
         if (op.op === "upsert_field" && op.field) {
           return { ...op, label: fieldLabel(locale, op.field) || op.label };

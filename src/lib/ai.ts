@@ -996,23 +996,55 @@ export async function chatCompletion(
   throw new AIError(`All ${errors.length} AI API(s) failed:\n${errors.map((e) => `- ${e}`).join("\n")}`);
 }
 
-// Best-effort parse JSON from model output (handles ```json fences, etc.)
-export function parseJsonLoose<T>(text: string): T {
-  const trimmed = text.trim();
+// Best-effort parse JSON from model output (handles ```json fences, trailing commas, etc.)
+function repairJsonText(raw: string): string {
+  let s = raw.trim().replace(/^\uFEFF/, "");
+  s = s.replace(/,\s*([}\]])/g, "$1");
+  s = s.replace(/^\s*\/\/.*$/gm, "");
+  return s;
+}
+
+function tryParseJson<T>(text: string): T | null {
   try {
-    return JSON.parse(trimmed) as T;
+    return JSON.parse(text) as T;
   } catch {
-    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenced) {
-      return JSON.parse(fenced[1].trim()) as T;
-    }
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1)) as T;
-    }
-    throw new AIError("AI response could not be parsed as JSON: " + trimmed.slice(0, 200));
+    return null;
   }
+}
+
+function jsonCandidates(text: string): string[] {
+  const trimmed = text.trim();
+  const out = new Set<string>();
+  const add = (s: string) => {
+    const t = s.trim();
+    if (t) {
+      out.add(t);
+      out.add(repairJsonText(t));
+    }
+  };
+  add(trimmed);
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenced) add(fenced[1]);
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) add(trimmed.slice(start, end + 1));
+  return [...out];
+}
+
+/** Returns null instead of throwing when all repair attempts fail */
+export function safeParseJsonLoose<T>(text: string): T | null {
+  for (const candidate of jsonCandidates(text)) {
+    const parsed = tryParseJson<T>(candidate);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+
+export function parseJsonLoose<T>(text: string): T {
+  const parsed = safeParseJsonLoose<T>(text);
+  if (parsed !== null) return parsed;
+  const preview = text.trim().slice(0, 200);
+  throw new AIError(`AI response could not be parsed as JSON: ${preview}`);
 }
 
 export async function chatJson<T>(
