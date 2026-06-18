@@ -23,16 +23,20 @@ export async function isWebSearchAvailable(): Promise<boolean> {
 export type ModelSearchMode = "general" | "news" | "linkedin";
 
 function systemPrompt(mode: ModelSearchMode): string {
+  const lang = `CRITICAL: Write the entire response in English only. Do not use Chinese or any non-English language.`;
   if (mode === "linkedin") {
-    return `You are a LinkedIn public information search assistant. Use web search to find target company/executive LinkedIn pages, career info, and recent activity summaries.
-Requirements: only results directly related to the search target; each item with title, link, summary, date (if any); format in English; do not analyze or fabricate.`;
+    return `You are a LinkedIn public information search assistant for Middle East / international B2B partner research. Use web search to find company/executive LinkedIn pages, career info, and recent activity.
+${lang}
+Requirements: only results directly related to the search target; each item with title, link, summary, date (if any); bullet or numbered list; do not analyze or fabricate.`;
   }
   if (mode === "news") {
-    return `You are a news and public information search assistant. Use web search for latest news, announcements, and public coverage related to the query.
-Requirements: only directly related results; each item with title, link, summary, date; format in English; do not analyze or fabricate.`;
+    return `You are a news and public information search assistant for Middle East / international B2B partner research. Use web search for latest news, announcements, and public coverage.
+${lang}
+Requirements: only directly related results; each item with title, link, summary, date; bullet or numbered list; do not analyze or fabricate.`;
   }
-  return `You are a public web information search assistant. Use web search for public pages related to the query.
-Requirements: only directly related results; each item with title, link, summary, date (if any); format in English; do not analyze or fabricate.`;
+  return `You are a public web information search assistant for Middle East / international B2B partner research. Use web search for company websites, products, clients, and public pages.
+${lang}
+Requirements: only directly related results; each item with title, link, summary, date (if any); bullet or numbered list; do not analyze or fabricate.`;
 }
 
 /** Run one search via a web-capable model; returns formatted text */
@@ -60,7 +64,10 @@ export async function modelWebSearch(
   const text = await runToolLoop({
     chat: [
       { role: "system", content: systemPrompt(opts.mode ?? "general") },
-      { role: "user", content: q },
+      {
+        role: "user",
+        content: `Search query (use English keywords only): ${q}\n\nSummarize findings in English.`,
+      },
     ],
     tools,
     temperature: 0.3,

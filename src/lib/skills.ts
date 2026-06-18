@@ -294,14 +294,14 @@ const linkedinSearchTool: Skill = {
     function: {
       name: "linkedin_search",
       description:
-        "Search LinkedIn public content: company pages, executive profiles, recent posts. Monitor partner CEO/CTO moves, HR changes, posts. Prefer company + person.",
+        "Search LinkedIn public content: company pages, executive profiles, recent posts. Monitor partner CEO/CTO moves, HR changes, posts. Prefer company + person. All query/company/person/topic parameters MUST be English keywords (e.g. 'Beinex Dubai CEO LinkedIn').",
       parameters: {
         type: "object",
         properties: {
-          company: { type: "string", description: "Company name, e.g. Beinex, TechMantra" },
-          person: { type: "string", description: "Contact name, e.g. Shantosh Sridhar" },
-          topic: { type: "string", description: "Extra keywords, e.g. hiring, partnership, Dubai" },
-          query: { type: "string", description: "Or provide a full search query" },
+          company: { type: "string", description: "Company name in English, e.g. Beinex, TechMantra" },
+          person: { type: "string", description: "Contact name in English, e.g. Shantosh Sridhar" },
+          topic: { type: "string", description: "Extra English keywords, e.g. hiring, partnership, Dubai" },
+          query: { type: "string", description: "Full search query in English only" },
           maxResults: { type: "number", description: "Result count, default 5" },
         },
       },
@@ -329,11 +329,11 @@ const webSearch: Skill = {
     function: {
       name: "web_search",
       description:
-        "Search public web info: company news, personnel changes, hiring signals, contract awards, competitor moves. Query should include company name + English keywords, e.g. 'Beinex Dubai contract award 2026'.",
+        "Search public web info: company news, personnel changes, hiring signals, contract awards, competitor moves. Query MUST be English keywords only, e.g. 'Beinex Dubai contract award 2026', 'Acme Analytics Saudi Arabia SAP partner website'. Never use Chinese in query.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Search keywords" },
+          query: { type: "string", description: "English search keywords only (company + country + topic)" },
           maxResults: { type: "number", description: "Result count, default 5" },
           topic: { type: "string", enum: ["general", "news"], description: "news=news-focused" },
         },

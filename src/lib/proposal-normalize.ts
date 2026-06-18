@@ -1,5 +1,10 @@
 import type { ExtractionProposal } from "@/lib/proposals";
 import type { IntakeProposal } from "@/lib/ai-intake";
+import { contactKey, fieldKey, oppKey, todoKey } from "@/lib/proposal-merge";
+
+function isExcluded(excluded: Set<string>, keys: string[]) {
+  return keys.some((k) => excluded.has(k));
+}
 
 export type NormalizedProposal = {
   partnerName?: string;
@@ -54,12 +59,20 @@ export function filterNormalized(
   return {
     ...p,
     partnerName: excluded.has("partner") ? undefined : p.partnerName,
-    fieldUpdates: p.fieldUpdates.filter((_, i) => !excluded.has(`f${i}`)),
-    contacts: p.contacts.filter((_, i) => !excluded.has(`c${i}`)),
-    opportunities: p.opportunities.filter((_, i) => !excluded.has(`o${i}`)),
-    todos: p.todos.filter((_, i) => !excluded.has(`t${i}`)),
-    trainings: p.trainings.filter((_, i) => !excluded.has(`tr${i}`)),
-    solutions: p.solutions.filter((_, i) => !excluded.has(`s${i}`)),
+    fieldUpdates: p.fieldUpdates.filter(
+      (f, i) => !isExcluded(excluded, [fieldKey(f.field), `f${i}`])
+    ),
+    contacts: p.contacts.filter(
+      (c, i) => !isExcluded(excluded, [contactKey(c.name), `c${i}`])
+    ),
+    opportunities: p.opportunities.filter(
+      (o, i) => !isExcluded(excluded, [oppKey(o.name), `o${i}`])
+    ),
+    todos: p.todos.filter(
+      (t, i) => !isExcluded(excluded, [todoKey(t.title), `t${i}`])
+    ),
+    trainings: p.trainings.filter((_, i) => !isExcluded(excluded, [`tr${i}`])),
+    solutions: p.solutions.filter((_, i) => !isExcluded(excluded, [`s${i}`])),
   };
 }
 

@@ -44,6 +44,7 @@ export function LiveProposalDraft({
   );
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const count = proposal ? countProposalItems(proposal) : 0;
@@ -70,8 +71,11 @@ export function LiveProposalDraft({
   async function confirm() {
     if (!normalized) return;
     setApplying(true);
+    setApplyError(null);
     try {
       await onConfirm(filterNormalized(normalized, excluded));
+    } catch (e) {
+      setApplyError(e instanceof Error ? e.message : String(e));
     } finally {
       setApplying(false);
     }
@@ -242,6 +246,12 @@ export function LiveProposalDraft({
       {questions.length > 0 && !ready && clarifications.length === 0 && (
         <div className="shrink-0 mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
           Adding these would make the profile more complete: {questions.join("; ")}
+        </div>
+      )}
+
+      {applyError && (
+        <div className="shrink-0 mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {applyError}
         </div>
       )}
 

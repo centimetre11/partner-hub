@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import type { AiTaskTier } from "./ai-capabilities";
@@ -283,6 +283,15 @@ const RESEARCH_GUIDE = `[Proactive research (important)]
 Goal: fill onboarding fields as completely as possible. All inputs (name only, long text, KMS link, chat) should use multi-source stacking—not one source only.
 Before outputting the JSON proposal, combine tools as below (parallel OK, multiple calls OK):
 
+[Web search language — mandatory]
+- web_search and linkedin_search queries MUST be English keywords only (never Chinese). Middle East / international partners are indexed better in English.
+- Query patterns (adapt company/country/product):
+  · "{Company} {Country} company website official"
+  · "{Company} SAP Business One partner {Country} contact"
+  · "{Company} LinkedIn executives CEO CTO"
+  · "{Company} clients case study Middle East"
+- If the user pasted Chinese text, extract the English company name / country before searching.
+
 1. User gave KMS link/pageId → read_kms first; then web_search + linkedin_search on company names from the doc for website, size, clients, key people not in KMS
 2. After identifying company name from user/KMS → search_partners dedupe; web_search background; linkedin_search executives/contacts
 3. Still missing category/playbook/Fanruan angle → search_knowledge team knowledge base
@@ -556,6 +565,12 @@ export async function runProposeTurn(opts: {
 
 const VALID_ROLES = ["APPROVER", "DECISION_MAKER", "SUPPORTER", "EVALUATOR", "INFLUENCER"];
 
+function parseOptionalDate(raw?: string): Date | undefined {
+  if (!raw?.trim()) return undefined;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 export async function applyIntake(opts: {
   scope: IntakeScope;
   partnerId?: string;
@@ -593,7 +608,15 @@ export async function applyIntake(opts: {
         data[f.field] = f.newValue;
       }
     }
-    const created = await db.partner.create({ data: data as Prisma.PartnerCreateInput });
+    let created;
+    try {
+      created = await db.partner.create({ data: data as Prisma.PartnerCreateInput });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        throw new Error(`Partner "${name.trim()}" already exists — open the existing record or use a different name.`);
+      }
+      throw e;
+    }
     partnerId = created.id;
     applied.push(asActive ? `Created active partner: ${created.name}` : `Created prospect: ${created.name}`);
     await db.timelineEvent.create({
@@ -715,7 +738,7 @@ export async function applyIntake(opts: {
         currentSkill: t.currentSkill,
         targetCert: t.targetCert,
         method: t.method,
-        deadline: t.deadline ? new Date(t.deadline) : undefined,
+        deadline: parseOptionalDate(t.deadline),
         status: t.status && ["PLANNED", "IN_PROGRESS", "DONE"].includes(t.status) ? t.status : "PLANNED",
       },
     });
@@ -749,7 +772,7 @@ export async function applyIntake(opts: {
         detail: t.detail,
         partnerId: partnerId || null,
         assigneeId: userId,
-        dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
+        dueDate: parseOptionalDate(t.dueDate),
         priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
         source: "AI",
       },
