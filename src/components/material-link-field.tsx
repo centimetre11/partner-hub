@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMessages } from "@/lib/i18n/context";
+import { providerIcon } from "@/lib/provider-icon";
 
 export type ParsedLink = {
   assetId: string;
@@ -11,17 +12,6 @@ export type ParsedLink = {
   thumbnailUrl: string | null;
   provider: string;
 };
-
-const PROVIDER_ICON: Record<string, string> = {
-  kms: "🏢",
-  gdrive: "📁",
-  dropbox: "📦",
-  web: "🔗",
-};
-
-export function providerIcon(provider?: string | null) {
-  return PROVIDER_ICON[provider ?? "web"] ?? "🔗";
-}
 
 export function MaterialLinkField({
   name = "assetId",

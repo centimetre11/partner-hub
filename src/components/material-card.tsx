@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Badge, fmtDateTime } from "@/components/ui";
-import { providerIcon } from "@/components/material-link-field";
+import { providerIcon } from "@/lib/provider-icon";
 
 type MaterialCardProps = {
   id: string;
