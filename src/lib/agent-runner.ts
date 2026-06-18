@@ -203,6 +203,18 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
       await pushWebhook(agent.webhookUrl, `${agent.name}`, output);
     }
 
+    if (agent.partnerId) {
+      try {
+        const { enqueueWecomPushForPartner } = await import("@/lib/wecom-push");
+        await enqueueWecomPushForPartner(
+          agent.partnerId,
+          `【${agent.icon} ${agent.name}】\n${output.slice(0, 3500)}`
+        );
+      } catch {
+        /* partner may not have bound wecom group */
+      }
+    }
+
     await db.agent.update({ where: { id: agent.id }, data: { lastRunAt: new Date() } });
     return output;
   } catch (e) {

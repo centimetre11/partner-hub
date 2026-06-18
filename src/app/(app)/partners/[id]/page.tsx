@@ -27,6 +27,8 @@ import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
 import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
+import { PartnerWecomPanel } from "@/components/partner-wecom-panel";
+import { getWecomChatForPartner } from "@/lib/wecom-chats";
 import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
 import { AiAddButton } from "@/components/ai-add-button";
 import { TodoEditButton } from "@/components/todo-edit-button";
@@ -68,11 +70,14 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   });
   if (!p) notFound();
   const users = await db.user.findMany();
-  const partnerAgents = await db.agent.findMany({
-    where: { partnerId: id, isTemplate: false },
-    orderBy: { updatedAt: "desc" },
-    select: { id: true, name: true, icon: true, description: true, enabled: true, lastRunAt: true },
-  });
+  const [partnerAgents, wecomChat] = await Promise.all([
+    db.agent.findMany({
+      where: { partnerId: id, isTemplate: false },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, name: true, icon: true, description: true, enabled: true, lastRunAt: true },
+    }),
+    getWecomChatForPartner(id),
+  ]);
   const agentTemplates = await db.agent.findMany({
     where: {
       isTemplate: true,
@@ -242,6 +247,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 </Card>
                 <AiPanel partnerId={p.id} missing={completeness.missing} />
                 <PartnerAgentsPanel partnerId={p.id} agents={partnerAgents} templates={agentTemplates} />
+                <PartnerWecomPanel
+                  partnerId={p.id}
+                  partnerName={p.name}
+                  boundChat={
+                    wecomChat
+                      ? {
+                          chatId: wecomChat.chatId,
+                          chatType: wecomChat.chatType,
+                          label: wecomChat.label,
+                        }
+                      : null
+                  }
+                />
               </div>
             </div>
           </div>

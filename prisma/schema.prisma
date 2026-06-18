@@ -97,6 +97,33 @@ model Partner {
   documents     Document[]
   monitorSources MonitorSource[]
   monitorItems  MonitorItem[]
+  wecomChat     WecomChat?
+}
+
+// 企业微信会话（群聊/单聊），可与伙伴绑定用于主动推送
+model WecomChat {
+  id         String   @id @default(cuid())
+  chatId     String   @unique
+  chatType   String   @default("group") // group | single
+  label      String?
+  partnerId  String?  @unique
+  partner    Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// 企微主动推送队列（由 wecom-bot 容器消费）
+model WecomPushJob {
+  id        String    @id @default(cuid())
+  chatId    String
+  content   String
+  status    String    @default("PENDING") // PENDING | SENT | FAILED
+  error     String?
+  createdAt DateTime  @default(now())
+  sentAt    DateTime?
+
+  @@index([status, createdAt])
 }
 
 // 打法库：playbook + pitch 存档（支持同标题多版本）

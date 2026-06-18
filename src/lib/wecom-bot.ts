@@ -5,6 +5,11 @@ import { db } from "@/lib/db";
 import { AIError, getAiConfigSummary, type AiConfigSummary } from "@/lib/ai";
 import { runQueryAssistant } from "@/lib/assistant-core";
 import type { IntakeMessage } from "@/lib/ai-intake";
+import { registerWecomChat } from "@/lib/wecom-chats";
+import {
+  claimPendingWecomPushJobs,
+  markWecomPushJob,
+} from "@/lib/wecom-push";
 
 const MAX_HISTORY = 20;
 const conversations = new Map<string, IntakeMessage[]>();
@@ -34,6 +39,7 @@ const status: WecomBotStatus = {
 let wsClient: InstanceType<typeof AiBot.WSClient> | null = null;
 let botUserId: string | null = null;
 let aiSummaryCache: AiConfigSummary | null = null;
+let pushTimer: ReturnType<typeof setInterval> | null = null;
 
 function getConfig() {
   const botId = process.env.WECOM_BOT_ID?.trim();
@@ -88,6 +94,19 @@ async function handleTextMessage(frame: WsFrame) {
   const text = frame.body?.text?.content?.trim();
   if (!text) return;
 
+  const chat = await registerWecomChat({
+    chatId: frame.body?.chatid,
+    chatType: frame.body?.chattype,
+    fromUserId: frame.body?.from?.userid,
+    text,
+  });
+  if (chat?.chatType === "group") {
+    console.log(
+      `[wecom-bot] 群聊已登记 chatId=${chat.chatId}` +
+        (chat.partner ? ` 已绑定伙伴=${chat.partner.name}` : " 尚未绑定伙伴")
+    );
+  }
+
   const key = chatKey(frame);
   const history = appendHistory(key, "user", text);
   const streamId = generateReqId("stream");
@@ -106,10 +125,26 @@ async function handleTextMessage(frame: WsFrame) {
   await wsClient.replyStream(frame, streamId, "正在思考，请稍候…", false);
 
   try {
-    const result = await runQueryAssistant(history, botUserId, {
-      locale: "zh",
-      feature: "WeCom Bot",
-    });
+    const boundPartnerId = chat?.partnerId;
+    const boundPartnerName = chat?.partner?.name;
+    const result = await runQueryAssistant(
+      boundPartnerId
+        ? [
+            ...history.slice(0, -1),
+            {
+              role: "user" as const,
+              content:
+                history[history.length - 1]?.content +
+                `\n\n（系统提示：当前会话已绑定伙伴「${boundPartnerName}」，涉及「这个伙伴/该伙伴」均指该伙伴，请优先用工具查询其档案与待办。）`,
+            },
+          ]
+        : history,
+      botUserId,
+      {
+        locale: "zh",
+        feature: "WeCom Bot",
+      }
+    );
     appendHistory(key, "assistant", result.reply);
     console.log(`[wecom-bot] 回复(${text.slice(0, 20)}…): ${result.reply.slice(0, 120)}…`);
     await wsClient.replyStream(frame, streamId, result.reply, true);
@@ -129,6 +164,33 @@ async function handleTextMessage(frame: WsFrame) {
       true
     );
   }
+}
+
+async function processPushQueue() {
+  if (!wsClient?.isConnected) return;
+  const jobs = await claimPendingWecomPushJobs(5);
+  for (const job of jobs) {
+    try {
+      await wsClient.sendMessage(job.chatId, {
+        msgtype: "markdown",
+        markdown: { content: job.content },
+      });
+      await markWecomPushJob(job.id, "SENT");
+      console.log(`[wecom-bot] 主动推送成功 chatId=${job.chatId.slice(0, 12)}…`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      await markWecomPushJob(job.id, "FAILED", msg);
+      console.error(`[wecom-bot] 主动推送失败: ${msg}`);
+    }
+  }
+}
+
+export async function pushWecomMarkdown(chatId: string, content: string) {
+  if (!wsClient?.isConnected) throw new Error("企微机器人未连接");
+  await wsClient.sendMessage(chatId, {
+    msgtype: "markdown",
+    markdown: { content },
+  });
 }
 
 export function getWecomBotStatus(): WecomBotStatus {
@@ -199,6 +261,9 @@ export async function startWecomBot() {
   });
 
   wsClient.connect();
+  pushTimer = setInterval(() => {
+    void processPushQueue();
+  }, 5000);
   if (ai.configured) {
     const apiList =
       ai.source === "database"
@@ -220,6 +285,10 @@ export async function startWecomBot() {
 }
 
 export function stopWecomBot() {
+  if (pushTimer) {
+    clearInterval(pushTimer);
+    pushTimer = null;
+  }
   if (wsClient) {
     wsClient.disconnect();
     wsClient = null;

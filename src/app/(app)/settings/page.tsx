@@ -5,6 +5,7 @@ import { RegisterForm } from "./register-form";
 import { MemberRow } from "./member-row";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
 import { KmsSetup } from "./kms-setup";
+import { WecomChatsCard } from "./wecom-chats-card";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
 import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
@@ -207,6 +208,10 @@ export default async function SettingsPage() {
             <EmptyState text={m.settings.noCallHistory} />
           )}
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <WecomChatsCard />
       </div>
     </div>
   );
