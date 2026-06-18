@@ -6,6 +6,7 @@ import { db } from "./db";
 import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
 import { applyProposal } from "./proposals";
+import { getLocale } from "./i18n/locale-server";
 import type { AgentBuilderDraft } from "./agent-builder";
 import type { AgentFieldProposal } from "./skills";
 
@@ -212,6 +213,7 @@ export async function applyAgentProposalAction(notificationId: string) {
   const n = await db.notification.findUniqueOrThrow({ where: { id: notificationId } });
   if (!n.proposal || n.appliedAt) return;
   const p: AgentFieldProposal = JSON.parse(n.proposal);
+  const locale = await getLocale();
   await applyProposal({
     partnerId: p.partnerId,
     proposal: {
@@ -225,6 +227,7 @@ export async function applyAgentProposalAction(notificationId: string) {
     },
     userId: user.id,
     eventType: "CHANGE",
+    locale,
   });
   await db.notification.update({
     where: { id: notificationId },

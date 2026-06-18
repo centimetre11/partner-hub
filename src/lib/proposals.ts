@@ -1,8 +1,28 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatJson } from "./ai";
-import { PARTNER_FIELD_LABELS, PIPELINE_STAGES, attitudeLabel, stageName } from "./constants";
+import { PARTNER_FIELD_LABELS } from "./constants";
 import { normalizeIndustriesInput } from "./taxonomy";
+import {
+  applyContactAdded,
+  applyContactUpdated,
+  applyFieldUpdatedMessage,
+  applyOpportunityAdded,
+  applyOpportunityUpdated,
+  applyTodoAdded,
+  attitudeDisplayName,
+  buildExtractSystemPrompt,
+  defaultExtractSummaryTitle,
+  emptyLabel,
+  fieldLabel,
+  noneLabel,
+  normalizeFieldUpdateLabels,
+  partnerContextHeader,
+  partnerContextSection,
+  stageDisplayName,
+} from "./ai-locale";
+import { getLabels } from "./i18n";
+import type { Locale } from "./i18n/locale";
 
 // ============ Proposal (diff preview) data structures ============
 
@@ -63,17 +83,19 @@ export type ExtractionProposal = {
 
 // ============ Partner context for prompts ============
 
-export async function partnerContext(partnerId: string): Promise<string> {
+export async function partnerContext(partnerId: string, locale: Locale = "zh"): Promise<string> {
+  const labels = getLabels(locale);
   const p = await db.partner.findUnique({
     where: { id: partnerId },
     include: { contacts: true, opportunities: true, owner: true },
   });
-  if (!p) return "(Partner not found)";
+  if (!p) return locale === "zh" ? "（未找到伙伴）" : "(Partner not found)";
   const fields = Object.entries(PARTNER_FIELD_LABELS)
-    .map(([field, label]) => {
+    .map(([field]) => {
       const v = (p as unknown as Record<string, unknown>)[field];
-      const display = field === "pipelineStage" ? `${v} (${stageName(Number(v))})` : v ?? "(empty)";
-      return `- ${label}[${field}]: ${display}`;
+      const display =
+        field === "pipelineStage" ? `${v} (${stageDisplayName(labels, Number(v))})` : v ?? emptyLabel(locale);
+      return `- ${fieldLabel(locale, field)}[${field}]: ${display}`;
     })
     .join("\n");
   const contactById = new Map(p.contacts.map((c) => [c.id, c.name]));
@@ -81,10 +103,10 @@ export async function partnerContext(partnerId: string): Promise<string> {
     ? p.contacts
         .map(
           (c) =>
-            `- id=${c.id} name:${c.name} role:${c.role} title:${c.title ?? "?"} dept:${c.department ?? "?"} attitude:${c.attitude}(${attitudeLabel(c.attitude)}) reportsTo:${c.reportsToId ? contactById.get(c.reportsToId) ?? "?" : "(top)"} contact:${c.contactInfo ?? "?"}`
+            `- id=${c.id} name:${c.name} role:${c.role} title:${c.title ?? "?"} dept:${c.department ?? "?"} attitude:${c.attitude}(${attitudeDisplayName(labels, c.attitude)}) reportsTo:${c.reportsToId ? contactById.get(c.reportsToId) ?? "?" : locale === "zh" ? "顶层" : "(top)"} contact:${c.contactInfo ?? "?"}`
         )
         .join("\n")
-    : "(none)";
+    : noneLabel(locale);
   const opps = p.opportunities.length
     ? p.opportunities
         .map(
@@ -92,12 +114,12 @@ export async function partnerContext(partnerId: string): Promise<string> {
             `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status}`
         )
         .join("\n")
-    : "(none)";
-  return `[Partner profile: ${p.name}]\n${fields}\n\n[Power map / key people]\n${contacts}\n\n[Opportunities]\n${opps}`;
+    : noneLabel(locale);
+  return `${partnerContextHeader(locale, p.name)}\n${fields}\n\n${partnerContextSection(locale, "contacts")}\n${contacts}\n\n${partnerContextSection(locale, "opportunities")}\n${opps}`;
 }
 
 /** Power map intake: existing contacts only (no full profile/opportunities) */
-export async function powermapContext(partnerId: string): Promise<string> {
+export async function powermapContext(partnerId: string, locale: Locale = "zh"): Promise<string> {
   const p = await db.partner.findUnique({
     where: { id: partnerId },
     select: {
@@ -108,36 +130,21 @@ export async function powermapContext(partnerId: string): Promise<string> {
       },
     },
   });
-  if (!p) return "(Partner not found)";
+  if (!p) return locale === "zh" ? "（未找到伙伴）" : "(Partner not found)";
   const byId = new Map(p.contacts.map((c) => [c.id, c.name]));
+  const top = locale === "zh" ? "顶层" : "top";
   const lines = p.contacts.length
     ? p.contacts
         .map(
           (c) =>
-            `- id=${c.id} ${c.name} | role:${c.role} | ${c.title ?? "—"} | ${c.department ?? "—"} | reportsTo:${c.reportsToId ? byId.get(c.reportsToId) ?? "?" : "top"}`,
+            `- id=${c.id} ${c.name} | role:${c.role} | ${c.title ?? "—"} | ${c.department ?? "—"} | reportsTo:${c.reportsToId ? byId.get(c.reportsToId) ?? "?" : top}`,
         )
         .join("\n")
-    : "(none — all new)";
-  return `[Partner: ${p.name}]\n[Existing contacts]\n${lines}`;
+    : locale === "zh" ? "（无 — 全部新建）" : "(none — all new)";
+  return `${partnerContextHeader(locale, p.name)}\n${partnerContextSection(locale, "powermap")}\n${lines}`;
 }
 
 // ============ AI extraction: proposal from arbitrary text ============
-
-const EXTRACT_SYSTEM = `You are an information extraction engine for Fanruan Software (leading BI vendor in China; products FineReport / FineBI / FineDataLink) Middle East partner management.
-The user provides raw text (meeting notes, WhatsApp/chat, email, news, etc.) and the current partner profile.
-Compare text to the profile and output a JSON proposal of updates. Reply in English in summary fields. Rules:
-1. Propose only changes supported by the text; attach reason (quote key phrase). Do not invent.
-2. fieldUpdates only for: ${Object.entries(PARTNER_FIELD_LABELS).map(([f, l]) => `${f}(${l})`).join(", ")}. newValue always string; pipelineStage 1-10 (${PIPELINE_STAGES.map((s) => `${s.stage}=${s.name}`).join(", ")}).
-3. People in text (power map): action=add if new; action=update with id if existing with new info (title, dept, attitude, reporting, contact). Fields:
-   - role: APPROVER/DECISION_MAKER/SUPPORTER/EVALUATOR/INFLUENCER
-   - attitude: 3=champion/2=supportive exclusive/1=supportive/0=neutral/-1=opposed
-   - department; reportsToName when reporting line is clear
-4. Opportunities: action=add for new; action=update with id for amount/stage/progress changes.
-5. todos: commitments and next steps from text (English titles; dueDate YYYY-MM-DD if known; priority HIGH/MEDIUM/LOW).
-6. summary: 3-6 sentences on key info (English); summaryTitle one-line English title.
-7. signals: notable positive or risk signals (English short phrases; empty array if none).
-Output JSON only:
-{"summaryTitle": "...", "summary": "...", "fieldUpdates": [{"field":"...","label":"...","oldValue":"...","newValue":"...","reason":"..."}], "contacts": [...], "opportunities": [...], "todos": [...], "signals": [...]}`;
 
 export async function extractProposal(opts: {
   partnerId: string;
@@ -145,23 +152,28 @@ export async function extractProposal(opts: {
   sourceType: string;
   today: string;
   userId?: string;
+  locale: Locale;
 }): Promise<ExtractionProposal> {
-  const ctx = await partnerContext(opts.partnerId);
+  const ctx = await partnerContext(opts.partnerId, opts.locale);
   const user = `Today's date: ${opts.today}\nSource type: ${opts.sourceType}\n\n${ctx}\n\n[Raw text]\n${opts.text}`;
-  const raw = await chatJson<Partial<ExtractionProposal>>(EXTRACT_SYSTEM, user, {
+  const raw = await chatJson<Partial<ExtractionProposal>>(buildExtractSystemPrompt(opts.locale), user, {
     feature: "AI information extraction",
     userId: opts.userId,
   });
-  return normalizeProposal(raw, opts.partnerId);
+  return normalizeProposal(raw, opts.partnerId, opts.locale);
 }
 
-export function normalizeProposal(raw: Partial<ExtractionProposal>, partnerId?: string): ExtractionProposal {
+export function normalizeProposal(raw: Partial<ExtractionProposal>, partnerId?: string, locale: Locale = "zh"): ExtractionProposal {
+  const fieldUpdates = normalizeFieldUpdateLabels(
+    (raw.fieldUpdates ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS && f.field !== "name"),
+    locale,
+  );
   return {
     partnerId,
     partnerName: raw.partnerName,
-    summaryTitle: raw.summaryTitle || "AI extraction summary",
+    summaryTitle: raw.summaryTitle || defaultExtractSummaryTitle(locale),
     summary: raw.summary || "",
-    fieldUpdates: (raw.fieldUpdates ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS && f.field !== "name"),
+    fieldUpdates,
     contacts: raw.contacts ?? [],
     opportunities: raw.opportunities ?? [],
     todos: raw.todos ?? [],
@@ -192,8 +204,10 @@ export async function applyProposal(opts: {
   userId: string;
   eventType: string; // MEETING / CHAT_IMPORT / NEWS / NOTE
   sourceText?: string;
+  locale?: Locale;
 }): Promise<ApplyResult> {
   const { partnerId, proposal, userId } = opts;
+  const locale = opts.locale ?? "zh";
   const partner = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
   const applied: string[] = [];
 
@@ -211,7 +225,7 @@ export async function applyProposal(opts: {
     } else {
       data[f.field] = f.newValue;
     }
-    applied.push(`Field "${f.label || PARTNER_FIELD_LABELS[f.field]}" updated to: ${f.newValue}`);
+    applied.push(applyFieldUpdatedMessage(locale, f.label || fieldLabel(locale, f.field), f.newValue));
   }
   if (Object.keys(data).length) {
     await db.partner.update({ where: { id: partnerId }, data: data as Prisma.PartnerUpdateInput });
@@ -246,7 +260,7 @@ export async function applyProposal(opts: {
           where: { id: c.id },
           data: Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null)),
         });
-        applied.push(`Updated contact: ${c.name}`);
+        applied.push(applyContactUpdated(locale, c.name));
         continue;
       }
     }
@@ -257,10 +271,10 @@ export async function applyProposal(opts: {
         where: { id: sameName.id },
         data: Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null)),
       });
-      applied.push(`Updated contact: ${c.name}`);
+      applied.push(applyContactUpdated(locale, c.name));
     } else {
       await db.contact.create({ data: { partnerId, ...payload } });
-      applied.push(`Added contact: ${c.name}`);
+      applied.push(applyContactAdded(locale, c.name));
     }
   }
 
@@ -282,7 +296,7 @@ export async function applyProposal(opts: {
           where: { id: o.id },
           data: Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null)),
         });
-        applied.push(`Updated opportunity: ${o.name}`);
+        applied.push(applyOpportunityUpdated(locale, o.name));
         continue;
       }
     }
@@ -292,10 +306,10 @@ export async function applyProposal(opts: {
         where: { id: sameName.id },
         data: Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null)),
       });
-      applied.push(`Updated opportunity: ${o.name}`);
+      applied.push(applyOpportunityUpdated(locale, o.name));
     } else {
       await db.opportunity.create({ data: { partnerId, ...payload } });
-      applied.push(`Added opportunity: ${o.name}`);
+      applied.push(applyOpportunityAdded(locale, o.name));
     }
   }
 
@@ -312,7 +326,7 @@ export async function applyProposal(opts: {
         source: "AI",
       },
     });
-    applied.push(`Added todo: ${t.title}`);
+    applied.push(applyTodoAdded(locale, t.title));
   }
 
   // Timeline + audit

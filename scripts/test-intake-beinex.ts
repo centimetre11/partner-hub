@@ -11,6 +11,7 @@ async function main() {
       messages: [{ role: "user", content: "帮我把 Beinex 这家公司建档，迪拜的 BI 伙伴" }],
       today: new Date().toISOString().slice(0, 10),
       userId: user.id,
+      locale: "zh",
     });
     console.log("ready:", turn.ready);
     console.log("partnerName:", turn.proposal.partnerName);

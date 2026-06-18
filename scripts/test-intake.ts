@@ -23,6 +23,7 @@ async function main() {
       messages: [{ role: "user", content: msg }],
       today: new Date().toISOString().slice(0, 10),
       userId: user.id,
+      locale: "zh",
     });
     console.log("成功");
     console.log("reply:", turn.reply.slice(0, 300));

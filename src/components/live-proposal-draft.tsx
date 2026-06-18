@@ -12,6 +12,12 @@ import {
   type ProposalChanges,
 } from "@/lib/proposal-merge";
 import { filterNormalized, normalizeProposal, type NormalizedProposal } from "@/lib/proposal-normalize";
+import {
+  isOpenEndedClarificationOption,
+  partitionClarifications,
+  type ClarificationAnswer,
+} from "@/lib/clarification-apply";
+import { useMessages } from "@/lib/i18n/context";
 
 type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution" | "partner";
 
@@ -22,7 +28,10 @@ type Props = {
   confirmLabel?: string;
   questions?: string[];
   clarifications?: IntakeClarification[];
-  onClarify?: (text: string) => void;
+  /** Write known field picks straight into the draft (no LLM) */
+  onDirectClarify?: (id: string, value: string) => void;
+  /** Submit all AI-mode picks in one message */
+  onAiClarify?: (answers: ClarificationAnswer[]) => void;
   ready?: boolean;
   loading?: boolean;
 };
@@ -34,7 +43,8 @@ export function LiveProposalDraft({
   confirmLabel = "Confirm & save",
   questions = [],
   clarifications = [],
-  onClarify,
+  onDirectClarify,
+  onAiClarify,
   ready = false,
   loading = false,
 }: Props) {
@@ -239,8 +249,13 @@ export function LiveProposalDraft({
         <div ref={bottomRef} />
       </div>
 
-      {clarifications.length > 0 && onClarify && (
-        <ClarifyBlock clarifications={clarifications} onClarify={onClarify} disabled={loading} />
+      {(clarifications.length > 0 && (onDirectClarify || onAiClarify)) && (
+        <ClarifyPanels
+          clarifications={clarifications}
+          onDirectClarify={onDirectClarify}
+          onAiClarify={onAiClarify}
+          disabled={loading}
+        />
       )}
 
       {questions.length > 0 && !ready && clarifications.length === 0 && (
@@ -271,88 +286,162 @@ export function LiveProposalDraft({
   );
 }
 
-function ClarifyBlock({
+function ClarifyPanels({
   clarifications,
-  onClarify,
+  onDirectClarify,
+  onAiClarify,
   disabled,
 }: {
   clarifications: IntakeClarification[];
-  onClarify: (text: string) => void;
+  onDirectClarify?: (id: string, value: string) => void;
+  onAiClarify?: (answers: ClarificationAnswer[]) => void;
   disabled?: boolean;
 }) {
-  // Local selection state for multi-select clarifications: { [clarifyId]: Set<option> }
-  const [picked, setPicked] = useState<Record<string, Set<string>>>({});
+  const am = useMessages().assistant;
+  const { direct, ai } = partitionClarifications(clarifications);
+  const [aiPicked, setAiPicked] = useState<Record<string, string | Set<string>>>({});
+  const [directDone, setDirectDone] = useState<Set<string>>(new Set());
 
-  const togglePick = (id: string, opt: string) =>
-    setPicked((prev) => {
+  const aiAnsweredCount = ai.filter((c) => {
+    const v = aiPicked[c.id];
+    if (c.multi) return v instanceof Set && v.size > 0;
+    return typeof v === "string" && v.length > 0;
+  }).length;
+  const aiAllAnswered = ai.length > 0 && aiAnsweredCount === ai.length;
+
+  function pickDirect(c: IntakeClarification, opt: string) {
+    if (disabled) return;
+    if (isOpenEndedClarificationOption(opt)) {
+      onAiClarify?.([{ id: c.id, question: c.question, value: opt }]);
+      return;
+    }
+    if (!onDirectClarify) return;
+    onDirectClarify(c.id, opt);
+    setDirectDone((prev) => new Set(prev).add(c.id));
+  }
+
+  function pickAiSingle(c: IntakeClarification, opt: string) {
+    if (disabled) return;
+    setAiPicked((prev) => ({ ...prev, [c.id]: opt }));
+  }
+
+  function toggleAiMulti(id: string, opt: string) {
+    if (disabled) return;
+    setAiPicked((prev) => {
       const next = { ...prev };
-      const set = new Set(next[id] ?? []);
+      const set = new Set(prev[id] instanceof Set ? (prev[id] as Set<string>) : []);
       if (set.has(opt)) set.delete(opt);
       else set.add(opt);
       next[id] = set;
       return next;
     });
+  }
 
-  const submitSingle = (q: string, opt: string) => {
-    if (disabled) return;
-    onClarify(`${q} ${opt}`);
-  };
-
-  const submitMulti = (c: IntakeClarification) => {
-    if (disabled) return;
-    const chosen = [...(picked[c.id] ?? [])];
-    if (!chosen.length) return;
-    onClarify(`${c.question} ${chosen.join(", ")}`);
-    setPicked((prev) => ({ ...prev, [c.id]: new Set() }));
-  };
+  function submitAiBatch() {
+    if (disabled || !onAiClarify || !aiAllAnswered) return;
+    const answers: ClarificationAnswer[] = ai.map((c) => {
+      const v = aiPicked[c.id];
+      const value =
+        c.multi && v instanceof Set ? [...v].join(", ") : typeof v === "string" ? v : "";
+      return { id: c.id, question: c.question, value };
+    });
+    onAiClarify(answers);
+    setAiPicked({});
+  }
 
   return (
-    <div className="shrink-0 mt-2 space-y-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-3">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-800">
-        <span>Need your help clarifying a few things</span>
-        <span className="text-[10px] text-amber-500">(click to select, or add details on the left)</span>
-      </div>
-      {clarifications.map((c) => {
-        const sel = picked[c.id] ?? new Set<string>();
-        return (
-          <div key={c.id} className="space-y-1.5">
-            <div className="text-xs text-zinc-700">{c.question}</div>
-            <div className="flex flex-wrap gap-1.5">
-              {c.options.map((opt) => {
-                const active = c.multi && sel.has(opt);
-                return (
+    <div className="shrink-0 mt-2 space-y-3">
+      {direct.length > 0 && onDirectClarify && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 space-y-2.5">
+          <div>
+            <div className="text-xs font-semibold text-emerald-900">{am.clarifyDirectTitle}</div>
+            <div className="text-[10px] text-emerald-700/90 mt-0.5">{am.clarifyDirectHint}</div>
+          </div>
+          {direct.map((c) => (
+            <div key={c.id} className="space-y-1.5">
+              <div className="text-xs text-zinc-700 flex items-center gap-2">
+                <span>{c.question}</span>
+                {directDone.has(c.id) && (
+                  <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {c.options.map((opt) => (
                   <button
                     key={opt}
                     type="button"
-                    disabled={disabled}
-                    onClick={() => (c.multi ? togglePick(c.id, opt) : submitSingle(c.question, opt))}
-                    className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
-                      active
-                        ? "border-amber-500 bg-amber-500 text-white"
-                        : "border-amber-300 bg-white text-amber-800 hover:border-amber-500 hover:bg-amber-100"
-                    }`}
+                    disabled={disabled || directDone.has(c.id)}
+                    onClick={() => pickDirect(c, opt)}
+                    className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-900 hover:border-emerald-500 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
                   >
                     {opt}
                   </button>
-                );
-              })}
-              {c.allowOther && !c.multi && (
-                <span className="text-[10px] text-amber-500 self-center">For other cases, type on the left</span>
-              )}
+                ))}
+              </div>
             </div>
-            {c.multi && (
-              <button
-                type="button"
-                disabled={disabled || sel.size === 0}
-                onClick={() => submitMulti(c)}
-                className="rounded-lg bg-amber-600 text-white px-3 py-1 text-xs hover:bg-amber-700 disabled:opacity-50"
-              >
-                Confirm selection ({sel.size})
-              </button>
-            )}
+          ))}
+        </div>
+      )}
+
+      {ai.length > 0 && onAiClarify && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 space-y-2.5">
+          <div>
+            <div className="text-xs font-semibold text-indigo-900">{am.clarifyAiTitle}</div>
+            <div className="text-[10px] text-indigo-700/90 mt-0.5">{am.clarifyAiHint}</div>
           </div>
-        );
-      })}
+          {ai.map((c) => {
+            const v = aiPicked[c.id];
+            return (
+              <div key={c.id} className="space-y-1.5">
+                <div className="text-xs text-zinc-700">{c.question}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {c.options.map((opt) => {
+                    const active =
+                      c.multi && v instanceof Set
+                        ? v.has(opt)
+                        : v === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() =>
+                          c.multi ? toggleAiMulti(c.id, opt) : pickAiSingle(c, opt)
+                        }
+                        className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+                          active
+                            ? "border-indigo-500 bg-indigo-500 text-white"
+                            : "border-indigo-300 bg-white text-indigo-900 hover:border-indigo-500 hover:bg-indigo-100"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                  {c.allowOther && (
+                    <span className="text-[10px] text-indigo-500 self-center">Other → type on the left</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between gap-2 pt-1">
+            {!aiAllAnswered && (
+              <span className="text-[10px] text-indigo-600">
+                {am.clarifyAiPending.replace("{n}", String(ai.length - aiAnsweredCount))}
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={disabled || !aiAllAnswered}
+              onClick={submitAiBatch}
+              className="ml-auto rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
+            >
+              {am.clarifyAiSubmit}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

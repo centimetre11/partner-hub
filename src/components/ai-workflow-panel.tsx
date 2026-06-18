@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-intake";
+import type { ClarificationAnswer } from "@/lib/clarification-apply";
 import type { AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
@@ -28,7 +29,8 @@ export function AiWorkflowPanel({
   patchChanges,
   questions,
   clarifications,
-  onClarify,
+  onDirectClarify,
+  onAiClarify,
   ready,
   scope,
   partnerId,
@@ -61,7 +63,8 @@ export function AiWorkflowPanel({
   patchChanges?: ProposalChanges | null;
   questions?: string[];
   clarifications?: IntakeClarification[];
-  onClarify?: (text: string) => void;
+  onDirectClarify?: (id: string, value: string) => void;
+  onAiClarify?: (answers: ClarificationAnswer[]) => void;
   ready?: boolean;
   scope?: IntakeScope;
   partnerId?: string;
@@ -267,7 +270,8 @@ export function AiWorkflowPanel({
             confirmLabel={ready ? "Confirm & save" : "Looks good — save now"}
             questions={questions}
             clarifications={clarifications}
-            onClarify={onClarify}
+            onDirectClarify={onDirectClarify}
+            onAiClarify={onAiClarify}
             ready={ready}
             loading={loading}
           />

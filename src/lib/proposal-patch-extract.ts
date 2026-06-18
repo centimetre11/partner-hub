@@ -3,6 +3,8 @@ import { PARTNER_FIELD_LABELS } from "./constants";
 import type { IntakeScope } from "./ai-intake";
 import type { ProposalPatchOp } from "./ai-trace";
 import { contactKey, fieldKey } from "./proposal-merge";
+import { buildPatchExtractPrompt, fieldLabel, partnerFieldLabels } from "./ai-locale";
+import type { Locale } from "./i18n/locale";
 
 const PATCH_TOOLS = new Set([
   "read_kms",
@@ -26,8 +28,9 @@ function isMeaningless(text: string | undefined): boolean {
   return NO_RESULT_RE.test(t);
 }
 
-function heuristicPatch(toolName: string, result: string): ProposalPatchOp[] {
+function heuristicPatch(toolName: string, result: string, locale: Locale): ProposalPatchOp[] {
   const ops: ProposalPatchOp[] = [];
+  const labels = partnerFieldLabels(locale);
   // If entire return is a "not found" style message, skip — no patches
   if (isMeaningless(result) && result.trim().length < 120) return ops;
 
@@ -53,13 +56,13 @@ function heuristicPatch(toolName: string, result: string): ProposalPatchOp[] {
     if (!m) continue;
     const label = m[1].trim();
     const value = m[2].trim();
-    const field = Object.entries(PARTNER_FIELD_LABELS).find(([, l]) => l === label || label.includes(l))?.[0];
-    if (field && value.length < 500) {
+    const field = Object.entries(labels).find(([code, l]) => l === label || label.includes(l) || code === label)?.[0];
+    if (field && field in PARTNER_FIELD_LABELS && value.length < 500) {
       ops.push({
         op: "upsert_field",
         key: fieldKey(field),
         field,
-        label: PARTNER_FIELD_LABELS[field as keyof typeof PARTNER_FIELD_LABELS],
+        label: fieldLabel(locale, field),
         newValue: value,
         source: toolName,
         reason: `extracted from ${toolName}`,
@@ -86,6 +89,7 @@ export async function extractPatchFromTool(
   toolName: string,
   result: string,
   scope: IntakeScope,
+  locale: Locale,
   userId?: string
 ): Promise<ProposalPatchOp[]> {
   const name = toolName === "$web_search" ? "web_search" : toolName;
@@ -95,32 +99,29 @@ export async function extractPatchFromTool(
   if (isMeaningless(result) && result.trim().length < 120) return [];
 
   const snippet = result.slice(0, 3500);
-  const fieldList = Object.entries(PARTNER_FIELD_LABELS)
-    .map(([f, l]) => `${f}=${l}`)
-    .join(", ");
 
   try {
     const { content } = await chatCompletion(
       [
         {
           role: "system",
-          content: `Extract structured fragments from tool output for database intake. Task scope: ${scope}. Output JSON only:
-{ "ops": [
-  { "op":"set_partner","name":"Company name","source":"tool name" },
-  { "op":"set_summary","summary":"One sentence" },
-  { "op":"upsert_field","key":"field:country","field":"country","label":"Country","newValue":"UAE","reason":"evidence" },
-  { "op":"upsert_contact","key":"contact:Name","contact":{"action":"add","name":"Name","title":"Title","reason":"evidence"} }
-]}
-Field codes only: ${fieldList}. Empty ops if nothing extractable. Do not fabricate. Reply in English for reason/summary text.`,
+          content: buildPatchExtractPrompt(scope, locale),
         },
         { role: "user", content: `Tool: ${name}\nOutput:\n${snippet}` },
       ],
       { jsonMode: true, temperature: 0, feature: `Incremental extract·${name}`, userId }
     );
     const parsed = parseJsonLoose<{ ops?: ProposalPatchOp[] }>(content ?? "");
-    if (Array.isArray(parsed.ops) && parsed.ops.length) return parsed.ops;
+    if (Array.isArray(parsed.ops) && parsed.ops.length) {
+      return parsed.ops.map((op) => {
+        if (op.op === "upsert_field" && op.field) {
+          return { ...op, label: fieldLabel(locale, op.field) || op.label };
+        }
+        return op;
+      });
+    }
   } catch {
     /* fallback */
   }
-  return heuristicPatch(name, result);
+  return heuristicPatch(name, result, locale);
 }

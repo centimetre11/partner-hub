@@ -7,6 +7,11 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
+import {
+  applyDirectClarification,
+  formatAiClarificationMessage,
+  type ClarificationAnswer,
+} from "@/lib/clarification-apply";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { useMessages } from "@/lib/i18n/context";
@@ -77,9 +82,24 @@ export function AssistantDock() {
     if (state.lastPatchChanges) setPatchChanges(state.lastPatchChanges);
   }
 
+  function handleDirectClarify(id: string, value: string) {
+    if (!proposal) return;
+    const c = clarifications.find((x) => x.id === id);
+    if (!c) return;
+    const { proposal: next, changes } = applyDirectClarification(proposal, c, value);
+    setProposal(next);
+    setClarifications((prev) => prev.filter((x) => x.id !== id));
+    setPatchChanges(changes);
+  }
+
+  function handleAiClarify(answers: ClarificationAnswer[]) {
+    void send(formatAiClarificationMessage(answers));
+  }
+
   async function send(text?: string) {
     const content = (text ?? input).trim();
     if ((!content && !pendingImages.length) || loading) return;
+    const preserveDraft = proposeMode || !!proposal;
     const next: Msg[] = [
       ...messages,
       {
@@ -94,11 +114,13 @@ export function AssistantDock() {
     setLoading(true);
     setLiveTrace([]);
     setReplyText("");
-    setProposal(null);
-    setQuestions([]);
-    setClarifications([]);
-    setReady(false);
-    setPatchChanges(null);
+    if (!preserveDraft) {
+      setProposal(null);
+      setQuestions([]);
+      setClarifications([]);
+      setReady(false);
+      setPatchChanges(null);
+    }
     const likelyPropose = /kms\.fineres|pageId=\d+|onboard|create partner|complete profile|intake|建档|补全画像|录入|创建伙伴/i.test(content);
     if (likelyPropose) setProposeMode(true);
     const ac = new AbortController();
@@ -215,7 +237,8 @@ export function AssistantDock() {
             patchChanges={patchChanges}
             questions={questions}
             clarifications={clarifications}
-            onClarify={(t) => send(t)}
+            onDirectClarify={handleDirectClarify}
+            onAiClarify={handleAiClarify}
             ready={ready}
             scope={proposeScope}
             partnerId={proposePartnerId}

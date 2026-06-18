@@ -7,6 +7,11 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
+import {
+  applyDirectClarification,
+  formatAiClarificationMessage,
+  type ClarificationAnswer,
+} from "@/lib/clarification-apply";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 
@@ -80,6 +85,20 @@ export function AiIntakePanel({
     setPhase(state.phase);
     setPhaseLabel(state.phaseLabel);
     if (state.lastPatchChanges) setPatchChanges(state.lastPatchChanges);
+  }
+
+  function handleDirectClarify(id: string, value: string) {
+    if (!proposal) return;
+    const c = clarifications.find((x) => x.id === id);
+    if (!c) return;
+    const { proposal: next, changes } = applyDirectClarification(proposal, c, value);
+    setProposal(next);
+    setClarifications((prev) => prev.filter((x) => x.id !== id));
+    setPatchChanges(changes);
+  }
+
+  function handleAiClarify(answers: ClarificationAnswer[]) {
+    void send(formatAiClarificationMessage(answers));
   }
 
   async function send(override?: string) {
@@ -173,7 +192,8 @@ export function AiIntakePanel({
           patchChanges={patchChanges}
           questions={questions}
           clarifications={clarifications}
-          onClarify={(t) => send(t)}
+          onDirectClarify={handleDirectClarify}
+          onAiClarify={handleAiClarify}
           ready={ready}
           scope={scope}
           partnerId={partnerId}

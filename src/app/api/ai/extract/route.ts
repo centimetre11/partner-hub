@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/session";
 import { AIError } from "@/lib/ai";
 import { extractProposal, guessPartner } from "@/lib/proposals";
+import { getLocale } from "@/lib/i18n/locale-server";
 
 // Extract information from any text (chat logs / meeting notes / email / news) and build a proposal for confirmation
 export async function POST(req: NextRequest) {
@@ -12,6 +13,7 @@ export async function POST(req: NextRequest) {
   if (!text?.trim()) return NextResponse.json({ error: "Text is empty" }, { status: 400 });
 
   try {
+    const locale = await getLocale();
     let pid = partnerId as string | undefined;
     let guess: { partnerId: string | null; partnerName: string | null; confidence: string } | null = null;
     if (!pid) {
@@ -28,6 +30,7 @@ export async function POST(req: NextRequest) {
       sourceType: sourceType || "chat log",
       today: new Date().toISOString().slice(0, 10),
       userId: uid,
+      locale,
     });
     return NextResponse.json({ proposal: { ...proposal, partnerId: pid }, guess });
   } catch (e) {

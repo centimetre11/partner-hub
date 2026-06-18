@@ -3,6 +3,7 @@ import { getSessionUserId } from "@/lib/session";
 import { AIError } from "@/lib/ai";
 import { createSseResponse } from "@/lib/ai-trace";
 import { runIntakeTurn, type IntakeScope, type IntakeMessage } from "@/lib/ai-intake";
+import { getLocale } from "@/lib/i18n/locale-server";
 
 const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profile", "training", "solution"];
 
@@ -16,12 +17,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Conversation is empty" }, { status: 400 });
   }
 
+  const locale = await getLocale();
   const base = {
     scope: scope as IntakeScope,
     partnerId: partnerId || undefined,
     messages: messages as IntakeMessage[],
     today: new Date().toISOString().slice(0, 10),
     userId: uid,
+    locale,
   };
 
   try {

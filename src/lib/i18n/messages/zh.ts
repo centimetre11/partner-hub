@@ -743,6 +743,13 @@ export const messagesZh: Messages = {
     error: "错误：{msg}",
     inputDraft: "继续补充信息，或在右侧确认…",
     inputQuery: "提问或下达指令…",
+    clarifyDirectTitle: "快速补全",
+    clarifyDirectHint: "点选后直接写入右侧草稿，无需再调 AI",
+    clarifyAiTitle: "需 AI 理解",
+    clarifyAiHint: "全部选完后点击一次提交，由 AI 继续完善",
+    clarifyAiSubmit: "选完了，提交给 AI",
+    clarifyAiPending: "还需选择 {n} 项",
+    clarifyApplied: "已写入草稿",
     suggestions: [
       "哪些 A 级伙伴超过 2 周未跟进？",
       "对比 Beinex 与 SEIDOR / Clariba — 应优先哪个？",

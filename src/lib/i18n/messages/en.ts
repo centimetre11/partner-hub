@@ -743,6 +743,13 @@ export const messagesEn = {
     error: "Error: {msg}",
     inputDraft: "Keep adding details, or confirm on the right…",
     inputQuery: "Ask a question or give a command…",
+    clarifyDirectTitle: "Quick fill",
+    clarifyDirectHint: "Applies straight to the draft — no extra AI call",
+    clarifyAiTitle: "Needs AI follow-up",
+    clarifyAiHint: "Select all items, then submit once for AI to continue",
+    clarifyAiSubmit: "Submit all to AI",
+    clarifyAiPending: "{n} item(s) still need an answer",
+    clarifyApplied: "Added to draft",
     suggestions: [
       "Which Tier A partners haven't been followed up in 2+ weeks?",
       "Compare Beinex and SEIDOR / Clariba — which should we prioritize?",

@@ -23,6 +23,8 @@ export type LabelsBundle = {
   materialCategoryLabels: Record<string, string>;
   knowledgeCategoryLabels: Record<string, string>;
   solutionStatusLabels: Record<string, string>;
+  /** Partner profile field display names (JSON keys stay English) */
+  partnerFieldLabels: Record<string, string>;
   partnerArchetypeLabels: Record<string, string>;
   valuePatternLabels: Record<string, string>;
   actionDomainLabels: Record<string, string>;

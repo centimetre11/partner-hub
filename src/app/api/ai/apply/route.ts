@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getSessionUserId } from "@/lib/session";
 import { applyProposal, type ExtractionProposal } from "@/lib/proposals";
+import { getLocale } from "@/lib/i18n/locale-server";
 
 // Persist a human-confirmed proposal (save endpoint for diff confirmation flow)
 export async function POST(req: NextRequest) {
@@ -17,12 +18,14 @@ export async function POST(req: NextRequest) {
   if (!partnerId || !proposal) return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
 
   try {
+    const locale = await getLocale();
     const result = await applyProposal({
       partnerId,
       proposal,
       userId: uid,
       eventType: eventType || "CHAT_IMPORT",
       sourceText,
+      locale,
     });
     revalidatePath(`/partners/${partnerId}`);
     revalidatePath("/partners");

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getSessionUserId } from "@/lib/session";
 import { applyIntake, type IntakeScope, type IntakeProposal } from "@/lib/ai-intake";
+import { getLocale } from "@/lib/i18n/locale-server";
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
@@ -11,6 +12,7 @@ export async function POST(req: NextRequest) {
   if (!proposal) return NextResponse.json({ error: "Missing proposal" }, { status: 400 });
 
   try {
+    const locale = await getLocale();
     const result = await applyIntake({
       scope: scope as IntakeScope,
       partnerId: partnerId || undefined,
@@ -18,6 +20,7 @@ export async function POST(req: NextRequest) {
       userId: uid,
       sourceText,
       intent: intent === "active" ? "active" : "prospect",
+      locale,
     });
     revalidatePath("/pool");
     revalidatePath("/partners");

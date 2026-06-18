@@ -8,6 +8,7 @@ import {
   type IntakeMessage,
 } from "@/lib/ai-intake";
 import { runQueryAssistant } from "@/lib/assistant-core";
+import { getLocale } from "@/lib/i18n/locale-server";
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
@@ -22,18 +23,19 @@ export async function POST(req: NextRequest) {
   const { messages, stream, partnerId, forcePropose } = body;
 
   const usePropose = forcePropose || shouldUseProposeMode(messages);
+  const locale = await getLocale();
 
   try {
     if (stream) {
       return createSseResponse(async (emit) => {
         const result = usePropose
-          ? await runProposeTurn({ messages, partnerId, userId: uid, emit })
+          ? await runProposeTurn({ messages, partnerId, userId: uid, emit, locale })
           : await runQueryAssistant(messages, uid, { emit });
         emit({ event: "done", data: result });
       });
     }
     const result = usePropose
-      ? await runProposeTurn({ messages, partnerId, userId: uid })
+      ? await runProposeTurn({ messages, partnerId, userId: uid, locale })
       : await runQueryAssistant(messages, uid);
     return NextResponse.json(result);
   } catch (e) {
