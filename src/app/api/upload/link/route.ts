@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   }
   if (!url) return NextResponse.json({ error: "Missing url" }, { status: 400 });
   try {
-    const asset = await saveLinkAsset(url, uid);
+    const { asset, preview } = await saveLinkAsset(url, uid);
     return NextResponse.json({
       asset: {
         id: asset.id,
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
         url: asset.url,
         thumbnailUrl: asset.thumbnailUrl,
         provider: asset.provider,
+        description: preview.description,
       },
     });
   } catch (e) {

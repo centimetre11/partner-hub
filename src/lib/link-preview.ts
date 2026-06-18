@@ -1,6 +1,7 @@
 export type LinkPreview = {
   url: string;
   title: string;
+  description: string | null;
   thumbnailUrl: string | null;
   provider: string;
 };
@@ -65,12 +66,17 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview> {
   const result: LinkPreview = {
     url,
     title: host,
+    description: null,
     thumbnailUrl: null,
     provider: "web",
   };
 
+  // ---- 特化：KMS (Confluence) ----
+  if (/kms\.fineres\.com/i.test(host)) {
+    result.provider = "kms";
+  }
   // ---- 特化：Google Drive ----
-  if (/drive\.google\.com|docs\.google\.com/i.test(host)) {
+  else if (/drive\.google\.com|docs\.google\.com/i.test(host)) {
     result.provider = "gdrive";
     const thumb = googleDriveThumb(url);
     if (thumb) result.thumbnailUrl = thumb;
@@ -101,9 +107,12 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreview> {
         const title =
           metaContent(html, "og:title", "twitter:title") ||
           html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
+        const description =
+          metaContent(html, "og:description", "twitter:description", "description");
         const image =
           metaContent(html, "og:image", "og:image:url", "twitter:image", "twitter:image:src");
         if (title) result.title = decodeEntities(title);
+        if (description) result.description = decodeEntities(description).slice(0, 500);
         const abs = absolutize(image ?? null, url);
         if (abs && !result.thumbnailUrl) result.thumbnailUrl = abs;
       } else if (ct.startsWith("image/")) {

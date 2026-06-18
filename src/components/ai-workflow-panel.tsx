@@ -280,6 +280,7 @@ export function AiWorkflowPanel({
             onProposalEdit={onProposalEdit}
             ready={ready}
             loading={loading}
+            scope={scope}
           />
         </div>
         )}

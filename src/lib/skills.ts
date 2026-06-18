@@ -667,10 +667,11 @@ export function intakeEnrichmentSkillsForScope(scope: string): string[] {
     case "profile":
       return [...INTAKE_ENRICHMENT_SKILLS];
     case "powermap":
-      // Keep AI contact add minimal: extract from user text/images only, no web research
+      // Extract from user text/images only, no web research
       return [];
     case "opportunity":
-      return ["web_search", "search_knowledge"];
+      // Structured field extraction only — skip web search for speed
+      return [];
     default:
       return [];
   }

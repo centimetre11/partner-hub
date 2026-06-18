@@ -137,6 +137,13 @@ export async function businessRecordContext(partnerId: string, locale: Locale = 
   return `${partnerContextHeader(locale, p.name)}\n${partnerContextSection(locale, "contacts")}\n${lines}`;
 }
 
+/** Minimal bound-partner hint for fast intake (todo / opportunity / solution). */
+export async function intakeBoundPartnerLine(partnerId: string, locale: Locale = "zh"): Promise<string> {
+  const p = await db.partner.findUnique({ where: { id: partnerId }, select: { name: true } });
+  if (!p) return locale === "zh" ? "（未找到伙伴）" : "(Partner not found)";
+  return locale === "zh" ? `[当前伙伴：${p.name}]` : `[Current partner: ${p.name}]`;
+}
+
 /** Power map intake: existing contacts only (no full profile/opportunities) */
 export async function powermapContext(partnerId: string, locale: Locale = "zh"): Promise<string> {
   const p = await db.partner.findUnique({

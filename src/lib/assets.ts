@@ -2,6 +2,7 @@ import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
 import { db } from "./db";
 import { fetchLinkPreview } from "./link-preview";
+import { fetchKmsPageFromUrl, resolveKmsCredential } from "./kms";
 
 const ALLOWED_EXT = new Set([
   ".pdf", ".ppt", ".pptx", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".md", ".txt",
@@ -54,7 +55,28 @@ export async function saveLinkAsset(rawUrl: string, userId: string | null) {
   const url = rawUrl.trim();
   if (!url) throw new Error("URL cannot be empty");
   const preview = await fetchLinkPreview(url);
-  return db.asset.create({
+
+  // KMS：有令牌时拉取正文摘要，比 OG 更准
+  if (preview.provider === "kms" && userId) {
+    const cred = await resolveKmsCredential(userId);
+    if (cred) {
+      try {
+        const page = await fetchKmsPageFromUrl({
+          baseUrl: cred.baseUrl,
+          token: cred.accessToken,
+          url: preview.url,
+        });
+        if (page.title) preview.title = page.title;
+        if (page.plainText) {
+          preview.description = page.plainText.replace(/\s+/g, " ").trim().slice(0, 500);
+        }
+      } catch {
+        // 无权限或页面不存在时保留 OG 回退
+      }
+    }
+  }
+
+  const asset = await db.asset.create({
     data: {
       kind: "LINK",
       filename: preview.title || preview.url,
@@ -66,6 +88,8 @@ export async function saveLinkAsset(rawUrl: string, userId: string | null) {
       uploadedById: userId,
     },
   });
+
+  return { asset, preview };
 }
 
 export async function readAssetFile(assetId: string) {

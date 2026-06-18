@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { IntakeProposal, IntakeClarification } from "@/lib/ai-intake";
+import type { IntakeScope } from "@/lib/ai-locale";
 import {
   countProposalItems,
   fieldKey,
@@ -12,6 +13,7 @@ import {
   type ProposalChanges,
 } from "@/lib/proposal-merge";
 import { filterNormalized, normalizeProposal, type NormalizedProposal } from "@/lib/proposal-normalize";
+import { scopeDraftSections } from "@/lib/proposal-scope";
 import {
   getClarificationMode,
   hasBlockingClarifications,
@@ -135,6 +137,7 @@ type Props = {
   onProposalEdit?: (patch: ProposalEditPatch) => void;
   ready?: boolean;
   loading?: boolean;
+  scope?: IntakeScope;
 };
 
 export function LiveProposalDraft({
@@ -149,13 +152,15 @@ export function LiveProposalDraft({
   onProposalEdit,
   ready = false,
   loading = false,
+  scope,
 }: Props) {
   const { assistant: am, intakePanel: ip } = useMessages();
   const labels = useLabels();
+  const sections = scopeDraftSections(scope);
   const confirmBtn = confirmLabel ?? ip.confirmReady;
   const normalized = useMemo(
-    () => (proposal ? normalizeProposal(proposal) : null),
-    [proposal]
+    () => (proposal ? normalizeProposal(proposal, scope) : null),
+    [proposal, scope]
   );
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
@@ -212,14 +217,14 @@ export function LiveProposalDraft({
   }
 
   const total =
-    normalized.fieldUpdates.length +
-    normalized.contacts.length +
-    normalized.opportunities.length +
-    normalized.todos.length +
-    normalized.trainings.length +
-    normalized.solutions.length +
-    normalized.businessRecords.length +
-    (normalized.partnerName ? 1 : 0);
+    (sections.partnerName && normalized.partnerName ? 1 : 0) +
+    (sections.fields ? normalized.fieldUpdates.length : 0) +
+    (sections.contacts ? normalized.contacts.length : 0) +
+    (sections.opportunities ? normalized.opportunities.length : 0) +
+    (sections.todos ? normalized.todos.length : 0) +
+    (sections.trainings ? normalized.trainings.length : 0) +
+    (sections.solutions ? normalized.solutions.length : 0) +
+    (sections.businessRecords ? normalized.businessRecords.length : 0);
 
   const saveDisabled = applying || total - excluded.size <= 0 || identityBlocked;
 
@@ -263,7 +268,7 @@ export function LiveProposalDraft({
           <p className="text-sm text-zinc-400 text-center py-8">{ip.nothingToSave}</p>
         ) : (
           <>
-            {(normalized.partnerName || (onProposalEdit && !partnerNameClarifyPending)) && (
+            {(sections.partnerName && (normalized.partnerName || (onProposalEdit && !partnerNameClarifyPending))) && (
               <DraftRow
                 k="partner"
                 tone="partner"
@@ -290,7 +295,8 @@ export function LiveProposalDraft({
                 </div>
               </DraftRow>
             )}
-            {normalized.fieldUpdates.map((f, i) => {
+            {sections.fields &&
+              normalized.fieldUpdates.map((f, i) => {
               const k = fieldKey(f.field) || `f${i}`;
               const editableWebsite = f.field === "website" && onProposalEdit;
               return (
@@ -325,7 +331,7 @@ export function LiveProposalDraft({
                 </DraftRow>
               );
             })}
-            {!websiteField && onProposalEdit && (
+            {sections.websiteHint && !websiteField && onProposalEdit && (
               <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/40 px-3 py-2.5">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
                   <span className="text-sm font-medium text-zinc-700 shrink-0">{am.editWebsite}</span>
@@ -338,7 +344,8 @@ export function LiveProposalDraft({
                 </div>
               </div>
             )}
-            {normalized.contacts.map((c, i) => {
+            {sections.contacts &&
+              normalized.contacts.map((c, i) => {
               const k = contactKey(c.name) || `c${i}`;
               return (
                 <DraftRow
@@ -364,7 +371,8 @@ export function LiveProposalDraft({
                 </DraftRow>
               );
             })}
-            {normalized.opportunities.map((o, i) => {
+            {sections.opportunities &&
+              normalized.opportunities.map((o, i) => {
               const k = oppKey(o.name) || `o${i}`;
               return (
                 <DraftRow
@@ -388,7 +396,8 @@ export function LiveProposalDraft({
                 </DraftRow>
               );
             })}
-            {normalized.todos.map((t, i) => {
+            {sections.todos &&
+              normalized.todos.map((t, i) => {
               const k = todoKey(t.title) || `t${i}`;
               return (
                 <DraftRow
@@ -407,7 +416,8 @@ export function LiveProposalDraft({
                 </DraftRow>
               );
             })}
-            {normalized.businessRecords.map((r, i) => {
+            {sections.businessRecords &&
+              normalized.businessRecords.map((r, i) => {
               const k = businessRecordKey(r.title) || `br${i}`;
               return (
                 <DraftRow

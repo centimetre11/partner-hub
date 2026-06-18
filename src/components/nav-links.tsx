@@ -45,7 +45,6 @@ export function NavLinks({
         { href: "/taxonomy", label: m.nav.taxonomy, icon: "◇" },
         { href: "/playbook-library", label: m.nav.playbookLibrary, icon: "◈" },
         { href: "/pool", label: m.nav.partnerPool, icon: "◬" },
-        { href: "/documents", label: m.nav.reports, icon: "📄" },
         { href: "/materials", label: m.nav.materials, icon: "📦" },
       ],
     },

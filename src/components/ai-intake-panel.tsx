@@ -7,6 +7,8 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { countProposalItems, mergeFinalProposal } from "@/lib/proposal-merge";
+import { intakeProposalReplacesDraft, isFastIntakeScope, shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
+import { applyIntakeProposalClient } from "@/lib/apply-intake-client";
 import { consumeAiSse } from "@/lib/ai-trace";
 import {
   applyDirectClarification,
@@ -53,6 +55,9 @@ export function AiIntakePanel({
   const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
   const abortRef = useRef<AbortController | null>(null);
+  const autoApplyMode = !!(partnerId && isFastIntakeScope(scope));
+  const [autoApplyFailed, setAutoApplyFailed] = useState(false);
+  const [autoApplying, setAutoApplying] = useState(false);
 
   function stop() {
     abortRef.current?.abort();
@@ -91,6 +96,59 @@ export function AiIntakePanel({
     void send(formatAiClarificationMessage(answers));
   }
 
+  async function tryAutoApply(
+    turn: {
+      proposal: IntakeProposal;
+      ready: boolean;
+      clarifications?: IntakeClarification[];
+      reply: string;
+    },
+    userMessages: Msg[]
+  ): Promise<boolean> {
+    const nextProposal = turn.proposal;
+    if (
+      !shouldAutoApplyBoundIntake({
+        scope,
+        partnerId,
+        ready: turn.ready,
+        clarifications: turn.clarifications,
+        proposal: nextProposal,
+      })
+    ) {
+      return false;
+    }
+
+    setAutoApplying(true);
+    setAutoApplyFailed(false);
+    try {
+      const sourceText = userMessages.filter((m) => m.role === "user").map((m) => m.content).join("\n");
+      const result = await applyIntakeProposalClient({
+        scope,
+        partnerId,
+        proposal: nextProposal,
+        sourceText,
+        intent,
+      });
+      const detail = result.applied.length ? result.applied.join("；") : ip.autoSaved;
+      setMessages((m) => [...m, { role: "assistant", content: `${turn.reply}\n\n✅ ${detail}` }]);
+      handleApplied(result.partnerId || partnerId!);
+      return true;
+    } catch (e) {
+      setAutoApplyFailed(true);
+      setError(e instanceof Error ? e.message : String(e));
+      return false;
+    } finally {
+      setAutoApplying(false);
+    }
+  }
+
+  function mergeTurnProposal(turnProposal: IntakeProposal, prev: IntakeProposal | null): IntakeProposal | null {
+    if (!turnProposal || countProposalItems(turnProposal) <= 0) return prev;
+    return intakeProposalReplacesDraft(scope)
+      ? turnProposal
+      : mergeFinalProposal(prev, turnProposal, excludedRef.current);
+  }
+
   async function send(override?: string) {
     const text = (override ?? input).trim();
     if ((!text && !pendingImages.length) || loading) return;
@@ -111,10 +169,11 @@ export function AiIntakePanel({
     setReplyText("");
     setClarifications([]);
     setPatchChanges(null);
+    setAutoApplyFailed(false);
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      const useStream = scope !== "business_record" && scope !== "todo";
+      const useStream = !isFastIntakeScope(scope);
       const res = await fetch("/api/ai/intake", {
         method: "POST",
         headers: {
@@ -135,15 +194,18 @@ export function AiIntakePanel({
           error?: string;
         };
         if (!res.ok) throw new Error(turn.error ?? "Request failed");
-        setMessages((m) => [...m, { role: "assistant", content: turn.reply }]);
-        setProposal((prev) =>
-          turn.proposal && countProposalItems(turn.proposal) > 0
-            ? mergeFinalProposal(prev, turn.proposal, excludedRef.current)
-            : prev
-        );
+        const merged = mergeTurnProposal(turn.proposal, proposal);
+        setProposal(merged);
         setReady(turn.ready);
         setQuestions(turn.questions ?? []);
         setClarifications(turn.clarifications ?? []);
+        const autoApplied = await tryAutoApply(
+          { ...turn, proposal: merged ?? turn.proposal },
+          next
+        );
+        if (!autoApplied) {
+          setMessages((m) => [...m, { role: "assistant", content: turn.reply }]);
+        }
         return;
       }
 
@@ -165,15 +227,18 @@ export function AiIntakePanel({
         return;
       }
       const turn = data as { reply: string; proposal: IntakeProposal; ready: boolean; questions?: string[]; clarifications?: IntakeClarification[] };
-      setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace: [...trace] }]);
-      setProposal((prev) =>
-        turn.proposal && countProposalItems(turn.proposal) > 0
-          ? mergeFinalProposal(prev, turn.proposal, excludedRef.current)
-          : prev
-      );
+      const merged = mergeTurnProposal(turn.proposal, proposal);
+      setProposal(merged);
       setReady(turn.ready);
       setQuestions((prev) => (turn.questions?.length ? turn.questions : prev));
       setClarifications((prev) => (turn.clarifications?.length ? turn.clarifications : prev));
+      const autoApplied = await tryAutoApply(
+        { ...turn, proposal: merged ?? turn.proposal },
+        next
+      );
+      if (!autoApplied) {
+        setMessages((m) => [...m, { role: "assistant", content: turn.reply || finalReply, trace: [...trace] }]);
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setMessages((m) => [...m, { role: "assistant", content: am.stopped, trace: [...liveTrace] }]);
@@ -205,7 +270,7 @@ export function AiIntakePanel({
           messages={
             messages.length === 0 ? [{ role: "assistant", content: meta.placeholder }] : messages
           }
-          loading={loading}
+          loading={loading || autoApplying}
           liveTrace={liveTrace}
           replyText={replyText}
           phase={phase}
@@ -231,7 +296,8 @@ export function AiIntakePanel({
           onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}
           onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
           inputPlaceholder={proposal ? am.inputDraft : undefined}
-          sendDisabled={loading || (!input.trim() && !pendingImages.length)}
+          sendDisabled={loading || autoApplying || (!input.trim() && !pendingImages.length)}
+          showDraftPanel={!autoApplyMode || autoApplyFailed}
         />
         {error && (
           <div className="absolute bottom-24 left-6 right-[62%] text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2 shadow-sm z-10">

@@ -75,7 +75,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
                 </form>
               </li>
             ))}
-            {doc.assets.length === 0 && <li className="text-xs text-zinc-400">{m.materials.noAttachments}</li>}
+            {doc.assets.length === 0 && <li className="text-xs text-zinc-400">{m.documents.noAttachments}</li>}
           </ul>
           <DocumentAssetUpload documentId={doc.id} action={linkDocumentAssetAction} />
         </div>

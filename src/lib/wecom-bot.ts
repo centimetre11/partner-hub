@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai-intake";
 import { runAssistantTurn } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
+import { shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
@@ -219,21 +220,46 @@ async function handleTextMessage(frame: WsFrame) {
         .filter((m) => m.role === "user")
         .map((m) => m.content)
         .join("\n");
-      proposeSessions.set(key, {
-        scope: session?.scope ?? result.scope,
-        partnerId: boundPartnerId ?? session?.partnerId,
-        proposal: merged,
-        ready: result.ready,
-        sourceText,
-      });
-      reply = formatProposeWecomReply({
-        scope: result.scope,
-        reply: result.reply,
-        proposal: merged,
-        ready: result.ready,
-        questions: result.questions,
-      });
-      console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
+      const scope = session?.scope ?? result.scope;
+      const partnerId = boundPartnerId ?? session?.partnerId;
+
+      if (
+        shouldAutoApplyBoundIntake({
+          scope,
+          partnerId,
+          ready: result.ready,
+          clarifications: result.clarifications,
+          proposal: merged,
+        })
+      ) {
+        const applied = await applyIntake({
+          scope,
+          partnerId,
+          proposal: merged,
+          userId: botUserId,
+          sourceText,
+          locale: "zh",
+        });
+        proposeSessions.delete(key);
+        reply = `${result.reply.trim()}\n\n${formatProposeAppliedReply(applied.applied, applied.partnerId, scope)}`;
+        console.log(`[wecom-bot] 绑定伙伴自动保存 scope=${scope} partner=${applied.partnerId.slice(0, 8)}…`);
+      } else {
+        proposeSessions.set(key, {
+          scope,
+          partnerId,
+          proposal: merged,
+          ready: result.ready,
+          sourceText,
+        });
+        reply = formatProposeWecomReply({
+          scope: result.scope,
+          reply: result.reply,
+          proposal: merged,
+          ready: result.ready,
+          questions: result.questions,
+        });
+        console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
+      }
     } else {
       if (session && !shouldUseProposeMode(messages)) {
         // User pivoted to a normal query — drop stale draft

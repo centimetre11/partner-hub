@@ -133,7 +133,9 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
   }
 }
 Rules:
-- Fill businessRecords only; other arrays must be empty.
+- Fill businessRecords only; fields/contacts/opportunities/todos/trainings/solutions MUST stay empty arrays.
+- This is NOT partner onboarding — never emit profile fields (website, category, headcount, etc.).
+- When partner is pre-bound in [伙伴绑定], omit partnerName entirely.
 - One user message may yield multiple businessRecords if they describe several milestones.
 - category: VISIT=meetings/visits; TRAINING=training/cert scheduling; NEGOTIATION=deals/terms; DELIVERY=contract/first delivery; RELATIONSHIP=relationship building; OTHER=rest.
 - Extract only from user text; do not invent. ready=true when at least one record has a clear title.`;
@@ -392,6 +394,32 @@ ${opts.taxonomyHint}
 ${ctx}
 
 ${buildOutputSchema(opts.scope, opts.locale)}`;
+}
+
+/** Compact prompt for fast AI Add scopes (single LLM call, no tools). */
+export function buildFastIntakeSystemPrompt(opts: {
+  locale: Locale;
+  scope: IntakeScope;
+  today: string;
+  partnerContext?: string;
+  partnerBinding?: string;
+}): string {
+  const cfg = SCOPE_CONFIG[opts.scope];
+  const lang = replyLanguage(opts.locale);
+  const ctx = opts.partnerContext ? `\n${opts.partnerContext}` : "";
+  const bind = opts.partnerBinding ? `\n${opts.partnerBinding}` : "";
+
+  return `Fast JSON extractor for Fanruan Middle East partner management. Today: ${opts.today}.
+Task: ${cfg.title}. ${cfg.guide}
+${bind}${ctx}
+
+${localeOutputRules(opts.locale)}
+
+${schemaHintForScope(opts.scope, opts.locale)}
+
+${buildOutputSchema(opts.scope, opts.locale)}
+
+Rules: one JSON object only; user-facing strings in ${lang}; ready=true when required items are clear; no web research; no profile/onboarding fields outside this task.`;
 }
 
 export function buildExtractSystemPrompt(locale: Locale): string {

@@ -1,6 +1,8 @@
 import type { ExtractionProposal } from "@/lib/proposals";
 import type { IntakeProposal } from "@/lib/ai-intake";
+import type { IntakeScope } from "@/lib/ai-locale";
 import { contactKey, fieldKey, oppKey, todoKey, businessRecordKey } from "@/lib/proposal-merge";
+import { scopeSummaryTitle } from "@/lib/proposal-scope";
 
 function isExcluded(excluded: Set<string>, keys: string[]) {
   return keys.some((k) => excluded.has(k));
@@ -24,11 +26,11 @@ export function isIntakeProposal(p: IntakeProposal | ExtractionProposal): p is I
   return "fields" in p && !("fieldUpdates" in p);
 }
 
-export function normalizeProposal(p: IntakeProposal | ExtractionProposal): NormalizedProposal {
+export function normalizeProposal(p: IntakeProposal | ExtractionProposal, scope?: IntakeScope): NormalizedProposal {
   if (isIntakeProposal(p)) {
     return {
       partnerName: p.partnerName,
-      summaryTitle: p.partnerName ? `New partner: ${p.partnerName}` : "Pending intake",
+      summaryTitle: scopeSummaryTitle(scope, p.partnerName) ?? (p.partnerName ? `New partner: ${p.partnerName}` : "Pending intake"),
       summary: p.summary,
       signals: [],
       fieldUpdates: p.fields,

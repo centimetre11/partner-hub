@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
+import { PageHeader } from "@/components/ui";
 import { deleteMaterialAction } from "@/lib/content-actions";
-import { AssetCard } from "@/components/asset-link";
+import { MaterialCard } from "@/components/material-card";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
 export default async function MaterialsPage() {
@@ -28,22 +28,25 @@ export default async function MaterialsPage() {
       />
       <div className="px-8 max-w-4xl space-y-3">
         {items.map((item) => (
-          <div key={item.id} className="bg-white rounded-xl border p-5">
-            <div className="flex justify-between gap-3">
-              <div>
-                <Link href={`/materials/${item.id}`} className="font-semibold text-zinc-900 hover:text-indigo-600">{item.title}</Link>
-                <div className="text-xs text-zinc-400 mt-1 flex gap-2 flex-wrap">
-                  <Badge tone="zinc">{L.MATERIAL_CATEGORY_LABELS[item.category] ?? item.category}</Badge>
-                  <span>{item.createdBy?.name} · {fmtDateTime(item.updatedAt, bcp47)}</span>
-                </div>
-                {item.description && <p className="text-sm text-zinc-500 mt-2">{item.description}</p>}
-                {item.asset && <div className="mt-2"><AssetCard asset={item.asset} /></div>}
-              </div>
-              <form action={deleteMaterialAction.bind(null, item.id)}>
-                <button className="text-xs text-zinc-400 hover:text-red-600">{m.common.delete}</button>
-              </form>
-            </div>
-          </div>
+          <MaterialCard
+            key={item.id}
+            id={item.id}
+            title={item.title}
+            description={item.description}
+            category={item.category}
+            categoryLabel={L.MATERIAL_CATEGORY_LABELS[item.category] ?? item.category}
+            updatedAt={item.updatedAt}
+            author={item.createdBy?.name}
+            bcp47={bcp47}
+            asset={item.asset}
+            labels={{
+              openLink: m.materials.openLink,
+              edit: m.common.edit,
+              delete: m.common.delete,
+              providers: m.materials.providers,
+            }}
+            deleteAction={deleteMaterialAction.bind(null, item.id)}
+          />
         ))}
         {items.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">{m.materials.empty}</div>}
       </div>

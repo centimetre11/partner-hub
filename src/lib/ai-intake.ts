@@ -14,6 +14,7 @@ import {
 } from "./skills";
 import {
   buildIntakeSystemPrompt,
+  buildFastIntakeSystemPrompt,
   applyContactAdded,
   applyContactUpdated,
   applyFieldMessage,
@@ -34,6 +35,7 @@ import type { Locale } from "./i18n/locale";
 import { taxonomyListForAi, normalizeIndustriesInput } from "./taxonomy";
 import {
   businessRecordContext,
+  intakeBoundPartnerLine,
   partnerContext,
   powermapContext,
   type ContactProposal,
@@ -53,6 +55,7 @@ import {
   loadIntakePartnerBinding,
   resolveIntakePartner,
 } from "./intake-partner-binding";
+import { isFastIntakeScope, sanitizeProposalForScope } from "./proposal-scope";
 
 export type IntakeScope = AiLocaleScope;
 
@@ -134,21 +137,13 @@ function emptyProposal(): IntakeProposal {
 
 /** Lightweight intake scopes use the fast model (attribute extraction, no deep reasoning) */
 function intakeTaskTier(scope: IntakeScope): AiTaskTier {
-  switch (scope) {
-    case "powermap":
-    case "opportunity":
-    case "training":
-    case "business_record":
-    case "todo":
-      return "fast";
-    default:
-      return "standard";
-  }
+  return isFastIntakeScope(scope) ? "fast" : "standard";
 }
 
 async function partnerContextForScope(scope: IntakeScope, partnerId: string, locale: Locale): Promise<string> {
   if (scope === "powermap") return powermapContext(partnerId, locale);
-  if (scope === "business_record") return businessRecordContext(partnerId, locale);
+  if (scope === "business_record" || scope === "training") return businessRecordContext(partnerId, locale);
+  if (isFastIntakeScope(scope)) return intakeBoundPartnerLine(partnerId, locale);
   return partnerContext(partnerId, locale);
 }
 
@@ -174,7 +169,7 @@ async function callIntakeExtract(
 
     const { content } = await chatCompletion(chat, {
       jsonMode: !retry,
-      temperature: 0.3,
+      temperature: opts.taskTier === "fast" ? 0.1 : 0.3,
       feature: opts.feature,
       userId: opts.userId,
       taskTier: opts.taskTier,
@@ -234,8 +229,8 @@ function intakeParseErrorReply(locale: Locale, detail: string): string {
     : `Sorry — the AI response had a format error. Your draft on the right is preserved; add more detail or edit before saving.\n\n(${short})`;
 }
 
-function fallbackIntakeTurn(locale: Locale, detail: string, partial?: Partial<IntakeTurn>): IntakeTurn {
-  const base = normalizeIntakeTurn(partial ?? {}, locale);
+function fallbackIntakeTurn(locale: Locale, detail: string, partial: Partial<IntakeTurn> | undefined, scope: IntakeScope): IntakeTurn {
+  const base = normalizeIntakeTurn(partial ?? {}, locale, scope);
   return {
     ...base,
     reply: intakeParseErrorReply(locale, detail),
@@ -247,6 +242,7 @@ function fallbackIntakeTurn(locale: Locale, detail: string, partial?: Partial<In
 async function parseIntakeTurnFromContent(
   content: string,
   locale: Locale,
+  scope: IntakeScope,
   opts?: {
     chat?: ChatMessage[];
     feature?: string;
@@ -257,7 +253,7 @@ async function parseIntakeTurnFromContent(
   const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
   if (direct) {
     try {
-      return normalizeIntakeTurn(direct, locale);
+      return normalizeIntakeTurn(direct, locale, scope);
     } catch {
       /* normalize failed — try repair below */
     }
@@ -282,7 +278,7 @@ async function parseIntakeTurnFromContent(
         taskTier: opts.taskTier,
       });
       const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
-      if (repaired) return normalizeIntakeTurn(repaired, locale);
+      if (repaired) return normalizeIntakeTurn(repaired, locale, scope);
     } catch {
       /* repair call failed */
     }
@@ -295,10 +291,10 @@ async function parseIntakeTurnFromContent(
     detail = e instanceof Error ? e.message : String(e);
   }
   const partial = direct ?? undefined;
-  return fallbackIntakeTurn(locale, detail, partial);
+  return fallbackIntakeTurn(locale, detail, partial, scope);
 }
 
-function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale): IntakeTurn {
+function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: IntakeScope): IntakeTurn {
   const p: Partial<IntakeProposal> = raw.proposal ?? {};
   const coerceField = (f: FieldUpdate): FieldUpdate => ({
     ...f,
@@ -306,7 +302,7 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale): IntakeTu
     oldValue: f.oldValue == null ? null : asTrimmedString(f.oldValue),
     newValue: asTrimmedString(f.newValue),
   });
-  return {
+  const turn: IntakeTurn = {
     reply: raw.reply || defaultIntakeReply(locale),
     questions: Array.isArray(raw.questions) ? raw.questions : [],
     clarifications: normalizeClarifications(raw.clarifications),
@@ -334,12 +330,15 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale): IntakeTu
       })).filter((r) => r.title),
     },
   };
+  turn.proposal = sanitizeProposalForScope(scope, turn.proposal);
+  return turn;
 }
 
 async function extractIntakeJson(
   chat: ChatMessage[],
   feature: string,
   locale: Locale,
+  scope: IntakeScope,
   userId?: string,
   emit?: TraceEmitter
 ): Promise<IntakeTurn> {
@@ -371,7 +370,7 @@ async function extractIntakeJson(
       userId,
     }));
   }
-  const turn = await parseIntakeTurnFromContent(content ?? "", locale, {
+  const turn = await parseIntakeTurnFromContent(content ?? "", locale, scope, {
     chat: extractChat,
     feature,
     userId,
@@ -411,8 +410,9 @@ export async function runIntakeTurn(opts: {
   locale: Locale;
 }): Promise<IntakeTurn> {
   const locale = opts.locale;
+  const fast = isFastIntakeScope(opts.scope);
   let taxonomyHint = "";
-  if (opts.scope !== "business_record" && opts.scope !== "todo") {
+  if (!fast) {
     const [categoryList, industryList, archetypeList, valuePatternList] = await Promise.all([
       taxonomyListForAi("CATEGORY"),
       taxonomyListForAi("INDUSTRY"),
@@ -428,19 +428,28 @@ export async function runIntakeTurn(opts: {
   }
 
   const enrichmentSkills = intakeEnrichmentSkillsForScope(opts.scope);
-  const useResearch = enrichmentSkills.length > 0 && !!opts.userId;
+  const useResearch = !fast && enrichmentSkills.length > 0 && !!opts.userId;
   const kmsConfigured = useResearch ? await isKmsConfiguredForUser(opts.userId) : false;
 
-  const system = buildIntakeSystemPrompt({
-    locale,
-    scope: opts.scope,
-    today: opts.today,
-    taxonomyHint,
-    partnerContext: partnerCtx || undefined,
-    partnerBinding: buildPartnerBindingPrompt({ locale, scope: opts.scope, binding }),
-    useResearch,
-    kmsConfigured,
-  });
+  const bindingBlock = buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
+  const system = fast
+    ? buildFastIntakeSystemPrompt({
+        locale,
+        scope: opts.scope,
+        today: opts.today,
+        partnerContext: partnerCtx || undefined,
+        partnerBinding: bindingBlock,
+      })
+    : buildIntakeSystemPrompt({
+        locale,
+        scope: opts.scope,
+        today: opts.today,
+        taxonomyHint,
+        partnerContext: partnerCtx || undefined,
+        partnerBinding: bindingBlock,
+        useResearch,
+        kmsConfigured,
+      });
 
   const chat: ChatMessage[] = [{ role: "system", content: system }];
   for (const m of opts.messages) chat.push({ role: m.role, content: m.content, images: m.images });
@@ -531,7 +540,7 @@ export async function runIntakeTurn(opts: {
       patch: { status: "done", content: "Research complete" },
     });
     if (researchContent?.trim().startsWith("{")) {
-      const turn = await parseIntakeTurnFromContent(researchContent, locale, {
+      const turn = await parseIntakeTurnFromContent(researchContent, locale, opts.scope, {
         chat,
         feature,
         userId: opts.userId,
@@ -542,7 +551,7 @@ export async function runIntakeTurn(opts: {
         return turn;
       }
     }
-    return extractIntakeJson(chat, feature, locale, opts.userId, opts.emit);
+    return extractIntakeJson(chat, feature, locale, opts.scope, opts.userId, opts.emit);
   }
 
   emitPhase(opts.emit, "extract", "Building proposal");
@@ -553,7 +562,7 @@ export async function runIntakeTurn(opts: {
     taskTier,
     emit: opts.emit,
   });
-  const turn = await parseIntakeTurnFromContent(content ?? "", locale, {
+  const turn = await parseIntakeTurnFromContent(content ?? "", locale, opts.scope, {
     chat,
     feature,
     userId: opts.userId,
@@ -562,7 +571,12 @@ export async function runIntakeTurn(opts: {
   emitProposalUpdate(opts.emit, turn);
   if (opts.emit) {
     opts.emit({ event: "reply_reset" });
-    await emitReplyChunks(opts.emit, turn.reply);
+    if (fast && turn.reply) {
+      opts.emit({ event: "reply_delta", delta: turn.reply });
+      opts.emit({ event: "reply_done" });
+    } else {
+      await emitReplyChunks(opts.emit, turn.reply);
+    }
   }
   return turn;
 }
@@ -654,7 +668,8 @@ export async function applyIntake(opts: {
   intent?: "prospect" | "active";
   locale: Locale;
 }): Promise<{ applied: string[]; partnerId: string }> {
-  const { scope, proposal, userId, locale } = opts;
+  const { scope, userId, locale } = opts;
+  const proposal = sanitizeProposalForScope(scope, opts.proposal);
   const applied: string[] = [];
   let partnerId = opts.partnerId ?? "";
 

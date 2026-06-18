@@ -77,20 +77,22 @@ export async function upsertMaterialAction(formData: FormData) {
     title: String(formData.get("title") ?? "").trim(),
     description: String(formData.get("description") ?? "") || null,
     category: String(formData.get("category") ?? "OTHER"),
-    body: String(formData.get("body") ?? "") || null,
     shared: formData.get("shared") === "on",
   };
   if (!data.title) return;
   let materialId = id;
   if (id) {
-    // 编辑时若未重新上传/贴链接，则保留原附件
-    await db.material.update({ where: { id }, data: assetId ? { ...data, assetId } : data });
+    await db.material.update({
+      where: { id },
+      data: assetId ? { ...data, assetId } : data,
+    });
   } else {
+    if (!assetId) return;
     const created = await db.material.create({ data: { ...data, assetId, createdById: user.id } });
     materialId = created.id;
   }
   revalidatePath("/materials");
-  redirect(`/materials/${materialId}`);
+  redirect("/materials");
 }
 
 export async function deleteMaterialAction(id: string) {

@@ -8,6 +8,7 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { countProposalItems, mergeFinalProposal } from "@/lib/proposal-merge";
+import { intakeProposalReplacesDraft } from "@/lib/proposal-scope";
 import { consumeAiSse } from "@/lib/ai-trace";
 import {
   applyDirectClarification,
@@ -166,11 +167,12 @@ export function AssistantDock() {
       if ((data as ProposeResult).mode === "propose") {
         const p = data as ProposeResult;
         setProposeMode(true);
-        setProposal((prev) =>
-          p.proposal && countProposalItems(p.proposal) > 0
-            ? mergeFinalProposal(prev, p.proposal, excludedRef.current)
-            : prev ?? p.proposal
-        );
+        setProposal((prev) => {
+          if (!p.proposal || countProposalItems(p.proposal) <= 0) return prev ?? p.proposal;
+          return intakeProposalReplacesDraft(p.scope)
+            ? p.proposal
+            : mergeFinalProposal(prev, p.proposal, excludedRef.current);
+        });
         setProposeScope(p.scope);
         setQuestions(p.questions ?? []);
         setClarifications((prev) => (p.clarifications?.length ? p.clarifications : prev));
