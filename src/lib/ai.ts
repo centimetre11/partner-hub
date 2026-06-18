@@ -37,7 +37,67 @@ export type ToolDef = {
 };
 
 export function aiConfigured() {
-  return !!process.env.AI_API_KEY;
+  return !!process.env.AI_API_KEY?.trim();
+}
+
+/** 是否已配置 AI：优先检查「团队设置 → 大模型管理中心」的数据库 API，再回退 .env */
+export async function isAiConfigured(): Promise<boolean> {
+  const enabled = await db.aiApiConfig.count({ where: { enabled: true } });
+  return enabled > 0 || aiConfigured();
+}
+
+export type AiConfigSummary = {
+  configured: boolean;
+  source: "database" | "env" | "none";
+  preferredLabel: string | null;
+  apis: Array<{
+    id: string;
+    name: string;
+    model: string;
+    provider: string;
+    isDefault: boolean;
+    priority: number;
+    capabilities: AiCapability[];
+  }>;
+};
+
+/** 汇总当前可用的 AI 配置（Web 助手、企微机器人、Agent 等共用同一套调度逻辑） */
+export async function getAiConfigSummary(): Promise<AiConfigSummary> {
+  const rows = await db.aiApiConfig.findMany({
+    where: { enabled: true },
+    orderBy: [{ priority: "desc" }, { isDefault: "desc" }, { createdAt: "asc" }],
+  });
+
+  if (rows.length) {
+    const apis = rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      model: row.model,
+      provider: row.provider,
+      isDefault: row.isDefault,
+      priority: row.priority,
+      capabilities: parseAiCapabilities(row.capabilities),
+    }));
+    const preferred = rows.find((r) => r.isDefault) ?? rows[0];
+    return {
+      configured: true,
+      source: "database",
+      preferredLabel: `${preferred.name} · ${preferred.model}`,
+      apis,
+    };
+  }
+
+  if (aiConfigured()) {
+    const model = process.env.AI_MODEL || "gpt-4o-mini";
+    return {
+      configured: true,
+      source: "env",
+      preferredLabel: `.env · ${model}`,
+      apis: [],
+    };
+  }
+
+  return { configured: false, source: "none", preferredLabel: null, apis: [] };
 }
 
 export class AIError extends Error {}

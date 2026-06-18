@@ -17,6 +17,22 @@ services:
       - partner-uploads:/data/uploads
     restart: unless-stopped
 
+  wecom-bot:
+    build: .
+    command: ["npx", "tsx", "scripts/wecom-bot.ts"]
+    environment:
+      - SESSION_SECRET=${SESSION_SECRET:-please-change-this-secret}
+      - DATABASE_URL=file:/data/partner-hub.db
+      - WECOM_BOT_ID=${WECOM_BOT_ID:-}
+      - WECOM_BOT_SECRET=${WECOM_BOT_SECRET:-}
+      - WECOM_BOT_WS_URL=${WECOM_BOT_WS_URL:-}
+      - WECOM_BOT_USER_ID=${WECOM_BOT_USER_ID:-}
+    volumes:
+      - partner-data:/data
+    depends_on:
+      - partner-hub
+    restart: unless-stopped
+
 volumes:
   partner-data:
   partner-uploads:
