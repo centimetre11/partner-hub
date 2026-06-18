@@ -8,10 +8,11 @@ import {
   runSkill,
   skillsToTools,
 } from "@/lib/skills";
+import { isKmsConfiguredForUser } from "@/lib/kms";
 
 export type AssistantLocale = "en" | "zh";
 
-function buildSystemPrompt(locale: AssistantLocale) {
+function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean) {
   const today =
     locale === "zh"
       ? new Date().toLocaleDateString("zh-CN", {
@@ -28,9 +29,12 @@ function buildSystemPrompt(locale: AssistantLocale) {
         });
 
   if (locale === "zh") {
+    const kmsLine = kmsConfigured
+      ? "KMS 个人令牌已配置，可直接用 read_kms 读取内部文档。"
+      : "KMS 个人令牌未配置，不要调用 read_kms；如需读取内部文档，请先在设置 → KMS 文档访问 中保存令牌。";
     return `你是帆软中东合作伙伴管理系统的 AI 助手，帮助帆软（中国领先 BI 厂商）中东 BD 团队管理合作伙伴。
 今天是 ${today}。
-你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档（需配置 token）、或搜索团队知识库。规则：
+你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档、或搜索团队知识库。${kmsLine} 规则：
 1. 用中文回复，简洁、可执行，直接给出查询结果。
 2. 查询类问题：必须先调用工具获取真实数据再回答，禁止编造；禁止只回复「已收到」「当前时间是…」「需要我帮你做什么吗」等空话。
 3. 问伙伴数量/列表：用 search_partners（status=ACTIVE 表示正式伙伴）；问待办：用 list_todos。
@@ -40,9 +44,12 @@ function buildSystemPrompt(locale: AssistantLocale) {
 7. 背景：帆软产品 FineReport（复杂报表）/ FineBI（自助分析）/ FineDataLink（数据集成）；中东差异化是复杂报表 + 数据主权合规（私有化部署）；策略材料含 Tier A/B/C 打法、首三单补贴、首年超级折扣、Fast Track 等。`;
   }
 
+  const kmsLine = kmsConfigured
+    ? "Your KMS personal access token is configured — use read_kms for internal docs."
+    : "KMS personal access token is not configured — do not call read_kms; save a token under Settings → KMS document access first.";
   return `You are the AI assistant for the Fanruan Middle East Partner Management System, helping Fanruan Software (Fanruan, a leading BI vendor in China) Middle East BD team manage partners.
 Today is ${today}.
-You can use tools to query and modify system data, search the public web, read KMS internal documents when a token is configured (read_kms), or search the team knowledge base (search_knowledge). Rules:
+You can use tools to query and modify system data, search the public web, read KMS internal documents (read_kms), or search the team knowledge base (search_knowledge). ${kmsLine} Rules:
 1. Reply in English, concisely and action-oriented.
 2. For queries: use tools to fetch real data before answering — do not invent facts.
 3. For modification commands (advance stage, update fields, create todos): execute directly and clearly state what changed. If the instruction is ambiguous, query to confirm the target first.
@@ -61,9 +68,10 @@ export async function runQueryAssistant(
   }
 ) {
   const locale = options?.locale ?? "en";
+  const kmsConfigured = await isKmsConfiguredForUser(uid);
   const tools = await skillsToTools(ASSISTANT_SKILLS);
   const chat: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(locale) },
+    { role: "system", content: buildSystemPrompt(locale, kmsConfigured) },
     ...messages.map((m) => ({ role: m.role, content: m.content, images: m.images }) as ChatMessage),
   ];
   const ctx = newSkillContext({ mode: "assistant", userId: uid });

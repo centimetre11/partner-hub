@@ -201,8 +201,19 @@ Before outputting the JSON proposal, combine tools as below (parallel OK, multip
 2. After identifying company name from user/KMS → search_partners dedupe; web_search background; linkedin_search executives/contacts
 3. Still missing category/playbook/Fanruan angle → search_knowledge team knowledge base
 4. After each tool round, check field checklist; keep researching until major fields are sourced or public channels truly have nothing
-5. If a tool fails or is unconfigured (e.g. no KMS token), skip and use others—do not block onboarding
+5. If a tool fails, skip it and use others—do not block onboarding. Do NOT assume KMS is unconfigured without calling read_kms when [KMS token status] says configured.
 6. After research, output JSON proposal (no more tools); in reply briefly note what each source found and what is still missing`;
+
+function kmsStatusBlock(locale: Locale, configured: boolean): string {
+  if (locale === "zh") {
+    return configured
+      ? "【KMS 令牌状态】已配置。用户提供 KMS 链接或 pageId 时，必须先调用 read_kms；不要假定未配置而跳过。"
+      : "【KMS 令牌状态】未配置。跳过 read_kms，改用 web_search、linkedin_search 等公开渠道。";
+  }
+  return configured
+    ? "[KMS token status] Configured. When the user provides a KMS link or pageId, you MUST call read_kms first; do not assume it is unconfigured and skip."
+    : "[KMS token status] Not configured. Skip read_kms; use web_search, linkedin_search, and other public sources.";
+}
 
 type ScopeConfig = {
   title: string;
@@ -259,10 +270,12 @@ export function buildIntakeSystemPrompt(opts: {
   taxonomyHint: string;
   partnerContext?: string;
   useResearch: boolean;
+  kmsConfigured?: boolean;
 }): string {
   const cfg = SCOPE_CONFIG[opts.scope];
   const lang = replyLanguage(opts.locale);
   const ctx = opts.partnerContext ? `\n\n${opts.partnerContext}` : "";
+  const kmsHint = opts.useResearch ? `\n${kmsStatusBlock(opts.locale, !!opts.kmsConfigured)}` : "";
 
   return `You are the AI intake assistant for Fanruan Software (Fanruan, leading BI vendor in China; products FineReport/FineBI/FineDataLink) Middle East partner management.
 Today's date: ${opts.today}.
@@ -273,7 +286,7 @@ ${localeOutputRules(opts.locale)}
 [Guidance rules (important, not rigid)]
 ${cfg.guide}
 Follow-ups should feel like a colleague—natural and brief, not a form. When the user has given enough, produce the proposal and set ready=true; don't chase optional fields.
-${opts.useResearch ? `\n${RESEARCH_GUIDE}` : ""}
+${opts.useResearch ? `\n${RESEARCH_GUIDE}${kmsHint}` : ""}
 
 [Proposal scope for this task]
 ${schemaHintForScope(opts.scope, opts.locale)}

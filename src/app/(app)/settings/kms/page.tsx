@@ -17,7 +17,7 @@ export default async function KmsSettingsPage() {
         <Card title={m.settings.yourKms}>
           <KmsSetup
             credential={{
-              configured: !!kmsCred,
+              configured: !!kmsCred?.accessToken,
               keyTail: kmsCred?.accessToken ? kmsCred.accessToken.slice(-4) : "",
               baseUrl: kmsCred?.baseUrl ?? KMS_DEFAULT_BASE_URL,
               updatedAt: kmsCred?.updatedAt.toISOString(),

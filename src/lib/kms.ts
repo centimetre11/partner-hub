@@ -100,6 +100,11 @@ export async function getUserKmsCredential(userId: string | null | undefined) {
   return db.userKmsCredential.findUnique({ where: { userId } });
 }
 
+export async function isKmsConfiguredForUser(userId: string | null | undefined): Promise<boolean> {
+  const cred = await getUserKmsCredential(userId);
+  return !!cred?.accessToken;
+}
+
 export async function fetchKmsPageById(opts: {
   baseUrl: string;
   token: string;

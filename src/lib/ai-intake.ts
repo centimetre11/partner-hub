@@ -5,6 +5,7 @@ import type { AiTaskTier } from "./ai-capabilities";
 import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
 import { extractPatchFromTool } from "./proposal-patch-extract";
+import { isKmsConfiguredForUser } from "./kms";
 import {
   buildIntakeTools,
   intakeEnrichmentSkillsForScope,
@@ -298,6 +299,7 @@ export async function runIntakeTurn(opts: {
 
   const enrichmentSkills = intakeEnrichmentSkillsForScope(opts.scope);
   const useResearch = enrichmentSkills.length > 0 && !!opts.userId;
+  const kmsConfigured = useResearch ? await isKmsConfiguredForUser(opts.userId) : false;
 
   const system = buildIntakeSystemPrompt({
     locale,
@@ -306,6 +308,7 @@ export async function runIntakeTurn(opts: {
     taxonomyHint,
     partnerContext: partnerCtx || undefined,
     useResearch,
+    kmsConfigured,
   });
 
   const chat: ChatMessage[] = [{ role: "system", content: system }];
