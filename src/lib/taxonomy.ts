@@ -70,8 +70,12 @@ export function stringifyIndustries(codes: string[]) {
   return uniq.length ? JSON.stringify(uniq) : null;
 }
 
-export function normalizeIndustriesInput(raw: string): { industries: string | null; industry: string | null } {
-  const trimmed = raw.trim();
+export function normalizeIndustriesInput(raw: unknown): { industries: string | null; industry: string | null } {
+  if (Array.isArray(raw)) {
+    const codes = raw.map(String).map((s) => s.trim()).filter(Boolean);
+    return { industries: stringifyIndustries(codes), industry: codes[0] ?? null };
+  }
+  const trimmed = String(raw ?? "").trim();
   if (!trimmed) return { industries: null, industry: null };
   if (trimmed.startsWith("[")) {
     try {

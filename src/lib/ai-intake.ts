@@ -320,17 +320,30 @@ function normalizeClarifications(raw: unknown): IntakeClarification[] {
   return out;
 }
 
+/** AI JSON may return numbers/arrays where strings are expected */
+function asTrimmedString(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v.trim();
+  if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean).join(", ");
+  return String(v).trim();
+}
+
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>): IntakeTurn {
   const p: Partial<IntakeProposal> = raw.proposal ?? {};
+  const coerceField = (f: FieldUpdate): FieldUpdate => ({
+    ...f,
+    oldValue: f.oldValue == null ? null : asTrimmedString(f.oldValue),
+    newValue: asTrimmedString(f.newValue),
+  });
   return {
     reply: raw.reply || "I've put this together—please review.",
     questions: Array.isArray(raw.questions) ? raw.questions : [],
     clarifications: normalizeClarifications(raw.clarifications),
     ready: !!raw.ready,
     proposal: {
-      partnerName: p.partnerName,
-      summary: p.summary || "",
-      fields: (p.fields ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS),
+      partnerName: p.partnerName == null ? undefined : asTrimmedString(p.partnerName),
+      summary: asTrimmedString(p.summary),
+      fields: (p.fields ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS).map(coerceField),
       contacts: p.contacts ?? [],
       opportunities: p.opportunities ?? [],
       todos: p.todos ?? [],
@@ -565,9 +578,10 @@ export async function runProposeTurn(opts: {
 
 const VALID_ROLES = ["APPROVER", "DECISION_MAKER", "SUPPORTER", "EVALUATOR", "INFLUENCER"];
 
-function parseOptionalDate(raw?: string): Date | undefined {
-  if (!raw?.trim()) return undefined;
-  const d = new Date(raw);
+function parseOptionalDate(raw: unknown): Date | undefined {
+  const s = asTrimmedString(raw);
+  if (!s) return undefined;
+  const d = new Date(s);
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
@@ -587,25 +601,24 @@ export async function applyIntake(opts: {
   // ---- New partner ----
   if (scope === "new_partner") {
     const asActive = opts.intent === "active";
-    const name =
-      proposal.partnerName ||
-      proposal.fields.find((f) => f.field === "name")?.newValue ||
-      "";
-    if (!name.trim()) throw new Error("Company name is required for onboarding");
+    const name = asTrimmedString(
+      proposal.partnerName || proposal.fields.find((f) => f.field === "name")?.newValue || ""
+    );
+    if (!name) throw new Error("Company name is required for onboarding");
     const data: Record<string, unknown> = asActive
-      ? { name: name.trim(), ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date() }
-      : { name: name.trim(), status: "PROSPECT", poolFlag: "NEW" };
+      ? { name, ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date() }
+      : { name, status: "PROSPECT", poolFlag: "NEW" };
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
       if (f.field === "fitScore" || f.field === "pipelineStage") {
-        const n = parseInt(f.newValue, 10);
+        const n = parseInt(asTrimmedString(f.newValue), 10);
         if (!Number.isNaN(n)) data[f.field] = n;
       } else if (f.field === "industries" || f.field === "industry") {
         const norm = normalizeIndustriesInput(f.newValue);
         data.industries = norm.industries;
         data.industry = norm.industry;
       } else {
-        data[f.field] = f.newValue;
+        data[f.field] = asTrimmedString(f.newValue);
       }
     }
     let created;
@@ -613,7 +626,7 @@ export async function applyIntake(opts: {
       created = await db.partner.create({ data: data as Prisma.PartnerCreateInput });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        throw new Error(`Partner "${name.trim()}" already exists — open the existing record or use a different name.`);
+        throw new Error(`Partner "${name}" already exists — open the existing record or use a different name.`);
       }
       throw e;
     }
@@ -640,16 +653,16 @@ export async function applyIntake(opts: {
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
       if (f.field === "fitScore" || f.field === "pipelineStage") {
-        const n = parseInt(f.newValue, 10);
+        const n = parseInt(asTrimmedString(f.newValue), 10);
         if (!Number.isNaN(n)) data[f.field] = n;
       } else if (f.field === "industries" || f.field === "industry") {
         const norm = normalizeIndustriesInput(f.newValue);
         data.industries = norm.industries;
         data.industry = norm.industry;
       } else {
-        data[f.field] = f.newValue;
+        data[f.field] = asTrimmedString(f.newValue);
       }
-      applied.push(`Field "${f.label || PARTNER_FIELD_LABELS[f.field]}" → ${f.newValue}`);
+      applied.push(`Field "${f.label || PARTNER_FIELD_LABELS[f.field]}" → ${asTrimmedString(f.newValue)}`);
     }
     if (Object.keys(data).length) {
       await db.partner.update({ where: { id: partnerId }, data: data as Prisma.PartnerUpdateInput });
@@ -730,7 +743,7 @@ export async function applyIntake(opts: {
 
   // ---- Training ----
   for (const t of proposal.trainings) {
-    if (!t.person?.trim()) continue;
+    if (!asTrimmedString(t.person)) continue;
     await db.training.create({
       data: {
         partnerId,
@@ -747,7 +760,7 @@ export async function applyIntake(opts: {
 
   // ---- Joint solutions ----
   for (const s of proposal.solutions) {
-    if (!s.name?.trim()) continue;
+    if (!asTrimmedString(s.name)) continue;
     await db.solution.create({
       data: {
         partnerId,

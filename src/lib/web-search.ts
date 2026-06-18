@@ -4,7 +4,7 @@
  */
 
 import { db } from "./db";
-import { findWebSearchBackend, KIMI_BUILTIN_SEARCH } from "./builtin-search";
+import { findWebSearchBackend, KIMI_BUILTIN_SEARCH, listWebSearchBackends } from "./builtin-search";
 
 export type WebSearchResult =
   | { ok: true; text: string }
@@ -47,8 +47,8 @@ export async function modelWebSearch(
   const q = query.trim();
   if (!q) return { ok: false, error: "Search query is empty" };
 
-  const backend = await findWebSearchBackend();
-  if (!backend) {
+  const backends = await listWebSearchBackends();
+  if (!backends.length) {
     return {
       ok: false,
       needsWebSearch: true,
@@ -57,35 +57,58 @@ export async function modelWebSearch(
     };
   }
 
-  const tools = backend.kind === "kimi" ? [KIMI_BUILTIN_SEARCH] : [];
-  const apiConfigId = backend.source === "db" ? backend.apiId : undefined;
-
   const { runToolLoop } = await import("./ai-tool-loop");
-  const text = await runToolLoop({
-    chat: [
-      { role: "system", content: systemPrompt(opts.mode ?? "general") },
-      {
-        role: "user",
-        content: `Search query (use English keywords only): ${q}\n\nSummarize findings in English.`,
-      },
-    ],
-    tools,
-    temperature: 0.3,
-    feature: opts.feature ?? "Model web search",
-    userId: opts.userId ?? undefined,
-    apiConfigId,
-    streamReply: false,
-    maxSteps: 8,
-    executeTool: async (tc) => {
-      if (tc.function.name === "$web_search") return tc.function.arguments;
-      return "(no tools available)";
-    },
-  });
+  const errors: string[] = [];
 
-  if (!text?.trim()) {
-    return { ok: false, error: "Search returned no results; try different keywords" };
+  for (let i = 0; i < backends.length; i++) {
+    const backend = backends[i]!;
+    const tools = backend.kind === "kimi" ? [KIMI_BUILTIN_SEARCH] : [];
+    const apiConfigId = backend.source === "db" ? backend.apiId : undefined;
+    const label = backend.source === "db" ? backend.name : "Environment Kimi";
+
+    try {
+      const text = await runToolLoop({
+        chat: [
+          { role: "system", content: systemPrompt(opts.mode ?? "general") },
+          {
+            role: "user",
+            content: `Search query (use English keywords only): ${q}\n\nSummarize findings in English.`,
+          },
+        ],
+        tools,
+        temperature: 0.3,
+        feature: opts.feature ?? "Model web search",
+        userId: opts.userId ?? undefined,
+        apiConfigId,
+        apiFallback: false,
+        streamReply: false,
+        maxSteps: 8,
+        executeTool: async (tc) => {
+          if (tc.function.name === "$web_search") return tc.function.arguments;
+          return "(no tools available)";
+        },
+      });
+
+      if (text?.trim()) {
+        if (i > 0) {
+          console.warn(`[web-search] Switched to ${label} after ${i} failed attempt(s)`);
+        }
+        return { ok: true, text: text.trim() };
+      }
+      errors.push(`${label}: empty result`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      errors.push(`${label}: ${msg}`);
+      if (i < backends.length - 1) {
+        console.warn(`[web-search] ${label} failed (${msg.slice(0, 120)}), trying next backend…`);
+      }
+    }
   }
-  return { ok: true, text: text.trim() };
+
+  return {
+    ok: false,
+    error: errors.length === 1 ? errors[0]! : `All web search backends failed: ${errors.join("; ")}`,
+  };
 }
 
 /** @deprecated Legacy alias; means whether model web search is available */

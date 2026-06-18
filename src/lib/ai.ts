@@ -155,35 +155,44 @@ export function requiredCapabilitiesForChat(opts: {
   return required;
 }
 
-async function resolveAiApi(opts?: {
+async function listAiApiCandidates(opts?: {
   capabilities?: AiCapability[];
   taskTier?: AiTaskTier;
-  /** Force a specific API (e.g. web-search-only model) */
+  /** Prefer this API first (e.g. web-search entry); on failure callers try the rest */
   apiConfigId?: string;
-}): Promise<ResolvedAiApi> {
+}): Promise<ResolvedAiApi[]> {
   const required = opts?.capabilities ?? ["chat"];
   const configured = await db.aiApiConfig.findMany({
     where: { enabled: true },
-    // Higher priority first (e.g. exhaust free quota), then default, then createdAt
     orderBy: [{ priority: "desc" }, { isDefault: "desc" }, { createdAt: "asc" }],
   });
 
+  const candidates: ResolvedAiApi[] = [];
+  const seen = new Set<string>();
+  const add = (api: ResolvedAiApi) => {
+    const key = api.id ?? api.bucketKey;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(api);
+  };
+
   if (configured.length) {
+    type ConfiguredApi = (typeof configured)[number];
+
     if (opts?.apiConfigId) {
       const forced = configured.find((a) => a.id === opts.apiConfigId);
-      if (forced) return toResolvedApi(forced);
+      if (forced) add(toResolvedApi(forced));
     }
-    // Read today's token usage per model to check daily limits
+
     const day = new Date().toISOString().slice(0, 10);
     const usages = await db.aiDailyTokenUsage.findMany({
       where: { day, bucketKey: { in: configured.map((api) => `api:${api.id}`) } },
     });
     const usedByBucket = new Map(usages.map((u) => [u.bucketKey, u.totalTokens]));
 
-    type ConfiguredApi = (typeof configured)[number];
     const isOverDailyLimit = (api: ConfiguredApi) => {
       const limit = api.dailyTokenLimit ?? 0;
-      if (limit <= 0) return false; // null or 0 means unlimited
+      if (limit <= 0) return false;
       return (usedByBucket.get(`api:${api.id}`) ?? 0) >= limit;
     };
     const matchesCap = (api: ConfiguredApi) =>
@@ -204,54 +213,54 @@ async function resolveAiApi(opts?: {
       return pool.find(matchesCap);
     };
 
-    // Prefer: under daily limit and has required capabilities (fast/non-reasoning for light tasks)
+    const addConfigured = (api: ConfiguredApi) => add(toResolvedApi(api));
+
     const matched = pickBest(available);
     if (matched) {
       const naturalChoice = configured.find(matchesCap);
-      if (naturalChoice && naturalChoice.id !== matched.id) {
+      if (naturalChoice && naturalChoice.id !== matched.id && !opts?.apiConfigId) {
         const reason =
           opts?.taskTier === "fast" && matched.id !== naturalChoice.id
             ? "light task prefers fast model"
             : `daily token limit reached (${usedByBucket.get(`api:${naturalChoice.id}`) ?? 0}/${naturalChoice.dailyTokenLimit})`;
         console.warn(`[ai] ${naturalChoice.name} ${reason}, auto-switching to ${matched.name}`);
       }
-      return toResolvedApi(matched);
+      addConfigured(matched);
     }
 
-    // Next: any model under limit (capabilities may not fully match; legacy fallback)
-    if (available.length) {
-      const fallback = available[0];
-      console.warn(
-        `[ai] no under-limit model has all ${required.join("+")}, falling back to ${fallback.name} (${parseAiCapabilities(fallback.capabilities).join("+")})`
-      );
-      return toResolvedApi(fallback);
+    for (const api of available) {
+      if (matchesCap(api)) addConfigured(api);
     }
+    for (const api of available) addConfigured(api);
+    for (const api of configured) {
+      if (isOverDailyLimit(api) && matchesCap(api)) addConfigured(api);
+    }
+    for (const api of configured) addConfigured(api);
 
-    // All at daily limit: fall back by priority (capability match first) to keep service up
-    const fallback = configured.find(matchesCap) ?? configured[0];
-    console.warn(
-      `[ai] all enabled models hit daily token limit, still falling back to ${fallback.name} (used today ${usedByBucket.get(`api:${fallback.id}`) ?? 0} / limit ${fallback.dailyTokenLimit ?? "∞"})`
-    );
-    return toResolvedApi(fallback);
+    if (candidates.length) return candidates;
   }
 
   const baseUrl = process.env.AI_BASE_URL || "https://api.openai.com/v1";
   const apiKey = process.env.AI_API_KEY;
   const model = process.env.AI_MODEL || "gpt-4o-mini";
   if (!apiKey) {
-    throw new AIError("AI is not configured: add a model API in Settings, or set AI_API_KEY (and AI_BASE_URL, AI_MODEL) in .env and restart.");
+    throw new AIError(
+      "AI is not configured: add a model API in Settings, or set AI_API_KEY (and AI_BASE_URL, AI_MODEL) in .env and restart."
+    );
   }
-  return {
-    id: null,
-    name: "Environment variable API",
-    bucketKey: `env:${baseUrl}:${model}`,
-    provider: "openai",
-    baseUrl,
-    apiKey,
-    model,
-    extraConfig: null,
-    capabilities: [...DEFAULT_AI_CAPABILITIES, "vision"],
-  };
+  return [
+    {
+      id: null,
+      name: "Environment variable API",
+      bucketKey: `env:${baseUrl}:${model}`,
+      provider: "openai",
+      baseUrl,
+      apiKey,
+      model,
+      extraConfig: null,
+      capabilities: [...DEFAULT_AI_CAPABILITIES, "vision"],
+    },
+  ];
 }
 
 type TokenUsage = {
@@ -847,42 +856,27 @@ async function openaiChatCompletionStream(
   return { content: content || null, toolCalls };
 }
 
-export async function chatCompletion(
-  messages: ChatMessage[],
-  opts: {
-    tools?: (ToolDef | Record<string, unknown>)[];
-    jsonMode?: boolean;
-    temperature?: number;
-    feature?: string;
-    userId?: string;
-    onDelta?: (delta: string) => void;
-    /** Force model selection by capability (e.g. vision) */
-    capability?: AiCapability;
-    /** fast: light tasks like attribute extraction; prefer models tagged fast or without deep reasoning */
-    taskTier?: AiTaskTier;
-    /** Force a specific API config (e.g. web search via Doubao/Kimi entry) */
-    apiConfigId?: string;
-    toolChoice?: "auto" | "required" | "none";
-  } = {}
-): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
-  messages = normalizeMessagesForAi(messages);
-  const api = await resolveAiApi({
-    capabilities: requiredCapabilitiesForChat({ messages, tools: opts.tools, jsonMode: opts.jsonMode, capability: opts.capability }),
-    taskTier: opts.taskTier,
-    apiConfigId: opts.apiConfigId,
-  });
+type ChatCompletionOpts = {
+  tools?: (ToolDef | Record<string, unknown>)[];
+  jsonMode?: boolean;
+  temperature?: number;
+  feature?: string;
+  userId?: string;
+  onDelta?: (delta: string) => void;
+  toolChoice?: "auto" | "required" | "none";
+};
 
+async function chatCompletionWithApi(
+  api: ResolvedAiApi,
+  messages: ChatMessage[],
+  opts: ChatCompletionOpts
+): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   if (api.provider === "volcengine") {
-    // With onDelta: true streaming (push while generating); otherwise return once
-    if (opts.onDelta) {
-      return volcengineResponsesStream(api, messages, opts);
-    }
+    if (opts.onDelta) return volcengineResponsesStream(api, messages, opts);
     return volcengineResponsesCompletion(api, messages, opts);
   }
 
-  if (opts.onDelta) {
-    return openaiChatCompletionStream(api, messages, opts);
-  }
+  if (opts.onDelta) return openaiChatCompletionStream(api, messages, opts);
 
   const body: Record<string, unknown> = {
     model: api.model,
@@ -934,6 +928,72 @@ export async function chatCompletion(
     content: msg?.content ?? null,
     toolCalls: (msg?.tool_calls as ToolCall[]) ?? [],
   };
+}
+
+export async function chatCompletion(
+  messages: ChatMessage[],
+  opts: {
+    tools?: (ToolDef | Record<string, unknown>)[];
+    jsonMode?: boolean;
+    temperature?: number;
+    feature?: string;
+    userId?: string;
+    onDelta?: (delta: string) => void;
+    /** Force model selection by capability (e.g. vision) */
+    capability?: AiCapability;
+    /** fast: light tasks like attribute extraction; prefer models tagged fast or without deep reasoning */
+    taskTier?: AiTaskTier;
+    /** Prefer this API first (e.g. web search via Doubao/Kimi entry) */
+    apiConfigId?: string;
+    /** When false, do not try other APIs after the primary candidate fails (default true) */
+    apiFallback?: boolean;
+    toolChoice?: "auto" | "required" | "none";
+  } = {}
+): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
+  messages = normalizeMessagesForAi(messages);
+  const candidates = await listAiApiCandidates({
+    capabilities: requiredCapabilitiesForChat({
+      messages,
+      tools: opts.tools,
+      jsonMode: opts.jsonMode,
+      capability: opts.capability,
+    }),
+    taskTier: opts.taskTier,
+    apiConfigId: opts.apiConfigId,
+  });
+
+  const tryList = opts.apiFallback === false ? candidates.slice(0, 1) : candidates;
+
+  const callOpts: ChatCompletionOpts = {
+    tools: opts.tools,
+    jsonMode: opts.jsonMode,
+    temperature: opts.temperature,
+    feature: opts.feature,
+    userId: opts.userId,
+    onDelta: opts.onDelta,
+    toolChoice: opts.toolChoice,
+  };
+
+  const errors: string[] = [];
+  for (let i = 0; i < tryList.length; i++) {
+    const api = tryList[i]!;
+    try {
+      const result = await chatCompletionWithApi(api, messages, callOpts);
+      if (i > 0) {
+        console.warn(`[ai] Switched to ${api.name} after ${i} failed attempt(s): ${errors[errors.length - 1]?.slice(0, 120)}`);
+      }
+      return result;
+    } catch (e) {
+      const msg = e instanceof AIError ? e.message : e instanceof Error ? e.message : String(e);
+      errors.push(`${api.name}: ${msg}`);
+      if (i < tryList.length - 1) {
+        console.warn(`[ai] ${api.name} failed (${msg.slice(0, 120)}), trying next API…`);
+      }
+    }
+  }
+
+  if (errors.length === 1) throw new AIError(errors[0]!);
+  throw new AIError(`All ${errors.length} AI API(s) failed:\n${errors.map((e) => `- ${e}`).join("\n")}`);
 }
 
 // Best-effort parse JSON from model output (handles ```json fences, etc.)
