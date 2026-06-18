@@ -1,7 +1,7 @@
-import { Card, EmptyState } from "@/components/ui";
+import { Card, EmptyState, fmtDateTime } from "@/components/ui";
 import { listWecomChats } from "@/lib/wecom-chats";
 import { requireSuperAdmin } from "@/lib/session";
-import { fmtDateTime, getServerI18n } from "@/lib/server-i18n";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export async function WecomChatsCard() {
   await requireSuperAdmin();
