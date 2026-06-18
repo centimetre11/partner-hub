@@ -4,8 +4,13 @@ import { fieldKey, mergeProposalPatch, type ProposalChanges } from "@/lib/propos
 
 export type ClarificationApplyMode = "direct" | "ai";
 
+/** Identity anchor fields — shown as blocking checkpoints before deep research continues */
+const IDENTITY_CLARIFICATION_IDS = new Set(["partnerName", "name", "website", "dedupe"]);
+
 /** Profile fields that map 1:1 from clarification id → draft field (no LLM round-trip) */
 const DIRECT_CLARIFICATION_IDS = new Set([
+  "partnerName",
+  "name",
   "country",
   "city",
   "headcount",
@@ -30,19 +35,32 @@ export function isOpenEndedClarificationOption(option: string): boolean {
   return OPEN_ENDED_OPTION.test(option.trim());
 }
 
+export function isIdentityClarification(c: IntakeClarification): boolean {
+  return c.kind === "identity" || IDENTITY_CLARIFICATION_IDS.has(c.id);
+}
+
+export function hasBlockingClarifications(clarifications: IntakeClarification[]): boolean {
+  return clarifications.some((c) => c.blocking);
+}
+
 export function getClarificationMode(c: IntakeClarification): ClarificationApplyMode {
   if (c.apply === "direct" || c.apply === "ai") return c.apply;
+  if (c.id === "dedupe") return "ai";
+  if (c.id === "partnerName" || c.id === "name" || c.id === "website") return "direct";
   if (DIRECT_CLARIFICATION_IDS.has(c.id) && c.id in PARTNER_FIELD_LABELS) return "direct";
   return "ai";
 }
 
 export function partitionClarifications(clarifications: IntakeClarification[]) {
+  const identity: IntakeClarification[] = [];
   const direct: IntakeClarification[] = [];
   const ai: IntakeClarification[] = [];
   for (const c of clarifications) {
-    (getClarificationMode(c) === "direct" ? direct : ai).push(c);
+    if (isIdentityClarification(c)) identity.push(c);
+    else if (getClarificationMode(c) === "direct") direct.push(c);
+    else ai.push(c);
   }
-  return { direct, ai };
+  return { identity, direct, ai };
 }
 
 export function applyDirectClarification(
@@ -50,6 +68,16 @@ export function applyDirectClarification(
   clarification: IntakeClarification,
   value: string
 ): { proposal: IntakeProposal; changes: ProposalChanges } {
+  const trimmed = value.trim();
+  if (clarification.id === "partnerName" || clarification.id === "name") {
+    const { draft, changes } = mergeProposalPatch(
+      proposal,
+      [{ op: "set_partner", name: trimmed }],
+      new Set()
+    );
+    return { proposal: draft, changes };
+  }
+
   const field = clarification.id in PARTNER_FIELD_LABELS ? clarification.id : clarification.id;
   const label = PARTNER_FIELD_LABELS[field] ?? clarification.question;
   const { draft, changes } = mergeProposalPatch(
@@ -60,8 +88,43 @@ export function applyDirectClarification(
         key: fieldKey(field),
         field,
         label,
-        newValue: value.trim(),
+        newValue: trimmed,
         reason: "User selected option",
+      },
+    ],
+    new Set()
+  );
+  return { proposal: draft, changes };
+}
+
+export type ProposalEditPatch =
+  | { type: "partnerName"; value: string }
+  | { type: "field"; field: string; value: string };
+
+export function applyProposalEdit(
+  proposal: IntakeProposal,
+  patch: ProposalEditPatch
+): { proposal: IntakeProposal; changes: ProposalChanges } {
+  if (patch.type === "partnerName") {
+    const { draft, changes } = mergeProposalPatch(
+      proposal,
+      [{ op: "set_partner", name: patch.value.trim() }],
+      new Set()
+    );
+    return { proposal: draft, changes };
+  }
+  const field = patch.field;
+  const label = PARTNER_FIELD_LABELS[field] ?? field;
+  const { draft, changes } = mergeProposalPatch(
+    proposal,
+    [
+      {
+        op: "upsert_field",
+        key: fieldKey(field),
+        field,
+        label,
+        newValue: patch.value.trim(),
+        reason: "User edited",
       },
     ],
     new Set()

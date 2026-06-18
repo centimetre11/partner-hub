@@ -9,8 +9,10 @@ import type { ProposalChanges } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
 import {
   applyDirectClarification,
+  applyProposalEdit,
   formatAiClarificationMessage,
   type ClarificationAnswer,
+  type ProposalEditPatch,
 } from "@/lib/clarification-apply";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
@@ -89,6 +91,13 @@ export function AssistantDock() {
     const { proposal: next, changes } = applyDirectClarification(proposal, c, value);
     setProposal(next);
     setClarifications((prev) => prev.filter((x) => x.id !== id));
+    setPatchChanges(changes);
+  }
+
+  function handleProposalEdit(patch: ProposalEditPatch) {
+    if (!proposal) return;
+    const { proposal: next, changes } = applyProposalEdit(proposal, patch);
+    setProposal(next);
     setPatchChanges(changes);
   }
 
@@ -239,6 +248,7 @@ export function AssistantDock() {
             clarifications={clarifications}
             onDirectClarify={handleDirectClarify}
             onAiClarify={handleAiClarify}
+            onProposalEdit={handleProposalEdit}
             ready={ready}
             scope={proposeScope}
             partnerId={proposePartnerId}

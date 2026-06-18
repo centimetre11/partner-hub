@@ -98,8 +98,12 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
   const fl = fieldListForAi(locale);
   const clarifyExample =
     locale === "zh"
-      ? `{ "id":"country", "question":"该公司主要在哪个国家？", "options":["阿联酋","沙特","卡塔尔","埃及"], "multi":false, "allowOther":true }`
-      : `{ "id":"country", "question":"Which country is this company primarily in?", "options":["UAE","Saudi Arabia","Qatar","Egypt"], "multi":false, "allowOther":true }`;
+      ? `{ "id":"country", "question":"该公司主要在哪个国家？", "options":["阿联酋","沙特","卡塔尔","埃及"], "multi":false, "allowOther":true, "apply":"direct", "kind":"field" }`
+      : `{ "id":"country", "question":"Which country is this company primarily in?", "options":["UAE","Saudi Arabia","Qatar","Egypt"], "multi":false, "allowOther":true, "apply":"direct", "kind":"field" }`;
+  const identityExample =
+    locale === "zh"
+      ? `{ "id":"partnerName", "question":"确认是哪家公司？", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "blocking":true }`
+      : `{ "id":"partnerName", "question":"Which company is this?", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "blocking":true }`;
 
   if (scope === "business_record") {
     return `Output a single JSON object. User-facing strings in ${lang}:
@@ -190,7 +194,11 @@ Rules:
 - ready: true when required fields are present. If user says save now / that's all, ready must be true.
 - proposal accumulates confirmed content each turn (do not clear prior extractions).
 - clarifications: when key info is missing and you can enumerate options, give 1–3 multiple-choice items (id = English field name e.g. country/category/headcount; options in ${lang}).
-- For profile field ids (country, headcount, category, industry, pipelineStage, etc.) set apply:"direct".
+- Identity checkpoints (new_partner): when company name is ambiguous (multiple candidates), website uncertain, or search_partners finds similar records, emit kind:"identity" + blocking:true clarifications BEFORE claiming ready. Examples:
+  · partnerName — ${identityExample}
+  · website — id:"website", kind:"identity", blocking:true, apply:"direct", options = candidate URLs + "No website yet"
+  · dedupe — id:"dedupe", kind:"identity", blocking:true, apply:"ai", options = existing partner names + "Create new anyway"
+- For profile field ids (country, headcount, category, industry, pipelineStage, etc.) set apply:"direct", kind:"field".
 - For reporting lines or ambiguous context, set apply:"ai". Empty clarifications array if none needed.`;
 }
 
@@ -261,7 +269,12 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "New partner onboarding",
     intro:
       "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
-    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, tier (A/B/C). If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).`,
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, tier (A/B/C). If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).
+
+Identity checkpoints (important):
+- After search_partners or when research finds multiple company name/website candidates, emit blocking identity clarifications (kind:"identity", blocking:true) for partnerName and/or website — do NOT set ready=true while blocking clarifications remain.
+- When search_partners finds a close match, emit dedupe clarification (id:"dedupe", apply:"ai") with options = matched partner name(s) + "Create new anyway".
+- Once user confirms identity via clarification, continue deep research and fill profile fields.`,
   },
   powermap: {
     title: "Add power map contact",

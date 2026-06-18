@@ -93,6 +93,10 @@ export type IntakeClarification = {
   allowOther?: boolean; // Allow "Other / manual entry"
   /** direct = write to draft locally; ai = batch to LLM after all picks (inferred from id when omitted) */
   apply?: "direct" | "ai";
+  /** identity = company anchor (name/website/dedupe); field = profile enum pick */
+  kind?: "identity" | "field";
+  /** When true, final save stays disabled until user picks (identity checkpoints) */
+  blocking?: boolean;
 };
 
 export type IntakeTurn = {
@@ -179,13 +183,19 @@ function normalizeClarifications(raw: unknown): IntakeClarification[] {
     if (!c || typeof c.question !== "string" || !Array.isArray(c.options)) continue;
     const options = c.options.map((o) => String(o).trim()).filter(Boolean).slice(0, 6);
     if (!options.length) continue;
+    const kind = c.kind === "identity" || c.kind === "field" ? c.kind : undefined;
+    const id = typeof c.id === "string" && c.id ? c.id : `clarify-${i}`;
+    const isIdentity =
+      kind === "identity" || id === "partnerName" || id === "name" || id === "website" || id === "dedupe";
     out.push({
-      id: typeof c.id === "string" && c.id ? c.id : `clarify-${i}`,
+      id,
       question: c.question.trim(),
       options,
       multi: !!c.multi,
       allowOther: c.allowOther !== false,
       apply: c.apply === "direct" || c.apply === "ai" ? c.apply : undefined,
+      kind: isIdentity ? "identity" : kind,
+      blocking: c.blocking ?? isIdentity,
     });
   }
   return out;

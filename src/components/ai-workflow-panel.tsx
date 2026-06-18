@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-intake";
-import type { ClarificationAnswer } from "@/lib/clarification-apply";
+import type { ClarificationAnswer, ProposalEditPatch } from "@/lib/clarification-apply";
 import type { AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
@@ -31,6 +31,7 @@ export function AiWorkflowPanel({
   clarifications,
   onDirectClarify,
   onAiClarify,
+  onProposalEdit,
   ready,
   scope,
   partnerId,
@@ -65,6 +66,7 @@ export function AiWorkflowPanel({
   clarifications?: IntakeClarification[];
   onDirectClarify?: (id: string, value: string) => void;
   onAiClarify?: (answers: ClarificationAnswer[]) => void;
+  onProposalEdit?: (patch: ProposalEditPatch) => void;
   ready?: boolean;
   scope?: IntakeScope;
   partnerId?: string;
@@ -272,6 +274,7 @@ export function AiWorkflowPanel({
             clarifications={clarifications}
             onDirectClarify={onDirectClarify}
             onAiClarify={onAiClarify}
+            onProposalEdit={onProposalEdit}
             ready={ready}
             loading={loading}
           />

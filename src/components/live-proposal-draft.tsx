@@ -14,9 +14,13 @@ import {
 } from "@/lib/proposal-merge";
 import { filterNormalized, normalizeProposal, type NormalizedProposal } from "@/lib/proposal-normalize";
 import {
+  getClarificationMode,
+  hasBlockingClarifications,
+  isIdentityClarification,
   isOpenEndedClarificationOption,
   partitionClarifications,
   type ClarificationAnswer,
+  type ProposalEditPatch,
 } from "@/lib/clarification-apply";
 import { useMessages } from "@/lib/i18n/context";
 
@@ -29,10 +33,9 @@ type Props = {
   confirmLabel?: string;
   questions?: string[];
   clarifications?: IntakeClarification[];
-  /** Write known field picks straight into the draft (no LLM) */
   onDirectClarify?: (id: string, value: string) => void;
-  /** Submit all AI-mode picks in one message */
   onAiClarify?: (answers: ClarificationAnswer[]) => void;
+  onProposalEdit?: (patch: ProposalEditPatch) => void;
   ready?: boolean;
   loading?: boolean;
 };
@@ -46,9 +49,11 @@ export function LiveProposalDraft({
   clarifications = [],
   onDirectClarify,
   onAiClarify,
+  onProposalEdit,
   ready = false,
   loading = false,
 }: Props) {
+  const am = useMessages().assistant;
   const normalized = useMemo(
     () => (proposal ? normalizeProposal(proposal) : null),
     [proposal]
@@ -59,6 +64,8 @@ export function LiveProposalDraft({
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const count = proposal ? countProposalItems(proposal) : 0;
+  const identityBlocked = hasBlockingClarifications(clarifications);
+  const websiteField = normalized?.fieldUpdates.find((f) => f.field === "website");
 
   useEffect(() => {
     if (!changes) return;
@@ -151,6 +158,8 @@ export function LiveProposalDraft({
     normalized.businessRecords.length +
     (normalized.partnerName ? 1 : 0);
 
+  const saveDisabled = applying || total - excluded.size <= 0 || identityBlocked;
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-center justify-between mb-3">
@@ -165,6 +174,16 @@ export function LiveProposalDraft({
           )}
         </div>
       </div>
+
+      {(clarifications.length > 0 && (onDirectClarify || onAiClarify)) && (
+        <ClarifyPanels
+          clarifications={clarifications}
+          onDirectClarify={onDirectClarify}
+          onAiClarify={onAiClarify}
+          disabled={loading}
+          variant="identity-first"
+        />
+      )}
 
       {(normalized.summary || normalized.partnerName) && (
         <div className="shrink-0 rounded-lg bg-indigo-50 border border-indigo-100 p-3 mb-3">
@@ -182,19 +201,33 @@ export function LiveProposalDraft({
           <p className="text-sm text-zinc-400 text-center py-8">Nothing to save yet…</p>
         ) : (
           <>
-            {normalized.partnerName && (
+            {(normalized.partnerName || onProposalEdit) && (
               <Row
                 k="partner"
                 tone="partner"
                 isNew={changes?.added.includes("partner")}
                 isUpdated={changes?.updated.includes("partner")}
               >
-                <span className="font-medium text-zinc-800">New partner</span>
-                <span className="text-emerald-700 font-medium ml-1.5">{normalized.partnerName}</span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full">
+                  <span className="font-medium text-zinc-800 shrink-0">{am.editPartnerName}</span>
+                  {onProposalEdit ? (
+                    <input
+                      type="text"
+                      value={normalized.partnerName ?? ""}
+                      onClick={(e) => e.preventDefault()}
+                      onChange={(e) => onProposalEdit({ type: "partnerName", value: e.target.value })}
+                      placeholder={am.editPartnerName}
+                      className="flex-1 min-w-0 rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm text-emerald-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    />
+                  ) : (
+                    <span className="text-emerald-700 font-medium">{normalized.partnerName}</span>
+                  )}
+                </div>
               </Row>
             )}
             {normalized.fieldUpdates.map((f, i) => {
               const k = fieldKey(f.field) || `f${i}`;
+              const editableWebsite = f.field === "website" && onProposalEdit;
               return (
                 <Row
                   key={k}
@@ -203,14 +236,52 @@ export function LiveProposalDraft({
                   isNew={changes?.added.includes(k)}
                   isUpdated={changes?.updated.includes(k)}
                 >
-                  <span className="font-medium text-zinc-800">{f.label}</span>
-                  {f.oldValue ? (
-                    <span className="text-zinc-400 mx-1.5 line-through decoration-red-300">{f.oldValue}</span>
-                  ) : null}
-                  <span className="text-emerald-700 font-medium">→ {f.newValue}</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full">
+                    <span className="font-medium text-zinc-800 shrink-0">{f.label}</span>
+                    {f.oldValue ? (
+                      <span className="text-zinc-400 line-through decoration-red-300 text-xs">{f.oldValue}</span>
+                    ) : null}
+                    {editableWebsite ? (
+                      <input
+                        type="text"
+                        value={f.newValue}
+                        onClick={(e) => e.preventDefault()}
+                        onChange={(e) =>
+                          onProposalEdit({ type: "field", field: "website", value: e.target.value })
+                        }
+                        placeholder={am.editWebsite}
+                        className="flex-1 min-w-0 rounded-md border border-amber-200 bg-white px-2 py-1 text-sm text-emerald-800 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      />
+                    ) : (
+                      <span className="text-emerald-700 font-medium">→ {f.newValue}</span>
+                    )}
+                  </div>
                 </Row>
               );
             })}
+            {!websiteField && onProposalEdit && (
+              <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/40 px-3 py-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
+                  <span className="text-sm font-medium text-zinc-700 shrink-0">{am.editWebsite}</span>
+                  <input
+                    type="text"
+                    defaultValue=""
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v) onProposalEdit({ type: "field", field: "website", value: v });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const v = (e.target as HTMLInputElement).value.trim();
+                        if (v) onProposalEdit({ type: "field", field: "website", value: v });
+                      }
+                    }}
+                    placeholder="example.com"
+                    className="flex-1 min-w-0 rounded-md border border-amber-200 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+            )}
             {normalized.contacts.map((c, i) => {
               const k = contactKey(c.name) || `c${i}`;
               return (
@@ -269,6 +340,7 @@ export function LiveProposalDraft({
           onDirectClarify={onDirectClarify}
           onAiClarify={onAiClarify}
           disabled={loading}
+          variant="field-only"
         />
       )}
 
@@ -284,37 +356,51 @@ export function LiveProposalDraft({
         </div>
       )}
 
-      <div className="shrink-0 sticky bottom-0 pt-3 mt-2 border-t border-zinc-100 bg-white/95 backdrop-blur-sm flex items-center justify-between gap-3">
-        <div className="text-xs text-zinc-400">
-          {total} item{total === 1 ? "" : "s"} · {excluded.size} excluded
+      <div className="shrink-0 sticky bottom-0 pt-3 mt-2 border-t border-zinc-100 bg-white/95 backdrop-blur-sm flex flex-col gap-2">
+        {identityBlocked && (
+          <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{am.confirmBlockedIdentity}</div>
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs text-zinc-400">
+            {total} item{total === 1 ? "" : "s"} · {excluded.size} excluded
+          </div>
+          <button
+            onClick={confirm}
+            disabled={saveDisabled}
+            className="rounded-lg bg-emerald-600 text-white font-medium px-5 py-2.5 text-sm hover:bg-emerald-700 disabled:opacity-50 shrink-0"
+          >
+            {applying ? "Saving…" : ready ? `✓ ${confirmLabel}` : confirmLabel}
+          </button>
         </div>
-        <button
-          onClick={confirm}
-          disabled={applying || total - excluded.size <= 0}
-          className="rounded-lg bg-emerald-600 text-white font-medium px-5 py-2.5 text-sm hover:bg-emerald-700 disabled:opacity-50 shrink-0"
-        >
-          {applying ? "Saving…" : ready ? `✓ ${confirmLabel}` : confirmLabel}
-        </button>
       </div>
     </div>
   );
 }
+
+type ClarifyVariant = "identity-first" | "field-only" | "all";
 
 function ClarifyPanels({
   clarifications,
   onDirectClarify,
   onAiClarify,
   disabled,
+  variant = "all",
 }: {
   clarifications: IntakeClarification[];
   onDirectClarify?: (id: string, value: string) => void;
   onAiClarify?: (answers: ClarificationAnswer[]) => void;
   disabled?: boolean;
+  variant?: ClarifyVariant;
 }) {
   const am = useMessages().assistant;
-  const { direct, ai } = partitionClarifications(clarifications);
+  const { identity, direct, ai } = partitionClarifications(clarifications);
   const [aiPicked, setAiPicked] = useState<Record<string, string | Set<string>>>({});
   const [directDone, setDirectDone] = useState<Set<string>>(new Set());
+  const [otherOpen, setOtherOpen] = useState<Record<string, boolean>>({});
+  const [otherText, setOtherText] = useState<Record<string, string>>({});
+
+  const showIdentity = variant === "identity-first" || variant === "all";
+  const showField = variant === "field-only" || variant === "all";
 
   const aiAnsweredCount = ai.filter((c) => {
     const v = aiPicked[c.id];
@@ -323,20 +409,35 @@ function ClarifyPanels({
   }).length;
   const aiAllAnswered = ai.length > 0 && aiAnsweredCount === ai.length;
 
-  function pickDirect(c: IntakeClarification, opt: string) {
+  function applyDirect(c: IntakeClarification, value: string) {
+    if (!onDirectClarify || disabled) return;
+    onDirectClarify(c.id, value);
+    setDirectDone((prev) => new Set(prev).add(c.id));
+    setOtherOpen((prev) => ({ ...prev, [c.id]: false }));
+  }
+
+  function applyAi(c: IntakeClarification, value: string) {
+    if (!onAiClarify || disabled) return;
+    onAiClarify([{ id: c.id, question: c.question, value }]);
+    setOtherOpen((prev) => ({ ...prev, [c.id]: false }));
+  }
+
+  function pickOption(c: IntakeClarification, opt: string, mode: "direct" | "ai") {
     if (disabled) return;
     if (isOpenEndedClarificationOption(opt)) {
-      onAiClarify?.([{ id: c.id, question: c.question, value: opt }]);
+      setOtherOpen((prev) => ({ ...prev, [c.id]: true }));
       return;
     }
-    if (!onDirectClarify) return;
-    onDirectClarify(c.id, opt);
-    setDirectDone((prev) => new Set(prev).add(c.id));
+    if (mode === "direct") applyDirect(c, opt);
+    else pickAiSingle(c, opt);
   }
 
   function pickAiSingle(c: IntakeClarification, opt: string) {
     if (disabled) return;
     setAiPicked((prev) => ({ ...prev, [c.id]: opt }));
+    if (isIdentityClarification(c) && !c.multi) {
+      onAiClarify?.([{ id: c.id, question: c.question, value: opt }]);
+    }
   }
 
   function toggleAiMulti(id: string, opt: string) {
@@ -351,6 +452,14 @@ function ClarifyPanels({
     });
   }
 
+  function submitOther(c: IntakeClarification) {
+    const text = otherText[c.id]?.trim();
+    if (!text || disabled) return;
+    if (getClarificationMode(c) === "direct") applyDirect(c, text);
+    else applyAi(c, text);
+    setOtherText((prev) => ({ ...prev, [c.id]: "" }));
+  }
+
   function submitAiBatch() {
     if (disabled || !onAiClarify || !aiAllAnswered) return;
     const answers: ClarificationAnswer[] = ai.map((c) => {
@@ -363,99 +472,185 @@ function ClarifyPanels({
     setAiPicked({});
   }
 
-  return (
-    <div className="shrink-0 mt-2 space-y-3">
-      {direct.length > 0 && onDirectClarify && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 space-y-2.5">
-          <div>
-            <div className="text-xs font-semibold text-emerald-900">{am.clarifyDirectTitle}</div>
-            <div className="text-[10px] text-emerald-700/90 mt-0.5">{am.clarifyDirectHint}</div>
-          </div>
-          {direct.map((c) => (
-            <div key={c.id} className="space-y-1.5">
-              <div className="text-xs text-zinc-700 flex items-center gap-2">
-                <span>{c.question}</span>
-                {directDone.has(c.id) && (
-                  <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {c.options.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    disabled={disabled || directDone.has(c.id)}
-                    onClick={() => pickDirect(c, opt)}
-                    className="rounded-full border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-900 hover:border-emerald-500 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {ai.length > 0 && onAiClarify && (
-        <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 space-y-2.5">
-          <div>
-            <div className="text-xs font-semibold text-indigo-900">{am.clarifyAiTitle}</div>
-            <div className="text-[10px] text-indigo-700/90 mt-0.5">{am.clarifyAiHint}</div>
-          </div>
-          {ai.map((c) => {
-            const v = aiPicked[c.id];
+  function renderOptions(
+    c: IntakeClarification,
+    mode: "direct" | "ai",
+    done: boolean,
+    activeStyle: string,
+    idleStyle: string
+  ) {
+    const v = aiPicked[c.id];
+    return (
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-1.5">
+          {c.options.map((opt) => {
+            if (isOpenEndedClarificationOption(opt)) return null;
+            const active =
+              mode === "ai" && (c.multi && v instanceof Set ? v.has(opt) : v === opt);
             return (
-              <div key={c.id} className="space-y-1.5">
-                <div className="text-xs text-zinc-700">{c.question}</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {c.options.map((opt) => {
-                    const active =
-                      c.multi && v instanceof Set
-                        ? v.has(opt)
-                        : v === opt;
-                    return (
-                      <button
-                        key={opt}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() =>
-                          c.multi ? toggleAiMulti(c.id, opt) : pickAiSingle(c, opt)
-                        }
-                        className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
-                          active
-                            ? "border-indigo-500 bg-indigo-500 text-white"
-                            : "border-indigo-300 bg-white text-indigo-900 hover:border-indigo-500 hover:bg-indigo-100"
-                        }`}
-                      >
-                        {opt}
-                      </button>
-                    );
-                  })}
-                  {c.allowOther && (
-                    <span className="text-[10px] text-indigo-500 self-center">Other → type on the left</span>
-                  )}
-                </div>
-              </div>
+              <button
+                key={opt}
+                type="button"
+                disabled={disabled || (mode === "direct" && done)}
+                onClick={() => pickOption(c, opt, mode)}
+                className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+                  active ? activeStyle : idleStyle
+                }`}
+              >
+                {opt}
+              </button>
             );
           })}
-          <div className="flex items-center justify-between gap-2 pt-1">
-            {!aiAllAnswered && (
-              <span className="text-[10px] text-indigo-600">
-                {am.clarifyAiPending.replace("{n}", String(ai.length - aiAnsweredCount))}
-              </span>
-            )}
+          {c.allowOther && (
             <button
               type="button"
-              disabled={disabled || !aiAllAnswered}
-              onClick={submitAiBatch}
-              className="ml-auto rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
+              disabled={disabled || (mode === "direct" && done)}
+              onClick={() => setOtherOpen((prev) => ({ ...prev, [c.id]: true }))}
+              className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${idleStyle}`}
             >
-              {am.clarifyAiSubmit}
+              {am.clarifyOther}
+            </button>
+          )}
+        </div>
+        {otherOpen[c.id] && (
+          <div className="flex gap-1.5 items-center">
+            <input
+              type="text"
+              value={otherText[c.id] ?? ""}
+              onChange={(e) => setOtherText((prev) => ({ ...prev, [c.id]: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && submitOther(c)}
+              placeholder={am.clarifyOtherPlaceholder}
+              className="flex-1 min-w-0 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              autoFocus
+            />
+            <button
+              type="button"
+              disabled={disabled || !otherText[c.id]?.trim()}
+              onClick={() => submitOther(c)}
+              className="rounded-md bg-zinc-800 text-white px-3 py-1 text-xs font-medium hover:bg-zinc-900 disabled:opacity-40"
+            >
+              {am.clarifyOtherConfirm}
             </button>
           </div>
+        )}
+      </div>
+    );
+  }
+
+  const identityPanel =
+    showIdentity && identity.length > 0 && (onDirectClarify || onAiClarify) ? (
+      <div className="rounded-xl border-2 border-amber-300 bg-amber-50/90 p-3 space-y-2.5 mb-3">
+        <div>
+          <div className="text-xs font-semibold text-amber-900">{am.clarifyIdentityTitle}</div>
+          <div className="text-[10px] text-amber-800/90 mt-0.5">{am.clarifyIdentityHint}</div>
         </div>
-      )}
+        {identity.map((c) => {
+          const mode = getClarificationMode(c);
+          const done = directDone.has(c.id);
+          if (mode === "ai") {
+            return (
+              <div key={c.id} className="space-y-1.5">
+                <div className="text-xs text-zinc-800 font-medium">{c.question}</div>
+                {renderOptions(
+                  c,
+                  "ai",
+                  false,
+                  "border-amber-600 bg-amber-600 text-white",
+                  "border-amber-400 bg-white text-amber-950 hover:border-amber-600 hover:bg-amber-100"
+                )}
+              </div>
+            );
+          }
+          return (
+            <div key={c.id} className="space-y-1.5">
+              <div className="text-xs text-zinc-800 flex items-center gap-2 font-medium">
+                <span>{c.question}</span>
+                {done && <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>}
+              </div>
+              {renderOptions(
+                c,
+                "direct",
+                done,
+                "border-amber-600 bg-amber-600 text-white",
+                "border-amber-400 bg-white text-amber-950 hover:border-amber-600 hover:bg-amber-100"
+              )}
+            </div>
+          );
+        })}
+      </div>
+    ) : null;
+
+  const directPanel =
+    showField && direct.length > 0 && onDirectClarify ? (
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 space-y-2.5">
+        <div>
+          <div className="text-xs font-semibold text-emerald-900">{am.clarifyDirectTitle}</div>
+          <div className="text-[10px] text-emerald-700/90 mt-0.5">{am.clarifyDirectHint}</div>
+        </div>
+        {direct.map((c) => (
+          <div key={c.id} className="space-y-1.5">
+            <div className="text-xs text-zinc-700 flex items-center gap-2">
+              <span>{c.question}</span>
+              {directDone.has(c.id) && (
+                <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
+              )}
+            </div>
+            {renderOptions(
+              c,
+              "direct",
+              directDone.has(c.id),
+              "border-emerald-600 bg-emerald-600 text-white",
+              "border-emerald-300 bg-white text-emerald-900 hover:border-emerald-500 hover:bg-emerald-100"
+            )}
+          </div>
+        ))}
+      </div>
+    ) : null;
+
+  const aiPanel =
+    showField && ai.length > 0 && onAiClarify ? (
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 space-y-2.5">
+        <div>
+          <div className="text-xs font-semibold text-indigo-900">{am.clarifyAiTitle}</div>
+          <div className="text-[10px] text-indigo-700/90 mt-0.5">{am.clarifyAiHint}</div>
+        </div>
+        {ai.map((c) => (
+          <div key={c.id} className="space-y-1.5">
+            <div className="text-xs text-zinc-700">{c.question}</div>
+            {renderOptions(
+              c,
+              "ai",
+              false,
+              "border-indigo-500 bg-indigo-500 text-white",
+              "border-indigo-300 bg-white text-indigo-900 hover:border-indigo-500 hover:bg-indigo-100"
+            )}
+          </div>
+        ))}
+        <div className="flex items-center justify-between gap-2 pt-1">
+          {!aiAllAnswered && (
+            <span className="text-[10px] text-indigo-600">
+              {am.clarifyAiPending.replace("{n}", String(ai.length - aiAnsweredCount))}
+            </span>
+          )}
+          <button
+            type="button"
+            disabled={disabled || !aiAllAnswered}
+            onClick={submitAiBatch}
+            className="ml-auto rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
+          >
+            {am.clarifyAiSubmit}
+          </button>
+        </div>
+      </div>
+    ) : null;
+
+  if (!identityPanel && !directPanel && !aiPanel) return null;
+
+  return (
+    <div className="shrink-0 mt-2 space-y-3">
+      {identityPanel}
+      {directPanel}
+      {aiPanel}
     </div>
   );
 }
