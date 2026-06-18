@@ -504,6 +504,7 @@ async function volcengineResponsesCompletion(
     temperature?: number;
     feature?: string;
     userId?: string;
+    toolChoice?: "auto" | "required" | "none";
   }
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   const extra = parseExtraConfig(api.extraConfig);
@@ -528,6 +529,7 @@ async function volcengineResponsesCompletion(
     ...(typeof extra.max_output_tokens === "number" ? { max_output_tokens: extra.max_output_tokens } : {}),
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(tools.length ? { tools } : {}),
+    ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
   };
   if (opts.jsonMode) {
     body.text = { format: { type: "json_object" } };
@@ -594,6 +596,7 @@ async function volcengineResponsesStream(
     feature?: string;
     userId?: string;
     onDelta?: (delta: string) => void;
+    toolChoice?: "auto" | "required" | "none";
   }
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   const extra = parseExtraConfig(api.extraConfig);
@@ -618,6 +621,7 @@ async function volcengineResponsesStream(
     ...(typeof extra.max_output_tokens === "number" ? { max_output_tokens: extra.max_output_tokens } : {}),
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(tools.length ? { tools } : {}),
+    ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
   };
   if (opts.jsonMode) {
     body.text = { format: { type: "json_object" } };
@@ -858,6 +862,7 @@ export async function chatCompletion(
     taskTier?: AiTaskTier;
     /** Force a specific API config (e.g. web search via Doubao/Kimi entry) */
     apiConfigId?: string;
+    toolChoice?: "auto" | "required" | "none";
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   messages = normalizeMessagesForAi(messages);

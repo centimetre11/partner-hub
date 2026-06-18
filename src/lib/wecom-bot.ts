@@ -111,6 +111,7 @@ async function handleTextMessage(frame: WsFrame) {
       feature: "WeCom Bot",
     });
     appendHistory(key, "assistant", result.reply);
+    console.log(`[wecom-bot] 回复(${text.slice(0, 20)}…): ${result.reply.slice(0, 120)}…`);
     await wsClient.replyStream(frame, streamId, result.reply, true);
   } catch (e) {
     const msg =

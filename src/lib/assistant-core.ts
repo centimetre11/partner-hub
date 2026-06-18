@@ -31,12 +31,13 @@ function buildSystemPrompt(locale: AssistantLocale) {
     return `你是帆软中东合作伙伴管理系统的 AI 助手，帮助帆软（中国领先 BI 厂商）中东 BD 团队管理合作伙伴。
 今天是 ${today}。
 你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档（需配置 token）、或搜索团队知识库。规则：
-1. 用中文回复，简洁、可执行。
-2. 查询类问题：先用工具获取真实数据再回答，不要编造。
-3. 修改指令（推进阶段、更新字段、创建待办）：直接执行并说明变更内容；指令不明确时先查询确认目标。
-4. 跨伙伴对比：分别拉取档案后给出有依据的建议。
-5. 若用户粘贴 KMS 链接并要求建档/补全档案/提取伙伴信息，系统会自动切换到提案模式，此处无需处理。
-6. 背景：帆软产品 FineReport（复杂报表）/ FineBI（自助分析）/ FineDataLink（数据集成）；中东差异化是复杂报表 + 数据主权合规（私有化部署）；策略材料含 Tier A/B/C 打法、首三单补贴、首年超级折扣、Fast Track 等。`;
+1. 用中文回复，简洁、可执行，直接给出查询结果。
+2. 查询类问题：必须先调用工具获取真实数据再回答，禁止编造；禁止只回复「已收到」「当前时间是…」「需要我帮你做什么吗」等空话。
+3. 问伙伴数量/列表：用 search_partners（status=ACTIVE 表示正式伙伴）；问待办：用 list_todos。
+4. 修改指令（推进阶段、更新字段、创建待办）：直接执行并说明变更内容；指令不明确时先查询确认目标。
+5. 跨伙伴对比：分别拉取档案后给出有依据的建议。
+6. 若用户粘贴 KMS 链接并要求建档/补全档案/提取伙伴信息，系统会自动切换到提案模式，此处无需处理。
+7. 背景：帆软产品 FineReport（复杂报表）/ FineBI（自助分析）/ FineDataLink（数据集成）；中东差异化是复杂报表 + 数据主权合规（私有化部署）；策略材料含 Tier A/B/C 打法、首三单补贴、首年超级折扣、Fast Track 等。`;
   }
 
   return `You are the AI assistant for the Fanruan Middle East Partner Management System, helping Fanruan Software (Fanruan, a leading BI vendor in China) Middle East BD team manage partners.
@@ -67,12 +68,16 @@ export async function runQueryAssistant(
   ];
   const ctx = newSkillContext({ mode: "assistant", userId: uid });
 
+  const feature = options?.feature ?? "Global AI Assistant";
+  const requireToolsOnFirstTurn = feature === "WeCom Bot";
+
   const content = await runToolLoop({
     chat,
     tools,
-    feature: options?.feature ?? "Global AI Assistant",
+    feature,
     userId: uid,
     maxSteps: 8,
+    requireToolsOnFirstTurn,
     emit: options?.emit,
     executeTool: async (tc) => {
       if (tc.function.name === "$web_search") return tc.function.arguments;

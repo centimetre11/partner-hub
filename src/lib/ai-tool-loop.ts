@@ -18,6 +18,8 @@ export type ToolLoopOptions = {
   maxSteps?: number;
   /** Force specific API config (e.g. web search) */
   apiConfigId?: string;
+  /** Force tool call on first model turn (WeCom bot data queries) */
+  requireToolsOnFirstTurn?: boolean;
   emit?: TraceEmitter;
   /** Stream final reply to frontend (default true). Set false for research/JSON output */
   streamReply?: boolean;
@@ -57,6 +59,8 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
       feature: opts.feature,
       userId: opts.userId,
       apiConfigId: opts.apiConfigId,
+      toolChoice:
+        i === 0 && opts.requireToolsOnFirstTurn && opts.tools.length ? "required" : undefined,
       // True streaming: push text deltas to frontend while generating (query scenarios only; off for JSON)
       onDelta:
         opts.emit && streamReply
