@@ -21,6 +21,7 @@ import {
   applyOpportunityUpdated,
   applyPartnerCreated,
   applySolutionAdded,
+  applyBusinessRecordAdded,
   applyTodoAdded,
   applyTrainingAdded,
   defaultIntakeReply,
@@ -36,6 +37,7 @@ import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
+import { persistBusinessRecord } from "./business-record-core";
 
 export type IntakeScope = AiLocaleScope;
 
@@ -61,6 +63,15 @@ export type SolutionProposal = {
   reason?: string;
 };
 
+export type BusinessRecordProposal = {
+  title: string;
+  content?: string;
+  category?: string;
+  occurredAt?: string;
+  contactName?: string;
+  reason?: string;
+};
+
 export type IntakeProposal = {
   partnerName?: string;
   summary: string;
@@ -70,6 +81,7 @@ export type IntakeProposal = {
   todos: TodoProposal[];
   trainings: TrainingProposal[];
   solutions: SolutionProposal[];
+  businessRecords: BusinessRecordProposal[];
 };
 
 /** Structured clarification: selectable options when info is incomplete */
@@ -98,7 +110,7 @@ export type IntakeMessage = {
 };
 
 function emptyProposal(): IntakeProposal {
-  return { summary: "", fields: [], contacts: [], opportunities: [], todos: [], trainings: [], solutions: [] };
+  return { summary: "", fields: [], contacts: [], opportunities: [], todos: [], trainings: [], solutions: [], businessRecords: [] };
 }
 
 /** Lightweight intake scopes use the fast model (attribute extraction, no deep reasoning) */
@@ -107,6 +119,7 @@ function intakeTaskTier(scope: IntakeScope): AiTaskTier {
     case "powermap":
     case "opportunity":
     case "training":
+    case "business_record":
       return "fast";
     default:
       return "standard";
@@ -211,6 +224,15 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale): IntakeTu
       todos: p.todos ?? [],
       trainings: p.trainings ?? [],
       solutions: p.solutions ?? [],
+      businessRecords: (p.businessRecords ?? []).map((r) => ({
+        ...r,
+        title: asTrimmedString(r.title),
+        content: r.content == null ? undefined : asTrimmedString(r.content),
+        category: r.category == null ? undefined : asTrimmedString(r.category),
+        occurredAt: r.occurredAt == null ? undefined : asTrimmedString(r.occurredAt),
+        contactName: r.contactName == null ? undefined : asTrimmedString(r.contactName),
+        reason: r.reason == null ? undefined : asTrimmedString(r.reason),
+      })).filter((r) => r.title),
     },
   };
 }
@@ -675,6 +697,30 @@ export async function applyIntake(opts: {
     applied.push(applySolutionAdded(locale, s.name));
   }
 
+  // ---- Business records ----
+  for (const r of proposal.businessRecords) {
+    const title = asTrimmedString(r.title);
+    if (!title) continue;
+    let contactId: string | null = null;
+    if (r.contactName) {
+      const contact = await db.contact.findFirst({
+        where: { partnerId, name: { contains: r.contactName } },
+      });
+      contactId = contact?.id ?? null;
+    }
+    await persistBusinessRecord({
+      partnerId,
+      userId,
+      category: r.category ?? "OTHER",
+      title,
+      content: r.content ?? null,
+      occurredAt: parseOptionalDate(r.occurredAt) ?? new Date(),
+      contactId,
+      source: "AI",
+    });
+    applied.push(applyBusinessRecordAdded(locale, title));
+  }
+
   // ---- Todos ----
   for (const t of proposal.todos) {
     await db.todoItem.create({
@@ -692,10 +738,10 @@ export async function applyIntake(opts: {
   }
 
   // ---- Timeline audit (non-onboarding; onboarding already logged) ----
-  if (scope !== "new_partner" && partnerId) {
+  if (scope !== "new_partner" && scope !== "business_record" && partnerId) {
     const intakeTitle =
       locale === "zh"
-        ? `AI 录入：${{ new_partner: "新伙伴", powermap: "权力地图", opportunity: "商机", profile: "档案补全", training: "培训", solution: "联合方案" }[scope]}`
+        ? `AI 录入：${{ new_partner: "新伙伴", powermap: "权力地图", opportunity: "商机", profile: "档案补全", training: "培训", solution: "联合方案", business_record: "商务记录" }[scope]}`
         : `AI intake: ${scope.replace(/_/g, " ")}`;
     await db.timelineEvent.create({
       data: {

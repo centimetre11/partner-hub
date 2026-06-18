@@ -174,12 +174,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <AiAddButton
-              scope="profile"
-              partnerId={p.id}
-              label={m.common.aiCapture}
-              className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
-            />
             {p.status === "PROSPECT" && (
               <form action={promotePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
@@ -288,7 +282,13 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   stageGuidance={stageGuidance}
                   labels={labels}
                 />
-                <PartnerAgentsPanel partnerId={p.id} agents={partnerAgents} templates={agentTemplates} />
+                <PartnerAgentsPanel
+                  partnerId={p.id}
+                  agents={partnerAgents}
+                  templates={agentTemplates}
+                  copy={m.partnerDetail.agentsPanel}
+                  bcp47={bcp47}
+                />
               </div>
             </div>
             <PartnerIntegrationsPanel
@@ -387,7 +387,13 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             <Card title={m.partnerDetail.trainingCert.replace("{count}", String(p.trainings.length))}>
               <TrainingList partnerId={p.id} trainings={p.trainings} input={input} m={m} />
             </Card>
-            <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />
+            <PartnerSolutionsSection
+              partnerId={p.id}
+              solutions={p.solutions}
+              copy={m.partnerDetail.solutionsSection}
+              solutionStatusLabels={L.SOLUTION_STATUS_LABELS}
+              documentTypeLabels={L.DOCUMENT_TYPE_LABELS}
+            />
           </div>
         }
         relationship={

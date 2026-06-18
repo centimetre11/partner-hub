@@ -8,7 +8,8 @@ export type IntakeScope =
   | "opportunity"
   | "profile"
   | "training"
-  | "solution";
+  | "solution"
+  | "business_record";
 
 export function replyLanguage(locale: Locale): "Chinese" | "English" {
   return locale === "zh" ? "Chinese" : "English";
@@ -100,6 +101,38 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
       ? `{ "id":"country", "question":"该公司主要在哪个国家？", "options":["阿联酋","沙特","卡塔尔","埃及"], "multi":false, "allowOther":true }`
       : `{ "id":"country", "question":"Which country is this company primarily in?", "options":["UAE","Saudi Arabia","Qatar","Egypt"], "multi":false, "allowOther":true }`;
 
+  if (scope === "business_record") {
+    return `Output a single JSON object. User-facing strings in ${lang}:
+{
+  "reply": "Your message to the user (${lang}, brief; confirm what you extracted)",
+  "questions": [],
+  "clarifications": [],
+  "ready": true/false,
+  "proposal": {
+    "summary": "One-line summary of milestone(s) to save (${lang})",
+    "fields": [],
+    "contacts": [],
+    "opportunities": [],
+    "todos": [],
+    "trainings": [],
+    "solutions": [],
+    "businessRecords": [{
+      "title": "Short headline e.g. visited VP / scheduled L2 training (${lang})",
+      "content": "Optional details (${lang})",
+      "category": "VISIT|TRAINING|NEGOTIATION|DELIVERY|RELATIONSHIP|OTHER",
+      "occurredAt": "YYYY-MM-DD (default today if unclear)",
+      "contactName": "optional: name matching existing contact",
+      "reason": "source snippet (${lang})"
+    }]
+  }
+}
+Rules:
+- Fill businessRecords only; other arrays must be empty.
+- One user message may yield multiple businessRecords if they describe several milestones.
+- category: VISIT=meetings/visits; TRAINING=training/cert scheduling; NEGOTIATION=deals/terms; DELIVERY=contract/first delivery; RELATIONSHIP=relationship building; OTHER=rest.
+- Extract only from user text; do not invent. ready=true when at least one record has a clear title.`;
+  }
+
   if (scope === "powermap") {
     const reportsExample =
       locale === "zh"
@@ -147,7 +180,8 @@ Rules:
     "opportunities": [{"action":"add|update","id":"...","name":"...","client":"...","amount":"...","stage":"...","nextStep":"...","status":"...","reason":"..."}],
     "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","detail":"..."}],
     "trainings": [{"person":"...","currentSkill":"...","targetCert":"...","deadline":"YYYY-MM-DD","status":"PLANNED|IN_PROGRESS|DONE","reason":"..."}],
-    "solutions": [{"name":"...","targetCustomer":"...","painPoint":"...","fanruanOffer":"...","partnerOffer":"...","pricingModel":"...","status":"...","reason":"..."}]
+    "solutions": [{"name":"...","targetCustomer":"...","painPoint":"...","fanruanOffer":"...","partnerOffer":"...","pricingModel":"...","status":"...","reason":"..."}],
+    "businessRecords": []
   }
 }
 Field codes for fields array: ${fl}.
@@ -180,6 +214,8 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
       return "Fill trainings only. Leave others as empty arrays.";
     case "solution":
       return `Fill solutions only. status codes: ${solutionStatuses}. Leave others as empty arrays.`;
+    case "business_record":
+      return "Fill businessRecords only (title required). Leave fields/contacts/opportunities/todos/trainings/solutions as empty arrays.";
   }
 }
 
@@ -259,6 +295,18 @@ Decide add (action=add) vs update (action=update with id) against the existing l
     title: "Add joint solution",
     intro: "The user wants to capture a co-created joint solution with this partner.",
     guide: `Per solution try: name (required), targetCustomer, painPoint, fanruanOffer, partnerOffer, pricingModel, status (${Object.keys(SOLUTION_STATUS_LABELS).join("/")}).`,
+  },
+  business_record: {
+    title: "Log business milestone",
+    intro:
+      "The user wants to record key business progress for this partner (visits, training scheduled, negotiations, delivery, relationship events). Input is usually free-form notes or chat paste—extract structured milestone(s).",
+    guide: `From user text extract one or more businessRecords:
+- title (required): concise headline in natural language
+- content: optional details
+- category: VISIT / TRAINING / NEGOTIATION / DELIVERY / RELATIONSHIP / OTHER
+- occurredAt: YYYY-MM-DD if mentioned, else today
+- contactName: if a known contact from [Existing contacts] is involved
+No web research. ready=true when title(s) are clear. User may paste meeting notes, WeCom chat, or a short sentence like "visited their VP yesterday".`,
   },
 };
 
@@ -410,6 +458,10 @@ export function applySolutionAdded(locale: Locale, name: string): string {
 
 export function applyTodoAdded(locale: Locale, title: string): string {
   return locale === "zh" ? `已添加待办：${title}` : `Added todo: ${title}`;
+}
+
+export function applyBusinessRecordAdded(locale: Locale, title: string): string {
+  return locale === "zh" ? `已记录商务进展：${title}` : `Logged business milestone: ${title}`;
 }
 
 export function defaultIntakeReply(locale: Locale): string {

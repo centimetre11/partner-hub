@@ -1,11 +1,45 @@
 import Link from "next/link";
+import type { Opportunity, TodoItem, TimelineEvent } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState } from "@/components/ui";
+import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState, fmtDate } from "@/components/ui";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
 import { getServerI18n, stageName } from "@/lib/server-i18n";
+
+function truncate(text: string, max = 22) {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+function lastActivityAt(p: { events: TimelineEvent[]; updatedAt: Date }) {
+  return p.events.length ? new Date(p.events[0].createdAt) : new Date(p.updatedAt);
+}
+
+function pickNextTodo(todos: TodoItem[]) {
+  const open = todos.filter((t) => t.status === "OPEN");
+  if (!open.length) return null;
+  const now = Date.now();
+  const priorityRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+  return [...open].sort((a, b) => {
+    const aOverdue = a.dueDate && new Date(a.dueDate).getTime() < now ? 0 : 1;
+    const bOverdue = b.dueDate && new Date(b.dueDate).getTime() < now ? 0 : 1;
+    if (aOverdue !== bOverdue) return aOverdue - bOverdue;
+    const pd =
+      (priorityRank[a.priority as keyof typeof priorityRank] ?? 1) -
+      (priorityRank[b.priority as keyof typeof priorityRank] ?? 1);
+    if (pd !== 0) return pd;
+    const ad = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+    const bd = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+    return ad - bd;
+  })[0];
+}
+
+function pickActiveOpportunity(opportunities: Opportunity[]) {
+  const active = opportunities.filter((o) => o.status === "ACTIVE");
+  if (!active.length) return null;
+  return [...active].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+}
 
 export default async function PartnersPage({
   searchParams,
@@ -13,7 +47,7 @@ export default async function PartnersPage({
   searchParams: Promise<{ q?: string; stage?: string; owner?: string; tier?: string; industry?: string }>;
 }) {
   await requireUser();
-  const { labels, messages: m } = await getServerI18n();
+  const { labels, messages: m, bcp47 } = await getServerI18n();
   const sp = await searchParams;
   const labelMaps = await loadTaxonomyLabelMaps();
   const industryOptions = await getTaxonomyOptions("INDUSTRY");
@@ -46,7 +80,8 @@ export default async function PartnersPage({
     include: {
       contacts: true,
       opportunities: true,
-      events: { orderBy: { createdAt: "desc" } },
+      todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }] },
+      events: { orderBy: { createdAt: "desc" }, take: 1 },
       trainings: true,
       owner: true,
       salesUser: true,
@@ -106,6 +141,11 @@ export default async function PartnersPage({
             {partners.map((p) => {
               const c = computeCompleteness(p, labels);
               const stale = staleDays(p);
+              const activityAt = lastActivityAt(p);
+              const openTodos = p.todos.filter((t) => t.status === "OPEN");
+              const nextTodo = pickNextTodo(p.todos);
+              const activeOpp = pickActiveOpportunity(p.opportunities);
+              const activityTone = stale > 30 ? "text-red-600" : stale > 14 ? "text-amber-600" : "text-zinc-700";
               return (
                 <Link
                   key={p.id}
@@ -132,8 +172,37 @@ export default async function PartnersPage({
                       <div className="text-sm font-medium text-indigo-700">{stageName(labels, p.pipelineStage)}</div>
                     </div>
                   </div>
-                  <div className="mt-3 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${p.pipelineStage * 10}%` }} />
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 min-w-0">
+                      <div className="text-[11px] text-zinc-400">{m.partners.lastActivity}</div>
+                      <div className={`text-xs font-medium mt-0.5 truncate ${activityTone}`}>
+                        {fmtDate(activityAt, bcp47)}
+                        {" · "}
+                        {stale === 0 ? m.partners.activityToday : m.partners.activityDaysAgo.replace("{days}", String(stale))}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 min-w-0">
+                      <div className="text-[11px] text-zinc-400">{m.partners.openTodos}</div>
+                      {openTodos.length > 0 ? (
+                        <div className="text-xs text-zinc-700 mt-0.5 truncate" title={nextTodo?.title}>
+                          {m.partners.openTodosCount.replace("{n}", String(openTodos.length))}
+                          {nextTodo ? ` · ${truncate(nextTodo.title)}` : ""}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-400 mt-0.5">{m.partners.noOpenTodos}</div>
+                      )}
+                    </div>
+                    <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 min-w-0">
+                      <div className="text-[11px] text-zinc-400">{m.partners.activeDeal}</div>
+                      {activeOpp ? (
+                        <div className="text-xs text-zinc-700 mt-0.5 truncate" title={activeOpp.name}>
+                          {truncate(activeOpp.name)}
+                          {activeOpp.amount ? ` · ${activeOpp.amount}` : ""}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-400 mt-0.5">{m.partners.noActiveDeal}</div>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
                     <span>

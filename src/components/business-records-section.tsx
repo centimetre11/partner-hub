@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { EmptyState, fmtDate } from "@/components/ui";
 import { BusinessRecordForm } from "@/components/business-record-form";
+import { AiAddButton } from "@/components/ai-add-button";
 import { useLabels, useLocale, useMessages } from "@/lib/i18n/context";
 import { localeToBcp47 } from "@/lib/i18n/locale";
 
@@ -37,13 +38,21 @@ export function BusinessRecordsSection({
           {pd.businessRecords.replace("{count}", String(records.length))}
         </h3>
         {!showForm && (
-          <button
-            type="button"
-            onClick={() => setShowForm(true)}
-            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
-          >
-            {pd.addBusinessRecord}
-          </button>
+          <div className="flex items-center gap-2">
+            <AiAddButton
+              scope="business_record"
+              partnerId={partnerId}
+              label={pd.aiBusinessRecord}
+              variant="soft"
+            />
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
+            >
+              {pd.addBusinessRecord}
+            </button>
+          </div>
         )}
       </div>
       <div className="p-4 space-y-3">
@@ -100,13 +109,16 @@ export function BusinessRecordDialogButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-100"
-      >
-        {label ?? pd.logBusinessRecord}
-      </button>
+      <div className="flex items-center gap-2">
+        <AiAddButton scope="business_record" partnerId={partnerId} label={pd.aiBusinessRecord} variant="soft" />
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-100"
+        >
+          {label ?? pd.logBusinessRecord}
+        </button>
+      </div>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setOpen(false)}>
           <div

@@ -1,6 +1,6 @@
 import type { ExtractionProposal } from "@/lib/proposals";
 import type { IntakeProposal } from "@/lib/ai-intake";
-import { contactKey, fieldKey, oppKey, todoKey } from "@/lib/proposal-merge";
+import { contactKey, fieldKey, oppKey, todoKey, businessRecordKey } from "@/lib/proposal-merge";
 
 function isExcluded(excluded: Set<string>, keys: string[]) {
   return keys.some((k) => excluded.has(k));
@@ -17,6 +17,7 @@ export type NormalizedProposal = {
   todos: ExtractionProposal["todos"];
   trainings: IntakeProposal["trainings"];
   solutions: IntakeProposal["solutions"];
+  businessRecords: IntakeProposal["businessRecords"];
 };
 
 export function isIntakeProposal(p: IntakeProposal | ExtractionProposal): p is IntakeProposal {
@@ -36,6 +37,7 @@ export function normalizeProposal(p: IntakeProposal | ExtractionProposal): Norma
       todos: p.todos,
       trainings: p.trainings,
       solutions: p.solutions,
+      businessRecords: p.businessRecords,
     };
   }
   return {
@@ -49,6 +51,7 @@ export function normalizeProposal(p: IntakeProposal | ExtractionProposal): Norma
     todos: p.todos,
     trainings: [],
     solutions: [],
+    businessRecords: [],
   };
 }
 
@@ -73,6 +76,9 @@ export function filterNormalized(
     ),
     trainings: p.trainings.filter((_, i) => !isExcluded(excluded, [`tr${i}`])),
     solutions: p.solutions.filter((_, i) => !isExcluded(excluded, [`s${i}`])),
+    businessRecords: p.businessRecords.filter(
+      (r, i) => !isExcluded(excluded, [businessRecordKey(r.title), `br${i}`])
+    ),
   };
 }
 
@@ -86,6 +92,7 @@ export function normalizedToIntake(p: NormalizedProposal): IntakeProposal {
     todos: p.todos,
     trainings: p.trainings,
     solutions: p.solutions,
+    businessRecords: p.businessRecords,
   };
 }
 

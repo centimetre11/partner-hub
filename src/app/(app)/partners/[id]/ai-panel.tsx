@@ -22,6 +22,7 @@ export function AiPanel({
 }) {
   const m = useMessages();
   const pd = m.partnerDetail;
+  const ap = pd.aiPanel;
   const router = useRouter();
   const [questions, setQuestions] = useState<string[] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
@@ -89,24 +90,22 @@ export function AiPanel({
 
   return (
     <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-sm p-5 text-white">
-      <h3 className="text-sm font-semibold flex items-center gap-1.5">✦ AI Assistant</h3>
-      <p className="text-xs text-indigo-200 mt-1 mb-4">
-        Generate contact questions from profile gaps; or summarize recent activity.
-      </p>
+      <h3 className="text-sm font-semibold flex items-center gap-1.5">✦ {ap.title}</h3>
+      <p className="text-xs text-indigo-200 mt-1 mb-4">{ap.subtitle}</p>
       <div className="flex flex-wrap gap-2">
         <button
           onClick={genQuestions}
           disabled={loading !== null}
           className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
         >
-          {loading === "q" ? "Generating…" : `Fill gaps (${missing.length} missing)`}
+          {loading === "q" ? ap.generating : ap.fillGaps.replace("{count}", String(missing.length))}
         </button>
         <button
           onClick={genSummary}
           disabled={loading !== null}
           className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
         >
-          {loading === "s" ? "Generating…" : "Generate activity summary"}
+          {loading === "s" ? ap.generating : ap.genSummary}
         </button>
         <button
           onClick={toggleGuidance}
@@ -126,7 +125,7 @@ export function AiPanel({
       )}
       {questions && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
-          <div className="text-xs font-semibold mb-2">Questions for next contact:</div>
+          <div className="text-xs font-semibold mb-2">{ap.questionsTitle}</div>
           <ol className="text-xs space-y-1.5 list-decimal list-inside text-indigo-50">
             {questions.map((q, i) => (
               <li key={i}>{q}</li>
@@ -136,7 +135,7 @@ export function AiPanel({
       )}
       {loading === "s" && liveText && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
-          <div className="text-xs font-semibold mb-2">Generating activity summary…</div>
+          <div className="text-xs font-semibold mb-2">{ap.genSummaryProgress}</div>
           <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">
             {liveText}
             <span className="inline-block w-1 h-3 bg-indigo-200 ml-0.5 animate-pulse align-middle" />
@@ -145,7 +144,7 @@ export function AiPanel({
       )}
       {summary && loading !== "s" && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
-          <div className="text-xs font-semibold mb-2">Activity summary (saved to timeline):</div>
+          <div className="text-xs font-semibold mb-2">{ap.summarySaved}</div>
           <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">{summary}</p>
         </div>
       )}

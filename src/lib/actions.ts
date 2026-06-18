@@ -12,6 +12,7 @@ import { normalizeUserRole } from "./user-roles";
 import { getLocale } from "./i18n/locale-server";
 import { getMessages } from "./i18n/messages";
 import { normalizePartnerTier } from "./tier";
+import { persistBusinessRecord, normalizeBusinessRecordCategory } from "./business-record-core";
 
 // ============ 认证 ============
 
@@ -556,17 +557,12 @@ export async function updatePartnerIntegrationsAction(partnerId: string, formDat
 
 // ============ 商务记录 ============
 
-const BUSINESS_RECORD_CATEGORIES = ["VISIT", "TRAINING", "NEGOTIATION", "DELIVERY", "RELATIONSHIP", "OTHER"] as const;
-
 export async function createBusinessRecordAction(partnerId: string, formData: FormData) {
   const user = await requireUser();
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
 
-  const categoryRaw = String(formData.get("category") ?? "OTHER");
-  const category = BUSINESS_RECORD_CATEGORIES.includes(categoryRaw as (typeof BUSINESS_RECORD_CATEGORIES)[number])
-    ? categoryRaw
-    : "OTHER";
+  const category = normalizeBusinessRecordCategory(String(formData.get("category") ?? "OTHER"));
   const content = String(formData.get("content") ?? "").trim() || null;
   const occurredAtRaw = String(formData.get("occurredAt") ?? "").trim();
   const occurredAt = occurredAtRaw ? new Date(occurredAtRaw) : new Date();
@@ -574,39 +570,17 @@ export async function createBusinessRecordAction(partnerId: string, formData: Fo
   const source = String(formData.get("source") ?? "MANUAL");
   const sourceTodoId = String(formData.get("sourceTodoId") ?? "").trim() || null;
 
-  const event = await db.timelineEvent.create({
-    data: {
-      partnerId,
-      type: "MILESTONE",
-      title,
-      content,
-      createdById: user.id,
-      createdAt: occurredAt,
-      meta: JSON.stringify({ category, source }),
-    },
+  await persistBusinessRecord({
+    partnerId,
+    userId: user.id,
+    category,
+    title,
+    content,
+    occurredAt,
+    contactId,
+    source,
+    sourceTodoId,
   });
-
-  await db.businessRecord.create({
-    data: {
-      partnerId,
-      category,
-      title,
-      content,
-      occurredAt,
-      contactId,
-      timelineEventId: event.id,
-      sourceTodoId,
-      source,
-      createdById: user.id,
-    },
-  });
-
-  if (sourceTodoId) {
-    await db.todoItem.update({
-      where: { id: sourceTodoId },
-      data: { status: "DONE", doneAt: new Date() },
-    });
-  }
 
   revalidatePath(`/partners/${partnerId}`);
   revalidatePath("/todos");

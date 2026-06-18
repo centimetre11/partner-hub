@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, EmptyState, fmtDateTime } from "@/components/ui";
 import { clonePartnerAgentAction } from "@/lib/agent-actions";
 import { RunButton } from "@/app/(app)/agents/[id]/run-button";
+import type { Messages } from "@/lib/i18n/messages/en";
 
 type AgentRow = {
   id: string;
@@ -23,16 +24,18 @@ export function PartnerAgentsPanel({
   partnerId,
   agents,
   templates,
+  copy,
+  bcp47,
 }: {
   partnerId: string;
   agents: AgentRow[];
   templates: TemplateRow[];
+  copy: Messages["partnerDetail"]["agentsPanel"];
+  bcp47: string;
 }) {
   return (
-    <Card title={`Quick Agents (${agents.length})`}>
-      <p className="text-xs text-zinc-500 mb-4">
-        Automation assistants bound to this partner: pre-meeting briefs, dynamic monitoring, sentiment tracking, joint solution reports, etc.
-      </p>
+    <Card title={copy.title.replace("{count}", String(agents.length))}>
+      <p className="text-xs text-zinc-500 mb-4">{copy.desc}</p>
       <div className="space-y-3">
         {agents.map((a) => (
           <div key={a.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 px-3 py-2.5">
@@ -42,18 +45,20 @@ export function PartnerAgentsPanel({
               </Link>
               {a.description && <p className="text-xs text-zinc-400 truncate">{a.description}</p>}
               {a.lastRunAt && (
-                <p className="text-xs text-zinc-400">Last run {fmtDateTime(a.lastRunAt)}</p>
+                <p className="text-xs text-zinc-400">
+                  {copy.lastRun.replace("{date}", fmtDateTime(a.lastRunAt, bcp47))}
+                </p>
               )}
             </div>
             <RunButton agentId={a.id} compact />
           </div>
         ))}
-        {agents.length === 0 && <EmptyState text="No agents bound yet" />}
+        {agents.length === 0 && <EmptyState text={copy.noAgents} />}
       </div>
 
       {templates.length > 0 && (
         <div className="mt-5 pt-4 border-t border-zinc-100">
-          <div className="text-xs text-zinc-500 mb-2">Create quickly from template (bound to this partner)</div>
+          <div className="text-xs text-zinc-500 mb-2">{copy.templatesHint}</div>
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <form key={t.id} action={clonePartnerAgentAction.bind(null, t.id, partnerId)}>
@@ -67,7 +72,7 @@ export function PartnerAgentsPanel({
       )}
 
       <Link href={`/agents/new?partnerId=${partnerId}`} className="mt-4 text-sm text-indigo-600 hover:underline block">
-        + Custom Agent
+        {copy.customAgent}
       </Link>
     </Card>
   );

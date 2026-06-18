@@ -9,6 +9,7 @@ import {
   contactKey,
   oppKey,
   todoKey,
+  businessRecordKey,
   type ProposalChanges,
 } from "@/lib/proposal-merge";
 import { filterNormalized, normalizeProposal, type NormalizedProposal } from "@/lib/proposal-normalize";
@@ -19,7 +20,7 @@ import {
 } from "@/lib/clarification-apply";
 import { useMessages } from "@/lib/i18n/context";
 
-type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution" | "partner";
+type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution" | "business" | "partner";
 
 type Props = {
   proposal: IntakeProposal | null;
@@ -111,6 +112,7 @@ export function LiveProposalDraft({
       todo: "border-l-purple-400",
       training: "border-l-orange-400",
       solution: "border-l-violet-400",
+      business: "border-l-amber-500",
       partner: "border-l-indigo-400",
     };
     const off = excluded.has(k);
@@ -146,6 +148,7 @@ export function LiveProposalDraft({
     normalized.todos.length +
     normalized.trainings.length +
     normalized.solutions.length +
+    normalized.businessRecords.length +
     (normalized.partnerName ? 1 : 0);
 
   return (
@@ -241,6 +244,17 @@ export function LiveProposalDraft({
               return (
                 <Row key={k} k={k} tone="todo" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
                   <span className="font-medium text-zinc-800">Todo: {t.title}</span>
+                </Row>
+              );
+            })}
+            {normalized.businessRecords.map((r, i) => {
+              const k = businessRecordKey(r.title) || `br${i}`;
+              return (
+                <Row key={k} k={k} tone="business" isNew={changes?.added.includes(k)} isUpdated={changes?.updated.includes(k)}>
+                  <span className="font-medium text-zinc-800">Milestone: {r.title}</span>
+                  <span className="text-zinc-500 ml-1.5 text-xs">
+                    {[r.category, r.occurredAt, r.contactName].filter(Boolean).join(" · ")}
+                  </span>
                 </Row>
               );
             })}

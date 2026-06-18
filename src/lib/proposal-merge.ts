@@ -17,7 +17,7 @@ export type MergePatchResult = {
 };
 
 function emptyDraft(): IntakeProposal {
-  return { summary: "", fields: [], contacts: [], opportunities: [], todos: [], trainings: [], solutions: [] };
+  return { summary: "", fields: [], contacts: [], opportunities: [], todos: [], trainings: [], solutions: [], businessRecords: [] };
 }
 
 export function fieldKey(field: string) {
@@ -36,6 +36,10 @@ export function todoKey(title: string) {
   return `todo:${title.toLowerCase()}`;
 }
 
+export function businessRecordKey(title: string) {
+  return `biz:${title.toLowerCase()}`;
+}
+
 export function countProposalItems(p: IntakeProposal): number {
   return (
     (p.partnerName ? 1 : 0) +
@@ -44,7 +48,8 @@ export function countProposalItems(p: IntakeProposal): number {
     p.opportunities.length +
     p.todos.length +
     p.trainings.length +
-    p.solutions.length
+    p.solutions.length +
+    p.businessRecords.length
   );
 }
 
@@ -53,7 +58,7 @@ export function mergeProposalPatch(
   ops: ProposalPatchOp[],
   excluded: Set<string>
 ): MergePatchResult {
-  const next: IntakeProposal = draft ? { ...draft, fields: [...draft.fields], contacts: [...draft.contacts], opportunities: [...draft.opportunities], todos: [...draft.todos], trainings: [...draft.trainings], solutions: [...draft.solutions] } : emptyDraft();
+  const next: IntakeProposal = draft ? { ...draft, fields: [...draft.fields], contacts: [...draft.contacts], opportunities: [...draft.opportunities], todos: [...draft.todos], trainings: [...draft.trainings], solutions: [...draft.solutions], businessRecords: [...draft.businessRecords] } : emptyDraft();
   const changes: ProposalChanges = { added: [], updated: [], removed: [], aiReupdates: [] };
 
   for (const op of ops) {
@@ -181,12 +186,13 @@ export function mergeFinalProposal(
   const { draft: merged } = mergeProposalPatch(draft ?? emptyDraft(), ops, excluded);
   merged.trainings = final.trainings;
   merged.solutions = final.solutions;
+  merged.businessRecords = final.businessRecords;
   return merged;
 }
 
 export type NormalizedRow = {
   key: string;
-  tone: "field" | "contact" | "opp" | "todo" | "training" | "solution" | "partner";
+  tone: "field" | "contact" | "opp" | "todo" | "training" | "solution" | "business" | "partner";
   label: string;
   detail?: string;
   oldValue?: string | null;

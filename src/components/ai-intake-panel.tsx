@@ -37,6 +37,11 @@ const SCOPE_META: Record<IntakeScope, { title: string; placeholder: string }> = 
   },
   training: { title: "AI Add Training", placeholder: "Describe the training or certification to schedule." },
   solution: { title: "AI Add Joint Solution", placeholder: "Describe the joint solution." },
+  business_record: {
+    title: "AI Log Business Milestone",
+    placeholder:
+      "Paste meeting notes, WeCom chat, or describe what happened — I'll extract and save as business record(s).\nExamples:\n• Visited their VP yesterday, discussed L2 cert plan\n• Scheduled FineBI L2 training on 3/15 with Faisal",
+  },
 };
 
 export function AiIntakePanel({
