@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-registry";
+import { getKmsConfigStatus } from "@/lib/kms";
 import { isWebSearchAvailable, webSearchBackendLabel } from "@/lib/web-search";
 import { isSuperAdmin } from "@/lib/user-roles";
 import { getServerI18n } from "@/lib/server-i18n";
@@ -14,8 +15,8 @@ export default async function ToolsPage() {
     where: { isTemplate: false },
     select: { skills: true },
   });
-  const kmsCred = await db.userKmsCredential.findUnique({ where: { userId: user.id } });
-  const kmsConfigured = !!kmsCred?.accessToken;
+  const kmsStatus = await getKmsConfigStatus(user.id);
+  const kmsConfigured = kmsStatus.configured;
   const usedToolNames = new Set<string>();
   for (const a of equippedAgents) {
     for (const name of JSON.parse(a.skills || "[]") as string[]) {
@@ -58,8 +59,13 @@ export default async function ToolsPage() {
         {!kmsConfigured && (
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
             <span className="font-medium">{m.tools.kmsBanner}</span>{" "}
-            <a href="/settings/kms" className="underline font-medium">{m.tools.kmsBannerLink}</a>{" "}
+            <a href="/account" className="underline font-medium">{m.tools.kmsBannerLink}</a>{" "}
             {m.tools.kmsBannerDetail}
+          </div>
+        )}
+        {kmsConfigured && kmsStatus.fallback && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {m.tools.kmsFallbackBanner}
           </div>
         )}
 

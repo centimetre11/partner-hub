@@ -35,6 +35,7 @@ import { partnerContext, powermapContext, type ContactProposal, type FieldUpdate
 import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
+import { partnerFieldValueFromText } from "./tier";
 
 export type IntakeScope = AiLocaleScope;
 
@@ -509,15 +510,13 @@ export async function applyIntake(opts: {
       : { name, status: "PROSPECT", poolFlag: "NEW" };
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
-      if (f.field === "fitScore" || f.field === "pipelineStage") {
-        const n = parseInt(asTrimmedString(f.newValue), 10);
-        if (!Number.isNaN(n)) data[f.field] = n;
-      } else if (f.field === "industries" || f.field === "industry") {
+      if (f.field === "industries" || f.field === "industry") {
         const norm = normalizeIndustriesInput(f.newValue);
         data.industries = norm.industries;
         data.industry = norm.industry;
       } else {
-        data[f.field] = asTrimmedString(f.newValue);
+        const parsed = partnerFieldValueFromText(f.field, asTrimmedString(f.newValue));
+        if (parsed !== undefined) data[f.field] = parsed;
       }
     }
     let created;
@@ -551,17 +550,17 @@ export async function applyIntake(opts: {
     const data: Record<string, unknown> = {};
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
-      if (f.field === "fitScore" || f.field === "pipelineStage") {
-        const n = parseInt(asTrimmedString(f.newValue), 10);
-        if (!Number.isNaN(n)) data[f.field] = n;
-      } else if (f.field === "industries" || f.field === "industry") {
+      if (f.field === "industries" || f.field === "industry") {
         const norm = normalizeIndustriesInput(f.newValue);
         data.industries = norm.industries;
         data.industry = norm.industry;
       } else {
-        data[f.field] = asTrimmedString(f.newValue);
+        const parsed = partnerFieldValueFromText(f.field, asTrimmedString(f.newValue));
+        if (parsed !== undefined) {
+          data[f.field] = parsed;
+          applied.push(applyFieldMessage(locale, f.label || fieldLabel(locale, f.field), asTrimmedString(f.newValue)));
+        }
       }
-      applied.push(applyFieldMessage(locale, f.label || fieldLabel(locale, f.field), asTrimmedString(f.newValue)));
     }
     if (Object.keys(data).length) {
       await db.partner.update({ where: { id: partnerId }, data: data as Prisma.PartnerUpdateInput });

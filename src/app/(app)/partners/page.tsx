@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
+import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState } from "@/components/ui";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
@@ -116,7 +116,7 @@ export default async function PartnersPage({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-zinc-900">{p.name}</span>
-                        {p.tier && <Badge tone={tierTone(p.tier)}>{m.common.tier} {p.tier}</Badge>}
+                        <TierBadge tier={p.tier} />
                         <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, p.category)}</Badge>
                         {parseIndustries(p).map((code) => (
                           <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>

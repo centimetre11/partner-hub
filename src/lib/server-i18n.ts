@@ -24,6 +24,7 @@ export function labelConstants(ui: ServerI18n["labels"]) {
     ATTITUDE_LABELS: ui.attitudeLabels,
     TODO_PRIORITY_LABELS: ui.todoPriorityLabels,
     EVENT_TYPE_LABELS: ui.eventTypeLabels,
+    BUSINESS_RECORD_CATEGORY_LABELS: ui.businessRecordCategoryLabels,
     MONITOR_DIMENSION_LABELS: ui.monitorDimensionLabels,
     MONITOR_SENTIMENT_LABELS: ui.monitorSentimentLabels,
     MONITOR_SOURCE_TYPE_LABELS: ui.monitorSourceTypeLabels,

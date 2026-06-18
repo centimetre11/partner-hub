@@ -4,18 +4,40 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AiStreamState } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
+import type { StageGuidance } from "@/lib/partner-framework";
+import type { LabelsBundle } from "@/lib/i18n/labels";
+import { StageGuidanceContent } from "@/components/stage-guidance-content";
+import { useMessages } from "@/lib/i18n/context";
 
-export function AiPanel({ partnerId, missing }: { partnerId: string; missing: string[] }) {
+export function AiPanel({
+  partnerId,
+  missing,
+  stageGuidance,
+  labels,
+}: {
+  partnerId: string;
+  missing: string[];
+  stageGuidance: StageGuidance;
+  labels: LabelsBundle;
+}) {
+  const m = useMessages();
+  const pd = m.partnerDetail;
   const router = useRouter();
   const [questions, setQuestions] = useState<string[] | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const [showGuidance, setShowGuidance] = useState(false);
   const [loading, setLoading] = useState<"q" | "s" | null>(null);
   const [liveText, setLiveText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const guidanceBtnLabel = pd.stageGuidanceBtn
+    .replace("{stage}", String(stageGuidance.stage))
+    .replace("{name}", stageGuidance.name);
+
   async function genQuestions() {
     setLoading("q");
     setError(null);
+    setShowGuidance(false);
     try {
       const res = await fetch("/api/ai/questions", {
         method: "POST",
@@ -37,6 +59,7 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
     setError(null);
     setLiveText("");
     setSummary(null);
+    setShowGuidance(false);
     try {
       const res = await fetch("/api/ai/summary", {
         method: "POST",
@@ -58,29 +81,49 @@ export function AiPanel({ partnerId, missing }: { partnerId: string; missing: st
     }
   }
 
+  function toggleGuidance() {
+    setShowGuidance((v) => !v);
+    setQuestions(null);
+    setSummary(null);
+  }
+
   return (
     <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-sm p-5 text-white">
       <h3 className="text-sm font-semibold flex items-center gap-1.5">✦ AI Assistant</h3>
       <p className="text-xs text-indigo-200 mt-1 mb-4">
         Generate contact questions from profile gaps; or summarize recent activity.
       </p>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={genQuestions}
           disabled={loading !== null}
-          className="flex-1 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
+          className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
         >
           {loading === "q" ? "Generating…" : `Fill gaps (${missing.length} missing)`}
         </button>
         <button
           onClick={genSummary}
           disabled={loading !== null}
-          className="flex-1 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
+          className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
         >
           {loading === "s" ? "Generating…" : "Generate activity summary"}
         </button>
+        <button
+          onClick={toggleGuidance}
+          disabled={loading !== null}
+          className={`flex-1 min-w-[120px] rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors ${
+            showGuidance ? "bg-white/30" : "bg-white/15 hover:bg-white/25"
+          }`}
+        >
+          {guidanceBtnLabel}
+        </button>
       </div>
       {error && <p className="text-xs text-amber-200 mt-3">{error}</p>}
+      {showGuidance && (
+        <div className="mt-4 bg-white/10 rounded-lg p-3.5">
+          <StageGuidanceContent guidance={stageGuidance} labels={labels} messages={m} variant="dark" />
+        </div>
+      )}
       {questions && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
           <div className="text-xs font-semibold mb-2">Questions for next contact:</div>

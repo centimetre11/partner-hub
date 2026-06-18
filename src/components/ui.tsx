@@ -21,11 +21,24 @@ export function Badge({
   );
 }
 
+import { formatTierLabel, normalizePartnerTier, type PartnerTier } from "@/lib/tier";
+
 export function tierTone(tier?: string | null): "red" | "amber" | "blue" | "zinc" {
-  if (tier === "A") return "red";
-  if (tier === "B") return "amber";
-  if (tier === "C") return "blue";
+  const normalized = normalizePartnerTier(tier);
+  if (normalized === "A") return "red";
+  if (normalized === "B") return "amber";
+  if (normalized === "C") return "blue";
   return "zinc";
+}
+
+export function TierBadge({ tier }: { tier?: string | null }) {
+  const normalized = normalizePartnerTier(tier);
+  if (!normalized) return null;
+  return <Badge tone={tierTone(normalized)}>{formatTierLabel(normalized)}</Badge>;
+}
+
+export function tierSelectValue(tier?: string | null): PartnerTier | "" {
+  return normalizePartnerTier(tier) ?? "";
 }
 
 export function ScoreBar({ score }: { score: number }) {

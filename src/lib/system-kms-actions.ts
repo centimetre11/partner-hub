@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireUser } from "./session";
+import { requireSuperAdmin } from "./session";
 import { db } from "./db";
 import { KMS_DEFAULT_BASE_URL, testKmsConnection } from "./kms";
 
@@ -10,40 +10,35 @@ function cleanToken(raw: FormDataEntryValue | null) {
   return v || null;
 }
 
-export async function saveKmsCredentialAction(formData: FormData) {
-  const user = await requireUser();
+export async function saveSystemKmsCredentialAction(formData: FormData) {
+  await requireSuperAdmin();
   const accessToken = cleanToken(formData.get("accessToken"));
-  if (!accessToken) return { error: "Please enter the KMS personal access token" };
-
+  if (!accessToken) return { error: "Please enter the team KMS token" };
   const baseUrl = cleanToken(formData.get("baseUrl")) ?? KMS_DEFAULT_BASE_URL;
 
-  await db.userKmsCredential.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id, accessToken, baseUrl },
+  await db.systemKmsCredential.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton", accessToken, baseUrl },
     update: { accessToken, baseUrl },
   });
 
   revalidatePath("/settings");
-  revalidatePath("/settings/kms");
   revalidatePath("/account");
   revalidatePath("/tools");
-  return { ok: true, message: "KMS token saved. You won't need to enter it again." };
+  return { ok: true, message: "Team KMS fallback token saved." };
 }
 
-export async function testKmsCredentialAction(formData: FormData) {
-  const user = await requireUser();
+export async function testSystemKmsCredentialAction(formData: FormData) {
+  await requireSuperAdmin();
   const accessToken = cleanToken(formData.get("accessToken"));
   const stored = cleanToken(formData.get("useStored"));
-
   let token = accessToken;
   if (!token && stored === "1") {
-    const cred = await db.userKmsCredential.findUnique({ where: { userId: user.id } });
+    const cred = await db.systemKmsCredential.findUnique({ where: { id: "singleton" } });
     token = cred?.accessToken ?? null;
   }
-  if (!token) return { error: "Enter a token, or save one first and then test the stored token." };
-
+  if (!token) return { error: "Enter a token or save one first" };
   const baseUrl = cleanToken(formData.get("baseUrl")) ?? KMS_DEFAULT_BASE_URL;
-
   try {
     const result = await testKmsConnection({ baseUrl, token });
     return {
@@ -55,11 +50,10 @@ export async function testKmsCredentialAction(formData: FormData) {
   }
 }
 
-export async function deleteKmsCredentialAction() {
-  const user = await requireUser();
-  await db.userKmsCredential.deleteMany({ where: { userId: user.id } });
+export async function deleteSystemKmsCredentialAction() {
+  await requireSuperAdmin();
+  await db.systemKmsCredential.deleteMany({ where: { id: "singleton" } });
   revalidatePath("/settings");
-  revalidatePath("/settings/kms");
   revalidatePath("/account");
   revalidatePath("/tools");
   return { ok: true };

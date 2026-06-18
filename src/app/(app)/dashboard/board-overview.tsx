@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { Badge, Card, ScoreBar, tierTone } from "@/components/ui";
+import { Badge, Card, ScoreBar, TierBadge, tierTone } from "@/components/ui";
+import { normalizePartnerTier } from "@/lib/tier";
 import { CATEGORY_LABELS, PIPELINE_STAGES } from "@/lib/constants";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 
@@ -45,8 +46,11 @@ export async function BoardOverview() {
     value: active.filter((p) => p.pipelineStage === s.stage).length,
   }));
 
-  const tierDist = ["A", "B", "C"].map((t) => ({ t, n: active.filter((p) => p.tier === t).length }));
-  const noTier = active.filter((p) => !p.tier).length;
+  const tierDist = ["A", "B", "C"].map((t) => ({
+    t,
+    n: active.filter((p) => normalizePartnerTier(p.tier) === t).length,
+  }));
+  const noTier = active.filter((p) => !normalizePartnerTier(p.tier)).length;
   const catDist = Object.entries(CATEGORY_LABELS)
     .map(([k, v]) => ({ label: v, value: active.filter((p) => p.category === k).length }))
     .filter((x) => x.value > 0);
@@ -174,7 +178,7 @@ export async function BoardOverview() {
               <Link href={`/partners/${p.id}`} className="w-48 shrink-0 text-sm font-medium text-zinc-800 hover:text-indigo-600 truncate">
                 {p.name}
               </Link>
-              {p.tier && <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge>}
+              {p.tier && <TierBadge tier={p.tier} />}
               <div className="w-36 shrink-0">
                 <ScoreBar score={c.score} />
               </div>

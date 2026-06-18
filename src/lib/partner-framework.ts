@@ -1,5 +1,6 @@
 import type { Contact, Opportunity, Partner, Solution, TimelineEvent, Training } from "@prisma/client";
 import { labelsEn, stageNameFromLabels, type LabelsBundle } from "./i18n/labels";
+import { formatTierLabel, normalizePartnerTier } from "./tier";
 import { labelsFromMap, labelFromMap, parseIndustries, type TaxonomyDimension } from "./taxonomy";
 
 export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "capability" | "relationship";
@@ -237,7 +238,8 @@ export function buildPartnerInstanceMap(
   const guidance = getStageGuidance(p, ui);
   const fb = ui.fallbacks;
 
-  const tierLabel = p.tier ? `Tier ${p.tier}` : fb.unclassified;
+  const normalizedTier = normalizePartnerTier(p.tier);
+  const tierLabel = normalizedTier ? formatTierLabel(normalizedTier) : fb.unclassified;
   const archetypeLabel = labelFromMap(
     labelMaps?.ARCHETYPE ?? ui.partnerArchetypeLabels,
     p.partnerArchetype,

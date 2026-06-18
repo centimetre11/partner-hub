@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/lib/actions";
 import { NavLinks } from "@/components/nav-links";
@@ -104,9 +105,12 @@ export function AppShell({
         <NavLinks unread={unread} onNavigate={() => setNavOpen(false)} showTeamSettings={isSuperAdmin(user)} />
         <div className="mt-auto border-t border-zinc-800 px-5 py-4">
           <LocaleSwitcher locale={locale} />
-          <div className="text-xs text-zinc-400 mb-2 truncate">
+          <Link
+            href="/account"
+            className="block text-xs text-zinc-400 mb-2 truncate hover:text-indigo-300 transition-colors"
+          >
             {user.name} · {user.email}
-          </div>
+          </Link>
           <form action={logoutAction}>
             <button className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">{m.shell.signOut}</button>
           </form>

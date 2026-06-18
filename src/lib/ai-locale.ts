@@ -75,7 +75,6 @@ const FREE_TEXT_FIELD_KEYS = new Set([
   "valueFanruanOffer",
   "valueCustomerOutcome",
   "notes",
-  "tier",
 ]);
 
 export function localeOutputRules(locale: Locale): string {
@@ -89,7 +88,7 @@ export function localeOutputRules(locale: Locale): string {
 - User-facing text MUST be in ${lang}: reply, questions, clarifications.question, clarifications.options, proposal.summary, todos (title/detail), contact approach/notes/reason, solution descriptions (name/targetCustomer/painPoint/fanruanOffer/partnerOffer/pricingModel/notes/reason), fieldUpdates.reason.
 - Free-text profile fields (${freeTextExamples}, etc.) → write newValue in ${lang}.
 - fieldUpdates.label → use the ${lang} display name from the field list (e.g. valuePartnerOffer → "${fieldLabels.valuePartnerOffer}").
-- JSON property names and stored enum codes stay English: field keys (country, category, …), category=POWER_BI, industries JSON array of BANKING/GOVERNMENT codes, role=DECISION_MAKER, pipelineStage as number 1–10, training/solution status codes (PLANNED/DRAFT/…), priority HIGH/MEDIUM/LOW.
+- JSON property names and stored enum codes stay English: field keys (country, category, …), category=POWER_BI, industries JSON array of BANKING/GOVERNMENT codes, role=DECISION_MAKER, pipelineStage as number 1–10, tier as A/B/C only (never numbers, "Tier 1", P0/P1, or fitScore), training/solution status codes (PLANNED/DRAFT/…), priority HIGH/MEDIUM/LOW for todos only.
 - Person names and company names: keep as found in source material (may be English or local language).`;
 }
 
@@ -226,7 +225,7 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "New partner onboarding",
     intro:
       "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
-    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, fitScore, priority. If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).`,
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, tier (A/B/C). If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).`,
   },
   powermap: {
     title: "Add power map contact",
@@ -309,7 +308,7 @@ ${localeOutputRules(locale)}
 
 Rules:
 1. Propose only changes supported by the text; attach reason (quote key phrase). Do not invent.
-2. fieldUpdates only for: ${fl}. newValue always string; pipelineStage 1-10 (${st}).
+2. fieldUpdates only for: ${fl}. newValue always string; pipelineStage 1-10 (${st}); tier must be A, B, or C only.
 3. People in text (power map): action=add if new; action=update with id if existing with new info (title, dept, attitude, reporting, contact). Fields:
    - role: APPROVER/DECISION_MAKER/SUPPORTER/EVALUATOR/INFLUENCER
    - attitude: 3=champion/2=supportive exclusive/1=supportive non-exclusive/0=neutral/-1=opposed

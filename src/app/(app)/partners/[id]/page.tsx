@@ -2,10 +2,11 @@ import { notFound } from "next/navigation";
 import type { Opportunity, TimelineEvent, TodoItem, Training, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } from "@/components/ui";
+import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, TierBadge } from "@/components/ui";
+import { formatTierLabel, normalizePartnerTier } from "@/lib/tier";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
-import { buildPartnerInstanceMap } from "@/lib/partner-framework";
+import { buildPartnerInstanceMap, getStageGuidance } from "@/lib/partner-framework";
 import {
   getTaxonomyOptions,
   labelFromMap,
@@ -16,18 +17,19 @@ import {
 import { PartnerGtmPanel } from "@/components/partner-gtm-panel";
 import { searchGtmLibraryAction } from "@/lib/gtm-library-actions";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
-import { PartnerStageGuidancePanel } from "@/components/partner-stage-guidance";
 import {
   addNoteAction, archivePartnerAction, createTodoAction,
   deleteOpportunityAction, deleteTodoAction, deleteTrainingAction, promotePartnerAction,
-  restorePartnerAction, setPipelineStageAction, toggleTodoAction,
+  restorePartnerAction, setPipelineStageAction,
   upsertOpportunityAction, upsertTrainingAction,
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
 import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
-import { PartnerWecomPanel } from "@/components/partner-wecom-panel";
+import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
+import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
+import { TodoItemRow } from "@/components/todo-item-row";
 import { getWecomChatForPartner } from "@/lib/wecom-chats";
 import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
 import { AiAddButton } from "@/components/ai-add-button";
@@ -64,6 +66,14 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         include: {
           assets: { include: { asset: true } },
           documents: { select: { id: true, title: true, type: true } },
+        },
+      },
+      businessRecords: {
+        orderBy: { occurredAt: "desc" },
+        take: 20,
+        include: {
+          createdBy: true,
+          contact: { select: { name: true } },
         },
       },
     },
@@ -106,6 +116,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   };
   const industryCodes = parseIndustries(p);
   const instanceMap = buildPartnerInstanceMap(p, labelMaps, labels);
+  const stageGuidance = getStageGuidance(p, labels);
+  const contactOptions = p.contacts.map((c) => ({ id: c.id, name: c.name }));
   const gtmLibraryItems = await searchGtmLibraryAction("");
   let selectedDims: string[] = [];
   if (p.monitorDims) {
@@ -134,7 +146,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 {L.STATUS_LABELS[p.status]}
               </Badge>
               {p.status === "PROSPECT" && <Badge tone="amber">{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>}
-              {p.tier && <Badge tone={tierTone(p.tier)}>{m.common.tier} {p.tier}</Badge>}
+              <TierBadge tier={p.tier} />
               {p.partnerArchetype && (
                 <Badge tone="indigo">{labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype)}</Badge>
               )}
@@ -223,7 +235,27 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         taxonomy={taxonomy}
         guide={
           <div className="space-y-5">
-            <PartnerStageGuidancePanel partner={p} labels={labels} messages={m} />
+            <SentimentMonitorSection
+              partnerId={p.id}
+              partnerName={p.name}
+              partnerWebsite={p.website}
+              disabled
+              sources={p.monitorSources.map((s) => ({
+                id: s.id, label: s.label, url: s.url, sourceType: s.sourceType,
+                domain: s.domain, title: s.title, thumbnailUrl: s.thumbnailUrl, enabled: s.enabled,
+              }))}
+              items={p.monitorItems.map((m) => ({
+                id: m.id, dimension: m.dimension, sentiment: m.sentiment, title: m.title,
+                summary: m.summary, url: m.url, sourceName: m.sourceName,
+                publishedAt: m.publishedAt, createdAt: m.createdAt,
+              }))}
+              selectedDims={selectedDims}
+            />
+            <BusinessRecordsSection
+              partnerId={p.id}
+              records={p.businessRecords}
+              contacts={contactOptions}
+            />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
               <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos.length))}>
                 <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4">
@@ -237,7 +269,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   <input name="dueDate" type="date" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm w-36 shrink-0" />
                   <button className="rounded-lg bg-zinc-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-zinc-700">+</button>
                 </form>
-                <TodoList todos={p.todos} users={users} input={input} m={m} L={L} bcp47={bcp47} />
+                <TodoList todos={p.todos} users={users} partnerId={p.id} contacts={contactOptions} m={m} L={L} bcp47={bcp47} />
               </Card>
               <div className="space-y-5">
                 <Card title={m.partnerDetail.profileGaps}>
@@ -250,23 +282,30 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     </div>
                   )}
                 </Card>
-                <AiPanel partnerId={p.id} missing={completeness.missing} />
-                <PartnerAgentsPanel partnerId={p.id} agents={partnerAgents} templates={agentTemplates} />
-                <PartnerWecomPanel
+                <AiPanel
                   partnerId={p.id}
-                  partnerName={p.name}
-                  boundChat={
-                    wecomChat
-                      ? {
-                          chatId: wecomChat.chatId,
-                          chatType: wecomChat.chatType,
-                          label: wecomChat.label,
-                        }
-                      : null
-                  }
+                  missing={completeness.missing}
+                  stageGuidance={stageGuidance}
+                  labels={labels}
                 />
+                <PartnerAgentsPanel partnerId={p.id} agents={partnerAgents} templates={agentTemplates} />
               </div>
             </div>
+            <PartnerIntegrationsPanel
+              partnerId={p.id}
+              partnerName={p.name}
+              kmsRootPath={p.kmsRootPath}
+              crmCustomerId={p.crmCustomerId}
+              boundChat={
+                wecomChat
+                  ? {
+                      chatId: wecomChat.chatId,
+                      chatType: wecomChat.chatType,
+                      label: wecomChat.label,
+                    }
+                  : null
+              }
+            />
           </div>
         }
         positioning={
@@ -299,7 +338,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               <Card title={m.partnerDetail.positioningTags} className="lg:col-span-1">
                 <dl className="space-y-3 text-sm">
                   {[
-                    [m.common.tier, p.tier ? `${m.common.tier} ${p.tier}` : null],
+                    [m.common.tier, (() => { const t = normalizePartnerTier(p.tier); return t ? formatTierLabel(t) : null; })()],
                     [m.partnerDetail.partnerType, p.partnerArchetype ? labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype) : null],
                     [m.partnerDetail.competitiveDna, labelFromMap(labelMaps.CATEGORY, p.category)],
                     [m.partnerDetail.primaryIndustry, industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
@@ -370,7 +409,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 }))}
               />
             </Card>
-            <Card title={m.partnerDetail.activityTimeline.replace("{count}", String(p.events.length))}>
+            <Card
+              title={m.partnerDetail.activityTimeline.replace("{count}", String(p.events.length))}
+              actions={<BusinessRecordDialogButton partnerId={p.id} contacts={contactOptions} />}
+            >
               <form action={addNoteAction.bind(null, p.id)} className="flex gap-2 mb-5">
                 <input name="content" required placeholder={m.partnerDetail.logActivityPlaceholder} className={input} />
                 <select name="type" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0">
@@ -381,21 +423,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </form>
               <TimelineList events={p.events} L={L} bcp47={bcp47} m={m} />
             </Card>
-            <SentimentMonitorSection
-              partnerId={p.id}
-              partnerName={p.name}
-              partnerWebsite={p.website}
-              sources={p.monitorSources.map((s) => ({
-                id: s.id, label: s.label, url: s.url, sourceType: s.sourceType,
-                domain: s.domain, title: s.title, thumbnailUrl: s.thumbnailUrl, enabled: s.enabled,
-              }))}
-              items={p.monitorItems.map((m) => ({
-                id: m.id, dimension: m.dimension, sentiment: m.sentiment, title: m.title,
-                summary: m.summary, url: m.url, sourceName: m.sourceName,
-                publishedAt: m.publishedAt, createdAt: m.createdAt,
-              }))}
-              selectedDims={selectedDims}
-            />
           </div>
         }
       />
@@ -406,14 +433,16 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
 function TodoList({
   todos,
   users,
-  input,
+  partnerId,
+  contacts,
   m,
   L,
   bcp47,
 }: {
   todos: (TodoItem & { assignee: User | null })[];
   users: User[];
-  input: string;
+  partnerId: string;
+  contacts: { id: string; name: string }[];
   m: Messages;
   L: ReturnType<typeof labelConstants>;
   bcp47: string;
@@ -421,54 +450,22 @@ function TodoList({
   const openTodos = todos.filter((t) => t.status !== "DONE");
   const doneTodos = todos.filter((t) => t.status === "DONE");
 
-  const renderTodo = (t: (typeof todos)[number]) => {
-    const overdue = t.status === "OPEN" && t.dueDate && new Date(t.dueDate) < new Date();
-    return (
-      <div key={t.id} className="flex items-start gap-2.5 group">
-        <form action={toggleTodoAction.bind(null, t.id)}>
-          <button
-            className={`w-4.5 h-4.5 mt-0.5 rounded border flex items-center justify-center text-[10px] ${
-              t.status === "DONE" ? "bg-indigo-600 border-indigo-600 text-white" : "border-zinc-300 hover:border-indigo-400"
-            }`}
-          >
-            {t.status === "DONE" && "✓"}
-          </button>
+  const renderTodo = (t: (typeof todos)[number]) => (
+    <TodoItemRow
+      key={t.id}
+      todo={t}
+      partnerId={partnerId}
+      users={users}
+      contacts={contacts}
+      priorityLabel={L.TODO_PRIORITY_LABELS[t.priority]}
+      bcp47={bcp47}
+      deleteAction={
+        <form action={deleteTodoAction.bind(null, t.id)}>
+          <button title={m.common.delete} className="text-zinc-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
         </form>
-        <div className="min-w-0 flex-1">
-          <div className={`text-sm ${t.status === "DONE" ? "line-through text-zinc-300" : "text-zinc-800"}`}>
-            {t.title}
-            {t.source === "AI" && <span className="ml-1.5 text-[10px] text-purple-500">AI</span>}
-          </div>
-          <div className="text-xs text-zinc-400">
-            {t.dueDate && (
-              <span className={overdue ? "text-red-500 font-medium" : ""}>
-                {fmtDate(t.dueDate, bcp47)}{overdue && ` ${m.common.overdue}`}
-              </span>
-            )}
-            {t.assignee && ` · ${t.assignee.name}`}
-            {` · ${L.TODO_PRIORITY_LABELS[t.priority]}`}
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <TodoEditButton
-            todo={{
-              id: t.id,
-              title: t.title,
-              detail: t.detail,
-              dueDate: t.dueDate,
-              priority: t.priority,
-              partnerId: t.partnerId,
-              assigneeId: t.assigneeId,
-            }}
-            users={users}
-          />
-          <form action={deleteTodoAction.bind(null, t.id)}>
-            <button title={m.common.delete} className="text-zinc-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
-          </form>
-        </div>
-      </div>
-    );
-  };
+      }
+    />
+  );
 
   return (
     <div className="space-y-2">
@@ -625,7 +622,8 @@ function TimelineList({
               e.type === "MEETING" ? "bg-emerald-500"
               : e.type === "CHAT_IMPORT" ? "bg-purple-500"
               : e.type === "AI_SUMMARY" ? "bg-indigo-500"
-              : e.type === "NEWS" ? "bg-sky-500"
+              :               e.type === "NEWS" ? "bg-sky-500"
+              : e.type === "MILESTONE" ? "bg-amber-500"
               : e.type === "CHANGE" ? "bg-amber-400"
               : "bg-zinc-300"
             }`}

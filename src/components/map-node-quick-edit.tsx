@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction, setPipelineStageAction } from "@/lib/actions";
+import { tierSelectValue } from "@/components/ui";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
 import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
@@ -90,7 +91,7 @@ export function MapNodeQuickEdit({
             {node.id === "tier" && (
               <label className="block space-y-1">
                 <span className="text-xs text-zinc-500">Tier</span>
-                <select name="tier" defaultValue={partner.tier ?? ""} className={input}>
+                <select name="tier" defaultValue={tierSelectValue(partner.tier)} className={input}>
                   <option value="">Not tiered</option>
                   <option value="A">A — immediate</option>
                   <option value="B">B — priority</option>

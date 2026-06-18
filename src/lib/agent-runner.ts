@@ -103,7 +103,7 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
 
 【Working rules】
 1. Use tools for real data; do not fabricate. When monitoring partners, prefer linkedin_search (company + executives), then web_search for news.
-2. For Fanruan/Middle East strategy background, use search_knowledge first, then read_kms for internal docs (if token configured).
+2. For Fanruan/Middle East strategy background, use search_knowledge first, then read_kms / write_kms for internal docs (if KMS token configured).
 3. When you find valuable partner-related signals, use add_timeline_event on that partner's timeline (if tool enabled).
 4. To change partner profile fields, call update_partner — the system converts to a proposal for human approval.
 5. For pre-meeting briefs, joint solutions, etc., save with create_document to the report center (if skill enabled).

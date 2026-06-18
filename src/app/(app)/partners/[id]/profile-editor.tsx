@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction } from "@/lib/actions";
+import { tierSelectValue } from "@/components/ui";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
 import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
@@ -50,7 +51,7 @@ export function ProfileEditor({
               </label>
               <label className="space-y-1">
                 <span className="text-xs text-zinc-500">{m.common.tier}</span>
-                <select name="tier" defaultValue={p.tier ?? ""} className={input}>
+                <select name="tier" defaultValue={tierSelectValue(p.tier)} className={input}>
                   <option value="">{pe.notTiered}</option>
                   <option value="A">{pe.tierA}</option>
                   <option value="B">{pe.tierB}</option>

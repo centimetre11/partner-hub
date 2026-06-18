@@ -11,6 +11,7 @@ import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboardin
 import { normalizeUserRole } from "./user-roles";
 import { getLocale } from "./i18n/locale-server";
 import { getMessages } from "./i18n/messages";
+import { normalizePartnerTier } from "./tier";
 
 // ============ 认证 ============
 
@@ -85,21 +86,22 @@ const EDITABLE_FIELDS = [
   "valuePartnerOffer", "valueFanruanOffer", "valueCustomerOutcome", "dedicatedHeadcount",
   "tier", "city", "country", "headcount", "website", "companyType",
   "coreBusiness", "capability", "knownClients", "certLevel", "currentTools",
-  "keyDifferentiator", "playbook", "pitch", "bestChannel", "priority", "notes",
+  "keyDifferentiator", "playbook", "pitch", "bestChannel", "notes",
 ] as const;
+
+function readPartnerField(formData: FormData, field: (typeof EDITABLE_FIELDS)[number]): unknown {
+  if (!formData.has(field)) return undefined;
+  const v = String(formData.get(field) ?? "").trim();
+  if (field === "tier") return v ? normalizePartnerTier(v) : null;
+  return v || null;
+}
 
 export async function updatePartnerAction(partnerId: string, formData: FormData) {
   await requireUser();
   const data: Record<string, unknown> = {};
   for (const f of EDITABLE_FIELDS) {
-    if (formData.has(f)) {
-      const v = String(formData.get(f) ?? "").trim();
-      data[f] = v || null;
-    }
-  }
-  if (formData.has("fitScore")) {
-    const n = parseInt(String(formData.get("fitScore")), 10);
-    data.fitScore = Number.isNaN(n) ? null : n;
+    const value = readPartnerField(formData, f);
+    if (value !== undefined) data[f] = value;
   }
   if (formData.has("ownerId")) {
     const v = String(formData.get("ownerId"));
@@ -537,4 +539,76 @@ export async function addNoteAction(partnerId: string, formData: FormData) {
     },
   });
   revalidatePath(`/partners/${partnerId}`);
+}
+
+// ============ 帆软集成配置 ============
+
+export async function updatePartnerIntegrationsAction(partnerId: string, formData: FormData) {
+  await requireUser();
+  const kmsRootPath = String(formData.get("kmsRootPath") ?? "").trim() || null;
+  const crmCustomerId = String(formData.get("crmCustomerId") ?? "").trim() || null;
+  await db.partner.update({
+    where: { id: partnerId },
+    data: { kmsRootPath, crmCustomerId },
+  });
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+// ============ 商务记录 ============
+
+const BUSINESS_RECORD_CATEGORIES = ["VISIT", "TRAINING", "NEGOTIATION", "DELIVERY", "RELATIONSHIP", "OTHER"] as const;
+
+export async function createBusinessRecordAction(partnerId: string, formData: FormData) {
+  const user = await requireUser();
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return;
+
+  const categoryRaw = String(formData.get("category") ?? "OTHER");
+  const category = BUSINESS_RECORD_CATEGORIES.includes(categoryRaw as (typeof BUSINESS_RECORD_CATEGORIES)[number])
+    ? categoryRaw
+    : "OTHER";
+  const content = String(formData.get("content") ?? "").trim() || null;
+  const occurredAtRaw = String(formData.get("occurredAt") ?? "").trim();
+  const occurredAt = occurredAtRaw ? new Date(occurredAtRaw) : new Date();
+  const contactId = String(formData.get("contactId") ?? "").trim() || null;
+  const source = String(formData.get("source") ?? "MANUAL");
+  const sourceTodoId = String(formData.get("sourceTodoId") ?? "").trim() || null;
+
+  const event = await db.timelineEvent.create({
+    data: {
+      partnerId,
+      type: "MILESTONE",
+      title,
+      content,
+      createdById: user.id,
+      createdAt: occurredAt,
+      meta: JSON.stringify({ category, source }),
+    },
+  });
+
+  await db.businessRecord.create({
+    data: {
+      partnerId,
+      category,
+      title,
+      content,
+      occurredAt,
+      contactId,
+      timelineEventId: event.id,
+      sourceTodoId,
+      source,
+      createdById: user.id,
+    },
+  });
+
+  if (sourceTodoId) {
+    await db.todoItem.update({
+      where: { id: sourceTodoId },
+      data: { status: "DONE", doneAt: new Date() },
+    });
+  }
+
+  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath("/todos");
+  revalidatePath("/");
 }

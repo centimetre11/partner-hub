@@ -13,8 +13,6 @@ const DIRECT_CLARIFICATION_IDS = new Set([
   "industry",
   "industries",
   "pipelineStage",
-  "fitScore",
-  "priority",
   "partnerArchetype",
   "valuePattern",
   "companyType",

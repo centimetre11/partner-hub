@@ -3,6 +3,7 @@ import { db } from "./db";
 import { chatJson } from "./ai";
 import { PARTNER_FIELD_LABELS } from "./constants";
 import { normalizeIndustriesInput } from "./taxonomy";
+import { partnerFieldValueFromText } from "./tier";
 import {
   applyContactAdded,
   applyContactUpdated,
@@ -215,15 +216,13 @@ export async function applyProposal(opts: {
   const data: Record<string, unknown> = {};
   for (const f of proposal.fieldUpdates) {
     if (!(f.field in PARTNER_FIELD_LABELS) || f.field === "name") continue;
-    if (f.field === "pipelineStage" || f.field === "fitScore") {
-      const n = parseInt(f.newValue, 10);
-      if (!Number.isNaN(n)) data[f.field] = n;
-    } else if (f.field === "industries" || f.field === "industry") {
+    if (f.field === "industries" || f.field === "industry") {
       const norm = normalizeIndustriesInput(f.newValue);
       data.industries = norm.industries;
       data.industry = norm.industry;
     } else {
-      data[f.field] = f.newValue;
+      const parsed = partnerFieldValueFromText(f.field, f.newValue);
+      if (parsed !== undefined) data[f.field] = parsed;
     }
     applied.push(applyFieldUpdatedMessage(locale, f.label || fieldLabel(locale, f.field), f.newValue));
   }

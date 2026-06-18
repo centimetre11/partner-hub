@@ -4,7 +4,7 @@ import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/u
 import { RegisterForm } from "./register-form";
 import { MemberRow } from "./member-row";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
-import { KmsSetup } from "./kms-setup";
+import { SystemKmsSetup } from "./system-kms-setup";
 import { WecomChatsCard } from "./wecom-chats-card";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
 import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
@@ -29,7 +29,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, kmsCred] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -42,7 +42,7 @@ export default async function SettingsPage() {
       take: 20,
       include: { user: true },
     }),
-    db.userKmsCredential.findUnique({ where: { userId: user.id } }),
+    db.systemKmsCredential.findUnique({ where: { id: "singleton" } }),
   ]);
 
   const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
@@ -139,15 +139,19 @@ export default async function SettingsPage() {
           <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
         </Card>
 
-        <Card title={m.settings.kmsTitle} className="lg:col-span-2">
-          <KmsSetup
+        <Card title={m.settings.systemKmsTitle} className="lg:col-span-2">
+          <SystemKmsSetup
             credential={{
-              configured: !!kmsCred?.accessToken,
-              keyTail: kmsCred?.accessToken ? kmsCred.accessToken.slice(-4) : "",
-              baseUrl: kmsCred?.baseUrl ?? KMS_DEFAULT_BASE_URL,
-              updatedAt: kmsCred?.updatedAt.toISOString(),
+              configured: !!systemKms?.accessToken,
+              keyTail: systemKms?.accessToken ? systemKms.accessToken.slice(-4) : "",
+              baseUrl: systemKms?.baseUrl ?? KMS_DEFAULT_BASE_URL,
+              updatedAt: systemKms?.updatedAt?.toISOString(),
             }}
           />
+          <p className="text-xs text-zinc-500 mt-4">
+            {m.settings.personalKmsHint}{" "}
+            <a href="/account" className="text-indigo-600 hover:underline">{m.nav.account}</a>
+          </p>
         </Card>
 
         <Card title={m.settings.dailyTokens14} className="lg:col-span-2">

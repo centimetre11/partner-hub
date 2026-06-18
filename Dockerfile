@@ -26,4 +26,4 @@ ENV DATABASE_URL="file:/data/partner-hub.db"
 VOLUME /data
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push --skip-generate && npx tsx prisma/seed.ts && npx tsx scripts/migrate-system-en.ts && npx next start"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && npx tsx prisma/seed.ts && npx tsx scripts/migrate-system-en.ts && npx tsx scripts/normalize-tier.ts && npx next start"]

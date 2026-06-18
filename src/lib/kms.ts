@@ -222,9 +222,9 @@ export async function writeKmsForUser(
     title?: string;
   },
 ): Promise<string> {
-  const cred = await getUserKmsCredential(userId);
+  const cred = await resolveKmsCredential(userId);
   if (!cred?.accessToken) {
-    return "KMS personal access token is not configured. After signing in, enter it once under Team Settings → KMS document access; the Agent and assistant will use it automatically.";
+    return "KMS token is not available. Save your personal token under Account → KMS, or ask an admin to configure a team fallback token.";
   }
 
   const content = String(args.content ?? "").trim();
@@ -320,14 +320,72 @@ function toKmsPage(baseUrl: string, data: ConfluenceContent): KmsPage {
   };
 }
 
+export type KmsCredentialSource = "personal" | "system" | "env";
+
+export type ResolvedKmsCredential = {
+  accessToken: string;
+  baseUrl: string;
+  source: KmsCredentialSource;
+};
+
 export async function getUserKmsCredential(userId: string | null | undefined) {
   if (!userId) return null;
   return db.userKmsCredential.findUnique({ where: { userId } });
 }
 
+/** 个人令牌 → 团队系统令牌(DB) → 环境变量 KMS_SYSTEM_TOKEN */
+export async function resolveKmsCredential(
+  userId: string | null | undefined,
+): Promise<ResolvedKmsCredential | null> {
+  if (userId) {
+    const personal = await db.userKmsCredential.findUnique({ where: { userId } });
+    if (personal?.accessToken) {
+      return { accessToken: personal.accessToken, baseUrl: personal.baseUrl, source: "personal" };
+    }
+  }
+  const system = await db.systemKmsCredential.findUnique({ where: { id: "singleton" } });
+  if (system?.accessToken) {
+    return { accessToken: system.accessToken, baseUrl: system.baseUrl, source: "system" };
+  }
+  const envToken = process.env.KMS_SYSTEM_TOKEN?.trim();
+  if (envToken) {
+    return {
+      accessToken: envToken,
+      baseUrl: process.env.KMS_SYSTEM_BASE_URL?.trim() || KMS_DEFAULT_BASE_URL,
+      source: "env",
+    };
+  }
+  return null;
+}
+
 export async function isKmsConfiguredForUser(userId: string | null | undefined): Promise<boolean> {
-  const cred = await getUserKmsCredential(userId);
-  return !!cred?.accessToken;
+  return !!(await resolveKmsCredential(userId));
+}
+
+export type KmsConfigStatus = {
+  configured: boolean;
+  personal: boolean;
+  fallback: boolean;
+  source?: KmsCredentialSource;
+  keyTail?: string;
+  baseUrl: string;
+};
+
+export async function getKmsConfigStatus(userId: string | null | undefined): Promise<KmsConfigStatus> {
+  const personal = userId ? await getUserKmsCredential(userId) : null;
+  const resolved = await resolveKmsCredential(userId);
+  return {
+    configured: !!resolved,
+    personal: !!personal?.accessToken,
+    fallback: !!resolved && !personal?.accessToken,
+    source: resolved?.source,
+    keyTail: personal?.accessToken
+      ? personal.accessToken.slice(-4)
+      : resolved?.accessToken
+        ? resolved.accessToken.slice(-4)
+        : undefined,
+    baseUrl: personal?.baseUrl ?? resolved?.baseUrl ?? KMS_DEFAULT_BASE_URL,
+  };
 }
 
 export async function fetchKmsPageById(opts: {
@@ -425,9 +483,9 @@ export async function readKmsForUser(
   userId: string | null | undefined,
   args: { pageId?: string; url?: string; query?: string; limit?: number }
 ): Promise<string> {
-  const cred = await getUserKmsCredential(userId);
+  const cred = await resolveKmsCredential(userId);
   if (!cred?.accessToken) {
-    return "KMS personal access token is not configured. After signing in, enter it once under Team Settings → KMS document access; the Agent and assistant will use it automatically.";
+    return "KMS personal access token is not configured. Save your token under Account → KMS, or ask an admin to set a team fallback token.";
   }
 
   try {
@@ -472,7 +530,7 @@ export async function prefetchKmsFromText(
   userId: string | null | undefined,
   text: string,
 ): Promise<{ ok: true; content: string; urls: string[] } | { ok: false; reason: "not_configured" | "no_urls" }> {
-  const cred = await getUserKmsCredential(userId);
+  const cred = await resolveKmsCredential(userId);
   if (!cred?.accessToken) return { ok: false, reason: "not_configured" };
 
   const urls = extractKmsUrls(text);

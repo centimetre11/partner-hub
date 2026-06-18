@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
+import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState, tierTone } from "@/components/ui";
+import { normalizePartnerTier } from "@/lib/tier";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps } from "@/lib/taxonomy";
 import { computeCompleteness } from "@/lib/completeness";
 import { deletePartnerAction, promotePartnerAction, restorePartnerAction, setPoolFlagAction } from "@/lib/actions";
@@ -168,7 +169,7 @@ export default async function PoolPage({
                     <td className="px-3 py-3 text-zinc-600">{labelFromMap(labelMaps.CATEGORY, p.category)}</td>
                     <td className="px-3 py-3 text-zinc-600 whitespace-nowrap">{p.city ?? p.country ?? "—"}</td>
                     <td className="px-3 py-3">
-                      {p.tier ? <Badge tone={tierTone(p.tier)}>{m.common.tier} {p.tier}</Badge> : <span className="text-zinc-300">—</span>}
+                      {normalizePartnerTier(p.tier) ? <TierBadge tier={p.tier} /> : <span className="text-zinc-300">—</span>}
                     </td>
                     <td className="px-3 py-3">
                       <Badge tone={p.aiVerified === "VERIFIED" ? "green" : "zinc"}>

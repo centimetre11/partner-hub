@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, Card, EmptyState, fmtDate, tierTone } from "@/components/ui";
+import { Badge, Card, EmptyState, fmtDate, TierBadge } from "@/components/ui";
 import { staleDays } from "@/lib/completeness";
 import { toggleTodoAction } from "@/lib/actions";
 import { WeeklyReport } from "./weekly-report";
@@ -220,7 +220,7 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
                     <Link href={`/partners/${p.id}`} className="text-sm font-medium text-zinc-800 hover:text-indigo-600">
                       {p.name}
                     </Link>
-                    {p.tier && <Badge tone={tierTone(p.tier)}>{m.common.tier} {p.tier}</Badge>}
+                    <TierBadge tier={p.tier} />
                     <span className="text-xs text-zinc-400">{stageName(labels, p.pipelineStage)}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

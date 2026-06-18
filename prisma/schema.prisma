@@ -30,6 +30,7 @@ model User {
   skills       Skill[]
   aiTokenUsages AiTokenUsage[]
   kmsCredential UserKmsCredential?
+  businessRecords BusinessRecord[]
 }
 
 model Partner {
@@ -74,6 +75,8 @@ model Partner {
   aiVerified       String? // VERIFIED / PARTIAL / UNKNOWN
   manualChecked    Boolean  @default(false)
   monitorDims      String? // JSON 数组：舆情监控勾选的维度
+  kmsRootPath      String? // KMS 主目录，手动填写
+  crmCustomerId    String? // 帆软 CRM 客户 ID
   pipelineStage    Int      @default(1) // 1-10 十阶段
   ownerId          String?
   owner            User?    @relation(fields: [ownerId], references: [id])
@@ -98,6 +101,28 @@ model Partner {
   monitorSources MonitorSource[]
   monitorItems  MonitorItem[]
   wecomChat     WecomChat?
+  businessRecords BusinessRecord[]
+}
+
+// 商务记录：伙伴关键进展（双写活动线 MILESTONE）
+model BusinessRecord {
+  id              String    @id @default(cuid())
+  partnerId       String
+  partner         Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  category        String    // VISIT / TRAINING / NEGOTIATION / DELIVERY / RELATIONSHIP / OTHER
+  title           String
+  content         String?
+  occurredAt      DateTime  @default(now())
+  contactId       String?
+  contact         Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  timelineEventId String?   @unique
+  sourceTodoId    String?
+  source          String    @default("MANUAL") // MANUAL / TODO / RELATIONSHIP_TAB
+  createdById     String?
+  createdBy       User?     @relation(fields: [createdById], references: [id])
+  createdAt       DateTime  @default(now())
+
+  @@index([partnerId, occurredAt])
 }
 
 // 企业微信会话（群聊/单聊），可与伙伴绑定用于主动推送
@@ -232,6 +257,7 @@ model Contact {
   notes       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  businessRecords BusinessRecord[]
 }
 
 // 附加汇报线（虚线/双线汇报）。主汇报实线仍走 Contact.reportsToId
@@ -569,5 +595,13 @@ model UserKmsCredential {
   baseUrl     String   @default("https://kms.fineres.com")
   accessToken String
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// 团队级 KMS 回退令牌（用户未配置个人令牌时使用）
+model SystemKmsCredential {
+  id          String   @id @default("singleton")
+  baseUrl     String   @default("https://kms.fineres.com")
+  accessToken String
   updatedAt   DateTime @updatedAt
 }

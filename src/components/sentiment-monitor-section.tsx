@@ -205,6 +205,7 @@ export function SentimentMonitorSection({
   sources,
   items,
   selectedDims,
+  disabled = false,
 }: {
   partnerId: string;
   partnerName?: string;
@@ -212,6 +213,7 @@ export function SentimentMonitorSection({
   sources: MonitorSourceRow[];
   items: MonitorItemRow[];
   selectedDims: string[];
+  disabled?: boolean;
 }) {
   const labels = useLabels();
   const mon = useMessages().monitor;
@@ -284,6 +286,12 @@ export function SentimentMonitorSection({
 
   return (
     <Card title={mon.title.replace("{count}", String(items.length))}>
+      {disabled && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {mon.temporarilyUnavailable}
+        </div>
+      )}
+      <div className={disabled ? "pointer-events-none opacity-60 select-none" : undefined}>
       <ScanProgressPanel
         scanning={scanning}
         steps={scanSteps}
@@ -391,6 +399,7 @@ export function SentimentMonitorSection({
             </div>
           </form>
         </details>
+      </div>
       </div>
 
       {items.length > 0 && (

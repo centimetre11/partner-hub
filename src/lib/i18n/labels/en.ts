@@ -72,6 +72,15 @@ export const labelsEn: LabelsBundle = {
     NEWS: "External Update",
     SYSTEM: "System",
     CHANGE: "Profile Change",
+    MILESTONE: "Business Milestone",
+  },
+  businessRecordCategoryLabels: {
+    VISIT: "Visit / Meeting",
+    TRAINING: "Training / Certification",
+    NEGOTIATION: "Negotiation",
+    DELIVERY: "Delivery / Contract",
+    RELATIONSHIP: "Relationship",
+    OTHER: "Other",
   },
   monitorDimensionLabels: {
     NEWS: "Company News",
@@ -188,11 +197,11 @@ export const labelsEn: LabelsBundle = {
     OTHER: "Other",
   },
   workspacePanels: [
-    { id: "guide", label: "Stage guidance", desc: "Stage actions · Todos · AI" },
+    { id: "guide", label: "Overview", desc: "Monitor · Records · Todos · Profile" },
     { id: "positioning", label: "Positioning playbook", desc: "Tier · Type · Value pattern · Profile" },
     { id: "pipeline", label: "Pipeline", desc: "Pipeline opportunity tracking" },
     { id: "capability", label: "Capability building", desc: "Training certification · Joint solutions" },
-    { id: "relationship", label: "Relationship management", desc: "Power map · Activity · Sentiment" },
+    { id: "relationship", label: "Relationship management", desc: "Power map · Activity" },
   ],
   completenessLabels: [
     "City / country",

@@ -11,6 +11,7 @@ import {
   shouldUseVolcengineBuiltinSearch,
 } from "./builtin-search";
 import { MONITOR_DIMENSIONS, MONITOR_SENTIMENT_LABELS } from "./constants";
+import { formatTierLabel, partnerFieldValueFromText } from "./tier";
 
 // ============ Skill execution context ============
 
@@ -135,7 +136,7 @@ const updatePartner: Skill = {
         type: "object",
         properties: {
           name: { type: "string", description: "Company name" },
-          fields: { type: "object", description: 'Field key-value pairs, e.g. {"pipelineStage": 5, "priority": "P0"}' },
+          fields: { type: "object", description: 'Field key-value pairs, e.g. {"pipelineStage": 5, "tier": "A"}' },
         },
         required: ["name", "fields"],
       },
@@ -169,16 +170,12 @@ const updatePartner: Skill = {
     const data: Record<string, unknown> = {};
     const changes: string[] = [];
     for (const u of updates) {
-      if (u.field === "pipelineStage" || u.field === "fitScore") {
-        const n = parseInt(u.newValue, 10);
-        if (!Number.isNaN(n)) {
-          data[u.field] = n;
-          changes.push(`${u.label} → ${u.field === "pipelineStage" ? `${n}(${stageName(n)})` : n}`);
-        }
-      } else {
-        data[u.field] = u.newValue;
-        changes.push(`${u.label} → ${u.newValue}`);
-      }
+      const parsed = partnerFieldValueFromText(u.field, u.newValue);
+      if (parsed === undefined) continue;
+      data[u.field] = parsed;
+      changes.push(
+        `${u.label} → ${u.field === "pipelineStage" ? `${parsed}(${stageName(Number(parsed))})` : u.field === "tier" ? formatTierLabel(String(parsed)) : parsed}`,
+      );
     }
     await db.partner.update({ where: { id: p.id }, data });
     await db.timelineEvent.create({

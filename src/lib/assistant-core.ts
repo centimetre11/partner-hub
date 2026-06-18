@@ -31,7 +31,7 @@ function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean) {
   if (locale === "zh") {
     const kmsLine = kmsConfigured
       ? "KMS 个人令牌已配置，可用 read_kms 读取、write_kms 写入内部文档（需页面编辑权限）。"
-      : "KMS 个人令牌未配置，不要调用 read_kms/write_kms；如需使用，请先在设置 → KMS 文档访问 中保存令牌。";
+      : "KMS 个人令牌未配置，不要调用 read_kms/write_kms；可在个人中心配置个人令牌，或使用团队回退。";
     return `你是帆软中东合作伙伴管理系统的 AI 助手，帮助帆软（中国领先 BI 厂商）中东 BD 团队管理合作伙伴。
 今天是 ${today}。
 你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档、或搜索团队知识库。${kmsLine} 规则：
@@ -46,7 +46,7 @@ function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean) {
 
   const kmsLine = kmsConfigured
     ? "Your KMS personal access token is configured — use read_kms to read and write_kms to write internal docs (edit permission required)."
-    : "KMS personal access token is not configured — do not call read_kms/write_kms; save a token under Settings → KMS document access first.";
+    : "KMS personal access token is not configured — do not call read_kms/write_kms; save one under Account or use team fallback.";
   return `You are the AI assistant for the Fanruan Middle East Partner Management System, helping Fanruan Software (Fanruan, a leading BI vendor in China) Middle East BD team manage partners.
 Today is ${today}.
 You can use tools to query and modify system data, search the public web, read KMS internal documents (read_kms), or search the team knowledge base (search_knowledge). ${kmsLine} Rules:

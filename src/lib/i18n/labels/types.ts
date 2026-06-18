@@ -15,6 +15,7 @@ export type LabelsBundle = {
   attitudeLabels: Record<number, string>;
   todoPriorityLabels: Record<string, string>;
   eventTypeLabels: Record<string, string>;
+  businessRecordCategoryLabels: Record<string, string>;
   monitorDimensionLabels: Record<string, string>;
   monitorSentimentLabels: Record<string, string>;
   monitorSourceTypeLabels: Record<string, string>;

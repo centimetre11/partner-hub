@@ -105,7 +105,6 @@ export const PARTNER_FIELD_LABELS: Record<string, string> = {
   pitch: "Pitch",
   bestChannel: "Best Contact Channel",
   fitScore: "Fit Score",
-  priority: "Priority",
   pipelineStage: "Pipeline Stage",
   notes: "Notes",
 };

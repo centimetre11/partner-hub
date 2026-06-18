@@ -72,6 +72,15 @@ export const labelsZh: LabelsBundle = {
     NEWS: "外部动态",
     SYSTEM: "系统",
     CHANGE: "档案变更",
+    MILESTONE: "商务进展",
+  },
+  businessRecordCategoryLabels: {
+    VISIT: "拜访/会面",
+    TRAINING: "培训/认证",
+    NEGOTIATION: "商务谈判",
+    DELIVERY: "交付/签约",
+    RELATIONSHIP: "关系经营",
+    OTHER: "其他",
   },
   monitorDimensionLabels: {
     NEWS: "公司动态",
@@ -131,7 +140,7 @@ export const labelsZh: LabelsBundle = {
     category: "竞品基因",
     industry: "主攻行业（单选，旧字段）",
     industries: "主攻行业",
-    tier: "分级",
+    tier: "Tier",
     partnerArchetype: "伙伴类型",
     valuePattern: "联合价值模式",
     valuePartnerOffer: "伙伴提供",
@@ -188,11 +197,11 @@ export const labelsZh: LabelsBundle = {
     OTHER: "其他",
   },
   workspacePanels: [
-    { id: "guide", label: "阶段指导", desc: "本阶段动作 · 待办 · AI" },
+    { id: "guide", label: "伙伴概览", desc: "监控 · 商务记录 · 待办 · 档案" },
     { id: "positioning", label: "定位打法", desc: "Tier · 类型 · 价值模式 · 画像" },
     { id: "pipeline", label: "商机推进", desc: "Pipeline 商机跟踪" },
     { id: "capability", label: "能力建设", desc: "培训认证 · 联合方案" },
-    { id: "relationship", label: "关系经营", desc: "权力地图 · 动态 · 舆情" },
+    { id: "relationship", label: "关系经营", desc: "权力地图 · 动态" },
   ],
   completenessLabels: [
     "城市/国家",
