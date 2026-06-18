@@ -109,6 +109,11 @@ export function formatToolArgs(name: string, args: Record<string, unknown>): str
   const partner = args.partnerName ?? args.name ?? args.partner;
   if (typeof partner === "string" && partner) return partner;
   if (name === "read_kms" && args.pageId) return `pageId: ${args.pageId}`;
+  if (name === "write_kms") {
+    const mode = args.mode ? String(args.mode) : "append";
+    const target = args.pageId ?? args.url ?? "?";
+    return `${mode} → ${String(target).slice(0, 50)}`;
+  }
   if (name === "update_partner" && args.field) return `${String(args.field)} → ${String(args.value ?? "")}`;
   const compact = JSON.stringify(args);
   return compact.length > 60 ? `${compact.slice(0, 57)}…` : compact;
@@ -122,6 +127,10 @@ export function summarizeToolResult(name: string, result: string): string {
   if (tool === "read_kms" || tool === "search_knowledge") {
     const first = clean.split("\n").find((l) => l.trim())?.replace(/^#+\s*/, "").trim() ?? "";
     return `Read ${clean.length} chars${first ? `, includes: ${first.slice(0, 80)}` : ""}`;
+  }
+  if (tool === "write_kms") {
+    const link = clean.match(/Link: (https?:\/\/\S+)/)?.[1];
+    return link ? `Written — ${link}` : clean.slice(0, 120);
   }
   if (tool === "web_search" || tool === "linkedin_search") {
     const lines = clean.split("\n").filter((l) => l.trim());

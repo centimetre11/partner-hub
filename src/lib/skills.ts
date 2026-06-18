@@ -4,7 +4,7 @@ import { PARTNER_FIELD_LABELS, stageName } from "./constants";
 import { partnerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
 import { generalWebSearch, linkedinSearch } from "./web-search";
-import { readKmsForUser } from "./kms";
+import { readKmsForUser, writeKmsForUser } from "./kms";
 import {
   KIMI_BUILTIN_SEARCH,
   shouldUseKimiBuiltinSearch,
@@ -509,6 +509,44 @@ const readKms: Skill = {
     }),
 };
 
+// ---- Write company KMS (Confluence) ----
+const writeKms: Skill = {
+  name: "write_kms",
+  label: "Write KMS documents",
+  desc: "Append, prepend, replace content on a KMS page, or create a child page (requires write permission)",
+  def: {
+    type: "function",
+    function: {
+      name: "write_kms",
+      description:
+        "Write to Fanruan KMS (Confluence). Modes: append (default, safest), prepend, replace (overwrites body), create_child (new page under parent). Requires personal access token with edit permission on the target page/space.",
+      parameters: {
+        type: "object",
+        properties: {
+          pageId: { type: "string", description: "Target KMS page ID" },
+          url: { type: "string", description: "Target KMS page URL" },
+          content: { type: "string", description: "Plain text or simple Markdown body to write" },
+          mode: {
+            type: "string",
+            enum: ["append", "prepend", "replace", "create_child"],
+            description: "append=add to end (default); prepend=add to top; replace=overwrite body; create_child=new sub-page",
+          },
+          title: { type: "string", description: "Required for create_child; optional to rename page on replace" },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  run: async (args, ctx) =>
+    writeKmsForUser(ctx.userId, {
+      pageId: args.pageId ? String(args.pageId) : undefined,
+      url: args.url ? String(args.url) : undefined,
+      content: String(args.content ?? ""),
+      mode: args.mode ? (String(args.mode) as "append" | "prepend" | "replace" | "create_child") : undefined,
+      title: args.title ? String(args.title) : undefined,
+    }),
+};
+
 // ---- Save to report center ----
 const createDocument: Skill = {
   name: "create_document",
@@ -571,6 +609,7 @@ export const SKILLS: Skill[] = [
   addTimelineEvent,
   searchKnowledge,
   readKms,
+  writeKms,
   createDocument,
 ];
 
@@ -585,6 +624,7 @@ export const DEFAULT_AGENT_SKILLS = [
   "create_todo",
   "search_knowledge",
   "read_kms",
+  "write_kms",
 ];
 
 export const REPORT_AGENT_KEYWORDS = [
@@ -610,6 +650,7 @@ export const ASSISTANT_SKILLS = [
   "linkedin_search",
   "web_search",
   "read_kms",
+  "write_kms",
   "search_knowledge",
 ];
 

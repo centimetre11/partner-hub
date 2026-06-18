@@ -14,12 +14,16 @@ export type KmsPage = {
 
 type ConfluenceContent = {
   id: string;
+  type?: string;
   title: string;
   space?: { name?: string; key?: string };
   version?: { when?: string; number?: number };
-  body?: { storage?: { value?: string } };
+  body?: { storage?: { value?: string; representation?: string } };
+  ancestors?: Array<{ id: string }>;
   _links?: { webui?: string; base?: string; tinyui?: string };
 };
+
+export type KmsWriteMode = "append" | "prepend" | "replace" | "create_child";
 
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/+$/, "");
@@ -73,25 +77,231 @@ export function confluenceStorageToPlainText(storage: string, maxLen = 12000): s
   return text;
 }
 
-async function kmsFetch<T>(baseUrl: string, token: string, path: string): Promise<T> {
+/** 纯文本 / 简单 Markdown → Confluence storage HTML */
+export function plainTextToConfluenceStorage(text: string): string {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const blocks: string[] = [];
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    blocks.push(`<ul>${listItems.map((li) => `<li><p>${escapeXml(li)}</p></li>`).join("")}</ul>`);
+    listItems = [];
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      continue;
+    }
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      flushList();
+      const level = heading[1].length;
+      blocks.push(`<h${level}>${escapeXml(heading[2])}</h${level}>`);
+      continue;
+    }
+    if (/^[-*]\s+/.test(trimmed)) {
+      listItems.push(trimmed.replace(/^[-*]\s+/, ""));
+      continue;
+    }
+    flushList();
+    blocks.push(`<p>${escapeXml(trimmed)}</p>`);
+  }
+  flushList();
+  return blocks.join("") || "<p></p>";
+}
+
+function escapeXml(s: string) {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function mergeStorageBody(current: string, addition: string, mode: "append" | "prepend" | "replace") {
+  if (mode === "replace") return addition;
+  if (mode === "prepend") return `${addition}${current}`;
+  return `${current}${addition}`;
+}
+
+async function fetchKmsContentRaw(opts: {
+  baseUrl: string;
+  token: string;
+  pageId: string;
+}): Promise<ConfluenceContent> {
+  return kmsFetch<ConfluenceContent>(
+    opts.baseUrl,
+    opts.token,
+    `/rest/api/content/${encodeURIComponent(opts.pageId)}?expand=body.storage,space,version,ancestors`
+  );
+}
+
+export async function updateKmsPage(opts: {
+  baseUrl: string;
+  token: string;
+  pageId: string;
+  content: string;
+  mode?: "append" | "prepend" | "replace";
+  title?: string;
+}): Promise<KmsPage> {
+  const mode = opts.mode ?? "append";
+  const current = await fetchKmsContentRaw(opts);
+  const version = current.version?.number;
+  if (!version) throw new Error("KMS page version missing — cannot update");
+
+  const addition = plainTextToConfluenceStorage(opts.content);
+  const existing = current.body?.storage?.value ?? "";
+  const nextBody = mergeStorageBody(existing, addition, mode);
+
+  const payload = {
+    id: current.id,
+    type: current.type ?? "page",
+    title: opts.title?.trim() || current.title,
+    version: { number: version + 1 },
+    body: {
+      storage: {
+        value: nextBody,
+        representation: "storage",
+      },
+    },
+  };
+
+  const updated = await kmsFetch<ConfluenceContent>(
+    opts.baseUrl,
+    opts.token,
+    `/rest/api/content/${encodeURIComponent(opts.pageId)}`,
+    { method: "PUT", body: payload },
+  );
+  return toKmsPage(opts.baseUrl, updated);
+}
+
+export async function createKmsChildPage(opts: {
+  baseUrl: string;
+  token: string;
+  parentPageId: string;
+  title: string;
+  content: string;
+}): Promise<KmsPage> {
+  const parent = await fetchKmsContentRaw({
+    baseUrl: opts.baseUrl,
+    token: opts.token,
+    pageId: opts.parentPageId,
+  });
+  const spaceKey = parent.space?.key;
+  if (!spaceKey) throw new Error("Parent page has no space key — cannot create child page");
+
+  const created = await kmsFetch<ConfluenceContent>(opts.baseUrl, opts.token, "/rest/api/content", {
+    method: "POST",
+    body: {
+      type: "page",
+      title: opts.title.trim(),
+      space: { key: spaceKey },
+      ancestors: [{ id: opts.parentPageId }],
+      body: {
+        storage: {
+          value: plainTextToConfluenceStorage(opts.content),
+          representation: "storage",
+        },
+      },
+    },
+  });
+  return toKmsPage(opts.baseUrl, created);
+}
+
+export async function writeKmsForUser(
+  userId: string | null | undefined,
+  args: {
+    pageId?: string;
+    url?: string;
+    content: string;
+    mode?: KmsWriteMode;
+    title?: string;
+  },
+): Promise<string> {
+  const cred = await getUserKmsCredential(userId);
+  if (!cred?.accessToken) {
+    return "KMS personal access token is not configured. After signing in, enter it once under Team Settings → KMS document access; the Agent and assistant will use it automatically.";
+  }
+
+  const content = String(args.content ?? "").trim();
+  if (!content) return "content is required";
+
+  const rawInput = args.pageId ? String(args.pageId) : args.url ? String(args.url) : null;
+  if (!rawInput) return "Provide pageId or url of the target KMS page.";
+
+  const mode = (args.mode ?? "append") as KmsWriteMode;
+  if (!["append", "prepend", "replace", "create_child"].includes(mode)) {
+    return "mode must be one of: append, prepend, replace, create_child";
+  }
+
+  try {
+    const pageId = parseKmsPageId(rawInput);
+    const resolvedId = pageId
+      ? pageId
+      : (await fetchKmsPageFromUrl({ baseUrl: cred.baseUrl, token: cred.accessToken, url: rawInput })).id;
+
+    if (mode === "create_child") {
+      const title = String(args.title ?? "").trim();
+      if (!title) return "title is required when mode=create_child";
+      const page = await createKmsChildPage({
+        baseUrl: cred.baseUrl,
+        token: cred.accessToken,
+        parentPageId: resolvedId,
+        title,
+        content,
+      });
+      return `Created child page: [${page.title}]\nLink: ${page.webUrl}\n\n${page.plainText.slice(0, 500)}`;
+    }
+
+    const page = await updateKmsPage({
+      baseUrl: cred.baseUrl,
+      token: cred.accessToken,
+      pageId: resolvedId,
+      content,
+      mode,
+      title: args.title ? String(args.title) : undefined,
+    });
+    return `Updated KMS page (${mode}): [${page.title}]\nLink: ${page.webUrl}\nUpdated: ${page.updatedAt ?? "now"}\n\nPreview:\n${page.plainText.slice(0, 800)}`;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+async function kmsFetch<T>(
+  baseUrl: string,
+  token: string,
+  path: string,
+  init?: { method?: string; body?: unknown },
+): Promise<T> {
   const url = `${normalizeBaseUrl(baseUrl)}${path.startsWith("/") ? path : `/${path}`}`;
   const res = await fetch(url, {
+    method: init?.method ?? "GET",
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
     },
-    signal: AbortSignal.timeout(20000),
+    body: init?.body ? JSON.stringify(init.body) : undefined,
+    signal: AbortSignal.timeout(30000),
   });
   if (!res.ok) {
-    const errText = (await res.text()).slice(0, 300);
+    const errText = (await res.text()).slice(0, 500);
     if (res.status === 401 || res.status === 403) {
-      throw new Error(`KMS authentication failed (${res.status}): personal access token is invalid or expired. Reconfigure it in team settings.`);
+      throw new Error(`KMS authentication failed (${res.status}): personal access token is invalid, expired, or lacks write permission. Reconfigure it in team settings.`);
     }
     if (res.status === 404) {
       throw new Error(`KMS page not found (404): ${path}`);
     }
+    if (res.status === 409) {
+      throw new Error(`KMS write conflict (409): page was updated by someone else. Re-read and retry. ${errText}`);
+    }
     throw new Error(`KMS request failed (${res.status}): ${errText}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 

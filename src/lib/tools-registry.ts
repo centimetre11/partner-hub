@@ -32,6 +32,7 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   scan_sentiment: { implemented: true, requiresWebSearch: true, priority: "core" },
   search_knowledge: { implemented: true, priority: "core" },
   read_kms: { implemented: true, requiresKms: true, priority: "core" },
+  write_kms: { implemented: true, requiresKms: true, priority: "standard" },
   create_document: { implemented: true, priority: "core" },
   list_todos: { implemented: true, priority: "standard" },
   update_partner: { implemented: true, priority: "assistant" },
@@ -49,13 +50,14 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   scan_sentiment: "intel",
   search_knowledge: "content",
   read_kms: "kms",
+  write_kms: "kms",
   create_document: "content",
 };
 
 const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
   { id: "partner", label: "Partner profiles", desc: "Search, read, and log partner activity", icon: "◮" },
   { id: "intel", label: "External intelligence", desc: "LinkedIn and public web — monitor partners, competitors, market signals", icon: "📡" },
-  { id: "kms", label: "Company KMS", desc: "Fanruan internal Confluence docs (personal token required)", icon: "🏢" },
+  { id: "kms", label: "Company KMS", desc: "Fanruan internal Confluence docs — read and write (personal token required)", icon: "🏢" },
   { id: "todo", label: "Tasks", desc: "Create and list follow-up todos", icon: "☑" },
   { id: "content", label: "Knowledge & reports", desc: "Team knowledge base and report center output", icon: "📄" },
 ];
