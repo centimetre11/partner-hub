@@ -179,6 +179,7 @@ export function PartnerIntegrationsPanel({
               value={crm}
               onChange={handleCrmChange}
               partnerId={partnerId}
+              partnerName={partnerName}
               matchedCustomer={crmCustomer}
             />
           </div>

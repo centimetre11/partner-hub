@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useMessages } from "@/lib/i18n/context";
-import { suggestCrmCustomerForPartnerAction } from "@/lib/crm-actions";
+import { suggestCrmCustomersForPartnerAction, type CrmCustomerSuggestion } from "@/lib/crm-actions";
 
 export type CrmCustomerOption = {
   id: string;
@@ -17,11 +17,13 @@ export function CrmCustomerPicker({
   value,
   onChange,
   partnerId,
+  partnerName,
   matchedCustomer,
 }: {
   value: string;
   onChange: (id: string, customer?: CrmCustomerOption | null) => void;
   partnerId?: string;
+  partnerName?: string;
   matchedCustomer?: CrmCustomerOption | null;
 }) {
   const crm = useMessages().crm;
@@ -31,6 +33,9 @@ export function CrmCustomerPicker({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [suggestions, setSuggestions] = useState<CrmCustomerSuggestion[]>([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestMsg, setSuggestMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -55,14 +60,39 @@ export function CrmCustomerPicker({
     onChange(customer.id, customer);
     setQuery("");
     setOpen(false);
+    setSuggestOpen(false);
+    setSuggestMsg(null);
   }
 
-  function suggest() {
+  function runSuggest() {
     if (!partnerId) return;
+    setSuggestMsg(null);
+    setSuggestOpen(true);
     startTransition(async () => {
-      const hit = await suggestCrmCustomerForPartnerAction(partnerId);
-      if (hit) select(hit);
+      const res = await suggestCrmCustomersForPartnerAction(partnerId, 8);
+      setSuggestions(res.candidates);
+      if (res.candidates.length === 0) {
+        setSuggestMsg(
+          crm.suggestEmpty.replace("{name}", res.partnerName || partnerName || ""),
+        );
+      } else {
+        setSuggestMsg(
+          crm.suggestFound
+            .replace("{count}", String(res.candidates.length))
+            .replace("{name}", res.partnerName || partnerName || ""),
+        );
+      }
     });
+  }
+
+  function matchReasonLabel(reason: CrmCustomerSuggestion["matchReason"]) {
+    const map: Record<CrmCustomerSuggestion["matchReason"], string> = {
+      exact: crm.matchExact,
+      contains: crm.matchContains,
+      token: crm.matchToken,
+      prefix: crm.matchPrefix,
+    };
+    return map[reason];
   }
 
   const input =
@@ -70,6 +100,62 @@ export function CrmCustomerPicker({
 
   return (
     <div className="space-y-2">
+      {partnerId && (
+        <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5 space-y-2">
+          <button
+            type="button"
+            disabled={pending}
+            onClick={runSuggest}
+            className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {pending
+              ? crm.suggestLoading
+              : crm.suggestMatchFor.replace("{name}", partnerName || "…")}
+          </button>
+
+          {suggestOpen && suggestMsg && (
+            <p
+              className={`text-xs px-1 ${
+                suggestions.length ? "text-indigo-700" : "text-amber-700"
+              }`}
+            >
+              {suggestMsg}
+            </p>
+          )}
+
+          {suggestOpen && suggestions.length > 0 && (
+            <div className="max-h-52 overflow-y-auto rounded-lg border border-indigo-100 bg-white divide-y divide-zinc-50">
+              {suggestions.map((c) => {
+                const selected = value === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => select(c)}
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 ${
+                      selected ? "bg-emerald-50 hover:bg-emerald-50" : ""
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-zinc-800">{c.name}</div>
+                      <span className="shrink-0 rounded bg-indigo-100 text-indigo-700 px-1.5 py-0.5 text-[10px]">
+                        {matchReasonLabel(c.matchReason)}
+                      </span>
+                    </div>
+                    <div className="text-zinc-500 mt-0.5">
+                      {[c.city, c.status, c.salesman].filter(Boolean).join(" · ")}
+                    </div>
+                    {selected && (
+                      <div className="text-emerald-700 mt-1">{crm.currentMatch}</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {matchedCustomer ? (
         <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900">
           <div className="font-medium">{matchedCustomer.name}</div>
@@ -88,7 +174,10 @@ export function CrmCustomerPicker({
       <div className="relative">
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSuggestOpen(false);
+          }}
           onFocus={() => query.trim() && setOpen(true)}
           placeholder={crm.searchPlaceholder}
           className={input}
@@ -113,30 +202,20 @@ export function CrmCustomerPicker({
         {loading && <div className="text-xs text-zinc-400 mt-1">{crm.searching}</div>}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {partnerId && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={suggest}
-            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:border-indigo-300 disabled:opacity-50"
-          >
-            {crm.suggestMatch}
-          </button>
-        )}
-        {value && (
-          <button
-            type="button"
-            onClick={() => {
-              onChange("", null);
-              router.refresh();
-            }}
-            className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600"
-          >
-            {crm.clearMatch}
-          </button>
-        )}
-      </div>
+      {value && (
+        <button
+          type="button"
+          onClick={() => {
+            onChange("", null);
+            setSuggestOpen(false);
+            setSuggestions([]);
+            router.refresh();
+          }}
+          className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600"
+        >
+          {crm.clearMatch}
+        </button>
+      )}
     </div>
   );
 }

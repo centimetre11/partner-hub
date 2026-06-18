@@ -57,25 +57,89 @@ export async function searchCrmCustomersAction(query: string, limit = 20) {
   });
 }
 
-export async function suggestCrmCustomerForPartnerAction(partnerId: string) {
+export type CrmCustomerSuggestion = {
+  id: string;
+  name: string;
+  city: string | null;
+  status: string | null;
+  salesman: string | null;
+  matchReason: "exact" | "contains" | "token" | "prefix";
+  score: number;
+};
+
+function scorePartnerCrmName(partnerName: string, customerName: string) {
+  const p = partnerName.toLowerCase().trim();
+  const c = customerName.toLowerCase().trim();
+  if (!p || !c) return { score: 0, matchReason: "prefix" as const };
+
+  if (p === c) return { score: 100, matchReason: "exact" as const };
+  if (c.includes(p) || p.includes(c)) return { score: 85, matchReason: "contains" as const };
+
+  const words = p.split(/\s+/).filter((w) => w.length >= 2);
+  let tokenHits = 0;
+  for (const w of words) {
+    if (c.includes(w)) tokenHits++;
+  }
+  if (tokenHits > 0) {
+    return { score: 55 + tokenHits * 12, matchReason: "token" as const };
+  }
+
+  const prefix = p.slice(0, Math.min(4, p.length));
+  if (prefix.length >= 3 && c.includes(prefix)) {
+    return { score: 40, matchReason: "prefix" as const };
+  }
+
+  return { score: 0, matchReason: "prefix" as const };
+}
+
+export async function suggestCrmCustomersForPartnerAction(partnerId: string, limit = 8) {
   await requireUser();
   const partner = await db.partner.findUnique({
     where: { id: partnerId },
-    select: { name: true, crmCustomerId: true },
+    select: { name: true },
   });
-  if (!partner) return null;
+  if (!partner?.name.trim()) {
+    return { partnerName: "", candidates: [] as CrmCustomerSuggestion[] };
+  }
 
-  const exact = await db.crmCustomer.findFirst({
-    where: { name: partner.name },
-    select: { id: true, name: true, city: true, status: true, salesman: true },
-  });
-  if (exact) return exact;
+  const partnerName = partner.name.trim();
+  const words = partnerName.split(/\s+/).filter((w) => w.length >= 2);
+  const prefix = partnerName.slice(0, Math.min(8, partnerName.length));
 
-  const fuzzy = await db.crmCustomer.findFirst({
-    where: { name: { contains: partner.name.slice(0, Math.min(partner.name.length, 8)) } },
-    select: { id: true, name: true, city: true, status: true, salesman: true },
+  const rows = await db.crmCustomer.findMany({
+    where: {
+      OR: [
+        { name: { contains: partnerName } },
+        ...(prefix.length >= 3 ? [{ name: { contains: prefix } }] : []),
+        ...words.map((w) => ({ name: { contains: w } })),
+      ],
+    },
+    take: 60,
+    select: {
+      id: true,
+      name: true,
+      city: true,
+      status: true,
+      salesman: true,
+    },
   });
-  return fuzzy;
+
+  const ranked = rows
+    .map((row) => {
+      const { score, matchReason } = scorePartnerCrmName(partnerName, row.name);
+      return { ...row, score, matchReason };
+    })
+    .filter((row) => row.score > 0)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+    .slice(0, limit);
+
+  return { partnerName, candidates: ranked };
+}
+
+/** @deprecated use suggestCrmCustomersForPartnerAction */
+export async function suggestCrmCustomerForPartnerAction(partnerId: string) {
+  const { candidates } = await suggestCrmCustomersForPartnerAction(partnerId, 1);
+  return candidates[0] ?? null;
 }
 
 export async function retryCrmBusinessRecordSyncAction(recordId: string) {
