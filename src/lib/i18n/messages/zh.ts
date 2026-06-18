@@ -266,6 +266,10 @@ export const messagesZh: Messages = {
     businessRecordContact: "关联联系人（可选）",
     crmSynced: "已同步 CRM",
     crmSyncFailed: "CRM 未同步",
+    crmSyncStatusSynced: "CRM 已同步",
+    crmSyncStatusFailed: "CRM 同步失败",
+    crmSyncStatusSkipped: "CRM 未同步",
+    crmSyncRetry: "重试同步",
     noBusinessRecords: "暂无商务记录",
     recordAsMilestone: "记录为商务进展？",
     recordAsMilestoneHint: "将此次待办完成沉淀为重点进展",
@@ -887,7 +891,7 @@ export const messagesZh: Messages = {
     wecomChatId: "企业微信群 ID",
     wecomChatIdHint: "绑定后可主动推送摘要、待办提醒到群聊",
     kmsRootPath: "KMS 主目录",
-    kmsRootPathHint: "手动填写，如 /partners/beon-it/",
+    kmsRootPathHint: "手动填写，如 https://kms.fineres.com/partners/beon-it/",
     crmCustomerId: "CRM 客户 ID",
     crmCustomerIdHint: "从同步的 CRM 客户库搜索并匹配，用于商务记录双向同步",
     save: "保存配置",
@@ -952,6 +956,11 @@ export const messagesZh: Messages = {
         title: "AI 记录商务进展",
         placeholder:
           "粘贴会议纪要、企微聊天或描述发生了什么 — 我会提取并保存为商务记录。\n示例：\n• 昨天拜访了对方 VP，讨论了 L2 认证计划\n• 已与 Faisal 约定 3/15 进行 FineBI L2 培训",
+      },
+      todo: {
+        title: "AI 创建待办",
+        placeholder:
+          "描述要跟进的待办事项。可关联具体伙伴，也可创建个人待办。\n示例：\n• 下周跟进 Acme 的 L2 认证报价\n• 提醒我周五整理本周拜访纪要",
       },
     },
   },

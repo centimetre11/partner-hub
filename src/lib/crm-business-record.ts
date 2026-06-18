@@ -65,6 +65,40 @@ async function resolveCrmContactId(crmCustomerId: string, contactId: string | nu
   return fuzzy?.id ?? null;
 }
 
+async function persistCrmSyncState(recordId: string, result: CrmBusinessRecordSyncResult, traceId?: string) {
+  const now = new Date();
+  if (result.status === "synced") {
+    await db.businessRecord.update({
+      where: { id: recordId },
+      data: {
+        crmSyncStatus: "SYNCED",
+        crmTraceId: result.traceId,
+        crmSyncedAt: now,
+        crmSyncError: null,
+      },
+    });
+    return;
+  }
+  if (result.status === "failed") {
+    await db.businessRecord.update({
+      where: { id: recordId },
+      data: {
+        crmSyncStatus: "FAILED",
+        crmTraceId: traceId ?? result.traceId ?? null,
+        crmSyncError: result.error,
+      },
+    });
+    return;
+  }
+  await db.businessRecord.update({
+    where: { id: recordId },
+    data: {
+      crmSyncStatus: "SKIPPED",
+      crmSyncError: result.reason,
+    },
+  });
+}
+
 export async function syncBusinessRecordToCrm(opts: {
   recordId: string;
   partnerId: string;
@@ -76,7 +110,9 @@ export async function syncBusinessRecordToCrm(opts: {
   contactId?: string | null;
 }): Promise<CrmBusinessRecordSyncResult> {
   if (process.env.CRM_TRACE_ENABLED === "0") {
-    return { status: "skipped", reason: "CRM 商务记录同步已关闭" };
+    const result = { status: "skipped" as const, reason: "CRM 商务记录同步已关闭" };
+    await persistCrmSyncState(opts.recordId, result);
+    return result;
   }
 
   const [partner, user] = await Promise.all([
@@ -91,10 +127,14 @@ export async function syncBusinessRecordToCrm(opts: {
   ]);
 
   if (!partner?.crmCustomerId) {
-    return { status: "skipped", reason: "伙伴未匹配 CRM 客户" };
+    const result = { status: "skipped" as const, reason: "伙伴未匹配 CRM 客户" };
+    await persistCrmSyncState(opts.recordId, result);
+    return result;
   }
   if (!user?.crmSalesmanName) {
-    return { status: "skipped", reason: "当前用户未匹配 CRM 销售账号" };
+    const result = { status: "skipped" as const, reason: "当前用户未匹配 CRM 销售账号" };
+    await persistCrmSyncState(opts.recordId, result);
+    return result;
   }
 
   const traceId = randomUUID();
@@ -114,25 +154,11 @@ export async function syncBusinessRecordToCrm(opts: {
       traceDetail: buildTraceDetail(opts.title, opts.content),
     });
 
-    await db.businessRecord.update({
-      where: { id: opts.recordId },
-      data: {
-        crmTraceId: traceId,
-        crmSyncedAt: now,
-        crmSyncError: null,
-      },
-    });
-
+    await persistCrmSyncState(opts.recordId, { status: "synced", traceId });
     return { status: "synced", traceId };
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
-    await db.businessRecord.update({
-      where: { id: opts.recordId },
-      data: {
-        crmTraceId: traceId,
-        crmSyncError: error,
-      },
-    });
+    await persistCrmSyncState(opts.recordId, { status: "failed", error, traceId }, traceId);
     return { status: "failed", error, traceId };
   }
 }

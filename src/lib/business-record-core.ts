@@ -16,6 +16,35 @@ export function normalizeBusinessRecordCategory(raw: string): BusinessRecordCate
   return BUSINESS_RECORD_CATEGORIES.includes(raw as BusinessRecordCategory) ? (raw as BusinessRecordCategory) : "OTHER";
 }
 
+export type BusinessRecordCrmSyncStatus = "SYNCED" | "FAILED" | "SKIPPED";
+
+export type BusinessRecordCrmSyncDisplay = {
+  status: BusinessRecordCrmSyncStatus | "PENDING";
+  reason?: string;
+  syncedAt?: Date;
+};
+
+export function resolveBusinessRecordCrmSync(record: {
+  crmSyncStatus?: string | null;
+  crmSyncedAt?: Date | string | null;
+  crmSyncError?: string | null;
+}): BusinessRecordCrmSyncDisplay {
+  const syncedAt = record.crmSyncedAt ? new Date(record.crmSyncedAt) : undefined;
+  if (record.crmSyncStatus === "SYNCED" || syncedAt) {
+    return { status: "SYNCED", syncedAt };
+  }
+  if (record.crmSyncStatus === "FAILED") {
+    return { status: "FAILED", reason: record.crmSyncError ?? undefined };
+  }
+  if (record.crmSyncStatus === "SKIPPED") {
+    return { status: "SKIPPED", reason: record.crmSyncError ?? undefined };
+  }
+  if (record.crmSyncError) {
+    return { status: "FAILED", reason: record.crmSyncError };
+  }
+  return { status: "PENDING" };
+}
+
 export async function persistBusinessRecord(opts: {
   partnerId: string;
   userId: string;
@@ -75,10 +104,12 @@ export async function persistBusinessRecord(opts: {
       contactId: opts.contactId,
     });
   } catch (e) {
-    crmSync = {
-      status: "failed",
-      error: e instanceof Error ? e.message : String(e),
-    };
+    const error = e instanceof Error ? e.message : String(e);
+    crmSync = { status: "failed", error };
+    await db.businessRecord.update({
+      where: { id: record.id },
+      data: { crmSyncStatus: "FAILED", crmSyncError: error },
+    });
   }
 
   return { record, crmSync };

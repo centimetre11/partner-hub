@@ -5,7 +5,7 @@ import { createSseResponse } from "@/lib/ai-trace";
 import { runIntakeTurn, type IntakeScope, type IntakeMessage } from "@/lib/ai-intake";
 import { getLocale } from "@/lib/i18n/locale-server";
 
-const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profile", "training", "solution", "business_record"];
+const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profile", "training", "solution", "business_record", "todo"];
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();

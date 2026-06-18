@@ -9,7 +9,8 @@ export type IntakeScope =
   | "profile"
   | "training"
   | "solution"
-  | "business_record";
+  | "business_record"
+  | "todo";
 
 export function replyLanguage(locale: Locale): "Chinese" | "English" {
   return locale === "zh" ? "Chinese" : "English";
@@ -113,6 +114,7 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
   "clarifications": [],
   "ready": true/false,
   "proposal": {
+    "partnerName": "(when session is open/unbound: company this record belongs to; omit when partner is pre-bound)",
     "summary": "One-line summary of milestone(s) to save (${lang})",
     "fields": [],
     "contacts": [],
@@ -135,6 +137,31 @@ Rules:
 - One user message may yield multiple businessRecords if they describe several milestones.
 - category: VISIT=meetings/visits; TRAINING=training/cert scheduling; NEGOTIATION=deals/terms; DELIVERY=contract/first delivery; RELATIONSHIP=relationship building; OTHER=rest.
 - Extract only from user text; do not invent. ready=true when at least one record has a clear title.`;
+  }
+
+  if (scope === "todo") {
+    return `Output a single JSON object. User-facing strings in ${lang}:
+{
+  "reply": "Your message to the user (${lang}, brief)",
+  "questions": [],
+  "clarifications": [],
+  "ready": true/false,
+  "proposal": {
+    "partnerName": "(optional: company to link this todo; omit for personal/global todos)",
+    "summary": "One-line summary (${lang})",
+    "fields": [],
+    "contacts": [],
+    "opportunities": [],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","detail":"..."}],
+    "trainings": [],
+    "solutions": [],
+    "businessRecords": []
+  }
+}
+Rules:
+- Fill todos only; other arrays must be empty.
+- ready=true when at least one todo has a clear title.
+- partnerName only when user mentions a specific company/partner.`;
   }
 
   if (scope === "powermap") {
@@ -224,6 +251,8 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
       return `Fill solutions only. status codes: ${solutionStatuses}. Leave others as empty arrays.`;
     case "business_record":
       return "Fill businessRecords only (title required). Leave fields/contacts/opportunities/todos/trainings/solutions as empty arrays.";
+    case "todo":
+      return "Fill todos only. Leave fields/contacts/opportunities/trainings/solutions/businessRecords as empty arrays.";
   }
 }
 
@@ -321,6 +350,13 @@ Decide add (action=add) vs update (action=update with id) against the existing l
 - contactName: if a known contact from [Existing contacts] is involved
 No web research. ready=true when title(s) are clear. User may paste meeting notes, WeCom chat, or a short sentence like "visited their VP yesterday".`,
   },
+  todo: {
+    title: "Create todo",
+    intro: "The user wants to create one or more follow-up todos. May or may not relate to a specific partner.",
+    guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), priority (HIGH/MEDIUM/LOW), detail.
+If user names a company/partner, set proposal.partnerName. Global todos (no company) are OK.
+No web research. ready=true when title is clear.`,
+  },
 };
 
 export function buildIntakeSystemPrompt(opts: {
@@ -329,6 +365,7 @@ export function buildIntakeSystemPrompt(opts: {
   today: string;
   taxonomyHint: string;
   partnerContext?: string;
+  partnerBinding?: string;
   useResearch: boolean;
   kmsConfigured?: boolean;
 }): string {
@@ -348,6 +385,7 @@ ${cfg.guide}
 Follow-ups should feel like a colleague—natural and brief, not a form. When the user has given enough, produce the proposal and set ready=true; don't chase optional fields.
 ${opts.useResearch ? `\n${RESEARCH_GUIDE}${kmsHint}` : ""}
 
+${opts.partnerBinding ? `\n${opts.partnerBinding}\n` : ""}
 [Proposal scope for this task]
 ${schemaHintForScope(opts.scope, opts.locale)}
 ${opts.taxonomyHint}

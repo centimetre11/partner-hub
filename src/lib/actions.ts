@@ -594,3 +594,20 @@ export async function createBusinessRecordAction(partnerId: string, formData: Fo
   }
   return { ok: true, info: `本地已保存（CRM：${crmSync.reason}）` };
 }
+
+export async function deleteBusinessRecordAction(partnerId: string, recordId: string) {
+  await requireUser();
+  const record = await db.businessRecord.findUnique({
+    where: { id: recordId },
+    select: { partnerId: true, timelineEventId: true },
+  });
+  if (!record || record.partnerId !== partnerId) return;
+
+  await db.businessRecord.delete({ where: { id: recordId } });
+  if (record.timelineEventId) {
+    await db.timelineEvent.delete({ where: { id: record.timelineEventId } }).catch(() => {});
+  }
+
+  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath("/");
+}

@@ -123,7 +123,8 @@ model BusinessRecord {
   createdBy       User?     @relation(fields: [createdById], references: [id])
   crmTraceId      String?
   crmSyncedAt     DateTime?
-  crmSyncError    String?
+  crmSyncStatus   String?   // SYNCED | FAILED | SKIPPED
+  crmSyncError    String?   // failure or skip reason
   createdAt       DateTime  @default(now())
 
   @@index([partnerId, occurredAt])

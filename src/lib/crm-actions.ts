@@ -155,10 +155,11 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
       occurredAt: true,
       contactId: true,
       crmSyncedAt: true,
+      crmSyncStatus: true,
     },
   });
   if (!record) return { error: "商务记录不存在" };
-  if (record.crmSyncedAt) return { error: "该记录已同步到 CRM" };
+  if (record.crmSyncStatus === "SYNCED" || record.crmSyncedAt) return { error: "该记录已同步到 CRM" };
 
   const { syncBusinessRecordToCrm } = await import("./crm-business-record");
   const { normalizeBusinessRecordCategory } = await import("./business-record-core");

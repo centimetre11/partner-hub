@@ -3,8 +3,18 @@ import { generateReqId } from "@wecom/aibot-node-sdk";
 import type { WsFrame } from "@wecom/aibot-node-sdk";
 import { db } from "@/lib/db";
 import { AIError, getAiConfigSummary, type AiConfigSummary } from "@/lib/ai";
-import { runQueryAssistant } from "@/lib/assistant-core";
-import type { IntakeMessage } from "@/lib/ai-intake";
+import {
+  applyIntake,
+  isProposeCancel,
+  isProposeConfirm,
+  shouldUseProposeMode,
+  type IntakeMessage,
+  type IntakeProposal,
+  type IntakeScope,
+} from "@/lib/ai-intake";
+import { runAssistantTurn } from "@/lib/assistant-router";
+import { mergeFinalProposal } from "@/lib/proposal-merge";
+import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
   claimPendingWecomPushJobs,
@@ -13,6 +23,16 @@ import {
 
 const MAX_HISTORY = 20;
 const conversations = new Map<string, IntakeMessage[]>();
+
+type ProposeSession = {
+  scope: IntakeScope;
+  partnerId?: string;
+  proposal: IntakeProposal;
+  ready: boolean;
+  sourceText: string;
+};
+
+const proposeSessions = new Map<string, ProposeSession>();
 
 export type WecomBotStatus = {
   enabled: boolean;
@@ -83,6 +103,25 @@ function appendHistory(key: string, role: "user" | "assistant", content: string)
   return history;
 }
 
+function withPartnerHint(
+  history: IntakeMessage[],
+  boundPartnerId?: string | null,
+  boundPartnerName?: string | null
+): IntakeMessage[] {
+  if (!boundPartnerId || !boundPartnerName || !history.length) return history;
+  const last = history[history.length - 1];
+  if (last.role !== "user") return history;
+  return [
+    ...history.slice(0, -1),
+    {
+      role: "user" as const,
+      content:
+        last.content +
+        `\n\n（系统提示：当前会话已绑定伙伴「${boundPartnerName}」。商务记录、商机、联系人、待办、培训等均默认归属该伙伴；「这个伙伴/该客户」均指该伙伴。）`,
+    },
+  ];
+}
+
 async function refreshAiSummary() {
   aiSummaryCache = await getAiConfigSummary();
   status.ai = aiSummaryCache;
@@ -124,30 +163,88 @@ async function handleTextMessage(frame: WsFrame) {
 
   await wsClient.replyStream(frame, streamId, "正在思考，请稍候…", false);
 
+  const boundPartnerId = chat?.partnerId ?? undefined;
+  const boundPartnerName = chat?.partner?.name;
+  const session = proposeSessions.get(key);
+
   try {
-    const boundPartnerId = chat?.partnerId;
-    const boundPartnerName = chat?.partner?.name;
-    const result = await runQueryAssistant(
-      boundPartnerId
-        ? [
-            ...history.slice(0, -1),
-            {
-              role: "user" as const,
-              content:
-                history[history.length - 1]?.content +
-                `\n\n（系统提示：当前会话已绑定伙伴「${boundPartnerName}」，涉及「这个伙伴/该伙伴」均指该伙伴，请优先用工具查询其档案与待办。）`,
-            },
-          ]
-        : history,
-      botUserId,
-      {
-        locale: "zh",
-        feature: "WeCom Bot",
+    if (session && isProposeCancel(text)) {
+      proposeSessions.delete(key);
+      const reply = "已取消，未保存任何草案内容。你可以继续正常提问，或重新发起录入。";
+      appendHistory(key, "assistant", reply);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    if (session && isProposeConfirm(text)) {
+      if (!session.ready) {
+        const reply = "草案信息还不够完整，请继续补充细节后再回复「确认」保存，或回复「取消」放弃。";
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+        return;
       }
-    );
-    appendHistory(key, "assistant", result.reply);
-    console.log(`[wecom-bot] 回复(${text.slice(0, 20)}…): ${result.reply.slice(0, 120)}…`);
-    await wsClient.replyStream(frame, streamId, result.reply, true);
+      const applied = await applyIntake({
+        scope: session.scope,
+        partnerId: boundPartnerId ?? session.partnerId,
+        proposal: session.proposal,
+        userId: botUserId,
+        sourceText: session.sourceText,
+        locale: "zh",
+      });
+      proposeSessions.delete(key);
+      const reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope);
+      appendHistory(key, "assistant", reply);
+      console.log(`[wecom-bot] Propose 已保存 scope=${session.scope} partner=${applied.partnerId.slice(0, 8)}…`);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
+    const inPropose = !!session || shouldUseProposeMode(messages);
+
+    const result = await runAssistantTurn({
+      messages,
+      userId: botUserId,
+      partnerId: boundPartnerId ?? session?.partnerId,
+      locale: "zh",
+      feature: inPropose ? "WeCom Bot · Propose" : "WeCom Bot",
+      forcePropose: inPropose,
+      proposeScope: session?.scope,
+    });
+
+    let reply: string;
+    if (result.mode === "propose") {
+      const merged = mergeFinalProposal(session?.proposal ?? null, result.proposal, new Set());
+      const sourceText = history
+        .filter((m) => m.role === "user")
+        .map((m) => m.content)
+        .join("\n");
+      proposeSessions.set(key, {
+        scope: session?.scope ?? result.scope,
+        partnerId: boundPartnerId ?? session?.partnerId,
+        proposal: merged,
+        ready: result.ready,
+        sourceText,
+      });
+      reply = formatProposeWecomReply({
+        scope: result.scope,
+        reply: result.reply,
+        proposal: merged,
+        ready: result.ready,
+        questions: result.questions,
+      });
+      console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
+    } else {
+      if (session && !shouldUseProposeMode(messages)) {
+        // User pivoted to a normal query — drop stale draft
+        proposeSessions.delete(key);
+      }
+      reply = result.reply;
+      console.log(`[wecom-bot] 回复(${text.slice(0, 20)}…): ${result.reply.slice(0, 120)}…`);
+    }
+
+    appendHistory(key, "assistant", reply);
+    await wsClient.replyStream(frame, streamId, reply, true);
   } catch (e) {
     const msg =
       e instanceof AIError
@@ -255,7 +352,7 @@ export async function startWecomBot() {
       msgtype: "text",
       text: {
         content:
-          "你好！我是帆软中东伙伴管理助手。\n\n你可以问我：\n• 当前有哪些 Tier A 伙伴？\n• 帮我把某伙伴推进到下一阶段\n• 创建一条待办\n• 对比两个伙伴的档案\n\n直接发消息即可开始对话。",
+          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  - 建档 / 补全画像（可贴 KMS 链接）\n  录入时会先给出草案，回复「确认」保存，「取消」放弃。\n\n直接发消息即可开始。",
       },
     });
   });

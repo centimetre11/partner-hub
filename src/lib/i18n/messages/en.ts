@@ -266,6 +266,10 @@ export const messagesEn = {
     businessRecordContact: "Related contact (optional)",
     crmSynced: "Synced to CRM",
     crmSyncFailed: "CRM not synced",
+    crmSyncStatusSynced: "Synced to CRM",
+    crmSyncStatusFailed: "CRM sync failed",
+    crmSyncStatusSkipped: "CRM not synced",
+    crmSyncRetry: "Retry sync",
     noBusinessRecords: "No business records yet",
     recordAsMilestone: "Log as business milestone?",
     recordAsMilestoneHint: "Capture this completed todo as a key progress item",
@@ -887,7 +891,7 @@ export const messagesEn = {
     wecomChatId: "WeCom group chat ID",
     wecomChatIdHint: "After binding, push summaries and todo reminders to the group",
     kmsRootPath: "KMS root path",
-    kmsRootPathHint: "Enter manually, e.g. /partners/beon-it/",
+    kmsRootPathHint: "Enter manually, e.g. https://kms.fineres.com/partners/beon-it/",
     crmCustomerId: "CRM customer ID",
     crmCustomerIdHint: "Search synced CRM customers to link for business record sync",
     save: "Save settings",
@@ -952,6 +956,11 @@ export const messagesEn = {
         title: "AI Log Business Milestone",
         placeholder:
           "Paste meeting notes, WeCom chat, or describe what happened — I'll extract and save as business record(s).\nExamples:\n• Visited their VP yesterday, discussed L2 cert plan\n• Scheduled FineBI L2 training on 3/15 with Faisal",
+      },
+      todo: {
+        title: "AI Create Todo",
+        placeholder:
+          "Describe follow-ups to track. Link to a partner or create a personal todo.\nExamples:\n• Follow up Acme on L2 cert quote next week\n• Remind me to summarize visits on Friday",
       },
     },
   },

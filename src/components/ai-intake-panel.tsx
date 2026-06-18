@@ -114,12 +114,39 @@ export function AiIntakePanel({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
+      const useStream = scope !== "business_record" && scope !== "todo";
       const res = await fetch("/api/ai/intake", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body: JSON.stringify({ scope, partnerId, messages: next, stream: true }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(useStream ? { Accept: "text/event-stream" } : {}),
+        },
+        body: JSON.stringify({ scope, partnerId, messages: next, stream: useStream }),
         signal: ac.signal,
       });
+
+      if (!useStream) {
+        const turn = (await res.json()) as {
+          reply: string;
+          proposal: IntakeProposal;
+          ready: boolean;
+          questions?: string[];
+          clarifications?: IntakeClarification[];
+          error?: string;
+        };
+        if (!res.ok) throw new Error(turn.error ?? "Request failed");
+        setMessages((m) => [...m, { role: "assistant", content: turn.reply }]);
+        setProposal((prev) =>
+          turn.proposal && countProposalItems(turn.proposal) > 0
+            ? mergeFinalProposal(prev, turn.proposal, excludedRef.current)
+            : prev
+        );
+        setReady(turn.ready);
+        setQuestions(turn.questions ?? []);
+        setClarifications(turn.clarifications ?? []);
+        return;
+      }
+
       const { data, trace, replyText: finalReply, aborted } = await consumeAiSse(
         res,
         (_ev, state) => applyStream(state),

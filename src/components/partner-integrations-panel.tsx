@@ -168,7 +168,7 @@ export function PartnerIntegrationsPanel({
             <input
               value={kms}
               onChange={(e) => setKms(e.target.value)}
-              placeholder="/partners/beon-it/"
+              placeholder="https://kms.fineres.com/partners/beon-it/"
               className={input}
             />
           </label>

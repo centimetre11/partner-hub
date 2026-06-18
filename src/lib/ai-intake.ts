@@ -32,13 +32,27 @@ import {
 } from "./ai-locale";
 import type { Locale } from "./i18n/locale";
 import { taxonomyListForAi, normalizeIndustriesInput } from "./taxonomy";
-import { partnerContext, powermapContext, type ContactProposal, type FieldUpdate, type OpportunityProposal, type TodoProposal } from "./proposals";
+import {
+  businessRecordContext,
+  partnerContext,
+  powermapContext,
+  type ContactProposal,
+  type FieldUpdate,
+  type OpportunityProposal,
+  type TodoProposal,
+} from "./proposals";
 import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
 import { persistBusinessRecord } from "./business-record-core";
 import { countProposalItems } from "./proposal-merge";
+import {
+  buildPartnerBindingPrompt,
+  intakeScopeRequiresPartner,
+  loadIntakePartnerBinding,
+  resolveIntakePartner,
+} from "./intake-partner-binding";
 
 export type IntakeScope = AiLocaleScope;
 
@@ -125,6 +139,7 @@ function intakeTaskTier(scope: IntakeScope): AiTaskTier {
     case "opportunity":
     case "training":
     case "business_record":
+    case "todo":
       return "fast";
     default:
       return "standard";
@@ -133,6 +148,7 @@ function intakeTaskTier(scope: IntakeScope): AiTaskTier {
 
 async function partnerContextForScope(scope: IntakeScope, partnerId: string, locale: Locale): Promise<string> {
   if (scope === "powermap") return powermapContext(partnerId, locale);
+  if (scope === "business_record") return businessRecordContext(partnerId, locale);
   return partnerContext(partnerId, locale);
 }
 
@@ -148,12 +164,13 @@ async function callIntakeExtract(
       opts.emit?.({ event: "reply_reset" });
     }
     let streamed = "";
-    const onDelta = opts.emit
-      ? (d: string) => {
-          streamed += d;
-          opts.emit!({ event: "reply_delta", delta: d });
-        }
-      : undefined;
+    const onDelta =
+      opts.emit && opts.taskTier !== "fast"
+        ? (d: string) => {
+            streamed += d;
+            opts.emit!({ event: "reply_delta", delta: d });
+          }
+        : undefined;
 
     const { content } = await chatCompletion(chat, {
       jsonMode: !retry,
@@ -234,6 +251,7 @@ async function parseIntakeTurnFromContent(
     chat?: ChatMessage[];
     feature?: string;
     userId?: string;
+    taskTier?: AiTaskTier;
   }
 ): Promise<IntakeTurn> {
   const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
@@ -261,6 +279,7 @@ async function parseIntakeTurnFromContent(
         temperature: 0.1,
         feature: `${opts.feature} (json repair)`,
         userId: opts.userId,
+        taskTier: opts.taskTier,
       });
       const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
       if (repaired) return normalizeIntakeTurn(repaired, locale);
@@ -392,14 +411,18 @@ export async function runIntakeTurn(opts: {
   locale: Locale;
 }): Promise<IntakeTurn> {
   const locale = opts.locale;
-  const [categoryList, industryList, archetypeList, valuePatternList] = await Promise.all([
-    taxonomyListForAi("CATEGORY"),
-    taxonomyListForAi("INDUSTRY"),
-    taxonomyListForAi("ARCHETYPE"),
-    taxonomyListForAi("VALUE_PATTERN"),
-  ]);
-  const taxonomyHint = `Taxonomy values (from library; industries is JSON array, multi-select OK): category=${categoryList}; industries=${industryList}; partnerArchetype=${archetypeList}; valuePattern=${valuePatternList}`;
+  let taxonomyHint = "";
+  if (opts.scope !== "business_record" && opts.scope !== "todo") {
+    const [categoryList, industryList, archetypeList, valuePatternList] = await Promise.all([
+      taxonomyListForAi("CATEGORY"),
+      taxonomyListForAi("INDUSTRY"),
+      taxonomyListForAi("ARCHETYPE"),
+      taxonomyListForAi("VALUE_PATTERN"),
+    ]);
+    taxonomyHint = `Taxonomy values (from library; industries is JSON array, multi-select OK): category=${categoryList}; industries=${industryList}; partnerArchetype=${archetypeList}; valuePattern=${valuePatternList}`;
+  }
   let partnerCtx = "";
+  const binding = await loadIntakePartnerBinding(opts.partnerId);
   if (opts.partnerId) {
     partnerCtx = await partnerContextForScope(opts.scope, opts.partnerId, locale);
   }
@@ -414,6 +437,7 @@ export async function runIntakeTurn(opts: {
     today: opts.today,
     taxonomyHint,
     partnerContext: partnerCtx || undefined,
+    partnerBinding: buildPartnerBindingPrompt({ locale, scope: opts.scope, binding }),
     useResearch,
     kmsConfigured,
   });
@@ -533,6 +557,7 @@ export async function runIntakeTurn(opts: {
     chat,
     feature,
     userId: opts.userId,
+    taskTier,
   });
   emitProposalUpdate(opts.emit, turn);
   if (opts.emit) {
@@ -542,23 +567,46 @@ export async function runIntakeTurn(opts: {
   return turn;
 }
 
-/** Detect propose-confirm mode (KMS onboarding / profile completion / partner enrichment) */
+/** Shared regex for propose-mode intent (assistant dock UI + server routing) */
+export const PROPOSE_INTENT_RE =
+  /kms\.fineres\.com|pageId=\d+|建档|补全画像|提炼.{0,6}伙伴|录入伙伴|创建伙伴|新公司|丰富.{0,4}档案|完善.{0,4}画像|商务记录|拜访记录|会议纪要|跟进记录|见面记录|记录拜访|记录会议|待办|创建待办|记待办|加待办|添加待办|添加商机|新建商机|加联系人|添加联系人|新联系人|培训计划|认证计划|联合方案|onboard|create partner|new partner|enrich.{0,8}profile|complete.{0,8}profile|business record|meeting log|visit log|log opportunity|add contact|create todo|add todo|log todo|intake/i;
+
+/** Detect propose-confirm mode (collaborative agents: onboarding, records, opportunities, etc.) */
 export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   const text = messages
     .filter((m) => m.role === "user")
     .map((m) => m.content)
     .join("\n");
-  if (/kms\.fineres\.com|pageId=\d+/i.test(text)) return true;
-  if (/建档|补全画像|提炼.{0,6}伙伴|录入|创建伙伴|新公司|丰富.{0,4}档案|完善.{0,4}画像|onboard|create partner|new partner|enrich.{0,8}profile|complete.{0,8}profile|intake/i.test(text)) return true;
-  return false;
+  return PROPOSE_INTENT_RE.test(text);
 }
 
 export function detectProposeScope(messages: IntakeMessage[], partnerId?: string): IntakeScope {
-  if (partnerId) return "profile";
   const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  if (/人物|联系人|权力地图|contact|power map|CTO|CEO/i.test(last)) return "powermap";
-  if (/商机|opportunity/i.test(last)) return "opportunity";
+  if (/待办|创建待办|记待办|加待办|添加待办|create todo|add todo|log todo/i.test(last)) {
+    return "todo";
+  }
+  if (/商务记录|拜访记录|会议纪要|跟进记录|见面|记录拜访|记录会议|business record|meeting log|visit log/i.test(last)) {
+    return "business_record";
+  }
+  if (/商机|添加商机|新建商机|opportunity|pipeline/i.test(last)) return "opportunity";
+  if (/联系人|权力地图|加联系人|添加联系人|新联系人|contact|power map|名片|CTO|CEO/i.test(last)) {
+    return "powermap";
+  }
+  if (/培训|认证|FCA|training plan/i.test(last)) return "training";
+  if (/联合方案|solution/i.test(last)) return "solution";
+  if (/建档|补全|画像|profile|onboard|kms/i.test(last)) return partnerId ? "profile" : "new_partner";
+  if (partnerId) return "profile";
   return "new_partner";
+}
+
+/** User confirms a pending propose draft (WeCom / text channels) */
+export function isProposeConfirm(text: string): boolean {
+  return /^(确认|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save)$/i.test(text.trim());
+}
+
+/** User cancels a pending propose draft */
+export function isProposeCancel(text: string): boolean {
+  return /^(取消|放弃|不要了|cancel|discard|abort)$/i.test(text.trim());
 }
 
 export type ProposeTurn = IntakeTurn & { scope: IntakeScope; mode: "propose" };
@@ -653,12 +701,27 @@ export async function applyIntake(opts: {
       },
     });
     if (asActive) await createStarterTodos(partnerId, created.name, userId);
+  } else if (scope === "todo" || intakeScopeRequiresPartner(scope)) {
+    const resolved = await resolveIntakePartner({
+      scope,
+      boundPartnerId: opts.partnerId,
+      proposal,
+      locale,
+    });
+    if (!resolved.ok) throw new Error(resolved.error);
+    partnerId = resolved.partnerId;
   }
 
-  if (!partnerId) throw new Error("Partner is required");
+  if (intakeScopeRequiresPartner(scope) && !partnerId) {
+    throw new Error(
+      locale === "zh"
+        ? "无法确定所属伙伴，请说明公司名称或在伙伴详情页 / 已绑定企微群中录入"
+        : "Could not determine partner — name the company or use a partner page / bound WeCom group"
+    );
+  }
 
   // ---- Profile fields (non-onboarding) ----
-  if (scope !== "new_partner" && proposal.fields.length) {
+  if (scope !== "new_partner" && partnerId && proposal.fields.length) {
     const data: Record<string, unknown> = {};
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
@@ -681,7 +744,7 @@ export async function applyIntake(opts: {
 
   // ---- Contacts (two passes: save first, then resolve reporting lines) ----
   const contactIdByName = new Map<string, string>();
-  for (const c of proposal.contacts) {
+  if (partnerId) for (const c of proposal.contacts) {
     const payload = {
       name: c.name,
       role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
@@ -710,7 +773,7 @@ export async function applyIntake(opts: {
   }
 
   // Second pass: resolve reportsToName → reportsToId
-  for (const c of proposal.contacts) {
+  if (partnerId) for (const c of proposal.contacts) {
     if (!c.reportsToName) continue;
     const subId = contactIdByName.get(c.name);
     if (!subId) continue;
@@ -728,7 +791,7 @@ export async function applyIntake(opts: {
   }
 
   // ---- Opportunities ----
-  for (const o of proposal.opportunities) {
+  if (partnerId) for (const o of proposal.opportunities) {
     const payload = {
       name: o.name,
       client: o.client,
@@ -752,7 +815,7 @@ export async function applyIntake(opts: {
   }
 
   // ---- Training ----
-  for (const t of proposal.trainings) {
+  if (partnerId) for (const t of proposal.trainings) {
     if (!asTrimmedString(t.person)) continue;
     await db.training.create({
       data: {
@@ -769,7 +832,7 @@ export async function applyIntake(opts: {
   }
 
   // ---- Joint solutions ----
-  for (const s of proposal.solutions) {
+  if (partnerId) for (const s of proposal.solutions) {
     if (!asTrimmedString(s.name)) continue;
     await db.solution.create({
       data: {
@@ -788,7 +851,7 @@ export async function applyIntake(opts: {
   }
 
   // ---- Business records ----
-  for (const r of proposal.businessRecords) {
+  if (partnerId) for (const r of proposal.businessRecords) {
     const title = asTrimmedString(r.title);
     if (!title) continue;
     let contactId: string | null = null;
@@ -828,10 +891,10 @@ export async function applyIntake(opts: {
   }
 
   // ---- Timeline audit (non-onboarding; onboarding already logged) ----
-  if (scope !== "new_partner" && scope !== "business_record" && partnerId) {
+  if (scope !== "new_partner" && scope !== "business_record" && scope !== "todo" && partnerId) {
     const intakeTitle =
       locale === "zh"
-        ? `AI 录入：${{ new_partner: "新伙伴", powermap: "权力地图", opportunity: "商机", profile: "档案补全", training: "培训", solution: "联合方案", business_record: "商务记录" }[scope]}`
+        ? `AI 录入：${{ new_partner: "新伙伴", powermap: "权力地图", opportunity: "商机", profile: "档案补全", training: "培训", solution: "联合方案", business_record: "商务记录", todo: "待办" }[scope]}`
         : `AI intake: ${scope.replace(/_/g, " ")}`;
     await db.timelineEvent.create({
       data: {

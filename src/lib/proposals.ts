@@ -119,6 +119,24 @@ export async function partnerContext(partnerId: string, locale: Locale = "zh"): 
   return `${partnerContextHeader(locale, p.name)}\n${fields}\n\n${partnerContextSection(locale, "contacts")}\n${contacts}\n\n${partnerContextSection(locale, "opportunities")}\n${opps}`;
 }
 
+/** Business record intake: partner name + contacts only (fast attribute extraction) */
+export async function businessRecordContext(partnerId: string, locale: Locale = "zh"): Promise<string> {
+  const p = await db.partner.findUnique({
+    where: { id: partnerId },
+    select: {
+      name: true,
+      contacts: { select: { id: true, name: true, title: true }, orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!p) return locale === "zh" ? "（未找到伙伴）" : "(Partner not found)";
+  const lines = p.contacts.length
+    ? p.contacts.map((c) => `- id=${c.id} ${c.name}${c.title ? ` (${c.title})` : ""}`).join("\n")
+    : locale === "zh"
+      ? "（无）"
+      : "(none)";
+  return `${partnerContextHeader(locale, p.name)}\n${partnerContextSection(locale, "contacts")}\n${lines}`;
+}
+
 /** Power map intake: existing contacts only (no full profile/opportunities) */
 export async function powermapContext(partnerId: string, locale: Locale = "zh"): Promise<string> {
   const p = await db.partner.findUnique({

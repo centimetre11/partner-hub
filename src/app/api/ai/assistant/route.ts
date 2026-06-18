@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/session";
 import { AIError } from "@/lib/ai";
 import { createSseResponse } from "@/lib/ai-trace";
-import {
-  runProposeTurn,
-  shouldUseProposeMode,
-  type IntakeMessage,
-} from "@/lib/ai-intake";
-import { runQueryAssistant } from "@/lib/assistant-core";
+import type { IntakeMessage } from "@/lib/ai-intake";
+import { runAssistantTurn } from "@/lib/assistant-router";
 import { getLocale } from "@/lib/i18n/locale-server";
 
 export async function POST(req: NextRequest) {
@@ -21,22 +17,31 @@ export async function POST(req: NextRequest) {
     forcePropose?: boolean;
   };
   const { messages, stream, partnerId, forcePropose } = body;
-
-  const usePropose = forcePropose || shouldUseProposeMode(messages);
   const locale = await getLocale();
 
   try {
     if (stream) {
       return createSseResponse(async (emit) => {
-        const result = usePropose
-          ? await runProposeTurn({ messages, partnerId, userId: uid, emit, locale })
-          : await runQueryAssistant(messages, uid, { emit });
+        const result = await runAssistantTurn({
+          messages,
+          userId: uid,
+          partnerId,
+          locale,
+          feature: "Global AI Assistant",
+          emit,
+          forcePropose,
+        });
         emit({ event: "done", data: result });
       });
     }
-    const result = usePropose
-      ? await runProposeTurn({ messages, partnerId, userId: uid, locale })
-      : await runQueryAssistant(messages, uid);
+    const result = await runAssistantTurn({
+      messages,
+      userId: uid,
+      partnerId,
+      locale,
+      feature: "Global AI Assistant",
+      forcePropose,
+    });
     return NextResponse.json(result);
   } catch (e) {
     const msg = e instanceof AIError ? e.message : `Assistant error: ${e instanceof Error ? e.message : e}`;

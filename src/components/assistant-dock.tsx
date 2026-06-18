@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-intake";
+import { PROPOSE_INTENT_RE } from "@/lib/ai-intake";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
@@ -131,7 +132,7 @@ export function AssistantDock() {
       setReady(false);
       setPatchChanges(null);
     }
-    const likelyPropose = /kms\.fineres|pageId=\d+|onboard|create partner|complete profile|intake|建档|补全画像|录入|创建伙伴/i.test(content);
+    const likelyPropose = PROPOSE_INTENT_RE.test(content);
     if (likelyPropose) setProposeMode(true);
     const ac = new AbortController();
     abortRef.current = ac;
@@ -143,6 +144,7 @@ export function AssistantDock() {
           messages: next.map(({ role, content: c, images }) => ({ role, content: c, images })),
           stream: true,
           partnerId: proposePartnerId,
+          forcePropose: proposeMode || !!proposal || likelyPropose,
         }),
         signal: ac.signal,
       });
@@ -200,9 +202,11 @@ export function AssistantDock() {
     setProposeMode(false);
     setQuestions([]);
     setReady(false);
-    setProposePartnerId(partnerId);
     router.refresh();
-    router.push(`/partners/${partnerId}`);
+    if (partnerId) {
+      setProposePartnerId(partnerId);
+      router.push(`/partners/${partnerId}`);
+    }
   }
 
   const panelMessages =

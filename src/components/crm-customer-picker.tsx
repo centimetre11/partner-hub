@@ -101,22 +101,25 @@ export function CrmCustomerPicker({
   return (
     <div className="space-y-2">
       {partnerId && (
-        <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5 space-y-2">
-          <button
-            type="button"
-            disabled={pending}
-            onClick={runSuggest}
-            className="w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {pending
-              ? crm.suggestLoading
-              : crm.suggestMatchFor.replace("{name}", partnerName || "…")}
-          </button>
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={runSuggest}
+              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-700 disabled:opacity-50"
+            >
+              {pending ? crm.suggestLoading : crm.suggestMatch}
+            </button>
+            {partnerName && (
+              <span className="text-[11px] text-zinc-400 truncate max-w-[200px]">{partnerName}</span>
+            )}
+          </div>
 
           {suggestOpen && suggestMsg && (
             <p
-              className={`text-xs px-1 ${
-                suggestions.length ? "text-indigo-700" : "text-amber-700"
+              className={`text-[11px] leading-relaxed ${
+                suggestions.length ? "text-zinc-500" : "text-amber-700"
               }`}
             >
               {suggestMsg}
@@ -124,7 +127,7 @@ export function CrmCustomerPicker({
           )}
 
           {suggestOpen && suggestions.length > 0 && (
-            <div className="max-h-52 overflow-y-auto rounded-lg border border-indigo-100 bg-white divide-y divide-zinc-50">
+            <div className="max-h-48 overflow-y-auto rounded-lg border border-zinc-200 bg-white divide-y divide-zinc-50">
               {suggestions.map((c) => {
                 const selected = value === c.id;
                 return (
@@ -132,13 +135,13 @@ export function CrmCustomerPicker({
                     key={c.id}
                     type="button"
                     onClick={() => select(c)}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 ${
-                      selected ? "bg-emerald-50 hover:bg-emerald-50" : ""
+                    className={`w-full text-left px-2.5 py-1.5 text-xs hover:bg-zinc-50 ${
+                      selected ? "bg-emerald-50/80 hover:bg-emerald-50/80" : ""
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="font-medium text-zinc-800">{c.name}</div>
-                      <span className="shrink-0 rounded bg-indigo-100 text-indigo-700 px-1.5 py-0.5 text-[10px]">
+                      <span className="shrink-0 rounded bg-zinc-100 text-zinc-500 px-1.5 py-0.5 text-[10px]">
                         {matchReasonLabel(c.matchReason)}
                       </span>
                     </div>
