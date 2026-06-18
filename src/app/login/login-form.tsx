@@ -2,8 +2,15 @@
 
 import { useActionState } from "react";
 import { loginAction } from "@/lib/actions";
+import type { Messages } from "@/lib/i18n/messages/en";
 
-export function LoginForm({ firstRun }: { firstRun: boolean }) {
+export function LoginForm({
+  firstRun,
+  messages: lm,
+}: {
+  firstRun: boolean;
+  messages: Messages["login"];
+}) {
   const [state, action, pending] = useActionState(loginAction, null);
 
   return (
@@ -13,33 +20,33 @@ export function LoginForm({ firstRun }: { firstRun: boolean }) {
     >
       {firstRun && (
         <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1.5">Name</label>
+          <label className="block text-sm font-medium text-zinc-700 mb-1.5">{lm.name}</label>
           <input
             name="name"
             required
-            placeholder="e.g. John Smith"
+            placeholder={lm.namePlaceholder}
             className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
       )}
       <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1.5">Email</label>
+        <label className="block text-sm font-medium text-zinc-700 mb-1.5">{lm.email}</label>
         <input
           name="email"
           type="email"
           required
-          placeholder="you@fanruan.com"
+          placeholder={lm.emailPlaceholder}
           className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-zinc-700 mb-1.5">Password</label>
+        <label className="block text-sm font-medium text-zinc-700 mb-1.5">{lm.password}</label>
         <input
           name="password"
           type="password"
           required
           minLength={6}
-          placeholder="At least 6 characters"
+          placeholder={lm.passwordPlaceholder}
           className="w-full rounded-lg border border-zinc-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
       </div>
@@ -48,7 +55,7 @@ export function LoginForm({ firstRun }: { firstRun: boolean }) {
         disabled={pending}
         className="w-full rounded-lg bg-indigo-600 text-white py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
       >
-        {pending ? "Processing…" : firstRun ? "Create account & sign in" : "Sign in"}
+        {pending ? lm.pending : firstRun ? lm.createAndSignIn : lm.signIn}
       </button>
     </form>
   );

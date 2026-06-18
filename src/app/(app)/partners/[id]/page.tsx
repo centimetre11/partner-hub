@@ -3,10 +3,6 @@ import type { Opportunity, TimelineEvent, TodoItem, Training, User } from "@pris
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, tierTone } from "@/components/ui";
-import {
-  EVENT_TYPE_LABELS, PIPELINE_STAGES,
-  POOL_FLAG_LABELS, STATUS_LABELS, TODO_PRIORITY_LABELS,
-} from "@/lib/constants";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { buildPartnerInstanceMap } from "@/lib/partner-framework";
@@ -32,12 +28,16 @@ import { AiPanel } from "./ai-panel";
 import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
-import { MONITOR_DIMENSIONS } from "@/lib/constants";
 import { AiAddButton } from "@/components/ai-add-button";
 import { TodoEditButton } from "@/components/todo-edit-button";
+import { getServerI18n, labelConstants } from "@/lib/server-i18n";
+import type { Messages } from "@/lib/i18n/messages/en";
 
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
+  const { labels, messages: m, bcp47 } = await getServerI18n();
+  const L = labelConstants(labels);
+  const monitorDimensions = Object.keys(L.MONITOR_DIMENSION_LABELS);
   const { id } = await params;
   const p = await db.partner.findUnique({
     where: { id },
@@ -90,7 +90,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     select: { id: true, name: true, icon: true, description: true },
     orderBy: { name: "asc" },
   });
-  const completeness = computeCompleteness(p);
+  const completeness = computeCompleteness(p, labels);
   const stale = staleDays(p);
   const labelMaps = await loadTaxonomyLabelMaps();
   const taxonomy = {
@@ -100,13 +100,13 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     CATEGORY: await getTaxonomyOptions("CATEGORY"),
   };
   const industryCodes = parseIndustries(p);
-  const instanceMap = buildPartnerInstanceMap(p, labelMaps);
+  const instanceMap = buildPartnerInstanceMap(p, labelMaps, labels);
   const gtmLibraryItems = await searchGtmLibraryAction("");
   let selectedDims: string[] = [];
   if (p.monitorDims) {
     try {
       const parsed = JSON.parse(p.monitorDims);
-      if (Array.isArray(parsed)) selectedDims = parsed.map(String).filter((d) => MONITOR_DIMENSIONS.includes(d));
+      if (Array.isArray(parsed)) selectedDims = parsed.map(String).filter((d) => monitorDimensions.includes(d));
     } catch {
       /* ignore */
     }
@@ -126,10 +126,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 break-words">{p.name}</h1>
               <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "ARCHIVED" ? "zinc" : "blue"}>
-                {STATUS_LABELS[p.status]}
+                {L.STATUS_LABELS[p.status]}
               </Badge>
-              {p.status === "PROSPECT" && <Badge tone="amber">{POOL_FLAG_LABELS[p.poolFlag]}</Badge>}
-              {p.tier && <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge>}
+              {p.status === "PROSPECT" && <Badge tone="amber">{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>}
+              {p.tier && <Badge tone={tierTone(p.tier)}>{m.common.tier} {p.tier}</Badge>}
               {p.partnerArchetype && (
                 <Badge tone="indigo">{labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype)}</Badge>
               )}
@@ -139,10 +139,10 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               {p.valuePattern && (
                 <Badge tone="purple">{labelFromMap(labelMaps.VALUE_PATTERN, p.valuePattern)}</Badge>
               )}
-              {stale > 30 && p.status === "ACTIVE" && <Badge tone="red">Stalled {stale} days</Badge>}
+              {stale > 30 && p.status === "ACTIVE" && <Badge tone="red">{m.partners.stalled.replace("{days}", String(stale))}</Badge>}
             </div>
             <div className="text-sm text-zinc-500 mt-1.5">
-              {[p.city, p.country].filter(Boolean).join(" · ") || "Region unknown"}
+              {[p.city, p.country].filter(Boolean).join(" · ") || m.common.unknownRegion}
               {p.website && (
                 <>
                   {" · "}
@@ -151,38 +151,35 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   </a>
                 </>
               )}
-              {" · Sales: "}
-              {p.salesUser?.name ?? p.owner?.name ?? "Unassigned"}
-              {" · Pre-sales: "}
-              {p.presalesUser?.name ?? "Unassigned"}
-              {" · Profile completeness "}
-              {completeness.score}%
+              {" · "}{m.partners.salesOwner}: {p.salesUser?.name ?? p.owner?.name ?? m.common.unassigned}
+              {" · "}{m.partners.presalesOwner}: {p.presalesUser?.name ?? m.common.unassigned}
+              {" · "}{m.partnerDetail.profileCompletenessPct.replace("{score}", String(completeness.score))}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             <AiAddButton
               scope="profile"
               partnerId={p.id}
-              label="✦ AI capture"
+              label={m.common.aiCapture}
               className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
             />
             {p.status === "PROSPECT" && (
               <form action={promotePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-                  Promote to active partner
+                  {m.partnerDetail.promoteActive}
                 </button>
               </form>
             )}
             {p.status !== "ARCHIVED" ? (
               <form action={archivePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400 hover:text-red-600">
-                  Archive
+                  {m.partnerDetail.archive}
                 </button>
               </form>
             ) : (
               <form action={restorePartnerAction.bind(null, p.id)}>
                 <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-                  Restore{p.prevStatus === "ACTIVE" ? " as active partner" : " as prospect"}
+                  {m.common.restore}{p.prevStatus === "ACTIVE" ? m.partnerDetail.restoreAsActive : m.partnerDetail.restoreAsProspect}
                 </button>
               </form>
             )}
@@ -190,7 +187,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         </div>
 
         <div className="mt-5 flex items-center gap-1 overflow-x-auto pb-1">
-          {PIPELINE_STAGES.map((s) => {
+          {labels.pipelineStages.map((s) => {
             const current = p.pipelineStage === s.stage;
             const passed = p.pipelineStage > s.stage;
             return (
@@ -217,23 +214,23 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         mapNodes={instanceMap}
         partner={p}
         users={users}
-        pipelineStages={PIPELINE_STAGES.map((s) => ({ stage: s.stage, name: s.name }))}
+        pipelineStages={labels.pipelineStages.map((s) => ({ stage: s.stage, name: s.name }))}
         taxonomy={taxonomy}
         guide={
           <div className="space-y-5">
-            <PartnerStageGuidancePanel partner={p} />
+            <PartnerStageGuidancePanel partner={p} labels={labels} messages={m} />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <Card title={`Todos (${openTodos.length} open)`}>
+              <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos.length))}>
                 <form action={createTodoAction} className="flex gap-2 mb-4">
                   <input type="hidden" name="partnerId" value={p.id} />
-                  <input name="title" required placeholder="Add todo…" className={input} />
+                  <input name="title" required placeholder={m.partnerDetail.addTodoPlaceholder} className={input} />
                   <input name="dueDate" type="date" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm w-36 shrink-0" />
                   <button className="rounded-lg bg-zinc-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-zinc-700">+</button>
                 </form>
-                <TodoList todos={p.todos} users={users} input={input} />
+                <TodoList todos={p.todos} users={users} input={input} m={m} L={L} bcp47={bcp47} />
               </Card>
               <div className="space-y-5">
-                <Card title="Profile gaps">
+                <Card title={m.partnerDetail.profileGaps}>
                   <ScoreBar score={completeness.score} />
                   {completeness.missing.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -252,21 +249,21 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         positioning={
           <div className="space-y-5">
             <div className="flex items-center justify-end gap-2">
-              <AiAddButton scope="profile" partnerId={p.id} label="✦ AI complete" variant="soft" />
+              <AiAddButton scope="profile" partnerId={p.id} label={m.partnerDetail.aiComplete} variant="soft" />
               <ProfileEditor partner={p} users={users} taxonomy={taxonomy} />
             </div>
 
             <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-5">
-              <h3 className="text-sm font-semibold text-indigo-800 mb-3">Joint value pattern</h3>
+              <h3 className="text-sm font-semibold text-indigo-800 mb-3">{m.partnerDetail.jointValuePattern}</h3>
               <dl className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
                 {[
-                  ["Partner offers", p.valuePartnerOffer],
-                  ["FanRuan offers", p.valueFanruanOffer],
-                  ["Customer gets", p.valueCustomerOutcome],
+                  [m.partnerDetail.partnerOffers, p.valuePartnerOffer],
+                  [m.partnerDetail.fanruanOffers, p.valueFanruanOffer],
+                  [m.partnerDetail.customerGets, p.valueCustomerOutcome],
                 ].map(([k, v]) => (
                   <div key={k as string}>
                     <dt className="text-xs text-zinc-500">{k}</dt>
-                    <dd className={v ? "text-zinc-800 mt-1" : "text-zinc-300 mt-1"}>{v || "To be filled — edit Value pattern on the instance map above"}</dd>
+                    <dd className={v ? "text-zinc-800 mt-1" : "text-zinc-300 mt-1"}>{v || m.partnerDetail.valuePatternTbd}</dd>
                   </div>
                 ))}
               </dl>
@@ -276,17 +273,17 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              <Card title="Positioning tags" className="lg:col-span-1">
+              <Card title={m.partnerDetail.positioningTags} className="lg:col-span-1">
                 <dl className="space-y-3 text-sm">
                   {[
-                    ["Tier", p.tier ? `Tier ${p.tier}` : null],
-                    ["Partner type", p.partnerArchetype ? labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype) : null],
-                    ["Competitive DNA", labelFromMap(labelMaps.CATEGORY, p.category)],
-                    ["Primary industry", industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
-                    ["Dedicated headcount", p.dedicatedHeadcount],
-                    ["Sales", p.salesUser?.name ?? p.owner?.name],
-                    ["Pre-sales", p.presalesUser?.name],
-                    ["Priority", p.priority],
+                    [m.common.tier, p.tier ? `${m.common.tier} ${p.tier}` : null],
+                    [m.partnerDetail.partnerType, p.partnerArchetype ? labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype) : null],
+                    [m.partnerDetail.competitiveDna, labelFromMap(labelMaps.CATEGORY, p.category)],
+                    [m.partnerDetail.primaryIndustry, industryCodes.length ? labelsFromMap(labelMaps.INDUSTRY, industryCodes) : null],
+                    [m.partnerDetail.dedicatedHeadcount, p.dedicatedHeadcount],
+                    [m.partners.salesOwner, p.salesUser?.name ?? p.owner?.name],
+                    [m.partners.presalesOwner, p.presalesUser?.name],
+                    [m.common.priority, p.priority],
                   ].map(([k, v]) => (
                     <div key={k as string} className="flex justify-between gap-3">
                       <dt className="text-zinc-400 shrink-0">{k}</dt>
@@ -295,19 +292,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   ))}
                 </dl>
               </Card>
-              <Card title="Company profile" className="lg:col-span-2">
+              <Card title={m.partnerDetail.companyProfile} className="lg:col-span-2">
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                   {[
-                    ["Company size", p.headcount],
-                    ["Core business", p.coreBusiness],
-                    ["Core capabilities", p.capability],
-                    ["Current tools", p.currentTools],
-                    ["Known clients", p.knownClients],
-                    ["Best outreach channel", p.bestChannel],
+                    [m.partnerDetail.companySize, p.headcount],
+                    [m.partnerDetail.coreBusiness, p.coreBusiness],
+                    [m.partnerDetail.coreCapabilities, p.capability],
+                    [m.partnerDetail.currentTools, p.currentTools],
+                    [m.partnerDetail.knownClients, p.knownClients],
+                    [m.partnerDetail.bestChannel, p.bestChannel],
                   ].map(([k, v]) => (
                     <div key={k as string}>
                       <dt className="text-xs text-zinc-400">{k}</dt>
-                      <dd className={v ? "text-zinc-800 mt-0.5" : "text-zinc-300 mt-0.5"}>{v || "To be filled"}</dd>
+                      <dd className={v ? "text-zinc-800 mt-0.5" : "text-zinc-300 mt-0.5"}>{v || m.common.toBeFilled}</dd>
                     </div>
                   ))}
                 </dl>
@@ -319,16 +316,16 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         }
         pipeline={
           <Card
-            title={`Opportunities (${p.opportunities.filter((o) => o.status === "ACTIVE").length} active)`}
-            actions={<AiAddButton scope="opportunity" partnerId={p.id} label="✦ AI add opportunity" variant="soft" />}
+            title={m.partnerDetail.opportunitiesActive.replace("{count}", String(p.opportunities.filter((o) => o.status === "ACTIVE").length))}
+            actions={<AiAddButton scope="opportunity" partnerId={p.id} label={m.partnerDetail.aiAddOpportunity} variant="soft" />}
           >
-            <OpportunityList partnerId={p.id} opportunities={p.opportunities} input={input} />
+            <OpportunityList partnerId={p.id} opportunities={p.opportunities} input={input} m={m} bcp47={bcp47} />
           </Card>
         }
         capability={
           <div className="space-y-5">
-            <Card title={`Training & certification (${p.trainings.length})`}>
-              <TrainingList partnerId={p.id} trainings={p.trainings} input={input} />
+            <Card title={m.partnerDetail.trainingCert.replace("{count}", String(p.trainings.length))}>
+              <TrainingList partnerId={p.id} trainings={p.trainings} input={input} m={m} />
             </Card>
             <PartnerSolutionsSection partnerId={p.id} solutions={p.solutions} />
           </div>
@@ -336,8 +333,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         relationship={
           <div className="space-y-5">
             <Card
-              title={`Power map (${p.contacts.length} people)`}
-              actions={<AiAddButton scope="powermap" partnerId={p.id} label="✦ AI add contact" variant="soft" />}
+              title={m.partnerDetail.powerMap.replace("{count}", String(p.contacts.length))}
+              actions={<AiAddButton scope="powermap" partnerId={p.id} label={m.partnerDetail.aiAddContact} variant="soft" />}
             >
               <PowerMapSection
                 partnerId={p.id}
@@ -352,16 +349,16 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 }))}
               />
             </Card>
-            <Card title={`Activity timeline (${p.events.length})`}>
+            <Card title={m.partnerDetail.activityTimeline.replace("{count}", String(p.events.length))}>
               <form action={addNoteAction.bind(null, p.id)} className="flex gap-2 mb-5">
-                <input name="content" required placeholder="Log activity or touchpoint…" className={input} />
+                <input name="content" required placeholder={m.partnerDetail.logActivityPlaceholder} className={input} />
                 <select name="type" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0">
-                  <option value="NOTE">Note</option>
-                  <option value="NEWS">External news</option>
+                  <option value="NOTE">{m.common.note}</option>
+                  <option value="NEWS">{m.common.externalNews}</option>
                 </select>
-                <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm shrink-0 hover:bg-zinc-700">Log</button>
+                <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm shrink-0 hover:bg-zinc-700">{m.common.log}</button>
               </form>
-              <TimelineList events={p.events} />
+              <TimelineList events={p.events} L={L} bcp47={bcp47} m={m} />
             </Card>
             <SentimentMonitorSection
               partnerId={p.id}
@@ -389,10 +386,16 @@ function TodoList({
   todos,
   users,
   input,
+  m,
+  L,
+  bcp47,
 }: {
   todos: (TodoItem & { assignee: User | null })[];
   users: User[];
   input: string;
+  m: Messages;
+  L: ReturnType<typeof labelConstants>;
+  bcp47: string;
 }) {
   const openTodos = todos.filter((t) => t.status !== "DONE");
   const doneTodos = todos.filter((t) => t.status === "DONE");
@@ -418,11 +421,11 @@ function TodoList({
           <div className="text-xs text-zinc-400">
             {t.dueDate && (
               <span className={overdue ? "text-red-500 font-medium" : ""}>
-                {fmtDate(t.dueDate)}{overdue && " overdue"}
+                {fmtDate(t.dueDate, bcp47)}{overdue && ` ${m.common.overdue}`}
               </span>
             )}
             {t.assignee && ` · ${t.assignee.name}`}
-            {` · ${TODO_PRIORITY_LABELS[t.priority]}`}
+            {` · ${L.TODO_PRIORITY_LABELS[t.priority]}`}
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -439,7 +442,7 @@ function TodoList({
             users={users}
           />
           <form action={deleteTodoAction.bind(null, t.id)}>
-            <button title="Delete" className="text-zinc-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
+            <button title={m.common.delete} className="text-zinc-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
           </form>
         </div>
       </div>
@@ -451,11 +454,11 @@ function TodoList({
       {openTodos.map(renderTodo)}
       {doneTodos.length > 0 && (
         <details className="group/done">
-          <summary className="text-xs text-zinc-400 cursor-pointer list-none py-1">Completed ({doneTodos.length})</summary>
+          <summary className="text-xs text-zinc-400 cursor-pointer list-none py-1">{m.partnerDetail.completedCount.replace("{count}", String(doneTodos.length))}</summary>
           <div className="space-y-2 mt-1">{doneTodos.map(renderTodo)}</div>
         </details>
       )}
-      {todos.length === 0 && <EmptyState text="No todos yet" />}
+      {todos.length === 0 && <EmptyState text={m.partnerDetail.noTodos} />}
     </div>
   );
 }
@@ -464,10 +467,14 @@ function OpportunityList({
   partnerId,
   opportunities,
   input,
+  m,
+  bcp47,
 }: {
   partnerId: string;
   opportunities: Opportunity[];
   input: string;
+  m: Messages;
+  bcp47: string;
 }) {
   return (
     <div className="space-y-3">
@@ -478,13 +485,13 @@ function OpportunityList({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-zinc-900">{o.name}</span>
                 <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
-                  {o.status === "ACTIVE" ? "Active" : o.status === "WON" ? "Won" : o.status === "LOST" ? "Lost" : "Paused"}
+                  {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
                 </Badge>
                 <Badge tone="blue">{o.stage}</Badge>
               </div>
               <div className="text-xs text-zinc-400 mt-0.5">
-                Client: {o.client ?? "—"} · Amount: {o.amount ?? "—"}
-                {o.followUpAt && ` · Follow-up: ${fmtDate(o.followUpAt)}`}
+                {m.common.client}: {o.client ?? "—"} · {m.common.amount}: {o.amount ?? "—"}
+                {o.followUpAt && ` · ${m.partnerDetail.followUp}: ${fmtDate(o.followUpAt, bcp47)}`}
               </div>
             </div>
             <span className="text-zinc-300 group-open:rotate-90 transition-transform">›</span>
@@ -493,37 +500,37 @@ function OpportunityList({
             <form action={upsertOpportunityAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
               <input type="hidden" name="id" value={o.id} />
               <input name="name" defaultValue={o.name} className={input} />
-              <input name="client" defaultValue={o.client ?? ""} placeholder="Client" className={input} />
-              <input name="amount" defaultValue={o.amount ?? ""} placeholder="Amount" className={input} />
-              <input name="stage" defaultValue={o.stage} placeholder="Stage" className={input} />
-              <input name="nextStep" defaultValue={o.nextStep ?? ""} placeholder="Next step" className={input} />
+              <input name="client" defaultValue={o.client ?? ""} placeholder={m.common.client} className={input} />
+              <input name="amount" defaultValue={o.amount ?? ""} placeholder={m.common.amount} className={input} />
+              <input name="stage" defaultValue={o.stage} placeholder={m.common.stage} className={input} />
+              <input name="nextStep" defaultValue={o.nextStep ?? ""} placeholder={m.common.nextStep} className={input} />
               <input name="followUpAt" type="date" defaultValue={o.followUpAt ? new Date(o.followUpAt).toISOString().slice(0, 10) : ""} className={input} />
               <select name="status" defaultValue={o.status} className={input}>
-                <option value="ACTIVE">Active</option>
-                <option value="WON">Won</option>
-                <option value="LOST">Lost</option>
-                <option value="PAUSED">Paused</option>
+                <option value="ACTIVE">{m.common.active}</option>
+                <option value="WON">{m.common.won}</option>
+                <option value="LOST">{m.common.lost}</option>
+                <option value="PAUSED">{m.common.paused}</option>
               </select>
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
-                <button formAction={deleteOpportunityAction.bind(null, partnerId, o.id)} className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
-                <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs">Save</button>
+                <button formAction={deleteOpportunityAction.bind(null, partnerId, o.id)} className="text-xs text-zinc-400 hover:text-red-600">{m.common.delete}</button>
+                <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
               </div>
             </form>
           </div>
         </details>
       ))}
-      {opportunities.length === 0 && <EmptyState text="No opportunities yet. At Stage 5+, bind at least 1 ACTIVE opportunity." />}
+      {opportunities.length === 0 && <EmptyState text={m.partnerDetail.noOpportunities} />}
       <details className="rounded-lg border border-dashed border-zinc-200">
-        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ Add opportunity</summary>
+        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">{m.partnerDetail.addOpportunity}</summary>
         <form action={upsertOpportunityAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-          <input name="name" required placeholder="Opportunity name *" className={input} />
-          <input name="client" placeholder="Client" className={input} />
-          <input name="amount" placeholder="Amount" className={input} />
-          <input name="stage" placeholder="Stage" className={input} />
-          <input name="nextStep" placeholder="Next step" className={input} />
+          <input name="name" required placeholder={m.partnerDetail.opportunityName} className={input} />
+          <input name="client" placeholder={m.common.client} className={input} />
+          <input name="amount" placeholder={m.common.amount} className={input} />
+          <input name="stage" placeholder={m.common.stage} className={input} />
+          <input name="nextStep" placeholder={m.common.nextStep} className={input} />
           <input name="followUpAt" type="date" className={input} />
           <div className="col-span-2 md:col-span-3 flex justify-end">
-            <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">Add</button>
+            <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
           </div>
         </form>
       </details>
@@ -535,10 +542,12 @@ function TrainingList({
   partnerId,
   trainings,
   input,
+  m,
 }: {
   partnerId: string;
   trainings: Training[];
   input: string;
+  m: Messages;
 }) {
   return (
     <div className="space-y-2">
@@ -546,28 +555,28 @@ function TrainingList({
         <form key={t.id} action={upsertTrainingAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm items-center">
           <input type="hidden" name="id" value={t.id} />
           <input name="person" defaultValue={t.person} className={input} />
-          <input name="currentSkill" defaultValue={t.currentSkill ?? ""} placeholder="Current skill" className={input} />
-          <input name="targetCert" defaultValue={t.targetCert ?? ""} placeholder="Target certification" className={input} />
+          <input name="currentSkill" defaultValue={t.currentSkill ?? ""} placeholder={m.common.currentSkill} className={input} />
+          <input name="targetCert" defaultValue={t.targetCert ?? ""} placeholder={m.common.targetCert} className={input} />
           <input name="deadline" type="date" defaultValue={t.deadline ? new Date(t.deadline).toISOString().slice(0, 10) : ""} className={input} />
           <select name="status" defaultValue={t.status} className={input}>
-            <option value="PLANNED">Planned</option>
-            <option value="IN_PROGRESS">In progress</option>
-            <option value="DONE">Completed</option>
+            <option value="PLANNED">{m.common.planned}</option>
+            <option value="IN_PROGRESS">{m.common.inProgress}</option>
+            <option value="DONE">{m.common.completed}</option>
           </select>
           <div className="flex gap-1 justify-end">
-            <button className="rounded-md bg-zinc-900 text-white px-2.5 py-1.5 text-xs">Save</button>
-            <button formAction={deleteTrainingAction.bind(null, partnerId, t.id)} className="text-xs text-zinc-400 hover:text-red-600 px-1">Del</button>
+            <button className="rounded-md bg-zinc-900 text-white px-2.5 py-1.5 text-xs">{m.common.save}</button>
+            <button formAction={deleteTrainingAction.bind(null, partnerId, t.id)} className="text-xs text-zinc-400 hover:text-red-600 px-1">{m.partnerDetail.trainingDel}</button>
           </div>
         </form>
       ))}
       <details className="rounded-lg border border-dashed border-zinc-200">
-        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">+ Add training plan</summary>
+        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">{m.partnerDetail.addTrainingPlan}</summary>
         <form action={upsertTrainingAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
-          <input name="person" required placeholder="Person *" className={input} />
-          <input name="currentSkill" placeholder="Current skill" className={input} />
-          <input name="targetCert" placeholder="Target certification" className={input} />
+          <input name="person" required placeholder={m.partnerDetail.personRequired} className={input} />
+          <input name="currentSkill" placeholder={m.common.currentSkill} className={input} />
+          <input name="targetCert" placeholder={m.common.targetCert} className={input} />
           <input name="deadline" type="date" className={input} />
-          <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">Add</button>
+          <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
         </form>
       </details>
     </div>
@@ -576,8 +585,14 @@ function TrainingList({
 
 function TimelineList({
   events,
+  L,
+  bcp47,
+  m,
 }: {
   events: (TimelineEvent & { createdBy: User | null })[];
+  L: ReturnType<typeof labelConstants>;
+  bcp47: string;
+  m: Messages;
 }) {
   return (
     <div className="space-y-0">
@@ -597,9 +612,9 @@ function TimelineList({
           <div className="pb-5 min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium text-zinc-800">{e.title}</span>
-              <Badge tone="zinc">{EVENT_TYPE_LABELS[e.type] ?? e.type}</Badge>
+              <Badge tone="zinc">{L.EVENT_TYPE_LABELS[e.type] ?? e.type}</Badge>
               <span className="text-xs text-zinc-400">
-                {fmtDateTime(e.createdAt)}
+                {fmtDateTime(e.createdAt, bcp47)}
                 {e.createdBy && ` · ${e.createdBy.name}`}
               </span>
             </div>
@@ -607,7 +622,7 @@ function TimelineList({
           </div>
         </div>
       ))}
-      {events.length === 0 && <EmptyState text="No activity yet" />}
+      {events.length === 0 && <EmptyState text={m.partnerDetail.noActivity} />}
     </div>
   );
 }

@@ -5,12 +5,11 @@ import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
 import { cloneAgentAction, toggleAgentAction } from "@/lib/agent-actions";
 import { getToolLabel } from "@/lib/tools-registry";
 import { AiCenterNav } from "@/components/ai-center-nav";
-
-const FREQ_LABELS: Record<string, string> = { HOURLY: "Hourly", DAILY: "Daily", WEEKLY: "Weekly" };
-const WEEKDAYS = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function AgentsPage() {
   const user = await requireUser();
+  const { messages: m, bcp47 } = await getServerI18n();
   const [agents, templates] = await Promise.all([
     db.agent.findMany({
       where: { isTemplate: false },
@@ -22,6 +21,13 @@ export default async function AgentsPage() {
 
   const mine = agents.filter((a) => a.createdById === user.id);
   const shared = agents.filter((a) => a.createdById !== user.id && a.shared);
+
+  const WEEKDAYS = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const FREQ_LABELS: Record<string, string> = {
+    HOURLY: m.agents.hourly,
+    DAILY: m.agents.daily,
+    WEEKLY: m.agents.weekly,
+  };
 
   function AgentCard({ a }: { a: (typeof agents)[number] }) {
     const skills: string[] = JSON.parse(a.skills || "[]");
@@ -39,7 +45,7 @@ export default async function AgentsPage() {
           <form action={toggleAgentAction.bind(null, a.id)}>
             <button
               className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${a.enabled ? "bg-indigo-600" : "bg-zinc-200"}`}
-              title={a.enabled ? "Enabled — click to disable" : "Disabled — click to enable"}
+              title={a.enabled ? m.agents.enabledTitle : m.agents.disabledTitle}
             >
               <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${a.enabled ? "left-[18px]" : "left-0.5"}`} />
             </button>
@@ -49,10 +55,10 @@ export default async function AgentsPage() {
           <Badge tone={a.trigger === "SCHEDULE" ? "purple" : "zinc"}>
             {a.trigger === "SCHEDULE"
               ? `${FREQ_LABELS[a.frequency ?? "DAILY"]}${a.frequency === "WEEKLY" ? ` ${WEEKDAYS[a.runWeekday]}` : ""}${a.frequency !== "HOURLY" ? ` ${a.runHour}:00` : ""}`
-              : "Manual trigger"}
+              : m.agents.manualTrigger}
           </Badge>
-          {a.partner && <Badge tone="blue">Bound to {a.partner.name}</Badge>}
-          {a.webhookUrl && <Badge tone="green">Webhook</Badge>}
+          {a.partner && <Badge tone="blue">{m.agents.boundTo.replace("{name}", a.partner.name)}</Badge>}
+          {a.webhookUrl && <Badge tone="green">{m.agents.webhook}</Badge>}
           {skills.slice(0, 3).map((s) => (
             <Badge key={s} tone="zinc">{getToolLabel(s)}</Badge>
           ))}
@@ -60,15 +66,15 @@ export default async function AgentsPage() {
         </div>
         <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
           <span>
-            {a.createdBy?.name ?? "System"} · Last run {lastRun ? fmtDateTime(lastRun.startedAt) : "never"}
-            {lastRun?.status === "FAILED" && <span className="text-red-500 ml-1">Failed</span>}
+            {a.createdBy?.name ?? m.agents.system} · {lastRun ? m.agents.lastRunAt.replace("{time}", fmtDateTime(lastRun.startedAt, bcp47)) : m.agents.lastRunNever}
+            {lastRun?.status === "FAILED" && <span className="text-red-500 ml-1">{m.agents.lastRunFailed}</span>}
           </span>
           <span className="flex gap-2">
             <form action={cloneAgentAction.bind(null, a.id)}>
-              <button className="text-zinc-400 hover:text-indigo-600">Clone</button>
+              <button className="text-zinc-400 hover:text-indigo-600">{m.common.clone}</button>
             </form>
             <Link href={`/agents/${a.id}`} className="text-indigo-600 hover:underline">
-              Details →
+              {m.agents.detailsArrow}
             </Link>
           </span>
         </div>
@@ -79,21 +85,18 @@ export default async function AgentsPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="Agent Center"
-        desc="Orchestrate automation Agents: equip tools (what it can do) + skills (how to do it), configure triggers and scope"
+        title={m.agents.title}
+        desc={m.agents.desc}
         actions={
-          <>
-            <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-              Build Agent via Chat
-            </Link>
-          </>
+          <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+            {m.agents.buildAgent}
+          </Link>
         }
       />
       <AiCenterNav />
       <div className="px-8 space-y-7">
-        {/* Template library */}
         <div>
-          <h2 className="text-sm font-semibold text-zinc-700 mb-3">Template Library — One-Click Create</h2>
+          <h2 className="text-sm font-semibold text-zinc-700 mb-3">{m.agents.templateLibrary}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {templates.map((t) => (
               <div key={t.id} className="bg-gradient-to-br from-zinc-50 to-indigo-50/50 rounded-xl border border-dashed border-zinc-300 p-4 flex items-start gap-3">
@@ -103,7 +106,7 @@ export default async function AgentsPage() {
                   <div className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{t.description}</div>
                   <form action={cloneAgentAction.bind(null, t.id)} className="mt-2">
                     <button className="text-xs rounded-md bg-white border border-zinc-200 px-2.5 py-1 text-indigo-600 hover:border-indigo-300">
-                      Create from template
+                      {m.agents.createFromTemplate}
                     </button>
                   </form>
                 </div>
@@ -112,9 +115,8 @@ export default async function AgentsPage() {
           </div>
         </div>
 
-        {/* Mine */}
         <div>
-          <h2 className="text-sm font-semibold text-zinc-700 mb-3">My Agents ({mine.length})</h2>
+          <h2 className="text-sm font-semibold text-zinc-700 mb-3">{m.agents.myAgentsCount.replace("{count}", String(mine.length))}</h2>
           {mine.length ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {mine.map((a) => (
@@ -123,15 +125,14 @@ export default async function AgentsPage() {
             </div>
           ) : (
             <div className="text-sm text-zinc-400 bg-white rounded-xl border border-zinc-200/80 p-6 text-center">
-              No Agents yet. Use a template above for one-click create, or build one from scratch.
+              {m.agents.emptyMine}
             </div>
           )}
         </div>
 
-        {/* Team shared */}
         {shared.length > 0 && (
           <div>
-            <h2 className="text-sm font-semibold text-zinc-700 mb-3">Team Shared ({shared.length})</h2>
+            <h2 className="text-sm font-semibold text-zinc-700 mb-3">{m.agents.teamSharedCount.replace("{count}", String(shared.length))}</h2>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {shared.map((a) => (
                 <AgentCard key={a.id} a={a} />

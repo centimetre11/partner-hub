@@ -3,11 +3,13 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
-import { KNOWLEDGE_CATEGORY_LABELS } from "@/lib/constants";
 import { deleteKnowledgeAction } from "@/lib/content-actions";
+import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
 export default async function KnowledgePage() {
   await requireUser();
+  const { labels, messages: m, bcp47 } = await getServerI18n();
+  const L = labelConstants(labels);
   const articles = await db.knowledgeArticle.findMany({
     orderBy: { updatedAt: "desc" },
     include: { createdBy: true },
@@ -16,11 +18,11 @@ export default async function KnowledgePage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="Knowledge Base"
-        desc="Capture FanRuan background, Middle East strategy, and product capabilities — Agents retrieve via the search_knowledge tool"
+        title={m.knowledge.title}
+        desc={m.knowledge.desc}
         actions={
           <Link href="/knowledge/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            + New article
+            {m.knowledge.newArticle}
           </Link>
         }
       />
@@ -31,16 +33,16 @@ export default async function KnowledgePage() {
             <div>
               <Link href={`/knowledge/${a.id}`} className="font-semibold text-zinc-900 hover:text-indigo-600">{a.title}</Link>
               <div className="text-xs text-zinc-400 mt-1 flex gap-2">
-                <Badge tone="purple">{KNOWLEDGE_CATEGORY_LABELS[a.category] ?? a.category}</Badge>
-                <span>{a.createdBy?.name} · {fmtDateTime(a.updatedAt)}</span>
+                <Badge tone="purple">{L.KNOWLEDGE_CATEGORY_LABELS[a.category] ?? a.category}</Badge>
+                <span>{a.createdBy?.name} · {fmtDateTime(a.updatedAt, bcp47)}</span>
               </div>
             </div>
             <form action={deleteKnowledgeAction.bind(null, a.id)}>
-              <button className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
+              <button className="text-xs text-zinc-400 hover:text-red-600">{m.common.delete}</button>
             </form>
           </div>
         ))}
-        {articles.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">Knowledge base is empty — add a few foundational articles first</div>}
+        {articles.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">{m.knowledge.empty}</div>}
       </div>
     </div>
   );

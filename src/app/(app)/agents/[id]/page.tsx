@@ -8,9 +8,11 @@ import { resolveAgentSkills } from "@/lib/skill-resolver";
 import { deleteAgentAction } from "@/lib/agent-actions";
 import { AgentForm } from "../agent-form";
 import { RunButton } from "./run-button";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function AgentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
+  const { messages: m, bcp47 } = await getServerI18n();
   const { id } = await params;
   const agent = await db.agent.findUnique({
     where: { id },
@@ -31,17 +33,22 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
     orderBy: { name: "asc" },
   });
 
+  const statusText = agent.enabled ? m.common.enabled : m.common.disabled;
+  const nextRunText = agent.nextRunAt ? ` · ${m.agents.nextRun.replace("{time}", fmtDateTime(agent.nextRunAt, bcp47))}` : "";
+  const desc = m.agents.statusLine
+    .replace("{creator}", agent.createdBy?.name ?? m.agents.system)
+    .replace("{status}", statusText)
+    .replace("{nextRun}", nextRunText);
+
   return (
     <div className="pb-16">
       <PageHeader
         title={`${agent.icon} ${agent.name}`}
-        desc={`Created by ${agent.createdBy?.name ?? "System"} · ${agent.enabled ? "Enabled" : "Disabled"}${agent.nextRunAt ? ` · Next run ${fmtDateTime(agent.nextRunAt)}` : ""}`}
+        desc={desc}
         actions={
           <>
-            <form
-              action={deleteAgentAction.bind(null, agent.id)}
-            >
-              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-500 hover:bg-red-50">Delete</button>
+            <form action={deleteAgentAction.bind(null, agent.id)}>
+              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-500 hover:bg-red-50">{m.agents.deleteBtn}</button>
             </form>
             <RunButton agentId={agent.id} />
           </>
@@ -75,7 +82,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
         </div>
 
         <div className="xl:col-span-2 space-y-4">
-          <Card title={`Run History (last ${agent.runs.length})`}>
+          <Card title={m.agents.runHistory.replace("{n}", String(agent.runs.length))}>
             {agent.runs.length ? (
               <div className="space-y-4">
                 {agent.runs.map((r) => (
@@ -83,21 +90,21 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                     <summary className="flex items-center justify-between gap-2 px-3.5 py-2.5 cursor-pointer list-none">
                       <span className="flex items-center gap-2 text-sm">
                         <Badge tone={r.status === "SUCCESS" ? "green" : r.status === "FAILED" ? "red" : "amber"}>
-                          {r.status === "SUCCESS" ? "Success" : r.status === "FAILED" ? "Failed" : "Running"}
+                          {r.status === "SUCCESS" ? m.common.success : r.status === "FAILED" ? m.common.failed : m.common.running}
                         </Badge>
-                        <span className="text-zinc-600">{fmtDateTime(r.startedAt)}</span>
+                        <span className="text-zinc-600">{fmtDateTime(r.startedAt, bcp47)}</span>
                       </span>
                       <span className="text-xs text-zinc-400 group-open:rotate-180 transition-transform">▾</span>
                     </summary>
                     <div className="px-3.5 pb-3 border-t border-zinc-100 pt-2.5">
-                      {r.error && <p className="text-xs text-red-500 mb-2">Error: {r.error}</p>}
+                      {r.error && <p className="text-xs text-red-500 mb-2">{m.agents.error} {r.error}</p>}
                       {r.output && (
                         <pre className="text-xs text-zinc-700 whitespace-pre-wrap font-sans bg-zinc-50 rounded-lg p-3 max-h-72 overflow-auto">{r.output}</pre>
                       )}
                       {r.toolLog && JSON.parse(r.toolLog).length > 0 && (
                         <details className="mt-2">
                           <summary className="text-xs text-zinc-500 cursor-pointer font-medium">
-                            Tool call trace ({JSON.parse(r.toolLog).length} calls)
+                            {m.agents.toolTrace.replace("{n}", String(JSON.parse(r.toolLog).length))}
                           </summary>
                           <div className="mt-2">
                             <AiProcessTrace
@@ -113,7 +120,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                 ))}
               </div>
             ) : (
-              <EmptyState text="No runs yet. Click Run Now in the top right to try it." />
+              <EmptyState text={m.agents.noRunsDetail} />
             )}
           </Card>
         </div>

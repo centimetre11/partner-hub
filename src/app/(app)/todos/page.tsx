@@ -2,9 +2,9 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { PageHeader, EmptyState, fmtDate } from "@/components/ui";
-import { TODO_PRIORITY_LABELS } from "@/lib/constants";
 import { createTodoAction, deleteTodoAction, toggleTodoAction } from "@/lib/actions";
 import { TodoEditButton } from "@/components/todo-edit-button";
+import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
 export default async function TodosPage({
   searchParams,
@@ -12,6 +12,8 @@ export default async function TodosPage({
   searchParams: Promise<{ filter?: string; assignee?: string }>;
 }) {
   const user = await requireUser();
+  const { labels: _labels, messages: m, bcp47 } = await getServerI18n();
+  const L = labelConstants(_labels);
   const sp = await searchParams;
   const filter = sp.filter ?? "open";
 
@@ -35,11 +37,11 @@ export default async function TodosPage({
   const users = await db.user.findMany();
 
   const tabs = [
-    { k: "open", label: "Open" },
-    { k: "mine", label: "Mine" },
-    { k: "overdue", label: "Overdue" },
-    { k: "done", label: "Done" },
-    { k: "all", label: "All" },
+    { k: "open", label: m.common.open },
+    { k: "mine", label: m.common.mine },
+    { k: "overdue", label: m.todos.overdueTab },
+    { k: "done", label: m.common.done },
+    { k: "all", label: m.todos.allTab },
   ];
 
   const input = "rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -64,13 +66,13 @@ export default async function TodosPage({
           <div className={`text-sm ${t.status === "DONE" ? "line-through text-zinc-300" : "text-zinc-800"}`}>
             {t.title}
             {t.source === "AI" && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-purple-50 text-purple-600">AI</span>}
-            {t.source === "SEED" && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-sky-50 text-sky-600">Plan</span>}
+            {t.source === "SEED" && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded bg-sky-50 text-sky-600">{m.common.plan}</span>}
           </div>
           <div className="text-xs text-zinc-400 mt-0.5">
             {t.dueDate && (
               <span className={overdue ? "text-red-500 font-medium" : ""}>
-                {fmtDate(t.dueDate)}
-                {overdue && " Overdue"}
+                {fmtDate(t.dueDate, bcp47)}
+                {overdue && ` ${m.common.overdue}`}
               </span>
             )}
             {t.partner && (
@@ -82,7 +84,7 @@ export default async function TodosPage({
               </>
             )}
             {t.assignee && ` · ${t.assignee.name}`}
-            {` · ${TODO_PRIORITY_LABELS[t.priority]} priority`}
+            {` · ${L.TODO_PRIORITY_LABELS[t.priority]} ${m.todos.prioritySuffix}`}
             {t.detail && ` · ${t.detail}`}
           </div>
         </div>
@@ -102,7 +104,7 @@ export default async function TodosPage({
           />
           <form action={deleteTodoAction.bind(null, t.id)}>
             <button
-              title="Delete todo"
+              title={m.todos.deleteTitle}
               className="text-zinc-300 hover:text-red-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
             >
               ✕
@@ -115,16 +117,12 @@ export default async function TodosPage({
 
   return (
     <div className="pb-16">
-      <PageHeader
-        title="Todos"
-        desc="Link partners and assignees; overdue items are highlighted in red · Initial todos from the 12-week action timeline"
-      />
+      <PageHeader title={m.todos.title} desc={m.todos.desc} />
       <div className="px-8">
-        {/* Create */}
         <form action={createTodoAction} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-4 mb-5 flex flex-wrap gap-2">
-          <input name="title" required placeholder="New todo…" className={`${input} flex-1 min-w-[200px]`} />
+          <input name="title" required placeholder={m.todos.newPlaceholder} className={`${input} flex-1 min-w-[200px]`} />
           <select name="partnerId" className={input}>
-            <option value="">No partner</option>
+            <option value="">{m.todos.noPartner}</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -136,14 +134,13 @@ export default async function TodosPage({
           </select>
           <input name="dueDate" type="date" className={input} />
           <select name="priority" defaultValue="MEDIUM" className={input}>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
+            <option value="HIGH">{m.common.high}</option>
+            <option value="MEDIUM">{m.common.medium}</option>
+            <option value="LOW">{m.common.low}</option>
           </select>
-          <button className="rounded-lg bg-indigo-600 text-white px-5 py-2 text-sm font-medium hover:bg-indigo-700">Add</button>
+          <button className="rounded-lg bg-indigo-600 text-white px-5 py-2 text-sm font-medium hover:bg-indigo-700">{m.common.add}</button>
         </form>
 
-        {/* Tab */}
         <div className="flex gap-1.5 mb-4">
           {tabs.map((t) => (
             <Link
@@ -158,10 +155,9 @@ export default async function TodosPage({
           ))}
         </div>
 
-        {/* List */}
         {todos.length === 0 ? (
           <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm">
-            <EmptyState text="No todos match this filter" />
+            <EmptyState text={m.todos.empty} />
           </div>
         ) : (
           <div className="space-y-4">
@@ -175,7 +171,7 @@ export default async function TodosPage({
               <details open={openTodos.length === 0} className="group/done bg-white rounded-xl border border-zinc-200/80 shadow-sm overflow-hidden">
                 <summary className="flex items-center gap-2 px-5 py-3 cursor-pointer select-none text-sm text-zinc-500 hover:bg-zinc-50 list-none">
                   <span className="transition-transform group-open/done:rotate-90 text-zinc-400">▸</span>
-                  Done
+                  {m.common.done}
                   <span className="text-xs text-zinc-400">({doneTodos.length})</span>
                 </summary>
                 <div className="divide-y divide-zinc-50 border-t border-zinc-100">

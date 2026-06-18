@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
@@ -8,6 +7,7 @@ import {
   parseIndustries,
 } from "@/lib/taxonomy";
 import { deleteGtmLibraryAction } from "@/lib/gtm-library-actions";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function PlaybookLibraryPage({
   searchParams,
@@ -15,6 +15,7 @@ export default async function PlaybookLibraryPage({
   searchParams: Promise<{ q?: string }>;
 }) {
   await requireUser();
+  const { messages: m, bcp47 } = await getServerI18n();
   const sp = await searchParams;
   const q = sp.q?.trim() ?? "";
   const labelMaps = await loadTaxonomyLabelMaps();
@@ -46,24 +47,21 @@ export default async function PlaybookLibraryPage({
 
   return (
     <div className="pb-16">
-      <PageHeader
-        title="Playbook Library"
-        desc="Team-shared playbooks and pitches — captured from partners for reference across the portfolio"
-      />
+      <PageHeader title={m.playbookLibrary.title} desc={m.playbookLibrary.desc} />
       <div className="px-8 max-w-4xl">
         <form className="mb-4 flex gap-2">
           <input
             name="q"
             defaultValue={q}
-            placeholder="Search title, content, source partner…"
+            placeholder={m.playbookLibrary.searchPlaceholder}
             className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
           />
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm hover:bg-zinc-700">Search</button>
+          <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm hover:bg-zinc-700">{m.common.search}</button>
         </form>
 
         {grouped.length === 0 ? (
           <div className="text-center text-sm text-zinc-400 py-16 bg-white rounded-xl border">
-            No entries yet. On a partner&apos;s Positioning &amp; Playbook tab, write playbook/pitch content and click &quot;Save to library&quot; to capture it here.
+            {m.playbookLibrary.emptyExtended}
           </div>
         ) : (
           <div className="space-y-4">
@@ -76,9 +74,9 @@ export default async function PlaybookLibraryPage({
                       <div>
                         <h2 className="font-semibold text-zinc-900">{latest.title}</h2>
                         <div className="flex flex-wrap gap-1.5 mt-2">
-                          <Badge tone="indigo">Latest v{latest.version}</Badge>
+                          <Badge tone="indigo">{m.playbookLibrary.latestVersion.replace("{n}", String(latest.version))}</Badge>
                           {versions.length > 1 && (
-                            <Badge tone="zinc">{versions.length} versions</Badge>
+                            <Badge tone="zinc">{m.playbookLibrary.versions.replace("{n}", String(versions.length))}</Badge>
                           )}
                           {(latest.industries ? parseIndustries({ industries: latest.industries }) : latest.industry ? [latest.industry] : []).map((code) => (
                             <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
@@ -92,8 +90,8 @@ export default async function PlaybookLibraryPage({
                           <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, latest.category ?? "OTHER")}</Badge>
                         </div>
                         <p className="text-xs text-zinc-400 mt-2">
-                          {latest.sourcePartnerName && <>Source: {latest.sourcePartnerName} · </>}
-                          {latest.createdBy?.name ?? "—"} · {fmtDateTime(latest.updatedAt)}
+                          {latest.sourcePartnerName && <>{m.playbookLibrary.source} {latest.sourcePartnerName} · </>}
+                          {latest.createdBy?.name ?? "—"} · {fmtDateTime(latest.updatedAt, bcp47)}
                           {latest.notes && <> · {latest.notes}</>}
                         </p>
                       </div>
@@ -101,13 +99,13 @@ export default async function PlaybookLibraryPage({
                   </div>
                   <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <h3 className="text-xs font-medium text-zinc-500 mb-1">playbook</h3>
+                      <h3 className="text-xs font-medium text-zinc-500 mb-1">{m.playbookLibrary.playbookLabel}</h3>
                       <p className="text-zinc-700 whitespace-pre-wrap leading-relaxed">
                         {latest.playbook || <span className="text-zinc-300">—</span>}
                       </p>
                     </div>
                     <div>
-                      <h3 className="text-xs font-medium text-zinc-500 mb-1">pitch</h3>
+                      <h3 className="text-xs font-medium text-zinc-500 mb-1">{m.playbookLibrary.pitchLabel}</h3>
                       <p className="text-zinc-700 whitespace-pre-wrap leading-relaxed">
                         {latest.pitch || <span className="text-zinc-300">—</span>}
                       </p>
@@ -116,15 +114,15 @@ export default async function PlaybookLibraryPage({
                   {versions.length > 1 && (
                     <details className="px-5 pb-4">
                       <summary className="text-xs text-indigo-600 cursor-pointer hover:underline">
-                        View version history ({versions.length - 1})
+                        {m.playbookLibrary.viewHistoryCount.replace("{count}", String(versions.length - 1))}
                       </summary>
                       <ul className="mt-3 space-y-3 border-t border-zinc-50 pt-3">
                         {versions.slice(1).map((v) => (
                           <li key={v.id} className="rounded-lg bg-zinc-50 p-3">
                             <div className="flex justify-between gap-2 items-start">
-                              <span className="text-xs font-medium text-zinc-600">v{v.version} · {fmtDateTime(v.updatedAt)}</span>
+                              <span className="text-xs font-medium text-zinc-600">v{v.version} · {fmtDateTime(v.updatedAt, bcp47)}</span>
                               <form action={deleteGtmLibraryAction.bind(null, v.id)}>
-                                <button className="text-xs text-zinc-400 hover:text-red-600">Delete</button>
+                                <button className="text-xs text-zinc-400 hover:text-red-600">{m.common.delete}</button>
                               </form>
                             </div>
                             {v.playbook && (
@@ -137,7 +135,7 @@ export default async function PlaybookLibraryPage({
                   )}
                   <div className="px-5 py-3 bg-zinc-50/80 border-t border-zinc-100 flex justify-end">
                     <form action={deleteGtmLibraryAction.bind(null, latest.id)}>
-                      <button className="text-xs text-zinc-400 hover:text-red-600">Delete latest version</button>
+                      <button className="text-xs text-zinc-400 hover:text-red-600">{m.playbookLibrary.deleteLatest}</button>
                     </form>
                   </div>
                 </div>
@@ -146,10 +144,7 @@ export default async function PlaybookLibraryPage({
           </div>
         )}
 
-        <p className="text-xs text-zinc-400 mt-6">
-          On <Link href="/partners" className="text-indigo-600 hover:underline">partner details → Positioning &amp; Playbook</Link>
-          you can &quot;Reference from library&quot; or &quot;Save to library&quot; (replace or new version).
-        </p>
+        <p className="text-xs text-zinc-400 mt-6">{m.playbookLibrary.footerHint}</p>
       </div>
     </div>
   );

@@ -90,16 +90,16 @@ export function EmptyState({ text }: { text: string }) {
   return <div className="text-center py-8 text-sm text-zinc-400">{text}</div>;
 }
 
-export function fmtDate(d: Date | string | null | undefined) {
+export function fmtDate(d: Date | string | null | undefined, locale = "en-US") {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return date.toLocaleDateString(locale, { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-export function fmtDateTime(d: Date | string | null | undefined) {
+export function fmtDateTime(d: Date | string | null | undefined, locale = "en-US") {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
-  return date.toLocaleString("en-US", {
+  return date.toLocaleString(locale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",

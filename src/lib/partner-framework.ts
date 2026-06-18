@@ -1,45 +1,17 @@
 import type { Contact, Opportunity, Partner, Solution, TimelineEvent, Training } from "@prisma/client";
-import { CATEGORY_LABELS, INDUSTRY_LABELS, PIPELINE_STAGES, stageName } from "./constants";
+import { labelsEn, stageNameFromLabels, type LabelsBundle } from "./i18n/labels";
 import { labelsFromMap, labelFromMap, parseIndustries, type TaxonomyDimension } from "./taxonomy";
-
-// ============ Enums & labels ============
-
-export const PARTNER_ARCHETYPE_LABELS: Record<string, string> = {
-  DATA_NATIVE: "Data-native",
-  BI_MIGRATOR: "Competitor migration",
-  IT_INTEGRATOR: "General IT integration",
-  IOT_INTEGRATOR: "IoT / Smart city",
-  SALES_AGENT: "Channel sales only",
-  SHELL_DATA: "Shell data company",
-  OTHER: "To be validated",
-};
-
-export const VALUE_PATTERN_LABELS: Record<string, string> = {
-  IOT_DASH: "IoT + Visualization",
-  APP_REPORT: "Business systems + Complex reporting",
-  CLOUD_APP: "Cloud channel + On-prem apps",
-  DATA_BI: "Data governance + BI loop",
-  BI_COMPLEMENT: "Competitor complement / Dual stack",
-  OEM_EMBED: "OEM / Embedded",
-  GOV_BID: "Government joint bidding",
-};
-
-export const ACTION_DOMAIN_LABELS: Record<string, string> = {
-  COMMITMENT: "Organizational commitment",
-  CAPABILITY: "Capability building",
-  PIPELINE: "Pipeline advancement",
-  RELATIONSHIP: "Relationship management",
-};
 
 export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "capability" | "relationship";
 
-export const WORKSPACE_PANELS: { id: WorkspacePanelId; label: string; desc: string }[] = [
-  { id: "guide", label: "Stage guidance", desc: "Stage actions · Todos · AI" },
-  { id: "positioning", label: "Positioning playbook", desc: "Tier · Type · Value pattern · Profile" },
-  { id: "pipeline", label: "Pipeline", desc: "Pipeline opportunity tracking" },
-  { id: "capability", label: "Capability building", desc: "Training certification · Joint solutions" },
-  { id: "relationship", label: "Relationship management", desc: "Power map · Activity · Sentiment" },
-];
+/** @deprecated Use getLabels(locale).partnerArchetypeLabels */
+export const PARTNER_ARCHETYPE_LABELS = labelsEn.partnerArchetypeLabels;
+/** @deprecated Use getLabels(locale).valuePatternLabels */
+export const VALUE_PATTERN_LABELS = labelsEn.valuePatternLabels;
+/** @deprecated Use getLabels(locale).actionDomainLabels */
+export const ACTION_DOMAIN_LABELS = labelsEn.actionDomainLabels;
+/** @deprecated Use getLabels(locale).workspacePanels */
+export const WORKSPACE_PANELS = labelsEn.workspacePanels;
 
 export type MapNodeStatus = "current" | "done" | "partial" | "missing" | "info";
 
@@ -141,8 +113,8 @@ function stageExitChecks(p: PartnerFrameworkInput): { id: string; label: string;
   return (upToStage.length ? upToStage : relevant.slice(-4)).map(({ id, label, ok }) => ({ id, label, ok }));
 }
 
-export function getStageGuidance(p: PartnerFrameworkInput): StageGuidance {
-  const meta = PIPELINE_STAGES.find((s) => s.stage === p.pipelineStage);
+export function getStageGuidance(p: PartnerFrameworkInput, ui: LabelsBundle = { ...labelsEn, locale: "en" }): StageGuidance {
+  const meta = ui.pipelineStages.find((s) => s.stage === p.pipelineStage);
   const stageCards: Record<number, { focus: string; domains: Record<string, string[]> }> = {
     1: {
       focus: "Quick screen: Are they a data player? Do they have a dedicated data team?",
@@ -239,7 +211,7 @@ export function getStageGuidance(p: PartnerFrameworkInput): StageGuidance {
   const card = stageCards[p.pipelineStage] ?? stageCards[2];
   return {
     stage: p.pipelineStage,
-    name: meta?.name ?? stageName(p.pipelineStage),
+    name: meta?.name ?? stageNameFromLabels(ui, p.pipelineStage),
     focus: card.focus,
     domains: card.domains,
     exitChecks: stageExitChecks(p),
@@ -258,97 +230,96 @@ function nodeStatus(ok: boolean, partial?: boolean, current?: boolean): MapNodeS
 export function buildPartnerInstanceMap(
   p: PartnerFrameworkInput,
   labelMaps?: Partial<Record<TaxonomyDimension, Record<string, string>>>,
+  ui: LabelsBundle = { ...labelsEn, locale: "en" },
 ): FrameworkMapNode[] {
   const activeOpps = p.opportunities.filter((o) => o.status === "ACTIVE");
   const stage = p.pipelineStage;
-  const guidance = getStageGuidance(p);
+  const guidance = getStageGuidance(p, ui);
+  const fb = ui.fallbacks;
 
-  const tierLabel = p.tier ? `Tier ${p.tier}` : "Unclassified";
+  const tierLabel = p.tier ? `Tier ${p.tier}` : fb.unclassified;
   const archetypeLabel = labelFromMap(
-    labelMaps?.ARCHETYPE ?? PARTNER_ARCHETYPE_LABELS,
+    labelMaps?.ARCHETYPE ?? ui.partnerArchetypeLabels,
     p.partnerArchetype,
-    "To be determined",
+    fb.tbd,
   );
-  const patternLabel = labelFromMap(labelMaps?.VALUE_PATTERN ?? VALUE_PATTERN_LABELS, p.valuePattern, "Not selected");
-  const categoryLabel = labelFromMap(labelMaps?.CATEGORY ?? CATEGORY_LABELS, p.category, p.category);
+  const patternLabel = labelFromMap(labelMaps?.VALUE_PATTERN ?? ui.valuePatternLabels, p.valuePattern, fb.notSelected);
+  const categoryLabel = labelFromMap(labelMaps?.CATEGORY ?? ui.categoryLabels, p.category, p.category);
   const industryCodes = parseIndustries(p);
-  const industryLabel = labelsFromMap(labelMaps?.INDUSTRY ?? INDUSTRY_LABELS, industryCodes, "To be determined");
+  const industryLabel = labelsFromMap(labelMaps?.INDUSTRY ?? ui.industryLabels, industryCodes, fb.tbd);
+
+  const layerPos = ui.frameworkLayerOrder[0] ?? "Positioning";
+  const layerPlay = ui.frameworkLayerOrder[1] ?? "Playbook";
+  const layerAct = ui.frameworkLayerOrder[2] ?? "Actions";
+  const layerExec = ui.frameworkLayerOrder[3] ?? "Execution";
+  const layerExit = ui.frameworkLayerOrder[4] ?? "Stage exit";
 
   const nodes: FrameworkMapNode[] = [
-    // Positioning layer
-    { id: "tier", layer: "Positioning", label: "Tier", hint: "Investment intensity", status: nodeStatus(!!p.tier), value: tierLabel },
-    { id: "stage", layer: "Positioning", label: "Stage", hint: "Relationship progress", status: "current", value: `${stage}. ${stageName(stage)}` },
-    { id: "archetype", layer: "Positioning", label: "Partner type", hint: "How to engage", status: nodeStatus(!!p.partnerArchetype && p.partnerArchetype !== "OTHER", !!p.partnerArchetype), value: archetypeLabel },
-    { id: "category", layer: "Positioning", label: "Competitive DNA", hint: "Background", status: nodeStatus(p.category !== "OTHER"), value: categoryLabel },
-    { id: "industry", layer: "Positioning", label: "Primary industry", hint: "Target vertical", status: nodeStatus(industryCodes.length > 0 && !industryCodes.every((c) => c === "OTHER"), industryCodes.length > 0), value: industryLabel },
-
-    // Playbook layer
-    { id: "value_pattern", layer: "Playbook", label: "Value pattern", hint: "What we sell together", status: nodeStatus(!!p.valuePattern), value: patternLabel },
+    { id: "tier", layer: layerPos, label: "Tier", hint: "Investment intensity", status: nodeStatus(!!p.tier), value: tierLabel },
+    { id: "stage", layer: layerPos, label: "Stage", hint: "Relationship progress", status: "current", value: `${stage}. ${stageNameFromLabels(ui, stage)}` },
+    { id: "archetype", layer: layerPos, label: ui.taxonomyMeta.ARCHETYPE.label, hint: ui.taxonomyMeta.ARCHETYPE.hint, status: nodeStatus(!!p.partnerArchetype && p.partnerArchetype !== "OTHER", !!p.partnerArchetype), value: archetypeLabel },
+    { id: "category", layer: layerPos, label: ui.taxonomyMeta.CATEGORY.label, hint: ui.taxonomyMeta.CATEGORY.hint, status: nodeStatus(p.category !== "OTHER"), value: categoryLabel },
+    { id: "industry", layer: layerPos, label: ui.taxonomyMeta.INDUSTRY.label, hint: ui.taxonomyMeta.INDUSTRY.hint, status: nodeStatus(industryCodes.length > 0 && !industryCodes.every((c) => c === "OTHER"), industryCodes.length > 0), value: industryLabel },
+    { id: "value_pattern", layer: layerPlay, label: ui.taxonomyMeta.VALUE_PATTERN.label, hint: ui.taxonomyMeta.VALUE_PATTERN.hint, status: nodeStatus(!!p.valuePattern), value: patternLabel },
     {
       id: "value_stack",
-      layer: "Playbook",
-      label: "Value triple",
-      hint: "Partner + FanRuan + Customer",
+      layer: layerPlay,
+      label: ui.locale === "zh" ? "价值三行" : "Value triple",
+      hint: ui.locale === "zh" ? "伙伴+帆软+客户" : "Partner + FanRuan + Customer",
       status: nodeStatus(!!(p.valuePartnerOffer && p.valueFanruanOffer && p.valueCustomerOutcome), !!(p.valuePartnerOffer || p.valueFanruanOffer)),
-      value: p.valuePartnerOffer ? "Partially filled" : "To be written",
+      value: p.valuePartnerOffer ? fb.partiallyFilled : fb.toBeWritten,
     },
-    { id: "playbook", layer: "Playbook", label: "playbook", hint: "How to win", status: nodeStatus(!!p.playbook, false), value: p.playbook ? "Captured" : "To be written" },
-    { id: "pitch", layer: "Playbook", label: "pitch", hint: "30-second pitch", status: nodeStatus(!!p.pitch), value: p.pitch ? "Ready" : "To be written" },
-
-    // Actions layer
+    { id: "playbook", layer: layerPlay, label: "playbook", hint: ui.locale === "zh" ? "怎么打" : "How to win", status: nodeStatus(!!p.playbook, false), value: p.playbook ? fb.captured : fb.toBeWritten },
+    { id: "pitch", layer: layerPlay, label: "pitch", hint: ui.locale === "zh" ? "30 秒话术" : "30-second pitch", status: nodeStatus(!!p.pitch), value: p.pitch ? fb.ready : fb.toBeWritten },
     {
       id: "domain_commitment",
-      layer: "Actions",
-      label: ACTION_DOMAIN_LABELS.COMMITMENT,
-      hint: "Dedicated staff / Sales & pre-sales",
+      layer: layerAct,
+      label: ui.actionDomainLabels.COMMITMENT,
+      hint: ui.locale === "zh" ? "专人/Owner" : "Dedicated staff / Sales & pre-sales",
       status: nodeStatus(
         !!(p.salesUserId || p.ownerId) && !!p.presalesUserId && !!p.dedicatedHeadcount,
         !!(p.salesUserId || p.ownerId) || !!p.presalesUserId,
       ),
       value: [
-        p.salesUser?.name ?? p.owner?.name ?? "No sales",
-        p.presalesUser?.name ?? "No pre-sales",
-        p.dedicatedHeadcount ? `${p.dedicatedHeadcount} people` : "Dedicated staff TBD",
+        p.salesUser?.name ?? p.owner?.name ?? fb.noSales,
+        p.presalesUser?.name ?? fb.noPresales,
+        p.dedicatedHeadcount ? `${p.dedicatedHeadcount} ${fb.people}` : fb.dedicatedTbd,
       ].filter(Boolean).join(" · "),
     },
     {
       id: "domain_capability",
-      layer: "Actions",
-      label: ACTION_DOMAIN_LABELS.CAPABILITY,
-      hint: "Training / Demo / Solutions",
+      layer: layerAct,
+      label: ui.actionDomainLabels.CAPABILITY,
+      hint: ui.locale === "zh" ? "培训/Demo/方案" : "Training / Demo / Solutions",
       status: nodeStatus(p.trainings.length > 0 && (p.solutions.length > 0 || stage < 5), p.trainings.length > 0),
-      value: `Training ${p.trainings.length} · Solutions ${p.solutions.length}`,
+      value: ui.locale === "zh" ? `培训 ${p.trainings.length} · 方案 ${p.solutions.length}` : `Training ${p.trainings.length} · Solutions ${p.solutions.length}`,
     },
     {
       id: "domain_pipeline",
-      layer: "Actions",
-      label: ACTION_DOMAIN_LABELS.PIPELINE,
-      hint: "Opportunity cadence",
+      layer: layerAct,
+      label: ui.actionDomainLabels.PIPELINE,
+      hint: ui.locale === "zh" ? "商机节奏" : "Opportunity cadence",
       status: nodeStatus(activeOpps.length > 0 && (stage < 5 || activeOpps.some((o) => o.nextStep)), activeOpps.length > 0),
-      value: `${activeOpps.length} active`,
+      value: `${activeOpps.length} ${fb.active}`,
     },
     {
       id: "domain_relationship",
-      layer: "Actions",
-      label: ACTION_DOMAIN_LABELS.RELATIONSHIP,
-      hint: "Power / touchpoints",
+      layer: layerAct,
+      label: ui.actionDomainLabels.RELATIONSHIP,
+      hint: ui.locale === "zh" ? "权力/接触" : "Power / touchpoints",
       status: nodeStatus(p.contacts.length >= 2 && p.contacts.some((c) => c.role === "DECISION_MAKER"), p.contacts.length > 0),
-      value: `${p.contacts.length} contacts · ${p.events.length} activities`,
+      value: `${p.contacts.length} ${fb.contacts} · ${p.events.length} ${fb.activities}`,
     },
-
-    // Execution layer
-    { id: "mod_profile", layer: "Execution", label: "Partner profile", status: nodeStatus(!!p.coreBusiness), value: "Jump ↓" },
-    { id: "mod_powermap", layer: "Execution", label: "Power map", status: nodeStatus(p.contacts.length > 0), value: `${p.contacts.length} people` },
-    { id: "mod_opp", layer: "Execution", label: "Opportunity tracking", status: nodeStatus(p.opportunities.length > 0), value: `${p.opportunities.length} records` },
-    { id: "mod_training", layer: "Execution", label: "Capability training", status: nodeStatus(p.trainings.length > 0), value: `${p.trainings.length} records` },
-    { id: "mod_solution", layer: "Execution", label: "Joint solutions", status: nodeStatus(p.solutions.length > 0), value: `${p.solutions.length} records` },
-    { id: "mod_timeline", layer: "Execution", label: "Activity timeline", status: nodeStatus(p.events.length > 0), value: `${p.events.length} records` },
-
-    // Current stage exit (summary node)
+    { id: "mod_profile", layer: layerExec, label: ui.locale === "zh" ? "伙伴画像" : "Partner profile", status: nodeStatus(!!p.coreBusiness), value: fb.jumpDown },
+    { id: "mod_powermap", layer: layerExec, label: ui.locale === "zh" ? "权力地图" : "Power map", status: nodeStatus(p.contacts.length > 0), value: `${p.contacts.length} ${fb.people}` },
+    { id: "mod_opp", layer: layerExec, label: ui.locale === "zh" ? "商机跟踪" : "Opportunity tracking", status: nodeStatus(p.opportunities.length > 0), value: `${p.opportunities.length} ${fb.records}` },
+    { id: "mod_training", layer: layerExec, label: ui.locale === "zh" ? "能力培训" : "Capability training", status: nodeStatus(p.trainings.length > 0), value: `${p.trainings.length} ${fb.records}` },
+    { id: "mod_solution", layer: layerExec, label: ui.locale === "zh" ? "联合方案" : "Joint solutions", status: nodeStatus(p.solutions.length > 0), value: `${p.solutions.length} ${fb.records}` },
+    { id: "mod_timeline", layer: layerExec, label: ui.locale === "zh" ? "动态时间线" : "Activity timeline", status: nodeStatus(p.events.length > 0), value: `${p.events.length} ${fb.records}` },
     {
       id: "stage_exit",
-      layer: "Stage exit",
-      label: `Stage ${stage} exit`,
+      layer: layerExit,
+      label: ui.locale === "zh" ? `阶段 ${stage} 准出` : `Stage ${stage} exit`,
       hint: guidance.focus,
       status: nodeStatus(guidance.exitChecks.every((c) => c.ok), guidance.exitChecks.some((c) => c.ok)),
       value: `${guidance.exitChecks.filter((c) => c.ok).length}/${guidance.exitChecks.length}`,
@@ -362,51 +333,52 @@ export function buildPartnerInstanceMap(
       ...n,
       panel: t.panel,
       editable: t.editable,
-      hint: `${n.hint ?? n.label} · Click to view${t.editable ? " / edit" : ""}`,
+      hint: `${n.hint ?? n.label} · ${fb.clickView}${t.editable ? fb.clickEdit : ""}`,
     };
   });
 }
 
 /** Overall framework reference map (no partner data) */
-export function buildFrameworkReferenceMap(): FrameworkMapNode[] {
+export function buildFrameworkReferenceMap(ui: LabelsBundle = { ...labelsEn, locale: "en" }): FrameworkMapNode[] {
+  const [layerPos, layerPlay, layerAct, layerExec] = ui.frameworkLayerOrder;
   const layers: { layer: string; nodes: { id: string; label: string; hint: string }[] }[] = [
     {
-      layer: "Positioning",
+      layer: layerPos,
       nodes: [
-        { id: "tier", label: "Tier A/B/C", hint: "Drives investment intensity and touch frequency" },
-        { id: "stage", label: "Stage 1–10", hint: "Drives required actions for this stage" },
-        { id: "archetype", label: "Partner type", hint: "Drives action branch (continue/watch/stop)" },
-        { id: "category", label: "Competitive DNA", hint: "PBI/Tableau/pure data…" },
-        { id: "industry", label: "Primary industry", hint: "Banking/government/retail/manufacturing…" },
+        { id: "tier", label: "Tier A/B/C", hint: ui.locale === "zh" ? "决定投入强度与接触频率" : "Drives investment intensity and touch frequency" },
+        { id: "stage", label: "Stage 1–10", hint: ui.locale === "zh" ? "决定本阶段必做动作" : "Drives required actions for this stage" },
+        { id: "archetype", label: ui.taxonomyMeta.ARCHETYPE.label, hint: ui.taxonomyMeta.ARCHETYPE.hint },
+        { id: "category", label: ui.taxonomyMeta.CATEGORY.label, hint: ui.taxonomyMeta.CATEGORY.hint },
+        { id: "industry", label: ui.taxonomyMeta.INDUSTRY.label, hint: ui.taxonomyMeta.INDUSTRY.hint },
       ],
     },
     {
-      layer: "Playbook",
+      layer: layerPlay,
       nodes: [
-        { id: "value_pattern", label: "Joint value pattern", hint: "IoT+dashboard / business systems+reporting / cloud+apps…" },
-        { id: "value_stack", label: "Value triple", hint: "Partner offers · FanRuan offers · Customer gets" },
-        { id: "playbook", label: "playbook", hint: "How to win with this pattern" },
-        { id: "pitch", label: "pitch", hint: "External 30-second pitch" },
+        { id: "value_pattern", label: ui.taxonomyMeta.VALUE_PATTERN.label, hint: ui.taxonomyMeta.VALUE_PATTERN.hint },
+        { id: "value_stack", label: ui.locale === "zh" ? "价值三行" : "Value triple", hint: ui.locale === "zh" ? "伙伴提供 · 帆软提供 · 客户得到" : "Partner offers · FanRuan offers · Customer gets" },
+        { id: "playbook", label: "playbook", hint: ui.locale === "zh" ? "这套模式怎么打" : "How to win with this pattern" },
+        { id: "pitch", label: "pitch", hint: ui.locale === "zh" ? "对外 30 秒话术" : "External 30-second pitch" },
       ],
     },
     {
-      layer: "Actions",
+      layer: layerAct,
       nodes: [
-        { id: "domain_commitment", label: "Organizational commitment", hint: "Owner · dedicated headcount · org chart" },
-        { id: "domain_capability", label: "Capability building", hint: "Certification · Demo · Joint solutions" },
-        { id: "domain_pipeline", label: "Pipeline advancement", hint: "ACTIVE opportunities · sync cadence · first deal" },
-        { id: "domain_relationship", label: "Relationship management", hint: "Power map · touchpoints · champion" },
+        { id: "domain_commitment", label: ui.actionDomainLabels.COMMITMENT, hint: ui.locale === "zh" ? "Owner · dedicated 人数 · org chart" : "Owner · dedicated headcount · org chart" },
+        { id: "domain_capability", label: ui.actionDomainLabels.CAPABILITY, hint: ui.locale === "zh" ? "认证 · Demo · 联合方案" : "Certification · Demo · Joint solutions" },
+        { id: "domain_pipeline", label: ui.actionDomainLabels.PIPELINE, hint: ui.locale === "zh" ? "ACTIVE 商机 · sync 节奏 · 首单" : "ACTIVE opportunities · sync cadence · first deal" },
+        { id: "domain_relationship", label: ui.actionDomainLabels.RELATIONSHIP, hint: ui.locale === "zh" ? "权力地图 · 接触 · champion" : "Power map · touchpoints · champion" },
       ],
     },
     {
-      layer: "Execution",
+      layer: layerExec,
       nodes: [
-        { id: "mod_profile", label: "Partner profile", hint: "Basic info and type" },
-        { id: "mod_powermap", label: "Power map", hint: "A/D/S/E/I framework" },
-        { id: "mod_opp", label: "Opportunity tracking", hint: "Specific pipeline deals" },
-        { id: "mod_training", label: "Capability training", hint: "FCA certification plan" },
-        { id: "mod_solution", label: "Joint solutions", hint: "Concrete instances of value pattern" },
-        { id: "mod_timeline", label: "Activity timeline", hint: "Touchpoints and change audit" },
+        { id: "mod_profile", label: ui.locale === "zh" ? "伙伴画像" : "Partner profile", hint: ui.locale === "zh" ? "基本信息与类型" : "Basic info and type" },
+        { id: "mod_powermap", label: ui.locale === "zh" ? "权力地图" : "Power map", hint: "A/D/S/E/I framework" },
+        { id: "mod_opp", label: ui.locale === "zh" ? "商机跟踪" : "Opportunity tracking", hint: ui.locale === "zh" ? "具体 Pipeline 单子" : "Specific pipeline deals" },
+        { id: "mod_training", label: ui.locale === "zh" ? "能力培训" : "Capability training", hint: "FCA certification plan" },
+        { id: "mod_solution", label: ui.locale === "zh" ? "联合方案" : "Joint solutions", hint: ui.locale === "zh" ? "价值模式的具体实例" : "Concrete instances of value pattern" },
+        { id: "mod_timeline", label: ui.locale === "zh" ? "动态时间线" : "Activity timeline", hint: ui.locale === "zh" ? "接触与变更审计" : "Touchpoints and change audit" },
       ],
     },
   ];
@@ -416,13 +388,11 @@ export function buildFrameworkReferenceMap(): FrameworkMapNode[] {
   );
 }
 
-export const FRAMEWORK_LAYER_ORDER = ["Positioning", "Playbook", "Actions", "Execution", "Stage exit"];
-
-export function groupMapByLayer(nodes: FrameworkMapNode[]) {
+export function groupMapByLayer(nodes: FrameworkMapNode[], ui: LabelsBundle = { ...labelsEn, locale: "en" }) {
   const map = new Map<string, FrameworkMapNode[]>();
   for (const n of nodes) {
     if (!map.has(n.layer)) map.set(n.layer, []);
     map.get(n.layer)!.push(n);
   }
-  return FRAMEWORK_LAYER_ORDER.filter((l) => map.has(l)).map((layer) => ({ layer, nodes: map.get(layer)! }));
+  return ui.frameworkLayerOrder.filter((l) => map.has(l)).map((layer) => ({ layer, nodes: map.get(layer)! }));
 }

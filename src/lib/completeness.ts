@@ -1,52 +1,50 @@
-import type { Contact, Opportunity, Partner, TimelineEvent, Training } from "@prisma/client";
+import type { TimelineEvent } from "@prisma/client";
+import type { PartnerWithRelations } from "./completeness-types";
+import type { LabelsBundle } from "./i18n/labels";
+import { labelsEn } from "./i18n/labels";
 import { parseIndustries } from "./taxonomy";
 
-export type PartnerWithRelations = Partner & {
-  contacts: Contact[];
-  opportunities: Opportunity[];
-  events: TimelineEvent[];
-  trainings: Training[];
-};
+export type { PartnerWithRelations } from "./completeness-types";
 
 export type Completeness = {
-  score: number; // 0-100
+  score: number;
   missing: string[];
 };
 
-type Check = { label: string; weight: number; ok: (p: PartnerWithRelations) => boolean };
+type Check = { labelKey: number; weight: number; ok: (p: PartnerWithRelations) => boolean };
 
 const CHECKS: Check[] = [
-  { label: "City / country", weight: 5, ok: (p) => !!p.city && !!p.country },
-  { label: "Company size", weight: 4, ok: (p) => !!p.headcount },
-  { label: "Website", weight: 3, ok: (p) => !!p.website },
-  { label: "Core business / capability", weight: 6, ok: (p) => !!(p.coreBusiness || p.capability) },
-  { label: "Known clients", weight: 6, ok: (p) => !!p.knownClients },
-  { label: "Current tools", weight: 5, ok: (p) => !!p.currentTools },
-  { label: "Joint value pattern", weight: 5, ok: (p) => !!p.valuePattern },
-  { label: "Value proposition (3 lines)", weight: 5, ok: (p) => !!(p.valuePartnerOffer && p.valueFanruanOffer && p.valueCustomerOutcome) },
-  { label: "Partner archetype", weight: 4, ok: (p) => !!p.partnerArchetype && p.partnerArchetype !== "OTHER" },
-  { label: "Target industries", weight: 4, ok: (p) => parseIndustries(p).some((c) => c && c !== "OTHER") },
-  { label: "Dedicated headcount", weight: 4, ok: (p) => !!p.dedicatedHeadcount },
-  { label: "Core playbook", weight: 5, ok: (p) => !!p.playbook },
-  { label: "Fit score", weight: 4, ok: (p) => p.fitScore != null },
-  { label: "Priority", weight: 3, ok: (p) => !!p.priority },
-  { label: "Sales owner", weight: 3, ok: (p) => !!(p.salesUserId || p.ownerId) },
-  { label: "Pre-sales owner", weight: 2, ok: (p) => !!p.presalesUserId },
-  { label: "At least 1 key contact", weight: 10, ok: (p) => p.contacts.length > 0 },
-  { label: "Decision maker identified", weight: 8, ok: (p) => p.contacts.some((c) => c.role === "DECISION_MAKER") },
-  { label: "Contact has contact info", weight: 4, ok: (p) => p.contacts.some((c) => !!c.contactInfo) },
-  { label: "At least 1 tracked opportunity", weight: 10, ok: (p) => p.opportunities.length > 0 },
-  { label: "Activity in last 30 days", weight: 8, ok: (p) => p.events.some((e) => Date.now() - new Date(e.createdAt).getTime() < 30 * 24 * 3600 * 1000) },
-  { label: "Training / certification plan", weight: 4, ok: (p) => p.trainings.length > 0 },
+  { labelKey: 0, weight: 5, ok: (p) => !!p.city && !!p.country },
+  { labelKey: 1, weight: 4, ok: (p) => !!p.headcount },
+  { labelKey: 2, weight: 3, ok: (p) => !!p.website },
+  { labelKey: 3, weight: 6, ok: (p) => !!(p.coreBusiness || p.capability) },
+  { labelKey: 4, weight: 6, ok: (p) => !!p.knownClients },
+  { labelKey: 5, weight: 5, ok: (p) => !!p.currentTools },
+  { labelKey: 6, weight: 5, ok: (p) => !!p.valuePattern },
+  { labelKey: 7, weight: 5, ok: (p) => !!(p.valuePartnerOffer && p.valueFanruanOffer && p.valueCustomerOutcome) },
+  { labelKey: 8, weight: 4, ok: (p) => !!p.partnerArchetype && p.partnerArchetype !== "OTHER" },
+  { labelKey: 9, weight: 4, ok: (p) => parseIndustries(p).some((c) => c && c !== "OTHER") },
+  { labelKey: 10, weight: 4, ok: (p) => !!p.dedicatedHeadcount },
+  { labelKey: 11, weight: 5, ok: (p) => !!p.playbook },
+  { labelKey: 12, weight: 4, ok: (p) => p.fitScore != null },
+  { labelKey: 13, weight: 3, ok: (p) => !!p.priority },
+  { labelKey: 14, weight: 3, ok: (p) => !!(p.salesUserId || p.ownerId) },
+  { labelKey: 15, weight: 2, ok: (p) => !!p.presalesUserId },
+  { labelKey: 16, weight: 10, ok: (p) => p.contacts.length > 0 },
+  { labelKey: 17, weight: 8, ok: (p) => p.contacts.some((c) => c.role === "DECISION_MAKER") },
+  { labelKey: 18, weight: 4, ok: (p) => p.contacts.some((c) => !!c.contactInfo) },
+  { labelKey: 19, weight: 10, ok: (p) => p.opportunities.length > 0 },
+  { labelKey: 20, weight: 8, ok: (p) => p.events.some((e) => Date.now() - new Date(e.createdAt).getTime() < 30 * 24 * 3600 * 1000) },
+  { labelKey: 21, weight: 4, ok: (p) => p.trainings.length > 0 },
 ];
 
-export function computeCompleteness(p: PartnerWithRelations): Completeness {
+export function computeCompleteness(p: PartnerWithRelations, ui: LabelsBundle = { ...labelsEn, locale: "en" }): Completeness {
   const total = CHECKS.reduce((s, c) => s + c.weight, 0);
   let got = 0;
   const missing: string[] = [];
   for (const c of CHECKS) {
     if (c.ok(p)) got += c.weight;
-    else missing.push(c.label);
+    else missing.push(ui.completenessLabels[c.labelKey] ?? "");
   }
   return { score: Math.round((got / total) * 100), missing };
 }

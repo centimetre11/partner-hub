@@ -6,6 +6,7 @@ import { DEFAULT_AGENT_SKILLS } from "@/lib/skills";
 import { resolveAgentSkills } from "@/lib/skill-resolver";
 import { AgentForm } from "../agent-form";
 import { AgentBuilder } from "../agent-builder";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function NewAgentPage({
   searchParams,
@@ -13,6 +14,7 @@ export default async function NewAgentPage({
   searchParams: Promise<{ partnerId?: string }>;
 }) {
   await requireUser();
+  const { messages: m } = await getServerI18n();
   const sp = await searchParams;
   const partners = await db.partner.findMany({
     where: { status: { not: "ARCHIVED" } },
@@ -23,14 +25,14 @@ export default async function NewAgentPage({
 
   return (
     <div className="pb-16">
-      <PageHeader title="Create Agent" desc="Generate a draft via chat, or manually configure instructions, tool kit, and skill library" />
+      <PageHeader title={m.agents.createTitle} desc={m.agents.createDesc} />
       <AiCenterNav />
       <div className="px-8 space-y-8">
         <AgentBuilder />
         <div className="max-w-3xl">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-zinc-800">Manual Create</h2>
-            <p className="text-xs text-zinc-400 mt-1">Best when you already know which tools and skills to select and how to write task instructions.</p>
+            <h2 className="text-sm font-semibold text-zinc-800">{m.agents.manualCreate}</h2>
+            <p className="text-xs text-zinc-400 mt-1">{m.agents.manualCreateDesc}</p>
           </div>
           <AgentForm
             agent={{

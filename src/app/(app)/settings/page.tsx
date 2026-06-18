@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/session";
-import { Badge, Card, EmptyState, PageHeader, fmtDate, fmtDateTime } from "@/components/ui";
+import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
 import { RegisterForm } from "./register-form";
 import { MemberRow } from "./member-row";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
@@ -9,18 +9,20 @@ import type { VolcengineApiForClient } from "./volcengine-api-setup";
 import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 import { parseAiCapabilities } from "@/lib/ai-capabilities";
+import { getServerI18n } from "@/lib/server-i18n";
 
-function maskKey(apiKey: string) {
-  if (!apiKey) return "Not set";
+function maskKey(apiKey: string, notSet: string) {
+  if (!apiKey) return notSet;
   return apiKey.slice(-4).padStart(Math.min(apiKey.length, 8), "*");
 }
 
-function fmtTokens(value: number) {
-  return new Intl.NumberFormat("en-US").format(value);
+function fmtTokens(value: number, locale: string) {
+  return new Intl.NumberFormat(locale === "zh" ? "zh-CN" : "en-US").format(value);
 }
 
 export default async function SettingsPage() {
   const user = await requireSuperAdmin();
+  const { locale, messages: m, bcp47 } = await getServerI18n();
   const today = new Date().toISOString().slice(0, 10);
   const since = new Date();
   since.setDate(since.getDate() - 13);
@@ -53,7 +55,7 @@ export default async function SettingsPage() {
     model: api.model,
     enabled: api.enabled,
     isDefault: api.isDefault,
-    keyTail: maskKey(api.apiKey),
+    keyTail: maskKey(api.apiKey, m.settings.notSet),
     capabilities: parseAiCapabilities(api.capabilities),
     dailyTokenLimit: api.dailyTokenLimit ?? null,
     usedTodayTokens: usedTodayByBucket.get(`api:${api.id}`) ?? 0,
@@ -79,7 +81,7 @@ export default async function SettingsPage() {
         model: api.model,
         enabled: api.enabled,
         isDefault: api.isDefault,
-        keyTail: maskKey(api.apiKey),
+        keyTail: maskKey(api.apiKey, m.settings.notSet),
         keyValid: !!normalizeApiKeyInput(api.apiKey),
         extraConfig,
         capabilities: parseAiCapabilities(api.capabilities),
@@ -94,9 +96,9 @@ export default async function SettingsPage() {
 
   return (
     <div className="pb-16">
-      <PageHeader title="Team settings" desc="Manage team members, LLM APIs, and token usage" />
+      <PageHeader title={m.settings.title} desc={m.settings.desc} />
       <div className="px-8 grid grid-cols-1 lg:grid-cols-2 gap-5 max-w-7xl">
-        <Card title={`Team members (${users.length})`}>
+        <Card title={m.settings.teamMembersCount.replace("{count}", String(users.length))}>
           <div className="space-y-3 mb-5">
             {users.map((u) => (
               <MemberRow key={u.id} user={u} />
@@ -105,40 +107,38 @@ export default async function SettingsPage() {
           <RegisterForm />
         </Card>
 
-        <Card title="AI configuration status">
+        <Card title={m.settings.aiConfigStatus}>
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${aiConfigured ? "bg-emerald-500" : "bg-red-400"}`} />
-              <span className="text-zinc-700">{aiConfigured ? "AI is configured and ready" : "AI not configured"}</span>
+              <span className="text-zinc-700">{aiConfigured ? m.settings.aiReady : m.settings.aiNotConfigured}</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg bg-zinc-50 p-3">
                 <div className="text-lg font-bold text-zinc-900">{aiApis.length}</div>
-                <div className="text-xs text-zinc-400">API configs</div>
+                <div className="text-xs text-zinc-400">{m.settings.apiConfigs}</div>
               </div>
               <div className="rounded-lg bg-zinc-50 p-3">
                 <div className="text-lg font-bold text-zinc-900">{aiApis.filter((api) => api.enabled).length}</div>
-                <div className="text-xs text-zinc-400">Enabled</div>
+                <div className="text-xs text-zinc-400">{m.settings.enabledCount}</div>
               </div>
               <div className="rounded-lg bg-zinc-50 p-3">
-                <div className="text-lg font-bold text-zinc-900">{fmtTokens(todayTokens)}</div>
-                <div className="text-xs text-zinc-400">Today's tokens</div>
+                <div className="text-lg font-bold text-zinc-900">{fmtTokens(todayTokens, locale)}</div>
+                <div className="text-xs text-zinc-400">{m.settings.todayTokens}</div>
               </div>
             </div>
             <div className="text-xs text-zinc-500 leading-relaxed bg-zinc-50 rounded-lg p-4">
-              Prefer enabled database APIs marked as default below; if none are added, falls back to <code className="bg-zinc-200 px-1 rounded">.env</code> AI_BASE_URL / AI_API_KEY / AI_MODEL.
+              {m.settings.preferDbApisDetail}
             </div>
-            <div className="text-xs text-zinc-400">
-              AI capabilities: chat import · global assistant (query/update data) · question list completion · dynamic summary · weekly business report. Every model call logs feature source, API, model, and token usage.
-            </div>
+            <div className="text-xs text-zinc-400">{m.settings.aiCapabilitiesDetail}</div>
           </div>
         </Card>
 
-        <Card title="LLM management center" className="lg:col-span-2">
+        <Card title={m.settings.llmCenter} className="lg:col-span-2">
           <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
         </Card>
 
-        <Card title="KMS document access" className="lg:col-span-2">
+        <Card title={m.settings.kmsTitle} className="lg:col-span-2">
           <KmsSetup
             credential={{
               configured: !!kmsCred,
@@ -149,18 +149,18 @@ export default async function SettingsPage() {
           />
         </Card>
 
-        <Card title="Daily token usage (last 14 days)" className="lg:col-span-2">
+        <Card title={m.settings.dailyTokens14} className="lg:col-span-2">
           {dailyUsage.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-xs text-zinc-400">
                   <tr className="border-b border-zinc-100">
-                    <th className="py-2 text-left font-medium">Date</th>
-                    <th className="py-2 text-left font-medium">API</th>
-                    <th className="py-2 text-right font-medium">Requests</th>
-                    <th className="py-2 text-right font-medium">Input tokens</th>
-                    <th className="py-2 text-right font-medium">Output tokens</th>
-                    <th className="py-2 text-right font-medium">Total tokens</th>
+                    <th className="py-2 text-left font-medium">{m.settings.date}</th>
+                    <th className="py-2 text-left font-medium">{m.settings.api}</th>
+                    <th className="py-2 text-right font-medium">{m.settings.requests}</th>
+                    <th className="py-2 text-right font-medium">{m.settings.inputTokens}</th>
+                    <th className="py-2 text-right font-medium">{m.settings.outputTokens}</th>
+                    <th className="py-2 text-right font-medium">{m.settings.totalTokens}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
@@ -168,21 +168,21 @@ export default async function SettingsPage() {
                     <tr key={row.id}>
                       <td className="py-2 text-zinc-700">{row.day}</td>
                       <td className="py-2 text-zinc-700">{row.apiName}</td>
-                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.requestCount)}</td>
-                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.promptTokens)}</td>
-                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.completionTokens)}</td>
-                      <td className="py-2 text-right tabular-nums font-semibold text-zinc-900">{fmtTokens(row.totalTokens)}</td>
+                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.requestCount, locale)}</td>
+                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.promptTokens, locale)}</td>
+                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.completionTokens, locale)}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold text-zinc-900">{fmtTokens(row.totalTokens, locale)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <EmptyState text="No token usage yet. It will appear here after your first AI call." />
+            <EmptyState text={m.settings.noTokenUsage} />
           )}
         </Card>
 
-        <Card title="Recent AI calls" className="lg:col-span-2">
+        <Card title={m.settings.recentCalls} className="lg:col-span-2">
           {recentUsage.length ? (
             <div className="space-y-2.5">
               {recentUsage.map((row) => (
@@ -190,21 +190,21 @@ export default async function SettingsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-zinc-800">{row.feature}</span>
-                      <Badge tone={row.status === "SUCCESS" ? "green" : "red"}>{row.status === "SUCCESS" ? "Success" : "Failed"}</Badge>
+                      <Badge tone={row.status === "SUCCESS" ? "green" : "red"}>{row.status === "SUCCESS" ? m.common.success : m.common.failed}</Badge>
                     </div>
                     <div className="text-xs text-zinc-400 mt-1">
-                      {row.apiName} · {row.model} · {row.user?.name ?? "System"} · {fmtDateTime(row.createdAt)}
+                      {row.apiName} · {row.model} · {row.user?.name ?? m.agents.system} · {fmtDateTime(row.createdAt, bcp47)}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-sm font-semibold text-zinc-900 tabular-nums">{fmtTokens(row.totalTokens)}</div>
-                    <div className="text-xs text-zinc-400">Tokens</div>
+                    <div className="text-sm font-semibold text-zinc-900 tabular-nums">{fmtTokens(row.totalTokens, locale)}</div>
+                    <div className="text-xs text-zinc-400">{m.settings.tokens}</div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <EmptyState text="No AI call history yet." />
+            <EmptyState text={m.settings.noCallHistory} />
           )}
         </Card>
       </div>

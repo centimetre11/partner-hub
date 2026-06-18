@@ -6,6 +6,7 @@ import { updatePartnerAction } from "@/lib/actions";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
 import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
+import { useMessages } from "@/lib/i18n/context";
 
 const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
@@ -20,12 +21,14 @@ export function ProfileEditor({
   users: User[];
   taxonomy: TaxonomyOptionsMap;
 }) {
+  const m = useMessages();
+  const pe = m.profileEditor;
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <button onClick={() => setOpen(true)} className="text-xs text-indigo-600 hover:underline">
-        Edit profile
+        {pe.editProfile}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
@@ -33,7 +36,7 @@ export function ProfileEditor({
             className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-semibold mb-4">Edit partner profile — {p.name}</h3>
+            <h3 className="text-base font-semibold mb-4">{pe.title.replace("{name}", p.name)}</h3>
             <form
               action={async (fd) => {
                 await updatePartnerAction(p.id, fd);
@@ -42,16 +45,16 @@ export function ProfileEditor({
               className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm"
             >
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Full company name</span>
+                <span className="text-xs text-zinc-500">{pe.fullName}</span>
                 <input name="name" defaultValue={p.name} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Tier</span>
+                <span className="text-xs text-zinc-500">{m.common.tier}</span>
                 <select name="tier" defaultValue={p.tier ?? ""} className={input}>
-                  <option value="">Not tiered</option>
-                  <option value="A">A — immediate</option>
-                  <option value="B">B — priority</option>
-                  <option value="C">C — follow up later</option>
+                  <option value="">{pe.notTiered}</option>
+                  <option value="A">{pe.tierA}</option>
+                  <option value="B">{pe.tierB}</option>
+                  <option value="C">{pe.tierC}</option>
                 </select>
               </label>
               <TaxonomySelectField
@@ -59,7 +62,7 @@ export function ProfileEditor({
                 name="partnerArchetype"
                 value={p.partnerArchetype ?? ""}
                 options={taxonomy.ARCHETYPE}
-                emptyLabel="To be determined"
+                emptyLabel={pe.tbd}
               />
               <TaxonomySelectField
                 dimension="CATEGORY"
@@ -80,62 +83,62 @@ export function ProfileEditor({
                 name="valuePattern"
                 value={p.valuePattern ?? ""}
                 options={taxonomy.VALUE_PATTERN}
-                emptyLabel="To be selected"
+                emptyLabel={pe.toBeSelected}
               />
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Dedicated headcount (FanRuan/data)</span>
-                <input name="dedicatedHeadcount" defaultValue={p.dedicatedHeadcount ?? ""} placeholder="e.g. 3 full-time" className={input} />
+                <span className="text-xs text-zinc-500">{pe.dedicatedHeadcountLabel}</span>
+                <input name="dedicatedHeadcount" defaultValue={p.dedicatedHeadcount ?? ""} placeholder={pe.dedicatedHeadcountPlaceholder} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Partner offers (value trio)</span>
-                <input name="valuePartnerOffer" defaultValue={p.valuePartnerOffer ?? ""} placeholder="e.g. Tableau implementation & client relationships" className={input} />
+                <span className="text-xs text-zinc-500">{pe.valuePartnerOffer}</span>
+                <input name="valuePartnerOffer" defaultValue={p.valuePartnerOffer ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">FanRuan offers</span>
-                <input name="valueFanruanOffer" defaultValue={p.valueFanruanOffer ?? ""} placeholder="e.g. FineReport complex reporting + onsite support" className={input} />
+                <span className="text-xs text-zinc-500">{pe.valueFanruanOffer}</span>
+                <input name="valueFanruanOffer" defaultValue={p.valueFanruanOffer ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Customer gets</span>
-                <input name="valueCustomerOutcome" defaultValue={p.valueCustomerOutcome ?? ""} placeholder="e.g. regulatory reporting + self-service analytics" className={input} />
+                <span className="text-xs text-zinc-500">{pe.valueCustomerOutcome}</span>
+                <input name="valueCustomerOutcome" defaultValue={p.valueCustomerOutcome ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">City</span>
+                <span className="text-xs text-zinc-500">{pe.city}</span>
                 <input name="city" defaultValue={p.city ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Country</span>
+                <span className="text-xs text-zinc-500">{pe.country}</span>
                 <input name="country" defaultValue={p.country ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Company size</span>
+                <span className="text-xs text-zinc-500">{pe.headcount}</span>
                 <input name="headcount" defaultValue={p.headcount ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Website</span>
+                <span className="text-xs text-zinc-500">{pe.website}</span>
                 <input name="website" defaultValue={p.website ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Core business</span>
+                <span className="text-xs text-zinc-500">{pe.coreBusiness}</span>
                 <input name="coreBusiness" defaultValue={p.coreBusiness ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Core capabilities</span>
+                <span className="text-xs text-zinc-500">{pe.capability}</span>
                 <input name="capability" defaultValue={p.capability ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Known clients</span>
+                <span className="text-xs text-zinc-500">{pe.knownClients}</span>
                 <input name="knownClients" defaultValue={p.knownClients ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Current tools</span>
+                <span className="text-xs text-zinc-500">{pe.currentTools}</span>
                 <input name="currentTools" defaultValue={p.currentTools ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Core playbook</span>
+                <span className="text-xs text-zinc-500">{pe.corePlaybook}</span>
                 <textarea name="playbook" defaultValue={p.playbook ?? ""} rows={2} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Pitch</span>
+                <span className="text-xs text-zinc-500">{pe.pitch}</span>
                 <textarea name="pitch" defaultValue={p.pitch ?? ""} rows={2} className={input} />
               </label>
               <PartnerTeamFields
@@ -146,17 +149,17 @@ export function ProfileEditor({
               />
               <label className="flex items-center gap-2 mt-5">
                 <input type="checkbox" name="manualChecked" defaultChecked={p.manualChecked} className="rounded" />
-                <span className="text-xs text-zinc-600">Manually verified</span>
+                <span className="text-xs text-zinc-600">{pe.manuallyVerified}</span>
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">Notes</span>
+                <span className="text-xs text-zinc-500">{pe.notes}</span>
                 <textarea name="notes" defaultValue={p.notes ?? ""} rows={2} className={input} />
               </label>
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
-                  Cancel
+                  {m.common.cancel}
                 </button>
-                <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">Save</button>
+                <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">{pe.save}</button>
               </div>
             </form>
           </div>

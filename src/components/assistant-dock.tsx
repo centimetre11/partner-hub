@@ -9,6 +9,7 @@ import type { ProposalChanges } from "@/lib/proposal-merge";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
+import { useMessages } from "@/lib/i18n/context";
 
 type Msg = {
   role: "user" | "assistant";
@@ -34,13 +35,9 @@ type QueryResult = {
   actions?: string[];
 };
 
-const SUGGESTIONS = [
-  "Which Tier A partners haven't been followed up in 2+ weeks?",
-  "Compare Beinex and SEIDOR / Clariba — which should we prioritize?",
-  "Which Riyadh candidates have government client resources?",
-];
-
 export function AssistantDock() {
+  const m = useMessages();
+  const am = m.assistant;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -87,7 +84,7 @@ export function AssistantDock() {
       ...messages,
       {
         role: "user",
-        content: content || "Please identify the information in the image(s)",
+        content: content || am.imageFallback,
         images: pendingImages.length ? pendingImages : undefined,
       },
     ];
@@ -127,7 +124,7 @@ export function AssistantDock() {
         const partial = (finalReply || "").trim();
         setMessages([
           ...next,
-          { role: "assistant", content: partial ? `${partial}\n\n(Stopped)` : "(Stopped)", trace: [...trace] },
+          { role: "assistant", content: partial ? `${partial}\n\n${am.stopped}` : am.stopped, trace: [...trace] },
         ]);
         return;
       }
@@ -148,11 +145,11 @@ export function AssistantDock() {
       }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setMessages([...next, { role: "assistant", content: "(Stopped)", trace: [...liveTrace] }]);
+        setMessages([...next, { role: "assistant", content: am.stopped, trace: [...liveTrace] }]);
       } else {
         setMessages([
           ...next,
-          { role: "assistant", content: `Error: ${e instanceof Error ? e.message : e}`, trace: liveTrace },
+          { role: "assistant", content: am.error.replace("{msg}", e instanceof Error ? e.message : String(e)), trace: liveTrace },
         ]);
       }
     } finally {
@@ -177,16 +174,16 @@ export function AssistantDock() {
       ? [
           {
             role: "assistant" as const,
-            content: `Try these:\n\n${SUGGESTIONS.map((s) => `• ${s}`).join("\n")}`,
+            content: `${am.tryThese}\n\n${am.suggestions.map((s) => `• ${s}`).join("\n")}`,
           },
         ]
-      : messages.map((m) => ({
-          role: m.role,
+      : messages.map((msg) => ({
+          role: msg.role,
           content:
-            m.content +
-            (m.actions?.length ? `\n\n${m.actions.map((a) => `✓ ${a}`).join("\n")}` : ""),
-          trace: m.trace,
-          images: m.images,
+            msg.content +
+            (msg.actions?.length ? `\n\n${msg.actions.map((a) => `✓ ${a}`).join("\n")}` : ""),
+          trace: msg.trace,
+          images: msg.images,
         }));
 
   return (
@@ -196,7 +193,7 @@ export function AssistantDock() {
           onClick={() => setOpen(true)}
           className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-xl flex items-center justify-center text-xl hover:scale-105 transition-transform safe-bottom"
           style={{ width: 56, height: 56 }}
-          title="AI Assistant"
+          title={am.fabTitle}
         >
           ✦
         </button>
@@ -205,8 +202,8 @@ export function AssistantDock() {
       {open && (
         <AiFullscreenOverlay onClose={() => setOpen(false)} zIndex={55}>
           <AiWorkflowPanel
-            title={showDraft ? "AI Assistant · Onboarding" : "AI Assistant"}
-            subtitle={showDraft ? "Research on the left · live draft on the right" : "Full-screen chat · queries & commands"}
+            title={showDraft ? am.onboardingTitle : am.title}
+            subtitle={showDraft ? am.onboardingSubtitle : am.subtitle}
             onClose={() => setOpen(false)}
             messages={panelMessages}
             loading={loading}
@@ -222,7 +219,7 @@ export function AssistantDock() {
             ready={ready}
             scope={proposeScope}
             partnerId={proposePartnerId}
-            sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
+            sourceText={messages.filter((msg) => msg.role === "user").map((msg) => msg.content).join("\n")}
             onApplied={onApplied}
             input={input}
             onInputChange={setInput}
@@ -231,7 +228,7 @@ export function AssistantDock() {
             pendingImages={pendingImages}
             onAddImages={(imgs) => setPendingImages((p) => [...p, ...imgs])}
             onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
-            inputPlaceholder={showDraft ? "Keep adding details, or confirm on the right…" : "Ask a question or give a command…"}
+            inputPlaceholder={showDraft ? am.inputDraft : am.inputQuery}
             sendDisabled={loading || (!input.trim() && !pendingImages.length)}
             showDraftPanel={showDraft}
           />

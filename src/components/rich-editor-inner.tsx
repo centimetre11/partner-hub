@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/mantine";
-import { zh } from "@blocknote/core/locales";
+import { zh, en } from "@blocknote/core/locales";
+import { useLocale } from "@/lib/i18n/context";
 import "@blocknote/mantine/style.css";
 
 export default function RichEditorInner({
@@ -14,7 +15,8 @@ export default function RichEditorInner({
   defaultValue?: string;
   placeholder?: string;
 }) {
-  const editor = useCreateBlockNote({ dictionary: zh });
+  const locale = useLocale();
+  const editor = useCreateBlockNote({ dictionary: locale === "zh" ? zh : en });
   const [markdown, setMarkdown] = useState(defaultValue);
   const initedRef = useRef(false);
 

@@ -4,17 +4,23 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { logoutAction } from "@/lib/actions";
 import { NavLinks } from "@/components/nav-links";
+import { LocaleSwitcher } from "@/components/locale-switcher";
 import { isSuperAdmin } from "@/lib/user-roles";
+import { useMessages } from "@/lib/i18n/context";
+import type { Locale } from "@/lib/i18n/locale";
 
 export function AppShell({
   children,
   user,
   unread,
+  locale,
 }: {
   children: React.ReactNode;
   user: { name: string; email: string; role?: string | null };
   unread: number;
+  locale: Locale;
 }) {
+  const m = useMessages();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
 
@@ -36,7 +42,7 @@ export function AppShell({
           type="button"
           onClick={() => setNavOpen((v) => !v)}
           className="flex items-center justify-center w-10 h-10 -ml-2 rounded-lg text-zinc-700 hover:bg-zinc-100 transition-colors"
-          aria-label={navOpen ? "Close menu" : "Open menu"}
+          aria-label={navOpen ? m.shell.closeMenu : m.shell.openMenu}
           aria-expanded={navOpen}
         >
           {navOpen ? (
@@ -53,7 +59,7 @@ export function AppShell({
           <div className="w-7 h-7 rounded-lg bg-indigo-500 text-white flex items-center justify-center text-sm font-bold shrink-0">
             F
           </div>
-          <span className="text-sm font-semibold text-zinc-900 truncate">MEA Partner Hub</span>
+          <span className="text-sm font-semibold text-zinc-900 truncate">{m.app.title}</span>
         </div>
         {unread > 0 && (
           <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center shrink-0">
@@ -67,7 +73,7 @@ export function AppShell({
           type="button"
           className="lg:hidden fixed inset-0 z-40 bg-black/50"
           onClick={() => setNavOpen(false)}
-          aria-label="Close menu"
+          aria-label={m.shell.closeMenu}
         />
       )}
 
@@ -81,14 +87,14 @@ export function AppShell({
             F
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-white leading-tight">MEA Partner Hub</div>
-            <div className="text-[10px] text-zinc-500 truncate">Fanruan MEA Partner Hub</div>
+            <div className="text-sm font-semibold text-white leading-tight">{m.app.title}</div>
+            <div className="text-[10px] text-zinc-500 truncate">{m.app.subtitle}</div>
           </div>
           <button
             type="button"
             onClick={() => setNavOpen(false)}
             className="lg:hidden ml-auto flex items-center justify-center w-8 h-8 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-            aria-label="Close menu"
+            aria-label={m.shell.closeMenu}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -97,11 +103,12 @@ export function AppShell({
         </div>
         <NavLinks unread={unread} onNavigate={() => setNavOpen(false)} showTeamSettings={isSuperAdmin(user)} />
         <div className="mt-auto border-t border-zinc-800 px-5 py-4">
+          <LocaleSwitcher locale={locale} />
           <div className="text-xs text-zinc-400 mb-2 truncate">
             {user.name} · {user.email}
           </div>
           <form action={logoutAction}>
-            <button className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Sign out</button>
+            <button className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">{m.shell.signOut}</button>
           </form>
         </div>
       </aside>

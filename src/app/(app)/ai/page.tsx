@@ -5,13 +5,15 @@ import { Badge, Card, PageHeader, fmtDateTime } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_COUNT } from "@/lib/tools-registry";
 import { isSuperAdmin } from "@/lib/user-roles";
+import { getServerI18n } from "@/lib/server-i18n";
 
-function fmtTokens(value: number) {
-  return new Intl.NumberFormat("en-US").format(value);
+function fmtTokens(value: number, locale: string) {
+  return new Intl.NumberFormat(locale === "zh" ? "zh-CN" : "en-US").format(value);
 }
 
 export default async function AiCenterPage() {
   const user = await requireUser();
+  const { locale, messages: m, bcp47 } = await getServerI18n();
   const today = new Date().toISOString().slice(0, 10);
   const [agents, templates, promptSkills, knowledge, apiConfigs, todayUsage, recentRuns] = await Promise.all([
     db.agent.count({ where: { isTemplate: false } }),
@@ -30,49 +32,56 @@ export default async function AiCenterPage() {
   const admin = isSuperAdmin(user);
   const settingsHref = admin ? "/settings" : "/ai";
 
+  const flowSteps = [
+    [m.ai.flow1Title, m.ai.flow1Desc],
+    [m.ai.flow2Title, m.ai.flow2Desc],
+    [m.ai.flow3Title, m.ai.flow3Desc],
+    [m.ai.flow4Title, m.ai.flow4Desc],
+  ] as const;
+
   return (
     <div className="pb-16">
       <PageHeader
-        title="AI Center"
-        desc="Orchestrate automation with Agents, equip tools and skills, connect knowledge base and LLM APIs"
+        title={m.ai.title}
+        desc={m.ai.desc}
         actions={
           <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            Build Agent via Chat
+            {m.ai.buildAgent}
           </Link>
         }
       />
       <AiCenterNav />
       <div className="px-8 space-y-6 max-w-7xl">
         <div className="rounded-xl border border-zinc-200/80 bg-gradient-to-br from-zinc-50 to-indigo-50/30 p-5">
-          <div className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">Capability Layers</div>
+          <div className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-3">{m.ai.capabilityLayers}</div>
           <div className="flex flex-col md:flex-row items-stretch gap-3 text-sm">
             <div className="flex-1 rounded-lg bg-white border border-zinc-200/80 p-4">
               <div className="text-lg mb-1">❖</div>
-              <div className="font-semibold text-zinc-900">Agent</div>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Decision maker: understands tasks, orchestrates workflows, calls tools, delivers results</p>
+              <div className="font-semibold text-zinc-900">{m.ai.agent}</div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.ai.agentLayerDesc}</p>
             </div>
             <div className="hidden md:flex items-center text-zinc-300 text-xl px-1">→</div>
             <div className="flex-1 rounded-lg bg-white border border-purple-100 p-4">
               <div className="text-lg mb-1">⚡</div>
-              <div className="font-semibold text-zinc-900">Skills</div>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Methodology: tells the Agent how to work—research frameworks, report structures, SOPs</p>
+              <div className="font-semibold text-zinc-900">{m.ai.skills}</div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.ai.skillsLayerDesc}</p>
             </div>
             <div className="hidden md:flex items-center text-zinc-300 text-xl px-1">→</div>
             <div className="flex-1 rounded-lg bg-white border border-indigo-100 p-4">
               <div className="text-lg mb-1">🔧</div>
-              <div className="font-semibold text-zinc-900">Tools</div>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Capability units: directly invoked by the Agent—read profiles, search the web, create todos</p>
+              <div className="font-semibold text-zinc-900">{m.ai.tools}</div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.ai.toolsLayerDesc}</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { label: "Agent", value: agents, href: "/agents", desc: `${templates} templates`, tone: "text-indigo-600" },
-            { label: "Tools", value: BUILTIN_TOOL_COUNT, href: "/tools", desc: "Built-in capabilities", tone: "text-sky-600" },
-            { label: "Skills", value: promptSkills, href: "/skills", desc: "Methodology flows", tone: "text-purple-600" },
-            { label: "Knowledge", value: knowledge, href: "/knowledge", desc: "Agent searchable", tone: "text-emerald-600" },
-            { label: "Today's Tokens", value: fmtTokens(todayTokens), href: settingsHref, desc: admin ? "By API" : "Super Admin only", tone: "text-amber-600" },
+            { label: m.ai.statsAgents, value: agents, href: "/agents", desc: `${templates} ${m.ai.templates}`, tone: "text-indigo-600" },
+            { label: m.ai.statsTools, value: BUILTIN_TOOL_COUNT, href: "/tools", desc: m.ai.builtinCapabilities, tone: "text-sky-600" },
+            { label: m.ai.statsSkills, value: promptSkills, href: "/skills", desc: m.ai.methodologyFlows, tone: "text-purple-600" },
+            { label: m.ai.statsKnowledge, value: knowledge, href: "/knowledge", desc: m.ai.agentSearchable, tone: "text-emerald-600" },
+            { label: m.ai.statsTokens, value: fmtTokens(todayTokens, locale), href: settingsHref, desc: admin ? m.ai.byApi : m.ai.superAdminOnly, tone: "text-amber-600" },
           ].map((item) => (
             <Link key={item.label} href={item.href} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 hover:border-indigo-300 transition-colors">
               <div className={`text-2xl font-bold tabular-nums ${item.tone}`}>{item.value}</div>
@@ -82,42 +91,37 @@ export default async function AiCenterPage() {
           ))}
         </div>
 
-        <Card title="Workbench">
+        <Card title={m.ai.workbench}>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <Link href="/agents" className="rounded-xl border border-zinc-100 p-4 hover:border-indigo-300 transition-colors">
               <div className="text-lg">❖</div>
-              <div className="text-sm font-semibold text-zinc-900 mt-2">Agent Orchestration</div>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Create automation Agents, configure triggers, equip tools and skills.</p>
+              <div className="text-sm font-semibold text-zinc-900 mt-2">{m.ai.agentOrchestration}</div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.ai.workbenchAgentDesc}</p>
             </Link>
             <Link href="/tools" className="rounded-xl border border-zinc-100 p-4 hover:border-indigo-300 transition-colors">
               <div className="text-lg">🔧</div>
-              <div className="text-sm font-semibold text-zinc-900 mt-2">Tool Kit</div>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Browse capability units Agents can call: profiles, todos, web search, knowledge retrieval.</p>
+              <div className="text-sm font-semibold text-zinc-900 mt-2">{m.ai.toolKit}</div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.ai.workbenchToolsDesc}</p>
             </Link>
             <Link href="/skills" className="rounded-xl border border-zinc-100 p-4 hover:border-indigo-300 transition-colors">
               <div className="text-lg">⚡</div>
-              <div className="text-sm font-semibold text-zinc-900 mt-2">Skill Library</div>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Capture team methodology for Agents to follow professional workflows.</p>
+              <div className="text-sm font-semibold text-zinc-900 mt-2">{m.ai.skillLibrary}</div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.ai.workbenchSkillsDesc}</p>
             </Link>
             <Link href="/knowledge" className="rounded-xl border border-zinc-100 p-4 hover:border-indigo-300 transition-colors">
               <div className="text-lg">📚</div>
-              <div className="text-sm font-semibold text-zinc-900 mt-2">Knowledge Base</div>
-              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">Maintain product, strategy, and playbook content—Agents search first, then answer.</p>
+              <div className="text-sm font-semibold text-zinc-900 mt-2">{m.ai.knowledgeBase}</div>
+              <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{m.ai.workbenchKnowledgeDesc}</p>
             </Link>
           </div>
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <Card title="Recommended Agent Creation Flow">
+          <Card title={m.ai.recommendedFlow}>
             <div className="space-y-3 text-sm">
-              {[
-                ["1", "Describe the goal", "Explain what to monitor, who receives output, and when it should trigger."],
-                ["2", "Answer the survey", "Builder asks about data sources, risk boundaries, and write rules in one pass."],
-                ["3", "Equip tools + skills", "Tools define what it can do; skills define how. Write ad-hoc strategy when no skill fits."],
-                ["4", "Fine-tune after creation", "Saved as a regular Agent—continue editing, running, and sharing."],
-              ].map(([n, title, desc]) => (
-                <div key={n} className="flex gap-3">
-                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold flex items-center justify-center shrink-0">{n}</div>
+              {flowSteps.map(([title, desc], i) => (
+                <div key={title} className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold flex items-center justify-center shrink-0">{i + 1}</div>
                   <div>
                     <div className="font-medium text-zinc-800">{title}</div>
                     <div className="text-xs text-zinc-400 mt-0.5">{desc}</div>
@@ -128,12 +132,12 @@ export default async function AiCenterPage() {
           </Card>
 
           <Card
-            title="LLM API Status"
+            title={m.ai.llmStatus}
             actions={
               admin ? (
-                <Link href="/settings" className="text-xs text-indigo-600 hover:underline">Manage →</Link>
+                <Link href="/settings" className="text-xs text-indigo-600 hover:underline">{m.ai.manage}</Link>
               ) : (
-                <span className="text-xs text-zinc-400">Super Admin only</span>
+                <span className="text-xs text-zinc-400">{m.ai.superAdminOnly}</span>
               )
             }
           >
@@ -145,35 +149,35 @@ export default async function AiCenterPage() {
                     <div className="text-xs text-zinc-400 truncate">{api.model}</div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {api.isDefault && <Badge tone="indigo">Default</Badge>}
-                    <Badge tone={api.enabled ? "green" : "zinc"}>{api.enabled ? "Enabled" : "Disabled"}</Badge>
+                    {api.isDefault && <Badge tone="indigo">{m.common.default}</Badge>}
+                    <Badge tone={api.enabled ? "green" : "zinc"}>{api.enabled ? m.common.enabled : m.common.disabled}</Badge>
                   </div>
                 </div>
               ))}
               {apiConfigs.length === 0 && (
-                <div className="text-sm text-zinc-400">No database API configs yet. Add them in Team Settings.</div>
+                <div className="text-sm text-zinc-400">{m.ai.noApiConfigs}</div>
               )}
             </div>
           </Card>
         </div>
 
-        <Card title="Recent Agent Runs">
+        <Card title={m.ai.recentRuns}>
           {recentRuns.length ? (
             <div className="space-y-2.5">
               {recentRuns.map((run) => (
                 <Link key={run.id} href={`/agents/${run.agentId}`} className="flex items-center justify-between gap-4 rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300">
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-zinc-800 truncate">{run.agent.icon} {run.agent.name}</div>
-                    <div className="text-xs text-zinc-400">{fmtDateTime(run.startedAt)}</div>
+                    <div className="text-xs text-zinc-400">{fmtDateTime(run.startedAt, bcp47)}</div>
                   </div>
                   <Badge tone={run.status === "SUCCESS" ? "green" : run.status === "FAILED" ? "red" : "amber"}>
-                    {run.status === "SUCCESS" ? "Success" : run.status === "FAILED" ? "Failed" : "Running"}
+                    {run.status === "SUCCESS" ? m.common.success : run.status === "FAILED" ? m.common.failed : m.common.running}
                   </Badge>
                 </Link>
               ))}
             </div>
           ) : (
-            <div className="text-sm text-zinc-400 py-6 text-center">No Agent runs yet. {user.name} can create an Agent and try a test run.</div>
+            <div className="text-sm text-zinc-400 py-6 text-center">{m.ai.noRunsUser.replace("{name}", user.name)}</div>
           )}
         </Card>
       </div>

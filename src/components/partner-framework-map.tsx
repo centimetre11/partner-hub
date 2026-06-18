@@ -1,48 +1,26 @@
 "use client";
 
+import { useMemo } from "react";
 import type { FrameworkMapNode } from "@/lib/partner-framework";
 import { groupMapByLayer } from "@/lib/partner-framework";
-
-const STATUS_STYLES: Record<string, { box: string; dot: string; label: string }> = {
-  info: {
-    box: "border-zinc-200 bg-zinc-50/80 text-zinc-700",
-    dot: "bg-zinc-400",
-    label: "Reference",
-  },
-  current: {
-    box: "border-indigo-500 bg-indigo-600 text-white shadow-md shadow-indigo-200",
-    dot: "bg-white",
-    label: "Current",
-  },
-  done: {
-    box: "border-emerald-200 bg-emerald-50 text-emerald-900",
-    dot: "bg-emerald-500",
-    label: "Ready",
-  },
-  partial: {
-    box: "border-amber-200 bg-amber-50 text-amber-900",
-    dot: "bg-amber-500",
-    label: "Partial",
-  },
-  missing: {
-    box: "border-zinc-200 bg-white text-zinc-500",
-    dot: "bg-zinc-300",
-    label: "To fill",
-  },
-};
+import { useLabels, useMessages } from "@/lib/i18n/context";
 
 function MapNode({
   node,
   compact,
   interactive,
   onNodeClick,
+  statusStyles,
+  editableLabel,
 }: {
   node: FrameworkMapNode;
   compact?: boolean;
   interactive?: boolean;
   onNodeClick?: (node: FrameworkMapNode) => void;
+  statusStyles: Record<string, { box: string; dot: string; label: string }>;
+  editableLabel: string;
 }) {
-  const s = STATUS_STYLES[node.status] ?? STATUS_STYLES.info;
+  const s = statusStyles[node.status] ?? statusStyles.info;
   const clickable = interactive && onNodeClick;
 
   const inner = (
@@ -68,7 +46,7 @@ function MapNode({
       )}
       {node.editable && interactive && (
         <div className={`mt-1 text-[10px] ${node.status === "current" ? "text-indigo-200" : "text-indigo-500"}`}>
-          Editable
+          {editableLabel}
         </div>
       )}
     </div>
@@ -112,7 +90,29 @@ export function PartnerFrameworkMap({
   interactive?: boolean;
   onNodeClick?: (node: FrameworkMapNode) => void;
 }) {
+  const labels = useLabels();
+  const m = useMessages();
+  const fm = m.frameworkMap;
+
+  const statusStyles = useMemo(
+    () => ({
+      info: { box: "border-zinc-200 bg-zinc-50/80 text-zinc-700", dot: "bg-zinc-400", label: fm.reference },
+      current: { box: "border-indigo-500 bg-indigo-600 text-white shadow-md shadow-indigo-200", dot: "bg-white", label: fm.current },
+      done: { box: "border-emerald-200 bg-emerald-50 text-emerald-900", dot: "bg-emerald-500", label: fm.ready },
+      partial: { box: "border-amber-200 bg-amber-50 text-amber-900", dot: "bg-amber-500", label: fm.partial },
+      missing: { box: "border-zinc-200 bg-white text-zinc-500", dot: "bg-zinc-300", label: fm.toFill },
+    }),
+    [fm],
+  );
+
   const grouped = groupMapByLayer(nodes);
+
+  const layerHint = (layer: string) => {
+    const idx = labels.frameworkLayerOrder.indexOf(layer);
+    if (idx < 0) return "";
+    if (idx === 3 && interactive) return fm.layerExecutionInteractive;
+    return fm.layerHints[idx] ?? "";
+  };
 
   return (
     <div className="rounded-2xl border border-zinc-200/80 bg-gradient-to-b from-white to-zinc-50/50 overflow-hidden">
@@ -130,13 +130,7 @@ export function PartnerFrameworkMap({
               <span className="text-[10px] font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                 {layer}
               </span>
-              {layer === "Positioning" && <span className="text-xs text-zinc-400">Who · Where · What type</span>}
-              {layer === "Playbook" && <span className="text-xs text-zinc-400">What we sell · How we pitch</span>}
-              {layer === "Actions" && <span className="text-xs text-zinc-400">Four-domain required actions</span>}
-              {layer === "Execution" && (
-                <span className="text-xs text-zinc-400">{interactive ? "System modules · click to navigate" : "System modules"}</span>
-              )}
-              {layer === "Stage exit" && <span className="text-xs text-zinc-400">Stage exit checklist</span>}
+              {layerHint(layer) && <span className="text-xs text-zinc-400">{layerHint(layer)}</span>}
             </div>
             <div
               className={`grid gap-2 ${
@@ -156,6 +150,8 @@ export function PartnerFrameworkMap({
                   compact={compact}
                   interactive={interactive}
                   onNodeClick={onNodeClick}
+                  statusStyles={statusStyles}
+                  editableLabel={fm.editable}
                 />
               ))}
             </div>
@@ -166,7 +162,7 @@ export function PartnerFrameworkMap({
 
       {legend && (
         <div className="px-5 py-3 border-t border-zinc-100 flex flex-wrap gap-3 text-[10px] text-zinc-500">
-          {Object.entries(STATUS_STYLES)
+          {Object.entries(statusStyles)
             .filter(([k]) => k !== "info" || !nodes.some((n) => n.status !== "info"))
             .map(([k, v]) => (
               <span key={k} className="flex items-center gap-1.5">
@@ -177,7 +173,7 @@ export function PartnerFrameworkMap({
           {interactive && (
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full ring-1 ring-indigo-300 bg-indigo-50" />
-              Editable
+              {fm.editable}
             </span>
           )}
         </div>

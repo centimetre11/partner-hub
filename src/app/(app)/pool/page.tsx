@@ -2,18 +2,12 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, tierTone, EmptyState } from "@/components/ui";
-import { AI_VERIFIED_LABELS, POOL_FLAG_LABELS } from "@/lib/constants";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps } from "@/lib/taxonomy";
 import { computeCompleteness } from "@/lib/completeness";
 import { deletePartnerAction, promotePartnerAction, restorePartnerAction, setPoolFlagAction } from "@/lib/actions";
 import { AddPartnerForm } from "./add-partner-form";
 import { DeletePartnerButton } from "./delete-partner-button";
-
-const VIEWS = [
-  { k: "prospect", label: "Prospects" },
-  { k: "archived", label: "Archived" },
-  { k: "all", label: "All" },
-];
+import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
 export default async function PoolPage({
   searchParams,
@@ -21,11 +15,19 @@ export default async function PoolPage({
   searchParams: Promise<{ q?: string; category?: string; country?: string; tier?: string; flag?: string; view?: string }>;
 }) {
   await requireUser();
+  const { labels, messages: m } = await getServerI18n();
+  const L = labelConstants(labels);
   const sp = await searchParams;
   const labelMaps = await loadTaxonomyLabelMaps();
   const categoryOptions = await getTaxonomyOptions("CATEGORY");
   const industryOptions = await getTaxonomyOptions("INDUSTRY");
-  const view = VIEWS.some((v) => v.k === sp.view) ? sp.view! : "prospect";
+  const view = ["prospect", "archived", "all"].includes(sp.view ?? "") ? sp.view! : "prospect";
+
+  const VIEWS = [
+    { k: "prospect", label: m.pool.prospects },
+    { k: "archived", label: m.pool.archivedTab },
+    { k: "all", label: m.pool.allTab },
+  ];
 
   const statusWhere =
     view === "archived" ? "ARCHIVED" : view === "all" ? { in: ["PROSPECT", "ARCHIVED"] } : "PROSPECT";
@@ -67,13 +69,12 @@ export default async function PoolPage({
   return (
     <div className="pb-16">
       <PageHeader
-        title="Partner Pool"
-        desc="Prospects and archived partners; manage active partners on the Active Partners page"
+        title={m.pool.title}
+        desc={m.pool.desc}
         actions={<AddPartnerForm taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />}
       />
 
       <div className="px-8">
-        {/* 状态 Tab */}
         <div className="flex items-center gap-1 mb-4 border-b border-zinc-200 overflow-x-auto pb-px -mx-1 px-1">
           {VIEWS.map((v) => {
             const active = v.k === view;
@@ -93,68 +94,66 @@ export default async function PoolPage({
           })}
         </div>
 
-        {/* 筛选 */}
         <form className="flex flex-wrap gap-2 mb-4" method="get">
           <input type="hidden" name="view" value={view} />
           <input
             name="q"
             defaultValue={sp.q}
-            placeholder="Search company name…"
+            placeholder={m.pool.searchPlaceholder}
             className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
           <select name="category" defaultValue={sp.category ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">All categories</option>
+            <option value="">{m.pool.allCategories}</option>
             {categoryOptions.map((o) => (
               <option key={o.code} value={o.code}>{o.label}</option>
             ))}
           </select>
           <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">All tiers</option>
-            <option value="A">Tier A — pursue now</option>
-            <option value="B">Tier B — high priority</option>
-            <option value="C">Tier C — follow up later</option>
+            <option value="">{m.pool.allTiers}</option>
+            <option value="A">{m.pool.tierADesc}</option>
+            <option value="B">{m.pool.tierBDesc}</option>
+            <option value="C">{m.pool.tierCDesc}</option>
           </select>
           {view !== "archived" && (
             <select name="flag" defaultValue={sp.flag ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-              <option value="">All statuses</option>
-              {Object.entries(POOL_FLAG_LABELS).map(([k, v]) => (
+              <option value="">{m.pool.allStatuses}</option>
+              {Object.entries(L.POOL_FLAG_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
           )}
           <select name="country" defaultValue={sp.country ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">All countries</option>
+            <option value="">{m.pool.allCountries}</option>
             {countries.filter((c) => c.country).map((c) => (
               <option key={c.country!} value={c.country!}>{c.country}</option>
             ))}
           </select>
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">Filter</button>
+          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">{m.common.filter}</button>
           {(sp.q || sp.category || sp.tier || sp.flag || sp.country) && (
             <Link href={qs({ q: undefined, category: undefined, tier: undefined, country: undefined, flag: undefined })} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
-              Clear
+              {m.common.clear}
             </Link>
           )}
         </form>
 
-        {/* 列表 */}
         <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-zinc-100 text-left text-xs text-zinc-500">
-                <th className="px-4 py-3 font-medium">Company</th>
-                <th className="px-3 py-3 font-medium">Category</th>
-                <th className="px-3 py-3 font-medium">Region</th>
-                <th className="px-3 py-3 font-medium">Tier</th>
-                <th className="px-3 py-3 font-medium">Verification</th>
-                <th className="px-3 py-3 font-medium">Completeness</th>
-                <th className="px-3 py-3 font-medium">Status</th>
-                <th className="px-3 py-3 font-medium text-right">Actions</th>
+                <th className="px-4 py-3 font-medium">{m.common.company}</th>
+                <th className="px-3 py-3 font-medium">{m.common.category}</th>
+                <th className="px-3 py-3 font-medium">{m.common.region}</th>
+                <th className="px-3 py-3 font-medium">{m.common.tier}</th>
+                <th className="px-3 py-3 font-medium">{m.common.verification}</th>
+                <th className="px-3 py-3 font-medium">{m.common.completeness}</th>
+                <th className="px-3 py-3 font-medium">{m.common.status}</th>
+                <th className="px-3 py-3 font-medium text-right">{m.common.actions}</th>
               </tr>
             </thead>
             <tbody>
               {partners.map((p) => {
-                const c = computeCompleteness(p);
+                const c = computeCompleteness(p, labels);
                 const archived = p.status === "ARCHIVED";
                 return (
                   <tr key={p.id} className={`border-b border-zinc-50 hover:bg-zinc-50/60 ${archived ? "opacity-70" : ""}`}>
@@ -169,48 +168,48 @@ export default async function PoolPage({
                     <td className="px-3 py-3 text-zinc-600">{labelFromMap(labelMaps.CATEGORY, p.category)}</td>
                     <td className="px-3 py-3 text-zinc-600 whitespace-nowrap">{p.city ?? p.country ?? "—"}</td>
                     <td className="px-3 py-3">
-                      {p.tier ? <Badge tone={tierTone(p.tier)}>Tier {p.tier}</Badge> : <span className="text-zinc-300">—</span>}
+                      {p.tier ? <Badge tone={tierTone(p.tier)}>{m.common.tier} {p.tier}</Badge> : <span className="text-zinc-300">—</span>}
                     </td>
                     <td className="px-3 py-3">
                       <Badge tone={p.aiVerified === "VERIFIED" ? "green" : "zinc"}>
-                        {AI_VERIFIED_LABELS[p.aiVerified ?? "UNKNOWN"]}
+                        {L.AI_VERIFIED_LABELS[p.aiVerified ?? "UNKNOWN"]}
                       </Badge>
                     </td>
                     <td className="px-3 py-3"><ScoreBar score={c.score} /></td>
                     <td className="px-3 py-3">
                       {archived ? (
-                        <Badge tone="zinc">Archived</Badge>
+                        <Badge tone="zinc">{m.common.archived}</Badge>
                       ) : (
-                        <Badge tone={flagTone(p.poolFlag)}>{POOL_FLAG_LABELS[p.poolFlag]}</Badge>
+                        <Badge tone={flagTone(p.poolFlag)}>{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>
                       )}
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-end gap-1.5">
                         {archived ? (
                           <form action={restorePartnerAction.bind(null, p.id)}>
-                            <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title={`Restore as ${p.prevStatus === "ACTIVE" ? "active partner" : "prospect"}`}>
-                              Restore{p.prevStatus === "ACTIVE" ? " as active" : " as prospect"}
+                            <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title={p.prevStatus === "ACTIVE" ? m.pool.restoreAsActive : m.pool.restoreAsProspect}>
+                              {m.common.restore}{p.prevStatus === "ACTIVE" ? ` ${m.pool.restoreAsActive}` : ` ${m.pool.restoreAsProspect}`}
                             </button>
                           </form>
                         ) : (
                           <>
                             <form action={promotePartnerAction.bind(null, p.id)}>
-                              <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title="Promote to active partner">
-                                Promote
+                              <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title={m.pool.promoteTitle}>
+                                {m.pool.promote}
                               </button>
                             </form>
                             {p.poolFlag !== "WATCHING" && (
                               <form action={setPoolFlagAction.bind(null, p.id, "WATCHING")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">Watch</button>
+                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">{m.common.watch}</button>
                               </form>
                             )}
                             {p.poolFlag !== "DROPPED" ? (
                               <form action={setPoolFlagAction.bind(null, p.id, "DROPPED")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-600 hover:border-red-200">Drop</button>
+                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-600 hover:border-red-200">{m.common.drop}</button>
                               </form>
                             ) : (
                               <form action={setPoolFlagAction.bind(null, p.id, "NEW")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">Restore</button>
+                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">{m.common.restore}</button>
                               </form>
                             )}
                           </>
@@ -226,7 +225,7 @@ export default async function PoolPage({
               })}
             </tbody>
           </table>
-          {partners.length === 0 && <EmptyState text={view === "archived" ? "No archived partners" : "No partners match your filters"} />}
+          {partners.length === 0 && <EmptyState text={view === "archived" ? m.pool.emptyArchived : m.pool.emptyFiltered} />}
           </div>
         </div>
       </div>

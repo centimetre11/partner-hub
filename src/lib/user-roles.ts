@@ -1,12 +1,10 @@
+import { labelsEn } from "./i18n/labels";
+
 export const USER_ROLES = ["SALES", "PRESALES", "ADMIN", "OTHER"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
-export const USER_ROLE_LABELS: Record<UserRole, string> = {
-  SALES: "Sales",
-  PRESALES: "Pre-sales",
-  ADMIN: "Super Admin",
-  OTHER: "Other",
-};
+/** @deprecated Use getLabels(locale).userRoleLabels */
+export const USER_ROLE_LABELS: Record<UserRole, string> = labelsEn.userRoleLabels as Record<UserRole, string>;
 
 export function isSuperAdmin(user: { role?: string | null }): boolean {
   return normalizeUserRole(user.role) === "ADMIN";

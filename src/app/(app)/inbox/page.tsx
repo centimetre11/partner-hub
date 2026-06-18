@@ -5,9 +5,11 @@ import { Badge, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
 import { applyAgentProposalAction, markAllReadAction, markReadAction } from "@/lib/agent-actions";
 import { saveNotificationAsDocumentAction } from "@/lib/content-actions";
 import type { AgentFieldProposal } from "@/lib/skills";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function InboxPage() {
   await requireUser();
+  const { messages: m, bcp47 } = await getServerI18n();
   const notifications = await db.notification.findMany({
     orderBy: { createdAt: "desc" },
     take: 100,
@@ -21,18 +23,18 @@ export default async function InboxPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="Inbox"
-        desc={`Agent run briefings and pending proposals${unread ? ` · ${unread} unread` : ""}`}
+        title={m.inbox.title}
+        desc={unread > 0 ? m.inbox.desc.replace("{count}", String(unread)) : m.inbox.desc.replace(/ · \{count\} unread$/, "").replace(/ · \{count\} 未读$/, "")}
         actions={
           unread > 0 ? (
             <form action={markAllReadAction}>
-              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">Mark all read</button>
+              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-600 hover:bg-zinc-50">{m.inbox.markAllRead}</button>
             </form>
           ) : undefined
         }
       />
       <div className="px-8 max-w-4xl space-y-3">
-        {notifications.length === 0 && <EmptyState text="Inbox is empty. Go to Agent Center to create and run an Agent." />}
+        {notifications.length === 0 && <EmptyState text={m.inbox.empty} />}
         {notifications.map((n) => {
           const proposal: AgentFieldProposal | null = n.proposal ? JSON.parse(n.proposal) : null;
           return (
@@ -46,11 +48,11 @@ export default async function InboxPage() {
                     {!n.readAt && <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />}
                     <h3 className="font-semibold text-zinc-900 text-sm">{n.title}</h3>
                     {proposal && (
-                      <Badge tone={n.appliedAt ? "green" : "amber"}>{n.appliedAt ? "Applied" : "Pending proposal"}</Badge>
+                      <Badge tone={n.appliedAt ? "green" : "amber"}>{n.appliedAt ? m.inbox.applied : m.inbox.pendingProposal}</Badge>
                     )}
                   </div>
                   <div className="text-xs text-zinc-400 mt-1">
-                    {fmtDateTime(n.createdAt)}
+                    {fmtDateTime(n.createdAt, bcp47)}
                     {n.partnerId && partnerName.get(n.partnerId) && (
                       <>
                         {" · "}
@@ -73,11 +75,11 @@ export default async function InboxPage() {
                   <div className="flex gap-2 shrink-0">
                     {n.content && (
                       <form action={saveNotificationAsDocumentAction.bind(null, n.id)}>
-                        <button className="text-xs text-indigo-500 hover:text-indigo-700">Save as report</button>
+                        <button className="text-xs text-indigo-500 hover:text-indigo-700">{m.inbox.saveAsReport}</button>
                       </form>
                     )}
                     <form action={markReadAction.bind(null, n.id)}>
-                      <button className="text-xs text-zinc-400 hover:text-zinc-600">Mark read</button>
+                      <button className="text-xs text-zinc-400 hover:text-zinc-600">{m.inbox.markRead}</button>
                     </form>
                   </div>
                 )}
@@ -90,20 +92,20 @@ export default async function InboxPage() {
               {proposal && !n.appliedAt && (
                 <div className="mt-3 border border-amber-200 bg-amber-50/50 rounded-lg p-3.5">
                   <p className="text-xs font-medium text-amber-800 mb-2">
-                    Agent proposes updating the following fields for "{proposal.partnerName}". Changes are written to the profile only after confirmation:
+                    {m.inbox.proposesUpdateFields.replace("{name}", proposal.partnerName)}
                   </p>
                   <div className="space-y-1 mb-3">
                     {proposal.fieldUpdates.map((f, i) => (
                       <div key={i} className="text-xs text-zinc-700">
                         <span className="font-medium">{f.label}</span>:
-                        <span className="line-through text-zinc-400 mx-1">{f.oldValue || "(empty)"}</span>→
+                        <span className="line-through text-zinc-400 mx-1">{f.oldValue || m.inbox.emptyField}</span>→
                         <span className="text-emerald-700 font-medium ml-1">{f.newValue}</span>
                       </div>
                     ))}
                   </div>
                   <form action={applyAgentProposalAction.bind(null, n.id)} className="flex gap-2">
                     <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-indigo-700">
-                      ✓ Confirm apply
+                      {m.inbox.confirmApply}
                     </button>
                   </form>
                 </div>

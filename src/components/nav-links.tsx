@@ -3,39 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useMessages } from "@/lib/i18n/context";
 
 type Leaf = { href: string; label: string; icon: string; aliases?: string[]; badge?: "unread" };
 type Group = { id: string; label: string; icon: string; children: Leaf[] };
 type Entry = Leaf | Group;
-
-const nav: Entry[] = [
-  { href: "/", label: "Dashboard", icon: "◧" },
-  { href: "/partners", label: "Active Partners", icon: "◮" },
-  {
-    id: "resources",
-    label: "Resources",
-    icon: "▦",
-    children: [
-      { href: "/framework", label: "Operating Framework", icon: "◎" },
-      { href: "/taxonomy", label: "Taxonomy", icon: "◇" },
-      { href: "/playbook-library", label: "Playbook Library", icon: "◈" },
-      { href: "/pool", label: "Partner Pool", icon: "◬" },
-      { href: "/documents", label: "Reports", icon: "📄" },
-      { href: "/materials", label: "Materials", icon: "📦" },
-    ],
-  },
-  {
-    id: "work",
-    label: "Work",
-    icon: "◳",
-    children: [
-      { href: "/todos", label: "Todos", icon: "☑" },
-      { href: "/inbox", label: "Inbox", icon: "✉", badge: "unread" },
-    ],
-  },
-  { href: "/ai", label: "AI Hub", icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge"] },
-  { href: "/settings", label: "Team Settings", icon: "⚙" },
-];
 
 function isGroup(e: Entry): e is Group {
   return "children" in e;
@@ -58,7 +30,37 @@ export function NavLinks({
   onNavigate?: () => void;
   showTeamSettings?: boolean;
 }) {
+  const m = useMessages();
   const pathname = usePathname();
+
+  const nav: Entry[] = [
+    { href: "/", label: m.nav.dashboard, icon: "◧" },
+    { href: "/partners", label: m.nav.activePartners, icon: "◮" },
+    {
+      id: "resources",
+      label: m.nav.resources,
+      icon: "▦",
+      children: [
+        { href: "/framework", label: m.nav.framework, icon: "◎" },
+        { href: "/taxonomy", label: m.nav.taxonomy, icon: "◇" },
+        { href: "/playbook-library", label: m.nav.playbookLibrary, icon: "◈" },
+        { href: "/pool", label: m.nav.partnerPool, icon: "◬" },
+        { href: "/documents", label: m.nav.reports, icon: "📄" },
+        { href: "/materials", label: m.nav.materials, icon: "📦" },
+      ],
+    },
+    {
+      id: "work",
+      label: m.nav.work,
+      icon: "◳",
+      children: [
+        { href: "/todos", label: m.nav.todos, icon: "☑" },
+        { href: "/inbox", label: m.nav.inbox, icon: "✉", badge: "unread" },
+      ],
+    },
+    { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge"] },
+    { href: "/settings", label: m.nav.teamSettings, icon: "⚙" },
+  ];
 
   const leafActive = (l: Leaf) =>
     l.href === "/"

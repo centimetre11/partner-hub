@@ -9,13 +9,17 @@ import { stageName } from "./constants";
 import { stringifyIndustries } from "./taxonomy";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { normalizeUserRole } from "./user-roles";
+import { getLocale } from "./i18n/locale-server";
+import { getMessages } from "./i18n/messages";
 
 // ============ 认证 ============
 
 export async function loginAction(_: unknown, formData: FormData) {
+  const locale = await getLocale();
+  const err = getMessages(locale).errors;
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
-  if (!email || !password) return { error: "Please enter email and password" };
+  if (!email || !password) return { error: err.emailPasswordRequired };
 
   const userCount = await db.user.count();
   if (userCount === 0) {
@@ -30,7 +34,7 @@ export async function loginAction(_: unknown, formData: FormData) {
 
   const user = await db.user.findUnique({ where: { email } });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    return { error: "Invalid email or password" };
+    return { error: err.invalidCredentials };
   }
   await createSession(user.id);
   redirect("/");

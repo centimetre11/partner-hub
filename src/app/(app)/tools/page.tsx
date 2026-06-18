@@ -5,9 +5,11 @@ import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-registry";
 import { isWebSearchAvailable, webSearchBackendLabel } from "@/lib/web-search";
 import { isSuperAdmin } from "@/lib/user-roles";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function ToolsPage() {
   const user = await requireUser();
+  const { messages: m } = await getServerI18n();
   const equippedAgents = await db.agent.findMany({
     where: { isTemplate: false },
     select: { skills: true },
@@ -32,14 +34,14 @@ export default async function ToolsPage() {
   return (
     <div className="pb-16">
       <PageHeader
-        title="Tool Kit"
-        desc="Tested Agent capability units—Middle East partner expansion first: profiles, LinkedIn, news, todos, knowledge base"
+        title={m.tools.title}
+        desc={m.tools.descLong}
         actions={
           <div className="flex items-center gap-2 text-xs">
             <Badge tone={webSearchReady ? "green" : "amber"}>
               {webSearchReady
-                ? `${readyCount}/${totalCount} available (${searchBackend})`
-                : `${readyCount}/${totalCount} available (web search model missing)`}
+                ? `${m.tools.available.replace("{n}", String(readyCount)).replace("{m}", String(totalCount))} (${searchBackend})`
+                : `${m.tools.available.replace("{n}", String(readyCount)).replace("{m}", String(totalCount))} (${m.tools.backendMissingShort})`}
             </Badge>
           </div>
         }
@@ -48,32 +50,21 @@ export default async function ToolsPage() {
       <div className="px-8 max-w-5xl space-y-6">
         {!webSearchReady && (
           <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            <span className="font-medium">LinkedIn search / news search / sentiment scan require a web-enabled LLM.</span>
-            Add and <strong>enable</strong> a web-capable model in{" "}
-            {admin ? (
-              <>Team Settings → LLM Management Center</>
-            ) : (
-              <>LLM Management Center (ask a Super Admin)</>
-            )}
-            :{" "}
-            <strong>Kimi (moonshot)</strong> or <strong>Volcano Engine</strong> (tools include{" "}
-            <code className="text-xs bg-amber-100 px-1 rounded">web_search</code>
-            ). The system auto-selects from <strong>all enabled</strong> configs—it does not have to be the default model.
+            <span className="font-medium">{m.tools.webSearchBanner}</span>{" "}
+            {admin ? m.tools.webSearchBannerAdmin : m.tools.webSearchBannerNonAdmin}.{" "}
+            {m.tools.webSearchBannerModels}
           </div>
         )}
         {!kmsConfigured && (
           <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
-            <span className="font-medium">Reading KMS requires a personal access token.</span>
-            Go to <a href="/settings/kms" className="underline font-medium">KMS document access</a> to enter it once; after saving, the{" "}
-            <code className="text-xs bg-indigo-100 px-1 rounded">read_kms</code> tool becomes available.
+            <span className="font-medium">{m.tools.kmsBanner}</span>{" "}
+            <a href="/settings/kms" className="underline font-medium">{m.tools.kmsBannerLink}</a>{" "}
+            {m.tools.kmsBannerDetail}
           </div>
         )}
 
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 text-sm text-indigo-900/80">
-          <span className="font-medium">Scenario priority:</span>
-          Monitoring radar → linkedin_search + web_search + add_timeline_event;
-          Pre-meeting brief → get_partner + search_knowledge + create_document;
-          Stalled partner wake-up → search_partners + create_todo.
+          <span className="font-medium">{m.tools.scenarioPriority}</span> {m.tools.scenarioBody}
         </div>
 
         {BUILTIN_TOOL_CATEGORIES.map((cat) => (
@@ -100,16 +91,16 @@ export default async function ToolsPage() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <div className="text-sm font-semibold text-zinc-900">{tool.label}</div>
-                          {tool.priority === "core" && <Badge tone="indigo">Core</Badge>}
+                          {tool.priority === "core" && <Badge tone="indigo">{m.tools.core}</Badge>}
                         </div>
                         <div className="text-xs text-zinc-400 font-mono mt-0.5">{tool.name}</div>
                         <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{tool.desc}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" ? "amber" : "zinc"}>
-                          {status === "ready" ? "Verified" : status === "needs_web_search" ? "Needs web search" : status === "needs_kms" ? "Needs KMS token" : "Unknown"}
+                          {status === "ready" ? m.tools.verified : status === "needs_web_search" ? m.tools.needsWebSearch : status === "needs_kms" ? m.tools.needsKms : m.tools.unknown}
                         </Badge>
-                        {usedToolNames.has(tool.name) && <Badge tone="blue">Equipped</Badge>}
+                        {usedToolNames.has(tool.name) && <Badge tone="blue">{m.tools.equipped}</Badge>}
                       </div>
                     </div>
                   </div>

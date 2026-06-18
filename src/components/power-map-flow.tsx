@@ -24,12 +24,10 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   CONTACT_ROLE_CODES,
-  CONTACT_ROLE_LABELS,
   CONTACT_ROLES_BY_INFLUENCE,
-  ATTITUDE_LABELS,
-  attitudeLabel,
   roleInfluence,
 } from "@/lib/constants";
+import { useLabels, useMessages } from "@/lib/i18n/context";
 import { attitudeDotClass, roleInfluenceStyle, PowerMapLegend, type PowerMapContact } from "@/components/power-map";
 import {
   moveContactAction,
@@ -63,10 +61,17 @@ const ARROW = { type: MarkerType.ArrowClosed, color: "#a1a1aa" } as const;
 
 type NodeData = { c: PowerMapContact };
 
+function attitudeText(labels: ReturnType<typeof useLabels>, a: number | null | undefined) {
+  return labels.attitudeLabels[a ?? 0] ?? labels.fallbacks.attitude;
+}
+
 // 自定义节点：复用权力地图卡片样式（左上角色代码、右上态度评分）
 function ContactNode({ data }: NodeProps<Node<NodeData>>) {
   const c = data.c;
+  const labels = useLabels();
+  const pm = useMessages().powerMap;
   const s = roleInfluenceStyle(c.role);
+  const roleLabel = labels.contactRoleLabels[c.role] ?? c.role;
   return (
     <div className="relative pm-node">
       {/* 顶部：作为下级的连接点（上级连到这里） */}
@@ -74,13 +79,13 @@ function ContactNode({ data }: NodeProps<Node<NodeData>>) {
       {/* 角色代码：影响力越高颜色越深（D>A>E>I>S） */}
       <span
         className={`absolute -top-2 -left-2 rounded-sm text-white font-bold flex items-center justify-center z-10 ${s.badge}`}
-        title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role} (influence ${roleInfluence(c.role)}/5)`}
+        title={`${roleLabel} (${pm.influence.replace("{n}", String(roleInfluence(c.role)))})`}
       >
         {CONTACT_ROLE_CODES[c.role] ?? "I"}
       </span>
       <span
         className={`absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center z-10 ${attitudeDotClass(c.attitude)}`}
-        title={attitudeLabel(c.attitude)}
+        title={attitudeText(labels, c.attitude)}
       >
         {c.attitude}
       </span>
@@ -249,6 +254,7 @@ function FlowInner({
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
   const [, startTransition] = useTransition();
   const { deleteElements, fitView } = useReactFlow();
+  const pm = useMessages().powerMap;
 
   // 拖动起点位置（用于撤销摆放）
   const dragStart = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -440,20 +446,20 @@ function FlowInner({
     <div>
       <style>{FLOW_CSS}</style>
       <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
-        <span className="text-zinc-400">Connection type:</span>
+        <span className="text-zinc-400">{pm.connectionType}</span>
         <button
           type="button"
           onClick={() => setLineMode("SOLID")}
           className={`${btn} ${lineMode === "SOLID" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
         >
-          Solid · Change primary report
+          {pm.solidLine}
         </button>
         <button
           type="button"
           onClick={() => setLineMode("DOTTED")}
           className={`${btn} ${lineMode === "DOTTED" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
         >
-          Dotted · Add secondary report
+          {pm.dottedLine}
         </button>
         <span className="text-zinc-300">|</span>
         <button
@@ -461,9 +467,10 @@ function FlowInner({
           onClick={undo}
           disabled={!undoStack.length}
           className={`${btn} ${btnIdle} disabled:opacity-40 disabled:cursor-not-allowed`}
-          title="Undo (Cmd/Ctrl+Z)"
+          title={pm.undoTitle}
         >
-          ↩ Undo{undoStack.length ? ` (${undoStack.length})` : ""}
+          {pm.undo}
+          {undoStack.length ? ` (${undoStack.length})` : ""}
         </button>
         <button
           type="button"
@@ -471,15 +478,13 @@ function FlowInner({
           disabled={!selectedEdges.length}
           className={`${btn} border-red-200 text-red-600 hover:border-red-300 disabled:opacity-40 disabled:cursor-not-allowed`}
         >
-          Delete selected connection
+          {pm.deleteConnection}
         </button>
         <button type="button" onClick={onResetLayout} className={`${btn} ${btnIdle}`}>
-          Reset auto layout
+          {pm.resetLayout}
         </button>
       </div>
-      <p className="text-[11px] text-zinc-400 mb-2">
-        Tip: Click a contact card to edit; hover over the handle dots and drag from one person to another to connect (green highlight means valid); select a connection and press Delete/Backspace or use the button above to remove it.
-      </p>
+      <p className="text-[11px] text-zinc-400 mb-2">{pm.tip}</p>
       <div className="h-[460px] rounded-lg border border-zinc-100 bg-zinc-50/40">
         <ReactFlow
           nodes={nodes}
@@ -526,6 +531,9 @@ function EditDrawer({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, start] = useTransition();
+  const labels = useLabels();
+  const pm = useMessages().powerMap;
+  const common = useMessages().common;
   const isNew = !contact;
 
   const save = useCallback(() => {
@@ -552,7 +560,9 @@ function EditDrawer({
       <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
       <div className="fixed right-0 top-0 h-full w-[340px] max-w-[88vw] bg-white shadow-xl z-50 flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
-          <span className="font-medium text-zinc-900">{isNew ? "Add contact" : `Edit: ${contact?.name}`}</span>
+          <span className="font-medium text-zinc-900">
+            {isNew ? pm.addContact : pm.editContact.replace("{name}", contact?.name ?? "")}
+          </span>
           <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">
             ×
           </button>
@@ -560,23 +570,23 @@ function EditDrawer({
         <form ref={formRef} className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
           {!isNew && <input type="hidden" name="id" value={contact!.id} />}
           <label className="block">
-            <span className="text-xs text-zinc-500">Name</span>
-            <input name="name" defaultValue={contact?.name ?? ""} placeholder="Name" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">{pm.name}</span>
+            <input name="name" defaultValue={contact?.name ?? ""} placeholder={pm.name} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Role (influence D&gt;A&gt;E&gt;I&gt;S)</span>
+            <span className="text-xs text-zinc-500">{pm.role}</span>
             <select name="role" defaultValue={contact?.role ?? "INFLUENCER"} className={DRAWER_INPUT}>
               {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
                 <option key={k} value={k}>
-                  {CONTACT_ROLE_CODES[k]} · {CONTACT_ROLE_LABELS[k]}
+                  {CONTACT_ROLE_CODES[k]} · {labels.contactRoleLabels[k]}
                 </option>
               ))}
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Attitude</span>
+            <span className="text-xs text-zinc-500">{pm.attitude}</span>
             <select name="attitude" defaultValue={String(contact?.attitude ?? 0)} className={DRAWER_INPUT}>
-              {Object.entries(ATTITUDE_LABELS)
+              {Object.entries(labels.attitudeLabels)
                 .sort((a, b) => Number(b[0]) - Number(a[0]))
                 .map(([k, v]) => (
                   <option key={k} value={k}>
@@ -586,37 +596,37 @@ function EditDrawer({
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Title</span>
-            <input name="title" defaultValue={contact?.title ?? ""} placeholder="Title" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">{pm.title}</span>
+            <input name="title" defaultValue={contact?.title ?? ""} placeholder={pm.title} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Department</span>
-            <input name="department" defaultValue={contact?.department ?? ""} placeholder="Department" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">{pm.department}</span>
+            <input name="department" defaultValue={contact?.department ?? ""} placeholder={pm.department} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Reports to</span>
+            <span className="text-xs text-zinc-500">{pm.reportsTo}</span>
             <select name="reportsToId" defaultValue={contact?.reportsToId ?? ""} className={DRAWER_INPUT}>
-              <option value="">(None = top level)</option>
+              <option value="">{pm.noneTopLevel}</option>
               {allContacts
                 .filter((x) => x.id !== contact?.id)
                 .map((x) => (
                   <option key={x.id} value={x.id}>
-                    Reports to {x.name}
+                    {pm.reportsToPerson.replace("{name}", x.name)}
                   </option>
                 ))}
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Contact info</span>
-            <input name="contactInfo" defaultValue={contact?.contactInfo ?? ""} placeholder="Contact info" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">{pm.contactInfo}</span>
+            <input name="contactInfo" defaultValue={contact?.contactInfo ?? ""} placeholder={pm.contactInfo} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Best approach</span>
-            <input name="approach" defaultValue={contact?.approach ?? ""} placeholder="Best approach" className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">{pm.bestApproach}</span>
+            <input name="approach" defaultValue={contact?.approach ?? ""} placeholder={pm.bestApproach} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">Notes</span>
-            <textarea name="notes" defaultValue={contact?.notes ?? ""} placeholder="Notes" rows={3} className={DRAWER_INPUT} />
+            <span className="text-xs text-zinc-500">{pm.notes}</span>
+            <textarea name="notes" defaultValue={contact?.notes ?? ""} placeholder={pm.notes} rows={3} className={DRAWER_INPUT} />
           </label>
         </form>
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-zinc-100">
@@ -627,7 +637,7 @@ function EditDrawer({
               disabled={pending}
               className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-40"
             >
-              Delete
+              {common.delete}
             </button>
           ) : (
             <span />
@@ -638,7 +648,7 @@ function EditDrawer({
               onClick={onClose}
               className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-300"
             >
-              Cancel
+              {common.cancel}
             </button>
             <button
               type="button"
@@ -646,7 +656,7 @@ function EditDrawer({
               disabled={pending}
               className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700 disabled:opacity-50"
             >
-              {pending ? "Saving…" : "Save"}
+              {pending ? pm.saving : common.save}
             </button>
           </div>
         </div>
@@ -670,6 +680,8 @@ function ContactList({
 }) {
   const [open, setOpen] = useState(contacts.length <= 8);
   const [q, setQ] = useState("");
+  const labels = useLabels();
+  const pm = useMessages().powerMap;
 
   const sorted = useMemo(
     () =>
@@ -686,14 +698,14 @@ function ContactList({
         c.name,
         c.title ?? "",
         c.department ?? "",
-        CONTACT_ROLE_LABELS[c.role] ?? "",
-        attitudeLabel(c.attitude),
+        labels.contactRoleLabels[c.role] ?? "",
+        attitudeText(labels, c.attitude),
       ]
         .join(" ")
         .toLowerCase()
         .includes(kw),
     );
-  }, [sorted, q]);
+  }, [sorted, q, labels]);
 
   return (
     <div className="mt-4 rounded-lg border border-zinc-100">
@@ -704,14 +716,14 @@ function ContactList({
           className="flex items-center gap-1 text-sm font-medium text-zinc-700"
         >
           <span className={`text-zinc-300 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
-          Key contacts ({contacts.length})
+          {pm.keyContacts.replace("{count}", String(contacts.length))}
         </button>
         <div className="flex-1" />
         {open && (
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name/title/dept/role/attitude"
+            placeholder={pm.searchPlaceholder}
             className="w-44 rounded-md border border-zinc-200 px-2.5 py-1 text-xs focus:border-indigo-400 focus:outline-none"
           />
         )}
@@ -720,7 +732,7 @@ function ContactList({
           onClick={onAdd}
           className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700"
         >
-          + Add contact
+          {pm.addContactBtn}
         </button>
       </div>
       {open && (
@@ -751,7 +763,7 @@ function ContactList({
                     <span className="font-medium text-zinc-900 truncate">{c.name}</span>
                     <span
                       className={`shrink-0 rounded-sm text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center ${s.badge}`}
-                      title={`${CONTACT_ROLE_LABELS[c.role] ?? c.role} (influence ${roleInfluence(c.role)}/5)`}
+                      title={`${labels.contactRoleLabels[c.role] ?? c.role} (${pm.influence.replace("{n}", String(roleInfluence(c.role)))})`}
                     >
                       {CONTACT_ROLE_CODES[c.role] ?? "I"}
                     </span>
@@ -760,13 +772,13 @@ function ContactList({
                     {[c.title, c.department].filter(Boolean).join(" · ") || "—"}
                   </div>
                 </div>
-                <span className="text-zinc-300 text-xs shrink-0">Edit ›</span>
+                <span className="text-zinc-300 text-xs shrink-0">{pm.editArrow}</span>
               </button>
             );
           })}
           {filtered.length === 0 && (
             <div className="px-3 py-6 text-center text-xs text-zinc-400">
-              {q ? "No matching contacts" : "No key contacts yet. Click \"+ Add contact\" to add one."}
+              {q ? pm.noMatch : pm.noContacts}
             </div>
           )}
         </div>
@@ -786,6 +798,7 @@ export function PowerMapSection({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const pm = useMessages().powerMap;
 
   const selected = adding ? null : contacts.find((c) => c.id === selectedId) ?? null;
   const drawerOpen = adding || !!selected;
@@ -814,7 +827,7 @@ export function PowerMapSection({
         </ReactFlowProvider>
       ) : (
         <div className="rounded-lg border border-dashed border-zinc-200 px-4 py-8 text-center text-sm text-zinc-400">
-          No key contacts yet. Click \"+ Add contact\" below to add manually, or use \"✦ AI Add\" above to extract from text/images.
+          {pm.emptyCanvas}
         </div>
       )}
       <ContactList contacts={contacts} selectedId={selectedId} onSelect={selectContact} onAdd={startAdd} />
