@@ -33,6 +33,7 @@ export function BusinessRecordForm({
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
   const [contactId, setContactId] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "info"; text: string } | null>(null);
 
   const input = compact
     ? "w-full rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -42,6 +43,7 @@ export function BusinessRecordForm({
     e.preventDefault();
     if (!title.trim()) return;
     setSubmitting(true);
+    setFeedback(null);
     try {
       const fd = new FormData();
       fd.set("title", title.trim());
@@ -51,9 +53,12 @@ export function BusinessRecordForm({
       fd.set("source", source);
       if (contactId) fd.set("contactId", contactId);
       if (sourceTodoId) fd.set("sourceTodoId", sourceTodoId);
-      await createBusinessRecordAction(partnerId, fd);
+      const res = await createBusinessRecordAction(partnerId, fd);
+      if (res?.message) setFeedback({ tone: "ok", text: res.message });
+      else if (res?.warning) setFeedback({ tone: "warn", text: res.warning });
+      else if (res?.info) setFeedback({ tone: "info", text: res.info });
       router.refresh();
-      onDone?.();
+      if (res?.message || !res?.warning) onDone?.();
     } finally {
       setSubmitting(false);
     }
@@ -107,6 +112,19 @@ export function BusinessRecordForm({
           />
         </label>
       </div>
+      {feedback && (
+        <div
+          className={`rounded-lg text-xs px-3 py-2 ${
+            feedback.tone === "ok"
+              ? "bg-emerald-50 text-emerald-800"
+              : feedback.tone === "warn"
+                ? "bg-amber-50 text-amber-800"
+                : "bg-zinc-50 text-zinc-600"
+          }`}
+        >
+          {feedback.text}
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         {onDone && (
           <button type="button" onClick={onDone} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600">

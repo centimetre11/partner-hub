@@ -13,6 +13,8 @@ type RecordRow = {
   title: string;
   content: string | null;
   occurredAt: Date | string;
+  crmSyncedAt?: Date | string | null;
+  crmSyncError?: string | null;
   createdBy: { name: string } | null;
   contact: { name: string } | null;
 };
@@ -74,11 +76,19 @@ export function BusinessRecordsSection({
                 <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-zinc-800">{r.title}</div>
-                  <div className="text-xs text-zinc-400 mt-0.5 flex flex-wrap gap-x-2">
+                  <div className="text-xs text-zinc-400 mt-0.5 flex flex-wrap gap-x-2 gap-y-1 items-center">
                     <span>{labels.businessRecordCategoryLabels[r.category] ?? r.category}</span>
                     <span>· {fmtDate(r.occurredAt, bcp47)}</span>
                     {r.contact && <span>· {r.contact.name}</span>}
                     {r.createdBy && <span>· {r.createdBy.name}</span>}
+                    {r.crmSyncedAt && (
+                      <span className="rounded bg-emerald-50 text-emerald-700 px-1.5 py-0.5">{pd.crmSynced}</span>
+                    )}
+                    {!r.crmSyncedAt && r.crmSyncError && (
+                      <span className="rounded bg-amber-50 text-amber-700 px-1.5 py-0.5" title={r.crmSyncError}>
+                        {pd.crmSyncFailed}
+                      </span>
+                    )}
                   </div>
                   {r.content && (
                     <p className="text-xs text-zinc-600 mt-1 whitespace-pre-wrap">{r.content}</p>

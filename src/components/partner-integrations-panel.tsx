@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMessages } from "@/lib/i18n/context";
 import { updatePartnerIntegrationsAction } from "@/lib/actions";
+import { CrmCustomerPicker, type CrmCustomerOption } from "@/components/crm-customer-picker";
 
 type BoundChat = {
   chatId: string;
@@ -16,12 +17,14 @@ export function PartnerIntegrationsPanel({
   partnerName,
   kmsRootPath,
   crmCustomerId,
+  matchedCrmCustomer,
   boundChat,
 }: {
   partnerId: string;
   partnerName: string;
   kmsRootPath: string | null;
   crmCustomerId: string | null;
+  matchedCrmCustomer?: CrmCustomerOption | null;
   boundChat: BoundChat;
 }) {
   const intg = useMessages().integrations;
@@ -30,6 +33,7 @@ export function PartnerIntegrationsPanel({
   const [chatLabel, setChatLabel] = useState(boundChat?.label ?? "");
   const [kms, setKms] = useState(kmsRootPath ?? "");
   const [crm, setCrm] = useState(crmCustomerId ?? "");
+  const [crmCustomer, setCrmCustomer] = useState<CrmCustomerOption | null>(matchedCrmCustomer ?? null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -94,6 +98,11 @@ export function PartnerIntegrationsPanel({
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleCrmChange(id: string, customer?: CrmCustomerOption | null) {
+    setCrm(id);
+    setCrmCustomer(customer ?? null);
   }
 
   const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -163,16 +172,16 @@ export function PartnerIntegrationsPanel({
               className={input}
             />
           </label>
-          <label className="block space-y-1">
+          <div className="space-y-1">
             <span className="text-xs font-medium text-zinc-700">{intg.crmCustomerId}</span>
             <p className="text-xs text-zinc-500">{intg.crmCustomerIdHint}</p>
-            <input
+            <CrmCustomerPicker
               value={crm}
-              onChange={(e) => setCrm(e.target.value)}
-              placeholder="C-2024-8891"
-              className={input}
+              onChange={handleCrmChange}
+              partnerId={partnerId}
+              matchedCustomer={crmCustomer}
             />
-          </label>
+          </div>
           <button
             type="submit"
             disabled={loading}

@@ -1,10 +1,12 @@
-import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { Card, PageHeader } from "@/components/ui";
 import { KmsSetup } from "../settings/kms-setup";
 import { ProfileSetup } from "./profile-setup";
 import { PasswordSetup } from "./password-setup";
+import { CrmUserSetup } from "@/components/crm-user-setup";
 import { getKmsConfigStatus, getUserKmsCredential, KMS_DEFAULT_BASE_URL } from "@/lib/kms";
+import { getCrmSalesmenAction } from "@/lib/crm-actions";
+import { db } from "@/lib/db";
 import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function AccountPage() {
@@ -12,6 +14,11 @@ export default async function AccountPage() {
   const { messages: m } = await getServerI18n();
   const kms = await getKmsConfigStatus(user.id);
   const personalKms = await getUserKmsCredential(user.id);
+  const freshUser = await db.user.findUnique({
+    where: { id: user.id },
+    select: { crmSalesmanName: true },
+  });
+  const salesmen = await getCrmSalesmenAction();
   const am = m.account;
 
   return (
@@ -71,6 +78,13 @@ export default async function AccountPage() {
             />
             <p className="text-xs text-zinc-500 leading-relaxed">{am.kmsFallbackHint}</p>
           </div>
+        </Card>
+
+        <Card title={am.crmTitle}>
+          <CrmUserSetup
+            crmSalesmanName={freshUser?.crmSalesmanName ?? null}
+            salesmen={salesmen}
+          />
         </Card>
       </div>
     </div>

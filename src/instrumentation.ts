@@ -7,6 +7,11 @@ export async function register() {
     }, 60 * 1000);
     console.log("[agent-scheduler] Started — checking scheduled agents every minute");
 
+    setInterval(() => {
+      void import("./lib/crm-scheduler").then(({ crmSchedulerTick }) => crmSchedulerTick());
+    }, 60 * 1000);
+    console.log("[crm-scheduler] Started — checking CRM sync every minute");
+
     if (process.env.WECOM_BOT_AUTOSTART === "1") {
       const g = globalThis as typeof globalThis & {
         __wecomBotStop?: () => void;

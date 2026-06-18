@@ -80,13 +80,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   });
   if (!p) notFound();
   const users = await db.user.findMany();
-  const [partnerAgents, wecomChat] = await Promise.all([
+  const [partnerAgents, wecomChat, matchedCrmCustomer] = await Promise.all([
     db.agent.findMany({
       where: { partnerId: id, isTemplate: false },
       orderBy: { updatedAt: "desc" },
       select: { id: true, name: true, icon: true, description: true, enabled: true, lastRunAt: true },
     }),
     getWecomChatForPartner(id),
+    p.crmCustomerId
+      ? db.crmCustomer.findUnique({
+          where: { id: p.crmCustomerId },
+          select: { id: true, name: true, city: true, status: true, salesman: true },
+        })
+      : Promise.resolve(null),
   ]);
   const agentTemplates = await db.agent.findMany({
     where: {
@@ -296,6 +302,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               partnerName={p.name}
               kmsRootPath={p.kmsRootPath}
               crmCustomerId={p.crmCustomerId}
+              matchedCrmCustomer={matchedCrmCustomer}
               boundChat={
                 wecomChat
                   ? {

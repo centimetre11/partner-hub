@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { syncBusinessRecordToCrm, type CrmBusinessRecordSyncResult } from "./crm-business-record";
 
 export const BUSINESS_RECORD_CATEGORIES = [
   "VISIT",
@@ -61,5 +62,24 @@ export async function persistBusinessRecord(opts: {
     });
   }
 
-  return record;
+  let crmSync: CrmBusinessRecordSyncResult;
+  try {
+    crmSync = await syncBusinessRecordToCrm({
+      recordId: record.id,
+      partnerId: opts.partnerId,
+      userId: opts.userId,
+      category,
+      title: opts.title,
+      content: opts.content,
+      occurredAt: opts.occurredAt,
+      contactId: opts.contactId,
+    });
+  } catch (e) {
+    crmSync = {
+      status: "failed",
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  return { record, crmSync };
 }

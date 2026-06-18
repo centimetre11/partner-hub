@@ -10,6 +10,8 @@ import type { VolcengineApiForClient } from "./volcengine-api-setup";
 import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 import { parseAiCapabilities } from "@/lib/ai-capabilities";
+import { CrmSyncCard } from "./crm-sync-card";
+import { getCrmSyncStats } from "@/lib/crm-sync";
 import { getServerI18n } from "@/lib/server-i18n";
 
 function maskKey(apiKey: string, notSet: string) {
@@ -29,7 +31,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, crmStats] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -43,6 +45,7 @@ export default async function SettingsPage() {
       include: { user: true },
     }),
     db.systemKmsCredential.findUnique({ where: { id: "singleton" } }),
+    getCrmSyncStats(),
   ]);
 
   const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
@@ -152,6 +155,16 @@ export default async function SettingsPage() {
             {m.settings.personalKmsHint}{" "}
             <a href="/account" className="text-indigo-600 hover:underline">{m.nav.account}</a>
           </p>
+        </Card>
+
+        <Card title={m.crm.syncTitle} className="lg:col-span-2">
+          <CrmSyncCard
+            customerCount={crmStats.customerCount}
+            contactCount={crmStats.contactCount}
+            lastSyncAt={crmStats.lastSyncAt?.toISOString() ?? null}
+            latestStatus={crmStats.latestLog?.status ?? null}
+            latestError={crmStats.latestLog?.error ?? null}
+          />
         </Card>
 
         <Card title={m.settings.dailyTokens14} className="lg:col-span-2">

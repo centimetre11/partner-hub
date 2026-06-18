@@ -31,6 +31,7 @@ model User {
   aiTokenUsages AiTokenUsage[]
   kmsCredential UserKmsCredential?
   businessRecords BusinessRecord[]
+  crmSalesmanName String? // 帆软 CRM 销售英文名，对应 com_salesman（如 Fay.Wen）
 }
 
 model Partner {
@@ -120,6 +121,9 @@ model BusinessRecord {
   source          String    @default("MANUAL") // MANUAL / TODO / RELATIONSHIP_TAB
   createdById     String?
   createdBy       User?     @relation(fields: [createdById], references: [id])
+  crmTraceId      String?
+  crmSyncedAt     DateTime?
+  crmSyncError    String?
   createdAt       DateTime  @default(now())
 
   @@index([partnerId, occurredAt])
@@ -604,4 +608,46 @@ model SystemKmsCredential {
   baseUrl     String   @default("https://kms.fineres.com")
   accessToken String
   updatedAt   DateTime @updatedAt
+}
+
+// 帆软 CRM 同步客户（com_id 为主键）
+model CrmCustomer {
+  id            String       @id
+  name          String
+  province      String?
+  city          String?
+  status        String?
+  salesman      String?
+  kpiContactDay DateTime?
+  syncedAt      DateTime     @updatedAt
+  contacts      CrmContact[]
+
+  @@index([name])
+  @@index([salesman])
+}
+
+// 帆软 CRM 同步联系人（cont_id 为主键）
+model CrmContact {
+  id         String      @id
+  customerId String
+  customer   CrmCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name       String?
+  mobile     String?
+  email      String?
+  duty       String?
+  recdate    DateTime?
+  syncedAt   DateTime    @updatedAt
+
+  @@index([customerId])
+}
+
+// CRM 数据同步日志
+model CrmSyncLog {
+  id            String   @id @default(cuid())
+  status        String
+  customerCount Int?
+  contactCount  Int?
+  durationMs    Int?
+  error         String?
+  createdAt     DateTime @default(now())
 }

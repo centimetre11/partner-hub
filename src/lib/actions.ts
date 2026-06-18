@@ -570,7 +570,7 @@ export async function createBusinessRecordAction(partnerId: string, formData: Fo
   const source = String(formData.get("source") ?? "MANUAL");
   const sourceTodoId = String(formData.get("sourceTodoId") ?? "").trim() || null;
 
-  await persistBusinessRecord({
+  const { crmSync } = await persistBusinessRecord({
     partnerId,
     userId: user.id,
     category,
@@ -585,4 +585,12 @@ export async function createBusinessRecordAction(partnerId: string, formData: Fo
   revalidatePath(`/partners/${partnerId}`);
   revalidatePath("/todos");
   revalidatePath("/");
+
+  if (crmSync.status === "synced") {
+    return { ok: true, message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };
+  }
+  if (crmSync.status === "failed") {
+    return { ok: true, warning: `本地已保存，CRM 同步失败：${crmSync.error}` };
+  }
+  return { ok: true, info: `本地已保存（CRM：${crmSync.reason}）` };
 }
