@@ -1,11 +1,15 @@
 import type { IntakeClarification, IntakeProposal } from "@/lib/ai-intake";
 import { PARTNER_FIELD_LABELS } from "@/lib/constants";
+import {
+  isConfirmUnlinkedTodoOption,
+  TODO_PARTNER_NOT_FOUND_ID,
+} from "@/lib/intake-partner-binding";
 import { fieldKey, businessRecordKey, mergeProposalPatch, type ProposalChanges } from "@/lib/proposal-merge";
 
 export type ClarificationApplyMode = "direct" | "ai";
 
 /** Identity anchor fields — shown as blocking checkpoints before deep research continues */
-const IDENTITY_CLARIFICATION_IDS = new Set(["partnerName", "name", "website", "dedupe"]);
+const IDENTITY_CLARIFICATION_IDS = new Set(["partnerName", "name", "website", "dedupe", TODO_PARTNER_NOT_FOUND_ID]);
 
 /** Profile fields that map 1:1 from clarification id → draft field (no LLM round-trip) */
 const DIRECT_CLARIFICATION_IDS = new Set([
@@ -47,7 +51,7 @@ export function getClarificationMode(c: IntakeClarification): ClarificationApply
   if (c.apply === "direct" || c.apply === "ai") return c.apply;
   if (/^br-\d+-(nature|action)$/.test(c.id)) return "direct";
   if (c.id === "dedupe") return "ai";
-  if (c.id === "partnerName" || c.id === "name" || c.id === "website") return "direct";
+  if (c.id === "partnerName" || c.id === "name" || c.id === "website" || c.id === TODO_PARTNER_NOT_FOUND_ID) return "direct";
   if (DIRECT_CLARIFICATION_IDS.has(c.id) && c.id in PARTNER_FIELD_LABELS) return "direct";
   return "ai";
 }
@@ -75,6 +79,24 @@ export function applyDirectClarification(
     const index = Number(brMatch[1]);
     const field = brMatch[2] === "nature" ? "traceNature" : "traceAction";
     return applyProposalEdit(proposal, { type: "businessRecord", index, field, value: trimmed });
+  }
+
+  if (clarification.id === TODO_PARTNER_NOT_FOUND_ID) {
+    if (isConfirmUnlinkedTodoOption(trimmed)) {
+      const next = { ...proposal, partnerName: undefined };
+      return {
+        proposal: next,
+        changes: proposal.partnerName
+          ? { added: [], updated: ["partner"], removed: [], aiReupdates: [] }
+          : { added: [], updated: [], removed: [], aiReupdates: [] },
+      };
+    }
+    const { draft, changes } = mergeProposalPatch(
+      proposal,
+      [{ op: "set_partner", name: trimmed }],
+      new Set()
+    );
+    return { proposal: draft, changes };
   }
 
   if (clarification.id === "partnerName" || clarification.id === "name") {

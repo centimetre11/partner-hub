@@ -187,6 +187,10 @@ export function mergeFinalProposal(
   merged.trainings = final.trainings;
   merged.solutions = final.solutions;
   merged.businessRecords = final.businessRecords;
+  merged.hubPartnerId = final.hubPartnerId ?? draft?.hubPartnerId;
+  merged.crmCustomerId = final.crmCustomerId ?? draft?.crmCustomerId;
+  merged.crmCustomerName = final.crmCustomerName ?? draft?.crmCustomerName;
+  merged.saveMode = final.saveMode ?? draft?.saveMode;
   return merged;
 }
 

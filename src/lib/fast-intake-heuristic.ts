@@ -3,7 +3,7 @@ import type { IntakeScope } from "./ai-locale";
 import type { Locale } from "./i18n/locale";
 import type { IntakeClarification, IntakeTurn } from "./ai-intake";
 import { isFastIntakeScope } from "./proposal-scope";
-import { extractPartnerNameFromIntakeText } from "./intake-partner-binding";
+import { extractPartnerNameFromIntakeText, enrichTodoPartnerBinding } from "./intake-partner-binding";
 import {
   businessRecordCrmOnlyReady,
   businessRecordHubReady,
@@ -209,12 +209,14 @@ function heuristicTodoTurn(userText: string, locale: Locale, today: string): Int
     },
   ];
 
+  const partnerName = extractPartnerNameFromIntakeText(text) ?? undefined;
+
   return {
     reply: heuristicReply(locale, "todo"),
     questions: [],
     clarifications: buildTodoClarifications(todos, locale),
     ready: !!title.trim(),
-    proposal: { ...emptyProposal(title), todos },
+    proposal: { ...emptyProposal(title), partnerName, todos },
   };
 }
 
@@ -472,9 +474,14 @@ export async function finalizeBusinessRecordTurn(
     ...turn,
     proposal: {
       ...turn.proposal,
+      hubPartnerId: target.hubPartnerId ?? turn.proposal.hubPartnerId,
       crmCustomerId: target.crmCustomerId ?? turn.proposal.crmCustomerId,
       crmCustomerName: target.crmCustomerName ?? turn.proposal.crmCustomerName,
-      partnerName: target.hubPartnerName ?? turn.proposal.partnerName ?? target.crmCustomerName,
+      partnerName:
+        target.hubPartnerName ??
+        turn.proposal.partnerName ??
+        target.crmCustomerName ??
+        target.companyLabel,
     },
     reply: !crmComplete || needsCompany
       ? locale === "zh"
@@ -487,15 +494,30 @@ export async function finalizeBusinessRecordTurn(
   };
 }
 
-function finalizeTodoTurn(turn: IntakeTurn, locale: Locale): IntakeTurn {
+async function finalizeTodoTurn(
+  turn: IntakeTurn,
+  locale: Locale,
+  opts?: { boundPartnerId?: string; userText?: string },
+): Promise<IntakeTurn> {
   const todos = turn.proposal.todos.filter((t) => t.title?.trim());
   if (!todos.length) return turn;
+
+  const { proposal, clarifications: partnerClarifications } = await enrichTodoPartnerBinding({
+    proposal: turn.proposal,
+    userText: opts?.userText,
+    boundPartnerId: opts?.boundPartnerId,
+    locale,
+    existingClarifications: turn.clarifications,
+  });
+
   const clarifications = [
     ...turn.clarifications,
+    ...partnerClarifications,
     ...buildTodoClarifications(todos, locale).filter((c) => !turn.clarifications.some((x) => x.id === c.id)),
   ];
   return {
     ...turn,
+    proposal,
     clarifications,
     ready: todos.length > 0 && !clarifications.some((c) => c.blocking),
     reply: turn.reply || heuristicReply(locale, "todo"),
@@ -521,14 +543,14 @@ export async function finalizeFastIntakeTurn(
   scope: IntakeScope,
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string },
+  opts?: { boundPartnerId?: string; userText?: string },
 ): Promise<IntakeTurn> {
   if (!isFastIntakeScope(scope)) return turn;
   switch (scope) {
     case "business_record":
       return finalizeBusinessRecordTurn(turn, locale, opts);
     case "todo":
-      return finalizeTodoTurn(turn, locale);
+      return finalizeTodoTurn(turn, locale, opts);
     case "opportunity":
       return finalizeSimpleReadyTurn(
         turn,

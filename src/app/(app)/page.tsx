@@ -7,6 +7,7 @@ import { toggleTodoAction } from "@/lib/actions";
 import { WeeklyReport } from "./weekly-report";
 import { AiAddButton } from "@/components/ai-add-button";
 import { BoardOverview } from "./dashboard/board-overview";
+import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import { getServerI18n, labelConstants, stageName } from "@/lib/server-i18n";
 import { isTodoOverdue, overdueDueDateBefore } from "@/lib/todo-dates";
 
@@ -96,12 +97,14 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
     db.partner.count({ where: { status: "ACTIVE" } }),
     db.todoItem.count({ where: { status: "OPEN" } }),
     db.opportunity.count({ where: { status: "ACTIVE", partner: { status: "ACTIVE" } } }),
-    db.notification.findMany({
-      where: { readAt: null },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-      include: { agentRun: { include: { agent: true } } },
-    }),
+    INBOX_NAV_ENABLED
+      ? db.notification.findMany({
+          where: { readAt: null },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          include: { agentRun: { include: { agent: true } } },
+        })
+      : Promise.resolve([]),
   ]);
 
   const stalePartners = activePartners
@@ -241,7 +244,7 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
         </div>
 
         <div className="space-y-5">
-          {unreadNotifications.length > 0 && (
+          {INBOX_NAV_ENABLED && unreadNotifications.length > 0 && (
             <Card
               title={m.dashboard.unreadInboxTitle.replace("{count}", String(unreadNotifications.length))}
               className="border-indigo-200"
@@ -278,6 +281,10 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
               </Link>
               <Link href="/pool" className="block rounded-lg border border-dashed border-zinc-200 px-4 py-2.5 hover:border-zinc-300 transition-colors">
                 <div className="text-xs text-zinc-500">{m.dashboard.prospectPoolLink}</div>
+              </Link>
+              <Link href="/knowhow" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
+                <div className="font-medium text-zinc-800">{m.dashboard.knowhowSearchLink}</div>
+                <div className="text-xs text-zinc-400 mt-0.5">{m.dashboard.knowhowSearchDesc}</div>
               </Link>
             </div>
           </Card>

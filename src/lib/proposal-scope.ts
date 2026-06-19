@@ -21,6 +21,7 @@ export function sanitizeProposalForScope(scope: IntakeScope, raw: IntakeProposal
       return {
         ...EMPTY_PROPOSAL_ARRAYS,
         partnerName: raw.partnerName,
+        hubPartnerId: raw.hubPartnerId,
         crmCustomerId: raw.crmCustomerId,
         crmCustomerName: raw.crmCustomerName,
         saveMode: raw.saveMode,

@@ -8,6 +8,7 @@ import { NavLinks } from "@/components/nav-links";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { isSuperAdmin } from "@/lib/user-roles";
 import { useMessages } from "@/lib/i18n/context";
+import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import type { Locale } from "@/lib/i18n/locale";
 
 export function AppShell({
@@ -62,7 +63,7 @@ export function AppShell({
           </div>
           <span className="text-sm font-semibold text-zinc-900 truncate">{m.app.title}</span>
         </div>
-        {unread > 0 && (
+        {INBOX_NAV_ENABLED && unread > 0 && (
           <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center shrink-0">
             {unread > 99 ? "99+" : unread}
           </span>

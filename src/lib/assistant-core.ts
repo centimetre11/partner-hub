@@ -9,10 +9,11 @@ import {
   skillsToTools,
 } from "@/lib/skills";
 import { isKmsConfiguredForUser } from "@/lib/kms";
+import { isKnowhowConfigured } from "@/lib/knowhow";
 
 export type AssistantLocale = "en" | "zh";
 
-function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean) {
+function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean, knowhowConfigured: boolean) {
   const today =
     locale === "zh"
       ? new Date().toLocaleDateString("zh-CN", {
@@ -32,9 +33,12 @@ function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean) {
     const kmsLine = kmsConfigured
       ? "KMS 个人令牌已配置，可用 read_kms 读取、write_kms 写入内部文档（需页面编辑权限）。"
       : "KMS 个人令牌未配置，不要调用 read_kms/write_kms；可在个人中心配置个人令牌，或使用团队回退。";
+    const knowhowLine = knowhowConfigured
+      ? "Know-how 检索已配置，可用 search_knowhow 检索帆软 Know-how 知识库（案例、方案、宣传物料等）。"
+      : "Know-how 检索未配置，不要调用 search_knowhow；请团队管理员在团队设置中配置 API 令牌。";
     return `你是帆软中东合作伙伴管理系统的 AI 助手，帮助帆软（中国领先 BI 厂商）中东 BD 团队管理合作伙伴。
 今天是 ${today}。
-你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档、或搜索团队知识库。${kmsLine} 规则：
+你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档、搜索团队知识库、或检索 Know-how 知识库。${kmsLine} ${knowhowLine} 规则：
 1. 用中文回复，简洁、可执行，直接给出查询结果。
 2. 查询类问题：必须先调用工具获取真实数据再回答，禁止编造；禁止只回复「已收到」「当前时间是…」「需要我帮你做什么吗」等空话。
 3. 问伙伴数量/列表：用 search_partners（status=ACTIVE 表示正式伙伴）；问待办：用 list_todos。
@@ -47,9 +51,12 @@ function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean) {
   const kmsLine = kmsConfigured
     ? "Your KMS personal access token is configured — use read_kms to read and write_kms to write internal docs (edit permission required)."
     : "KMS personal access token is not configured — do not call read_kms/write_kms; save one under Account or use team fallback.";
+  const knowhowLine = knowhowConfigured
+    ? "Know-how search is configured — use search_knowhow to retrieve cases, solutions, and collateral from the Fanruan Know-how knowledge base."
+    : "Know-how search is not configured — do not call search_knowhow; ask a team admin to set the API token in Team Settings.";
   return `You are the AI assistant for the Fanruan Middle East Partner Management System, helping Fanruan Software (Fanruan, a leading BI vendor in China) Middle East BD team manage partners.
 Today is ${today}.
-You can use tools to query and modify system data, search the public web, read KMS internal documents (read_kms), or search the team knowledge base (search_knowledge). ${kmsLine} Rules:
+You can use tools to query and modify system data, search the public web, read KMS internal documents (read_kms), search the team knowledge base (search_knowledge), or search the Know-how knowledge base (search_knowhow). ${kmsLine} ${knowhowLine} Rules:
 1. Reply in English, concisely and action-oriented.
 2. For queries: use tools to fetch real data before answering — do not invent facts.
 3. For modification commands (advance stage, update fields, create todos): execute directly and clearly state what changed. If the instruction is ambiguous, query to confirm the target first.
@@ -69,9 +76,10 @@ export async function runQueryAssistant(
 ) {
   const locale = options?.locale ?? "en";
   const kmsConfigured = await isKmsConfiguredForUser(uid);
+  const knowhowConfigured = await isKnowhowConfigured();
   const tools = await skillsToTools(ASSISTANT_SKILLS);
   const chat: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(locale, kmsConfigured) },
+    { role: "system", content: buildSystemPrompt(locale, kmsConfigured, knowhowConfigured) },
     ...messages.map((m) => ({ role: m.role, content: m.content, images: m.images }) as ChatMessage),
   ];
   const ctx = newSkillContext({ mode: "assistant", userId: uid });

@@ -9,6 +9,7 @@ const tabs = [
   { href: "/tools", label: "Tools", icon: "🔧" },
   { href: "/skills", label: "Skills", icon: "⚡" },
   { href: "/knowledge", label: "Knowledge", icon: "📚" },
+  { href: "/knowhow", label: "Know-how", icon: "🔍" },
 ];
 
 export function AiCenterNav() {

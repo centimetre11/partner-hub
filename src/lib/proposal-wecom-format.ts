@@ -29,10 +29,14 @@ function formatBusinessRecordChecklist(
   const r = proposal.businessRecords[0];
   if (!r) return "";
 
-  const hubName = proposal.partnerName?.trim();
-  const hasHub = !!hubName && proposal.saveMode !== "crm_only";
+  const hubName = proposal.hubPartnerId ? proposal.partnerName?.trim() : undefined;
+  const companyName =
+    proposal.partnerName?.trim() ||
+    proposal.crmCustomerName?.trim() ||
+    undefined;
+  const hasHub = !!proposal.hubPartnerId && proposal.saveMode !== "crm_only";
   const hasCrm = !!proposal.crmCustomerId;
-  const crmLabel = proposal.crmCustomerName ?? proposal.crmCustomerId ?? "";
+  const crmLabel = proposal.crmCustomerName ?? proposal.crmCustomerId ?? companyName ?? "";
   const hasNature = !!r.traceNature?.trim();
   const hasAction = !!r.traceAction?.trim();
   const hasDetail = !!r.title?.trim();

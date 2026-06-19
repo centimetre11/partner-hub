@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useMessages } from "@/lib/i18n/context";
+import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 
 type Leaf = { href: string; label: string; icon: string; aliases?: string[]; badge?: "unread" };
 type Group = { id: string; label: string; icon: string; children: Leaf[] };
@@ -36,6 +37,7 @@ export function NavLinks({
   const nav: Entry[] = [
     { href: "/", label: m.nav.dashboard, icon: "◧" },
     { href: "/partners", label: m.nav.activePartners, icon: "◮" },
+    { href: "/todos", label: m.nav.todos, icon: "☑" },
     {
       id: "resources",
       label: m.nav.resources,
@@ -48,16 +50,10 @@ export function NavLinks({
         { href: "/materials", label: m.nav.materials, icon: "📦" },
       ],
     },
-    {
-      id: "work",
-      label: m.nav.work,
-      icon: "◳",
-      children: [
-        { href: "/todos", label: m.nav.todos, icon: "☑" },
-        { href: "/inbox", label: m.nav.inbox, icon: "✉", badge: "unread" },
-      ],
-    },
-    { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge"] },
+    ...(INBOX_NAV_ENABLED
+      ? [{ href: "/inbox" as const, label: m.nav.inbox, icon: "✉", badge: "unread" as const }]
+      : []),
+    { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge", "/knowhow"] },
     { href: "/settings", label: m.nav.teamSettings, icon: "⚙" },
   ];
 

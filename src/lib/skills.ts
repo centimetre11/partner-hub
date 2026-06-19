@@ -5,6 +5,7 @@ import { partnerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
 import { generalWebSearch, linkedinSearch } from "./web-search";
 import { readKmsForUser, writeKmsForUser } from "./kms";
+import { searchKnowhowForAgent } from "./knowhow";
 import {
   KIMI_BUILTIN_SEARCH,
   shouldUseKimiBuiltinSearch,
@@ -204,7 +205,7 @@ const createTodo: Skill = {
     type: "function",
     function: {
       name: "create_todo",
-      description: "Create a todo item.",
+      description: "Create a todo item. Try to link partnerName to an existing partner; if not found, still create without a partner.",
       parameters: {
         type: "object",
         properties: {
@@ -476,6 +477,44 @@ const searchKnowledge: Skill = {
   },
 };
 
+// ---- Search Fanruan Know-how knowledge base ----
+const searchKnowhow: Skill = {
+  name: "search_knowhow",
+  label: "Search Know-how",
+  desc: "Semantic search in the Fanruan Know-how knowledge base — cases, solutions, collateral, industry materials",
+  def: {
+    type: "function",
+    function: {
+      name: "search_knowhow",
+      description:
+        "Search the Fanruan Know-how knowledge base (semantic retrieval + metadata filters). Use for customer cases, solution materials, marketing collateral, industry references, and project/contract documents. Requires team Know-how API token in Team Settings.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Natural-language search query, e.g. retail success cases in South China" },
+          business_domain: {
+            type: "string",
+            enum: ["project", "contract"],
+            description: "Business domain filter, default project",
+          },
+          tags: {
+            type: "string",
+            description: "Tag filter, comma-separated (资料类型/业务维度/业务系统/终端/项目需求场景)",
+          },
+          quality: { type: "string", description: "Content quality filter, e.g. curated selection" },
+          node_path: { type: "string", description: "Folder path filter, comma-separated, e.g. marketing collateral" },
+          industry: { type: "string", description: "Industry filter, comma-separated" },
+          author: { type: "string", description: "Author filter (exact match)" },
+          customer: { type: "string", description: "Customer name filter (exact match)" },
+          top_k: { type: "number", description: "Max results, default 10, max 50" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  run: async (args) => searchKnowhowForAgent(args),
+};
+
 // ---- Read company KMS (Confluence) ----
 const readKms: Skill = {
   name: "read_kms",
@@ -606,6 +645,7 @@ export const SKILLS: Skill[] = [
   scanSentiment,
   addTimelineEvent,
   searchKnowledge,
+  searchKnowhow,
   readKms,
   writeKms,
   createDocument,
@@ -621,6 +661,7 @@ export const DEFAULT_AGENT_SKILLS = [
   "add_timeline_event",
   "create_todo",
   "search_knowledge",
+  "search_knowhow",
   "read_kms",
   "write_kms",
 ];
@@ -650,6 +691,7 @@ export const ASSISTANT_SKILLS = [
   "read_kms",
   "write_kms",
   "search_knowledge",
+  "search_knowhow",
 ];
 
 /** Read-only research tools for AI intake/profile enrichment (no write operations) */
@@ -660,6 +702,7 @@ export const INTAKE_ENRICHMENT_SKILLS = [
   "linkedin_search",
   "read_kms",
   "search_knowledge",
+  "search_knowhow",
 ] as const;
 
 export function intakeEnrichmentSkillsForScope(scope: string): string[] {

@@ -4,6 +4,7 @@ import { Badge, PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-registry";
 import { getKmsConfigStatus } from "@/lib/kms";
+import { isKnowhowConfigured } from "@/lib/knowhow";
 import { isWebSearchAvailable, webSearchBackendLabel } from "@/lib/web-search";
 import { isSuperAdmin } from "@/lib/user-roles";
 import { getServerI18n } from "@/lib/server-i18n";
@@ -17,6 +18,7 @@ export default async function ToolsPage() {
   });
   const kmsStatus = await getKmsConfigStatus(user.id);
   const kmsConfigured = kmsStatus.configured;
+  const knowhowConfigured = await isKnowhowConfigured();
   const usedToolNames = new Set<string>();
   for (const a of equippedAgents) {
     for (const name of JSON.parse(a.skills || "[]") as string[]) {
@@ -28,7 +30,7 @@ export default async function ToolsPage() {
   const searchBackend = webSearchReady ? await webSearchBackendLabel() : null;
   const admin = isSuperAdmin(user);
   const readyCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).filter(
-    (t) => getToolAvailability(t.name, { kmsConfigured, webSearchReady }) === "ready"
+    (t) => getToolAvailability(t.name, { kmsConfigured, knowhowConfigured, webSearchReady }) === "ready"
   ).length;
   const totalCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).length;
 
@@ -69,6 +71,13 @@ export default async function ToolsPage() {
           </div>
         )}
 
+        {!knowhowConfigured && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+            <span className="font-medium">{m.tools.knowhowBanner}</span>{" "}
+            {admin ? m.tools.knowhowBannerAdmin : m.tools.knowhowBannerNonAdmin}
+          </div>
+        )}
+
         <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 text-sm text-indigo-900/80">
           <span className="font-medium">{m.tools.scenarioPriority}</span> {m.tools.scenarioBody}
         </div>
@@ -85,7 +94,7 @@ export default async function ToolsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {cat.tools.map((tool) => {
-                const status = getToolAvailability(tool.name, { kmsConfigured, webSearchReady });
+                const status = getToolAvailability(tool.name, { kmsConfigured, knowhowConfigured, webSearchReady });
                 return (
                   <div
                     key={tool.name}
@@ -103,8 +112,16 @@ export default async function ToolsPage() {
                         <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{tool.desc}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" ? "amber" : "zinc"}>
-                          {status === "ready" ? m.tools.verified : status === "needs_web_search" ? m.tools.needsWebSearch : status === "needs_kms" ? m.tools.needsKms : m.tools.unknown}
+                        <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" || status === "needs_knowhow" ? "amber" : "zinc"}>
+                          {status === "ready"
+                            ? m.tools.verified
+                            : status === "needs_web_search"
+                              ? m.tools.needsWebSearch
+                              : status === "needs_kms"
+                                ? m.tools.needsKms
+                                : status === "needs_knowhow"
+                                  ? m.tools.needsKnowhow
+                                  : m.tools.unknown}
                         </Badge>
                         {usedToolNames.has(tool.name) && <Badge tone="blue">{m.tools.equipped}</Badge>}
                       </div>

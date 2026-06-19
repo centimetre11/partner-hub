@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import { Badge, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
 import { applyAgentProposalAction, markAllReadAction, markReadAction } from "@/lib/agent-actions";
 import { saveNotificationAsDocumentAction } from "@/lib/content-actions";
@@ -8,6 +10,7 @@ import type { AgentFieldProposal } from "@/lib/skills";
 import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function InboxPage() {
+  if (!INBOX_NAV_ENABLED) redirect("/");
   await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
   const notifications = await db.notification.findMany({

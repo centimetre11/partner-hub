@@ -152,6 +152,7 @@ export async function enrichBusinessRecordCompanyTarget(
   return {
     ...next,
     partnerName: target.hubPartnerName ?? companyLabel ?? next.partnerName,
+    hubPartnerId: target.hubPartnerId ?? next.hubPartnerId,
     crmCustomerId: target.crmCustomerId ?? next.crmCustomerId,
     crmCustomerName: target.crmCustomerName ?? next.crmCustomerName,
   };

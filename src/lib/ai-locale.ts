@@ -166,8 +166,8 @@ Rules:
 }
 Rules:
 - Fill todos only; other arrays must be empty.
-- ready=true when at least one todo has a clear title.
-- partnerName only when user mentions a specific company/partner.`;
+- ready=true when at least one todo has a clear title and partner lookup is resolved (single match auto-linked; ambiguous/missing partner handled by system clarifications).
+- Set proposal.partnerName when user mentions a company; omit for personal/global todos.`;
   }
 
   if (scope === "powermap") {
@@ -277,10 +277,21 @@ Before outputting the JSON proposal, combine tools as below (parallel OK, multip
 
 1. User gave KMS link/pageId → read_kms first; then web_search + linkedin_search on company names from the doc for website, size, clients, key people not in KMS
 2. After identifying company name from user/KMS → search_partners dedupe; web_search background; linkedin_search executives/contacts
-3. Still missing category/playbook/Fanruan angle → search_knowledge team knowledge base
+3. Still missing category/playbook/Fanruan angle → search_knowledge team knowledge base; for cases/solutions/collateral → search_knowhow Know-how knowledge base
 4. After each tool round, check field checklist; keep researching until major fields are sourced or public channels truly have nothing
-5. If a tool fails, skip it and use others—do not block onboarding. Do NOT assume KMS is unconfigured without calling read_kms when [KMS token status] says configured.
+5. If a tool fails, skip it and use others—do not block onboarding. Do NOT assume KMS is unconfigured without calling read_kms when [KMS token status] says configured. Do NOT assume Know-how is unconfigured without calling search_knowhow when [Know-how token status] says configured.
 6. After research, output JSON proposal (no more tools); in reply briefly note what each source found and what is still missing`;
+
+function knowhowStatusBlock(locale: Locale, configured: boolean): string {
+  if (locale === "zh") {
+    return configured
+      ? "【Know-how 令牌状态】已配置。可调用 search_knowhow 检索帆软 Know-how 知识库（案例、方案、宣传物料等）。禁止说「Know-how 未配置」。"
+      : "【Know-how 令牌状态】未配置。跳过 search_knowhow，改用 search_knowledge、web_search 等渠道。";
+  }
+  return configured
+    ? "[Know-how token status] Configured. Call search_knowhow to retrieve cases, solutions, and collateral from the Fanruan Know-how knowledge base. Do NOT say Know-how is unconfigured."
+    : "[Know-how token status] Not configured. Skip search_knowhow; use search_knowledge, web_search, and other sources.";
+}
 
 function kmsStatusBlock(locale: Locale, configured: boolean): string {
   if (locale === "zh") {
@@ -360,10 +371,12 @@ No web research. ready=true only when title + traceNature + traceAction are set 
   },
   todo: {
     title: "Create todo",
-    intro: "The user wants to create one or more follow-up todos. May or may not relate to a specific partner.",
+    intro: "The user wants to create one or more follow-up todos. Prefer linking to a partner/customer when mentioned.",
     guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), priority (HIGH/MEDIUM/LOW), detail.
-If user names a company/partner, set proposal.partnerName. Global todos (no company) are OK.
-No web research. ready=true when title is clear.`,
+If user names a company/partner, set proposal.partnerName — the system will auto-link on a single match.
+Multiple matches require blocking partnerName clarification. If the company is named but not found in Partner Hub, the system will ask the user to confirm an unlinked todo (do not set ready=true yourself in that case).
+If no company is mentioned, omit partnerName for a global/personal todo.
+No web research. ready=true when title is clear AND no blocking partner clarifications remain.`,
   },
 };
 
@@ -376,11 +389,13 @@ export function buildIntakeSystemPrompt(opts: {
   partnerBinding?: string;
   useResearch: boolean;
   kmsConfigured?: boolean;
+  knowhowConfigured?: boolean;
 }): string {
   const cfg = SCOPE_CONFIG[opts.scope];
   const lang = replyLanguage(opts.locale);
   const ctx = opts.partnerContext ? `\n\n${opts.partnerContext}` : "";
   const kmsHint = opts.useResearch ? `\n${kmsStatusBlock(opts.locale, !!opts.kmsConfigured)}` : "";
+  const knowhowHint = opts.useResearch ? `\n${knowhowStatusBlock(opts.locale, !!opts.knowhowConfigured)}` : "";
 
   return `You are the AI intake assistant for Fanruan Software (Fanruan, leading BI vendor in China; products FineReport/FineBI/FineDataLink) Middle East partner management.
 Today's date: ${opts.today}.
@@ -391,7 +406,7 @@ ${localeOutputRules(opts.locale)}
 [Guidance rules (important, not rigid)]
 ${cfg.guide}
 Follow-ups should feel like a colleague—natural and brief, not a form. When the user has given enough, produce the proposal and set ready=true; don't chase optional fields.
-${opts.useResearch ? `\n${RESEARCH_GUIDE}${kmsHint}` : ""}
+${opts.useResearch ? `\n${RESEARCH_GUIDE}${kmsHint}${knowhowHint}` : ""}
 
 ${opts.partnerBinding ? `\n${opts.partnerBinding}\n` : ""}
 [Proposal scope for this task]

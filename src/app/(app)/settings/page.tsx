@@ -5,10 +5,12 @@ import { RegisterForm } from "./register-form";
 import { MemberRow } from "./member-row";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
 import { SystemKmsSetup } from "./system-kms-setup";
+import { SystemKnowhowSetup } from "./knowhow-setup";
 import { AmmoSetup } from "./ammo-setup";
 import { WecomChatsCard } from "./wecom-chats-card";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
 import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
+import { KNOWHOW_DEFAULT_BASE_URL } from "@/lib/knowhow";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 import { parseAiCapabilities } from "@/lib/ai-capabilities";
 import { CrmSyncCard } from "./crm-sync-card";
@@ -34,7 +36,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, crmStats, ammoConfig, salesmen] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, salesmen] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -48,6 +50,7 @@ export default async function SettingsPage() {
       include: { user: true },
     }),
     db.systemKmsCredential.findUnique({ where: { id: "singleton" } }),
+    db.systemKnowhowCredential.findUnique({ where: { id: "singleton" } }),
     getCrmSyncStats(),
     getAmmoConfigForClient(),
     getCrmSalesmenAction(),
@@ -160,6 +163,17 @@ export default async function SettingsPage() {
             {m.settings.personalKmsHint}{" "}
             <a href="/account" className="text-indigo-600 hover:underline">{m.nav.account}</a>
           </p>
+        </Card>
+
+        <Card title={m.settings.systemKnowhowTitle} className="lg:col-span-2">
+          <SystemKnowhowSetup
+            credential={{
+              configured: !!systemKnowhow?.apiKey,
+              keyTail: systemKnowhow?.apiKey ? systemKnowhow.apiKey.slice(-4) : "",
+              baseUrl: systemKnowhow?.baseUrl ?? KNOWHOW_DEFAULT_BASE_URL,
+              updatedAt: systemKnowhow?.updatedAt?.toISOString(),
+            }}
+          />
         </Card>
 
         <Card title={m.ammoSettings.title} className="lg:col-span-2">

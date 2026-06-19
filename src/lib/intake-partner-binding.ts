@@ -1,5 +1,5 @@
 import { db } from "./db";
-import type { IntakeProposal } from "./ai-intake";
+import type { IntakeClarification, IntakeProposal } from "./ai-intake";
 import type { IntakeScope } from "./ai-locale";
 import type { Locale } from "./i18n/locale";
 
@@ -127,15 +127,23 @@ export async function resolveIntakePartner(opts: {
     const matches = await findPartnersByName(name);
     if (matches.length === 1) return { ok: true, partnerId: matches[0]!.id, partnerName: matches[0]!.name };
     if (matches.length > 1) {
+      const exact = matches.find((m) => m.name.toLowerCase() === name.toLowerCase());
+      if (exact) return { ok: true, partnerId: exact.id, partnerName: exact.name };
       return {
         ok: false,
         error:
           opts.locale === "zh"
-            ? `找到多家匹配伙伴：${matches.map((m) => m.name).join("、")}，请说明具体是哪家`
+            ? `找到多家匹配伙伴：${matches.map((m) => m.name).join("、")}，请确认具体是哪家`
             : `Multiple partners match: ${matches.map((m) => m.name).join(", ")} — specify which one`,
       };
     }
-    return { ok: true, partnerId: "", partnerName: name };
+    return {
+      ok: false,
+      error:
+        opts.locale === "zh"
+          ? `未找到名为「${name}」的伙伴，请确认是否创建不关联待办`
+          : `No partner found for "${name}" — confirm an unlinked todo before saving`,
+    };
   }
 
   if (!intakeScopeRequiresPartner(opts.scope)) {
@@ -193,8 +201,8 @@ export function buildPartnerBindingPrompt(opts: {
 
   if (opts.scope === "todo") {
     return opts.locale === "zh"
-      ? `[开放式录入 · 待办]\n未预选伙伴。待办可全局（不关联伙伴），若用户提到公司名则写入 proposal.partnerName 以便关联。`
-      : `[Open intake · todo]\nNo partner pre-selected. Todos may be global; set proposal.partnerName when the user names a company.`;
+      ? `[开放式录入 · 待办]\n未预选伙伴。优先从用户描述中提取公司/客户名并关联 Partner Hub 伙伴（proposal.partnerName）。唯一匹配则自动关联；多家匹配须 blocking 澄清让用户选定。若提到公司名但系统中找不到，须 blocking 确认是否创建不关联伙伴/客户的待办（勿静默跳过）。未提及公司名则可创建全局待办。`
+      : `[Open intake · todo]\nPrefer linking a Partner Hub partner when the user names a company. Single match → auto-link; multiple matches → blocking disambiguation. If a company is named but not found, require blocking confirmation before saving an unlinked todo. No company mentioned → global todo is OK.`;
   }
 
   if (intakeScopeRequiresPartner(opts.scope)) {
@@ -204,4 +212,109 @@ export function buildPartnerBindingPrompt(opts: {
   }
 
   return "";
+}
+
+export const TODO_PARTNER_NOT_FOUND_ID = "todo-partner-not-found";
+
+const CONFIRM_UNLINKED_TODO_ZH = "是，创建不关联待办";
+const CONFIRM_UNLINKED_TODO_EN = "Yes, create without linking";
+
+export function confirmUnlinkedTodoOption(locale: Locale): string {
+  return locale === "zh" ? CONFIRM_UNLINKED_TODO_ZH : CONFIRM_UNLINKED_TODO_EN;
+}
+
+export function isConfirmUnlinkedTodoOption(value: string): boolean {
+  const v = value.trim();
+  return (
+    v === CONFIRM_UNLINKED_TODO_ZH ||
+    v === CONFIRM_UNLINKED_TODO_EN ||
+    /^是[，,]?\s*创建不关联/i.test(v)
+  );
+}
+
+/** Try to link a todo to a partner; confirm before saving unlinked when lookup fails. */
+export async function enrichTodoPartnerBinding(opts: {
+  proposal: IntakeProposal;
+  userText?: string;
+  boundPartnerId?: string;
+  locale: Locale;
+  existingClarifications: IntakeClarification[];
+}): Promise<{ proposal: IntakeProposal; clarifications: IntakeClarification[] }> {
+  if (opts.boundPartnerId) {
+    return { proposal: opts.proposal, clarifications: [] };
+  }
+  if (
+    opts.existingClarifications.some(
+      (c) => c.id === "partnerName" || c.id === TODO_PARTNER_NOT_FOUND_ID
+    )
+  ) {
+    return { proposal: opts.proposal, clarifications: [] };
+  }
+
+  let proposal = opts.proposal;
+  if (opts.userText?.trim()) {
+    proposal = await enrichProposalPartnerFromText(proposal, opts.userText, opts.boundPartnerId);
+  }
+
+  const clarifications: IntakeClarification[] = [];
+  const name = proposal.partnerName?.trim();
+
+  if (name) {
+    const matches = await findPartnersByName(name);
+    if (matches.length === 1) {
+      proposal = { ...proposal, partnerName: matches[0]!.name };
+    } else if (matches.length > 1) {
+      clarifications.push({
+        id: "partnerName",
+        question:
+          opts.locale === "zh"
+            ? "找到多家匹配伙伴，请确认要关联哪家："
+            : "Multiple partners match — which one should this todo link to?",
+        options: matches.map((m) => m.name),
+        multi: false,
+        allowOther: true,
+        apply: "direct",
+        kind: "identity",
+        blocking: true,
+      });
+    } else {
+      clarifications.push({
+        id: TODO_PARTNER_NOT_FOUND_ID,
+        question:
+          opts.locale === "zh"
+            ? `未在系统中找到「${name}」。是否创建不关联伙伴/客户的待办？也可在下方输入正确公司名。`
+            : `"${name}" was not found in Partner Hub. Create an unlinked todo? Or enter the correct company name below.`,
+        options: [confirmUnlinkedTodoOption(opts.locale)],
+        multi: false,
+        allowOther: true,
+        apply: "direct",
+        kind: "identity",
+        blocking: true,
+      });
+    }
+    return { proposal, clarifications };
+  }
+
+  if (opts.userText?.trim()) {
+    const suggestions = await suggestPartnersFromIntakeText(opts.userText, 5);
+    if (suggestions.length === 1) {
+      proposal = { ...proposal, partnerName: suggestions[0]!.name };
+    } else if (suggestions.length > 1) {
+      clarifications.push({
+        id: "partnerName",
+        question:
+          opts.locale === "zh"
+            ? "找到多家可能相关的伙伴，请确认要关联哪家："
+            : "Several partners may match — which one should this todo link to?",
+        options: suggestions.map((m) => m.name),
+        multi: false,
+        allowOther: true,
+        apply: "direct",
+        kind: "identity",
+        blocking: true,
+      });
+    }
+  }
+
+  return { proposal, clarifications };
 }

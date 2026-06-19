@@ -7,6 +7,7 @@ import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
 import { extractPatchFromTool } from "./proposal-patch-extract";
 import { isKmsConfiguredForUser, prefetchKmsFromText } from "./kms";
+import { isKnowhowConfigured } from "./knowhow";
 import {
   buildIntakeTools,
   intakeEnrichmentSkillsForScope,
@@ -111,6 +112,8 @@ export type BusinessRecordProposal = {
 
 export type IntakeProposal = {
   partnerName?: string;
+  /** Partner Hub 伙伴 ID（仅当系统中确有建档时才有） */
+  hubPartnerId?: string;
   /** CRM 客户 ID（com_id），开放录入时可能仅有 CRM 无 Hub 伙伴 */
   crmCustomerId?: string;
   crmCustomerName?: string;
@@ -217,7 +220,7 @@ async function callIntakeExtract(
 
 const MAX_RESEARCH_STEPS = 8;
 
-function normalizeClarifications(raw: unknown): IntakeClarification[] {
+function normalizeClarifications(raw: unknown, scope?: IntakeScope): IntakeClarification[] {
   if (!Array.isArray(raw)) return [];
   const out: IntakeClarification[] = [];
   for (let i = 0; i < raw.length && out.length < 4; i++) {
@@ -229,6 +232,7 @@ function normalizeClarifications(raw: unknown): IntakeClarification[] {
     const id = typeof c.id === "string" && c.id ? c.id : `clarify-${i}`;
     const isIdentity =
       kind === "identity" || id === "partnerName" || id === "name" || id === "website" || id === "dedupe";
+    const isTodoPartnerNotFound = id === "todo-partner-not-found";
     out.push({
       id,
       question: c.question.trim(),
@@ -237,7 +241,7 @@ function normalizeClarifications(raw: unknown): IntakeClarification[] {
       allowOther: c.allowOther !== false,
       apply: c.apply === "direct" || c.apply === "ai" ? c.apply : undefined,
       kind: isIdentity ? "identity" : kind,
-      blocking: c.blocking ?? isIdentity,
+      blocking: isTodoPartnerNotFound ? true : (c.blocking ?? isIdentity),
     });
   }
   return out;
@@ -298,7 +302,10 @@ async function finalizeIntakeTurn(
   }
   const next = { ...turn, proposal };
   return isFastIntakeScope(scope)
-    ? await finalizeFastIntakeTurn(scope, next, locale, opts?.partnerId ? { boundPartnerId: opts.partnerId } : undefined)
+    ? await finalizeFastIntakeTurn(scope, next, locale, {
+        boundPartnerId: opts?.partnerId,
+        userText: opts?.userText,
+      })
     : next;
 }
 
@@ -385,10 +392,11 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
   const turn: IntakeTurn = {
     reply: raw.reply || defaultIntakeReply(locale),
     questions: Array.isArray(raw.questions) ? raw.questions : [],
-    clarifications: normalizeClarifications(raw.clarifications),
+    clarifications: normalizeClarifications(raw.clarifications, scope),
     ready: !!raw.ready,
     proposal: {
       partnerName: p.partnerName == null ? undefined : asTrimmedString(p.partnerName),
+      hubPartnerId: p.hubPartnerId == null ? undefined : asTrimmedString(p.hubPartnerId),
       crmCustomerId: p.crmCustomerId == null ? undefined : asTrimmedString(p.crmCustomerId),
       crmCustomerName: p.crmCustomerName == null ? undefined : asTrimmedString(p.crmCustomerName),
       saveMode: p.saveMode === "crm_only" ? "crm_only" : p.saveMode === "both" ? "both" : undefined,
@@ -544,6 +552,7 @@ export async function runIntakeTurn(opts: {
   const enrichmentSkills = intakeEnrichmentSkillsForScope(opts.scope);
   const useResearch = !fast && enrichmentSkills.length > 0 && !!opts.userId;
   const kmsConfigured = useResearch ? await isKmsConfiguredForUser(opts.userId) : false;
+  const knowhowConfigured = useResearch ? await isKnowhowConfigured() : false;
 
   const bindingBlock = buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
   const system = fast
@@ -563,6 +572,7 @@ export async function runIntakeTurn(opts: {
         partnerBinding: bindingBlock,
         useResearch,
         kmsConfigured,
+        knowhowConfigured,
       });
 
   const chat: ChatMessage[] = [{ role: "system", content: system }];

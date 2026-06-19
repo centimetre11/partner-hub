@@ -617,6 +617,14 @@ model SystemKmsCredential {
   updatedAt   DateTime @updatedAt
 }
 
+// 团队级 Know-how 知识库检索 API 令牌
+model SystemKnowhowCredential {
+  id        String   @id @default("singleton")
+  baseUrl   String   @default("https://digitchat.fanruan.com/dataset")
+  apiKey    String
+  updatedAt DateTime @updatedAt
+}
+
 // 团队弹药库配置（Google 云盘文件夹 + KMS 页面地址）
 model SystemAmmoConfig {
   id                   String   @id @default("singleton")

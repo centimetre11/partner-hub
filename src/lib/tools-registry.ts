@@ -10,6 +10,8 @@ export type ToolMeta = {
   requiresWebSearch?: boolean;
   /** Requires user-configured KMS personal token */
   requiresKms?: boolean;
+  /** Requires team Know-how API token */
+  requiresKnowhow?: boolean;
   /** Core scenario priority */
   priority: "core" | "standard" | "assistant";
 };
@@ -31,6 +33,7 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   web_search: { implemented: true, requiresWebSearch: true, priority: "core" },
   scan_sentiment: { implemented: true, requiresWebSearch: true, priority: "core" },
   search_knowledge: { implemented: true, priority: "core" },
+  search_knowhow: { implemented: true, requiresKnowhow: true, priority: "core" },
   read_kms: { implemented: true, requiresKms: true, priority: "core" },
   write_kms: { implemented: true, requiresKms: true, priority: "standard" },
   create_document: { implemented: true, priority: "core" },
@@ -49,6 +52,7 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   web_search: "intel",
   scan_sentiment: "intel",
   search_knowledge: "content",
+  search_knowhow: "knowhow",
   read_kms: "kms",
   write_kms: "kms",
   create_document: "content",
@@ -58,6 +62,7 @@ const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
   { id: "partner", label: "Partner profiles", desc: "Search, read, and log partner activity", icon: "◮" },
   { id: "intel", label: "External intelligence", desc: "LinkedIn and public web — monitor partners, competitors, market signals", icon: "📡" },
   { id: "kms", label: "Company KMS", desc: "Fanruan internal Confluence docs — read and write (personal token required)", icon: "🏢" },
+  { id: "knowhow", label: "Know-how", desc: "Fanruan Know-how knowledge base — semantic search for cases, solutions, and collateral", icon: "🔍" },
   { id: "todo", label: "Tasks", desc: "Create and list follow-up todos", icon: "☑" },
   { id: "content", label: "Knowledge & reports", desc: "Team knowledge base and report center output", icon: "📄" },
 ];
@@ -95,12 +100,13 @@ export function isToolAvailable(name: string, opts?: { webSearchReady?: boolean 
 
 export function getToolAvailability(
   name: string,
-  opts?: { kmsConfigured?: boolean; webSearchReady?: boolean },
-): "ready" | "needs_web_search" | "needs_kms" | "unknown" {
+  opts?: { kmsConfigured?: boolean; knowhowConfigured?: boolean; webSearchReady?: boolean },
+): "ready" | "needs_web_search" | "needs_kms" | "needs_knowhow" | "unknown" {
   if (!SKILLS.some((t) => t.name === name)) return "unknown";
   const meta = TOOL_META[name];
   if (meta?.requiresWebSearch && !opts?.webSearchReady) return "needs_web_search";
   if (meta?.requiresKms && !opts?.kmsConfigured) return "needs_kms";
+  if (meta?.requiresKnowhow && !opts?.knowhowConfigured) return "needs_knowhow";
   return "ready";
 }
 
@@ -111,6 +117,7 @@ export const CORE_AGENT_TOOLS = [
   "add_timeline_event",
   "create_todo",
   "search_knowledge",
+  "search_knowhow",
 ];
 
 export const INTEL_AGENT_TOOLS = ["linkedin_search", "web_search", "scan_sentiment"];
