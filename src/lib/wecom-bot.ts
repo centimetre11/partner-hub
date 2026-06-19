@@ -16,6 +16,10 @@ import { runAssistantTurn } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
 import { shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
+import {
+  intakeScopeRequiresPartner,
+  lookupSinglePartnerByName,
+} from "@/lib/intake-partner-binding";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
   formatWecomBotHelpReply,
@@ -134,6 +138,23 @@ function withPartnerHint(
   ];
 }
 
+/** Open intake (no bound group): user picks partner by name before confirm. */
+async function applyPartnerPickToSession(
+  session: ProposeSession,
+  text: string,
+  boundPartnerId?: string
+): Promise<ProposeSession> {
+  if (boundPartnerId || session.proposal.partnerName?.trim()) return session;
+  if (!intakeScopeRequiresPartner(session.scope)) return session;
+  const match = await lookupSinglePartnerByName(text);
+  if (!match) return session;
+  return {
+    ...session,
+    partnerId: match.id,
+    proposal: { ...session.proposal, partnerName: match.name },
+  };
+}
+
 async function refreshAiSummary() {
   aiSummaryCache = await getAiConfigSummary();
   status.ai = aiSummaryCache;
@@ -214,7 +235,9 @@ async function handleTextMessage(frame: WsFrame) {
 
   const boundPartnerId = chat?.partnerId ?? undefined;
   const boundPartnerName = chat?.partner?.name;
-  const session = proposeSessions.get(key);
+  const chatType: "group" | "single" =
+    chat?.chatType === "group" || frame.body?.chattype === "group" ? "group" : "single";
+  let session = proposeSessions.get(key);
 
   try {
     if (session && isProposeCancel(text)) {
@@ -227,7 +250,7 @@ async function handleTextMessage(frame: WsFrame) {
 
     if (session && isProposeConfirm(text)) {
       if (!session.ready) {
-        const reply = "草案信息还不够完整，请继续补充细节后再 @我 回复「确认」保存，或 @我 回复「取消」放弃。";
+        const reply = "草案信息还不够完整，请继续补充细节后再回复「确认」保存，或回复「取消」放弃。";
         appendHistory(key, "assistant", reply);
         await wsClient.replyStream(frame, streamId, reply, true);
         return;
@@ -254,6 +277,11 @@ async function handleTextMessage(frame: WsFrame) {
       );
       await wsClient.replyStream(frame, streamId, reply, true);
       return;
+    }
+
+    if (session && !isProposeConfirm(text) && !isProposeCancel(text)) {
+      session = await applyPartnerPickToSession(session, text, boundPartnerId);
+      proposeSessions.set(key, session);
     }
 
     const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
@@ -313,6 +341,7 @@ async function handleTextMessage(frame: WsFrame) {
           proposal: merged,
           ready: result.ready,
           questions: result.questions,
+          chatType,
         });
         console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
       }

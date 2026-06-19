@@ -23,6 +23,7 @@ export function formatProposeWecomReply(opts: {
   proposal: IntakeProposal;
   ready: boolean;
   questions?: string[];
+  chatType?: "group" | "single";
 }): string {
   const parts: string[] = [];
   if (opts.reply.trim()) parts.push(opts.reply.trim());
@@ -55,10 +56,19 @@ export function formatProposeWecomReply(opts: {
   }
 
   const hasItems = countProposalItems(opts.proposal) > 0;
+  const isGroup = opts.chatType !== "single";
+  const confirmHint = isGroup
+    ? "群聊请 **@我 确认** 保存，或 **@我 取消** 放弃。"
+    : "私聊请直接回复 **确认** 保存，或 **取消** 放弃。";
+  const partnerHint =
+    !isGroup && !opts.proposal.partnerName && opts.scope === "business_record"
+      ? "\n💡 私聊录入需指定伙伴：回复公司全称（如 ASTRA Group），或消息里带上公司名。"
+      : "";
+
   if (opts.ready && hasItems) {
-    parts.push("\n---\n✅ 信息已足够。群聊请 **@我 确认** 保存，或 **@我 取消** 放弃。");
+    parts.push(`\n---\n✅ 信息已足够。${confirmHint}${partnerHint}`);
   } else if (hasItems) {
-    parts.push("\n---\n📝 草案进行中。可继续补充，就绪后 **@我 确认** 保存，**@我 取消** 放弃。");
+    parts.push(`\n---\n📝 草案进行中。可继续补充，就绪后 ${confirmHint}${partnerHint}`);
   } else {
     parts.push("\n---\n请补充更多信息以生成可保存的草案。");
   }

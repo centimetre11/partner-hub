@@ -20,6 +20,7 @@ export function sanitizeProposalForScope(scope: IntakeScope, raw: IntakeProposal
     case "business_record":
       return {
         ...EMPTY_PROPOSAL_ARRAYS,
+        partnerName: raw.partnerName,
         summary,
         businessRecords: raw.businessRecords ?? [],
       };
@@ -33,6 +34,7 @@ export function sanitizeProposalForScope(scope: IntakeScope, raw: IntakeProposal
     case "powermap":
       return {
         ...EMPTY_PROPOSAL_ARRAYS,
+        partnerName: raw.partnerName,
         summary,
         contacts: raw.contacts ?? [],
       };

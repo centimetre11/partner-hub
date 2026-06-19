@@ -47,6 +47,12 @@ async function findPartnersByName(query: string, limit = 6) {
   });
 }
 
+/** Single unambiguous partner match by name (exact or contains). */
+export async function lookupSinglePartnerByName(query: string) {
+  const matches = await findPartnersByName(query);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
 export type ResolveIntakePartnerResult =
   | { ok: true; partnerId: string; partnerName: string }
   | { ok: false; error: string };
