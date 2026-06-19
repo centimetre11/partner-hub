@@ -67,41 +67,6 @@ export async function saveNotificationAsDocumentAction(notificationId: string) {
   redirect(`/documents/${doc.id}`);
 }
 
-// ============ Material ============
-
-export async function upsertMaterialAction(formData: FormData) {
-  const user = await requireUser();
-  const id = String(formData.get("id") ?? "");
-  const assetId = String(formData.get("assetId") ?? "") || null;
-  const data = {
-    title: String(formData.get("title") ?? "").trim(),
-    description: String(formData.get("description") ?? "") || null,
-    category: String(formData.get("category") ?? "OTHER"),
-    shared: formData.get("shared") === "on",
-  };
-  if (!data.title) return;
-  let materialId = id;
-  if (id) {
-    await db.material.update({
-      where: { id },
-      data: assetId ? { ...data, assetId } : data,
-    });
-  } else {
-    if (!assetId) return;
-    const created = await db.material.create({ data: { ...data, assetId, createdById: user.id } });
-    materialId = created.id;
-  }
-  revalidatePath("/materials");
-  redirect("/materials");
-}
-
-export async function deleteMaterialAction(id: string) {
-  await requireUser();
-  await db.material.delete({ where: { id } });
-  revalidatePath("/materials");
-  redirect("/materials");
-}
-
 // ============ Knowledge ============
 
 export async function upsertKnowledgeAction(formData: FormData) {

@@ -1,54 +1,60 @@
-import Link from "next/link";
-import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import { isSuperAdmin } from "@/lib/user-roles";
 import { PageHeader } from "@/components/ui";
-import { deleteMaterialAction } from "@/lib/content-actions";
-import { MaterialCard } from "@/components/material-card";
-import { getServerI18n, labelConstants } from "@/lib/server-i18n";
+import { AmmoGdriveSection } from "@/components/ammo-gdrive-section";
+import { AmmoKmsSection } from "@/components/ammo-kms-section";
+import { resolveKmsAmmoPageUrls } from "@/lib/ammo-config";
+import { fetchAmmoGdriveFiles } from "@/lib/google-drive";
+import { fetchAmmoKmsPages } from "@/lib/kms";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function MaterialsPage() {
-  await requireUser();
-  const { labels, messages: m, bcp47 } = await getServerI18n();
-  const L = labelConstants(labels);
-  const items = await db.material.findMany({
-    orderBy: { updatedAt: "desc" },
-    include: { asset: true, createdBy: true },
-  });
+  const user = await requireUser();
+  const { messages: m, bcp47 } = await getServerI18n();
+  const kmsUrls = await resolveKmsAmmoPageUrls();
+
+  const [gdriveResult, kmsResult] = await Promise.all([
+    fetchAmmoGdriveFiles(),
+    fetchAmmoKmsPages(kmsUrls, user.id),
+  ]);
+
+  const isAdmin = isSuperAdmin(user);
 
   return (
     <div className="pb-16">
-      <PageHeader
-        title={m.materials.title}
-        desc={m.materials.desc}
-        actions={
-          <Link href="/materials/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
-            {m.materials.newMaterial}
-          </Link>
-        }
-      />
-      <div className="px-8 max-w-4xl space-y-3">
-        {items.map((item) => (
-          <MaterialCard
-            key={item.id}
-            id={item.id}
-            title={item.title}
-            description={item.description}
-            category={item.category}
-            categoryLabel={L.MATERIAL_CATEGORY_LABELS[item.category] ?? item.category}
-            updatedAt={item.updatedAt}
-            author={item.createdBy?.name}
-            bcp47={bcp47}
-            asset={item.asset}
-            labels={{
-              openLink: m.materials.openLink,
-              edit: m.common.edit,
-              delete: m.common.delete,
-              providers: m.materials.providers,
-            }}
-            deleteAction={deleteMaterialAction.bind(null, item.id)}
-          />
-        ))}
-        {items.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">{m.materials.empty}</div>}
+      <PageHeader title={m.materials.title} desc={m.materials.desc} />
+      <div className="px-8 max-w-5xl space-y-6">
+        <AmmoGdriveSection
+          result={gdriveResult}
+          bcp47={bcp47}
+          isAdmin={isAdmin}
+          labels={{
+            title: m.materials.gdriveSection,
+            openFolder: m.materials.openFolder,
+            openFile: m.materials.openLink,
+            empty: m.materials.gdriveEmpty,
+            notConfigured: m.materials.gdriveNotConfigured,
+            missingCredentials: m.materials.gdriveMissingCredentials,
+            configure: m.materials.configureInSettings,
+            files: m.materials.gdriveFileCount,
+          }}
+        />
+        <AmmoKmsSection
+          result={kmsResult}
+          bcp47={bcp47}
+          isAdmin={isAdmin}
+          labels={{
+            title: m.materials.kmsSection,
+            open: m.materials.openLink,
+            empty: m.materials.kmsEmpty,
+            notConfigured: m.materials.kmsNotConfigured,
+            kmsNotConfigured: m.materials.kmsTokenNotConfigured,
+            configure: m.materials.configureInSettings,
+            configureKms: m.materials.configureKmsToken,
+            pages: m.materials.kmsPageCount,
+            underParent: m.materials.underParent,
+          }}
+        />
       </div>
     </div>
   );

@@ -612,6 +612,15 @@ model SystemKmsCredential {
   updatedAt   DateTime @updatedAt
 }
 
+// 团队弹药库配置（Google 云盘文件夹 + KMS 页面地址）
+model SystemAmmoConfig {
+  id                   String   @id @default("singleton")
+  gdriveFolderUrl      String?
+  gdriveServiceAccount String?
+  kmsPageUrls          String?
+  updatedAt            DateTime @updatedAt
+}
+
 // 帆软 CRM 同步客户（com_id 为主键）
 model CrmCustomer {
   id            String       @id

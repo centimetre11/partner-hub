@@ -1,20 +1,69 @@
 /**
  * 验证商务记录 → CRM 双写链路（需网络）
- * 用法: npx tsx scripts/test-crm-trace.ts
+ *
+ * 用法:
+ *   npx tsx scripts/test-crm-trace.ts              # 真实提交 CRM
+ *   npx tsx scripts/test-crm-trace.ts --dry-run    # 仅打印 payload，不提交
  */
+import { randomUUID } from "crypto";
 import { PrismaClient } from "@prisma/client";
+import { buildCrmTraceWireBody } from "../src/lib/crm";
+import { buildCrmTraceFields } from "../src/lib/crm-trace-payload";
 import { syncBusinessRecordToCrm } from "../src/lib/crm-business-record";
 
 const db = new PrismaClient();
+const dryRun = process.argv.includes("--dry-run");
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function formatCrmDate(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function formatCrmTime(d: Date) {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
 
 async function main() {
+  const title = "拜访 Sheike 商务交流";
+  const content = "今天拜访了 Sheike，一起吃了个饭，讨论 FineBI 合作";
+  const category = "VISIT" as const;
+  const occurredAt = new Date();
+
+  const crmFields = buildCrmTraceFields({ title, content, category });
+  console.log("CRM field mapping:", crmFields);
+
+  const samplePayload = buildCrmTraceWireBody({
+    traceId: randomUUID(),
+    traceNature: crmFields.traceNature,
+    traceCompany: "00000000-0000-0000-0000-000000000000",
+    traceContact: "",
+    traceRecdate: formatCrmDate(occurredAt),
+    traceRectime: formatCrmTime(new Date()),
+    traceRecorder: "Zayne.Zhao",
+    traceAction: crmFields.traceAction,
+    traceDetail: crmFields.traceDetail,
+    traceKeyword: crmFields.traceKeyword,
+  });
+  console.log("wire payload sample:", JSON.stringify(samplePayload, null, 2));
+
+  if (dryRun) {
+    console.log("--dry-run: skipping database and CRM submit");
+    return;
+  }
+
   const user = await db.user.findFirst();
   if (!user) throw new Error("No user in database");
 
-  await db.user.update({
-    where: { id: user.id },
-    data: { crmSalesmanName: "chenmin" },
-  });
+  const crmSalesmanName = user.crmSalesmanName ?? "Zayne.Zhao";
+  if (!user.crmSalesmanName) {
+    await db.user.update({
+      where: { id: user.id },
+      data: { crmSalesmanName },
+    });
+  }
 
   let partner = await db.partner.findFirst();
   if (!partner) throw new Error("No partner in database");
@@ -30,10 +79,10 @@ async function main() {
   const record = await db.businessRecord.create({
     data: {
       partnerId: partner.id,
-      category: "VISIT",
-      title: "API 双写测试",
-      content: "partner-hub 自动同步验证",
-      occurredAt: new Date(),
+      category,
+      title,
+      content,
+      occurredAt,
       source: "MANUAL",
       createdById: user.id,
     },
@@ -43,7 +92,7 @@ async function main() {
     recordId: record.id,
     partnerId: partner.id,
     userId: user.id,
-    category: "VISIT",
+    category,
     title: record.title,
     content: record.content,
     occurredAt: record.occurredAt,
@@ -54,6 +103,7 @@ async function main() {
   console.log("record crm fields:", {
     crmTraceId: updated?.crmTraceId,
     crmSyncedAt: updated?.crmSyncedAt,
+    crmSyncStatus: updated?.crmSyncStatus,
     crmSyncError: updated?.crmSyncError,
   });
 

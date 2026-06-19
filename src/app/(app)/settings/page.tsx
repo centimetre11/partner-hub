@@ -5,6 +5,7 @@ import { RegisterForm } from "./register-form";
 import { MemberRow } from "./member-row";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
 import { SystemKmsSetup } from "./system-kms-setup";
+import { AmmoSetup } from "./ammo-setup";
 import { WecomChatsCard } from "./wecom-chats-card";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
 import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
@@ -12,6 +13,7 @@ import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengi
 import { parseAiCapabilities } from "@/lib/ai-capabilities";
 import { CrmSyncCard } from "./crm-sync-card";
 import { getCrmSyncStats } from "@/lib/crm-sync";
+import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getServerI18n } from "@/lib/server-i18n";
 
 function maskKey(apiKey: string, notSet: string) {
@@ -31,7 +33,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, crmStats] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, crmStats, ammoConfig] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -46,6 +48,7 @@ export default async function SettingsPage() {
     }),
     db.systemKmsCredential.findUnique({ where: { id: "singleton" } }),
     getCrmSyncStats(),
+    getAmmoConfigForClient(),
   ]);
 
   const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
@@ -155,6 +158,10 @@ export default async function SettingsPage() {
             {m.settings.personalKmsHint}{" "}
             <a href="/account" className="text-indigo-600 hover:underline">{m.nav.account}</a>
           </p>
+        </Card>
+
+        <Card title={m.ammoSettings.title} className="lg:col-span-2">
+          <AmmoSetup config={ammoConfig} />
         </Card>
 
         <Card title={m.crm.syncTitle} className="lg:col-span-2">

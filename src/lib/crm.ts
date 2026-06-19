@@ -2,7 +2,7 @@ export const CRM_DEFAULT_DATA_URL =
   "https://crm.finereporthelp.com/WebReport/decision/url/pub/crm/data?id=fa8f9bcb42b247a7880688336242e40d&secret=zd123456";
 
 export const CRM_TRACE_SUBMIT_URL =
-  "https://crm-dev.fineres.com/WebReport/decision/url/datainputcrm/submit?id=zd_trce_in&secret=zd12345";
+  "https://crm.finereporthelp.com/WebReport/decision/url/datainputcrm/submit?id=zd_trce_in&secret=zd12345";
 
 export type CrmDataRow = {
   com_id: string;
@@ -123,6 +123,46 @@ export type CrmTraceInsertPayload = {
   traceKeyword?: string;
 };
 
+export function buildCrmTraceWireBody(payload: CrmTraceInsertPayload) {
+  return {
+    info: [
+      {
+        trace_id: payload.traceId,
+        trace_nature: payload.traceNature,
+        trace_company: payload.traceCompany,
+        trace_contact: payload.traceContact ?? "",
+        trace_recdate: payload.traceRecdate,
+        trace_rectime: payload.traceRectime,
+        trace_recorder: payload.traceRecorder,
+        trace_action: payload.traceAction,
+        trace_detail: payload.traceDetail,
+        trace_keyword: payload.traceKeyword || "商务跟进",
+        op: "insert",
+      },
+    ],
+  };
+}
+
+function tryParseCrmJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
+function extractCrmSubmitError(data: unknown): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const root = data as Record<string, unknown>;
+  if (root.success === false) {
+    return String(root.error ?? root.message ?? root.msg ?? "CRM 接口返回失败");
+  }
+  if (root.result !== undefined && root.result !== "success") {
+    return String(root.error ?? root.message ?? root.msg ?? `CRM result=${String(root.result)}`);
+  }
+  return undefined;
+}
+
 export async function submitCrmBusinessRecord(
   payload: CrmTraceInsertPayload,
   submitUrl = process.env.CRM_TRACE_SUBMIT_URL?.trim() || CRM_TRACE_SUBMIT_URL,
@@ -130,31 +170,26 @@ export async function submitCrmBusinessRecord(
   const res = await fetch(submitUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      info: [
-        {
-          trace_id: payload.traceId,
-          trace_nature: payload.traceNature,
-          trace_company: payload.traceCompany,
-          trace_contact: payload.traceContact || payload.traceId,
-          trace_recdate: payload.traceRecdate,
-          trace_rectime: payload.traceRectime,
-          trace_recorder: payload.traceRecorder,
-          trace_action: payload.traceAction,
-          trace_detail: payload.traceDetail,
-          trace_keyword: payload.traceKeyword || "中东接口插入",
-          op: "insert",
-        },
-      ],
-    }),
+    body: JSON.stringify(buildCrmTraceWireBody(payload)),
     cache: "no-store",
   });
+  const raw = await res.text();
+  const data = tryParseCrmJson(raw);
+
   if (!res.ok) {
-    throw new Error(`CRM trace submit HTTP ${res.status}`);
+    const snippet = typeof data === "string" ? data.slice(0, 200) : JSON.stringify(data).slice(0, 200);
+    throw new Error(`CRM trace submit HTTP ${res.status}: ${snippet}`);
   }
-  const json = (await res.json()) as { result?: string; kind?: string };
-  if (json.result !== "success") {
-    throw new Error(`CRM trace submit failed: ${JSON.stringify(json)}`);
+
+  const crmError = extractCrmSubmitError(data);
+  if (crmError) {
+    const snippet = typeof data === "string" ? data.slice(0, 200) : JSON.stringify(data).slice(0, 200);
+    throw new Error(`${crmError} (${snippet})`);
   }
-  return json;
+
+  if (typeof data === "string") {
+    throw new Error(`CRM trace submit returned non-JSON: ${data.slice(0, 200)}`);
+  }
+
+  return data as { result?: string; kind?: string };
 }

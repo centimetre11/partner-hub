@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { submitCrmBusinessRecord, type CrmTraceInsertPayload } from "./crm";
+import { submitCrmBusinessRecord } from "./crm";
+import { buildCrmTraceFields } from "./crm-trace-payload";
 import type { BusinessRecordCategory } from "./business-record-core";
 
 export type CrmBusinessRecordSyncResult =
@@ -18,27 +19,6 @@ function formatCrmDate(d: Date) {
 
 function formatCrmTime(d: Date) {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-}
-
-function mapCategoryToNature(category: BusinessRecordCategory): CrmTraceInsertPayload["traceNature"] {
-  return category === "VISIT" ? "现场" : "非现场";
-}
-
-function mapCategoryToAction(category: BusinessRecordCategory) {
-  const map: Record<BusinessRecordCategory, string> = {
-    VISIT: "拜访",
-    TRAINING: "培训",
-    NEGOTIATION: "商务谈判",
-    DELIVERY: "交付",
-    RELATIONSHIP: "关系维护",
-    OTHER: "其他",
-  };
-  return map[category] ?? "其他";
-}
-
-function buildTraceDetail(title: string, content: string | null | undefined) {
-  const body = content?.trim();
-  return body ? `${title.trim()}\n${body}` : title.trim();
 }
 
 async function resolveCrmContactId(crmCustomerId: string, contactId: string | null | undefined) {
@@ -140,18 +120,24 @@ export async function syncBusinessRecordToCrm(opts: {
   const traceId = randomUUID();
   const now = new Date();
   const traceContact = await resolveCrmContactId(partner.crmCustomerId, opts.contactId);
+  const crmFields = buildCrmTraceFields({
+    title: opts.title,
+    content: opts.content,
+    category: opts.category,
+  });
 
   try {
     await submitCrmBusinessRecord({
       traceId,
-      traceNature: mapCategoryToNature(opts.category),
+      traceNature: crmFields.traceNature,
       traceCompany: partner.crmCustomerId,
       traceContact,
       traceRecdate: formatCrmDate(opts.occurredAt),
       traceRectime: formatCrmTime(now),
       traceRecorder: user.crmSalesmanName,
-      traceAction: mapCategoryToAction(opts.category),
-      traceDetail: buildTraceDetail(opts.title, opts.content),
+      traceAction: crmFields.traceAction,
+      traceDetail: crmFields.traceDetail,
+      traceKeyword: crmFields.traceKeyword,
     });
 
     await persistCrmSyncState(opts.recordId, { status: "synced", traceId });
