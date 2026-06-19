@@ -1,22 +1,27 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, Card, EmptyState, fmtDate, TierBadge } from "@/components/ui";
+import { Card, EmptyState, fmtDate, TierBadge } from "@/components/ui";
 import { staleDays } from "@/lib/completeness";
 import { toggleTodoAction } from "@/lib/actions";
 import { WeeklyReport } from "./weekly-report";
 import { AiAddButton } from "@/components/ai-add-button";
 import { BoardOverview } from "./dashboard/board-overview";
+import { DashboardWorkbenchTodos } from "./dashboard-workbench-todos";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
-import { getServerI18n, labelConstants, stageName } from "@/lib/server-i18n";
-import { isTodoOverdue, overdueDueDateBefore } from "@/lib/todo-dates";
+import { getServerI18n, stageName } from "@/lib/server-i18n";
+import { overdueDueDateBefore } from "@/lib/todo-dates";
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; todos?: string }>;
+}) {
   const user = await requireUser();
-  const { tab } = await searchParams;
+  const { tab, todos: todosScope } = await searchParams;
   const isBoard = tab === "board";
+  const todoView = todosScope === "all" ? "all" : "mine";
   const { labels, messages: m, bcp47, locale } = await getServerI18n();
-  const L = labelConstants(labels);
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? m.greeting.morning : hour < 18 ? m.greeting.afternoon : m.greeting.evening;
@@ -60,7 +65,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           })}
         </div>
       </div>
-      {isBoard ? <BoardOverview /> : <WorkOverview userId={user.id} now={now} m={m} L={L} bcp47={bcp47} labels={labels} />}
+      {isBoard ? (
+        <BoardOverview />
+      ) : (
+        <WorkOverview userId={user.id} now={now} todoView={todoView} m={m} bcp47={bcp47} labels={labels} />
+      )}
     </div>
   );
 }
@@ -68,22 +77,14 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
 type WorkProps = {
   userId: string;
   now: Date;
+  todoView: "mine" | "all";
   m: Awaited<ReturnType<typeof getServerI18n>>["messages"];
-  L: ReturnType<typeof labelConstants>;
   bcp47: string;
   labels: Awaited<ReturnType<typeof getServerI18n>>["labels"];
 };
 
-async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
-  const in7days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
-
-  const [myTodos, overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications] = await Promise.all([
-    db.todoItem.findMany({
-      where: { status: "OPEN", OR: [{ assigneeId: userId }, { assigneeId: null }], dueDate: { lte: in7days } },
-      include: { partner: true },
-      orderBy: { dueDate: "asc" },
-      take: 12,
-    }),
+async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkProps) {
+  const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications] = await Promise.all([
     db.todoItem.findMany({
       where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore(now) } },
       include: { partner: true, assignee: true },
@@ -134,12 +135,12 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
       {(openTodoCount > 0 || overdueTodos.length > 0 || signedPlusCount > 0) && (
         <div className="px-8 mb-4 flex flex-wrap gap-3 text-xs">
           {openTodoCount > 0 && (
-            <Link href="/todos" className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-zinc-600 hover:border-indigo-300">
+            <Link href="/?todos=all#workbench" className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-zinc-600 hover:border-indigo-300">
               {m.dashboard.openTodosChip} <span className="font-semibold text-zinc-900">{openTodoCount}</span>
             </Link>
           )}
           {overdueTodos.length > 0 && (
-            <Link href="/todos" className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-red-700 hover:border-red-300">
+            <Link href="/?todos=all#workbench" className="rounded-full border border-red-200 bg-red-50 px-3 py-1 text-red-700 hover:border-red-300">
               {m.dashboard.overdueTodosChip} <span className="font-semibold">{overdueTodos.length}</span>
             </Link>
           )}
@@ -182,39 +183,14 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
             </Card>
           )}
 
-          <Card title={m.dashboard.weekTodosTitle} actions={<Link href="/todos" className="text-xs text-indigo-600 hover:underline">{m.common.viewAll} →</Link>}>
-            <div className="space-y-2.5">
-              {myTodos.map((t) => {
-                const overdue = t.dueDate && isTodoOverdue(t.dueDate, now);
-                return (
-                  <div key={t.id} className="flex items-start gap-2.5">
-                    <form action={toggleTodoAction.bind(null, t.id)}>
-                      <button className="w-4 h-4 mt-0.5 rounded border border-zinc-300 hover:border-indigo-400" />
-                    </form>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm text-zinc-800">
-                        {t.title}
-                        {t.source === "AI" && <span className="ml-1.5 text-[10px] text-purple-500">AI</span>}
-                      </div>
-                      <div className="text-xs text-zinc-400">
-                        <span className={overdue ? "text-red-500" : ""}>{fmtDate(t.dueDate, bcp47)}</span>
-                        {t.partner && (
-                          <>
-                            {" · "}
-                            <Link href={`/partners/${t.partner.id}`} className="text-indigo-600 hover:underline">
-                              {t.partner.name}
-                            </Link>
-                          </>
-                        )}
-                        {` · ${L.TODO_PRIORITY_LABELS[t.priority]}`}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {myTodos.length === 0 && <EmptyState text={m.dashboard.noWeekTodosEmpty} />}
-            </div>
-          </Card>
+          <DashboardWorkbenchTodos
+            userId={userId}
+            scope={todoView}
+            now={now}
+            m={m}
+            bcp47={bcp47}
+            labels={labels}
+          />
 
           <Card title={m.dashboard.staleAlertsTitle}>
             <div className="space-y-2.5">
@@ -281,10 +257,6 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
               </Link>
               <Link href="/pool" className="block rounded-lg border border-dashed border-zinc-200 px-4 py-2.5 hover:border-zinc-300 transition-colors">
                 <div className="text-xs text-zinc-500">{m.dashboard.prospectPoolLink}</div>
-              </Link>
-              <Link href="/knowhow" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">{m.dashboard.knowhowSearchLink}</div>
-                <div className="text-xs text-zinc-400 mt-0.5">{m.dashboard.knowhowSearchDesc}</div>
               </Link>
             </div>
           </Card>

@@ -37,7 +37,6 @@ export function NavLinks({
   const nav: Entry[] = [
     { href: "/", label: m.nav.dashboard, icon: "◧" },
     { href: "/partners", label: m.nav.activePartners, icon: "◮" },
-    { href: "/todos", label: m.nav.todos, icon: "☑" },
     {
       id: "resources",
       label: m.nav.resources,
@@ -48,6 +47,7 @@ export function NavLinks({
         { href: "/playbook-library", label: m.nav.playbookLibrary, icon: "◈" },
         { href: "/pool", label: m.nav.partnerPool, icon: "◬" },
         { href: "/materials", label: m.nav.materials, icon: "📦" },
+        { href: "/knowhow", label: m.nav.knowhow, icon: "🔍" },
       ],
     },
     ...(INBOX_NAV_ENABLED
