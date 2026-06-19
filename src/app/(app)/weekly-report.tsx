@@ -22,7 +22,7 @@ export function WeeklyReport() {
       .then((r) => r.json())
       .then((d) => d?.content && setReport(d))
       .catch(() => {});
-  }, []);
+  }, [locale]);
 
   async function generate() {
     setLoading(true);

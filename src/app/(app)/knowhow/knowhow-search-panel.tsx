@@ -35,6 +35,9 @@ type Props = {
     viewDetail: string;
     backToResults: string;
     searching: string;
+    openSource: string;
+    detailFallback: string;
+    noContent: string;
   };
 };
 
@@ -48,15 +51,22 @@ export function KnowhowSearchPanel({ configured, isAdmin, labels }: Props) {
   const [topK, setTopK] = useState(20);
   const [showFilters, setShowFilters] = useState(false);
   const [hits, setHits] = useState<KnowhowSearchHit[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<{ title: string; content: string; metadata: Record<string, unknown> } | null>(null);
+  const [selectedHit, setSelectedHit] = useState<KnowhowSearchHit | null>(null);
+  const [detail, setDetail] = useState<{
+    title: string;
+    content: string;
+    sourceUrl: string;
+    metadata: Record<string, unknown>;
+    fromSearchFallback?: boolean;
+    apiError?: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function search() {
     startTransition(async () => {
       setError(null);
-      setSelectedId(null);
+      setSelectedHit(null);
       setDetail(null);
       const res = await searchKnowhowAction({
         query,
@@ -77,21 +87,31 @@ export function KnowhowSearchPanel({ configured, isAdmin, labels }: Props) {
     });
   }
 
-  function openDetail(documentId: string) {
+  function openDetail(hit: KnowhowSearchHit) {
     startTransition(async () => {
       setError(null);
-      setSelectedId(documentId);
-      const res = await getKnowhowDocumentAction(documentId);
+      setSelectedHit(hit);
+      const res = await getKnowhowDocumentAction(hit);
       if (res.error) {
         setError(res.error);
-        setDetail(null);
+        setDetail({
+          title: hit.title,
+          content: hit.content,
+          sourceUrl: hit.sourceUrl,
+          metadata: hit.metadata,
+          fromSearchFallback: true,
+          apiError: res.error,
+        });
         return;
       }
       if (res.doc) {
         setDetail({
           title: res.doc.title,
           content: res.doc.content,
+          sourceUrl: res.doc.sourceUrl,
           metadata: res.doc.metadata,
+          fromSearchFallback: res.fromSearchFallback,
+          apiError: res.apiError,
         });
       }
     });
@@ -191,26 +211,53 @@ export function KnowhowSearchPanel({ configured, isAdmin, labels }: Props) {
 
       {error && <div className="rounded-lg bg-red-50 text-red-700 text-sm px-4 py-3 whitespace-pre-wrap">{error}</div>}
 
-      {selectedId && detail && (
+      {selectedHit && detail && (
         <div className="rounded-xl border border-indigo-200 bg-white p-5 space-y-3">
-          <button type="button" onClick={() => { setSelectedId(null); setDetail(null); }} className="text-xs text-indigo-600 hover:underline">
-            ← {labels.backToResults}
-          </button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedHit(null);
+                setDetail(null);
+              }}
+              className="text-xs text-indigo-600 hover:underline"
+            >
+              ← {labels.backToResults}
+            </button>
+            {detail.sourceUrl && (
+              <a
+                href={detail.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs rounded-md border border-indigo-200 px-2.5 py-1 text-indigo-600 hover:bg-indigo-50"
+              >
+                {labels.openSource} ↗
+              </a>
+            )}
+          </div>
           <h2 className="text-lg font-semibold text-zinc-900">{detail.title}</h2>
+          {(detail.fromSearchFallback || detail.apiError) && (
+            <div className="rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
+              {labels.detailFallback}
+              {detail.apiError && <div className="mt-1 text-amber-700">{detail.apiError}</div>}
+            </div>
+          )}
           {Object.keys(detail.metadata).length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {Object.entries(detail.metadata).slice(0, 8).map(([key, value]) => (
+              {Object.entries(detail.metadata).slice(0, 12).map(([key, value]) => (
                 <span key={key} className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600">
                   {key}: {Array.isArray(value) ? value.join("、") : String(value)}
                 </span>
               ))}
             </div>
           )}
-          <div className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">{detail.content || "（暂无正文）"}</div>
+          <div className="text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed max-h-[60vh] overflow-y-auto">
+            {detail.content || labels.noContent}
+          </div>
         </div>
       )}
 
-      {!selectedId && hits.length > 0 && (
+      {!selectedHit && hits.length > 0 && (
         <div className="space-y-3">
           {hits.map((hit) => (
             <div key={hit.documentId} className="rounded-xl border border-zinc-200 bg-white p-5">
@@ -223,14 +270,26 @@ export function KnowhowSearchPanel({ configured, isAdmin, labels }: Props) {
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => openDetail(hit.documentId)}
-                  className="shrink-0 text-xs rounded-md border border-indigo-200 px-2.5 py-1 text-indigo-600 hover:bg-indigo-50"
-                >
-                  {labels.viewDetail}
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {hit.sourceUrl && (
+                    <a
+                      href={hit.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs rounded-md border border-zinc-200 px-2.5 py-1 text-zinc-600 hover:border-indigo-300 hover:text-indigo-600"
+                    >
+                      {labels.openSource}
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => openDetail(hit)}
+                    className="text-xs rounded-md border border-indigo-200 px-2.5 py-1 text-indigo-600 hover:bg-indigo-50"
+                  >
+                    {labels.viewDetail}
+                  </button>
+                </div>
               </div>
               {hit.content && (
                 <p className="text-sm text-zinc-600 mt-2 line-clamp-4 whitespace-pre-wrap">{hit.content}</p>
@@ -249,7 +308,7 @@ export function KnowhowSearchPanel({ configured, isAdmin, labels }: Props) {
         </div>
       )}
 
-      {!selectedId && !pending && hits.length === 0 && query.trim() && !error && (
+      {!selectedHit && !pending && hits.length === 0 && query.trim() && !error && (
         <div className="text-center text-sm text-zinc-400 py-10">{labels.noResults}</div>
       )}
     </div>

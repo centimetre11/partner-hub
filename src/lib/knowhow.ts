@@ -37,9 +37,12 @@ export type KnowhowRetrieveRequest = {
 
 export type KnowhowSearchHit = {
   documentId: string;
+  /** 用于 GET /documents/{id} 的 ID（优先 metadata.document_id） */
+  detailDocumentId: string;
   title: string;
   content: string;
   score: number | null;
+  sourceUrl: string;
   metadata: Record<string, unknown>;
 };
 
@@ -47,6 +50,7 @@ export type KnowhowDocument = {
   id: string;
   title: string;
   content: string;
+  sourceUrl: string;
   metadata: Record<string, unknown>;
 };
 
@@ -86,6 +90,53 @@ function pickNumber(...values: unknown[]): number | null {
     if (typeof v === "string" && v.trim() && !Number.isNaN(Number(v))) return Number(v);
   }
   return null;
+}
+
+function pickUrl(...values: unknown[]): string {
+  for (const v of values) {
+    if (typeof v !== "string") continue;
+    const s = v.trim();
+    if (/^https?:\/\//i.test(s)) return s;
+  }
+  return "";
+}
+
+export function resolveDetailDocumentId(metadata: Record<string, unknown>, fallback: string) {
+  const fromMeta = pickString(metadata.document_id, metadata.documentId, metadata.doc_id, metadata.id);
+  if (fromMeta && !fromMeta.startsWith("snippet-")) return fromMeta;
+  if (fallback && !fallback.startsWith("snippet-")) return fallback;
+  return fromMeta || fallback;
+}
+
+function isSyntheticDocumentId(id: string) {
+  return id.startsWith("snippet-");
+}
+
+function extractSourceUrl(
+  raw: Record<string, unknown>,
+  metadata: Record<string, unknown>,
+  document?: Record<string, unknown> | null,
+) {
+  return pickUrl(
+    raw.url,
+    raw.web_url,
+    raw.source_url,
+    raw.link,
+    raw.document_url,
+    raw.file_url,
+    document?.url,
+    document?.web_url,
+    document?.source_url,
+    metadata.url,
+    metadata.web_url,
+    metadata.source_url,
+    metadata.link,
+    metadata.document_url,
+    metadata.file_url,
+    metadata.page_url,
+    metadata.kh_url,
+    metadata.kms_url,
+  );
 }
 
 function normalizeHit(raw: Record<string, unknown>): KnowhowSearchHit | null {
@@ -157,11 +208,15 @@ function normalizeHit(raw: Record<string, unknown>): KnowhowSearchHit | null {
     segment?.title,
     resolvedId,
   );
+  const sourceUrl = extractSourceUrl(raw, metadata, document);
+  const detailDocumentId = resolveDetailDocumentId(metadata, resolvedId);
   return {
     documentId: resolvedId,
+    detailDocumentId,
     title,
     content,
     score: pickNumber(raw.score, raw.final_score, raw.rerank_score, raw.vector_score),
+    sourceUrl,
     metadata,
   };
 }
@@ -324,12 +379,57 @@ export async function getKnowhowDocument(
       ? (data.metadata as Record<string, unknown>)
       : {};
   const id = pickString(data.id, data.document_id, documentId);
+  const sourceUrl = extractSourceUrl(data, metadata);
   return {
     id,
-    title: pickString(data.title, data.name, metadata.title, id),
-    content: pickString(data.content, data.text, data.summary, data.body),
+    title: pickString(data.title, data.name, metadata.title, metadata.name, id),
+    content: pickString(
+      data.content,
+      data.text,
+      data.summary,
+      data.body,
+      data.full_text,
+      data.fullText,
+      metadata.content,
+      metadata.summary,
+      metadata.text,
+    ),
+    sourceUrl,
     metadata,
   };
+}
+
+/** 拉取文档详情；若 API 无正文则回退到检索摘要 */
+export async function getKnowhowDocumentDetail(
+  hit: KnowhowSearchHit,
+  credOverride?: { apiKey: string; baseUrl: string },
+): Promise<KnowhowDocument & { fromSearchFallback?: boolean; apiError?: string }> {
+  const fallback: KnowhowDocument = {
+    id: hit.detailDocumentId,
+    title: hit.title,
+    content: hit.content,
+    sourceUrl: hit.sourceUrl,
+    metadata: hit.metadata,
+  };
+
+  if (isSyntheticDocumentId(hit.detailDocumentId)) {
+    return { ...fallback, fromSearchFallback: true };
+  }
+
+  try {
+    const doc = await getKnowhowDocument(hit.detailDocumentId, credOverride);
+    return {
+      id: doc.id,
+      title: doc.title || hit.title,
+      content: doc.content || hit.content,
+      sourceUrl: doc.sourceUrl || hit.sourceUrl,
+      metadata: { ...hit.metadata, ...doc.metadata },
+      fromSearchFallback: !doc.content && !!hit.content,
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { ...fallback, fromSearchFallback: true, apiError: message };
+  }
 }
 
 export async function testKnowhowConnection(cred: { apiKey: string; baseUrl: string }) {
@@ -392,7 +492,7 @@ export function formatKnowhowHitsForAgent(hits: KnowhowSearchHit[]): string {
         .join("; ");
       const score = h.score != null ? ` score=${h.score.toFixed(3)}` : "";
       const body = h.content.slice(0, 1200) + (h.content.length > 1200 ? "…" : "");
-      return `${i + 1}. [${h.title}] (doc: ${h.documentId})${score}${meta ? `\nMeta: ${meta}` : ""}\n${body || "(no snippet)"}`;
+      return `${i + 1}. [${h.title}] (doc: ${h.detailDocumentId})${score}${meta ? `\nMeta: ${meta}` : ""}${h.sourceUrl ? `\nURL: ${h.sourceUrl}` : ""}\n${body || "(no snippet)"}`;
     })
     .join("\n\n---\n\n");
 }

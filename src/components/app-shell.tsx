@@ -7,6 +7,7 @@ import { logoutAction } from "@/lib/actions";
 import { NavLinks } from "@/components/nav-links";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { isSuperAdmin } from "@/lib/user-roles";
+import { useAssistant } from "@/lib/assistant-context";
 import { useMessages } from "@/lib/i18n/context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import type { Locale } from "@/lib/i18n/locale";
@@ -23,6 +24,7 @@ export function AppShell({
   locale: Locale;
 }) {
   const m = useMessages();
+  const { openAssistant } = useAssistant();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
 
@@ -104,7 +106,18 @@ export function AppShell({
           </button>
         </div>
         <NavLinks unread={unread} onNavigate={() => setNavOpen(false)} showTeamSettings={isSuperAdmin(user)} />
-        <div className="mt-auto border-t border-zinc-800 px-5 py-4">
+        <div className="mt-auto border-t border-zinc-800 px-3 py-4 space-y-2">
+          <button
+            type="button"
+            onClick={() => {
+              openAssistant();
+              setNavOpen(false);
+            }}
+            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 transition-colors shadow-lg shadow-indigo-950/30"
+          >
+            <span className="text-base w-5 text-center">✦</span>
+            <span>{m.assistant.fabTitle}</span>
+          </button>
           <LocaleSwitcher locale={locale} />
           <Link
             href="/account"

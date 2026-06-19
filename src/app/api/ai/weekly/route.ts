@@ -4,18 +4,30 @@ import { db } from "@/lib/db";
 import { AIError } from "@/lib/ai";
 import { createSseResponse } from "@/lib/ai-trace";
 import { streamTextCompletion } from "@/lib/ai-stream-text";
-import { stageName } from "@/lib/constants";
 import { staleDays } from "@/lib/completeness";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
+import {
+  buildWeeklyReportSystemPrompt,
+  buildWeeklyReportUserContent,
+  weeklyPartnerStatusLine,
+} from "@/lib/ai-locale";
+import { getLabels, localeToBcp47, type Locale } from "@/lib/i18n";
+import { getLocale } from "@/lib/i18n/locale-server";
 
 export async function GET() {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  const locale = await getLocale();
   const setting = await db.setting.findUnique({ where: { key: "weekly_report" } });
-  return NextResponse.json(setting ? JSON.parse(setting.value) : null);
+  if (!setting) return NextResponse.json(null);
+  const report = JSON.parse(setting.value) as { content?: string; generatedAt?: string; locale?: Locale };
+  if (!report.locale || report.locale !== locale) return NextResponse.json(null);
+  return NextResponse.json(report);
 }
 
-async function generateWeekly(uid: string, emit?: Parameters<typeof streamTextCompletion>[1]["emit"]) {
+async function generateWeekly(uid: string, locale: Locale, emit?: Parameters<typeof streamTextCompletion>[1]["emit"]) {
+  const labels = getLabels(locale);
+  const bcp47 = localeToBcp47(locale);
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
   const [active, prospects, recentEvents, openTodos, overdue] = await Promise.all([
     db.partner.findMany({ where: { status: "ACTIVE" }, include: { events: true, opportunities: true } }),
@@ -33,11 +45,16 @@ async function generateWeekly(uid: string, emit?: Parameters<typeof streamTextCo
   const partnerLines = active
     .map((p) => {
       const opps = p.opportunities.filter((o) => o.status === "ACTIVE");
-      return `${p.name}: stage ${p.pipelineStage} (${stageName(p.pipelineStage)}), ${opps.length} opportunit${opps.length === 1 ? "y" : "ies"}, ${staleDays(p)} days without activity`;
+      return weeklyPartnerStatusLine(locale, labels, {
+        name: p.name,
+        stage: p.pipelineStage,
+        oppCount: opps.length,
+        staleDays: staleDays(p),
+      });
     })
     .join("\n");
   const eventLines = recentEvents
-    .map((e) => `${new Date(e.createdAt).toLocaleDateString("en-US")} ${e.partner.name}: ${e.title}`)
+    .map((e) => `${new Date(e.createdAt).toLocaleDateString(bcp47)} ${e.partner.name}: ${e.title}`)
     .join("\n");
   const overdueLines = overdue.map((t) => `${t.title} (${t.partner?.name ?? "-"})`).join("\n");
 
@@ -45,18 +62,25 @@ async function generateWeekly(uid: string, emit?: Parameters<typeof streamTextCo
     [
       {
         role: "system",
-        content:
-          "You are a business analyst for Fanruan Middle East partner operations. Based on the data, generate this week's business report (in English). Structure: 1) Overall progress (2-3 sentences); 2) Risk signals (stalled partners, overdue todos — name names); 3) Three partners to focus on this week and why; 4) Key actions for next week (3-5 items). Be concise and direct — no filler.",
+        content: buildWeeklyReportSystemPrompt(locale),
       },
       {
         role: "user",
-        content: `Prospect pool: ${prospects}\nActive partners: ${active.length}\nOpen todos: ${openTodos}\n\n[Active partner status]\n${partnerLines || "(none)"}\n\n[Last 7 days activity]\n${eventLines || "(none)"}\n\n[Overdue todos]\n${overdueLines || "(none)"}`,
+        content: buildWeeklyReportUserContent({
+          locale,
+          prospects,
+          activeCount: active.length,
+          openTodos,
+          partnerLines,
+          eventLines,
+          overdueLines,
+        }),
       },
     ],
-    { feature: "AI Weekly Report", userId: uid, emit }
+    { feature: locale === "zh" ? "AI 周报" : "AI Weekly Report", userId: uid, emit }
   );
 
-  const report = { content, generatedAt: new Date().toISOString() };
+  const report = { content, generatedAt: new Date().toISOString(), locale };
   await db.setting.upsert({
     where: { key: "weekly_report" },
     create: { key: "weekly_report", value: JSON.stringify(report) },
@@ -78,13 +102,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const locale = await getLocale();
     if (stream) {
       return createSseResponse(async (emit) => {
-        const result = await generateWeekly(uid, emit);
+        const result = await generateWeekly(uid, locale, emit);
         emit({ event: "done", data: result });
       });
     }
-    const result = await generateWeekly(uid);
+    const result = await generateWeekly(uid, locale);
     return NextResponse.json(result);
   } catch (e) {
     const msg = e instanceof AIError ? e.message : "Generation failed";

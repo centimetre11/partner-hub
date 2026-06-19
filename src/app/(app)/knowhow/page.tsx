@@ -44,6 +44,9 @@ export default async function KnowhowPage() {
             viewDetail: m.knowhow.viewDetail,
             backToResults: m.knowhow.backToResults,
             searching: m.knowhow.searching,
+            openSource: m.knowhow.openSource,
+            detailFallback: m.knowhow.detailFallback,
+            noContent: m.knowhow.noContent,
           }}
         />
       </div>

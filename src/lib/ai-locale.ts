@@ -469,6 +469,73 @@ Output JSON only:
 {"summaryTitle": "...", "summary": "...", "fieldUpdates": [{"field":"...","label":"...","oldValue":"...","newValue":"...","reason":"..."}], "contacts": [...], "opportunities": [...], "todos": [...], "signals": [...]}`;
 }
 
+export function buildWeeklyReportSystemPrompt(locale: Locale): string {
+  const lang = replyLanguage(locale);
+  return `You are a business analyst for Fanruan Middle East partner operations.
+Based on the operational data provided, write this week's business report entirely in ${lang}.
+
+Structure (use ${lang} section headings and prose):
+1) Overall progress — 2-3 sentences on pipeline and partner ecosystem movement
+2) Risk signals — stalled partners, overdue todos; name specific partners/tasks
+3) Three partners to focus on this week — who and why
+4) Key actions for next week — 3-5 concrete items
+
+Rules:
+- All headings, bullets, and narrative must be in ${lang} (Simplified Chinese when locale is zh).
+- Keep partner/company/person names exactly as in the data.
+- Be concise and direct — no filler or generic advice.`;
+}
+
+export function buildWeeklyReportUserContent(opts: {
+  locale: Locale;
+  prospects: number;
+  activeCount: number;
+  openTodos: number;
+  partnerLines: string;
+  eventLines: string;
+  overdueLines: string;
+}): string {
+  const none = opts.locale === "zh" ? "（无）" : "(none)";
+  if (opts.locale === "zh") {
+    return `候选池：${opts.prospects}
+正式伙伴：${opts.activeCount}
+进行中待办：${opts.openTodos}
+
+【正式伙伴状态】
+${opts.partnerLines || none}
+
+【近 7 天动态】
+${opts.eventLines || none}
+
+【逾期待办】
+${opts.overdueLines || none}`;
+  }
+  return `Prospect pool: ${opts.prospects}
+Active partners: ${opts.activeCount}
+Open todos: ${opts.openTodos}
+
+[Active partner status]
+${opts.partnerLines || none}
+
+[Last 7 days activity]
+${opts.eventLines || none}
+
+[Overdue todos]
+${opts.overdueLines || none}`;
+}
+
+export function weeklyPartnerStatusLine(
+  locale: Locale,
+  labels: LabelsBundle,
+  opts: { name: string; stage: number; oppCount: number; staleDays: number },
+): string {
+  const stage = stageDisplayName(labels, opts.stage);
+  if (locale === "zh") {
+    return `${opts.name}：阶段 ${opts.stage}（${stage}），${opts.oppCount} 个进行中商机，${opts.staleDays} 天无活动`;
+  }
+  return `${opts.name}: stage ${opts.stage} (${stage}), ${opts.oppCount} active opportunit${opts.oppCount === 1 ? "y" : "ies"}, ${opts.staleDays} days without activity`;
+}
+
 export function buildPatchExtractPrompt(scope: IntakeScope, locale: Locale): string {
   const fl = fieldListForAi(locale);
   const lang = replyLanguage(locale);

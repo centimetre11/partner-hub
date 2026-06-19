@@ -710,6 +710,9 @@ export const messagesZh: Messages = {
     score: "相关度",
     viewDetail: "查看详情",
     backToResults: "返回结果列表",
+    openSource: "在 Know-how 打开",
+    detailFallback: "文档详情 API 未返回完整正文，以下为检索摘要。若元数据含链接，可点击右上角跳转原文。",
+    noContent: "（暂无正文，请尝试在 Know-how 平台打开原文）",
   },
   materials: {
     title: "弹药库",

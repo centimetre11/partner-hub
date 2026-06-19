@@ -19,6 +19,7 @@ import {
 } from "@/lib/clarification-apply";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
+import { useAssistant } from "@/lib/assistant-context";
 import { useMessages } from "@/lib/i18n/context";
 
 type Msg = {
@@ -49,7 +50,7 @@ export function AssistantDock() {
   const m = useMessages();
   const am = m.assistant;
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const { open, setOpen } = useAssistant();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -232,10 +233,12 @@ export function AssistantDock() {
     <>
       {!open && (
         <button
+          type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-xl flex items-center justify-center text-xl hover:scale-105 transition-transform safe-bottom"
+          className="lg:hidden fixed bottom-4 left-4 sm:bottom-6 z-50 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-xl flex items-center justify-center text-xl hover:scale-105 transition-transform safe-bottom"
           style={{ width: 56, height: 56 }}
           title={am.fabTitle}
+          aria-label={am.fabTitle}
         >
           ✦
         </button>

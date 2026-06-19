@@ -710,6 +710,9 @@ export const messagesEn = {
     score: "Score",
     viewDetail: "View detail",
     backToResults: "Back to results",
+    openSource: "Open in Know-how",
+    detailFallback: "The document detail API did not return full body text — showing the search snippet. Use the link above if available.",
+    noContent: "(No body text — try opening the original in Know-how)",
   },
   materials: {
     title: "Ammo Library",

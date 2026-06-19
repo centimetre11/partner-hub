@@ -2,7 +2,7 @@
 
 import { requireUser } from "./session";
 import {
-  getKnowhowDocument,
+  getKnowhowDocumentDetail,
   retrieveKnowhow,
   type KnowhowMetadataFilter,
   type KnowhowSearchHit,
@@ -72,11 +72,16 @@ export async function searchKnowhowAction(params: KnowhowSearchParams): Promise<
   }
 }
 
-export async function getKnowhowDocumentAction(documentId: string) {
+export async function getKnowhowDocumentAction(hit: KnowhowSearchHit) {
   await requireUser();
   try {
-    const doc = await getKnowhowDocument(documentId);
-    return { ok: true, doc };
+    const doc = await getKnowhowDocumentDetail(hit);
+    return {
+      ok: true,
+      doc,
+      fromSearchFallback: doc.fromSearchFallback,
+      apiError: doc.apiError,
+    };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
