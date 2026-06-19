@@ -8,33 +8,8 @@ export type AmmoConfigForClient = {
   gdriveFolderUrl: string;
   gdriveServiceAccountConfigured: boolean;
   gdriveServiceAccountEmail: string | null;
-  kmsPageUrls: string;
   updatedAt?: string;
 };
-
-export function parseKmsPageUrlsInput(raw: string): string[] {
-  return raw
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-}
-
-export function serializeKmsPageUrls(urls: string[]): string {
-  return JSON.stringify(urls);
-}
-
-export function deserializeKmsPageUrls(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (Array.isArray(parsed)) {
-      return parsed.map((u) => String(u).trim()).filter(Boolean);
-    }
-  } catch {
-    return parseKmsPageUrlsInput(raw);
-  }
-  return [];
-}
 
 function parseServiceAccountEmail(json: string | null | undefined): string | null {
   if (!json?.trim()) return null;
@@ -72,11 +47,6 @@ export async function resolveGdriveFolderId(): Promise<string | null> {
   return parseGdriveFolderId(url);
 }
 
-export async function resolveKmsAmmoPageUrls(): Promise<string[]> {
-  const row = await getSystemAmmoConfigRow();
-  return deserializeKmsPageUrls(row?.kmsPageUrls);
-}
-
 export async function getAmmoConfigForClient(): Promise<AmmoConfigForClient> {
   const row = await getSystemAmmoConfigRow();
   const saJson = row?.gdriveServiceAccount?.trim() || process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || null;
@@ -84,7 +54,6 @@ export async function getAmmoConfigForClient(): Promise<AmmoConfigForClient> {
     gdriveFolderUrl: row?.gdriveFolderUrl?.trim() || process.env.GDRIVE_FOLDER_URL?.trim() || DEFAULT_GDRIVE_FOLDER_URL,
     gdriveServiceAccountConfigured: !!saJson,
     gdriveServiceAccountEmail: parseServiceAccountEmail(saJson),
-    kmsPageUrls: deserializeKmsPageUrls(row?.kmsPageUrls).join("\n"),
     updatedAt: row?.updatedAt?.toISOString(),
   };
 }

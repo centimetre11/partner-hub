@@ -1,14 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireSuperAdmin } from "./session";
+import { requireSuperAdmin, requireUser } from "./session";
 import { db } from "./db";
-import {
-  parseKmsPageUrlsInput,
-  serializeKmsPageUrls,
-} from "./ammo-config";
-import { testGdriveConnection } from "./google-drive";
-import { testAmmoKmsUrls } from "./kms";
+import { fetchAmmoGdriveBrowse, testGdriveConnection } from "./google-drive";
+import type { GdriveBrowseResult } from "./google-drive";
 
 function clean(raw: FormDataEntryValue | null) {
   return String(raw ?? "").trim() || null;
@@ -18,8 +14,6 @@ export async function saveSystemAmmoConfigAction(formData: FormData) {
   await requireSuperAdmin();
   const gdriveFolderUrl = clean(formData.get("gdriveFolderUrl"));
   const gdriveServiceAccount = clean(formData.get("gdriveServiceAccount"));
-  const kmsPageUrlsRaw = String(formData.get("kmsPageUrls") ?? "");
-  const kmsPageUrls = serializeKmsPageUrls(parseKmsPageUrlsInput(kmsPageUrlsRaw));
 
   const existing = await db.systemAmmoConfig.findUnique({ where: { id: "singleton" } });
   await db.systemAmmoConfig.upsert({
@@ -28,18 +22,21 @@ export async function saveSystemAmmoConfigAction(formData: FormData) {
       id: "singleton",
       gdriveFolderUrl,
       gdriveServiceAccount: gdriveServiceAccount ?? existing?.gdriveServiceAccount ?? null,
-      kmsPageUrls,
     },
     update: {
       gdriveFolderUrl,
       ...(gdriveServiceAccount ? { gdriveServiceAccount } : {}),
-      kmsPageUrls,
     },
   });
 
   revalidatePath("/settings");
   revalidatePath("/materials");
   return { ok: true, message: "Ammo library settings saved." };
+}
+
+export async function browseGdriveFolderAction(folderId: string): Promise<GdriveBrowseResult> {
+  await requireUser();
+  return fetchAmmoGdriveBrowse(folderId);
 }
 
 export async function testSystemAmmoGdriveAction(formData: FormData) {
@@ -60,20 +57,7 @@ export async function testSystemAmmoGdriveAction(formData: FormData) {
   if (!result.ok) return { error: result.error };
   return {
     ok: true,
-    message: `Drive OK — ${result.fileCount} file(s) in folder${result.sampleName ? `, e.g. "${result.sampleName}"` : ""}`,
-  };
-}
-
-export async function testSystemAmmoKmsAction(formData: FormData) {
-  const user = await requireSuperAdmin();
-  const urls = parseKmsPageUrlsInput(String(formData.get("kmsPageUrls") ?? ""));
-  if (!urls.length) return { error: "Enter at least one KMS page URL" };
-
-  const result = await testAmmoKmsUrls(urls, user.id);
-  if (!result.ok) return { error: result.error };
-  return {
-    ok: true,
-    message: `KMS OK — ${result.pageCount} page(s)${result.sampleTitle ? `, e.g. "${result.sampleTitle}"` : ""}`,
+    message: `Drive OK — ${result.folderCount} folder(s), ${result.fileCount} file(s) at root${result.sampleName ? `, e.g. "${result.sampleName}"` : ""}`,
   };
 }
 

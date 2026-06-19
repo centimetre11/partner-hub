@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import {
   saveSystemAmmoConfigAction,
   testSystemAmmoGdriveAction,
-  testSystemAmmoKmsAction,
   clearSystemAmmoServiceAccountAction,
 } from "@/lib/ammo-actions";
 import type { AmmoConfigForClient } from "@/lib/ammo-config";
@@ -17,7 +16,6 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
   const s = useMessages().ammoSettings;
   const [folderUrl, setFolderUrl] = useState(config.gdriveFolderUrl);
   const [serviceAccount, setServiceAccount] = useState("");
-  const [kmsUrls, setKmsUrls] = useState(config.kmsPageUrls);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -29,7 +27,6 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
       const fd = new FormData();
       fd.set("gdriveFolderUrl", folderUrl.trim());
       if (serviceAccount.trim()) fd.set("gdriveServiceAccount", serviceAccount.trim());
-      fd.set("kmsPageUrls", kmsUrls);
       const res = await action(fd);
       if (res.error) setError(res.error);
       else if (res.message) setMessage(res.message);
@@ -46,18 +43,6 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
       if (serviceAccount.trim()) fd.set("gdriveServiceAccount", serviceAccount.trim());
       if (useStored) fd.set("useStoredSa", "1");
       const res = await testSystemAmmoGdriveAction(fd);
-      if (res.error) setError(res.error);
-      else if (res.message) setMessage(res.message);
-    });
-  }
-
-  function testKms() {
-    startTransition(async () => {
-      setMessage(null);
-      setError(null);
-      const fd = new FormData();
-      fd.set("kmsPageUrls", kmsUrls);
-      const res = await testSystemAmmoKmsAction(fd);
       if (res.error) setError(res.error);
       else if (res.message) setMessage(res.message);
     });
@@ -114,18 +99,6 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
         )}
       </div>
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-800">{s.kmsPageUrls}</label>
-        <p className="text-xs text-zinc-500">{s.kmsPageUrlsHint}</p>
-        <textarea
-          value={kmsUrls}
-          onChange={(e) => setKmsUrls(e.target.value)}
-          placeholder={s.kmsPageUrlsPlaceholder}
-          rows={4}
-          className={input}
-        />
-      </div>
-
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -153,14 +126,6 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
             {s.testGdriveStored}
           </button>
         )}
-        <button
-          type="button"
-          onClick={testKms}
-          disabled={pending}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
-        >
-          {s.testKms}
-        </button>
       </div>
 
       {message && <p className="text-sm text-emerald-700 whitespace-pre-wrap">{message}</p>}

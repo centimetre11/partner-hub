@@ -4,6 +4,7 @@ import { resolveGdriveFolderId, resolveGdriveFolderUrl, resolveGdriveServiceAcco
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const FOLDER_MIME = "application/vnd.google-apps.folder";
 
 export type GdriveFileItem = {
   id: string;
@@ -15,13 +16,37 @@ export type GdriveFileItem = {
   modifiedTime: string | null;
 };
 
-export type GdriveListResult =
-  | { ok: true; folderUrl: string; files: GdriveFileItem[] }
+export type GdriveFolderItem = {
+  id: string;
+  name: string;
+  modifiedTime: string | null;
+};
+
+export type GdriveBrowseResult =
+  | {
+      ok: true;
+      folderUrl: string;
+      rootFolderId: string;
+      currentFolderId: string;
+      currentFolderName: string;
+      folders: GdriveFolderItem[];
+      files: GdriveFileItem[];
+    }
   | { ok: false; reason: "not_configured" | "missing_credentials" | "error"; message: string };
 
 type ServiceAccount = {
   client_email: string;
   private_key: string;
+};
+
+type RawDriveItem = {
+  id: string;
+  name: string;
+  mimeType: string;
+  thumbnailLink?: string;
+  webViewLink?: string;
+  modifiedTime?: string;
+  iconLink?: string;
 };
 
 export function parseGdriveFolderId(url: string): string | null {
@@ -87,7 +112,34 @@ async function getAccessToken(serviceAccountJson: string): Promise<string> {
   return data.access_token;
 }
 
-export async function listGdriveFolderFiles(folderId: string, serviceAccountJson: string): Promise<GdriveFileItem[]> {
+async function fetchDriveFolderName(token: string, folderId: string): Promise<string> {
+  const res = await fetch(`${DRIVE_API}/files/${folderId}?fields=name&supportsAllDrives=true`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = (await res.json()) as { name?: string; error?: { message?: string } };
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Drive metadata failed (${res.status})`);
+  }
+  return data.name ?? "Folder";
+}
+
+function mapFileItem(f: RawDriveItem): GdriveFileItem {
+  return {
+    id: f.id,
+    name: f.name,
+    mimeType: f.mimeType,
+    webViewLink: f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view`,
+    thumbnailLink: f.thumbnailLink ?? null,
+    iconLink: f.iconLink ?? null,
+    modifiedTime: f.modifiedTime ?? null,
+  };
+}
+
+export async function listGdriveFolderContents(
+  folderId: string,
+  serviceAccountJson: string,
+): Promise<{ folderName: string; folders: GdriveFolderItem[]; files: GdriveFileItem[] }> {
   const token = await getAccessToken(serviceAccountJson);
   const params = new URLSearchParams({
     q: `'${folderId}' in parents and trashed=false`,
@@ -95,25 +147,14 @@ export async function listGdriveFolderFiles(folderId: string, serviceAccountJson
     pageSize: "100",
     supportsAllDrives: "true",
     includeItemsFromAllDrives: "true",
-    orderBy: "modifiedTime desc",
+    orderBy: "folder,name,modifiedTime desc",
   });
 
   const res = await fetch(`${DRIVE_API}/files?${params}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(20000),
   });
-  const data = (await res.json()) as {
-    files?: Array<{
-      id: string;
-      name: string;
-      mimeType: string;
-      thumbnailLink?: string;
-      webViewLink?: string;
-      modifiedTime?: string;
-      iconLink?: string;
-    }>;
-    error?: { message?: string };
-  };
+  const data = (await res.json()) as { files?: RawDriveItem[]; error?: { message?: string } };
 
   if (!res.ok) {
     const msg = data.error?.message || `Drive API failed (${res.status})`;
@@ -123,25 +164,35 @@ export async function listGdriveFolderFiles(folderId: string, serviceAccountJson
     throw new Error(msg);
   }
 
-  return (data.files ?? [])
-    .filter((f) => f.mimeType !== "application/vnd.google-apps.folder")
+  const items = data.files ?? [];
+  const folders = items
+    .filter((f) => f.mimeType === FOLDER_MIME)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
     .map((f) => ({
       id: f.id,
       name: f.name,
-      mimeType: f.mimeType,
-      webViewLink: f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view`,
-      thumbnailLink: f.thumbnailLink ?? null,
-      iconLink: f.iconLink ?? null,
       modifiedTime: f.modifiedTime ?? null,
     }));
+  const files = items
+    .filter((f) => f.mimeType !== FOLDER_MIME)
+    .sort((a, b) => {
+      const ta = a.modifiedTime ? Date.parse(a.modifiedTime) : 0;
+      const tb = b.modifiedTime ? Date.parse(b.modifiedTime) : 0;
+      return tb - ta;
+    })
+    .map(mapFileItem);
+
+  const folderName = await fetchDriveFolderName(token, folderId);
+  return { folderName, folders, files };
 }
 
-export async function fetchAmmoGdriveFiles(): Promise<GdriveListResult> {
+export async function fetchAmmoGdriveBrowse(folderId?: string): Promise<GdriveBrowseResult> {
   const folderUrl = await resolveGdriveFolderUrl();
-  const folderId = folderUrl ? parseGdriveFolderId(folderUrl) : await resolveGdriveFolderId();
+  const rootFolderId = folderUrl ? parseGdriveFolderId(folderUrl) : await resolveGdriveFolderId();
   const saJson = await resolveGdriveServiceAccountJson();
+  const targetFolderId = folderId?.trim() || rootFolderId;
 
-  if (!folderUrl || !folderId) {
+  if (!folderUrl || !rootFolderId) {
     return { ok: false, reason: "not_configured", message: "Google Drive folder URL is not configured" };
   }
   if (!saJson) {
@@ -151,10 +202,21 @@ export async function fetchAmmoGdriveFiles(): Promise<GdriveListResult> {
       message: "Google service account JSON is not configured",
     };
   }
+  if (!targetFolderId) {
+    return { ok: false, reason: "error", message: "Invalid folder ID" };
+  }
 
   try {
-    const files = await listGdriveFolderFiles(folderId, saJson);
-    return { ok: true, folderUrl, files };
+    const { folderName, folders, files } = await listGdriveFolderContents(targetFolderId, saJson);
+    return {
+      ok: true,
+      folderUrl,
+      rootFolderId,
+      currentFolderId: targetFolderId,
+      currentFolderName: folderName,
+      folders,
+      files,
+    };
   } catch (e) {
     return {
       ok: false,
@@ -167,16 +229,20 @@ export async function fetchAmmoGdriveFiles(): Promise<GdriveListResult> {
 export async function testGdriveConnection(
   folderUrl: string,
   serviceAccountJson: string,
-): Promise<{ ok: true; fileCount: number; sampleName: string | null } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; folderCount: number; fileCount: number; sampleName: string | null }
+  | { ok: false; error: string }
+> {
   const folderId = parseGdriveFolderId(folderUrl);
   if (!folderId) return { ok: false, error: "Invalid Google Drive folder URL" };
   if (!serviceAccountJson.trim()) return { ok: false, error: "Service account JSON is required" };
   try {
-    const files = await listGdriveFolderFiles(folderId, serviceAccountJson);
+    const { folders, files } = await listGdriveFolderContents(folderId, serviceAccountJson);
     return {
       ok: true,
+      folderCount: folders.length,
       fileCount: files.length,
-      sampleName: files[0]?.name ?? null,
+      sampleName: folders[0]?.name ?? files[0]?.name ?? null,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
