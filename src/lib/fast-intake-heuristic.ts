@@ -28,6 +28,54 @@ function stripIntakeSystemHint(content: string): string {
   return content.trim();
 }
 
+/** Remove user-facing intake command prefix (e.g. 「帮我记一下商务记录，」) from raw message text. */
+export function stripIntakeCommandPrefix(text: string, scope: IntakeScope): string {
+  let s = text.trim();
+  if (!s) return s;
+
+  switch (scope) {
+    case "business_record":
+      s = s
+        .replace(
+          /^(帮我|请|麻烦)?(记(录|个|一下)?|添加|加|创建|新增|写)?(一个|一下)?(商务记录|拜访记录|会议纪要|跟进记录|商务进展)[：:,，\s]*/i,
+          "",
+        )
+        .replace(/^(帮我|请|麻烦)?记录(一下)?(商务|拜访|会议)(记录|进展)?[：:,，\s]*/i, "")
+        .replace(
+          /^(please )?(help me )?(to )?(log|record|add|create)?( a)?( business)?( record| visit(?: log)?| meeting(?: log)?)[：:\s,]*/i,
+          "",
+        );
+      break;
+    case "todo":
+      s = s
+        .replace(/^(帮我|请|麻烦)?(记(录|个)?|加|创建|新增)?(一个)?待办[：:,，\s]*/i, "")
+        .replace(/^(todo|add todo|create todo)[：:\s]*/i, "");
+      break;
+    case "opportunity":
+      s = s.replace(/^(帮我|请|麻烦)?(添加|新建|加|创建)?(一个)?商机[：:,，\s]*/i, "");
+      break;
+    case "powermap":
+      s = s
+        .replace(/^(帮我|请|麻烦)?(添加|加|新建)?(一个)?(联系人|权力地图|名片)[：:,，\s]*/i, "")
+        .replace(/^(add|create)?( a)? contact[：:\s]*/i, "");
+      break;
+    case "training":
+      s = s.replace(/^(帮我|请|麻烦)?(添加|创建|制定)?(一个)?(培训计划|培训)[：:,，\s]*/i, "");
+      break;
+    case "solution":
+      s = s.replace(/^(帮我|请|麻烦)?(添加|创建|写)?(一个)?(联合方案|方案)[：:,，\s]*/i, "");
+      break;
+    default:
+      break;
+  }
+  return s.trim();
+}
+
+function sanitizeBusinessRecordText(text: string): string {
+  const stripped = stripIntakeCommandPrefix(text, "business_record");
+  return stripped || text.trim();
+}
+
 function buildTitle(text: string): string {
   const trimmed = text.trim();
   if (trimmed.length <= 80) return trimmed;
@@ -93,13 +141,14 @@ function heuristicReply(locale: Locale, kind: string): string {
   return locale === "zh" ? zh[kind] ?? zh.todo : en[kind] ?? en.todo;
 }
 
-export function lastIntakeUserText(chat?: ChatMessage[]): string {
+export function lastIntakeUserText(chat?: ChatMessage[], scope?: IntakeScope): string {
   if (!chat?.length) return "";
   for (let i = chat.length - 1; i >= 0; i--) {
     const m = chat[i];
     if (m.role !== "user") continue;
     const t = stripIntakeSystemHint(m.content ?? "").trim();
-    if (t) return t;
+    const stripped = scope ? stripIntakeCommandPrefix(t, scope) : t;
+    if (stripped) return stripped;
   }
   return "";
 }
@@ -162,9 +211,9 @@ export function heuristicBusinessRecordTurn(
   locale: Locale,
   today: string,
 ): IntakeTurn | null {
-  const text = userText.trim();
+  const text = sanitizeBusinessRecordText(userText);
   if (!text) return null;
-  if (!/拜访|visit|会议|认证|培训|商务|vp|ceo|客户|讨论|见面|meal|training|fca|l2/i.test(text)) {
+  if (!/拜访|visit|会议|认证|培训|商务|vp|ceo|客户|讨论|见面|meal|training|fca|l2|电话|联系|预约/i.test(text)) {
     return null;
   }
 
@@ -444,7 +493,11 @@ export async function finalizeBusinessRecordTurn(
   locale: Locale,
   opts?: { boundPartnerId?: string },
 ): Promise<IntakeTurn> {
-  const records = turn.proposal.businessRecords ?? [];
+  const records = (turn.proposal.businessRecords ?? []).map((r) => {
+    const title = sanitizeBusinessRecordText(r.title ?? "");
+    const content = r.content ? sanitizeBusinessRecordText(r.content) : title;
+    return { ...r, title, content: content || title };
+  });
   if (!records.length) return turn;
 
   const target = await resolveBusinessRecordCompanyTarget({
@@ -474,6 +527,7 @@ export async function finalizeBusinessRecordTurn(
     ...turn,
     proposal: {
       ...turn.proposal,
+      businessRecords: records,
       hubPartnerId: target.hubPartnerId ?? turn.proposal.hubPartnerId,
       crmCustomerId: target.crmCustomerId ?? turn.proposal.crmCustomerId,
       crmCustomerName: target.crmCustomerName ?? turn.proposal.crmCustomerName,

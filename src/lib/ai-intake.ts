@@ -53,6 +53,7 @@ import {
   finalizeFastIntakeTurn,
   heuristicFastIntakeTurn,
   lastIntakeUserText,
+  stripIntakeCommandPrefix,
 } from "./fast-intake-heuristic";
 import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
 import {
@@ -322,7 +323,7 @@ async function parseIntakeTurnFromContent(
     partnerId?: string;
   }
 ): Promise<IntakeTurn> {
-  const userText = lastIntakeUserText(opts?.chat);
+  const userText = lastIntakeUserText(opts?.chat, scope);
   const finalizeOpts = { partnerId: opts?.partnerId, userText };
 
   const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
@@ -411,9 +412,13 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
       trainings: p.trainings ?? [],
       solutions: p.solutions ?? [],
       businessRecords: (p.businessRecords ?? []).map((r) => {
-        const title = asTrimmedString(r.title);
+        let title = asTrimmedString(r.title);
+        let content = r.content == null ? undefined : asTrimmedString(r.content);
+        if (scope === "business_record") {
+          title = stripIntakeCommandPrefix(title, scope) || title;
+          if (content) content = stripIntakeCommandPrefix(content, scope) || content;
+        }
         const category = r.category == null ? undefined : asTrimmedString(r.category);
-        const content = r.content == null ? undefined : asTrimmedString(r.content);
         const cat = normalizeBusinessRecordCategory(category ?? "OTHER");
         const traceNature =
           normalizeCrmTraceNature(r.traceNature == null ? undefined : asTrimmedString(r.traceNature)) ??
