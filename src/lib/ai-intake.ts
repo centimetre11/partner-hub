@@ -1,3 +1,4 @@
+import { isAgentBuilderIntent } from "./agent-builder-intent";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
@@ -732,6 +733,7 @@ export function isTodoListQueryIntent(text: string): boolean {
 export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   if (lastUser && isTodoListQueryIntent(lastUser.content)) return false;
+  if (lastUser && isAgentBuilderIntent(lastUser.content)) return false;
   const text = messages
     .filter((m) => m.role === "user")
     .map((m) => m.content)

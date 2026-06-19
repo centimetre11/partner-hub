@@ -1,9 +1,12 @@
-import { chatJson } from "./ai";
+import { AIError, chatJson } from "./ai";
 import { emitReplyChunks, type TraceEmitter } from "./ai-trace";
 import { db } from "./db";
+import type { Locale } from "./i18n/locale";
 import { resolveAgentSkills } from "./skill-resolver";
 
 export type AgentBuilderMessage = { role: "user" | "assistant"; content: string };
+
+export type AgentDeliveryMode = "inbox" | "wecom_chat" | "partner_group" | "webhook";
 
 export type AgentBuilderDraft = {
   name: string;
@@ -20,6 +23,7 @@ export type AgentBuilderDraft = {
   partnerId: string;
   shared: boolean;
   webhookUrl: string;
+  deliveryMode: AgentDeliveryMode | "";
   missingSkillNotes: string[];
   questionnaire: string[];
   rationale: string;
@@ -47,14 +51,19 @@ const DEFAULT_DRAFT: AgentBuilderDraft = {
   partnerId: "",
   shared: true,
   webhookUrl: "",
+  deliveryMode: "",
   missingSkillNotes: [],
   questionnaire: [],
   rationale: "",
 };
 
-const OUTPUT_SCHEMA = `Output exactly one JSON object:
+const VALID_DELIVERY: AgentDeliveryMode[] = ["inbox", "wecom_chat", "partner_group", "webhook"];
+
+function outputSchema(locale: Locale) {
+  const replyLang = locale === "zh" ? "Chinese" : "English";
+  return `Output exactly one JSON object:
 {
-  "reply": "English reply to the user; concise product-consultant tone explaining current understanding and next step",
+  "reply": "${replyLang} reply to the user; concise product-consultant tone explaining current understanding and next step",
   "questions": ["Questions still needing user confirmation, max 5; empty array if enough info"],
   "ready": true/false,
   "draft": {
@@ -62,7 +71,7 @@ const OUTPUT_SCHEMA = `Output exactly one JSON object:
     "icon": "one emoji",
     "description": "one-line description",
     "instructions": "Full system instructions: identity, run steps each time, tool order, output format, how to proceed when a tool is missing using existing data and reasoning",
-    "skills": ["tool name, e.g. web_search"],
+    "skills": ["tool name, e.g. list_todos"],
     "skillIds": ["skill id"],
     "trigger": "MANUAL or SCHEDULE",
     "frequency": "HOURLY/DAILY/WEEKLY",
@@ -71,12 +80,53 @@ const OUTPUT_SCHEMA = `Output exactly one JSON object:
     "scopeType": "ALL or PARTNER",
     "partnerId": "bound partner id or empty string",
     "shared": true,
-    "webhookUrl": "",
+    "webhookUrl": "required when deliveryMode=webhook, else empty",
+    "deliveryMode": "inbox | wecom_chat | partner_group | webhook",
     "missingSkillNotes": ["When no matching skill exists, explain gap and interim approach"],
     "questionnaire": ["Survey-style questions for user confirmation"],
-    "rationale": "Why these tools/skills and trigger mode were chosen"
+    "rationale": "Why these tools/skills, trigger, and delivery mode were chosen"
   }
 }`;
+}
+
+function buildSystemPrompt(locale: Locale, toolLines: string, promptSkillLines: string, partnerLines: string, knowledgeLines: string) {
+  const lang = locale === "zh" ? "Chinese" : "English";
+  return `You are the conversational "Agent Architect" in the AI Agent platform.
+Goal: help users build runnable Agents through dialogue, not by making them understand every form field.
+Always reply in ${lang}.
+
+How you work:
+1. Understand business goal, inputs, trigger timing, deliverables, delivery channel, risk boundaries.
+2. When info is insufficient, ask the most critical clarifying questions in one survey-style batch — avoid fragmented back-and-forth.
+3. Pick tools from the tool list (draft.skills) and methodology skills (draft.skillIds); prefer fewer, precise choices.
+4. If no skill fits exactly, don't block; note the gap in missingSkillNotes and write interim steps in instructions.
+5. For company strategy/product knowledge, prefer search_knowledge in instructions.
+6. Partner profile field edits should go through proposals/human approval; timeline writes, todos, and document creation can be direct actions.
+7. Before ready=true you MUST have confirmed ALL of:
+   - Business goal and instructions
+   - Trigger (MANUAL or SCHEDULE + frequency/runHour if scheduled)
+   - Scope (ALL or PARTNER + partnerId if partner-bound)
+   - Delivery mode (draft.deliveryMode):
+     * inbox — results only in Partner Hub inbox
+     * wecom_chat — push to the WeCom chat where the user is building (use when user says current group / 本群 / 这个群)
+     * partner_group — push to partner's bound WeCom group (requires scopeType=PARTNER)
+     * webhook — external webhook URL in draft.webhookUrl
+8. ready=true only when name, instructions, deliveryMode are set; webhook mode also requires webhookUrl.
+
+【Available tools (draft.skills = name)】
+${toolLines}
+
+【Available skills (draft.skillIds = id)】
+${promptSkillLines}
+
+【Bindable partners】
+${partnerLines || "(no partners yet)"}
+
+【Citable knowledge base】
+${knowledgeLines}
+
+${outputSchema(locale)}`;
+}
 
 function clampHour(value: unknown) {
   const n = Number(value);
@@ -88,11 +138,81 @@ function clampWeekday(value: unknown) {
   return Number.isInteger(n) && n >= 1 && n <= 7 ? n : 1;
 }
 
+function normalizeDeliveryMode(value: unknown): AgentDeliveryMode | "" {
+  const s = String(value ?? "").trim() as AgentDeliveryMode;
+  return VALID_DELIVERY.includes(s) ? s : "";
+}
+
+function isDraftReady(draft: AgentBuilderDraft): boolean {
+  if (!draft.name.trim() || !draft.instructions.trim()) return false;
+  if (!draft.deliveryMode) return false;
+  if (draft.deliveryMode === "webhook" && !draft.webhookUrl.trim()) return false;
+  if (draft.deliveryMode === "partner_group" && draft.scopeType !== "PARTNER") return false;
+  if (draft.scopeType === "PARTNER" && !draft.partnerId) return false;
+  return true;
+}
+
+function fallbackTurn(locale: Locale, detail: string, partial?: Partial<AgentBuilderTurn>): AgentBuilderTurn {
+  const draft = { ...DEFAULT_DRAFT, ...(partial?.draft ?? {}) } as AgentBuilderDraft;
+  const reply =
+    locale === "zh"
+      ? `抱歉，AI 返回格式有误，没能完整解析草案。请继续补充需求，或简化描述后重试。\n\n（${detail.slice(0, 120)}）`
+      : `Sorry — the AI response had a format error. Please add more detail or retry.\n\n(${detail.slice(0, 120)})`;
+  return {
+    reply: partial?.reply?.trim() || reply,
+    questions: Array.isArray(partial?.questions) ? partial!.questions! : [],
+    ready: false,
+    draft,
+  };
+}
+
+function normalizeTurn(
+  raw: Partial<AgentBuilderTurn>,
+  locale: Locale,
+  builtinNames: Set<string>,
+  promptSkillIds: Set<string>,
+  partnerIds: Set<string>
+): AgentBuilderTurn {
+  const draft = { ...DEFAULT_DRAFT, ...(raw.draft ?? {}) } as AgentBuilderDraft;
+  const skills = Array.isArray(draft.skills) ? draft.skills.filter((s) => builtinNames.has(s)) : [];
+  const skillIds = Array.isArray(draft.skillIds) ? draft.skillIds.filter((id) => promptSkillIds.has(id)) : [];
+  const scopeType = draft.scopeType === "PARTNER" && partnerIds.has(draft.partnerId) ? "PARTNER" : "ALL";
+  const deliveryMode = normalizeDeliveryMode(draft.deliveryMode);
+  const normalizedDraft: AgentBuilderDraft = {
+    ...draft,
+    icon: draft.icon || "🤖",
+    skills,
+    skillIds,
+    trigger: draft.trigger === "SCHEDULE" ? "SCHEDULE" : "MANUAL",
+    frequency: (["HOURLY", "DAILY", "WEEKLY"].includes(draft.frequency) ? draft.frequency : "WEEKLY") as AgentBuilderDraft["frequency"],
+    runHour: clampHour(draft.runHour),
+    runWeekday: clampWeekday(draft.runWeekday),
+    scopeType: scopeType as AgentBuilderDraft["scopeType"],
+    partnerId: scopeType === "PARTNER" ? draft.partnerId : "",
+    shared: draft.shared !== false,
+    webhookUrl: draft.webhookUrl || "",
+    deliveryMode,
+    missingSkillNotes: Array.isArray(draft.missingSkillNotes) ? draft.missingSkillNotes : [],
+    questionnaire: Array.isArray(draft.questionnaire) ? draft.questionnaire : [],
+    rationale: draft.rationale || "",
+  };
+  const defaultReply =
+    locale === "zh" ? "我已整理 Agent 草案，请确认或补充信息。" : "I've drafted an Agent outline — please confirm what else to add.";
+  return {
+    reply: raw.reply?.trim() || defaultReply,
+    questions: Array.isArray(raw.questions) ? raw.questions : [],
+    ready: !!raw.ready && isDraftReady(normalizedDraft),
+    draft: normalizedDraft,
+  };
+}
+
 export async function runAgentBuilderTurn(opts: {
   messages: AgentBuilderMessage[];
   userId?: string;
   emit?: TraceEmitter;
+  locale?: Locale;
 }): Promise<AgentBuilderTurn> {
+  const locale = opts.locale ?? "en";
   const [{ toolOptions, promptSkillOptions }, partners, knowledge] = await Promise.all([
     resolveAgentSkills(),
     db.partner.findMany({
@@ -120,66 +240,28 @@ export async function runAgentBuilderTurn(opts: {
     .join("\n");
   const knowledgeLines = knowledge.map((k) => `${k.category} | ${k.title}`).join("\n") || "(no shared knowledge yet)";
 
-  const system = `You are the conversational "Agent Architect" in the AI Agent platform (OpenClaw / Harness / Workbuddy style).
-Goal: help users build runnable Agents through dialogue, not by making them understand every form field.
-Always reply in English.
-
-How you work:
-1. Understand business goal, inputs, trigger timing, deliverables, write/push needs, risk boundaries.
-2. When info is insufficient, ask the most critical clarifying questions in one survey-style batch — avoid fragmented back-and-forth.
-3. Pick tools from the tool list (draft.skills) and methodology skills (draft.skillIds); prefer fewer, precise choices.
-4. If no skill fits exactly, don't block; note the gap in missingSkillNotes and write interim steps in instructions: try linkedin_search, web_search, knowledge base, profiles, and reasoning first.
-5. For company strategy/product knowledge, prefer search_knowledge and require checking the knowledge base in instructions.
-6. Partner profile field edits should go through proposals/human approval; timeline writes, todos, and document creation can be direct actions.
-7. ready=true only when the draft is sufficient to create; if goal/trigger/output/data source are still missing, ready=false with questionnaire.
-
-【Available tools (draft.skills = name)】
-${toolLines}
-
-【Available skills (draft.skillIds = id)】
-${promptSkillLines}
-
-【Bindable partners】
-${partnerLines || "(no partners yet)"}
-
-【Citable knowledge base】
-${knowledgeLines}
-
-${OUTPUT_SCHEMA}`;
-
+  const system = buildSystemPrompt(locale, toolLines, promptSkillLines, partnerLines, knowledgeLines);
   const conversation = opts.messages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
-  const raw = await chatJson<Partial<AgentBuilderTurn>>(
-    system,
-    `【Current conversation】\n${conversation || "User has not described a need yet. Guide them on what Agent they want to build."}`,
-    { feature: "Conversational Agent builder", userId: opts.userId, temperature: 0.2 }
-  );
-  const draft = { ...DEFAULT_DRAFT, ...(raw.draft ?? {}) } as AgentBuilderDraft;
-  const skills = Array.isArray(draft.skills) ? draft.skills.filter((s) => builtinNames.has(s)) : [];
-  const skillIds = Array.isArray(draft.skillIds) ? draft.skillIds.filter((id) => promptSkillIds.has(id)) : [];
-  const scopeType = draft.scopeType === "PARTNER" && partnerIds.has(draft.partnerId) ? "PARTNER" : "ALL";
+  const userPrompt =
+    locale === "zh"
+      ? `【当前对话】\n${conversation || "用户尚未描述需求，请引导其说明想构建的 Agent。"}`
+      : `【Current conversation】\n${conversation || "User has not described a need yet. Guide them on what Agent they want to build."}`;
 
-  const turn: AgentBuilderTurn = {
-    reply: raw.reply || "I've drafted an Agent outline — please confirm what else to add.",
-    questions: Array.isArray(raw.questions) ? raw.questions : [],
-    ready: !!raw.ready && !!draft.name && !!draft.instructions,
-    draft: {
-      ...draft,
-      icon: draft.icon || "🤖",
-      skills,
-      skillIds,
-      trigger: draft.trigger === "SCHEDULE" ? "SCHEDULE" : "MANUAL",
-      frequency: (["HOURLY", "DAILY", "WEEKLY"].includes(draft.frequency) ? draft.frequency : "WEEKLY") as AgentBuilderDraft["frequency"],
-      runHour: clampHour(draft.runHour),
-      runWeekday: clampWeekday(draft.runWeekday),
-      scopeType: scopeType as AgentBuilderDraft["scopeType"],
-      partnerId: scopeType === "PARTNER" ? draft.partnerId : "",
-      shared: draft.shared !== false,
-      webhookUrl: draft.webhookUrl || "",
-      missingSkillNotes: Array.isArray(draft.missingSkillNotes) ? draft.missingSkillNotes : [],
-      questionnaire: Array.isArray(draft.questionnaire) ? draft.questionnaire : [],
-      rationale: draft.rationale || "",
-    },
-  };
+  let raw: Partial<AgentBuilderTurn>;
+  try {
+    raw = await chatJson<Partial<AgentBuilderTurn>>(system, userPrompt, {
+      feature: locale === "zh" ? "企微 Agent Builder" : "Conversational Agent builder",
+      userId: opts.userId,
+      temperature: 0.2,
+    });
+  } catch (e) {
+    const detail = e instanceof AIError ? e.message : e instanceof Error ? e.message : String(e);
+    return fallbackTurn(locale, detail);
+  }
+
+  const turn = normalizeTurn(raw, locale, builtinNames, promptSkillIds, partnerIds);
   await emitReplyChunks(opts.emit, turn.reply);
   return turn;
 }
+
+export { isDraftReady, normalizeDeliveryMode };

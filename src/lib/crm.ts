@@ -11,6 +11,10 @@ export type CrmDataRow = {
   com_city?: string;
   com_kpi_contactday?: string;
   com_salesman?: string;
+  com_presales?: string;
+  com_project?: string;
+  com_project_manager?: string;
+  com_pm?: string;
   com_status?: string;
   cont_id?: string;
   cont_name?: string;
@@ -58,6 +62,8 @@ export type CrmCustomerUpsert = {
   city: string | null;
   status: string | null;
   salesman: string | null;
+  presales: string | null;
+  projectManager: string | null;
   kpiContactDay: Date | null;
 };
 
@@ -87,6 +93,12 @@ export function normalizeCrmRows(rows: CrmDataRow[]) {
         city: row.com_city?.trim() || null,
         status: row.com_status?.trim() || null,
         salesman: row.com_salesman?.trim() || null,
+        presales: row.com_presales?.trim() || null,
+        projectManager:
+          row.com_project_manager?.trim() ||
+          row.com_pm?.trim() ||
+          row.com_project?.trim() ||
+          null,
         kpiContactDay: parseCrmDate(row.com_kpi_contactday),
       });
     }

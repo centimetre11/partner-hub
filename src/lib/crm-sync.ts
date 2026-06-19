@@ -42,6 +42,8 @@ export async function syncCrmData(): Promise<CrmSyncResult> {
               city: c.city,
               status: c.status,
               salesman: c.salesman,
+              presales: c.presales,
+              projectManager: c.projectManager,
               kpiContactDay: c.kpiContactDay,
             },
           }),

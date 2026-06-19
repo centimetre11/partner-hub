@@ -46,10 +46,14 @@ export function CrmUserSetup({
         </div>
       )}
 
-      {salesmen.length ? (
+      {salesmen.length > 0 && (
         <label className="block space-y-1">
           <span className="text-xs text-zinc-500">{crm.selectSalesman}</span>
-          <select value={selected} onChange={(e) => setSelected(e.target.value)} className={input}>
+          <select
+            value={salesmen.includes(selected) ? selected : ""}
+            onChange={(e) => setSelected(e.target.value)}
+            className={input}
+          >
             <option value="">{crm.noMapping}</option>
             {salesmen.map((s) => (
               <option key={s} value={s}>
@@ -58,18 +62,18 @@ export function CrmUserSetup({
             ))}
           </select>
         </label>
-      ) : (
-        <label className="block space-y-1">
-          <span className="text-xs text-zinc-500">{crm.manualSalesman}</span>
-          <input
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            placeholder="Fay.Wen"
-            className={input}
-          />
-          <p className="text-xs text-zinc-400">{crm.syncFirstHint}</p>
-        </label>
       )}
+
+      <label className="block space-y-1">
+        <span className="text-xs text-zinc-500">{crm.manualSalesman}</span>
+        <input
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+          placeholder="Fay.Wen"
+          className={input}
+        />
+        <p className="text-xs text-zinc-400">{crm.syncFirstHint}</p>
+      </label>
 
       <button
         type="button"

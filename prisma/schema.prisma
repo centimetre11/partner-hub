@@ -432,8 +432,9 @@ model Agent {
   partner      Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   shared       Boolean   @default(true)
   enabled      Boolean   @default(true)
-  webhookUrl   String?
-  isTemplate   Boolean   @default(false) // 模板库条目，克隆使用
+  webhookUrl       String?
+  wecomPushChatId  String? // 运行完成后推送到指定企微 chatId
+  isTemplate       Boolean   @default(false) // 模板库条目，克隆使用
   createdById  String?
   createdBy    User?     @relation(fields: [createdById], references: [id])
   lastRunAt    DateTime?
@@ -642,12 +643,16 @@ model CrmCustomer {
   city          String?
   status        String?
   salesman      String?
+  presales      String?
+  projectManager String?
   kpiContactDay DateTime?
   syncedAt      DateTime     @updatedAt
   contacts      CrmContact[]
 
   @@index([name])
   @@index([salesman])
+  @@index([presales])
+  @@index([projectManager])
 }
 
 // 帆软 CRM 同步联系人（cont_id 为主键）

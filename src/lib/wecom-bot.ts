@@ -14,6 +14,21 @@ import {
   type IntakeProposal,
   type IntakeScope,
 } from "@/lib/ai-intake";
+import type { AgentBuilderDraft, AgentBuilderMessage } from "@/lib/agent-builder";
+import { runAgentBuilderTurn } from "@/lib/agent-builder";
+import {
+  isAgentBuilderCancel,
+  isAgentBuilderConfirm,
+  isAgentBuilderTrialRun,
+  shouldUseAgentBuilderMode,
+} from "@/lib/agent-builder-intent";
+import {
+  formatAgentBuilderWecomReply,
+  formatAgentCreatedReply,
+  formatAgentTrialRunReply,
+} from "@/lib/agent-builder-wecom-format";
+import { createAgentFromDraft } from "@/lib/agent-create";
+import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
 import { shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
@@ -55,6 +70,38 @@ type ProposeSession = {
 };
 
 const proposeSessions = new Map<string, ProposeSession>();
+
+type AgentBuilderSession = {
+  messages: AgentBuilderMessage[];
+  draft: AgentBuilderDraft;
+  ready: boolean;
+  sourceChatId: string;
+  boundPartnerId?: string;
+  lastCreatedAgentId?: string;
+};
+
+const agentBuilderSessions = new Map<string, AgentBuilderSession>();
+
+const EMPTY_AGENT_DRAFT: AgentBuilderDraft = {
+  name: "",
+  icon: "🤖",
+  description: "",
+  instructions: "",
+  skills: [],
+  skillIds: [],
+  trigger: "MANUAL",
+  frequency: "WEEKLY",
+  runHour: 9,
+  runWeekday: 1,
+  scopeType: "ALL",
+  partnerId: "",
+  shared: true,
+  webhookUrl: "",
+  deliveryMode: "",
+  missingSkillNotes: [],
+  questionnaire: [],
+  rationale: "",
+};
 
 export type WecomBotStatus = {
   enabled: boolean;
@@ -198,6 +245,30 @@ async function prepareSessionForApply(
   };
 }
 
+function buildAgentBuilderContextHint(opts: {
+  boundPartnerId?: string;
+  boundPartnerName?: string;
+  sourceChatId: string;
+  chatType: "group" | "single";
+}): string {
+  const parts: string[] = [];
+  if (opts.boundPartnerId && opts.boundPartnerName) {
+    parts.push(
+      `系统提示：当前企微群已绑定伙伴「${opts.boundPartnerName}」(partnerId=${opts.boundPartnerId})，可作为 scopeType=PARTNER 默认值`
+    );
+  }
+  if (opts.chatType === "group" && opts.sourceChatId) {
+    parts.push(
+      `系统提示：用户正在企微群 chatId=${opts.sourceChatId} 中构建 Agent；若需推送到本群，可设 deliveryMode=wecom_chat`
+    );
+  }
+  return parts.join("；");
+}
+
+function resolveSourceChatId(frame: WsFrame, chatId?: string | null): string {
+  return chatId ?? frame.body?.chatid ?? frame.body?.from?.userid ?? "default";
+}
+
 async function refreshAiSummary() {
   aiSummaryCache = await getAiConfigSummary();
   status.ai = aiSummaryCache;
@@ -280,9 +351,116 @@ async function handleTextMessage(frame: WsFrame) {
   const boundPartnerName = chat?.partner?.name;
   const chatType: "group" | "single" =
     chat?.chatType === "group" || frame.body?.chattype === "group" ? "group" : "single";
+  const sourceChatId = resolveSourceChatId(frame, chat?.chatId);
   let session = proposeSessions.get(key);
+  let agentSession = agentBuilderSessions.get(key);
 
   try {
+    // ---- Agent Builder session (priority over Propose) ----
+    if (agentSession && isAgentBuilderCancel(text)) {
+      agentBuilderSessions.delete(key);
+      const reply = "已取消 Agent 草案。你可以继续正常提问，或重新描述要构建的自动化 Agent。";
+      appendHistory(key, "assistant", reply);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    if (agentSession && isAgentBuilderTrialRun(text)) {
+      if (!agentSession.lastCreatedAgentId) {
+        const reply = "暂无可试运行的 Agent。请先完成创建（草案就绪后回复「确认」）。";
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+        return;
+      }
+      await wsClient.replyStream(frame, streamId, "正在试运行 Agent，请稍候…", false);
+      try {
+        const agent = await db.agent.findUniqueOrThrow({ where: { id: agentSession.lastCreatedAgentId } });
+        const output = await runAgent(agentSession.lastCreatedAgentId, "manual");
+        const reply = formatAgentTrialRunReply(output, agent.name);
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await wsClient.replyStream(frame, streamId, `试运行失败：${msg}`, true);
+      }
+      return;
+    }
+
+    if (agentSession && isAgentBuilderConfirm(text)) {
+      if (!agentSession.ready) {
+        const reply = "Agent 草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。";
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+        return;
+      }
+      if (actor.matchedBy === "fallback") {
+        const reply =
+          "⚠️ 未识别到你的 Partner Hub 账号。请先在 Web 个人中心生成绑定码，再 @我 绑定 XXXXXX 后再创建 Agent。";
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+        return;
+      }
+      const wecomPushChatId =
+        agentSession.draft.deliveryMode === "wecom_chat" ? agentSession.sourceChatId : undefined;
+      const created = await createAgentFromDraft(agentSession.draft, actorUserId, { wecomPushChatId });
+      agentBuilderSessions.set(key, {
+        ...agentSession,
+        ready: false,
+        lastCreatedAgentId: created.id,
+        messages: [],
+        draft: EMPTY_AGENT_DRAFT,
+      });
+      const reply = formatAgentCreatedReply(created, agentSession.draft);
+      appendHistory(key, "assistant", reply);
+      console.log(`[wecom-bot] Agent 已创建 id=${created.id.slice(0, 8)}… actor=${actorUserId.slice(0, 8)}…`);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    const inAgentBuilder = !!agentSession || shouldUseAgentBuilderMode(history);
+    if (inAgentBuilder) {
+      proposeSessions.delete(key);
+      if (!agentSession) {
+        agentSession = {
+          messages: [],
+          draft: EMPTY_AGENT_DRAFT,
+          ready: false,
+          sourceChatId,
+          boundPartnerId,
+        };
+      }
+      agentSession.messages.push({ role: "user", content: text });
+      const contextHint = buildAgentBuilderContextHint({
+        boundPartnerId,
+        boundPartnerName,
+        sourceChatId,
+        chatType,
+      });
+      const builderMessages = agentSession.messages.map((m, i, arr) => {
+        if (i !== arr.length - 1 || m.role !== "user" || !contextHint) return m;
+        return { role: "user" as const, content: `${m.content}\n\n（${contextHint}）` };
+      });
+      const turn = await runAgentBuilderTurn({
+        messages: builderMessages,
+        userId: actorUserId,
+        locale: "zh",
+      });
+      agentSession.messages.push({ role: "assistant", content: turn.reply });
+      agentSession.draft = turn.draft;
+      agentSession.ready = turn.ready;
+      agentBuilderSessions.set(key, agentSession);
+      const reply = formatAgentBuilderWecomReply({
+        turn,
+        chatType,
+        boundPartnerName,
+      });
+      appendHistory(key, "assistant", reply);
+      console.log(`[wecom-bot] AgentBuilder ready=${turn.ready} name=${turn.draft.name || "(draft)"}`);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    // ---- Propose session ----
     if (session && isProposeCancel(text)) {
       proposeSessions.delete(key);
       const reply = "已取消，未保存任何草案内容。你可以继续正常提问，或重新发起录入。";
@@ -364,9 +542,11 @@ async function handleTextMessage(frame: WsFrame) {
 
     if (isTodoListQueryIntent(text)) {
       proposeSessions.delete(key);
+      agentBuilderSessions.delete(key);
       session = undefined;
     }
 
+    agentBuilderSessions.delete(key);
     const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
     const inPropose = !!session || shouldUseProposeMode(messages);
 
@@ -430,6 +610,13 @@ async function handleTextMessage(frame: WsFrame) {
         });
         console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
       }
+    } else if (result.mode === "agent_builder") {
+      reply = formatAgentBuilderWecomReply({
+        turn: result,
+        chatType,
+        boundPartnerName,
+      });
+      console.log(`[wecom-bot] AgentBuilder(via router) ready=${result.ready}`);
     } else {
       if (session && !shouldUseProposeMode(messages)) {
         // User pivoted to a normal query — drop stale draft
@@ -549,7 +736,7 @@ export async function startWecomBot() {
       msgtype: "text",
       text: {
         content:
-          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 身份：@我 我是谁 / @我 绑定 / @我 帮助\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  录入时会先给出草案，群聊请 @我 并回复「确认」保存或「取消」放弃。\n\n直接 @我 发消息即可开始。",
+          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 身份：@我 我是谁 / @我 绑定 / @我 帮助\n• Agent 创建：@我 创建一个 Agent（如定时提醒、扫描待办）→ 多轮澄清 → @我 确认\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  录入时会先给出草案，群聊请 @我 并回复「确认」保存或「取消」放弃。\n\n直接 @我 发消息即可开始。",
       },
     });
   });

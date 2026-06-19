@@ -148,10 +148,14 @@ export function UserIdentitySetup({
       <div className="space-y-4 border-t border-zinc-100 pt-4">
         <h4 className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">{id.stepCrm}</h4>
         <p className="text-xs text-zinc-500">{crm.userMappingHint}</p>
-        {salesmen.length ? (
+        {salesmen.length > 0 && (
           <label className="block space-y-1">
             <span className="text-xs text-zinc-500">{crm.selectSalesman}</span>
-            <select value={crmUser} onChange={(e) => setCrmUser(e.target.value)} className={input}>
+            <select
+              value={salesmen.includes(crmUser) ? crmUser : ""}
+              onChange={(e) => setCrmUser(e.target.value)}
+              className={input}
+            >
               <option value="">{crm.noMapping}</option>
               {salesmen.map((s) => (
                 <option key={s} value={s}>
@@ -160,18 +164,17 @@ export function UserIdentitySetup({
               ))}
             </select>
           </label>
-        ) : (
-          <label className="block space-y-1">
-            <span className="text-xs text-zinc-500">{crm.manualSalesman}</span>
-            <input
-              value={crmUser}
-              onChange={(e) => setCrmUser(e.target.value)}
-              placeholder="Fay.Wen"
-              className={input}
-            />
-            <p className="text-xs text-zinc-400">{crm.syncFirstHint}</p>
-          </label>
         )}
+        <label className="block space-y-1">
+          <span className="text-xs text-zinc-500">{crm.manualSalesman}</span>
+          <input
+            value={crmUser}
+            onChange={(e) => setCrmUser(e.target.value)}
+            placeholder="Fay.Wen"
+            className={input}
+          />
+          <p className="text-xs text-zinc-400">{crm.syncFirstHint}</p>
+        </label>
       </div>
 
       <button

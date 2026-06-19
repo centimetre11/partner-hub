@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireSuperAdmin, requireUser } from "./session";
 import { syncCrmData } from "./crm-sync";
+import { getCrmRecorderNames, getCrmExtraRecordersFromSettings, saveCrmExtraRecorders } from "./crm-recorders";
 
 export async function triggerCrmSyncAction() {
   await requireSuperAdmin();
@@ -190,11 +191,22 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
 
 export async function getCrmSalesmenAction() {
   await requireUser();
-  const rows = await db.crmCustomer.findMany({
-    where: { salesman: { not: null } },
-    distinct: ["salesman"],
-    select: { salesman: true },
-    orderBy: { salesman: "asc" },
-  });
-  return rows.map((r) => r.salesman!).filter(Boolean);
+  return getCrmRecorderNames();
+}
+
+export async function getCrmExtraRecordersAction() {
+  await requireSuperAdmin();
+  return getCrmExtraRecordersFromSettings();
+}
+
+export async function saveCrmExtraRecordersAction(formData: FormData) {
+  await requireSuperAdmin();
+  const raw = String(formData.get("extraRecorders") ?? "");
+  const names = await saveCrmExtraRecorders(raw);
+  revalidatePath("/settings");
+  revalidatePath("/account");
+  return {
+    ok: true,
+    message: names.length ? `已保存 ${names.length} 个 CRM 录入人补录` : "已清空 CRM 录入人补录",
+  };
 }

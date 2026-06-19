@@ -14,7 +14,7 @@ import { KNOWHOW_DEFAULT_BASE_URL } from "@/lib/knowhow";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 import { parseAiCapabilities } from "@/lib/ai-capabilities";
 import { CrmSyncCard } from "./crm-sync-card";
-import { getCrmSalesmenAction } from "@/lib/crm-actions";
+import { getCrmSalesmenAction, getCrmExtraRecordersAction } from "@/lib/crm-actions";
 import { getCrmSyncStats } from "@/lib/crm-sync";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getServerI18n } from "@/lib/server-i18n";
@@ -36,7 +36,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, salesmen] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, salesmen, extraRecorders] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -54,6 +54,7 @@ export default async function SettingsPage() {
     getCrmSyncStats(),
     getAmmoConfigForClient(),
     getCrmSalesmenAction(),
+    getCrmExtraRecordersAction(),
   ]);
 
   const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
@@ -187,6 +188,7 @@ export default async function SettingsPage() {
             lastSyncAt={crmStats.lastSyncAt?.toISOString() ?? null}
             latestStatus={crmStats.latestLog?.status ?? null}
             latestError={crmStats.latestLog?.error ?? null}
+            extraRecorders={extraRecorders.join("\n")}
           />
         </Card>
 

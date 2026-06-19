@@ -203,6 +203,18 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
       await pushWebhook(agent.webhookUrl, `${agent.name}`, output);
     }
 
+    if (agent.wecomPushChatId) {
+      try {
+        const { enqueueWecomPush } = await import("@/lib/wecom-push");
+        await enqueueWecomPush(
+          agent.wecomPushChatId,
+          `【${agent.icon} ${agent.name}】\n${output.slice(0, 3500)}`
+        );
+      } catch (e) {
+        console.warn(`[agent-runner] wecomPushChatId push failed:`, e instanceof Error ? e.message : e);
+      }
+    }
+
     if (agent.partnerId) {
       try {
         const { enqueueWecomPushForPartner } = await import("@/lib/wecom-push");
