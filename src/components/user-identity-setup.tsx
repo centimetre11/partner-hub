@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveMyUserIdentityAction } from "@/lib/user-identity-actions";
+import { saveMyUserIdentityAction, generateWecomBindCodeAction } from "@/lib/user-identity-actions";
 import { useMessages } from "@/lib/i18n/context";
 
 const input =
@@ -29,6 +29,8 @@ export function UserIdentitySetup({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [bindCode, setBindCode] = useState<string | null>(null);
+  const [bindCodeHint, setBindCodeHint] = useState<string | null>(null);
 
   const wecomOk = !!wecomUserId;
   const displayOk = !!wecomDisplayName;
@@ -46,6 +48,20 @@ export function UserIdentitySetup({
       const res = await saveMyUserIdentityAction(fd);
       if ("error" in res && typeof res.error === "string") setError(res.error);
       else if ("message" in res && res.message) setMessage(res.message);
+    });
+  }
+
+  function generateBindCode() {
+    startTransition(async () => {
+      setMessage(null);
+      setError(null);
+      setBindCodeHint(null);
+      const res = await generateWecomBindCodeAction();
+      if ("error" in res && typeof res.error === "string") setError(res.error);
+      else if ("code" in res && res.code) {
+        setBindCode(res.code);
+        setBindCodeHint(res.message ?? null);
+      }
     });
   }
 
@@ -73,6 +89,26 @@ export function UserIdentitySetup({
         )}
       </div>
 
+      <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-3 text-xs space-y-2">
+        <div className="font-medium text-indigo-900">{id.botBindTitle}</div>
+        <p className="text-indigo-800/90 leading-relaxed">{id.botBindDesc}</p>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={generateBindCode}
+          className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-xs hover:bg-indigo-700 disabled:opacity-40"
+        >
+          {id.generateBindCode}
+        </button>
+        {bindCode && (
+          <div className="rounded-lg bg-white border border-indigo-200 px-3 py-2 text-indigo-950">
+            <div className="font-mono text-lg font-bold tracking-widest">{bindCode}</div>
+            <div className="mt-1 text-indigo-700">{id.botBindSend.replace("{code}", bindCode)}</div>
+          </div>
+        )}
+        {bindCodeHint && <p className="text-indigo-700">{bindCodeHint}</p>}
+      </div>
+
       <details className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2 text-xs text-indigo-900">
         <summary className="cursor-pointer font-medium">{id.howToFindUserid}</summary>
         <ol className="mt-2 list-decimal list-inside space-y-1.5 leading-relaxed text-indigo-800/90">
@@ -94,7 +130,7 @@ export function UserIdentitySetup({
             autoComplete="off"
             spellCheck={false}
           />
-          <p className="text-xs text-zinc-400">{w.userIdHint}</p>
+          <p className="text-xs text-zinc-400">{w.userIdHint} {id.userIdCopyHint}</p>
         </label>
         <label className="block space-y-1">
           <span className="text-xs text-zinc-500">{id.displayNameLabel}</span>

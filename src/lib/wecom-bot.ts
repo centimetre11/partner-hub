@@ -18,6 +18,12 @@ import { shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
+  formatWecomBotHelpReply,
+  handleWecomBindCommand,
+  isWecomBotHelpQuery,
+  parseWecomBindCommand,
+} from "@/lib/wecom-bind-commands";
+import {
   formatWecomIdentityReply,
   isWecomIdentityQuery,
   resolveWecomActorUserId,
@@ -167,6 +173,26 @@ async function handleTextMessage(frame: WsFrame) {
     appendHistory(key, "assistant", reply);
     await wsClient.replyStream(frame, streamId, reply, true);
     console.log(`[wecom-bot] 身份查询 from=${fromUserId ?? "?"} matched=${actor.matchedBy} hub=${actorUserId.slice(0, 8)}…`);
+    return;
+  }
+
+  const bindCommand = parseWecomBindCommand(text);
+  if (bindCommand) {
+    const streamId = generateReqId("stream");
+    const reply = await handleWecomBindCommand(bindCommand, fromUserId);
+    appendHistory(key, "user", text);
+    appendHistory(key, "assistant", reply);
+    await wsClient.replyStream(frame, streamId, reply, true);
+    console.log(`[wecom-bot] 绑定指令 type=${bindCommand.type} from=${fromUserId ?? "?"}`);
+    return;
+  }
+
+  if (isWecomBotHelpQuery(text)) {
+    const streamId = generateReqId("stream");
+    const reply = formatWecomBotHelpReply();
+    appendHistory(key, "user", text);
+    appendHistory(key, "assistant", reply);
+    await wsClient.replyStream(frame, streamId, reply, true);
     return;
   }
 
@@ -408,7 +434,7 @@ export async function startWecomBot() {
       msgtype: "text",
       text: {
         content:
-          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  - 建档 / 补全画像（可贴 KMS 链接）\n  录入时会先给出草案，群聊请 @我 并回复「确认」保存或「取消」放弃。\n\n直接发消息即可开始。",
+          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 身份：@我 我是谁 / @我 绑定 / @我 帮助\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  录入时会先给出草案，群聊请 @我 并回复「确认」保存或「取消」放弃。\n\n直接 @我 发消息即可开始。",
       },
     });
   });

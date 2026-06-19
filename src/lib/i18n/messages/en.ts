@@ -762,6 +762,11 @@ export const messagesEn = {
     displayNamePlaceholder: "e.g. saber-陈敏 (exactly as shown in the group)",
     displayNameHint: "Use only when userid is unavailable; case and spaces matter.",
     saveAll: "Save identity bindings",
+    botBindTitle: "WeCom one-tap bind (recommended)",
+    botBindDesc: "Skip manual userid paste: generate a 6-character code here, then @ the bot in WeCom with「绑定 CODE」.",
+    generateBindCode: "Generate WeCom bind code",
+    botBindSend: "In your WeCom group send: @bot 绑定 {code}",
+    userIdCopyHint: "When copying from「我是谁」, do not include backticks `.",
   },
   wecom: {
     userMappingHint:

@@ -5,6 +5,7 @@ import { PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { createTodoAction, deleteTodoAction, toggleTodoAction } from "@/lib/actions";
 import { TodoEditButton } from "@/components/todo-edit-button";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
+import { isTodoOverdue, overdueDueDateBefore } from "@/lib/todo-dates";
 
 export default async function TodosPage({
   searchParams,
@@ -20,7 +21,7 @@ export default async function TodosPage({
   const todos = await db.todoItem.findMany({
     where: {
       ...(filter === "open" ? { status: "OPEN" } : filter === "done" ? { status: "DONE" } : {}),
-      ...(filter === "overdue" ? { status: "OPEN", dueDate: { lt: new Date() } } : {}),
+      ...(filter === "overdue" ? { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } } : {}),
       ...(filter === "mine" ? { status: "OPEN", assigneeId: user.id } : {}),
       ...(sp.assignee ? { assigneeId: sp.assignee } : {}),
     },
@@ -50,7 +51,7 @@ export default async function TodosPage({
   const doneTodos = todos.filter((t) => t.status === "DONE");
 
   const renderRow = (t: (typeof todos)[number]) => {
-    const overdue = t.status === "OPEN" && t.dueDate && new Date(t.dueDate) < new Date();
+    const overdue = t.status === "OPEN" && t.dueDate && isTodoOverdue(t.dueDate);
     return (
       <div key={t.id} className="flex items-start gap-3 px-5 py-3.5 group">
         <form action={toggleTodoAction.bind(null, t.id)}>

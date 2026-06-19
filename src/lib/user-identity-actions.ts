@@ -1,11 +1,15 @@
 "use server";
 
+import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireSuperAdmin, requireUser } from "./session";
-
-const WECOM_USER_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._@-]{0,63}$/;
-const WECOM_DISPLAY_NAME_RE = /^[\w\u4e00-\u9fff\s.\-_@]{1,64}$/;
+import {
+  isValidWecomDisplayName,
+  isValidWecomUserId,
+  sanitizeWecomDisplayName,
+  sanitizeWecomUserId,
+} from "./wecom-identity-validation";
 
 export type UserIdentityFields = {
   wecomUserId: string | null;
@@ -14,9 +18,15 @@ export type UserIdentityFields = {
 };
 
 function parseIdentityForm(formData: FormData): UserIdentityFields {
-  const wecomUserId = String(formData.get("wecomUserId") ?? "").trim() || null;
-  const wecomDisplayName = String(formData.get("wecomDisplayName") ?? "").trim() || null;
+  const wecomUserIdRaw = String(formData.get("wecomUserId") ?? "").trim();
+  const wecomDisplayNameRaw = String(formData.get("wecomDisplayName") ?? "").trim();
   const crmSalesmanName = String(formData.get("crmSalesmanName") ?? "").trim() || null;
+
+  const wecomUserId = wecomUserIdRaw ? sanitizeWecomUserId(wecomUserIdRaw) || null : null;
+  const wecomDisplayName = wecomDisplayNameRaw
+    ? sanitizeWecomDisplayName(wecomDisplayNameRaw) || null
+    : null;
+
   return { wecomUserId, wecomDisplayName, crmSalesmanName };
 }
 
@@ -24,13 +34,13 @@ async function assertIdentityAvailable(
   userId: string,
   fields: UserIdentityFields,
 ): Promise<{ error?: string }> {
-  if (fields.wecomUserId && !WECOM_USER_ID_RE.test(fields.wecomUserId)) {
+  if (fields.wecomUserId && !isValidWecomUserId(fields.wecomUserId)) {
     return {
       error:
-        "企业微信 userid 格式无效：仅支持字母、数字及 . _ @ -，且不能以特殊字符开头，最长 64 字符",
+        "企业微信 userid 格式无效。请只粘贴账号本身（不要带反引号 `），一般为字母数字与下划线，4–128 位",
     };
   }
-  if (fields.wecomDisplayName && !WECOM_DISPLAY_NAME_RE.test(fields.wecomDisplayName)) {
+  if (fields.wecomDisplayName && !isValidWecomDisplayName(fields.wecomDisplayName)) {
     return { error: "企微显示名格式无效：最长 64 字符，请勿包含特殊符号" };
   }
 
@@ -88,4 +98,33 @@ export async function saveUserIdentityByAdminAction(userId: string, formData: Fo
   revalidatePath("/settings");
   revalidatePath("/account");
   return { ok: true };
+}
+
+const BIND_CODE_TTL_MS = 15 * 60 * 1000;
+
+function randomBindCode() {
+  return randomBytes(3).toString("hex").toUpperCase();
+}
+
+/** Web 个人中心生成企微绑定码，群里 @机器人 绑定 XXXXXX 完成绑定 */
+export async function generateWecomBindCodeAction() {
+  const user = await requireUser();
+  const code = randomBindCode();
+  const expiresAt = new Date(Date.now() + BIND_CODE_TTL_MS);
+
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      wecomBindCode: code,
+      wecomBindCodeExpiresAt: expiresAt,
+    },
+  });
+
+  revalidatePath("/account");
+  return {
+    ok: true as const,
+    code,
+    expiresAt: expiresAt.toISOString(),
+    message: `绑定码 ${code} 已生成，15 分钟内有效。请在企微群发送：@机器人 绑定 ${code}`,
+  };
 }

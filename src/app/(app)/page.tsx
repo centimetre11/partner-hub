@@ -8,6 +8,7 @@ import { WeeklyReport } from "./weekly-report";
 import { AiAddButton } from "@/components/ai-add-button";
 import { BoardOverview } from "./dashboard/board-overview";
 import { getServerI18n, labelConstants, stageName } from "@/lib/server-i18n";
+import { isTodoOverdue, overdueDueDateBefore } from "@/lib/todo-dates";
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const user = await requireUser();
@@ -83,7 +84,7 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
       take: 12,
     }),
     db.todoItem.findMany({
-      where: { status: "OPEN", dueDate: { lt: now } },
+      where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore(now) } },
       include: { partner: true, assignee: true },
       orderBy: { dueDate: "asc" },
       take: 10,
@@ -181,7 +182,7 @@ async function WorkOverview({ userId, now, m, L, bcp47, labels }: WorkProps) {
           <Card title={m.dashboard.weekTodosTitle} actions={<Link href="/todos" className="text-xs text-indigo-600 hover:underline">{m.common.viewAll} →</Link>}>
             <div className="space-y-2.5">
               {myTodos.map((t) => {
-                const overdue = t.dueDate && new Date(t.dueDate) < now;
+                const overdue = t.dueDate && isTodoOverdue(t.dueDate, now);
                 return (
                   <div key={t.id} className="flex items-start gap-2.5">
                     <form action={toggleTodoAction.bind(null, t.id)}>

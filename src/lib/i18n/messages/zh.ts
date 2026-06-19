@@ -762,6 +762,11 @@ export const messagesZh: Messages = {
     displayNamePlaceholder: "例如 saber-陈敏（与群里你的名字一致）",
     displayNameHint: "仅当无法填写 userid 时使用；区分大小写与空格。",
     saveAll: "保存身份绑定",
+    botBindTitle: "企微一键绑定（推荐）",
+    botBindDesc: "无需手填 userid：在 Web 生成 6 位绑定码，到企微群 @ 机器人发送「绑定 绑定码」即可完成。",
+    generateBindCode: "生成企微绑定码",
+    botBindSend: "请在企微群发送：@机器人 绑定 {code}",
+    userIdCopyHint: "从「我是谁」复制时不要带反引号 `。",
   },
   wecom: {
     userMappingHint:

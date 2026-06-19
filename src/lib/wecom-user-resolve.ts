@@ -12,6 +12,14 @@ export type WecomActorResolution = {
     wecomDisplayName: string | null;
     crmSalesmanName: string | null;
   } | null;
+  /** 未匹配到发消息者时，仅用于日志，勿展示为「你的」绑定状态 */
+  fallbackBotUser?: {
+    id: string;
+    name: string;
+    wecomUserId: string | null;
+    wecomDisplayName: string | null;
+    crmSalesmanName: string | null;
+  } | null;
 };
 
 const WECOM_IDENTITY_QUERY_RE =
@@ -71,7 +79,8 @@ export async function resolveWecomActorUserId(input: {
   return {
     userId: input.fallbackUserId,
     matchedBy: "fallback",
-    hubUser: fallback,
+    hubUser: null,
+    fallbackBotUser: fallback,
   };
 }
 
@@ -116,23 +125,31 @@ export function formatWecomIdentityReply(opts: {
     "**企微身份绑定信息**",
     "",
     `• 本次消息 userid：\`${fromUserId}\``,
-    "  （可复制到 Partner Hub → 个人中心 → 身份绑定）",
+    "  （复制时不要带反引号；或直接用绑定码绑定）",
   ];
 
   if (opts.resolution.matchedBy === "fallback") {
     lines.push("", "⚠️ 尚未匹配到你的 Partner Hub 账号。");
+    lines.push(
+      "",
+      "**快速绑定**",
+      "1. Web **个人中心 → 身份绑定** → 生成绑定码",
+      "2. 发送：`@我 绑定 XXXXXX`",
+      "3. 可选：`@我 绑定 CRM chenmin`",
+    );
   } else {
     lines.push("", `• Partner Hub 账号：**${hub?.name ?? "—"}**`);
     lines.push(`• 匹配方式：${opts.resolution.matchedBy === "wecomUserId" ? "企微 userid" : "企微显示名"}`);
   }
 
+  const showUser = hub;
   lines.push(
     "",
-    `• 企微 userid 绑定：${hub?.wecomUserId ? `✅ \`${hub.wecomUserId}\`` : "❌ 未绑定"}`,
-    `• 企微显示名绑定：${hub?.wecomDisplayName ? `✅ ${hub.wecomDisplayName}` : "❌ 未绑定"}`,
-    `• CRM 销售账号：${hub?.crmSalesmanName ? `✅ ${hub.crmSalesmanName}` : "❌ 未绑定"}`,
+    `• 企微 userid 绑定：${showUser?.wecomUserId ? `✅ \`${showUser.wecomUserId}\`` : "❌ 未绑定"}`,
+    `• 企微显示名绑定：${showUser?.wecomDisplayName ? `✅ ${showUser.wecomDisplayName}` : "❌ 未绑定"}`,
+    `• CRM 销售账号：${showUser?.crmSalesmanName ? `✅ ${showUser.crmSalesmanName}` : "❌ 未绑定"}`,
     "",
-    "请在 Web 打开 **个人中心**（/account）完成三项绑定，商务记录才会以你的 CRM 账号归档。",
+    "发送 `@我 绑定` 查看绑定说明，`@我 帮助` 查看全部指令。",
   );
 
   return lines.join("\n");

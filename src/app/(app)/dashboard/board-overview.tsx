@@ -4,6 +4,7 @@ import { Badge, Card, ScoreBar, TierBadge, tierTone } from "@/components/ui";
 import { normalizePartnerTier } from "@/lib/tier";
 import { CATEGORY_LABELS, PIPELINE_STAGES } from "@/lib/constants";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
+import { overdueDueDateBefore } from "@/lib/todo-dates";
 
 function Bar({ label, value, max, tone = "bg-indigo-500", suffix }: { label: string; value: number; max: number; tone?: string; suffix?: string }) {
   return (
@@ -25,7 +26,7 @@ export async function BoardOverview() {
     include: { contacts: true, opportunities: true, events: true, trainings: true },
   });
   const openTodos = await db.todoItem.count({ where: { status: "OPEN" } });
-  const overdueTodos = await db.todoItem.count({ where: { status: "OPEN", dueDate: { lt: new Date() } } });
+  const overdueTodos = await db.todoItem.count({ where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } } });
   const activeOppCount = await db.opportunity.count({
     where: { status: "ACTIVE", partner: { status: "ACTIVE" } },
   });

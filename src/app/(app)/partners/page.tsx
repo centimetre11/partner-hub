@@ -7,6 +7,7 @@ import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
 import { getServerI18n, stageName } from "@/lib/server-i18n";
+import { isTodoOverdue } from "@/lib/todo-dates";
 
 function truncate(text: string, max = 22) {
   return text.length > max ? `${text.slice(0, max)}…` : text;
@@ -19,11 +20,10 @@ function lastActivityAt(p: { events: TimelineEvent[]; updatedAt: Date }) {
 function pickNextTodo(todos: TodoItem[]) {
   const open = todos.filter((t) => t.status === "OPEN");
   if (!open.length) return null;
-  const now = Date.now();
   const priorityRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
   return [...open].sort((a, b) => {
-    const aOverdue = a.dueDate && new Date(a.dueDate).getTime() < now ? 0 : 1;
-    const bOverdue = b.dueDate && new Date(b.dueDate).getTime() < now ? 0 : 1;
+    const aOverdue = a.dueDate && isTodoOverdue(a.dueDate) ? 0 : 1;
+    const bOverdue = b.dueDate && isTodoOverdue(b.dueDate) ? 0 : 1;
     if (aOverdue !== bOverdue) return aOverdue - bOverdue;
     const pd =
       (priorityRank[a.priority as keyof typeof priorityRank] ?? 1) -

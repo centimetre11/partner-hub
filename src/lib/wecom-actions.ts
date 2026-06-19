@@ -3,18 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireUser } from "./session";
-
-const WECOM_USER_ID_RE = /^[a-zA-Z0-9][a-zA-Z0-9._@-]{0,63}$/;
+import { isValidWecomUserId, sanitizeWecomUserId } from "./wecom-identity-validation";
 
 export async function saveWecomUserIdAction(formData: FormData) {
   const user = await requireUser();
   const raw = String(formData.get("wecomUserId") ?? "").trim();
-  const wecomUserId = raw || null;
+  const wecomUserId = raw ? sanitizeWecomUserId(raw) || null : null;
 
-  if (wecomUserId && !WECOM_USER_ID_RE.test(wecomUserId)) {
+  if (wecomUserId && !isValidWecomUserId(wecomUserId)) {
     return {
       error:
-        "企业微信 userid 格式无效：仅支持字母、数字及 . _ @ -，且不能以特殊字符开头，最长 64 字符",
+        "企业微信 userid 格式无效。请只粘贴账号本身（不要带反引号 `），一般为字母数字与下划线，4–128 位",
     };
   }
 

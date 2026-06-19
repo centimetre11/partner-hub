@@ -12,6 +12,7 @@ import {
 } from "./builtin-search";
 import { MONITOR_DIMENSIONS, MONITOR_SENTIMENT_LABELS } from "./constants";
 import { formatTierLabel, partnerFieldValueFromText } from "./tier";
+import { overdueDueDateBefore } from "./todo-dates";
 
 // ============ Skill execution context ============
 
@@ -263,7 +264,7 @@ const listTodos: Skill = {
     const todos = await db.todoItem.findMany({
       where: {
         status: "OPEN",
-        ...(args.overdueOnly ? { dueDate: { lt: new Date() } } : {}),
+        ...(args.overdueOnly ? { dueDate: { lt: overdueDueDateBefore() } } : {}),
         ...(args.partnerName ? { partner: { name: { contains: String(args.partnerName) } } } : {}),
       },
       include: { partner: true, assignee: true },

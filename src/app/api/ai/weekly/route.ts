@@ -6,6 +6,7 @@ import { createSseResponse } from "@/lib/ai-trace";
 import { streamTextCompletion } from "@/lib/ai-stream-text";
 import { stageName } from "@/lib/constants";
 import { staleDays } from "@/lib/completeness";
+import { overdueDueDateBefore } from "@/lib/todo-dates";
 
 export async function GET() {
   const uid = await getSessionUserId();
@@ -26,7 +27,7 @@ async function generateWeekly(uid: string, emit?: Parameters<typeof streamTextCo
       take: 60,
     }),
     db.todoItem.count({ where: { status: "OPEN" } }),
-    db.todoItem.findMany({ where: { status: "OPEN", dueDate: { lt: new Date() } }, include: { partner: true }, take: 20 }),
+    db.todoItem.findMany({ where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } }, include: { partner: true }, take: 20 }),
   ]);
 
   const partnerLines = active

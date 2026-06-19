@@ -6,6 +6,7 @@ import { toggleTodoAction } from "@/lib/actions";
 import { BusinessRecordForm } from "@/components/business-record-form";
 import { TodoEditButton } from "@/components/todo-edit-button";
 import { fmtDate } from "@/components/ui";
+import { isTodoOverdue } from "@/lib/todo-dates";
 import { useMessages } from "@/lib/i18n/context";
 import type { TodoItem, User } from "@prisma/client";
 
@@ -32,7 +33,7 @@ export function TodoItemRow({
   const [prompt, setPrompt] = useState(false);
   const [loading, setLoading] = useState(false);
   const isDone = todo.status === "DONE";
-  const overdue = todo.status === "OPEN" && todo.dueDate && new Date(todo.dueDate) < new Date();
+  const overdue = todo.status === "OPEN" && todo.dueDate && isTodoOverdue(todo.dueDate);
 
   async function markDoneOnly() {
     setLoading(true);
