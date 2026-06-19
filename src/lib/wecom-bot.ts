@@ -19,6 +19,7 @@ import { runAgentBuilderTurn } from "@/lib/agent-builder";
 import {
   isAgentBuilderCancel,
   isAgentBuilderConfirm,
+  isAgentBuilderIntent,
   isAgentBuilderTrialRun,
   shouldUseAgentBuilderMode,
 } from "@/lib/agent-builder-intent";
@@ -356,6 +357,11 @@ async function handleTextMessage(frame: WsFrame) {
   let agentSession = agentBuilderSessions.get(key);
 
   try {
+    if (isAgentBuilderIntent(text)) {
+      proposeSessions.delete(key);
+      session = undefined;
+    }
+
     // ---- Agent Builder session (priority over Propose) ----
     if (agentSession && isAgentBuilderCancel(text)) {
       agentBuilderSessions.delete(key);
@@ -548,7 +554,8 @@ async function handleTextMessage(frame: WsFrame) {
 
     agentBuilderSessions.delete(key);
     const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
-    const inPropose = !!session || shouldUseProposeMode(messages);
+    const inPropose =
+      !isAgentBuilderIntent(text) && (!!session || shouldUseProposeMode(messages));
 
     const result = await runAssistantTurn({
       messages,

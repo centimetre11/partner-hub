@@ -753,6 +753,7 @@ export function stripIntakeSystemHint(content: string): string {
 export function detectProposeScope(messages: IntakeMessage[], partnerId?: string): IntakeScope {
   const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const text = stripIntakeSystemHint(last);
+  if (isAgentBuilderIntent(last)) return "new_partner";
   // Business record before todo — bound-group hints may mention 待办; user may say 记个商务记录.
   if (
     /商务记录|拜访记录|会议纪要|跟进记录|见面|记录拜访|记录会议|记.{0,4}商务|拜访|business record|meeting log|visit log|log.{0,6}visit/i.test(

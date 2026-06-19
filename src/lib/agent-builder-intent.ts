@@ -1,20 +1,28 @@
 import type { IntakeMessage } from "./ai-intake";
 import { stripIntakeSystemHint } from "./ai-intake";
+import { stripWecomCommandPrefix } from "./wecom-user-resolve";
+
+function normalizeIntentText(text: string): string {
+  return stripIntakeSystemHint(stripWecomCommandPrefix(text)).trim();
+}
 
 /** Pure todo intake — must stay in Propose mode, not Agent Builder */
 function isPureTodoIntakeIntent(text: string): boolean {
-  const t = stripIntakeSystemHint(text).trim();
+  const t = normalizeIntentText(text);
+  if (/机器人|提醒|推送|通知|自动化|agent|Agent|定时|到期前/i.test(t)) return false;
   return /^(创建|添加|记|加|新建|录入).{0,4}待办|create todo|add todo|log todo/i.test(t);
 }
 
 /** Detect automation / Agent creation intent (WeCom + assistant routing) */
 export function isAgentBuilderIntent(text: string): boolean {
-  const t = stripIntakeSystemHint(text).trim();
+  const t = normalizeIntentText(text);
 
   // Automation patterns take priority over single-todo intake phrasing
   if (/机器人.{0,8}提醒|自动.{0,8}提醒|定时.{0,8}(扫描|运行|提醒|任务|推送)/i.test(t)) {
     return true;
   }
+  if (/待办.{0,48}(到期|截止|due).{0,48}(提醒|推送|通知)/i.test(t)) return true;
+  if (/到期前.{0,24}(天|日|day).{0,32}(提醒|推送)/i.test(t) && /待办|todo/i.test(t)) return true;
   if (/创建.{0,24}(提醒|推送|通知|机器人)/i.test(t) && /待办|todo/i.test(t)) return true;
 
   if (isPureTodoIntakeIntent(t)) return false;
