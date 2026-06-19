@@ -31,6 +31,7 @@ model User {
   aiTokenUsages AiTokenUsage[]
   kmsCredential UserKmsCredential?
   businessRecords BusinessRecord[]
+  feedbackSubmissions FeedbackSubmission[]
   crmSalesmanName String? // 帆软 CRM 销售英文名，对应 com_salesman（如 Fay.Wen）
   wecomUserId     String? @unique // 企业微信成员 userid，用于识别发消息者与 @ 提醒
   wecomDisplayName String? @unique // 企微群聊显示名（如 saber-陈敏），userid 不可用时的兜底匹配
@@ -488,6 +489,32 @@ model Asset {
   materials    Material[]
   solutionLinks SolutionAsset[]
   documentLinks DocumentAsset[]
+  feedbackLinks FeedbackAsset[]
+}
+
+// 用户提交的需求与问题
+model FeedbackSubmission {
+  id          String   @id @default(cuid())
+  // REQUIREMENT 需求 / ISSUE 问题 / OTHER 其他
+  type        String
+  title       String
+  description String?
+  // OPEN 待处理 / IN_PROGRESS 处理中 / RESOLVED 已解决 / CLOSED 已关闭
+  status      String   @default("OPEN")
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  assets      FeedbackAsset[]
+}
+
+model FeedbackAsset {
+  feedbackId String
+  assetId    String
+  feedback   FeedbackSubmission @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  asset      Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@id([feedbackId, assetId])
 }
 
 model Document {

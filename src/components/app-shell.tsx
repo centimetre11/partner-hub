@@ -8,6 +8,7 @@ import { NavLinks } from "@/components/nav-links";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { isSuperAdmin } from "@/lib/user-roles";
 import { useAssistant } from "@/lib/assistant-context";
+import { FeedbackButton } from "@/components/feedback-form-modal";
 import { useMessages } from "@/lib/i18n/context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import type { Locale } from "@/lib/i18n/locale";
@@ -107,6 +108,7 @@ export function AppShell({
         </div>
         <NavLinks unread={unread} onNavigate={() => setNavOpen(false)} showTeamSettings={isSuperAdmin(user)} />
         <div className="mt-auto border-t border-zinc-800 px-3 py-4 space-y-2">
+          <FeedbackButton onOpen={() => setNavOpen(false)} />
           <button
             type="button"
             onClick={() => {

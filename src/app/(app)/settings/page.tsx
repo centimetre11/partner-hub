@@ -14,6 +14,7 @@ import { KNOWHOW_DEFAULT_BASE_URL } from "@/lib/knowhow";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 import { parseAiCapabilities } from "@/lib/ai-capabilities";
 import { CrmSyncCard } from "./crm-sync-card";
+import { FeedbackList } from "./feedback-list";
 import { getCrmSalesmenAction, getCrmExtraRecordersAction } from "@/lib/crm-actions";
 import { getCrmSyncStats } from "@/lib/crm-sync";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
@@ -36,7 +37,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, salesmen, extraRecorders] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, salesmen, extraRecorders, feedbackItems] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -55,6 +56,14 @@ export default async function SettingsPage() {
     getAmmoConfigForClient(),
     getCrmSalesmenAction(),
     getCrmExtraRecordersAction(),
+    db.feedbackSubmission.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: {
+        createdBy: { select: { name: true, email: true } },
+        assets: { include: { asset: { select: { id: true, filename: true, mimeType: true, kind: true } } } },
+      },
+    }),
   ]);
 
   const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
@@ -106,6 +115,7 @@ export default async function SettingsPage() {
     });
   const aiConfigured = aiApis.some((api) => api.enabled) || !!process.env.AI_API_KEY;
   const todayTokens = todayUsageEarly.reduce((sum, row) => sum + row.totalTokens, 0);
+  const openFeedbackCount = feedbackItems.filter((f) => f.status === "OPEN" || f.status === "IN_PROGRESS").length;
 
   return (
     <div className="pb-16">
@@ -118,6 +128,17 @@ export default async function SettingsPage() {
             ))}
           </div>
           <RegisterForm />
+        </Card>
+
+        <Card
+          title={
+            openFeedbackCount > 0
+              ? m.feedback.adminTitleWithCount.replace("{count}", String(openFeedbackCount))
+              : m.feedback.adminTitle
+          }
+          className="lg:col-span-2"
+        >
+          <FeedbackList items={feedbackItems} bcp47={bcp47} />
         </Card>
 
         <Card title={m.settings.aiConfigStatus}>
