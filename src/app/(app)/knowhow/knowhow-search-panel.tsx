@@ -73,6 +73,7 @@ export function KnowhowSearchPanel({ configured, isAdmin, labels }: Props) {
         return;
       }
       setHits(res.hits ?? []);
+      if (!res.hits?.length && res.hint) setError(res.hint);
     });
   }
 

@@ -2,9 +2,9 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { Badge, Card, ScoreBar, TierBadge, tierTone } from "@/components/ui";
 import { normalizePartnerTier } from "@/lib/tier";
-import { CATEGORY_LABELS, PIPELINE_STAGES } from "@/lib/constants";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
+import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
 function Bar({ label, value, max, tone = "bg-indigo-500", suffix }: { label: string; value: number; max: number; tone?: string; suffix?: string }) {
   return (
@@ -21,6 +21,10 @@ function Bar({ label, value, max, tone = "bg-indigo-500", suffix }: { label: str
 }
 
 export async function BoardOverview() {
+  const { labels, messages: m } = await getServerI18n();
+  const b = m.dashboard.board;
+  const L = labelConstants(labels);
+
   const all = await db.partner.findMany({
     where: { status: { in: ["ACTIVE", "PROSPECT"] } },
     include: { contacts: true, opportunities: true, events: true, trainings: true },
@@ -35,14 +39,14 @@ export async function BoardOverview() {
   const prospects = all.filter((p) => p.status === "PROSPECT");
 
   const funnel = [
-    { label: "Active partners", value: active.length },
-    { label: "Needs assessment onward (≥3)", value: active.filter((p) => p.pipelineStage >= 3).length },
-    { label: "POC onward (≥5)", value: active.filter((p) => p.pipelineStage >= 5).length },
-    { label: "Signed (≥7)", value: active.filter((p) => p.pipelineStage >= 7).length },
-    { label: "First delivery (≥8)", value: active.filter((p) => p.pipelineStage >= 8).length },
+    { label: b.funnelActive, value: active.length },
+    { label: b.funnelNeedsAssessment, value: active.filter((p) => p.pipelineStage >= 3).length },
+    { label: b.funnelPoc, value: active.filter((p) => p.pipelineStage >= 5).length },
+    { label: b.funnelSigned, value: active.filter((p) => p.pipelineStage >= 7).length },
+    { label: b.funnelFirstDelivery, value: active.filter((p) => p.pipelineStage >= 8).length },
   ];
 
-  const stageDist = PIPELINE_STAGES.map((s) => ({
+  const stageDist = labels.pipelineStages.map((s) => ({
     label: `${s.stage}. ${s.name}`,
     value: active.filter((p) => p.pipelineStage === s.stage).length,
   }));
@@ -52,12 +56,12 @@ export async function BoardOverview() {
     n: active.filter((p) => normalizePartnerTier(p.tier) === t).length,
   }));
   const noTier = active.filter((p) => !normalizePartnerTier(p.tier)).length;
-  const catDist = Object.entries(CATEGORY_LABELS)
+  const catDist = Object.entries(L.CATEGORY_LABELS)
     .map(([k, v]) => ({ label: v, value: active.filter((p) => p.category === k).length }))
     .filter((x) => x.value > 0);
   const countryCount = new Map<string, number>();
   for (const p of active) {
-    const key = (p.country ?? "Unknown").split("/")[0].trim();
+    const key = (p.country ?? b.unknownCountry).split("/")[0].trim();
     countryCount.set(key, (countryCount.get(key) ?? 0) + 1);
   }
   const countries = [...countryCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -69,7 +73,7 @@ export async function BoardOverview() {
     .slice(0, 8);
 
   const ranked = active
-    .map((p) => ({ p, c: computeCompleteness(p), stale: staleDays(p) }))
+    .map((p) => ({ p, c: computeCompleteness(p, labels), stale: staleDays(p) }))
     .sort((a, b) => a.c.score - b.c.score)
     .slice(0, 10);
 
@@ -82,11 +86,11 @@ export async function BoardOverview() {
     <div className="px-8 space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: "Active partners", value: active.length, tone: "text-indigo-600" },
-          { label: "POC onward", value: pocPlus, tone: "text-purple-600" },
-          { label: "Active opportunities", value: activeOppCount, tone: "text-sky-600" },
-          { label: "Open todos", value: openTodos, tone: "text-zinc-900" },
-          { label: "Overdue todos", value: overdueTodos, tone: overdueTodos ? "text-red-600" : "text-zinc-900" },
+          { label: b.statActivePartners, value: active.length, tone: "text-indigo-600" },
+          { label: b.statPocOnward, value: pocPlus, tone: "text-purple-600" },
+          { label: b.statActiveOpps, value: activeOppCount, tone: "text-sky-600" },
+          { label: b.statOpenTodos, value: openTodos, tone: "text-zinc-900" },
+          { label: b.statOverdueTodos, value: overdueTodos, tone: overdueTodos ? "text-red-600" : "text-zinc-900" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-4">
             <div className={`text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</div>
@@ -97,16 +101,16 @@ export async function BoardOverview() {
 
       {prospects.length > 0 && (
         <p className="text-xs text-zinc-400">
-          Prospect pool {prospects.length} ·{" "}
+          {b.prospectPool.replace("{count}", String(prospects.length))}{" "}
           <Link href="/pool" className="text-indigo-600 hover:underline">
-            Go to partner pool
+            {b.goToPool}
           </Link>
-          (not included in main board stats)
+          {b.notInBoardStats}
         </p>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <Card title="Active partner funnel">
+        <Card title={b.funnelTitle}>
           <div className="space-y-2.5">
             {funnel.map((f, i) => (
               <Bar
@@ -120,7 +124,7 @@ export async function BoardOverview() {
           </div>
         </Card>
 
-        <Card title="Active partner pipeline distribution">
+        <Card title={b.pipelineDistTitle}>
           <div className="space-y-2">
             {stageDist.map((s) => (
               <Bar key={s.label} label={s.label} value={s.value} max={maxStage} />
@@ -128,16 +132,16 @@ export async function BoardOverview() {
           </div>
         </Card>
 
-        <Card title="Tier & category (active partners)">
+        <Card title={b.tierCategoryTitle}>
           <div className="flex gap-3 mb-5">
             {tierDist.map(({ t, n }) => (
               <Link key={t} href={`/partners?tier=${t}`} className="flex-1 rounded-lg border border-zinc-100 p-3 text-center hover:border-indigo-300">
-                <Badge tone={tierTone(t)}>Tier {t}</Badge>
+                <Badge tone={tierTone(t)}>{b.tierLabel.replace("{tier}", t)}</Badge>
                 <div className="text-xl font-bold mt-1.5 tabular-nums">{n}</div>
               </Link>
             ))}
             <div className="flex-1 rounded-lg border border-zinc-100 p-3 text-center">
-              <Badge tone="zinc">Not tiered</Badge>
+              <Badge tone="zinc">{b.notTiered}</Badge>
               <div className="text-xl font-bold mt-1.5 tabular-nums">{noTier}</div>
             </div>
           </div>
@@ -148,7 +152,7 @@ export async function BoardOverview() {
           </div>
         </Card>
 
-        <Card title="Country / region (active partners)">
+        <Card title={b.countryTitle}>
           <div className="space-y-2">
             {countries.map(([c, n]) => (
               <Bar key={c} label={c} value={n} max={maxCountry} tone="bg-amber-500" />
@@ -158,21 +162,21 @@ export async function BoardOverview() {
       </div>
 
       {staleActive.length > 0 && (
-        <Card title="Stall alerts (active partners · no activity 30+ days)">
+        <Card title={b.stallAlertsTitle}>
           <div className="divide-y divide-zinc-50">
             {staleActive.map(({ p, stale }) => (
               <div key={p.id} className="flex items-center justify-between gap-3 py-2.5">
                 <Link href={`/partners/${p.id}`} className="text-sm font-medium text-zinc-800 hover:text-indigo-600 truncate">
                   {p.name}
                 </Link>
-                <span className="text-xs text-red-500 shrink-0">{stale} days idle</span>
+                <span className="text-xs text-red-500 shrink-0">{b.daysIdle.replace("{days}", String(stale))}</span>
               </div>
             ))}
           </div>
         </Card>
       )}
 
-      <Card title="Profile completeness gaps (active partners top 10)">
+      <Card title={b.completenessTitle}>
         <div className="divide-y divide-zinc-50">
           {ranked.map(({ p, c, stale }) => (
             <div key={p.id} className="flex items-center gap-4 py-3">
@@ -184,12 +188,14 @@ export async function BoardOverview() {
                 <ScoreBar score={c.score} />
               </div>
               <div className="flex-1 text-xs text-zinc-400 truncate">
-                Missing: {c.missing.slice(0, 5).join(", ")}{c.missing.length > 5 ? "…" : ""}
+                {b.missing}{c.missing.slice(0, 5).join(", ")}{c.missing.length > 5 ? "…" : ""}
               </div>
-              {stale > 30 && <span className="text-xs text-red-500 shrink-0">{stale}d idle</span>}
+              {stale > 30 && (
+                <span className="text-xs text-red-500 shrink-0">{b.daysIdleShort.replace("{days}", String(stale))}</span>
+              )}
             </div>
           ))}
-          {ranked.length === 0 && <p className="py-6 text-sm text-zinc-400 text-center">No active partners yet</p>}
+          {ranked.length === 0 && <p className="py-6 text-sm text-zinc-400 text-center">{b.noActivePartners}</p>}
         </div>
       </Card>
     </div>

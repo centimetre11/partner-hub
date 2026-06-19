@@ -1,4 +1,7 @@
 import { db } from "./db";
+import { normalizeKnowhowApiKey } from "./knowhow-token";
+
+export { normalizeKnowhowApiKey } from "./knowhow-token";
 
 export const KNOWHOW_DEFAULT_BASE_URL = "https://digitchat.fanruan.com/dataset";
 
@@ -53,7 +56,8 @@ function normalizeBaseUrl(baseUrl: string) {
 
 export async function resolveKnowhowCredential() {
   const stored = await db.systemKnowhowCredential.findUnique({ where: { id: "singleton" } });
-  const apiKey = stored?.apiKey?.trim() || process.env.KNOWHOW_API_KEY?.trim() || null;
+  const rawKey = stored?.apiKey?.trim() || process.env.KNOWHOW_API_KEY?.trim() || "";
+  const apiKey = rawKey ? normalizeKnowhowApiKey(rawKey) : null;
   const baseUrl = stored?.baseUrl?.trim() || process.env.KNOWHOW_BASE_URL?.trim() || KNOWHOW_DEFAULT_BASE_URL;
   return apiKey ? { apiKey, baseUrl: normalizeBaseUrl(baseUrl) } : null;
 }
@@ -85,16 +89,76 @@ function pickNumber(...values: unknown[]): number | null {
 }
 
 function normalizeHit(raw: Record<string, unknown>): KnowhowSearchHit | null {
-  const documentId = pickString(raw.document_id, raw.documentId, raw.id);
-  if (!documentId) return null;
+  const segment =
+    raw.segment && typeof raw.segment === "object" && !Array.isArray(raw.segment)
+      ? (raw.segment as Record<string, unknown>)
+      : null;
+  const document =
+    (segment?.document && typeof segment.document === "object" && !Array.isArray(segment.document)
+      ? (segment.document as Record<string, unknown>)
+      : null) ??
+    (raw.document && typeof raw.document === "object" && !Array.isArray(raw.document)
+      ? (raw.document as Record<string, unknown>)
+      : null);
+
+  const documentId =
+    pickString(
+      raw.document_id,
+      raw.documentId,
+      raw.chunk_id,
+      raw.chunkId,
+      raw.record_id,
+      raw.recordId,
+      segment?.document_id,
+      segment?.documentId,
+      segment?.id,
+      segment?.chunk_id,
+      document?.id,
+      document?.document_id,
+      raw.id,
+    ) || "";
+  const content = pickString(
+    raw.content,
+    raw.text,
+    raw.summary,
+    raw.chunk,
+    raw.snippet,
+    raw.page_content,
+    raw.pageContent,
+    segment?.content,
+    segment?.text,
+    segment?.summary,
+    segment?.chunk,
+    segment?.snippet,
+    segment?.page_content,
+  );
+  if (!documentId && !content) return null;
+  const resolvedId =
+    documentId ||
+    pickString(raw.id, segment?.id) ||
+    `snippet-${content.slice(0, 32).replace(/\s+/g, " ").trim()}`;
+
   const metadata =
     raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
       ? (raw.metadata as Record<string, unknown>)
-      : {};
-  const title = pickString(raw.title, raw.name, metadata.title, metadata.name, documentId);
-  const content = pickString(raw.content, raw.text, raw.summary, raw.chunk, raw.snippet);
+      : segment?.metadata && typeof segment.metadata === "object" && !Array.isArray(segment.metadata)
+        ? (segment.metadata as Record<string, unknown>)
+        : document?.metadata && typeof document.metadata === "object" && !Array.isArray(document.metadata)
+          ? (document.metadata as Record<string, unknown>)
+          : {};
+
+  const title = pickString(
+    raw.title,
+    raw.name,
+    document?.name,
+    document?.title,
+    metadata.title,
+    metadata.name,
+    segment?.title,
+    resolvedId,
+  );
   return {
-    documentId,
+    documentId: resolvedId,
     title,
     content,
     score: pickNumber(raw.score, raw.final_score, raw.rerank_score, raw.vector_score),
@@ -102,23 +166,65 @@ function normalizeHit(raw: Record<string, unknown>): KnowhowSearchHit | null {
   };
 }
 
+function collectHitArrays(value: unknown, depth = 0): Record<string, unknown>[][] {
+  if (depth > 4 || value == null) return [];
+  if (Array.isArray(value)) {
+    const objects = value.filter((item) => item && typeof item === "object") as Record<string, unknown>[];
+    if (objects.length && objects.some((item) => normalizeHit(item))) return [objects];
+    return objects.flatMap((item) => collectHitArrays(item, depth + 1));
+  }
+  if (typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    const arrays: Record<string, unknown>[][] = [];
+    for (const key of [
+      "records",
+      "results",
+      "data",
+      "items",
+      "documents",
+      "hits",
+      "chunks",
+      "retrieval_results",
+      "segments",
+    ]) {
+      if (key in obj) arrays.push(...collectHitArrays(obj[key], depth + 1));
+    }
+    return arrays;
+  }
+  return [];
+}
+
 function extractHits(payload: unknown): KnowhowSearchHit[] {
   if (!payload || typeof payload !== "object") return [];
   const root = payload as Record<string, unknown>;
-  const candidates = [root.data, root.results, root.records, root.items, root.documents, root.hits];
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate
-        .map((item) => (item && typeof item === "object" ? normalizeHit(item as Record<string, unknown>) : null))
-        .filter((item): item is KnowhowSearchHit => !!item);
-    }
-  }
-  if (Array.isArray(payload)) {
-    return payload
+  if (Array.isArray(root.data)) {
+    const direct = root.data
       .map((item) => (item && typeof item === "object" ? normalizeHit(item as Record<string, unknown>) : null))
       .filter((item): item is KnowhowSearchHit => !!item);
+    if (direct.length) return direct;
+  }
+  const arrays = collectHitArrays(payload);
+  for (const candidate of arrays) {
+    const hits = candidate
+      .map((item) => normalizeHit(item))
+      .filter((item): item is KnowhowSearchHit => !!item);
+    if (hits.length) return hits;
   }
   return [];
+}
+
+function summarizePayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") return String(payload).slice(0, 500);
+  const root = payload as Record<string, unknown>;
+  const keys = Object.keys(root);
+  const preview: Record<string, unknown> = { keys };
+  for (const key of keys.slice(0, 8)) {
+    const val = root[key];
+    if (Array.isArray(val)) preview[key] = `array(${val.length})`;
+    else if (val && typeof val === "object") preview[key] = `object(${Object.keys(val as object).join(",")})`;
+    else preview[key] = val;
+  }
+  return JSON.stringify(preview);
 }
 
 async function knowhowFetch<T>(
@@ -147,12 +253,17 @@ async function knowhowFetch<T>(
   }
   if (!res.ok) {
     const detail =
-      body && typeof body === "object" && "message" in body
-        ? String((body as { message?: unknown }).message)
-        : typeof body === "string"
-          ? body
-          : res.statusText;
+      body && typeof body === "object" && "detail" in body
+        ? String((body as { detail?: unknown }).detail)
+        : body && typeof body === "object" && "message" in body
+          ? String((body as { message?: unknown }).message)
+          : typeof body === "string"
+            ? body
+            : res.statusText;
     throw new Error(`Know-how API ${res.status}: ${detail || "request failed"}`);
+  }
+  if (body && typeof body === "object" && "detail" in body) {
+    throw new Error(`Know-how API: ${String((body as { detail?: unknown }).detail)}`);
   }
   return body as T;
 }
@@ -181,7 +292,15 @@ export async function retrieveKnowhow(
     }),
   });
 
-  return extractHits(payload);
+  const hits = extractHits(payload);
+  if (!hits.length) {
+    console.warn("[knowhow] retrieve returned 0 parsed hits", {
+      query: request.query,
+      baseUrl: cred.baseUrl,
+      summary: summarizePayload(payload),
+    });
+  }
+  return hits;
 }
 
 export async function getKnowhowDocument(
@@ -214,17 +333,29 @@ export async function getKnowhowDocument(
 }
 
 export async function testKnowhowConnection(cred: { apiKey: string; baseUrl: string }) {
-  const hits = await retrieveKnowhow(
-    {
-      query: "零售",
-      retrieval_model: { top_k: 1, rerank_enable: false },
-    },
-    cred,
-  );
+  const normalized = { ...cred, apiKey: normalizeKnowhowApiKey(cred.apiKey) };
+  const payload = await knowhowFetch<unknown>(normalized, "api/v1/retrieve", {
+    method: "POST",
+    body: JSON.stringify({
+      query: "零售行业的成功案例有哪些？",
+      retrieval_model: {
+        business_domain: "project",
+        datasets: "both",
+        rerank_enable: true,
+        top_k: 5,
+        vector_weight: 0.7,
+        rerank_blend_weight: 0.3,
+      },
+    }),
+  });
+  const hits = extractHits(payload);
   return {
     ok: true,
     count: hits.length,
     sampleTitle: hits[0]?.title ?? null,
+    keyLength: normalized.apiKey.length,
+    keyTail: normalized.apiKey.slice(-4),
+    rawSummary: summarizePayload(payload),
   };
 }
 

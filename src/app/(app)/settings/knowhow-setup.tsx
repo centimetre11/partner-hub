@@ -6,6 +6,7 @@ import {
   testSystemKnowhowCredentialAction,
   deleteSystemKnowhowCredentialAction,
 } from "@/lib/system-knowhow-actions";
+import { normalizeKnowhowApiKey } from "@/lib/knowhow-token";
 
 const input =
   "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
@@ -28,12 +29,26 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
       setMessage(null);
       setError(null);
       const fd = new FormData();
-      if (token.trim()) fd.set("apiKey", token.trim());
+      if (token.trim()) fd.set("apiKey", normalizeKnowhowApiKey(token));
       fd.set("baseUrl", credential.baseUrl);
       const res = await action(fd);
       if (res.error) setError(res.error);
       else if (res.message) setMessage(res.message);
       if (res.ok && token.trim()) setToken("");
+    });
+  }
+
+  function testConnection() {
+    startTransition(async () => {
+      setMessage(null);
+      setError(null);
+      const fd = new FormData();
+      if (token.trim()) fd.set("apiKey", normalizeKnowhowApiKey(token));
+      else fd.set("useStored", "1");
+      fd.set("baseUrl", credential.baseUrl);
+      const res = await testSystemKnowhowCredentialAction(fd);
+      if (res.error) setError(res.error);
+      else if (res.message) setMessage(res.message);
     });
   }
 
@@ -62,7 +77,7 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
   return (
     <div className="space-y-4 text-sm">
       <p className="text-xs text-zinc-500 leading-relaxed">
-        团队 Know-how 知识库检索 API 令牌，供工作台搜索与 Agent 工具 search_knowhow 使用。优先级：团队数据库配置 →{" "}
+        团队 Know-how 知识库检索 API 令牌（与 KMS 令牌不同），供工作台搜索与 Agent 工具 search_knowhow 使用。请在「Know-how 检索令牌」卡片配置，不要与上方「团队 KMS 回退令牌」混淆。粘贴时无需加 <code className="text-xs bg-zinc-100 px-1 rounded">Bearer</code> 前缀或引号，系统会自动清洗。优先级：团队数据库配置 →{" "}
         <code className="text-xs bg-zinc-100 px-1 rounded">KNOWHOW_API_KEY</code> 环境变量。
       </p>
       {credential.configured ? (
@@ -81,7 +96,13 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
           type="password"
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          placeholder={credential.configured ? "留空则保留已保存的令牌" : "粘贴 API Key"}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData("text");
+            if (!pasted) return;
+            e.preventDefault();
+            setToken(normalizeKnowhowApiKey(pasted));
+          }}
+          placeholder={credential.configured ? "留空则保留已保存的令牌" : "粘贴 API Key（无需 Bearer 前缀）"}
           className={input}
           autoComplete="off"
         />
@@ -97,8 +118,8 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
         </button>
         <button
           type="button"
-          disabled={pending}
-          onClick={() => run(testSystemKnowhowCredentialAction)}
+          disabled={pending || (!token.trim() && !credential.configured)}
+          onClick={testConnection}
           className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:border-indigo-300 disabled:opacity-40"
         >
           测试连接

@@ -40,6 +40,7 @@ function buildFilters(params: KnowhowSearchParams): Record<string, KnowhowMetada
 export async function searchKnowhowAction(params: KnowhowSearchParams): Promise<{
   ok?: boolean;
   hits?: KnowhowSearchHit[];
+  hint?: string;
   error?: string;
 }> {
   await requireUser();
@@ -58,6 +59,13 @@ export async function searchKnowhowAction(params: KnowhowSearchParams): Promise<
       },
       metadata_filters: buildFilters(params),
     });
+    if (!hits.length) {
+      return {
+        ok: true,
+        hits,
+        hint: "Know-how API 已响应但未解析到结果。请确认使用的是 Know-how 检索令牌（不是 KMS 令牌），并在团队设置中点击「测试连接」验证。",
+      };
+    }
     return { ok: true, hits };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };

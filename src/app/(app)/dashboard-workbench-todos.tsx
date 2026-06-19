@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { Card, EmptyState, fmtDate } from "@/components/ui";
-import { createTodoAction, deleteTodoAction, toggleTodoAction } from "@/lib/actions";
+import { CreateTodoDrawer } from "@/components/create-todo-drawer";
+import { deleteTodoAction, toggleTodoAction } from "@/lib/actions";
 import { TodoEditButton } from "@/components/todo-edit-button";
 import { labelConstants, type getServerI18n } from "@/lib/server-i18n";
 import { isTodoOverdue } from "@/lib/todo-dates";
@@ -50,11 +51,10 @@ export async function DashboardWorkbenchTodos({
     db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
-  const input =
-    "rounded-lg border border-zinc-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
-
   const toggle = (
-    <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 text-xs shrink-0">
+    <div className="flex items-center gap-2 shrink-0">
+      <CreateTodoDrawer userId={userId} partners={partners} users={users} />
+      <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 text-xs">
       <Link
         href="/?todos=mine#workbench"
         className={`rounded-md px-2.5 py-1 transition-colors ${
@@ -71,6 +71,7 @@ export async function DashboardWorkbenchTodos({
       >
         {m.common.viewAll}
       </Link>
+      </div>
     </div>
   );
 
@@ -80,31 +81,6 @@ export async function DashboardWorkbenchTodos({
       title={isAll ? m.dashboard.allTodosTitle : m.dashboard.weekTodosTitle}
       actions={toggle}
     >
-      <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4 pb-4 border-b border-zinc-100">
-        <input
-          name="title"
-          required
-          placeholder={m.partnerDetail.addTodoPlaceholder}
-          className={`${input} flex-1 min-w-[140px]`}
-        />
-        <select name="partnerId" className={`${input} max-w-[160px]`} aria-label={m.todos.noPartner}>
-          <option value="">{m.todos.noPartner}</option>
-          {partners.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <input name="dueDate" type="date" className={`${input} w-36`} />
-        <input type="hidden" name="assigneeId" value={userId} />
-        <button
-          type="submit"
-          className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm font-medium hover:bg-zinc-700 shrink-0"
-        >
-          {m.dashboard.createTodo}
-        </button>
-      </form>
-
       <div className="space-y-2.5">
         {todos.map((t) => {
           const overdue = t.dueDate && isTodoOverdue(t.dueDate, now);
