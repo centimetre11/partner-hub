@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { submitCrmBusinessRecord } from "./crm";
-import { buildCrmTraceFields } from "./crm-trace-payload";
+import { resolveCrmTraceFields } from "./crm-trace-payload";
+import type { CrmTraceAction, CrmTraceNature } from "./crm-trace-constants";
 import type { BusinessRecordCategory } from "./business-record-core";
 
 export type CrmBusinessRecordSyncResult =
@@ -88,6 +89,8 @@ export async function syncBusinessRecordToCrm(opts: {
   content?: string | null;
   occurredAt: Date;
   contactId?: string | null;
+  traceNature?: string | null;
+  traceAction?: string | null;
 }): Promise<CrmBusinessRecordSyncResult> {
   if (process.env.CRM_TRACE_ENABLED === "0") {
     const result = { status: "skipped" as const, reason: "CRM 商务记录同步已关闭" };
@@ -120,22 +123,24 @@ export async function syncBusinessRecordToCrm(opts: {
   const traceId = randomUUID();
   const now = new Date();
   const traceContact = await resolveCrmContactId(partner.crmCustomerId, opts.contactId);
-  const crmFields = buildCrmTraceFields({
+  const crmFields = resolveCrmTraceFields({
     title: opts.title,
     content: opts.content,
     category: opts.category,
+    traceNature: opts.traceNature,
+    traceAction: opts.traceAction,
   });
 
   try {
     await submitCrmBusinessRecord({
       traceId,
-      traceNature: crmFields.traceNature,
+      traceNature: crmFields.traceNature as CrmTraceNature,
       traceCompany: partner.crmCustomerId,
       traceContact,
       traceRecdate: formatCrmDate(opts.occurredAt),
       traceRectime: formatCrmTime(now),
       traceRecorder: user.crmSalesmanName,
-      traceAction: crmFields.traceAction,
+      traceAction: crmFields.traceAction as CrmTraceAction,
       traceDetail: crmFields.traceDetail,
       traceKeyword: crmFields.traceKeyword,
     });

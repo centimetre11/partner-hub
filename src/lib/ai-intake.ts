@@ -47,7 +47,9 @@ import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
-import { persistBusinessRecord } from "./business-record-core";
+import { businessRecordCrmFieldsComplete, inferTraceAction, inferTraceNature } from "./crm-trace-payload";
+import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
+import { persistBusinessRecord, normalizeBusinessRecordCategory, type BusinessRecordCategory } from "./business-record-core";
 import { countProposalItems } from "./proposal-merge";
 import {
   buildPartnerBindingPrompt,
@@ -87,6 +89,10 @@ export type BusinessRecordProposal = {
   category?: string;
   occurredAt?: string;
   contactName?: string;
+  /** CRM KPI：现场 | 非现场 */
+  traceNature?: string;
+  /** CRM 商务行为 */
+  traceAction?: string;
   reason?: string;
 };
 
@@ -150,7 +156,7 @@ async function partnerContextForScope(scope: IntakeScope, partnerId: string, loc
 /** Call LLM for JSON extraction; streams reply_delta when emit is set */
 async function callIntakeExtract(
   chat: ChatMessage[],
-  opts: { feature: string; userId?: string; taskTier: AiTaskTier; emit?: TraceEmitter },
+  opts: { feature: string; userId?: string; taskTier: AiTaskTier; emit?: TraceEmitter; streamFast?: boolean },
 ): Promise<string | null> {
   const runOnce = async (retry: boolean): Promise<string | null> => {
     if (retry) {
@@ -159,8 +165,9 @@ async function callIntakeExtract(
       opts.emit?.({ event: "reply_reset" });
     }
     let streamed = "";
+    const streamReply = opts.taskTier !== "fast" || opts.streamFast;
     const onDelta =
-      opts.emit && opts.taskTier !== "fast"
+      opts.emit && streamReply
         ? (d: string) => {
             streamed += d;
             opts.emit!({ event: "reply_delta", delta: d });
@@ -319,18 +326,37 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
       todos: p.todos ?? [],
       trainings: p.trainings ?? [],
       solutions: p.solutions ?? [],
-      businessRecords: (p.businessRecords ?? []).map((r) => ({
-        ...r,
-        title: asTrimmedString(r.title),
-        content: r.content == null ? undefined : asTrimmedString(r.content),
-        category: r.category == null ? undefined : asTrimmedString(r.category),
-        occurredAt: r.occurredAt == null ? undefined : asTrimmedString(r.occurredAt),
-        contactName: r.contactName == null ? undefined : asTrimmedString(r.contactName),
-        reason: r.reason == null ? undefined : asTrimmedString(r.reason),
-      })).filter((r) => r.title),
+      businessRecords: (p.businessRecords ?? []).map((r) => {
+        const title = asTrimmedString(r.title);
+        const category = r.category == null ? undefined : asTrimmedString(r.category);
+        const content = r.content == null ? undefined : asTrimmedString(r.content);
+        const cat = normalizeBusinessRecordCategory(category ?? "OTHER");
+        const traceNature =
+          normalizeCrmTraceNature(r.traceNature == null ? undefined : asTrimmedString(r.traceNature)) ??
+          inferTraceNature(title, content, cat);
+        const traceAction =
+          normalizeCrmTraceAction(r.traceAction == null ? undefined : asTrimmedString(r.traceAction)) ??
+          inferTraceAction(title, content, cat);
+        return {
+          ...r,
+          title,
+          content,
+          category,
+          occurredAt: r.occurredAt == null ? undefined : asTrimmedString(r.occurredAt),
+          contactName: r.contactName == null ? undefined : asTrimmedString(r.contactName),
+          traceNature,
+          traceAction,
+          reason: r.reason == null ? undefined : asTrimmedString(r.reason),
+        };
+      }).filter((r) => r.title),
     },
   };
   turn.proposal = sanitizeProposalForScope(scope, turn.proposal);
+  if (scope === "business_record") {
+    turn.ready =
+      turn.proposal.businessRecords.length > 0 &&
+      businessRecordCrmFieldsComplete(turn.proposal.businessRecords);
+  }
   return turn;
 }
 
@@ -561,6 +587,7 @@ export async function runIntakeTurn(opts: {
     userId: opts.userId,
     taskTier,
     emit: opts.emit,
+    streamFast: opts.scope === "business_record",
   });
   const turn = await parseIntakeTurnFromContent(content ?? "", locale, opts.scope, {
     chat,
@@ -903,6 +930,8 @@ export async function applyIntake(opts: {
       content: r.content ?? null,
       occurredAt: parseOptionalDate(r.occurredAt) ?? new Date(),
       contactId,
+      traceNature: r.traceNature,
+      traceAction: r.traceAction,
       source: "AI",
     });
     applied.push(applyBusinessRecordAdded(locale, title));

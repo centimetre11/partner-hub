@@ -14,6 +14,8 @@ import {
 } from "@/lib/proposal-merge";
 import { filterNormalized, normalizeProposal, type NormalizedProposal } from "@/lib/proposal-normalize";
 import { scopeDraftSections } from "@/lib/proposal-scope";
+import { CRM_TRACE_ACTIONS, CRM_TRACE_NATURES } from "@/lib/crm-trace-constants";
+import { businessRecordCrmFieldsComplete } from "@/lib/crm-trace-payload";
 import {
   getClarificationMode,
   hasBlockingClarifications,
@@ -226,7 +228,17 @@ export function LiveProposalDraft({
     (sections.solutions ? normalized.solutions.length : 0) +
     (sections.businessRecords ? normalized.businessRecords.length : 0);
 
-  const saveDisabled = applying || total - excluded.size <= 0 || identityBlocked;
+  const saveDisabled =
+    applying ||
+    total - excluded.size <= 0 ||
+    identityBlocked ||
+    (scope === "business_record" &&
+      !businessRecordCrmFieldsComplete(
+        normalized.businessRecords.filter((r, i) => {
+          const k = businessRecordKey(r.title) || `br${i}`;
+          return !excluded.has(k);
+        })
+      ));
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -433,9 +445,47 @@ export function LiveProposalDraft({
                   badgeUpdated={ip.badgeUpdated}
                 >
                   <span className="font-medium text-zinc-800">{ip.milestone}: {r.title}</span>
-                  <span className="text-zinc-500 ml-1.5 text-xs">
+                  <span className="text-zinc-500 ml-1.5 text-xs block mt-0.5">
                     {[r.category, r.occurredAt, r.contactName].filter(Boolean).join(" · ")}
                   </span>
+                  {onProposalEdit && (
+                    <div className="mt-2 flex flex-wrap gap-2 items-center">
+                      <label className="text-xs text-zinc-500 flex items-center gap-1">
+                        {ip.traceNatureLabel}
+                        <select
+                          value={r.traceNature ?? ""}
+                          onChange={(e) =>
+                            onProposalEdit({ type: "businessRecord", index: i, field: "traceNature", value: e.target.value })
+                          }
+                          className="text-xs border border-zinc-200 rounded px-1.5 py-0.5 bg-white"
+                        >
+                          <option value="">{ip.selectPlaceholder}</option>
+                          {CRM_TRACE_NATURES.map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs text-zinc-500 flex items-center gap-1">
+                        {ip.traceActionLabel}
+                        <select
+                          value={r.traceAction ?? ""}
+                          onChange={(e) =>
+                            onProposalEdit({ type: "businessRecord", index: i, field: "traceAction", value: e.target.value })
+                          }
+                          className="text-xs border border-zinc-200 rounded px-1.5 py-0.5 bg-white max-w-[10rem]"
+                        >
+                          <option value="">{ip.selectPlaceholder}</option>
+                          {CRM_TRACE_ACTIONS.map((a) => (
+                            <option key={a} value={a}>
+                              {a}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  )}
                 </DraftRow>
               );
             })}
@@ -459,6 +509,12 @@ export function LiveProposalDraft({
       <div className="shrink-0 sticky bottom-0 pt-3 mt-2 border-t border-zinc-100 bg-white/95 backdrop-blur-sm flex flex-col gap-2">
         {identityBlocked && (
           <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{am.confirmBlockedIdentity}</div>
+        )}
+        {scope === "business_record" && !saveDisabled && !applying && (
+          <div className="text-xs text-zinc-500">{ip.crmSyncHint}</div>
+        )}
+        {scope === "business_record" && saveDisabled && total - excluded.size > 0 && !identityBlocked && (
+          <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{ip.crmFieldsRequired}</div>
         )}
         <div className="flex items-center justify-between gap-3">
           <div className="text-xs text-zinc-400">

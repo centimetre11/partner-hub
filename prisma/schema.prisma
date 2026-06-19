@@ -114,6 +114,8 @@ model BusinessRecord {
   category        String    // VISIT / TRAINING / NEGOTIATION / DELIVERY / RELATIONSHIP / OTHER
   title           String
   content         String?
+  crmTraceNature  String?   // 现场 | 非现场（CRM KPI）
+  crmTraceAction  String?   // CRM 商务行为
   occurredAt      DateTime  @default(now())
   contactId       String?
   contact         Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)

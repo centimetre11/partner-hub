@@ -8,7 +8,7 @@
 import { randomUUID } from "crypto";
 import { PrismaClient } from "@prisma/client";
 import { buildCrmTraceWireBody } from "../src/lib/crm";
-import { buildCrmTraceFields } from "../src/lib/crm-trace-payload";
+import { resolveCrmTraceFields } from "../src/lib/crm-trace-payload";
 import { syncBusinessRecordToCrm } from "../src/lib/crm-business-record";
 
 const db = new PrismaClient();
@@ -32,7 +32,7 @@ async function main() {
   const category = "VISIT" as const;
   const occurredAt = new Date();
 
-  const crmFields = buildCrmTraceFields({ title, content, category });
+  const crmFields = resolveCrmTraceFields({ title, content, category });
   console.log("CRM field mapping:", crmFields);
 
   const samplePayload = buildCrmTraceWireBody({

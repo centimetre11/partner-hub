@@ -128,6 +128,8 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
       "category": "VISIT|TRAINING|NEGOTIATION|DELIVERY|RELATIONSHIP|OTHER",
       "occurredAt": "YYYY-MM-DD (default today if unclear)",
       "contactName": "optional: name matching existing contact",
+      "traceNature": "现场|非现场 (required — 现场 for in-person visits/meals/meetings; 非现场 for remote/chat/email)",
+      "traceAction": "CRM business behavior (required) — one of: 接待|培训|服务|调研|方案|催款|客情|其它|远程会议|WhatsApp or Line|Email",
       "reason": "source snippet (${lang})"
     }]
   }
@@ -137,8 +139,9 @@ Rules:
 - This is NOT partner onboarding — never emit profile fields (website, category, headcount, etc.).
 - When partner is pre-bound in [伙伴绑定], omit partnerName entirely.
 - One user message may yield multiple businessRecords if they describe several milestones.
-- category: VISIT=meetings/visits; TRAINING=training/cert scheduling; NEGOTIATION=deals/terms; DELIVERY=contract/first delivery; RELATIONSHIP=relationship building; OTHER=rest.
-- Extract only from user text; do not invent. ready=true when at least one record has a clear title.`;
+- traceNature and traceAction are mandatory for CRM KPI sync — infer from text; user will confirm in UI before save.
+- category: VISIT=meetings/visits; TRAINING=training; NEGOTIATION=deals; DELIVERY=delivery; RELATIONSHIP=relationship; OTHER=rest.
+- Extract only from user text; do not invent. ready=true only when every record has title + traceNature + traceAction.`;
   }
 
   if (scope === "todo") {
@@ -252,7 +255,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
     case "solution":
       return `Fill solutions only. status codes: ${solutionStatuses}. Leave others as empty arrays.`;
     case "business_record":
-      return "Fill businessRecords only (title required). Leave fields/contacts/opportunities/todos/trainings/solutions as empty arrays.";
+      return "Fill businessRecords only (title, traceNature, traceAction required). Leave other arrays empty.";
     case "todo":
       return "Fill todos only. Leave fields/contacts/opportunities/trainings/solutions/businessRecords as empty arrays.";
   }
@@ -345,12 +348,14 @@ Decide add (action=add) vs update (action=update with id) against the existing l
     intro:
       "The user wants to record key business progress for this partner (visits, training scheduled, negotiations, delivery, relationship events). Input is usually free-form notes or chat paste—extract structured milestone(s).",
     guide: `From user text extract one or more businessRecords:
-- title (required): concise headline in natural language
+- title (required): concise headline
+- traceNature (required): 现场 | 非现场 — 现场 for in-person; 非现场 for remote/chat/email
+- traceAction (required): one of 接待|培训|服务|调研|方案|催款|客情|其它|远程会议|WhatsApp or Line|Email
 - content: optional details
 - category: VISIT / TRAINING / NEGOTIATION / DELIVERY / RELATIONSHIP / OTHER
 - occurredAt: YYYY-MM-DD if mentioned, else today
 - contactName: if a known contact from [Existing contacts] is involved
-No web research. ready=true when title(s) are clear. User may paste meeting notes, WeCom chat, or a short sentence like "visited their VP yesterday".`,
+No web research. ready=true only when title + traceNature + traceAction are set for each record.`,
   },
   todo: {
     title: "Create todo",

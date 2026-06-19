@@ -55,6 +55,8 @@ export async function persistBusinessRecord(opts: {
   contactId?: string | null;
   source: string;
   sourceTodoId?: string | null;
+  traceNature?: string | null;
+  traceAction?: string | null;
 }) {
   const category = normalizeBusinessRecordCategory(opts.category);
   const event = await db.timelineEvent.create({
@@ -75,6 +77,8 @@ export async function persistBusinessRecord(opts: {
       category,
       title: opts.title,
       content: opts.content,
+      crmTraceNature: opts.traceNature?.trim() || null,
+      crmTraceAction: opts.traceAction?.trim() || null,
       occurredAt: opts.occurredAt,
       contactId: opts.contactId,
       timelineEventId: event.id,
@@ -102,6 +106,8 @@ export async function persistBusinessRecord(opts: {
       content: opts.content,
       occurredAt: opts.occurredAt,
       contactId: opts.contactId,
+      traceNature: opts.traceNature,
+      traceAction: opts.traceAction,
     });
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);

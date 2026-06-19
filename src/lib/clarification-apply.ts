@@ -1,6 +1,6 @@
 import type { IntakeClarification, IntakeProposal } from "@/lib/ai-intake";
 import { PARTNER_FIELD_LABELS } from "@/lib/constants";
-import { fieldKey, mergeProposalPatch, type ProposalChanges } from "@/lib/proposal-merge";
+import { fieldKey, businessRecordKey, mergeProposalPatch, type ProposalChanges } from "@/lib/proposal-merge";
 
 export type ClarificationApplyMode = "direct" | "ai";
 
@@ -99,12 +99,27 @@ export function applyDirectClarification(
 
 export type ProposalEditPatch =
   | { type: "partnerName"; value: string }
-  | { type: "field"; field: string; value: string };
+  | { type: "field"; field: string; value: string }
+  | { type: "businessRecord"; index: number; field: "traceNature" | "traceAction"; value: string };
 
 export function applyProposalEdit(
   proposal: IntakeProposal,
   patch: ProposalEditPatch
 ): { proposal: IntakeProposal; changes: ProposalChanges } {
+  if (patch.type === "businessRecord") {
+    const records = [...proposal.businessRecords];
+    const row = records[patch.index];
+    if (!row) return { proposal, changes: { added: [], updated: [], removed: [], aiReupdates: [] } };
+    records[patch.index] = {
+      ...row,
+      [patch.field]: patch.value.trim(),
+    };
+    const key = businessRecordKey(row.title) || `br${patch.index}`;
+    return {
+      proposal: { ...proposal, businessRecords: records },
+      changes: { added: [], updated: [key], removed: [], aiReupdates: [] },
+    };
+  }
   if (patch.type === "partnerName") {
     const { draft, changes } = mergeProposalPatch(
       proposal,

@@ -272,7 +272,15 @@ export function AiWorkflowPanel({
             proposal={proposal}
             changes={patchChanges}
             onConfirm={apply}
-            confirmLabel={ready ? ip.confirmReady : ip.confirmDraft}
+          confirmLabel={
+            scope === "business_record"
+              ? ready
+                ? ip.confirmSyncReady
+                : ip.confirmSyncDraft
+              : ready
+                ? ip.confirmReady
+                : ip.confirmDraft
+          }
             questions={questions}
             clarifications={clarifications}
             onDirectClarify={onDirectClarify}

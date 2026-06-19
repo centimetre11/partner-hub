@@ -154,6 +154,8 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
       content: true,
       occurredAt: true,
       contactId: true,
+      crmTraceNature: true,
+      crmTraceAction: true,
       crmSyncedAt: true,
       crmSyncStatus: true,
     },
@@ -172,6 +174,8 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
     content: record.content,
     occurredAt: record.occurredAt,
     contactId: record.contactId,
+    traceNature: record.crmTraceNature,
+    traceAction: record.crmTraceAction,
   });
 
   revalidatePath(`/partners/${record.partnerId}`);

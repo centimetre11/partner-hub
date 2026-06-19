@@ -245,6 +245,7 @@ export function shouldAutoApplyBoundIntake(opts: {
   proposal: IntakeProposal | null;
 }): boolean {
   if (!opts.partnerId || !opts.ready || !opts.proposal) return false;
+  if (opts.scope === "business_record") return false;
   if (!isFastIntakeScope(opts.scope)) return false;
   if ((opts.clarifications ?? []).some((c) => c.blocking)) return false;
   return countProposalItems(opts.proposal) > 0;

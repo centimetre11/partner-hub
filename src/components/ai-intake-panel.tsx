@@ -55,7 +55,7 @@ export function AiIntakePanel({
   const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
   const abortRef = useRef<AbortController | null>(null);
-  const autoApplyMode = !!(partnerId && isFastIntakeScope(scope));
+  const autoApplyMode = !!(partnerId && isFastIntakeScope(scope) && scope !== "business_record");
   const [autoApplyFailed, setAutoApplyFailed] = useState(false);
   const [autoApplying, setAutoApplying] = useState(false);
 
@@ -173,7 +173,7 @@ export function AiIntakePanel({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      const useStream = !isFastIntakeScope(scope);
+      const useStream = scope === "business_record" || !isFastIntakeScope(scope);
       const res = await fetch("/api/ai/intake", {
         method: "POST",
         headers: {
