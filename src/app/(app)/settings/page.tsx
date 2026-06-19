@@ -12,6 +12,7 @@ import { KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { normalizeApiKeyInput, type VolcengineExtraConfig } from "@/lib/volcengine-config";
 import { parseAiCapabilities } from "@/lib/ai-capabilities";
 import { CrmSyncCard } from "./crm-sync-card";
+import { getCrmSalesmenAction } from "@/lib/crm-actions";
 import { getCrmSyncStats } from "@/lib/crm-sync";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getServerI18n } from "@/lib/server-i18n";
@@ -33,7 +34,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, crmStats, ammoConfig] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, crmStats, ammoConfig, salesmen] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -49,6 +50,7 @@ export default async function SettingsPage() {
     db.systemKmsCredential.findUnique({ where: { id: "singleton" } }),
     getCrmSyncStats(),
     getAmmoConfigForClient(),
+    getCrmSalesmenAction(),
   ]);
 
   const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
@@ -108,7 +110,7 @@ export default async function SettingsPage() {
         <Card title={m.settings.teamMembersCount.replace("{count}", String(users.length))}>
           <div className="space-y-3 mb-5">
             {users.map((u) => (
-              <MemberRow key={u.id} user={u} />
+              <MemberRow key={u.id} user={u} salesmen={salesmen} />
             ))}
           </div>
           <RegisterForm />

@@ -56,9 +56,9 @@ export function formatProposeWecomReply(opts: {
 
   const hasItems = countProposalItems(opts.proposal) > 0;
   if (opts.ready && hasItems) {
-    parts.push("\n---\n✅ 信息已足够。回复 **确认** 保存，或 **取消** 放弃。");
+    parts.push("\n---\n✅ 信息已足够。群聊请 **@我 确认** 保存，或 **@我 取消** 放弃。");
   } else if (hasItems) {
-    parts.push("\n---\n📝 草案进行中。可继续补充信息，就绪后回复 **确认** 保存，**取消** 放弃。");
+    parts.push("\n---\n📝 草案进行中。可继续补充，就绪后 **@我 确认** 保存，**@我 取消** 放弃。");
   } else {
     parts.push("\n---\n请补充更多信息以生成可保存的草案。");
   }

@@ -3,8 +3,7 @@ import { Card, PageHeader } from "@/components/ui";
 import { KmsSetup } from "../settings/kms-setup";
 import { ProfileSetup } from "./profile-setup";
 import { PasswordSetup } from "./password-setup";
-import { CrmUserSetup } from "@/components/crm-user-setup";
-import { WecomUserSetup } from "@/components/wecom-user-setup";
+import { UserIdentitySetup } from "@/components/user-identity-setup";
 import { getKmsConfigStatus, getUserKmsCredential, KMS_DEFAULT_BASE_URL } from "@/lib/kms";
 import { getCrmSalesmenAction } from "@/lib/crm-actions";
 import { db } from "@/lib/db";
@@ -17,7 +16,7 @@ export default async function AccountPage() {
   const personalKms = await getUserKmsCredential(user.id);
   const freshUser = await db.user.findUnique({
     where: { id: user.id },
-    select: { crmSalesmanName: true, wecomUserId: true },
+    select: { crmSalesmanName: true, wecomUserId: true, wecomDisplayName: true, name: true },
   });
   const salesmen = await getCrmSalesmenAction();
   const am = m.account;
@@ -81,15 +80,14 @@ export default async function AccountPage() {
           </div>
         </Card>
 
-        <Card title={am.crmTitle}>
-          <CrmUserSetup
+        <Card title={am.identityTitle}>
+          <UserIdentitySetup
+            hubName={freshUser?.name ?? user.name}
+            wecomUserId={freshUser?.wecomUserId ?? null}
+            wecomDisplayName={freshUser?.wecomDisplayName ?? null}
             crmSalesmanName={freshUser?.crmSalesmanName ?? null}
             salesmen={salesmen}
           />
-        </Card>
-
-        <Card title={am.wecomTitle}>
-          <WecomUserSetup wecomUserId={freshUser?.wecomUserId ?? null} />
         </Card>
       </div>
     </div>

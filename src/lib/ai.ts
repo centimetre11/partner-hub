@@ -5,6 +5,7 @@ import {
   type AiTaskTier,
   apiHasCapabilities,
   DEFAULT_AI_CAPABILITIES,
+  maxTokensForTaskTier,
   parseAiCapabilities,
 } from "./ai-capabilities";
 import { normalizeMessagesForAi } from "./ai-images-server";
@@ -511,6 +512,7 @@ async function volcengineResponsesCompletion(
     tools?: (ToolDef | Record<string, unknown>)[];
     jsonMode?: boolean;
     temperature?: number;
+    maxTokens?: number;
     feature?: string;
     userId?: string;
     toolChoice?: "auto" | "required" | "none";
@@ -529,13 +531,15 @@ async function volcengineResponsesCompletion(
     ...(opts.tools ?? []),
   ]);
 
+  const maxOutputTokens = resolveMaxOutputTokens(extra, opts.maxTokens);
+
   const body: Record<string, unknown> = {
     model: api.model,
     stream: false,
     store: extra.store ?? true,
     input: messagesToVolcengineInput(messages),
     ...(instructions ? { instructions } : {}),
-    ...(typeof extra.max_output_tokens === "number" ? { max_output_tokens: extra.max_output_tokens } : {}),
+    ...(typeof maxOutputTokens === "number" ? { max_output_tokens: maxOutputTokens } : {}),
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(tools.length ? { tools } : {}),
     ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
@@ -602,6 +606,7 @@ async function volcengineResponsesStream(
     tools?: (ToolDef | Record<string, unknown>)[];
     jsonMode?: boolean;
     temperature?: number;
+    maxTokens?: number;
     feature?: string;
     userId?: string;
     onDelta?: (delta: string) => void;
@@ -621,13 +626,15 @@ async function volcengineResponsesStream(
     ...(opts.tools ?? []),
   ]);
 
+  const maxOutputTokens = resolveMaxOutputTokens(extra, opts.maxTokens);
+
   const body: Record<string, unknown> = {
     model: api.model,
     stream: true,
     store: extra.store ?? true,
     input: messagesToVolcengineInput(messages),
     ...(instructions ? { instructions } : {}),
-    ...(typeof extra.max_output_tokens === "number" ? { max_output_tokens: extra.max_output_tokens } : {}),
+    ...(typeof maxOutputTokens === "number" ? { max_output_tokens: maxOutputTokens } : {}),
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(tools.length ? { tools } : {}),
     ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
@@ -751,6 +758,7 @@ async function openaiChatCompletionStream(
     tools?: (ToolDef | Record<string, unknown>)[];
     jsonMode?: boolean;
     temperature?: number;
+    maxTokens?: number;
     feature?: string;
     userId?: string;
     onDelta?: (delta: string) => void;
@@ -761,6 +769,7 @@ async function openaiChatCompletionStream(
     messages: toOpenAiMessages(messages),
     temperature: opts.temperature ?? 0.2,
     stream: true,
+    ...(typeof opts.maxTokens === "number" ? { max_tokens: opts.maxTokens } : {}),
   };
   if (opts.tools?.length) body.tools = opts.tools;
   if (opts.jsonMode) body.response_format = { type: "json_object" };
@@ -860,11 +869,17 @@ type ChatCompletionOpts = {
   tools?: (ToolDef | Record<string, unknown>)[];
   jsonMode?: boolean;
   temperature?: number;
+  maxTokens?: number;
   feature?: string;
   userId?: string;
   onDelta?: (delta: string) => void;
   toolChoice?: "auto" | "required" | "none";
 };
+
+function resolveMaxOutputTokens(extra: Record<string, unknown>, maxTokens?: number): number | undefined {
+  if (typeof extra.max_output_tokens === "number") return extra.max_output_tokens;
+  return maxTokens;
+}
 
 async function chatCompletionWithApi(
   api: ResolvedAiApi,
@@ -882,6 +897,7 @@ async function chatCompletionWithApi(
     model: api.model,
     messages: toOpenAiMessages(messages),
     temperature: opts.temperature ?? 0.2,
+    ...(typeof opts.maxTokens === "number" ? { max_tokens: opts.maxTokens } : {}),
   };
   if (opts.tools?.length) body.tools = opts.tools;
   if (opts.jsonMode) body.response_format = { type: "json_object" };
@@ -936,6 +952,7 @@ export async function chatCompletion(
     tools?: (ToolDef | Record<string, unknown>)[];
     jsonMode?: boolean;
     temperature?: number;
+    maxTokens?: number;
     feature?: string;
     userId?: string;
     onDelta?: (delta: string) => void;
@@ -951,6 +968,7 @@ export async function chatCompletion(
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   messages = normalizeMessagesForAi(messages);
+  const maxTokens = opts.maxTokens ?? maxTokensForTaskTier(opts.taskTier);
   const candidates = await listAiApiCandidates({
     capabilities: requiredCapabilitiesForChat({
       messages,
@@ -968,6 +986,7 @@ export async function chatCompletion(
     tools: opts.tools,
     jsonMode: opts.jsonMode,
     temperature: opts.temperature,
+    maxTokens,
     feature: opts.feature,
     userId: opts.userId,
     onDelta: opts.onDelta,

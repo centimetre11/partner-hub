@@ -18,6 +18,11 @@ import { shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
+  formatWecomIdentityReply,
+  isWecomIdentityQuery,
+  resolveWecomActorUserId,
+} from "@/lib/wecom-user-resolve";
+import {
   claimPendingWecomPushJobs,
   markWecomPushJob,
 } from "@/lib/wecom-push";
@@ -148,6 +153,23 @@ async function handleTextMessage(frame: WsFrame) {
   }
 
   const key = chatKey(frame);
+  const fromUserId = frame.body?.from?.userid?.trim() || null;
+  const actor = await resolveWecomActorUserId({
+    fromUserId,
+    fallbackUserId: botUserId,
+  });
+  const actorUserId = actor.userId;
+
+  if (isWecomIdentityQuery(text)) {
+    const streamId = generateReqId("stream");
+    const reply = formatWecomIdentityReply({ fromUserId, resolution: actor });
+    appendHistory(key, "user", text);
+    appendHistory(key, "assistant", reply);
+    await wsClient.replyStream(frame, streamId, reply, true);
+    console.log(`[wecom-bot] 身份查询 from=${fromUserId ?? "?"} matched=${actor.matchedBy} hub=${actorUserId.slice(0, 8)}…`);
+    return;
+  }
+
   const history = appendHistory(key, "user", text);
   const streamId = generateReqId("stream");
 
@@ -179,7 +201,7 @@ async function handleTextMessage(frame: WsFrame) {
 
     if (session && isProposeConfirm(text)) {
       if (!session.ready) {
-        const reply = "草案信息还不够完整，请继续补充细节后再回复「确认」保存，或回复「取消」放弃。";
+        const reply = "草案信息还不够完整，请继续补充细节后再 @我 回复「确认」保存，或 @我 回复「取消」放弃。";
         appendHistory(key, "assistant", reply);
         await wsClient.replyStream(frame, streamId, reply, true);
         return;
@@ -188,14 +210,22 @@ async function handleTextMessage(frame: WsFrame) {
         scope: session.scope,
         partnerId: boundPartnerId ?? session.partnerId,
         proposal: session.proposal,
-        userId: botUserId,
+        userId: actorUserId,
         sourceText: session.sourceText,
         locale: "zh",
       });
       proposeSessions.delete(key);
-      const reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope);
+      let reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope);
+      if (actor.matchedBy === "fallback") {
+        reply +=
+          "\n\n⚠️ 未识别到你的 Partner Hub 账号（请在 Web 个人中心绑定企微 userid）。CRM 可能无法以你的销售账号归档。";
+      } else if (session.scope === "business_record" && !actor.hubUser?.crmSalesmanName) {
+        reply += "\n\n⚠️ 你尚未绑定 CRM 销售账号，商务记录已存本地但可能未同步 CRM。";
+      }
       appendHistory(key, "assistant", reply);
-      console.log(`[wecom-bot] Propose 已保存 scope=${session.scope} partner=${applied.partnerId.slice(0, 8)}…`);
+      console.log(
+        `[wecom-bot] Propose 已保存 scope=${session.scope} partner=${applied.partnerId.slice(0, 8)}… actor=${actorUserId.slice(0, 8)}… (${actor.matchedBy})`,
+      );
       await wsClient.replyStream(frame, streamId, reply, true);
       return;
     }
@@ -205,7 +235,7 @@ async function handleTextMessage(frame: WsFrame) {
 
     const result = await runAssistantTurn({
       messages,
-      userId: botUserId,
+      userId: actorUserId,
       partnerId: boundPartnerId ?? session?.partnerId,
       locale: "zh",
       feature: inPropose ? "WeCom Bot · Propose" : "WeCom Bot",
@@ -236,7 +266,7 @@ async function handleTextMessage(frame: WsFrame) {
           scope,
           partnerId,
           proposal: merged,
-          userId: botUserId,
+          userId: actorUserId,
           sourceText,
           locale: "zh",
         });
@@ -378,7 +408,7 @@ export async function startWecomBot() {
       msgtype: "text",
       text: {
         content:
-          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  - 建档 / 补全画像（可贴 KMS 链接）\n  录入时会先给出草案，回复「确认」保存，「取消」放弃。\n\n直接发消息即可开始。",
+          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  - 建档 / 补全画像（可贴 KMS 链接）\n  录入时会先给出草案，群聊请 @我 并回复「确认」保存或「取消」放弃。\n\n直接发消息即可开始。",
       },
     });
   });

@@ -12,6 +12,21 @@ export const AI_CAPABILITY_META = {
 export type AiCapability = keyof typeof AI_CAPABILITY_META;
 export type AiTaskTier = "fast" | "standard";
 
+/** Default max completion tokens for fast intake (AI Add, WeCom propose, business records). */
+export const DEFAULT_FAST_INTAKE_MAX_TOKENS = 800;
+
+export function resolveFastIntakeMaxTokens(): number {
+  const raw = process.env.FAST_INTAKE_MAX_TOKENS?.trim();
+  if (!raw) return DEFAULT_FAST_INTAKE_MAX_TOKENS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 128) return DEFAULT_FAST_INTAKE_MAX_TOKENS;
+  return Math.min(Math.floor(n), 4096);
+}
+
+export function maxTokensForTaskTier(tier?: AiTaskTier): number | undefined {
+  return tier === "fast" ? resolveFastIntakeMaxTokens() : undefined;
+}
+
 export const ALL_AI_CAPABILITIES = Object.keys(AI_CAPABILITY_META) as AiCapability[];
 
 /** Default capabilities for new/unlabeled models */

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { chatCompletion, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import type { AiTaskTier } from "./ai-capabilities";
+import { maxTokensForTaskTier } from "./ai-capabilities";
 import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
 import { extractPatchFromTool } from "./proposal-patch-extract";
@@ -180,6 +181,7 @@ async function callIntakeExtract(
       feature: opts.feature,
       userId: opts.userId,
       taskTier: opts.taskTier,
+      maxTokens: maxTokensForTaskTier(opts.taskTier),
       onDelta,
     });
     if (opts.emit && streamed) opts.emit({ event: "reply_done" });
@@ -283,6 +285,7 @@ async function parseIntakeTurnFromContent(
         feature: `${opts.feature} (json repair)`,
         userId: opts.userId,
         taskTier: opts.taskTier,
+        maxTokens: maxTokensForTaskTier(opts.taskTier),
       });
       const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
       if (repaired) return normalizeIntakeTurn(repaired, locale, scope);
@@ -659,14 +662,37 @@ export function detectProposeScope(messages: IntakeMessage[], partnerId?: string
   return "new_partner";
 }
 
+const PROPOSE_CONFIRM_RE =
+  /^(确认|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save)$/i;
+const PROPOSE_CANCEL_RE = /^(取消|放弃|不要了|cancel|discard|abort)$/i;
+
+/** 群聊 @机器人 时前缀仅含 bot 显示名（无中文业务正文） */
+const WECOM_BOT_NAME_PREFIX_RE = /^[\w.\s-]{1,40}$/;
+
+/**
+ * 识别 propose 确认/取消指令。群聊必须 @ 机器人，如「@MENA Beard Gang 确认」。
+ */
+function matchesProposeCommand(text: string, directRe: RegExp, wordsPattern: string): boolean {
+  const t = text.trim();
+  if (directRe.test(t)) return true;
+  const atMatch = t.match(new RegExp(`^@(.+)\\s+(${wordsPattern})\\s*$`, "i"));
+  if (!atMatch) return false;
+  const prefix = atMatch[1].trim();
+  return WECOM_BOT_NAME_PREFIX_RE.test(prefix);
+}
+
 /** User confirms a pending propose draft (WeCom / text channels) */
 export function isProposeConfirm(text: string): boolean {
-  return /^(确认|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save)$/i.test(text.trim());
+  return matchesProposeCommand(
+    text,
+    PROPOSE_CONFIRM_RE,
+    "确认|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save"
+  );
 }
 
 /** User cancels a pending propose draft */
 export function isProposeCancel(text: string): boolean {
-  return /^(取消|放弃|不要了|cancel|discard|abort)$/i.test(text.trim());
+  return matchesProposeCommand(text, PROPOSE_CANCEL_RE, "取消|放弃|不要了|cancel|discard|abort");
 }
 
 export type ProposeTurn = IntakeTurn & { scope: IntakeScope; mode: "propose" };
