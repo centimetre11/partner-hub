@@ -153,3 +153,64 @@ export async function syncBusinessRecordToCrm(opts: {
     return { status: "failed", error, traceId };
   }
 }
+
+/** Write a business trace to FanRuan CRM without a Partner Hub partner / BusinessRecord row. */
+export async function submitBusinessRecordToCrmOnly(opts: {
+  crmCustomerId: string;
+  userId: string;
+  category: BusinessRecordCategory;
+  title: string;
+  content?: string | null;
+  occurredAt: Date;
+  traceNature?: string | null;
+  traceAction?: string | null;
+}): Promise<CrmBusinessRecordSyncResult> {
+  if (process.env.CRM_TRACE_ENABLED === "0") {
+    return { status: "skipped", reason: "CRM 商务记录同步已关闭" };
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: opts.userId },
+    select: { crmSalesmanName: true },
+  });
+  if (!user?.crmSalesmanName) {
+    return { status: "skipped", reason: "当前用户未匹配 CRM 销售账号" };
+  }
+
+  const crmCustomer = await db.crmCustomer.findUnique({
+    where: { id: opts.crmCustomerId },
+    select: { id: true, name: true },
+  });
+  if (!crmCustomer) {
+    return { status: "failed", error: "CRM 客户不存在或尚未同步到本地" };
+  }
+
+  const traceId = randomUUID();
+  const now = new Date();
+  const crmFields = resolveCrmTraceFields({
+    title: opts.title,
+    content: opts.content,
+    category: opts.category,
+    traceNature: opts.traceNature,
+    traceAction: opts.traceAction,
+  });
+
+  try {
+    await submitCrmBusinessRecord({
+      traceId,
+      traceNature: crmFields.traceNature as CrmTraceNature,
+      traceCompany: crmCustomer.id,
+      traceContact: null,
+      traceRecdate: formatCrmDate(opts.occurredAt),
+      traceRectime: formatCrmTime(now),
+      traceRecorder: user.crmSalesmanName,
+      traceAction: crmFields.traceAction as CrmTraceAction,
+      traceDetail: crmFields.traceDetail,
+      traceKeyword: crmFields.traceKeyword,
+    });
+    return { status: "synced", traceId };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    return { status: "failed", error, traceId };
+  }
+}

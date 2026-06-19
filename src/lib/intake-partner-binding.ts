@@ -53,6 +53,49 @@ export async function lookupSinglePartnerByName(query: string) {
   return matches.length === 1 ? matches[0]! : null;
 }
 
+/** Partner name candidates for clarification buttons (Partner Hub). */
+export async function suggestPartnersFromIntakeText(text: string, limit = 6) {
+  const extracted = extractPartnerNameFromIntakeText(text);
+  if (extracted) {
+    const matches = await findPartnersByName(extracted, limit);
+    if (matches.length) return matches;
+  }
+  return findPartnersByName(text.slice(0, 40), limit);
+}
+
+/** Try to pull a company/partner name from free-form intake text. */
+export function extractPartnerNameFromIntakeText(text: string): string | null {
+  const t = text.trim();
+  if (!t) return null;
+
+  const skip = /^(商务|记录|一下|个|这条|电话|微信|帮我|请)/i;
+  const patterns: RegExp[] = [
+    /(?:联系|拜访|走访|对接|跟进|会见|见了|去了|电话(?:给|联系)?|微信(?:联系)?|约了)\s*(?:了|过|一下)?\s*([A-Za-z0-9\u4e00-\u9fa5][A-Za-z0-9\u4e00-\u9fa5\s.&'-]{0,48}?)\s*(?:的|负责人|联系人|VP|CEO|CTO|总经理|总监|team|团队)/i,
+    /\b([A-Z][A-Za-z0-9]*(?:\s+[A-Z][A-Za-z0-9]*){0,4}(?:\s+(?:Group|Corp|Ltd|LLC|Inc|Co|Technology|Solutions))?)\b\s*(?:的|负责人|联系人)/,
+    /(?:伙伴|客户|公司|partner|customer)[：:\s]+([^\n,，。；;]{2,48})/i,
+  ];
+
+  for (const re of patterns) {
+    const m = t.match(re);
+    const name = m?.[1]?.trim().replace(/\s+/g, " ");
+    if (name && name.length >= 2 && !skip.test(name)) return name;
+  }
+  return null;
+}
+
+/** Attach partnerName from user text when open intake missed it in the proposal. */
+export async function enrichProposalPartnerFromText(
+  proposal: IntakeProposal,
+  userText: string,
+  boundPartnerId?: string
+): Promise<IntakeProposal> {
+  if (boundPartnerId || proposal.partnerName?.trim()) return proposal;
+  const extracted = extractPartnerNameFromIntakeText(userText);
+  if (!extracted) return proposal;
+  const match = await lookupSinglePartnerByName(extracted);
+  return { ...proposal, partnerName: match?.name ?? extracted };
+}
+
 export type ResolveIntakePartnerResult =
   | { ok: true; partnerId: string; partnerName: string }
   | { ok: false; error: string };

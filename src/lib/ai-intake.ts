@@ -63,10 +63,13 @@ import { persistBusinessRecord, normalizeBusinessRecordCategory, type BusinessRe
 import { countProposalItems } from "./proposal-merge";
 import {
   buildPartnerBindingPrompt,
+  enrichProposalPartnerFromText,
   intakeScopeRequiresPartner,
   loadIntakePartnerBinding,
   resolveIntakePartner,
 } from "./intake-partner-binding";
+import { enrichBusinessRecordCompanyTarget, resolveBusinessRecordCompanyTarget } from "./business-record-intake";
+import { submitBusinessRecordToCrmOnly } from "./crm-business-record";
 import { isFastIntakeScope, sanitizeProposalForScope } from "./proposal-scope";
 
 export type IntakeScope = AiLocaleScope;
@@ -108,6 +111,11 @@ export type BusinessRecordProposal = {
 
 export type IntakeProposal = {
   partnerName?: string;
+  /** CRM 客户 ID（com_id），开放录入时可能仅有 CRM 无 Hub 伙伴 */
+  crmCustomerId?: string;
+  crmCustomerName?: string;
+  /** both=Hub+CRM（默认）；crm_only=仅写入 CRM（Hub 未建档时用户确认） */
+  saveMode?: "both" | "crm_only";
   summary: string;
   fields: FieldUpdate[];
   contacts: ContactProposal[];
@@ -138,6 +146,8 @@ export type IntakeTurn = {
   questions: string[]; // Open clarification points (guidance)
   clarifications: IntakeClarification[]; // Structured option clarifications
   ready: boolean; // Whether info is sufficient to save
+  /** 商务记录：Hub 未建档但 CRM 已匹配，可「仅CRM」保存 */
+  crmOnlyReady?: boolean;
   proposal: IntakeProposal;
 };
 
@@ -253,7 +263,6 @@ function fallbackIntakeTurn(
   detail: string,
   partial: Partial<IntakeTurn> | undefined,
   scope: IntakeScope,
-  opts?: { chat?: ChatMessage[]; today?: string },
 ): IntakeTurn {
   const base = normalizeIntakeTurn(partial ?? {}, locale, scope);
   const hasDraft = countProposalItems(base.proposal) > 0;
@@ -266,13 +275,31 @@ function fallbackIntakeTurn(
         ? "Partial draft on the right — fill CRM fields or add more detail."
         : "Partial draft on the right — review or answer follow-ups below."
     : intakeParseErrorReply(locale, detail);
-  const turn: IntakeTurn = {
+  return {
     ...base,
     reply,
     ready: false,
     clarifications: base.clarifications.length ? base.clarifications : [],
   };
-  return isFastIntakeScope(scope) ? finalizeFastIntakeTurn(scope, turn, locale) : turn;
+}
+
+async function finalizeIntakeTurn(
+  turn: IntakeTurn,
+  scope: IntakeScope,
+  locale: Locale,
+  opts?: { partnerId?: string; userText?: string }
+): Promise<IntakeTurn> {
+  let proposal = turn.proposal;
+  if (scope === "business_record") {
+    proposal = await enrichBusinessRecordCompanyTarget(proposal, opts?.userText ?? "", opts?.partnerId);
+  } else if (!opts?.partnerId && opts?.userText) {
+    const { enrichProposalPartnerFromText } = await import("./intake-partner-binding");
+    proposal = await enrichProposalPartnerFromText(proposal, opts.userText, opts?.partnerId);
+  }
+  const next = { ...turn, proposal };
+  return isFastIntakeScope(scope)
+    ? await finalizeFastIntakeTurn(scope, next, locale, opts?.partnerId ? { boundPartnerId: opts.partnerId } : undefined)
+    : next;
 }
 
 async function parseIntakeTurnFromContent(
@@ -285,13 +312,17 @@ async function parseIntakeTurnFromContent(
     userId?: string;
     taskTier?: AiTaskTier;
     today?: string;
+    partnerId?: string;
   }
 ): Promise<IntakeTurn> {
+  const userText = lastIntakeUserText(opts?.chat);
+  const finalizeOpts = { partnerId: opts?.partnerId, userText };
+
   const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
   if (direct) {
     try {
       const turn = normalizeIntakeTurn(direct, locale, scope);
-      return isFastIntakeScope(scope) ? finalizeFastIntakeTurn(scope, turn, locale) : turn;
+      return finalizeIntakeTurn(turn, scope, locale, finalizeOpts);
     } catch {
       /* normalize failed — try repair below */
     }
@@ -319,7 +350,7 @@ async function parseIntakeTurnFromContent(
       const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
       if (repaired) {
         const turn = normalizeIntakeTurn(repaired, locale, scope);
-        return isFastIntakeScope(scope) ? finalizeFastIntakeTurn(scope, turn, locale) : turn;
+        return finalizeIntakeTurn(turn, scope, locale, finalizeOpts);
       }
     } catch {
       /* repair call failed */
@@ -327,10 +358,9 @@ async function parseIntakeTurnFromContent(
   }
 
   if (isFastIntakeScope(scope)) {
-    const userText = lastIntakeUserText(opts?.chat);
     const today = opts?.today ?? new Date().toISOString().slice(0, 10);
     const heuristic = userText ? heuristicFastIntakeTurn(scope, userText, locale, today) : null;
-    if (heuristic) return finalizeFastIntakeTurn(scope, heuristic, locale);
+    if (heuristic) return finalizeIntakeTurn(heuristic, scope, locale, finalizeOpts);
   }
 
   let detail = "Invalid JSON";
@@ -340,7 +370,8 @@ async function parseIntakeTurnFromContent(
     detail = e instanceof Error ? e.message : String(e);
   }
   const partial = direct ?? undefined;
-  return fallbackIntakeTurn(locale, detail, partial, scope, opts);
+  const fallback = fallbackIntakeTurn(locale, detail, partial, scope);
+  return finalizeIntakeTurn(fallback, scope, locale, finalizeOpts);
 }
 
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: IntakeScope): IntakeTurn {
@@ -358,6 +389,9 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
     ready: !!raw.ready,
     proposal: {
       partnerName: p.partnerName == null ? undefined : asTrimmedString(p.partnerName),
+      crmCustomerId: p.crmCustomerId == null ? undefined : asTrimmedString(p.crmCustomerId),
+      crmCustomerName: p.crmCustomerName == null ? undefined : asTrimmedString(p.crmCustomerName),
+      saveMode: p.saveMode === "crm_only" ? "crm_only" : p.saveMode === "both" ? "both" : undefined,
       summary: asTrimmedString(p.summary),
       fields: normalizeFieldUpdateLabels(
         (p.fields ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS).map(coerceField),
@@ -409,9 +443,6 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
   } else if (scope === "solution") {
     turn.ready = turn.proposal.solutions.some((s) => !!asTrimmedString(s.name));
   }
-  if (isFastIntakeScope(scope)) {
-    return finalizeFastIntakeTurn(scope, turn, locale);
-  }
   return turn;
 }
 
@@ -421,7 +452,8 @@ async function extractIntakeJson(
   locale: Locale,
   scope: IntakeScope,
   userId?: string,
-  emit?: TraceEmitter
+  emit?: TraceEmitter,
+  partnerId?: string,
 ): Promise<IntakeTurn> {
   const extractId = nextTraceId("extract");
   emitPhase(emit, "extract", "Building proposal");
@@ -455,6 +487,7 @@ async function extractIntakeJson(
     chat: extractChat,
     feature,
     userId,
+    partnerId,
   });
   emit?.({
     event: "trace_patch",
@@ -625,6 +658,7 @@ export async function runIntakeTurn(opts: {
         chat,
         feature,
         userId: opts.userId,
+        partnerId: opts.partnerId,
       });
       if (turn.proposal.summary || turn.proposal.partnerName || countProposalItems(turn.proposal) > 0) {
         emitProposalUpdate(opts.emit, turn);
@@ -632,7 +666,7 @@ export async function runIntakeTurn(opts: {
         return turn;
       }
     }
-    return extractIntakeJson(chat, feature, locale, opts.scope, opts.userId, opts.emit);
+    return extractIntakeJson(chat, feature, locale, opts.scope, opts.userId, opts.emit, opts.partnerId);
   }
 
   emitPhase(opts.emit, "extract", "Building proposal");
@@ -650,6 +684,7 @@ export async function runIntakeTurn(opts: {
     userId: opts.userId,
     taskTier,
     today: opts.today,
+    partnerId: opts.partnerId,
   });
   emitProposalUpdate(opts.emit, turn);
   if (opts.emit) {
@@ -740,6 +775,15 @@ export function isProposeConfirm(text: string): boolean {
     text,
     PROPOSE_CONFIRM_RE,
     "确认|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save"
+  );
+}
+
+/** User confirms CRM-only save when Hub has no partner but CRM matched */
+export function isProposeCrmOnlyConfirm(text: string): boolean {
+  return matchesProposeCommand(
+    text,
+    /^(仅crm|只填crm|仅同步crm|只写crm|crm only|crm-only)$/i,
+    "仅crm|只填crm|仅同步crm|只写crm|crm only|crm-only"
   );
 }
 
@@ -842,22 +886,30 @@ export async function applyIntake(opts: {
     });
     if (asActive) await createStarterTodos(partnerId, created.name, userId);
   } else if (scope === "todo" || intakeScopeRequiresPartner(scope)) {
-    const resolved = await resolveIntakePartner({
-      scope,
-      boundPartnerId: opts.partnerId,
-      proposal,
-      locale,
-    });
-    if (!resolved.ok) throw new Error(resolved.error);
-    partnerId = resolved.partnerId;
+    if (scope === "business_record" && proposal.saveMode === "crm_only" && proposal.crmCustomerId) {
+      partnerId = "";
+    } else {
+      const resolved = await resolveIntakePartner({
+        scope,
+        boundPartnerId: opts.partnerId,
+        proposal,
+        locale,
+      });
+      if (!resolved.ok) throw new Error(resolved.error);
+      partnerId = resolved.partnerId;
+    }
   }
 
   if (intakeScopeRequiresPartner(scope) && !partnerId) {
-    throw new Error(
-      locale === "zh"
-        ? "无法确定所属伙伴，请说明公司名称或在伙伴详情页 / 已绑定企微群中录入"
-        : "Could not determine partner — name the company or use a partner page / bound WeCom group"
-    );
+    const crmOnlyOk =
+      scope === "business_record" && proposal.saveMode === "crm_only" && !!proposal.crmCustomerId;
+    if (!crmOnlyOk) {
+      throw new Error(
+        locale === "zh"
+          ? "无法确定所属伙伴，请说明公司名称或在伙伴详情页 / 已绑定企微群中录入"
+          : "Could not determine partner — name the company or use a partner page / bound WeCom group"
+      );
+    }
   }
 
   // ---- Profile fields (non-onboarding) ----
@@ -991,18 +1043,62 @@ export async function applyIntake(opts: {
   }
 
   // ---- Business records ----
-  if (partnerId) for (const r of proposal.businessRecords) {
+  const brTarget =
+    scope === "business_record"
+      ? await resolveBusinessRecordCompanyTarget({
+          proposal,
+          boundPartnerId: opts.partnerId,
+          saveMode: proposal.saveMode,
+        })
+      : null;
+
+  for (const r of proposal.businessRecords) {
     const title = asTrimmedString(r.title);
     if (!title) continue;
+
+    if (proposal.saveMode === "crm_only" && proposal.crmCustomerId) {
+      const crmResult = await submitBusinessRecordToCrmOnly({
+        crmCustomerId: proposal.crmCustomerId,
+        userId,
+        category: normalizeBusinessRecordCategory(r.category ?? "OTHER"),
+        title,
+        content: r.content ?? null,
+        occurredAt: parseOptionalDate(r.occurredAt) ?? new Date(),
+        traceNature: r.traceNature,
+        traceAction: r.traceAction,
+      });
+      if (crmResult.status === "failed") throw new Error(crmResult.error);
+      const label = proposal.crmCustomerName ?? proposal.crmCustomerId;
+      applied.push(
+        crmResult.status === "synced"
+          ? locale === "zh"
+            ? `已写入帆软 CRM（${label}，未存 Partner Hub）`
+            : `Saved to FanRuan CRM (${label}, not in Partner Hub)`
+          : locale === "zh"
+            ? `CRM 未写入：${crmResult.reason}`
+            : `CRM skipped: ${crmResult.reason}`
+      );
+      continue;
+    }
+
+    const recordPartnerId = partnerId || brTarget?.hubPartnerId;
+    if (!recordPartnerId) {
+      throw new Error(
+        locale === "zh"
+          ? "未找到 Partner Hub 伙伴；若仅在 CRM 有该客户，请回复「仅CRM」"
+          : 'Partner not found in Partner Hub — reply「仅CRM」if the customer exists in CRM only'
+      );
+    }
+
     let contactId: string | null = null;
     if (r.contactName) {
       const contact = await db.contact.findFirst({
-        where: { partnerId, name: { contains: r.contactName } },
+        where: { partnerId: recordPartnerId, name: { contains: r.contactName } },
       });
       contactId = contact?.id ?? null;
     }
     await persistBusinessRecord({
-      partnerId,
+      partnerId: recordPartnerId,
       userId,
       category: r.category ?? "OTHER",
       title,

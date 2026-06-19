@@ -3,6 +3,12 @@ import type { IntakeScope } from "./ai-locale";
 import type { Locale } from "./i18n/locale";
 import type { IntakeClarification, IntakeTurn } from "./ai-intake";
 import { isFastIntakeScope } from "./proposal-scope";
+import { extractPartnerNameFromIntakeText } from "./intake-partner-binding";
+import {
+  businessRecordCrmOnlyReady,
+  businessRecordHubReady,
+  resolveBusinessRecordCompanyTarget,
+} from "./business-record-intake";
 import { normalizeBusinessRecordCategory } from "./business-record-core";
 import {
   CRM_TRACE_ACTIONS,
@@ -177,13 +183,14 @@ export function heuristicBusinessRecordTurn(
       reason: text.slice(0, 120),
     },
   ];
+  const partnerName = extractPartnerNameFromIntakeText(text) ?? undefined;
 
   return {
     reply: heuristicReply(locale, "business_record"),
     questions: [],
-    clarifications: buildBusinessRecordClarifications(records, locale),
-    ready: businessRecordCrmFieldsComplete(records),
-    proposal: { ...emptyProposal(title), businessRecords: records },
+    clarifications: buildBusinessRecordClarifications(records, locale, { partnerName }),
+    ready: false,
+    proposal: { ...emptyProposal(title), partnerName, businessRecords: records },
   };
 }
 
@@ -366,8 +373,21 @@ export function heuristicFastIntakeTurn(
 export function buildBusinessRecordClarifications(
   records: { title?: string; traceNature?: string; traceAction?: string }[],
   locale: Locale,
+  opts?: { partnerName?: string; openIntake?: boolean },
 ): IntakeClarification[] {
   const out: IntakeClarification[] = [];
+  if (opts?.openIntake && !opts.partnerName?.trim()) {
+    out.push({
+      id: "partnerName",
+      question: locale === "zh" ? "这条商务记录属于哪个伙伴/客户？" : "Which partner is this record for?",
+      options: [],
+      multi: false,
+      allowOther: true,
+      apply: "direct",
+      kind: "identity",
+      blocking: true,
+    });
+  }
   for (let i = 0; i < records.length; i++) {
     const r = records[i];
     const prefix =
@@ -417,27 +437,53 @@ function buildTodoClarifications(
   ];
 }
 
-export function finalizeBusinessRecordTurn(turn: IntakeTurn, locale: Locale): IntakeTurn {
+export async function finalizeBusinessRecordTurn(
+  turn: IntakeTurn,
+  locale: Locale,
+  opts?: { boundPartnerId?: string },
+): Promise<IntakeTurn> {
   const records = turn.proposal.businessRecords ?? [];
   if (!records.length) return turn;
 
+  const target = await resolveBusinessRecordCompanyTarget({
+    proposal: turn.proposal,
+    boundPartnerId: opts?.boundPartnerId,
+    saveMode: turn.proposal.saveMode,
+  });
+  const openIntake = !opts?.boundPartnerId;
+  const hubReady = businessRecordHubReady(target);
+  const crmOnlyReady = businessRecordCrmOnlyReady(target);
+
   const mergedClarifications = [
     ...turn.clarifications,
-    ...buildBusinessRecordClarifications(records, locale).filter(
-      (c) => !turn.clarifications.some((x) => x.id === c.id),
-    ),
+    ...buildBusinessRecordClarifications(records, locale, {
+      partnerName: turn.proposal.partnerName,
+      openIntake: openIntake && target.syncPlan === "unresolved",
+    }).filter((c) => !turn.clarifications.some((x) => x.id === c.id)),
   ];
-  const complete = businessRecordCrmFieldsComplete(records);
+  const crmComplete = businessRecordCrmFieldsComplete(records);
+  const blocking = mergedClarifications.some((c) => c.blocking);
+
+  const needsCompany =
+    target.syncPlan === "unresolved" ||
+    (target.syncPlan === "crm_only_pending" && !hubReady);
 
   return {
     ...turn,
-    reply: !complete
+    proposal: {
+      ...turn.proposal,
+      crmCustomerId: target.crmCustomerId ?? turn.proposal.crmCustomerId,
+      crmCustomerName: target.crmCustomerName ?? turn.proposal.crmCustomerName,
+      partnerName: target.hubPartnerName ?? turn.proposal.partnerName ?? target.crmCustomerName,
+    },
+    reply: !crmComplete || needsCompany
       ? locale === "zh"
-        ? "已生成商务记录草案。请在右侧选择现场/非现场与商务行为（CRM 必填），或回答下方追问。"
-        : "Review on-site/off-site and CRM action on the right, or answer follow-ups below."
+        ? "已生成商务记录草案。请核对下方清单；若 Partner Hub 未建档但 CRM 有客户，可回复「仅CRM」只写入 CRM。"
+        : "Review the checklist below. If the company is only in CRM, reply「仅CRM」to save CRM-only."
       : turn.reply,
     clarifications: mergedClarifications,
-    ready: complete && !mergedClarifications.some((c) => c.blocking),
+    ready: crmComplete && hubReady && !blocking,
+    crmOnlyReady: crmComplete && crmOnlyReady && !blocking,
   };
 }
 
@@ -471,11 +517,16 @@ function finalizeSimpleReadyTurn(
 }
 
 /** fast intake 统一收尾：补追问、校正 ready（商务记录含 CRM 字段；其余只存 Partner Hub） */
-export function finalizeFastIntakeTurn(scope: IntakeScope, turn: IntakeTurn, locale: Locale): IntakeTurn {
+export async function finalizeFastIntakeTurn(
+  scope: IntakeScope,
+  turn: IntakeTurn,
+  locale: Locale,
+  opts?: { boundPartnerId?: string },
+): Promise<IntakeTurn> {
   if (!isFastIntakeScope(scope)) return turn;
   switch (scope) {
     case "business_record":
-      return finalizeBusinessRecordTurn(turn, locale);
+      return finalizeBusinessRecordTurn(turn, locale, opts);
     case "todo":
       return finalizeTodoTurn(turn, locale);
     case "opportunity":

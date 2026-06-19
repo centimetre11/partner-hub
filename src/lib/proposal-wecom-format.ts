@@ -16,12 +16,54 @@ function bullet(lines: string[]) {
   return lines.filter(Boolean).map((l) => `• ${l}`).join("\n");
 }
 
+function checklistLine(done: boolean, label: string, value?: string) {
+  const mark = done ? "✅" : "⬜";
+  return value ? `${mark} ${label}：${value}` : `${mark} ${label}`;
+}
+
+function formatBusinessRecordChecklist(
+  proposal: IntakeProposal,
+  ready: boolean,
+  crmOnlyReady?: boolean
+) {
+  const r = proposal.businessRecords[0];
+  if (!r) return "";
+
+  const hubName = proposal.partnerName?.trim();
+  const hasHub = !!hubName && proposal.saveMode !== "crm_only";
+  const hasCrm = !!proposal.crmCustomerId;
+  const crmLabel = proposal.crmCustomerName ?? proposal.crmCustomerId ?? "";
+  const hasNature = !!r.traceNature?.trim();
+  const hasAction = !!r.traceAction?.trim();
+  const hasDetail = !!r.title?.trim();
+
+  const lines = [
+    checklistLine(hasHub, "Partner Hub 伙伴", hasHub ? hubName : "未建档"),
+    checklistLine(hasCrm, "帆软 CRM 客户", hasCrm ? crmLabel : "未匹配"),
+    checklistLine(hasNature, "现场/非现场", r.traceNature),
+    checklistLine(hasAction, "CRM 商务行为", r.traceAction),
+    checklistLine(hasDetail, "记录详情", r.title?.slice(0, 60)),
+  ];
+
+  let status: string;
+  if (ready) {
+    status = hasCrm && hasHub ? "将同时写入 Partner Hub 与 CRM，回复「确认」保存" : "回复「确认」保存到 Partner Hub";
+  } else if (crmOnlyReady) {
+    status = "Partner Hub 未建档，CRM 已匹配 → 回复「仅CRM」只写入 CRM，或「取消」放弃";
+  } else {
+    status = "请补全 ⬜ 项后再确认";
+  }
+
+  return `\n**【商务记录 · 填报清单】**\n${lines.join("\n")}\n_${status}_`;
+}
+
 /** Render propose draft as WeCom-friendly markdown */
 export function formatProposeWecomReply(opts: {
   scope: IntakeScope;
   reply: string;
   proposal: IntakeProposal;
   ready: boolean;
+  crmOnlyReady?: boolean;
   questions?: string[];
   chatType?: "group" | "single";
 }): string {
@@ -30,6 +72,7 @@ export function formatProposeWecomReply(opts: {
 
   const draftLines: string[] = [];
   if (opts.proposal.partnerName) draftLines.push(`归属伙伴：${opts.proposal.partnerName}`);
+  if (opts.proposal.crmCustomerName) draftLines.push(`CRM 客户：${opts.proposal.crmCustomerName}`);
   if (opts.proposal.summary) draftLines.push(`摘要：${opts.proposal.summary}`);
   for (const f of opts.proposal.fields) {
     draftLines.push(`${f.label}：${f.newValue}`);
@@ -47,7 +90,9 @@ export function formatProposeWecomReply(opts: {
   for (const t of opts.proposal.trainings) draftLines.push(`培训：${t.person}${t.targetCert ? ` → ${t.targetCert}` : ""}`);
   for (const s of opts.proposal.solutions) draftLines.push(`方案：${s.name}`);
 
-  if (draftLines.length) {
+  if (opts.scope === "business_record" && opts.proposal.businessRecords.length) {
+    parts.push(formatBusinessRecordChecklist(opts.proposal, opts.ready, opts.crmOnlyReady));
+  } else if (draftLines.length) {
     parts.push(`\n**【${SCOPE_LABELS[opts.scope]} · 草案预览】**\n${bullet(draftLines)}`);
   }
 
@@ -60,15 +105,16 @@ export function formatProposeWecomReply(opts: {
   const confirmHint = isGroup
     ? "群聊请 **@我 确认** 保存，或 **@我 取消** 放弃。"
     : "私聊请直接回复 **确认** 保存，或 **取消** 放弃。";
-  const partnerHint =
-    !isGroup && !opts.proposal.partnerName && opts.scope === "business_record"
-      ? "\n💡 私聊录入需指定伙伴：回复公司全称（如 ASTRA Group），或消息里带上公司名。"
-      : "";
+  const crmOnlyHint = opts.crmOnlyReady
+    ? "\n💡 Hub 未建档、CRM 已匹配：回复 **仅CRM** 只写入帆软 CRM。"
+    : "";
 
   if (opts.ready && hasItems) {
-    parts.push(`\n---\n✅ 信息已足够。${confirmHint}${partnerHint}`);
+    parts.push(`\n---\n✅ 信息已足够。${confirmHint}${crmOnlyHint}`);
+  } else if (opts.crmOnlyReady && hasItems) {
+    parts.push(`\n---\n📝 草案可仅写 CRM。${crmOnlyHint} 或 **取消** 放弃。`);
   } else if (hasItems) {
-    parts.push(`\n---\n📝 草案进行中。可继续补充，就绪后 ${confirmHint}${partnerHint}`);
+    parts.push(`\n---\n📝 草案进行中。补全清单后 ${confirmHint}${crmOnlyHint}`);
   } else {
     parts.push("\n---\n请补充更多信息以生成可保存的草案。");
   }

@@ -7,6 +7,7 @@ import {
   applyIntake,
   isProposeCancel,
   isProposeConfirm,
+  isProposeCrmOnlyConfirm,
   shouldUseProposeMode,
   type IntakeMessage,
   type IntakeProposal,
@@ -16,10 +17,13 @@ import { runAssistantTurn } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
 import { shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
+import { enrichBusinessRecordCompanyTarget } from "@/lib/business-record-intake";
 import {
+  enrichProposalPartnerFromText,
   intakeScopeRequiresPartner,
   lookupSinglePartnerByName,
 } from "@/lib/intake-partner-binding";
+import { applyDirectClarification } from "@/lib/clarification-apply";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
   formatWecomBotHelpReply,
@@ -45,6 +49,7 @@ type ProposeSession = {
   partnerId?: string;
   proposal: IntakeProposal;
   ready: boolean;
+  crmOnlyReady?: boolean;
   sourceText: string;
 };
 
@@ -144,14 +149,51 @@ async function applyPartnerPickToSession(
   text: string,
   boundPartnerId?: string
 ): Promise<ProposeSession> {
-  if (boundPartnerId || session.proposal.partnerName?.trim()) return session;
-  if (!intakeScopeRequiresPartner(session.scope)) return session;
-  const match = await lookupSinglePartnerByName(text);
-  if (!match) return session;
+  if (boundPartnerId) return session;
+
+  let proposal = session.proposal;
+  if (!proposal.partnerName?.trim()) {
+    proposal = await enrichProposalPartnerFromText(proposal, text, boundPartnerId);
+  }
+
+  const partnerClarification = session.scope === "business_record"
+    ? { id: "partnerName", question: "", options: [], multi: false, allowOther: true, apply: "direct" as const, kind: "identity" as const, blocking: true }
+    : null;
+  if (partnerClarification && !proposal.partnerName?.trim() && intakeScopeRequiresPartner(session.scope)) {
+    const applied = applyDirectClarification(proposal, partnerClarification, text);
+    proposal = applied.proposal;
+  }
+
+  if (!proposal.partnerName?.trim()) return { ...session, proposal };
+
+  const match = await lookupSinglePartnerByName(proposal.partnerName);
   return {
     ...session,
-    partnerId: match.id,
-    proposal: { ...session.proposal, partnerName: match.name },
+    partnerId: match?.id ?? session.partnerId,
+    proposal: match ? { ...proposal, partnerName: match.name } : proposal,
+  };
+}
+
+async function prepareSessionForApply(
+  session: ProposeSession,
+  boundPartnerId?: string
+): Promise<ProposeSession> {
+  if (boundPartnerId) return session;
+  let proposal =
+    session.scope === "business_record"
+      ? await enrichBusinessRecordCompanyTarget(session.proposal, session.sourceText, boundPartnerId)
+      : await enrichProposalPartnerFromText(session.proposal, session.sourceText, boundPartnerId);
+  if (!proposal.partnerName?.trim() && session.scope !== "business_record") {
+    return { ...session, proposal };
+  }
+  if (session.scope === "business_record" && proposal.saveMode === "crm_only") {
+    return { ...session, proposal };
+  }
+  const match = proposal.partnerName ? await lookupSinglePartnerByName(proposal.partnerName) : null;
+  return {
+    ...session,
+    partnerId: match?.id ?? session.partnerId,
+    proposal: match ? { ...proposal, partnerName: match.name } : proposal,
   };
 }
 
@@ -248,13 +290,48 @@ async function handleTextMessage(frame: WsFrame) {
       return;
     }
 
-    if (session && isProposeConfirm(text)) {
-      if (!session.ready) {
-        const reply = "草案信息还不够完整，请继续补充细节后再回复「确认」保存，或回复「取消」放弃。";
+    if (session && isProposeCrmOnlyConfirm(text)) {
+      if (!session.crmOnlyReady) {
+        const reply =
+          "当前草案暂不支持仅写 CRM（可能 CRM 未匹配或必填项未齐）。请按清单补全，或在 Partner Hub 建档后回复「确认」。";
         appendHistory(key, "assistant", reply);
         await wsClient.replyStream(frame, streamId, reply, true);
         return;
       }
+      session = await prepareSessionForApply(session, boundPartnerId);
+      session = {
+        ...session,
+        proposal: { ...session.proposal, saveMode: "crm_only" as const },
+      };
+      const applied = await applyIntake({
+        scope: session.scope,
+        partnerId: boundPartnerId ?? session.partnerId,
+        proposal: session.proposal,
+        userId: actorUserId,
+        sourceText: session.sourceText,
+        locale: "zh",
+      });
+      proposeSessions.delete(key);
+      let reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope);
+      if (!actor.hubUser?.crmSalesmanName) {
+        reply += "\n\n⚠️ 你尚未绑定 CRM 销售账号，无法写入帆软 CRM。";
+      }
+      appendHistory(key, "assistant", reply);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    if (session && isProposeConfirm(text)) {
+      if (!session.ready) {
+        const reply = session.crmOnlyReady
+          ? "Partner Hub 未建档。若只写入帆软 CRM，请回复 **仅CRM**；或回复「取消」放弃。"
+          : "草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。";
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+        return;
+      }
+      session = await prepareSessionForApply(session, boundPartnerId);
+      proposeSessions.set(key, session);
       const applied = await applyIntake({
         scope: session.scope,
         partnerId: boundPartnerId ?? session.partnerId,
@@ -279,7 +356,7 @@ async function handleTextMessage(frame: WsFrame) {
       return;
     }
 
-    if (session && !isProposeConfirm(text) && !isProposeCancel(text)) {
+    if (session && !isProposeConfirm(text) && !isProposeCancel(text) && !isProposeCrmOnlyConfirm(text)) {
       session = await applyPartnerPickToSession(session, text, boundPartnerId);
       proposeSessions.set(key, session);
     }
@@ -333,6 +410,7 @@ async function handleTextMessage(frame: WsFrame) {
           partnerId,
           proposal: merged,
           ready: result.ready,
+          crmOnlyReady: result.crmOnlyReady,
           sourceText,
         });
         reply = formatProposeWecomReply({
@@ -340,6 +418,7 @@ async function handleTextMessage(frame: WsFrame) {
           reply: result.reply,
           proposal: merged,
           ready: result.ready,
+          crmOnlyReady: result.crmOnlyReady,
           questions: result.questions,
           chatType,
         });
