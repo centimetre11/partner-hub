@@ -49,11 +49,10 @@ import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
 import {
-  buildBusinessRecordClarifications,
-  finalizeBusinessRecordTurn,
-  heuristicBusinessRecordTurn,
+  finalizeFastIntakeTurn,
+  heuristicFastIntakeTurn,
   lastIntakeUserText,
-} from "./business-record-heuristic";
+} from "./fast-intake-heuristic";
 import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
 import {
   businessRecordCrmFieldsComplete,
@@ -260,8 +259,12 @@ function fallbackIntakeTurn(
   const hasDraft = countProposalItems(base.proposal) > 0;
   const reply = hasDraft
     ? locale === "zh"
-      ? "部分字段已解析。请核对右侧草案并补充 CRM 必填项（现场/非现场、商务行为），或继续描述。"
-      : "Partial draft saved on the right — fill CRM fields or add more detail."
+      ? scope === "business_record"
+        ? "部分字段已解析。请核对右侧草案并补充 CRM 必填项，或继续描述。"
+        : "部分字段已解析。请核对右侧草案，或在下方回答追问后继续。"
+      : scope === "business_record"
+        ? "Partial draft on the right — fill CRM fields or add more detail."
+        : "Partial draft on the right — review or answer follow-ups below."
     : intakeParseErrorReply(locale, detail);
   const turn: IntakeTurn = {
     ...base,
@@ -269,7 +272,7 @@ function fallbackIntakeTurn(
     ready: false,
     clarifications: base.clarifications.length ? base.clarifications : [],
   };
-  return scope === "business_record" ? finalizeBusinessRecordTurn(turn, locale) : turn;
+  return isFastIntakeScope(scope) ? finalizeFastIntakeTurn(scope, turn, locale) : turn;
 }
 
 async function parseIntakeTurnFromContent(
@@ -288,7 +291,7 @@ async function parseIntakeTurnFromContent(
   if (direct) {
     try {
       const turn = normalizeIntakeTurn(direct, locale, scope);
-      return scope === "business_record" ? finalizeBusinessRecordTurn(turn, locale) : turn;
+      return isFastIntakeScope(scope) ? finalizeFastIntakeTurn(scope, turn, locale) : turn;
     } catch {
       /* normalize failed — try repair below */
     }
@@ -316,18 +319,18 @@ async function parseIntakeTurnFromContent(
       const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
       if (repaired) {
         const turn = normalizeIntakeTurn(repaired, locale, scope);
-        return scope === "business_record" ? finalizeBusinessRecordTurn(turn, locale) : turn;
+        return isFastIntakeScope(scope) ? finalizeFastIntakeTurn(scope, turn, locale) : turn;
       }
     } catch {
       /* repair call failed */
     }
   }
 
-  if (scope === "business_record") {
+  if (isFastIntakeScope(scope)) {
     const userText = lastIntakeUserText(opts?.chat);
     const today = opts?.today ?? new Date().toISOString().slice(0, 10);
-    const heuristic = userText ? heuristicBusinessRecordTurn(userText, locale, today) : null;
-    if (heuristic) return finalizeBusinessRecordTurn(heuristic, locale);
+    const heuristic = userText ? heuristicFastIntakeTurn(scope, userText, locale, today) : null;
+    if (heuristic) return finalizeFastIntakeTurn(scope, heuristic, locale);
   }
 
   let detail = "Invalid JSON";
@@ -395,7 +398,19 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
     turn.ready =
       turn.proposal.businessRecords.length > 0 &&
       businessRecordCrmFieldsComplete(turn.proposal.businessRecords);
-    return finalizeBusinessRecordTurn(turn, locale);
+  } else if (scope === "todo") {
+    turn.ready = turn.proposal.todos.some((t) => !!asTrimmedString(t.title));
+  } else if (scope === "opportunity") {
+    turn.ready = turn.proposal.opportunities.some((o) => !!asTrimmedString(o.name));
+  } else if (scope === "powermap") {
+    turn.ready = turn.proposal.contacts.some((c) => !!asTrimmedString(c.name));
+  } else if (scope === "training") {
+    turn.ready = turn.proposal.trainings.some((t) => !!asTrimmedString(t.person));
+  } else if (scope === "solution") {
+    turn.ready = turn.proposal.solutions.some((s) => !!asTrimmedString(s.name));
+  }
+  if (isFastIntakeScope(scope)) {
+    return finalizeFastIntakeTurn(scope, turn, locale);
   }
   return turn;
 }
