@@ -8,6 +8,7 @@ import {
   isProposeCancel,
   isProposeConfirm,
   isProposeCrmOnlyConfirm,
+  isTodoListQueryIntent,
   shouldUseProposeMode,
   type IntakeMessage,
   type IntakeProposal,
@@ -361,6 +362,11 @@ async function handleTextMessage(frame: WsFrame) {
       proposeSessions.set(key, session);
     }
 
+    if (isTodoListQueryIntent(text)) {
+      proposeSessions.delete(key);
+      session = undefined;
+    }
+
     const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
     const inPropose = !!session || shouldUseProposeMode(messages);
 
@@ -430,7 +436,8 @@ async function handleTextMessage(frame: WsFrame) {
         proposeSessions.delete(key);
       }
       reply = result.reply;
-      console.log(`[wecom-bot] 回复(${text.slice(0, 20)}…): ${result.reply.slice(0, 120)}…`);
+      const modeLabel = isTodoListQueryIntent(text) ? "待办查询" : text.slice(0, 20);
+      console.log(`[wecom-bot] 回复(${modeLabel}…): ${result.reply.slice(0, 120)}…`);
     }
 
     appendHistory(key, "assistant", reply);

@@ -1,6 +1,6 @@
 import type { TraceEmitter } from "./ai-trace";
 import type { IntakeMessage, IntakeScope } from "./ai-intake";
-import { runProposeTurn, shouldUseProposeMode } from "./ai-intake";
+import { runProposeTurn, shouldUseProposeMode, isTodoListQueryIntent } from "./ai-intake";
 import { runQueryAssistant, type AssistantLocale } from "./assistant-core";
 import type { Locale } from "./i18n/locale";
 
@@ -25,7 +25,10 @@ export async function runAssistantTurn(opts: {
   /** Sticky scope for multi-turn propose sessions */
   proposeScope?: IntakeScope;
 }): Promise<AssistantTurnResult> {
-  const usePropose = opts.forcePropose || shouldUseProposeMode(opts.messages);
+  const lastUser = [...opts.messages].reverse().find((m) => m.role === "user");
+  const todoListQuery = lastUser ? isTodoListQueryIntent(lastUser.content) : false;
+  const usePropose =
+    !todoListQuery && (opts.forcePropose || shouldUseProposeMode(opts.messages));
   if (usePropose) {
     return runProposeTurn({
       messages: opts.messages,

@@ -716,10 +716,22 @@ export async function runIntakeTurn(opts: {
 
 /** Shared regex for propose-mode intent (assistant dock UI + server routing) */
 export const PROPOSE_INTENT_RE =
-  /kms\.fineres\.com|pageId=\d+|建档|补全画像|提炼.{0,6}伙伴|录入伙伴|创建伙伴|新公司|丰富.{0,4}档案|完善.{0,4}画像|商务记录|拜访记录|会议纪要|跟进记录|见面记录|记录拜访|记录会议|待办|创建待办|记待办|加待办|添加待办|添加商机|新建商机|加联系人|添加联系人|新联系人|培训计划|认证计划|联合方案|onboard|create partner|new partner|enrich.{0,8}profile|complete.{0,8}profile|business record|meeting log|visit log|log opportunity|add contact|create todo|add todo|log todo|intake/i;
+  /kms\.fineres\.com|pageId=\d+|建档|补全画像|提炼.{0,6}伙伴|录入伙伴|创建伙伴|新公司|丰富.{0,4}档案|完善.{0,4}画像|商务记录|拜访记录|会议纪要|跟进记录|见面记录|记录拜访|记录会议|创建待办|记.{0,4}待办|加待办|添加待办|待办[：:，,]|添加商机|新建商机|加联系人|添加联系人|新联系人|培训计划|认证计划|联合方案|onboard|create partner|new partner|enrich.{0,8}profile|complete.{0,8}profile|business record|meeting log|visit log|log opportunity|add contact|create todo|add todo|log todo|intake/i;
+
+/** List/query todos — must use Query mode + list_todos, not propose intake */
+export function isTodoListQueryIntent(text: string): boolean {
+  const t = stripIntakeSystemHint(text).trim();
+  if (/^(创建|添加|记|加|新建|录入).{0,4}待办|create todo|add todo|log todo/i.test(t)) return false;
+  if (!/待办|todos?\b/i.test(t)) return false;
+  return /看一下|看看|查|查询|列出|列举|显示|展示|有什么|有哪些|多少|所有|全部|当前|现在|我的|哪些|事项|list|show|what|open|view/i.test(
+    t
+  );
+}
 
 /** Detect propose-confirm mode (collaborative agents: onboarding, records, opportunities, etc.) */
 export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
+  if (lastUser && isTodoListQueryIntent(lastUser.content)) return false;
   const text = messages
     .filter((m) => m.role === "user")
     .map((m) => m.content)
@@ -754,13 +766,13 @@ export function detectProposeScope(messages: IntakeMessage[], partnerId?: string
   ) {
     return "todo";
   }
-  if (/商机|添加商机|新建商机|opportunity|pipeline/i.test(last)) return "opportunity";
-  if (/联系人|权力地图|加联系人|添加联系人|新联系人|contact|power map|名片|CTO|CEO/i.test(last)) {
+  if (/商机|添加商机|新建商机|opportunity|pipeline/i.test(text)) return "opportunity";
+  if (/联系人|权力地图|加联系人|添加联系人|新联系人|contact|power map|名片|CTO|CEO/i.test(text)) {
     return "powermap";
   }
-  if (/培训|认证|FCA|training plan/i.test(last)) return "training";
-  if (/联合方案|solution/i.test(last)) return "solution";
-  if (/建档|补全|画像|profile|onboard|kms/i.test(last)) return partnerId ? "profile" : "new_partner";
+  if (/培训|认证|FCA|training plan/i.test(text)) return "training";
+  if (/联合方案|solution/i.test(text)) return "solution";
+  if (/建档|补全|画像|profile|onboard|kms/i.test(text)) return partnerId ? "profile" : "new_partner";
   if (partnerId) return "profile";
   return "new_partner";
 }
