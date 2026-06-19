@@ -140,6 +140,7 @@ Rules:
 - When partner is pre-bound in [伙伴绑定], omit partnerName entirely.
 - One user message may yield multiple businessRecords if they describe several milestones.
 - traceNature and traceAction are mandatory for CRM KPI sync — infer from text; user will confirm in UI before save.
+- If traceNature or traceAction cannot be inferred confidently, set ready=false and add clarifications (direct apply) e.g. id "br-0-nature" with options 现场|非现场, or "br-0-action" with CRM action options.
 - category: VISIT=meetings/visits; TRAINING=training; NEGOTIATION=deals; DELIVERY=delivery; RELATIONSHIP=relationship; OTHER=rest.
 - Extract only from user text; do not invent. ready=true only when every record has title + traceNature + traceAction.`;
   }

@@ -48,8 +48,18 @@ import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
-import { businessRecordCrmFieldsComplete, inferTraceAction, inferTraceNature } from "./crm-trace-payload";
+import {
+  buildBusinessRecordClarifications,
+  finalizeBusinessRecordTurn,
+  heuristicBusinessRecordTurn,
+  lastIntakeUserText,
+} from "./business-record-heuristic";
 import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
+import {
+  businessRecordCrmFieldsComplete,
+  inferTraceAction,
+  inferTraceNature,
+} from "./crm-trace-payload";
 import { persistBusinessRecord, normalizeBusinessRecordCategory, type BusinessRecordCategory } from "./business-record-core";
 import { countProposalItems } from "./proposal-merge";
 import {
@@ -185,7 +195,8 @@ async function callIntakeExtract(
       onDelta,
     });
     if (opts.emit && streamed) opts.emit({ event: "reply_done" });
-    return content;
+    const merged = (content ?? "").trim() || streamed.trim();
+    return merged || null;
   };
 
   try {
@@ -238,14 +249,27 @@ function intakeParseErrorReply(locale: Locale, detail: string): string {
     : `Sorry — the AI response had a format error. Your draft on the right is preserved; add more detail or edit before saving.\n\n(${short})`;
 }
 
-function fallbackIntakeTurn(locale: Locale, detail: string, partial: Partial<IntakeTurn> | undefined, scope: IntakeScope): IntakeTurn {
+function fallbackIntakeTurn(
+  locale: Locale,
+  detail: string,
+  partial: Partial<IntakeTurn> | undefined,
+  scope: IntakeScope,
+  opts?: { chat?: ChatMessage[]; today?: string },
+): IntakeTurn {
   const base = normalizeIntakeTurn(partial ?? {}, locale, scope);
-  return {
+  const hasDraft = countProposalItems(base.proposal) > 0;
+  const reply = hasDraft
+    ? locale === "zh"
+      ? "部分字段已解析。请核对右侧草案并补充 CRM 必填项（现场/非现场、商务行为），或继续描述。"
+      : "Partial draft saved on the right — fill CRM fields or add more detail."
+    : intakeParseErrorReply(locale, detail);
+  const turn: IntakeTurn = {
     ...base,
-    reply: intakeParseErrorReply(locale, detail),
+    reply,
     ready: false,
     clarifications: base.clarifications.length ? base.clarifications : [],
   };
+  return scope === "business_record" ? finalizeBusinessRecordTurn(turn, locale) : turn;
 }
 
 async function parseIntakeTurnFromContent(
@@ -257,12 +281,14 @@ async function parseIntakeTurnFromContent(
     feature?: string;
     userId?: string;
     taskTier?: AiTaskTier;
+    today?: string;
   }
 ): Promise<IntakeTurn> {
   const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
   if (direct) {
     try {
-      return normalizeIntakeTurn(direct, locale, scope);
+      const turn = normalizeIntakeTurn(direct, locale, scope);
+      return scope === "business_record" ? finalizeBusinessRecordTurn(turn, locale) : turn;
     } catch {
       /* normalize failed — try repair below */
     }
@@ -288,10 +314,20 @@ async function parseIntakeTurnFromContent(
         maxTokens: maxTokensForTaskTier(opts.taskTier),
       });
       const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
-      if (repaired) return normalizeIntakeTurn(repaired, locale, scope);
+      if (repaired) {
+        const turn = normalizeIntakeTurn(repaired, locale, scope);
+        return scope === "business_record" ? finalizeBusinessRecordTurn(turn, locale) : turn;
+      }
     } catch {
       /* repair call failed */
     }
+  }
+
+  if (scope === "business_record") {
+    const userText = lastIntakeUserText(opts?.chat);
+    const today = opts?.today ?? new Date().toISOString().slice(0, 10);
+    const heuristic = userText ? heuristicBusinessRecordTurn(userText, locale, today) : null;
+    if (heuristic) return finalizeBusinessRecordTurn(heuristic, locale);
   }
 
   let detail = "Invalid JSON";
@@ -301,7 +337,7 @@ async function parseIntakeTurnFromContent(
     detail = e instanceof Error ? e.message : String(e);
   }
   const partial = direct ?? undefined;
-  return fallbackIntakeTurn(locale, detail, partial, scope);
+  return fallbackIntakeTurn(locale, detail, partial, scope, opts);
 }
 
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: IntakeScope): IntakeTurn {
@@ -359,6 +395,7 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
     turn.ready =
       turn.proposal.businessRecords.length > 0 &&
       businessRecordCrmFieldsComplete(turn.proposal.businessRecords);
+    return finalizeBusinessRecordTurn(turn, locale);
   }
   return turn;
 }
@@ -590,13 +627,14 @@ export async function runIntakeTurn(opts: {
     userId: opts.userId,
     taskTier,
     emit: opts.emit,
-    streamFast: opts.scope === "business_record",
+    streamFast: false,
   });
   const turn = await parseIntakeTurnFromContent(content ?? "", locale, opts.scope, {
     chat,
     feature,
     userId: opts.userId,
     taskTier,
+    today: opts.today,
   });
   emitProposalUpdate(opts.emit, turn);
   if (opts.emit) {

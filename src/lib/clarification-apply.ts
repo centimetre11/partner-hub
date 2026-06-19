@@ -45,6 +45,7 @@ export function hasBlockingClarifications(clarifications: IntakeClarification[])
 
 export function getClarificationMode(c: IntakeClarification): ClarificationApplyMode {
   if (c.apply === "direct" || c.apply === "ai") return c.apply;
+  if (/^br-\d+-(nature|action)$/.test(c.id)) return "direct";
   if (c.id === "dedupe") return "ai";
   if (c.id === "partnerName" || c.id === "name" || c.id === "website") return "direct";
   if (DIRECT_CLARIFICATION_IDS.has(c.id) && c.id in PARTNER_FIELD_LABELS) return "direct";
@@ -69,6 +70,13 @@ export function applyDirectClarification(
   value: string
 ): { proposal: IntakeProposal; changes: ProposalChanges } {
   const trimmed = value.trim();
+  const brMatch = clarification.id.match(/^br-(\d+)-(nature|action)$/);
+  if (brMatch) {
+    const index = Number(brMatch[1]);
+    const field = brMatch[2] === "nature" ? "traceNature" : "traceAction";
+    return applyProposalEdit(proposal, { type: "businessRecord", index, field, value: trimmed });
+  }
+
   if (clarification.id === "partnerName" || clarification.id === "name") {
     const { draft, changes } = mergeProposalPatch(
       proposal,
