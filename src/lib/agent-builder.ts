@@ -112,6 +112,7 @@ How you work:
      * partner_group — push to partner's bound WeCom group (requires scopeType=PARTNER)
      * webhook — external webhook URL in draft.webhookUrl
 8. ready=true only when name, instructions, deliveryMode are set; webhook mode also requires webhookUrl.
+9. NEVER claim the Agent is already saved/created in the system. When ready=true, say the draft is ready and the user must reply 确认 or 创建Agent in WeCom to persist it.
 
 【Available tools (draft.skills = name)】
 ${toolLines}

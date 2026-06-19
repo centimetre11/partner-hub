@@ -28,12 +28,18 @@ export function isAgentBuilderIntent(text: string): boolean {
   if (isPureTodoIntakeIntent(t)) return false;
 
   if (/创建.{0,8}(agent|Agent|自动化)|建.{0,6}(agent|Agent|自动化)|搭建.{0,8}(agent|Agent|自动化)/i.test(t)) {
+    if (isAgentBuilderCreateCommand(text)) return false;
     return true;
   }
   if (/create agent|build agent|new agent|automation agent|agent builder/i.test(t)) return true;
   if (/agent.{0,10}(编排|自动化)|编排.{0,8}工作流|自动化.{0,8}工作流/i.test(t)) return true;
 
   return false;
+}
+
+/** Bare "create agent" command — finalize when draft ready, not a new automation description */
+export function isAgentBuilderFinalizeIntent(text: string): boolean {
+  return isAgentBuilderCreateCommand(text) || isAgentBuilderConfirm(text);
 }
 
 export function shouldUseAgentBuilderMode(
@@ -46,13 +52,23 @@ export function shouldUseAgentBuilderMode(
   return isAgentBuilderIntent(lastUser.content);
 }
 
+/** Short command to finalize a ready draft (WeCom) */
+export function isAgentBuilderCreateCommand(text: string): boolean {
+  const t = normalizeIntentText(text);
+  return /^(创建\s*agent|创建agent|开始创建|确认创建|好的\s*创建|保存\s*agent)$/i.test(t);
+}
+
 /** User confirms Agent Builder draft (WeCom) */
 export function isAgentBuilderConfirm(text: string): boolean {
-  const t = text.trim();
+  const t = normalizeIntentText(text);
+  if (isAgentBuilderCreateCommand(text)) return true;
   if (/^(确认|确认创建|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save)$/i.test(t)) {
     return true;
   }
-  const atMatch = t.match(/^@(.+)\s+(确认|确认创建|确认保存|保存|提交|apply|confirm|ok save|save)\s*$/i);
+  const raw = text.trim();
+  const atMatch = raw.match(
+    /^@(.+)\s+(确认|确认创建|确认保存|保存|提交|创建\s*agent|创建agent|开始创建|apply|confirm|ok save|save)\s*$/i
+  );
   if (!atMatch) return false;
   return /^[\w.\s-]{1,40}$/.test(atMatch[1].trim());
 }

@@ -79,7 +79,9 @@ export function formatAgentBuilderWecomReply(opts: {
     : "请回复 **确认** 创建 Agent，或 **取消** 放弃。";
 
   if (turn.ready) {
-    parts.push(`\n---\n✅ 草案已就绪。${confirmHint}\n创建后可 **@我 试运行** 立即执行一次。`);
+    parts.push(
+      `\n---\n✅ 草案已就绪（**尚未写入系统**）。${confirmHint}\n也可直接 @我 **创建Agent** 或 **试运行**（试运行会自动创建并执行一次）。`
+    );
   } else {
     parts.push(`\n---\n📝 草案构建中，请继续补充。${confirmHint}`);
   }

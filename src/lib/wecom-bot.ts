@@ -19,6 +19,7 @@ import { runAgentBuilderTurn } from "@/lib/agent-builder";
 import {
   isAgentBuilderCancel,
   isAgentBuilderConfirm,
+  isAgentBuilderCreateCommand,
   isAgentBuilderIntent,
   isAgentBuilderTrialRun,
   shouldUseAgentBuilderMode,
@@ -276,6 +277,37 @@ async function refreshAiSummary() {
   return aiSummaryCache;
 }
 
+async function persistAgentBuilderSession(opts: {
+  agentSession: AgentBuilderSession;
+  actorUserId: string;
+  actor: Awaited<ReturnType<typeof resolveWecomActorUserId>>;
+  key: string;
+}): Promise<{ created: Awaited<ReturnType<typeof createAgentFromDraft>>; draft: AgentBuilderDraft; reply: string } | { error: string }> {
+  const { agentSession, actorUserId, actor, key } = opts;
+  if (!agentSession.ready) {
+    return { error: "Agent 草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」或「创建Agent」，或回复「取消」放弃。" };
+  }
+  if (actor.matchedBy === "fallback") {
+    return {
+      error:
+        "⚠️ 未识别到你的 Partner Hub 账号。请先在 Web 个人中心生成绑定码，再 @我 绑定 XXXXXX 后再创建 Agent。",
+    };
+  }
+  const draft = agentSession.draft;
+  const wecomPushChatId = draft.deliveryMode === "wecom_chat" ? agentSession.sourceChatId : undefined;
+  const created = await createAgentFromDraft(draft, actorUserId, { wecomPushChatId });
+  agentBuilderSessions.set(key, {
+    ...agentSession,
+    ready: false,
+    lastCreatedAgentId: created.id,
+    messages: [],
+    draft: EMPTY_AGENT_DRAFT,
+  });
+  const reply = formatAgentCreatedReply(created, draft);
+  console.log(`[wecom-bot] Agent 已创建 id=${created.id.slice(0, 8)}… actor=${actorUserId.slice(0, 8)}…`);
+  return { created, draft, reply };
+}
+
 async function handleTextMessage(frame: WsFrame) {
   if (!wsClient || !botUserId) return;
   const text = frame.body?.text?.content?.trim();
@@ -372,8 +404,17 @@ async function handleTextMessage(frame: WsFrame) {
     }
 
     if (agentSession && isAgentBuilderTrialRun(text)) {
-      if (!agentSession.lastCreatedAgentId) {
-        const reply = "暂无可试运行的 Agent。请先完成创建（草案就绪后回复「确认」）。";
+      if (!agentSession.lastCreatedAgentId && agentSession.ready) {
+        const persisted = await persistAgentBuilderSession({ agentSession, actorUserId, actor, key });
+        if ("error" in persisted) {
+          appendHistory(key, "assistant", persisted.error);
+          await wsClient.replyStream(frame, streamId, persisted.error, true);
+          return;
+        }
+        agentSession = agentBuilderSessions.get(key);
+      }
+      if (!agentSession?.lastCreatedAgentId) {
+        const reply = "暂无可试运行的 Agent。请先 @我 **确认** 或 **创建Agent** 完成创建。";
         appendHistory(key, "assistant", reply);
         await wsClient.replyStream(frame, streamId, reply, true);
         return;
@@ -393,37 +434,21 @@ async function handleTextMessage(frame: WsFrame) {
     }
 
     if (agentSession && isAgentBuilderConfirm(text)) {
-      if (!agentSession.ready) {
-        const reply = "Agent 草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。";
-        appendHistory(key, "assistant", reply);
-        await wsClient.replyStream(frame, streamId, reply, true);
+      const persisted = await persistAgentBuilderSession({ agentSession, actorUserId, actor, key });
+      if ("error" in persisted) {
+        appendHistory(key, "assistant", persisted.error);
+        await wsClient.replyStream(frame, streamId, persisted.error, true);
         return;
       }
-      if (actor.matchedBy === "fallback") {
-        const reply =
-          "⚠️ 未识别到你的 Partner Hub 账号。请先在 Web 个人中心生成绑定码，再 @我 绑定 XXXXXX 后再创建 Agent。";
-        appendHistory(key, "assistant", reply);
-        await wsClient.replyStream(frame, streamId, reply, true);
-        return;
-      }
-      const wecomPushChatId =
-        agentSession.draft.deliveryMode === "wecom_chat" ? agentSession.sourceChatId : undefined;
-      const created = await createAgentFromDraft(agentSession.draft, actorUserId, { wecomPushChatId });
-      agentBuilderSessions.set(key, {
-        ...agentSession,
-        ready: false,
-        lastCreatedAgentId: created.id,
-        messages: [],
-        draft: EMPTY_AGENT_DRAFT,
-      });
-      const reply = formatAgentCreatedReply(created, agentSession.draft);
-      appendHistory(key, "assistant", reply);
-      console.log(`[wecom-bot] Agent 已创建 id=${created.id.slice(0, 8)}… actor=${actorUserId.slice(0, 8)}…`);
-      await wsClient.replyStream(frame, streamId, reply, true);
+      appendHistory(key, "assistant", persisted.reply);
+      await wsClient.replyStream(frame, streamId, persisted.reply, true);
       return;
     }
 
-    const inAgentBuilder = !!agentSession || shouldUseAgentBuilderMode(history);
+    const skipBuilderTurn =
+      !!agentSession?.ready && (isAgentBuilderConfirm(text) || isAgentBuilderCreateCommand(text));
+    const inAgentBuilder =
+      !skipBuilderTurn && (!!agentSession || shouldUseAgentBuilderMode(history));
     if (inAgentBuilder) {
       proposeSessions.delete(key);
       if (!agentSession) {
