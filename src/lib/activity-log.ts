@@ -1,4 +1,3 @@
-import "server-only";
 import { db } from "./db";
 
 const MAX_TEXT = 12000;
