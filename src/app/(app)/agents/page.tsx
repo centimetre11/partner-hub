@@ -3,13 +3,13 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
 import { cloneAgentAction, toggleAgentAction } from "@/lib/agent-actions";
-import { getToolLabel } from "@/lib/tools-registry";
+import { getToolLabel } from "@/lib/tool-labels";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function AgentsPage() {
   const user = await requireUser();
-  const { messages: m, bcp47 } = await getServerI18n();
+  const { messages: m, bcp47, locale } = await getServerI18n();
   const agents = await db.agent.findMany({
     where: { isTemplate: false },
     include: { partner: true, createdBy: true, runs: { orderBy: { startedAt: "desc" }, take: 1 } },
@@ -19,7 +19,7 @@ export default async function AgentsPage() {
   const mine = agents.filter((a) => a.createdById === user.id);
   const shared = agents.filter((a) => a.createdById !== user.id && a.shared);
 
-  const WEEKDAYS = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const WEEKDAYS = ["", ...m.agents.weekdays];
   const FREQ_LABELS: Record<string, string> = {
     HOURLY: m.agents.hourly,
     DAILY: m.agents.daily,
@@ -57,7 +57,7 @@ export default async function AgentsPage() {
           {a.partner && <Badge tone="blue">{m.agents.boundTo.replace("{name}", a.partner.name)}</Badge>}
           {a.webhookUrl && <Badge tone="green">{m.agents.webhook}</Badge>}
           {skills.slice(0, 3).map((s) => (
-            <Badge key={s} tone="zinc">{getToolLabel(s)}</Badge>
+            <Badge key={s} tone="zinc">{getToolLabel(s, locale)}</Badge>
           ))}
           {skills.length > 3 && <span className="text-xs text-slate-400">+{skills.length - 3}</span>}
         </div>

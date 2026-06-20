@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { upsertAgentAction } from "@/lib/agent-actions";
 import type { PromptSkillOption, ToolOption } from "@/lib/skill-resolver";
-import { useMessages } from "@/lib/i18n/context";
+import { useMessages, useLocale } from "@/lib/i18n/context";
+import { getToolLabel } from "@/lib/tool-labels";
 
 const AGENT_PUSH_SKILLS = ["push_wecom", "send_email"] as const;
 
@@ -42,6 +43,7 @@ export function AgentForm({
   partners: PartnerOption[];
 }) {
   const { agents: a } = useMessages();
+  const locale = useLocale();
   const [trigger, setTrigger] = useState(agent.trigger);
   const [frequency, setFrequency] = useState(agent.frequency);
   const [scopeType, setScopeType] = useState(agent.scopeType);
@@ -56,29 +58,29 @@ export function AgentForm({
       {agent.id && <input type="hidden" name="id" value={agent.id} />}
 
       <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-800">Basic Info</h3>
+        <h3 className="text-sm font-semibold text-slate-800">{a.formBasicInfo}</h3>
         <div className="flex gap-3">
           <label className="space-y-1 w-20">
-            <span className="text-xs text-slate-500">Icon</span>
+            <span className="text-xs text-slate-500">{a.formIcon}</span>
             <input name="icon" defaultValue={agent.icon} className={`${input} text-center text-lg`} />
           </label>
           <label className="space-y-1 flex-1">
-            <span className="text-xs text-slate-500">Name *</span>
-            <input name="name" required defaultValue={agent.name} placeholder="e.g. Beinex LinkedIn Activity Radar" className={input} />
+            <span className="text-xs text-slate-500">{a.formName}</span>
+            <input name="name" required defaultValue={agent.name} placeholder={a.formNamePlaceholder} className={input} />
           </label>
         </div>
         <label className="space-y-1 block">
-          <span className="text-xs text-slate-500">One-line description</span>
-          <input name="description" defaultValue={agent.description} placeholder="What it helps you do" className={input} />
+          <span className="text-xs text-slate-500">{a.formDesc}</span>
+          <input name="description" defaultValue={agent.description} placeholder={a.formDescPlaceholder} className={input} />
         </label>
         <label className="space-y-1 block">
-          <span className="text-xs text-slate-500">Task instructions * (tell the Agent who it is, what to do each run, and what to output)</span>
+          <span className="text-xs text-slate-500">{a.formInstructions}</span>
           <textarea
             name="instructions"
             required
             defaultValue={agent.instructions}
             rows={7}
-            placeholder={`Example:\nYou are a radar monitoring partner external activity. Each run:\n1. Use get_partner to read the bound partner profile and contacts\n2. Use linkedin_search for executive LinkedIn updates\n3. Use web_search for news/hiring/wins\n4. Write valuable findings with add_timeline_event\n5. Output a brief: what was found, what it means, suggested actions`}
+            placeholder={a.formInstructionsPlaceholder}
             className={input}
           />
         </label>
@@ -86,8 +88,8 @@ export function AgentForm({
 
       <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800">Tool Kit</h3>
-          <p className="text-xs text-slate-400 mt-0.5">Capability units the Agent can call directly—read profiles, search the web, create todos, etc.</p>
+          <h3 className="text-sm font-semibold text-slate-800">{a.formToolKit}</h3>
+          <p className="text-xs text-slate-400 mt-0.5">{a.formToolKitDesc}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {toolkitOptions.map((t) => (
@@ -97,7 +99,7 @@ export function AgentForm({
             >
               <input type="checkbox" name="skills" value={t.name} defaultChecked={agent.skills.includes(t.name)} className="mt-0.5 rounded" />
               <span className="min-w-0">
-                <span className="text-sm font-medium text-slate-800 block">{t.label}</span>
+                <span className="text-sm font-medium text-slate-800 block">{getToolLabel(t.name, locale)}</span>
                 <span className="text-xs text-slate-400 font-mono">{t.name}</span>
                 <span className="text-xs text-slate-400 block mt-0.5">{t.desc}</span>
               </span>
@@ -109,8 +111,8 @@ export function AgentForm({
       {promptSkillOptions.length > 0 && (
         <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">Skill Library</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Methodology and professional workflows—injected into system instructions to guide how the Agent combines tools</p>
+            <h3 className="text-sm font-semibold text-slate-800">{a.formSkillLibrary}</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{a.formSkillLibraryDesc}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {promptSkillOptions.map((s) => (
@@ -121,7 +123,7 @@ export function AgentForm({
                 <input type="checkbox" name="skillIds" value={s.id} defaultChecked={agent.skillIds.includes(s.id)} className="mt-0.5 rounded" />
                 <span className="min-w-0">
                   <span className="text-sm font-medium text-slate-800 block">{s.label}</span>
-                  <span className="text-xs text-purple-500">Methodology</span>
+                  <span className="text-xs text-purple-500">{a.formMethodology}</span>
                   <span className="text-xs text-slate-400 block">{s.desc}</span>
                 </span>
               </label>
@@ -131,41 +133,45 @@ export function AgentForm({
       )}
 
       <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-800">Trigger & Scope</h3>
+        <h3 className="text-sm font-semibold text-slate-800">{a.formTriggerScope}</h3>
         <div className="flex flex-wrap gap-3 items-end">
           <label className="space-y-1">
-            <span className="text-xs text-slate-500">Trigger</span>
+            <span className="text-xs text-slate-500">{a.formTrigger}</span>
             <select name="trigger" value={trigger} onChange={(e) => setTrigger(e.target.value)} className={input}>
-              <option value="MANUAL">Manual run</option>
-              <option value="SCHEDULE">Scheduled run</option>
+              <option value="MANUAL">{a.formTriggerManual}</option>
+              <option value="SCHEDULE">{a.formTriggerSchedule}</option>
             </select>
           </label>
           {trigger === "SCHEDULE" && (
             <>
               <label className="space-y-1">
-                <span className="text-xs text-slate-500">Frequency</span>
+                <span className="text-xs text-slate-500">{a.formFrequency}</span>
                 <select name="frequency" value={frequency} onChange={(e) => setFrequency(e.target.value)} className={input}>
-                  <option value="HOURLY">Hourly</option>
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
+                  <option value="HOURLY">{a.hourly}</option>
+                  <option value="DAILY">{a.daily}</option>
+                  <option value="WEEKLY">{a.weekly}</option>
                 </select>
               </label>
               {frequency === "WEEKLY" && (
                 <label className="space-y-1">
-                  <span className="text-xs text-slate-500">Day of week</span>
+                  <span className="text-xs text-slate-500">{a.formDayOfWeek}</span>
                   <select name="runWeekday" defaultValue={agent.runWeekday} className={input}>
-                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => (
-                      <option key={d} value={i + 1}>{d}</option>
+                    {a.weekdays.map((d, i) => (
+                      <option key={d} value={i + 1}>
+                        {d}
+                      </option>
                     ))}
                   </select>
                 </label>
               )}
               {frequency !== "HOURLY" && (
                 <label className="space-y-1">
-                  <span className="text-xs text-slate-500">Time</span>
+                  <span className="text-xs text-slate-500">{a.formTime}</span>
                   <select name="runHour" defaultValue={agent.runHour} className={input}>
                     {Array.from({ length: 24 }, (_, h) => (
-                      <option key={h} value={h}>{h}:00</option>
+                      <option key={h} value={h}>
+                        {h}:00
+                      </option>
                     ))}
                   </select>
                 </label>
@@ -173,19 +179,21 @@ export function AgentForm({
             </>
           )}
           <label className="space-y-1">
-            <span className="text-xs text-slate-500">Scope</span>
+            <span className="text-xs text-slate-500">{a.formScope}</span>
             <select name="scopeType" value={scopeType} onChange={(e) => setScopeType(e.target.value)} className={input}>
-              <option value="ALL">Global (no partner binding)</option>
-              <option value="PARTNER">Bind to a partner</option>
+              <option value="ALL">{a.formScopeAll}</option>
+              <option value="PARTNER">{a.formScopePartner}</option>
             </select>
           </label>
           {scopeType === "PARTNER" && (
             <label className="space-y-1">
-              <span className="text-xs text-slate-500">Partner</span>
+              <span className="text-xs text-slate-500">{a.formPartner}</span>
               <select name="partnerId" defaultValue={agent.partnerId} className={input}>
-                <option value="">Select partner…</option>
+                <option value="">{a.formSelectPartner}</option>
                 {partners.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
                 ))}
               </select>
             </label>
@@ -247,12 +255,7 @@ export function AgentForm({
         )}
         <label className="space-y-1 block">
           <span className="text-xs text-slate-500">{a.webhookUrl}</span>
-          <input
-            name="webhookUrl"
-            defaultValue={agent.webhookUrl}
-            placeholder={a.webhookPlaceholder}
-            className={input}
-          />
+          <input name="webhookUrl" defaultValue={agent.webhookUrl} placeholder={a.webhookPlaceholder} className={input} />
         </label>
         <label className="flex items-center gap-2">
           <input type="checkbox" name="shared" defaultChecked={agent.shared} className="rounded" />

@@ -66,7 +66,16 @@ export function formatAgentBuilderWecomReply(opts: {
   if (draft.description) parts.push(`_${draft.description}_`);
   parts.push(checklist.join("\n"));
 
-  if (turn.questions.length) {
+  if (turn.clarifications.length) {
+    parts.push(
+      `\n**待确认：**\n${turn.clarifications
+        .map((c) => {
+          const opts = c.options.map((o, i) => `${i === 0 ? "★ " : ""}${String.fromCharCode(65 + i)}. ${o}`).join("\n   ");
+          return `• ${c.question}\n   ${opts}`;
+        })
+        .join("\n")}`
+    );
+  } else if (turn.questions.length) {
     parts.push(`\n**待确认：**\n${turn.questions.map((q) => `• ${q}`).join("\n")}`);
   }
   if (draft.questionnaire.length) {

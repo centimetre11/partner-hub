@@ -113,10 +113,8 @@ export function SidebarFooter({
               {m.nav.account}
             </Link>
 
-            <div className="px-3 py-2.5 border-t border-slate-100">
-              <div className="text-[10px] font-medium uppercase tracking-wide text-slate-400 mb-2">
-                {m.shell.language}
-              </div>
+            <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm text-slate-700 border-t border-slate-100">
+              <span className="shrink-0">{m.shell.language}</span>
               <LocaleSwitcherSegmented locale={locale} />
             </div>
 

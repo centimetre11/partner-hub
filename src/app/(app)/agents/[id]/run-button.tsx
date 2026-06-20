@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AiStreamState } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
+import { useMessages } from "@/lib/i18n";
 
 export function RunButton({ agentId, compact }: { agentId: string; compact?: boolean }) {
+  const { agents: a } = useMessages();
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [liveText, setLiveText] = useState("");
@@ -26,7 +28,7 @@ export function RunButton({ agentId, compact }: { agentId: string; compact?: boo
       });
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Run failed");
+      setError(e instanceof Error ? e.message : a.runFailed);
     } finally {
       setRunning(false);
     }
@@ -41,7 +43,11 @@ export function RunButton({ agentId, compact }: { agentId: string; compact?: boo
         </div>
       )}
       <div className="flex items-center gap-2">
-        {error && <span className="text-xs text-red-500 max-w-xs truncate" title={error}>{error}</span>}
+        {error && (
+          <span className="text-xs text-red-500 max-w-xs truncate" title={error}>
+            {error}
+          </span>
+        )}
         <button
           onClick={run}
           disabled={running}
@@ -51,7 +57,7 @@ export function RunButton({ agentId, compact }: { agentId: string; compact?: boo
               : "rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
           }
         >
-          {running ? "Running…" : compact ? "▶ Run" : "▶ Run Now"}
+          {running ? a.running : compact ? a.runCompact : a.runNow}
         </button>
       </div>
     </div>

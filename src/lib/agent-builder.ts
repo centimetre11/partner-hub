@@ -4,37 +4,20 @@ import { db } from "./db";
 import type { Locale } from "./i18n/locale";
 import { resolveAgentSkills } from "./skill-resolver";
 
-export type AgentBuilderMessage = { role: "user" | "assistant"; content: string };
-
-export type AgentDeliveryMode = "inbox" | "wecom_chat" | "partner_group" | "webhook";
-
-export type AgentBuilderDraft = {
-  name: string;
-  icon: string;
-  description: string;
-  instructions: string;
-  skills: string[];
-  skillIds: string[];
-  trigger: "MANUAL" | "SCHEDULE";
-  frequency: "HOURLY" | "DAILY" | "WEEKLY";
-  runHour: number;
-  runWeekday: number;
-  scopeType: "ALL" | "PARTNER";
-  partnerId: string;
-  shared: boolean;
-  webhookUrl: string;
-  deliveryMode: AgentDeliveryMode | "";
-  missingSkillNotes: string[];
-  questionnaire: string[];
-  rationale: string;
-};
-
-export type AgentBuilderTurn = {
-  reply: string;
-  questions: string[];
-  ready: boolean;
-  draft: AgentBuilderDraft;
-};
+import type {
+  AgentBuilderClarification,
+  AgentBuilderDraft,
+  AgentBuilderMessage,
+  AgentBuilderTurn,
+  AgentDeliveryMode,
+} from "./agent-builder-types";
+export type {
+  AgentBuilderClarification,
+  AgentBuilderDraft,
+  AgentBuilderMessage,
+  AgentBuilderTurn,
+  AgentDeliveryMode,
+} from "./agent-builder-types";
 
 const DEFAULT_DRAFT: AgentBuilderDraft = {
   name: "",
@@ -64,7 +47,14 @@ function outputSchema(locale: Locale) {
   return `Output exactly one JSON object:
 {
   "reply": "${replyLang} reply to the user; concise product-consultant tone explaining current understanding and next step",
-  "questions": ["Questions still needing user confirmation, max 5; empty array if enough info"],
+  "clarifications": [
+    {
+      "id": "stable_snake_id e.g. delivery_mode",
+      "question": "One-line confirmation question",
+      "options": ["2-4 concrete choices; FIRST option is your recommended default for this Agent"]
+    }
+  ],
+  "questions": ["Deprecated — mirror clarification questions as plain strings for legacy clients; prefer clarifications"],
   "ready": true/false,
   "draft": {
     "name": "Agent name",
@@ -97,7 +87,7 @@ Always reply in ${lang}.
 
 How you work:
 1. Understand business goal, inputs, trigger timing, deliverables, delivery channel, risk boundaries.
-2. When info is insufficient, ask the most critical clarifying questions in one survey-style batch — avoid fragmented back-and-forth.
+2. When info is insufficient, output clarifications[] (max 4): each item is one confirmation with 2-4 options. Put your recommended choice FIRST in options. Do NOT include "Other" — the UI adds it. Avoid open-ended questions in reply; use clarifications instead.
 3. Pick tools from the tool list (draft.skills) and methodology skills (draft.skillIds); prefer fewer, precise choices.
 4. If no skill fits exactly, don't block; note the gap in missingSkillNotes and write interim steps in instructions.
 5. For company strategy/product knowledge, prefer search_knowledge in instructions.
@@ -153,15 +143,49 @@ function isDraftReady(draft: AgentBuilderDraft): boolean {
   return true;
 }
 
+function legacyQuestionOptions(locale: Locale): string[] {
+  return locale === "zh"
+    ? ["采用当前草案设置（推荐）", "需要换成另一种方式", "暂不确定"]
+    : ["Use draft setting (recommended)", "Prefer a different approach", "Not sure yet"];
+}
+
+function normalizeClarifications(raw: unknown, questions: string[], locale: Locale): AgentBuilderClarification[] {
+  const out: AgentBuilderClarification[] = [];
+  if (Array.isArray(raw)) {
+    for (let i = 0; i < raw.length && out.length < 4; i++) {
+      const c = raw[i] as Partial<AgentBuilderClarification> | null;
+      if (!c || typeof c.question !== "string") continue;
+      const options = Array.isArray(c.options)
+        ? c.options.map((o) => String(o).trim()).filter(Boolean).slice(0, 5)
+        : [];
+      if (!options.length) continue;
+      out.push({
+        id: typeof c.id === "string" && c.id.trim() ? c.id.trim() : `confirm-${i}`,
+        question: c.question.trim(),
+        options,
+      });
+    }
+  }
+  if (out.length) return out;
+  const qs = questions.map((q) => String(q).trim()).filter(Boolean).slice(0, 4);
+  return qs.map((question, i) => ({
+    id: `legacy-${i}`,
+    question,
+    options: legacyQuestionOptions(locale),
+  }));
+}
+
 function fallbackTurn(locale: Locale, detail: string, partial?: Partial<AgentBuilderTurn>): AgentBuilderTurn {
   const draft = { ...DEFAULT_DRAFT, ...(partial?.draft ?? {}) } as AgentBuilderDraft;
   const reply =
     locale === "zh"
       ? `抱歉，AI 返回格式有误，没能完整解析草案。请继续补充需求，或简化描述后重试。\n\n（${detail.slice(0, 120)}）`
       : `Sorry — the AI response had a format error. Please add more detail or retry.\n\n(${detail.slice(0, 120)})`;
+  const questions = Array.isArray(partial?.questions) ? partial!.questions! : [];
   return {
     reply: partial?.reply?.trim() || reply,
-    questions: Array.isArray(partial?.questions) ? partial!.questions! : [],
+    questions,
+    clarifications: normalizeClarifications(partial?.clarifications, questions, locale),
     ready: false,
     draft,
   };
@@ -199,10 +223,18 @@ function normalizeTurn(
   };
   const defaultReply =
     locale === "zh" ? "我已整理 Agent 草案，请确认或补充信息。" : "I've drafted an Agent outline — please confirm what else to add.";
+  const clarifications = normalizeClarifications(raw.clarifications, Array.isArray(raw.questions) ? raw.questions : [], locale);
+  const questions =
+    clarifications.length > 0
+      ? clarifications.map((c) => c.question)
+      : Array.isArray(raw.questions)
+        ? raw.questions
+        : [];
   return {
     reply: raw.reply?.trim() || defaultReply,
-    questions: Array.isArray(raw.questions) ? raw.questions : [],
-    ready: !!raw.ready && isDraftReady(normalizedDraft),
+    questions,
+    clarifications,
+    ready: !!raw.ready && isDraftReady(normalizedDraft) && clarifications.length === 0,
     draft: normalizedDraft,
   };
 }
