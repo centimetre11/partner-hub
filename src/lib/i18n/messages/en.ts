@@ -802,7 +802,7 @@ export const messagesEn = {
     sectionKnowledge: "Knowledge & search",
     sectionKnowledgeDesc: "KMS, Know-how, and ammo library",
     sectionIntegrations: "Integrations",
-    sectionIntegrationsDesc: "CRM sync and WeCom",
+    sectionIntegrationsDesc: "CRM sync, WeCom, and email notifications",
     teamMembersCount: "Team members ({count})",
     teamMembersHint: "Click Edit to update profiles and set WeCom userid / CRM salesman for members",
     editMember: "Edit",
@@ -852,6 +852,7 @@ export const messagesEn = {
     systemKmsTitle: "Team KMS fallback token",
     personalKmsHint: "Each member can save a personal KMS token under Account; this fallback is used when they have not.",
     systemKnowhowTitle: "Know-how search token",
+    systemEmailTitle: "Email service (QQ SMTP)",
   },
   account: {
     title: "Account",

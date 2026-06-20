@@ -18,6 +18,8 @@ import { FeedbackList } from "./feedback-list";
 import { getCrmSalesmenAction, getCrmExtraRecordersAction } from "@/lib/crm-actions";
 import { getCrmSyncStats } from "@/lib/crm-sync";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
+import { getEmailConfigForClient } from "@/lib/email-config";
+import { EmailSetup } from "./email-setup";
 import { getServerI18n } from "@/lib/server-i18n";
 import { SettingsShell, SettingsSection } from "./settings-shell";
 
@@ -38,7 +40,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, salesmen, extraRecorders, feedbackItems] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -55,6 +57,7 @@ export default async function SettingsPage() {
     db.systemKnowhowCredential.findUnique({ where: { id: "singleton" } }),
     getCrmSyncStats(),
     getAmmoConfigForClient(),
+    getEmailConfigForClient(),
     getCrmSalesmenAction(),
     getCrmExtraRecordersAction(),
     db.feedbackSubmission.findMany({
@@ -289,6 +292,10 @@ export default async function SettingsPage() {
           </Card>
 
           <WecomChatsCard />
+
+          <Card title={m.settings.systemEmailTitle} className="lg:col-span-2">
+            <EmailSetup config={emailConfig} />
+          </Card>
         </SettingsSection>
       </SettingsShell>
     </div>

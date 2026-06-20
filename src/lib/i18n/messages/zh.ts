@@ -802,7 +802,7 @@ export const messagesZh: Messages = {
     sectionKnowledge: "知识库与检索",
     sectionKnowledgeDesc: "KMS、Know-how 与弹药库配置",
     sectionIntegrations: "外部集成",
-    sectionIntegrationsDesc: "CRM 数据同步与企业微信",
+    sectionIntegrationsDesc: "CRM 数据同步、企业微信与邮件通知",
     teamMembersCount: "团队成员 ({count})",
     teamMembersHint: "点击「编辑」可修改资料，并代成员配置企微 userid 与 CRM 销售账号",
     editMember: "编辑",
@@ -852,6 +852,7 @@ export const messagesZh: Messages = {
     systemKmsTitle: "团队 KMS 回退令牌",
     personalKmsHint: "每位成员可在个人中心配置自己的 KMS 令牌；未配置时使用此团队回退。",
     systemKnowhowTitle: "Know-how 检索令牌",
+    systemEmailTitle: "邮件服务（QQ 邮箱 SMTP）",
   },
   account: {
     title: "个人中心",

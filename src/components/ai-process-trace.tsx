@@ -163,15 +163,3 @@ export function AiProcessTrace({
     </div>
   );
 }
-
-export function toolLogToTrace(log: { tool: string; args: unknown; result: string }[]): AiTraceStep[] {
-  return log.map((l, i) => ({
-    type: "tool" as const,
-    id: `log-${i}`,
-    name: l.tool,
-    label: getToolLabel(l.tool),
-    args: (typeof l.args === "object" && l.args !== null ? l.args : { raw: l.args }) as Record<string, unknown>,
-    result: l.result.length > 200 ? `${l.result.slice(0, 197)}…` : l.result,
-    status: "done" as const,
-  }));
-}

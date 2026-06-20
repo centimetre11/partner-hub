@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
-import { AiProcessTrace, toolLogToTrace } from "@/components/ai-process-trace";
+import { AiProcessTrace } from "@/components/ai-process-trace";
+import { parseToolLog, toolLogToTrace } from "@/lib/ai-trace";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { resolveAgentSkills } from "@/lib/skill-resolver";
 import { deleteAgentAction } from "@/lib/agent-actions";
@@ -85,7 +86,9 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
           <Card title={m.agents.runHistory.replace("{n}", String(agent.runs.length))}>
             {agent.runs.length ? (
               <div className="space-y-4">
-                {agent.runs.map((r) => (
+                {agent.runs.map((r) => {
+                  const toolLog = parseToolLog(r.toolLog);
+                  return (
                   <details key={r.id} className="group border border-slate-100 rounded-lg">
                     <summary className="flex items-center justify-between gap-2 px-3.5 py-2.5 cursor-pointer list-none">
                       <span className="flex items-center gap-2 text-sm">
@@ -101,23 +104,20 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
                       {r.output && (
                         <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans bg-slate-50 rounded-lg p-3 max-h-72 overflow-auto">{r.output}</pre>
                       )}
-                      {r.toolLog && JSON.parse(r.toolLog).length > 0 && (
+                      {toolLog.length > 0 && (
                         <details className="mt-2">
                           <summary className="text-xs text-slate-500 cursor-pointer font-medium">
-                            {m.agents.toolTrace.replace("{n}", String(JSON.parse(r.toolLog).length))}
+                            {m.agents.toolTrace.replace("{n}", String(toolLog.length))}
                           </summary>
                           <div className="mt-2">
-                            <AiProcessTrace
-                              steps={toolLogToTrace(
-                                JSON.parse(r.toolLog) as { tool: string; args: unknown; result: string }[]
-                              )}
-                            />
+                            <AiProcessTrace steps={toolLogToTrace(toolLog)} />
                           </div>
                         </details>
                       )}
                     </div>
                   </details>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <EmptyState text={m.agents.noRunsDetail} />

@@ -653,6 +653,18 @@ model SystemKnowhowCredential {
   updatedAt DateTime @updatedAt
 }
 
+// 团队邮件服务（QQ 邮箱 SMTP 等）
+model SystemEmailConfig {
+  id         String   @id @default("singleton")
+  smtpHost   String   @default("smtp.qq.com")
+  smtpPort   Int      @default(465)
+  smtpSecure Boolean  @default(true)
+  fromEmail  String
+  fromName   String?
+  authCode   String
+  updatedAt  DateTime @updatedAt
+}
+
 // 团队弹药库配置（Google 云盘文件夹 + KMS 页面地址）
 model SystemAmmoConfig {
   id                   String   @id @default("singleton")

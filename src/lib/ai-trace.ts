@@ -385,3 +385,27 @@ export async function consumeAiSse(
   if (!aborted && result === undefined) throw new Error("Stream ended without a result");
   return { data: result, trace, replyText, liveText: replyText, proposal, questions, clarifications, ready, aborted };
 }
+
+export type ToolLogEntry = { tool: string; args: unknown; result: string };
+
+export function parseToolLog(raw: string | null | undefined): ToolLogEntry[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as ToolLogEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function toolLogToTrace(log: ToolLogEntry[]): AiTraceStep[] {
+  return log.map((l, i) => ({
+    type: "tool" as const,
+    id: `log-${i}`,
+    name: l.tool,
+    label: getToolLabel(l.tool),
+    args: (typeof l.args === "object" && l.args !== null ? l.args : { raw: l.args }) as Record<string, unknown>,
+    result: l.result.length > 200 ? `${l.result.slice(0, 197)}…` : l.result,
+    status: "done" as const,
+  }));
+}
