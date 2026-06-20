@@ -9,7 +9,6 @@ import { computeNextRunFromCron, cronToAgentSchedule } from "./cron";
 import { createAutomationFromDraft, buildAutomationInstructions, resolveAutomationDraftContent } from "./automation-create";
 import { isAutomationDraftReady } from "./builder-context-prompt";
 import {
-  buildScheduledPushTaskMd,
   defaultAutomationName,
   defaultAutomationSlug,
   DEFAULT_AUTOMATION_SKILLS,
@@ -77,14 +76,7 @@ export async function upsertAutomationAction(formData: FormData) {
     slug,
     name,
     description,
-    taskMd: buildScheduledPushTaskMd({
-      goal: description,
-      partnerId: partnerId || undefined,
-      partnerName: partner?.name,
-      wecomPushChatId: wecomPushChatId ?? "",
-      pushEmailTo: pushEmailTo ?? "",
-      locale: "zh",
-    }),
+    taskMd: "",
     triggerType: "SCHEDULE",
     cronExpr,
     timezone,

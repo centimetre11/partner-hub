@@ -1,5 +1,5 @@
 import { describeCron } from "./cron";
-import { partnerScopeLabel } from "./automation-push";
+import { partnerScopeLabel, inferDueWithinDays } from "./automation-push";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
 
 export type BuilderDeliveryPrefs = {
@@ -18,7 +18,7 @@ export function formatBuilderContextPrefix(prefs: BuilderDeliveryPrefs, locale: 
     lines.push(
       prefs.partnerId
         ? `伙伴：${prefs.partnerName || prefs.partnerId}（partnerId=${prefs.partnerId}）`
-        : "伙伴：不指定（全部伙伴）"
+        : "伙伴：不指定（无伙伴关联，如今日新闻/行业资讯）"
     );
     if (prefs.cronExpr) lines.push(`定时：${describeCron(prefs.cronExpr, "zh")}（${prefs.cronExpr}）`);
     if (prefs.wecomChatId) {
@@ -83,13 +83,19 @@ export function mergeAutomationDraftWithPrefs(
   draft: AutomationBuilderDraft,
   prefs: BuilderDeliveryPrefs
 ): AutomationBuilderDraft {
-  return {
+  const merged = {
     ...draft,
     cronExpr: prefs.cronExpr || draft.cronExpr,
     partnerId: prefs.partnerId,
     wecomPushChatId: prefs.wecomChatId,
     pushEmailTo: prefs.email,
   };
+  // 从描述推断待办到期天数（若 AI 未写入 draft.dueWithinDays）
+  if (!merged.dueWithinDays && merged.description) {
+    const inferred = inferDueWithinDays(merged.description, undefined);
+    if (inferred) merged.dueWithinDays = inferred;
+  }
+  return merged;
 }
 
 /** Required: cron + task goal + at least one push channel. Partner optional. */

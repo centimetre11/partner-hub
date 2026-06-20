@@ -58,10 +58,9 @@ export function AutomationForm({
       .then((data: { wecomChats: WecomOption[]; emails: EmailOption[]; partners?: PartnerOption[] }) => {
         setWecomChats(data.wecomChats ?? []);
         setEmails(data.emails ?? []);
-        if (!wecomPushChatId && data.wecomChats?.[0]?.chatId) {
-          setWecomPushChatId(data.wecomChats[0].chatId);
-        }
-        if (!pushEmailTo && data.emails?.[0]?.email) {
+        // 编辑已有自动化：严格保留库里的推送配置，不用默认值覆盖
+        if (initial.id) return;
+        if (!initial.pushEmailTo && data.emails?.[0]?.email) {
           setPushEmailTo(data.emails[0].email);
         }
       });

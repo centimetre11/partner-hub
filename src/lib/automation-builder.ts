@@ -2,6 +2,8 @@ import { AIError, chatJson } from "./ai";
 import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
 import { clarificationSchemaHint, hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
 import {
+  pickAutomationTaskMd,
+  inferDueWithinDays,
   buildScheduledPushTaskMd,
   defaultAutomationName,
   defaultAutomationSlug,
@@ -90,7 +92,7 @@ Example scenarios (same framework):
 1. 「每天把这个客户 3 天内过期的待办推送到这个群」→ list_todos + dueWithinDays=3
 2. 「每天把这个客户的商机发邮件给我」→ list_opportunities + send_email
 3. 「每天搜一下这个客户的投标动态发邮件给我」→ web_search + send_email
-4. 「每周一汇总全部伙伴 stalled 商机推送到群」→ partnerId empty (ALL) + list_opportunities
+4. 「每日科技新闻摘要发邮件」→ partnerId 空 + web_search（无伙伴关联）
 
 Rules:
 1. triggerType is always SCHEDULE. Runtime tools: list_todos, list_opportunities, web_search, get_partner, search_partners, push_wecom, send_email.
@@ -138,10 +140,6 @@ function normalizeDraft(raw: Partial<AutomationBuilderDraft>, partnerNameHint?: 
   if (!cronExpr) cronExpr = "0 9 * * *";
 
   const partnerId = String(raw.partnerId ?? "").trim();
-  const dueWithinDays =
-    raw.dueWithinDays != null && Number.isInteger(raw.dueWithinDays) && raw.dueWithinDays > 0
-      ? raw.dueWithinDays
-      : undefined;
   const wecomPushChatId = String(raw.wecomPushChatId ?? "").trim();
   const pushEmailTo = String(raw.pushEmailTo ?? "").trim();
   const description = String(raw.description ?? "").trim();
@@ -159,19 +157,20 @@ function normalizeDraft(raw: Partial<AutomationBuilderDraft>, partnerNameHint?: 
   if (!name) name = defaultAutomationName(description || partnerNameHint, locale);
 
   const goal = description || name;
+  const dueWithinDays = inferDueWithinDays(goal, raw.dueWithinDays);
   const taskMdRaw = String(raw.taskMd ?? "").trim();
-  const taskMd =
-    taskMdRaw && taskMdRaw.length > 80 && !taskMdRaw.includes("scheduled-partner-push")
-      ? taskMdRaw
-      : buildScheduledPushTaskMd({
-          goal,
-          partnerId,
-          partnerName: partnerNameHint || scopeName,
-          dueWithinDays,
-          wecomPushChatId,
-          pushEmailTo,
-          locale,
-        });
+  const taskMd = pickAutomationTaskMd(
+    {
+      goal,
+      partnerId,
+      partnerName: partnerNameHint || scopeName,
+      dueWithinDays,
+      wecomPushChatId,
+      pushEmailTo,
+      locale,
+    },
+    taskMdRaw
+  );
 
   return {
     slug,

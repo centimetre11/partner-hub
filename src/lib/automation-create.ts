@@ -3,7 +3,8 @@ import { computeNextRunAt } from "./agent-runner";
 import { computeNextRunFromCron, cronToAgentSchedule } from "./cron";
 import {
   buildAutomationVariables,
-  buildScheduledPushTaskMd,
+  pickAutomationTaskMd,
+  inferDueWithinDays,
   defaultAutomationName,
   defaultAutomationSlug,
   DEFAULT_AUTOMATION_SKILLS,
@@ -79,34 +80,30 @@ export async function resolveAutomationDraftContent(
   const wecomPushChatId = draft.wecomPushChatId?.trim() || opts.wecomPushChatId?.trim() || "";
   const pushEmailTo = draft.pushEmailTo?.trim() || "";
 
-  const dueWithinDays =
-    draft.dueWithinDays != null && Number.isInteger(draft.dueWithinDays) && draft.dueWithinDays > 0
-      ? draft.dueWithinDays
-      : undefined;
+  const dueWithinDays = inferDueWithinDays(goal, draft.dueWithinDays);
 
   const variables = buildAutomationVariables({
     goal,
     partnerId,
-    partnerName: partnerName || partnerScopeLabel(undefined, locale),
+    partnerName: partnerId ? partnerName || partnerScopeLabel(undefined, locale) : partnerName,
     dueWithinDays,
     wecomPushChatId,
     pushEmailTo,
     locale,
   });
 
-  const customTaskMd = draft.taskMd?.trim();
-  const taskMd =
-    customTaskMd && !customTaskMd.includes("scheduled-partner-push") && customTaskMd.length > 80
-      ? customTaskMd
-      : buildScheduledPushTaskMd({
-          goal,
-          partnerId,
-          partnerName: partnerName || undefined,
-          dueWithinDays,
-          wecomPushChatId,
-          pushEmailTo,
-          locale,
-        });
+  const taskMd = pickAutomationTaskMd(
+    {
+      goal,
+      partnerId,
+      partnerName: partnerName || undefined,
+      dueWithinDays,
+      wecomPushChatId,
+      pushEmailTo,
+      locale,
+    },
+    draft.taskMd
+  );
 
   return { taskMd, variables, partnerId: partnerId || null, partnerName, goal };
 }
