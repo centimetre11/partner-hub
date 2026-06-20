@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { createFeedbackAction } from "@/lib/feedback-actions";
 import { useMessages } from "@/lib/i18n/context";
 
@@ -204,19 +205,52 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
 
 export function FeedbackFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const m = useMessages();
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4 sm:p-6" onClick={onClose}>
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4 sm:p-8"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="feedback-modal-title"
+    >
       <div
-        className="bg-white rounded-xl w-full border border-slate-200 max-w-2xl p-6 sm:p-8 max-h-[92vh] overflow-y-auto shadow-xl"
+        className="bg-white rounded-xl w-full max-w-4xl min-w-0 p-6 sm:p-8 max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold mb-1">{m.feedback.modalTitle}</h3>
+        <h3 id="feedback-modal-title" className="text-lg font-semibold mb-1">
+          {m.feedback.modalTitle}
+        </h3>
         <p className="text-sm text-slate-500 mb-5">{m.feedback.modalDesc}</p>
         <FeedbackForm onClose={onClose} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -19,6 +19,7 @@ import { getCrmSalesmenAction, getCrmExtraRecordersAction } from "@/lib/crm-acti
 import { getCrmSyncStats } from "@/lib/crm-sync";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getServerI18n } from "@/lib/server-i18n";
+import { SettingsShell, SettingsSection } from "./settings-shell";
 
 function maskKey(apiKey: string, notSet: string) {
   if (!apiKey) return notSet;
@@ -117,165 +118,179 @@ export default async function SettingsPage() {
   const todayTokens = todayUsageEarly.reduce((sum, row) => sum + row.totalTokens, 0);
   const openFeedbackCount = feedbackItems.filter((f) => f.status === "OPEN" || f.status === "IN_PROGRESS").length;
 
+  const nav = [
+    { id: "team", label: m.settings.sectionTeam },
+    { id: "ai", label: m.settings.sectionAi },
+    { id: "knowledge", label: m.settings.sectionKnowledge },
+    { id: "integrations", label: m.settings.sectionIntegrations },
+  ];
+
   return (
     <div className="pb-16">
       <PageHeader title={m.settings.title} desc={m.settings.desc} />
-      <div className="px-8 grid grid-cols-1 lg:grid-cols-2 gap-5 max-w-7xl">
-        <Card title={m.settings.teamMembersCount.replace("{count}", String(users.length))}>
-          <div className="space-y-3 mb-5">
-            {users.map((u) => (
-              <MemberRow key={u.id} user={u} salesmen={salesmen} />
-            ))}
-          </div>
-          <RegisterForm />
-        </Card>
-
-        <Card
-          title={
-            openFeedbackCount > 0
-              ? m.feedback.adminTitleWithCount.replace("{count}", String(openFeedbackCount))
-              : m.feedback.adminTitle
-          }
-          className="lg:col-span-2"
-        >
-          <FeedbackList items={feedbackItems} bcp47={bcp47} />
-        </Card>
-
-        <Card title={m.settings.aiConfigStatus}>
-          <div className="space-y-3 text-sm">
-            <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${aiConfigured ? "bg-emerald-500" : "bg-red-400"}`} />
-              <span className="text-slate-700">{aiConfigured ? m.settings.aiReady : m.settings.aiNotConfigured}</span>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg bg-slate-50 p-3">
-                <div className="text-lg font-bold text-slate-900">{aiApis.length}</div>
-                <div className="text-xs text-slate-400">{m.settings.apiConfigs}</div>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <div className="text-lg font-bold text-slate-900">{aiApis.filter((api) => api.enabled).length}</div>
-                <div className="text-xs text-slate-400">{m.settings.enabledCount}</div>
-              </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <div className="text-lg font-bold text-slate-900">{fmtTokens(todayTokens, locale)}</div>
-                <div className="text-xs text-slate-400">{m.settings.todayTokens}</div>
-              </div>
-            </div>
-            <div className="text-xs text-slate-500 leading-relaxed bg-slate-50 rounded-lg p-4">
-              {m.settings.preferDbApisDetail}
-            </div>
-            <div className="text-xs text-slate-400">{m.settings.aiCapabilitiesDetail}</div>
-          </div>
-        </Card>
-
-        <Card title={m.settings.llmCenter} className="lg:col-span-2">
-          <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
-        </Card>
-
-        <Card title={m.settings.systemKmsTitle} className="lg:col-span-2">
-          <SystemKmsSetup
-            credential={{
-              configured: !!systemKms?.accessToken,
-              keyTail: systemKms?.accessToken ? systemKms.accessToken.slice(-4) : "",
-              baseUrl: systemKms?.baseUrl ?? KMS_DEFAULT_BASE_URL,
-              updatedAt: systemKms?.updatedAt?.toISOString(),
-            }}
-          />
-          <p className="text-xs text-slate-500 mt-4">
-            {m.settings.personalKmsHint}{" "}
-            <a href="/account" className="text-sky-600 hover:underline">{m.nav.account}</a>
-          </p>
-        </Card>
-
-        <Card title={m.settings.systemKnowhowTitle} className="lg:col-span-2">
-          <SystemKnowhowSetup
-            credential={{
-              configured: !!systemKnowhow?.apiKey,
-              keyTail: systemKnowhow?.apiKey ? systemKnowhow.apiKey.slice(-4) : "",
-              baseUrl: systemKnowhow?.baseUrl ?? KNOWHOW_DEFAULT_BASE_URL,
-              updatedAt: systemKnowhow?.updatedAt?.toISOString(),
-            }}
-          />
-        </Card>
-
-        <Card title={m.ammoSettings.title} className="lg:col-span-2">
-          <AmmoSetup config={ammoConfig} />
-        </Card>
-
-        <Card title={m.crm.syncTitle} className="lg:col-span-2">
-          <CrmSyncCard
-            customerCount={crmStats.customerCount}
-            contactCount={crmStats.contactCount}
-            lastSyncAt={crmStats.lastSyncAt?.toISOString() ?? null}
-            latestStatus={crmStats.latestLog?.status ?? null}
-            latestError={crmStats.latestLog?.error ?? null}
-            extraRecorders={extraRecorders.join("\n")}
-          />
-        </Card>
-
-        <Card title={m.settings.dailyTokens14} className="lg:col-span-2">
-          {dailyUsage.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-xs text-slate-400">
-                  <tr className="border-b border-slate-100">
-                    <th className="py-2 text-left font-medium">{m.settings.date}</th>
-                    <th className="py-2 text-left font-medium">{m.settings.api}</th>
-                    <th className="py-2 text-right font-medium">{m.settings.requests}</th>
-                    <th className="py-2 text-right font-medium">{m.settings.inputTokens}</th>
-                    <th className="py-2 text-right font-medium">{m.settings.outputTokens}</th>
-                    <th className="py-2 text-right font-medium">{m.settings.totalTokens}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {dailyUsage.map((row) => (
-                    <tr key={row.id}>
-                      <td className="py-2 text-slate-700">{row.day}</td>
-                      <td className="py-2 text-slate-700">{row.apiName}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.requestCount, locale)}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.promptTokens, locale)}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.completionTokens, locale)}</td>
-                      <td className="py-2 text-right tabular-nums font-semibold text-slate-900">{fmtTokens(row.totalTokens, locale)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <EmptyState text={m.settings.noTokenUsage} />
-          )}
-        </Card>
-
-        <Card title={m.settings.recentCalls} className="lg:col-span-2">
-          {recentUsage.length ? (
-            <div className="space-y-2.5">
-              {recentUsage.map((row) => (
-                <div key={row.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 px-4 py-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-800">{row.feature}</span>
-                      <Badge tone={row.status === "SUCCESS" ? "green" : "red"}>{row.status === "SUCCESS" ? m.common.success : m.common.failed}</Badge>
-                    </div>
-                    <div className="text-xs text-slate-400 mt-1">
-                      {row.apiName} · {row.model} · {row.user?.name ?? m.agents.system} · {fmtDateTime(row.createdAt, bcp47)}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-sm font-semibold text-slate-900 tabular-nums">{fmtTokens(row.totalTokens, locale)}</div>
-                    <div className="text-xs text-slate-400">{m.settings.tokens}</div>
-                  </div>
-                </div>
+      <SettingsShell nav={nav}>
+        <SettingsSection id="team" title={m.settings.sectionTeam} desc={m.settings.sectionTeamDesc}>
+          <Card title={m.settings.teamMembersCount.replace("{count}", String(users.length))} className="lg:col-span-2">
+            <p className="text-xs text-slate-500 mb-4">{m.settings.teamMembersHint}</p>
+            <div className="space-y-3 mb-5">
+              {users.map((u) => (
+                <MemberRow key={u.id} user={u} salesmen={salesmen} />
               ))}
             </div>
-          ) : (
-            <EmptyState text={m.settings.noCallHistory} />
-          )}
-        </Card>
-      </div>
+            <RegisterForm />
+          </Card>
 
-      <div className="mt-6">
-        <WecomChatsCard />
-      </div>
+          <Card
+            title={
+              openFeedbackCount > 0
+                ? m.feedback.adminTitleWithCount.replace("{count}", String(openFeedbackCount))
+                : m.feedback.adminTitle
+            }
+            className="lg:col-span-2"
+          >
+            <FeedbackList items={feedbackItems} bcp47={bcp47} />
+          </Card>
+        </SettingsSection>
+
+        <SettingsSection id="ai" title={m.settings.sectionAi} desc={m.settings.sectionAiDesc}>
+          <Card title={m.settings.aiConfigStatus}>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <span className={`w-2.5 h-2.5 rounded-full ${aiConfigured ? "bg-emerald-500" : "bg-red-400"}`} />
+                <span className="text-slate-700">{aiConfigured ? m.settings.aiReady : m.settings.aiNotConfigured}</span>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-lg font-bold text-slate-900">{aiApis.length}</div>
+                  <div className="text-xs text-slate-400">{m.settings.apiConfigs}</div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-lg font-bold text-slate-900">{aiApis.filter((api) => api.enabled).length}</div>
+                  <div className="text-xs text-slate-400">{m.settings.enabledCount}</div>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <div className="text-lg font-bold text-slate-900">{fmtTokens(todayTokens, locale)}</div>
+                  <div className="text-xs text-slate-400">{m.settings.todayTokens}</div>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 leading-relaxed bg-slate-50 rounded-lg p-4">
+                {m.settings.preferDbApisDetail}
+              </div>
+              <div className="text-xs text-slate-400">{m.settings.aiCapabilitiesDetail}</div>
+            </div>
+          </Card>
+
+          <Card title={m.settings.llmCenter} className="lg:col-span-2">
+            <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
+          </Card>
+
+          <Card title={m.settings.dailyTokens14} className="lg:col-span-2">
+            {dailyUsage.length ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-xs text-slate-400">
+                    <tr className="border-b border-slate-100">
+                      <th className="py-2 text-left font-medium">{m.settings.date}</th>
+                      <th className="py-2 text-left font-medium">{m.settings.api}</th>
+                      <th className="py-2 text-right font-medium">{m.settings.requests}</th>
+                      <th className="py-2 text-right font-medium">{m.settings.inputTokens}</th>
+                      <th className="py-2 text-right font-medium">{m.settings.outputTokens}</th>
+                      <th className="py-2 text-right font-medium">{m.settings.totalTokens}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {dailyUsage.map((row) => (
+                      <tr key={row.id}>
+                        <td className="py-2 text-slate-700">{row.day}</td>
+                        <td className="py-2 text-slate-700">{row.apiName}</td>
+                        <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.requestCount, locale)}</td>
+                        <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.promptTokens, locale)}</td>
+                        <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.completionTokens, locale)}</td>
+                        <td className="py-2 text-right tabular-nums font-semibold text-slate-900">{fmtTokens(row.totalTokens, locale)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState text={m.settings.noTokenUsage} />
+            )}
+          </Card>
+
+          <Card title={m.settings.recentCalls} className="lg:col-span-2">
+            {recentUsage.length ? (
+              <div className="space-y-2.5">
+                {recentUsage.map((row) => (
+                  <div key={row.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-800">{row.feature}</span>
+                        <Badge tone={row.status === "SUCCESS" ? "green" : "red"}>{row.status === "SUCCESS" ? m.common.success : m.common.failed}</Badge>
+                      </div>
+                      <div className="text-xs text-slate-400 mt-1">
+                        {row.apiName} · {row.model} · {row.user?.name ?? m.agents.system} · {fmtDateTime(row.createdAt, bcp47)}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-semibold text-slate-900 tabular-nums">{fmtTokens(row.totalTokens, locale)}</div>
+                      <div className="text-xs text-slate-400">{m.settings.tokens}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState text={m.settings.noCallHistory} />
+            )}
+          </Card>
+        </SettingsSection>
+
+        <SettingsSection id="knowledge" title={m.settings.sectionKnowledge} desc={m.settings.sectionKnowledgeDesc}>
+          <Card title={m.settings.systemKmsTitle} className="lg:col-span-2">
+            <SystemKmsSetup
+              credential={{
+                configured: !!systemKms?.accessToken,
+                keyTail: systemKms?.accessToken ? systemKms.accessToken.slice(-4) : "",
+                baseUrl: systemKms?.baseUrl ?? KMS_DEFAULT_BASE_URL,
+                updatedAt: systemKms?.updatedAt?.toISOString(),
+              }}
+            />
+            <p className="text-xs text-slate-500 mt-4">
+              {m.settings.personalKmsHint}{" "}
+              <a href="/account" className="text-sky-600 hover:underline">{m.nav.account}</a>
+            </p>
+          </Card>
+
+          <Card title={m.settings.systemKnowhowTitle} className="lg:col-span-2">
+            <SystemKnowhowSetup
+              credential={{
+                configured: !!systemKnowhow?.apiKey,
+                keyTail: systemKnowhow?.apiKey ? systemKnowhow.apiKey.slice(-4) : "",
+                baseUrl: systemKnowhow?.baseUrl ?? KNOWHOW_DEFAULT_BASE_URL,
+                updatedAt: systemKnowhow?.updatedAt?.toISOString(),
+              }}
+            />
+          </Card>
+
+          <Card title={m.ammoSettings.title} className="lg:col-span-2">
+            <AmmoSetup config={ammoConfig} />
+          </Card>
+        </SettingsSection>
+
+        <SettingsSection id="integrations" title={m.settings.sectionIntegrations} desc={m.settings.sectionIntegrationsDesc}>
+          <Card title={m.crm.syncTitle} className="lg:col-span-2">
+            <CrmSyncCard
+              customerCount={crmStats.customerCount}
+              contactCount={crmStats.contactCount}
+              lastSyncAt={crmStats.lastSyncAt?.toISOString() ?? null}
+              latestStatus={crmStats.latestLog?.status ?? null}
+              latestError={crmStats.latestLog?.error ?? null}
+              extraRecorders={extraRecorders.join("\n")}
+            />
+          </Card>
+
+          <WecomChatsCard />
+        </SettingsSection>
+      </SettingsShell>
     </div>
   );
 }
