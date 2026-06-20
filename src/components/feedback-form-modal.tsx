@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { createFeedbackAction } from "@/lib/feedback-actions";
 import { useMessages } from "@/lib/i18n/context";
@@ -10,17 +11,32 @@ const input =
 
 type UploadedImage = { id: string; filename: string; previewUrl?: string };
 
+function fileKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function dedupeFiles(files: File[]) {
+  const seen = new Set<string>();
+  return files.filter((file) => {
+    const key = fileKey(file);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function imageFilesFromClipboard(data: DataTransfer | null): File[] {
   if (!data) return [];
-  return [...data.items]
+  const files = [...data.items]
     .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
     .map((it) => it.getAsFile())
     .filter((f): f is File => !!f);
+  return dedupeFiles(files);
 }
 
 async function uploadImageFiles(files: File[]): Promise<UploadedImage[]> {
   const uploaded: UploadedImage[] = [];
-  for (const file of files) {
+  for (const file of dedupeFiles(files)) {
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch("/api/upload", { method: "POST", body: fd });
@@ -104,13 +120,21 @@ function ImageUploadField({
   );
 }
 
-function FeedbackForm({ onClose }: { onClose: () => void }) {
+function FeedbackForm({
+  onClose,
+  onRegisterPaste,
+}: {
+  onClose: () => void;
+  onRegisterPaste: (handler: (e: React.ClipboardEvent) => void) => void;
+}) {
   const m = useMessages();
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(false);
   const imagesRef = useRef<UploadedImage[]>([]);
   imagesRef.current = images;
+  const pasteBusyRef = useRef(false);
   const [state, action, pending] = useActionState(
     async (_: unknown, formData: FormData) => {
       images.forEach((img) => formData.append("assetIds", img.id));
@@ -120,13 +144,16 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
   );
 
   const handleUploadFiles = useCallback(async (files: File[]) => {
-    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    const imageFiles = dedupeFiles(files.filter((f) => f.type.startsWith("image/")));
     if (!imageFiles.length) return;
     setUploadLoading(true);
     setUploadError(null);
     try {
       const uploaded = await uploadImageFiles(imageFiles);
-      setImages((prev) => [...prev, ...uploaded]);
+      setImages((prev) => {
+        const existingIds = new Set(prev.map((img) => img.id));
+        return [...prev, ...uploaded.filter((img) => !existingIds.has(img.id))];
+      });
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -135,26 +162,27 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
   }, []);
 
   const handlePaste = useCallback(
-    (e: React.ClipboardEvent | ClipboardEvent) => {
+    async (e: React.ClipboardEvent) => {
       const files = imageFilesFromClipboard(e.clipboardData);
-      if (!files.length) return;
+      if (!files.length || pasteBusyRef.current) return;
       e.preventDefault();
-      void handleUploadFiles(files);
+      pasteBusyRef.current = true;
+      try {
+        await handleUploadFiles(files);
+      } finally {
+        pasteBusyRef.current = false;
+      }
     },
     [handleUploadFiles],
   );
 
   useEffect(() => {
-    if (state?.ok) onClose();
-  }, [state, onClose]);
+    onRegisterPaste(handlePaste);
+  }, [handlePaste, onRegisterPaste]);
 
   useEffect(() => {
-    function onWindowPaste(e: ClipboardEvent) {
-      handlePaste(e);
-    }
-    document.addEventListener("paste", onWindowPaste);
-    return () => document.removeEventListener("paste", onWindowPaste);
-  }, [handlePaste]);
+    if (state?.ok) setSubmitted(true);
+  }, [state]);
 
   useEffect(() => {
     return () => {
@@ -164,15 +192,35 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
+  if (submitted) {
+    return (
+      <div className="py-6 text-center space-y-4">
+        <div className="text-3xl">✓</div>
+        <p className="text-sm text-slate-700">{m.feedback.submitSuccess}</p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+          <Link
+            href="/account#my-feedback"
+            onClick={onClose}
+            className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800"
+          >
+            {m.feedback.viewMine}
+          </Link>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
+            {m.feedback.close}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <form action={action} className="space-y-5" onPaste={handlePaste}>
+    <form action={action} className="space-y-5">
       <label className="block space-y-1.5">
         <span className="text-xs text-slate-500">{m.feedback.descLabel}</span>
         <textarea
           name="description"
           rows={8}
           placeholder={m.feedback.descPlaceholder}
-          onPaste={handlePaste}
           className={`${input} resize-y min-h-[180px] text-[15px] leading-relaxed`}
         />
       </label>
@@ -188,16 +236,21 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
           {state.error === "content_required" ? m.feedback.contentRequired : state.error}
         </p>
       )}
-      <div className="flex justify-end gap-2 pt-2">
-        <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
-          {m.common.cancel}
-        </button>
-        <button
-          disabled={pending}
-          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
-        >
-          {pending ? m.feedback.submitting : m.feedback.submit}
-        </button>
+      <div className="flex items-center justify-between gap-3 pt-2">
+        <Link href="/account#my-feedback" onClick={onClose} className="text-xs text-slate-500 hover:text-slate-800 hover:underline">
+          {m.feedback.viewMine}
+        </Link>
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
+            {m.common.cancel}
+          </button>
+          <button
+            disabled={pending}
+            className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
+          >
+            {pending ? m.feedback.submitting : m.feedback.submit}
+          </button>
+        </div>
       </div>
     </form>
   );
@@ -206,6 +259,10 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
 export function FeedbackFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const m = useMessages();
   const [mounted, setMounted] = useState(false);
+  const pasteHandlerRef = useRef<((e: React.ClipboardEvent) => void) | null>(null);
+  const registerPasteHandler = useCallback((handler: (e: React.ClipboardEvent) => void) => {
+    pasteHandlerRef.current = handler;
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -242,12 +299,13 @@ export function FeedbackFormModal({ open, onClose }: { open: boolean; onClose: (
       <div
         className="bg-white rounded-xl w-full max-w-4xl min-w-0 p-6 sm:p-8 max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200"
         onClick={(e) => e.stopPropagation()}
+        onPaste={(e) => pasteHandlerRef.current?.(e)}
       >
         <h3 id="feedback-modal-title" className="text-lg font-semibold mb-1">
           {m.feedback.modalTitle}
         </h3>
         <p className="text-sm text-slate-500 mb-5">{m.feedback.modalDesc}</p>
-        <FeedbackForm onClose={onClose} />
+        <FeedbackForm onClose={onClose} onRegisterPaste={registerPasteHandler} />
       </div>
     </div>,
     document.body,

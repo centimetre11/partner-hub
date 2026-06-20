@@ -148,7 +148,7 @@ export default async function SettingsPage() {
             }
             className="lg:col-span-2"
           >
-            <FeedbackList items={feedbackItems} bcp47={bcp47} />
+            <FeedbackList items={feedbackItems} bcp47={bcp47} admin />
           </Card>
         </SettingsSection>
 

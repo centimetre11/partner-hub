@@ -40,6 +40,7 @@ export async function createFeedbackAction(formData: FormData) {
   });
 
   revalidatePath("/settings");
+  revalidatePath("/account");
   return { ok: true as const };
 }
 
@@ -56,5 +57,6 @@ export async function updateFeedbackStatusAction(feedbackId: string, formData: F
   });
 
   revalidatePath("/settings");
+  revalidatePath("/account");
   return { ok: true as const };
 }
