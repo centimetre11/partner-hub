@@ -114,5 +114,7 @@ function toItem(c: AiClarification) {
     options: c.options,
     multi: c.multi,
     allowOther: c.allowOther,
+    control: c.control,
+    placeholder: c.placeholder,
   };
 }

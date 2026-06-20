@@ -99,15 +99,14 @@ Example scenarios (same framework):
 
 Rules:
 1. triggerType is always SCHEDULE. Runtime tools: list_todos, list_opportunities, web_search, get_partner, search_partners, push_wecom, send_email.
-2. partnerId: if user says「这个伙伴/该客户」without bound partner → leave partnerId empty in draft; user picks in Web dropdown (do NOT list partners in clarifications). Use bound partner when provided.
+2. partnerId: if user says「这个伙伴/该客户」without a bound partner in system hint → ready=false and tier:required clarification listing partner names; do NOT assume「无伙伴关联」. Use bound partner when provided. Leave EMPTY only when user wants all/no partner scope.
 3. ready=true requires: draft.description, draft.cronExpr, and at least one of wecomPushChatId or pushEmailTo. partnerId is optional (empty = all).
-4. 【构建偏好】wins for filled fields; if user text conflicts with empty prefs → follow user intent in draft fields only.
-5. Web builder has dropdowns for partner, WeCom group, and email — never ask for chatId, partner names, or email in clarifications.
-6. Apply WeCom group chatId ONLY when user/prefs explicitly enable WeCom push — not by default.
-7. clarifications: only for ambiguous schedule or non-delivery task details (not partner/group/email).
-8. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
-9. Do NOT build unrelated pipelines (gold price, generic coding agents).
-10. Cron presets:
+4. 【构建偏好】wins for filled fields; if user text conflicts (e.g.「发到群」while prefs say no WeCom) → follow user intent and emit clarifications to pick the group — do NOT silently skip WeCom.
+5. Apply WeCom group chatId ONLY when user/prefs explicitly enable WeCom push — not by default.
+6. clarifications tier required for ambiguous partner, WeCom group, or email — always offer concrete names from the partner list / known groups, NEVER ask user to type chatId manually.
+7. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
+8. Do NOT build unrelated pipelines (gold price, generic coding agents).
+9. Cron presets:
 ${cronExamples}
 
 ${clarificationSchemaHint(locale)}
@@ -261,8 +260,6 @@ export async function runAutomationBuilderTurn(opts: {
   boundPartnerName?: string;
   sourceChatId?: string;
   deliveryPrefs?: Partial<BuilderDeliveryPrefs>;
-  /** Web UI 有下拉选伙伴/群/邮箱；企微 Bot 无下拉用 chat 澄清 */
-  deliveryPicker?: "dropdown" | "chat";
 }): Promise<AutomationBuilderTurn> {
   const locale = opts.locale ?? "en";
   const partners = await db.partner.findMany({
@@ -342,6 +339,16 @@ ${partnerLines}`;
       .filter((c) => c.chatType === "group")
       .map((c) => ({ chatId: c.chatId, label: c.label, partnerName: c.partnerName }));
 
+    const emailUsers = opts.userId
+      ? await db.user.findMany({
+          select: { id: true, name: true, email: true },
+          orderBy: { name: "asc" },
+        })
+      : [];
+    const emails = emailUsers
+      .filter((u) => u.email)
+      .map((u) => ({ id: u.id, name: u.name, email: u.email! }));
+
     const clarifications = enrichAutomationClarifications({
       clarifications: turn.clarifications,
       messages: opts.messages,
@@ -350,9 +357,9 @@ ${partnerLines}`;
       pushEmailTo: effectiveEmail,
       partners,
       wecomChats,
+      emails,
       locale,
       boundPartnerId: opts.boundPartnerId,
-      deliveryPicker: opts.deliveryPicker ?? (opts.sourceChatId ? "chat" : "dropdown"),
     });
     turn = {
       ...turn,

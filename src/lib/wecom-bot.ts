@@ -681,7 +681,21 @@ async function handleTextMessage(frame: WsFrame) {
       try {
         const agent = await db.agent.findUniqueOrThrow({ where: { id: automationSession.lastCreatedAgentId } });
         const output = await runAgent(automationSession.lastCreatedAgentId, "manual");
-        const reply = formatAutomationTrialRunReply(output, agent.name);
+        const lastRun = await db.agentRun.findFirst({
+          where: { agentId: agent.id },
+          orderBy: { startedAt: "desc" },
+          select: { toolLog: true },
+        });
+        let pushedWecom = false;
+        try {
+          const log = JSON.parse(lastRun?.toolLog ?? "[]") as { tool?: string }[];
+          pushedWecom = log.some((t) => t.tool === "push_wecom");
+        } catch {
+          /* ignore */
+        }
+        const reply = pushedWecom
+          ? `✅ **试运行完成 · ⚡ ${agent.name}**\n\n结果已通过 \`push_wecom\` 推送到群，请查看上方消息。`
+          : formatAutomationTrialRunReply(output, agent.name);
         appendHistory(key, "assistant", reply);
         await wsClient.replyStream(frame, streamId, reply, true);
       } catch (e) {

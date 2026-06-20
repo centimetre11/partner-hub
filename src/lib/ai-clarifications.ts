@@ -8,12 +8,18 @@
 
 export type ClarificationTier = "required" | "preference";
 
+export type ClarificationControl = "choice" | "select";
+
 export type AiClarification = {
   id: string;
   question: string;
   options: string[];
   multi?: boolean;
   allowOther?: boolean;
+  /** choice = 少量选项卡片；select = 系统列表下拉（伙伴/群/邮箱等） */
+  control?: ClarificationControl;
+  /** select 控件的空选项文案 */
+  placeholder?: string;
   /** required = must answer; preference = optional, defaults to first option */
   tier?: ClarificationTier;
   /** Legacy alias: true → required, false → preference */
@@ -65,19 +71,23 @@ export function normalizeAiClarification(
   opts?: { defaultTier?: ClarificationTier }
 ): AiClarification | null {
   if (!raw || typeof raw.question !== "string") return null;
+  const maxOptions = raw.control === "select" ? 200 : 6;
   const options = Array.isArray(raw.options)
-    ? raw.options.map((o) => String(o).trim()).filter(Boolean).slice(0, 6)
+    ? raw.options.map((o) => String(o).trim()).filter(Boolean).slice(0, maxOptions)
     : [];
   if (!options.length) return null;
   const tier =
     raw.tier ??
     (raw.blocking === false ? "preference" : raw.blocking === true ? "required" : opts?.defaultTier ?? "required");
+  const control: ClarificationControl = raw.control === "select" ? "select" : "choice";
   return {
     id: typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : `confirm-${index}`,
     question: raw.question.trim(),
     options,
     multi: raw.multi,
-    allowOther: raw.allowOther,
+    allowOther: control === "select" ? false : raw.allowOther,
+    control,
+    placeholder: raw.placeholder?.trim() || undefined,
     tier,
     blocking: tier === "required",
     apply: raw.apply,

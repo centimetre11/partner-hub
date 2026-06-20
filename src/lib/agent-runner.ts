@@ -259,27 +259,32 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
       await pushWebhook(agent.webhookUrl, `${agent.name}`, output);
     }
 
-    if (agent.wecomPushChatId) {
+    const pushedWecomInRun = toolLog.some((t) => t.tool === "push_wecom");
+
+    // 运行中已 push_wecom 时不再 post-run 重复推送；同一 chatId 也只推一次
+    if (!pushedWecomInRun) {
       try {
         const { enqueueWecomPush } = await import("@/lib/wecom-push");
-        await enqueueWecomPush(
-          agent.wecomPushChatId,
-          `【${agent.icon} ${agent.name}】\n${output.slice(0, 3500)}`
-        );
+        const { getWecomChatForPartner } = await import("@/lib/wecom-chats");
+        const text = `【${agent.icon} ${agent.name}】\n${output.slice(0, 3500)}`;
+        const chatIds = new Set<string>();
+        if (agent.wecomPushChatId?.trim()) chatIds.add(agent.wecomPushChatId.trim());
+        if (agent.partnerId) {
+          const partnerChat = await getWecomChatForPartner(agent.partnerId);
+          if (partnerChat?.chatId) chatIds.add(partnerChat.chatId);
+        }
+        for (const chatId of chatIds) {
+          try {
+            await enqueueWecomPush(chatId, text);
+          } catch (e) {
+            console.warn(
+              `[agent-runner] wecom push failed chatId=${chatId}:`,
+              e instanceof Error ? e.message : e
+            );
+          }
+        }
       } catch (e) {
-        console.warn(`[agent-runner] wecomPushChatId push failed:`, e instanceof Error ? e.message : e);
-      }
-    }
-
-    if (agent.partnerId) {
-      try {
-        const { enqueueWecomPushForPartner } = await import("@/lib/wecom-push");
-        await enqueueWecomPushForPartner(
-          agent.partnerId,
-          `【${agent.icon} ${agent.name}】\n${output.slice(0, 3500)}`
-        );
-      } catch {
-        /* partner may not have bound wecom group */
+        console.warn(`[agent-runner] post-run wecom push failed:`, e instanceof Error ? e.message : e);
       }
     }
 

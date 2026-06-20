@@ -808,10 +808,6 @@ export const messagesZh: Messages = {
     builderDeliveryRequired: "请设置定时，并至少选择企微群或邮箱其一作为推送渠道。",
     builderScheduleUnset: "未设置（待 AI 解析）",
     builderBarHint: "发送后由 AI 解析并填入下方选项；可手动修改，修改后不再自动覆盖",
-    builderPickPartnerHint: "请在下方「伙伴 / 客户」下拉框中选择",
-    builderPickWecomHint: "请在下方「企微群」下拉框中选择推送群",
-    builderPickEmailHint: "请在下方「邮箱」下拉框中选择收件人",
-    builderPickDeliveryHint: "请至少在下方选择「企微群」或「邮箱」之一",
     builderUntitled: "未命名自动化",
     builderWaitingDesc: "等待描述",
     builderTrigger: "触发方式",
@@ -1449,13 +1445,14 @@ export const messagesZh: Messages = {
     preferenceTitle: "偏好选项（可选）",
     preferenceHint: "AI 已按推荐项继续，你可随时点击调整。",
     recommended: "推荐",
+    selectPlaceholder: "请选择…",
   },
   builderCommon: {
     modeAuto: "自动",
     modeManual: "手动",
     initTitle: "定时查询推送",
     initDesc:
-      "设置定时与推送渠道（企微群 / 邮箱），可选绑定伙伴（不选=全部）；再描述要查什么、推什么 — AI 会生成可每天运行的管道。",
+      "描述要定时查询并推送的内容（待办、商机等）；AI 会通过对话选项确认伙伴、企微群或邮箱。",
     initTitleAgent: "监控与定时 Agent",
     initDescAgent:
       "在下方设置定时与推送目的地，再描述监控或自动化目标 — AI 会在右侧匹配工具/技能并生成可运行的 Agent 草案。",

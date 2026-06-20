@@ -809,10 +809,6 @@ export const messagesEn = {
     builderDeliveryRequired: "Set a schedule and at least one delivery channel (WeCom group or email).",
     builderScheduleUnset: "Not set (AI will infer)",
     builderBarHint: "AI fills the fields below after you send; edit manually anytime — edits won't be overwritten",
-    builderPickPartnerHint: "Pick a partner in the dropdown below",
-    builderPickWecomHint: "Pick a WeCom group in the dropdown below",
-    builderPickEmailHint: "Pick a recipient email in the dropdown below",
-    builderPickDeliveryHint: "Select at least WeCom group or email below",
     builderUntitled: "Untitled automation",
     builderWaitingDesc: "Waiting for description",
     builderTrigger: "Trigger",
@@ -1450,13 +1446,14 @@ export const messagesEn = {
     preferenceTitle: "Preferences (optional)",
     preferenceHint: "AI continued with the recommended option. Tap anytime to adjust.",
     recommended: "recommended",
+    selectPlaceholder: "Select…",
   },
   builderCommon: {
     modeAuto: "Auto",
     modeManual: "Manual",
     initTitle: "Scheduled query & push",
     initDesc:
-      "Set schedule and delivery (WeCom / email), optionally pick a partner (empty = all); describe what to fetch and push — AI builds a runnable pipeline.",
+      "Describe what to query and push on a schedule; AI will confirm partner, WeCom group, or email via option cards.",
     initTitleAgent: "Monitoring & scheduled Agent",
     initDescAgent:
       "Set schedule and push destinations below. Describe the monitoring or automation goal — the AI will match tools/skills and generate a runnable Agent draft on the right.",

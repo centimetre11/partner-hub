@@ -21,24 +21,11 @@ export async function POST(req: NextRequest) {
   try {
     if (stream) {
       return createSseResponse(async (emit) => {
-        const turn = await runAutomationBuilderTurn({
-          messages,
-          userId: uid,
-          emit,
-          locale,
-          deliveryPrefs,
-          deliveryPicker: "dropdown",
-        });
+        const turn = await runAutomationBuilderTurn({ messages, userId: uid, emit, locale, deliveryPrefs });
         emit({ event: "done", data: turn });
       });
     }
-    const turn = await runAutomationBuilderTurn({
-      messages,
-      userId: uid,
-      locale,
-      deliveryPrefs,
-      deliveryPicker: "dropdown",
-    });
+    const turn = await runAutomationBuilderTurn({ messages, userId: uid, locale, deliveryPrefs });
     return NextResponse.json(turn);
   } catch (e) {
     const msg = e instanceof AIError ? e.message : `Build failed: ${e instanceof Error ? e.message : e}`;

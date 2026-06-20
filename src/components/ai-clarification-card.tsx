@@ -10,6 +10,8 @@ export type ClarificationItem = {
   options: string[];
   multi?: boolean;
   allowOther?: boolean;
+  control?: "choice" | "select";
+  placeholder?: string;
 };
 
 type Answer = { id: string; question: string; value: string };
@@ -47,6 +49,7 @@ export function AiClarificationCard({
   const m = useMessages();
   const ag = m.agents;
   const am = m.assistant;
+  const cf = m.clarifications;
   const locale = useLocale();
   const immediate = !!onImmediatePick;
 
@@ -156,6 +159,9 @@ export function AiClarificationCard({
           ? "bg-orange-50/80"
           : "bg-slate-50/80";
 
+  const selectCls =
+    "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50";
+
   if (!clarifications.length) return null;
 
   return (
@@ -165,6 +171,31 @@ export function AiClarificationCard({
       </div>
       <div className="p-4 space-y-5">
         {clarifications.map((c) => {
+          if (c.control === "select") {
+            const value = picked[c.id] ?? "";
+            return (
+              <div key={c.id} className="space-y-2">
+                <label htmlFor={`clarify-${c.id}`} className="text-sm font-medium text-slate-800 leading-relaxed">
+                  {c.question}
+                </label>
+                <select
+                  id={`clarify-${c.id}`}
+                  disabled={disabled}
+                  value={value}
+                  onChange={(e) => setPicked((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                  className={selectCls}
+                >
+                  <option value="">{c.placeholder ?? cf.selectPlaceholder}</option>
+                  {c.options.map((opt) => (
+                    <option key={`${c.id}-${opt}`} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          }
+
           const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
           const opts = presetOptions(c);
           const hasOther = showOtherInput(c);
