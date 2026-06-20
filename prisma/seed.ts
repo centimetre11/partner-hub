@@ -380,9 +380,8 @@ const agentTemplates = [
 3. linkedin_search for key contacts; web_search for recent news (2 weeks).
 4. search_knowledge for Fanruan talk tracks / competitive ammo.
 5. Structure: one-line status; key people and attitudes; open items; suggested agenda (≤3) and goals; external updates or ammo.
-6. create_document (type=MEETING_PREP) when done.
-7. If get_partner shows a WeCom group chatId, push_wecom with a concise Markdown summary of the brief; if not bound, skip push and state in the final brief that the partner has no WeCom group bound.`,
-    skills: ["get_partner", "list_todos", "linkedin_search", "web_search", "search_knowledge", "create_document", "push_wecom"],
+6. If get_partner shows a WeCom group chatId, push_wecom with a concise Markdown summary of the brief; if not bound, skip push and state in the final brief that the partner has no WeCom group bound.`,
+    skills: ["get_partner", "list_todos", "linkedin_search", "web_search", "search_knowledge", "push_wecom"],
     trigger: "MANUAL",
     scopeType: "PARTNER",
   },
@@ -395,9 +394,8 @@ const agentTemplates = [
 1. get_partner for full profile.
 2. search_knowledge and read_kms for internal Fanruan docs.
 3. list_todos for open partner-related items.
-4. Markdown report: target customer & pain; joint value prop; scenarios; pricing/co-op model; 90-day plan (3–5 actions).
-5. create_document (type=JOINT_SOLUTION) when done.`,
-    skills: ["get_partner", "search_knowledge", "read_kms", "list_todos", "create_document"],
+4. Markdown report: target customer & pain; joint value prop; scenarios; pricing/co-op model; 90-day plan (3–5 actions).`,
+    skills: ["get_partner", "search_knowledge", "read_kms", "list_todos"],
     trigger: "MANUAL",
     scopeType: "PARTNER",
   },

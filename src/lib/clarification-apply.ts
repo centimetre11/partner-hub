@@ -26,7 +26,6 @@ const DIRECT_CLARIFICATION_IDS = new Set([
   "city",
   "headcount",
   "category",
-  "industry",
   "industries",
   "pipelineStage",
   "partnerArchetype",

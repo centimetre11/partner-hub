@@ -5,7 +5,7 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { createAgentFromBuilderAction } from "@/lib/agent-actions";
 import { formatAiClarificationMessage } from "@/lib/clarification-apply";
-import { formatPreferencePick } from "@/lib/ai-clarifications";
+import { formatPreferencePick, hasRequiredClarifications } from "@/lib/ai-clarifications";
 import type {
   AgentBuilderClarification,
   AgentBuilderDraft,
@@ -138,7 +138,9 @@ export function AgentBuilder() {
       if (!nextTurn) throw new Error(m.builderBuildFailed);
       setTurn(nextTurn);
       setMessages([...next, { role: "assistant", content: finalReply || nextTurn.reply, trace: [...trace] }]);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      if (!hasRequiredClarifications(nextTurn.clarifications ?? [])) {
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

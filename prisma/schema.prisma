@@ -50,8 +50,6 @@ model Partner {
   poolFlag         String   @default("NEW")
   // PURE_DATA / POWER_BI / TABLEAU / QLIK / IT_INTEGRATOR / OTHER
   category         String   @default("OTHER")
-  // BANKING / … / OTHER（兼容旧数据；新数据用 industries）
-  industry         String?
   industries       String?  // JSON 数组，主攻行业多选
   // DATA_NATIVE / BI_MIGRATOR / IT_INTEGRATOR / IOT_INTEGRATOR / SALES_AGENT / SHELL_DATA / OTHER
   partnerArchetype String?
@@ -169,7 +167,6 @@ model GtmLibrary {
   title            String
   playbook         String?
   pitch            String?
-  industry         String?
   industries       String?
   valuePattern     String?
   partnerArchetype String?

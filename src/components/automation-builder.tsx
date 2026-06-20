@@ -204,7 +204,9 @@ export function AutomationBuilder() {
       if (!nextTurn) throw new Error(a.builderBuildFailed);
       setTurn(nextTurn);
       setMessages([...next, { role: "assistant", content: finalReply || nextTurn.reply, trace: [...trace] }]);
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      if (!hasRequiredClarifications(nextTurn.clarifications ?? [])) {
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

@@ -138,7 +138,6 @@ export const labelsEn: LabelsBundle = {
   partnerFieldLabels: {
     name: "Company Name",
     category: "Competitor Category",
-    industry: "Primary Industry (single, legacy)",
     industries: "Primary Industries",
     tier: "Tier",
     partnerArchetype: "Partner Archetype",

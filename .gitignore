@@ -35,6 +35,7 @@ yarn-error.log*
 !.env.example
 
 # local sqlite database
+dev.db
 prisma/dev.db
 prisma/*.db-journal
 

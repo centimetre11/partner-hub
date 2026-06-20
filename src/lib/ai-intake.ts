@@ -430,7 +430,7 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
       saveMode: p.saveMode === "crm_only" ? "crm_only" : p.saveMode === "both" ? "both" : undefined,
       summary: asTrimmedString(p.summary),
       fields: normalizeFieldUpdateLabels(
-        (p.fields ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS).map(coerceField),
+        (p.fields ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS && f.field !== "industry").map(coerceField),
         locale,
       ),
       contacts: p.contacts ?? [],
@@ -880,10 +880,9 @@ export async function applyIntake(opts: {
       : { name, status: "PROSPECT", poolFlag: "NEW" };
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
-      if (f.field === "industries" || f.field === "industry") {
+      if (f.field === "industries") {
         const norm = normalizeIndustriesInput(f.newValue);
         data.industries = norm.industries;
-        data.industry = norm.industry;
       } else {
         const parsed = partnerFieldValueFromText(f.field, asTrimmedString(f.newValue));
         if (parsed !== undefined) data[f.field] = parsed;
@@ -943,10 +942,9 @@ export async function applyIntake(opts: {
     const data: Record<string, unknown> = {};
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
-      if (f.field === "industries" || f.field === "industry") {
+      if (f.field === "industries") {
         const norm = normalizeIndustriesInput(f.newValue);
         data.industries = norm.industries;
-        data.industry = norm.industry;
       } else {
         const parsed = partnerFieldValueFromText(f.field, asTrimmedString(f.newValue));
         if (parsed !== undefined) {

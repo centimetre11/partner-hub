@@ -231,7 +231,7 @@ Rules:
   · partnerName — ${identityExample}
   · website — id:"website", kind:"identity", tier:"required", apply:"direct", options = multiple candidate URLs (not when KMS already has one URL)
   · dedupe — id:"dedupe", kind:"identity", tier:"required", apply:"ai", options = existing partner names + "Create new anyway"
-- For profile field ids (country, headcount, category, industry, pipelineStage, etc.) set apply:"direct", kind:"field", tier:"preference" unless truly blocking.
+- For profile field ids (country, headcount, category, industries, pipelineStage, etc.) set apply:"direct", kind:"field", tier:"preference" unless truly blocking.
 - For reporting lines or ambiguous context, set apply:"ai". Empty clarifications array if none needed.`;
 }
 
@@ -244,13 +244,13 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
 
   switch (scope) {
     case "new_partner":
-      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industry values: ${ind}; pipelineStage 1–10: ${st}); add contacts if people appear in text/research, opportunities if deals are mentioned. Leave trainings/solutions as empty arrays.`;
+      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industries values: ${ind}; pipelineStage 1–10: ${st}); add contacts if people appear in text/research, opportunities if deals are mentioned. Leave trainings/solutions as empty arrays.`;
     case "powermap":
       return "Fill contacts only (action=add or update with id). Leave fields/opportunities/todos/trainings/solutions as empty arrays.";
     case "opportunity":
       return "Fill opportunities only. Leave others as empty arrays.";
     case "profile":
-      return `Fill fields only (FieldUpdate; oldValue may be empty). Field names: ${fl} (category: ${cat}; industry: ${ind}). Use tools when info is insufficient. Leave others as empty arrays.`;
+      return `Fill fields only (FieldUpdate; oldValue may be empty). Field names: ${fl} (category: ${cat}; industries: ${ind}). Use tools when info is insufficient. Leave others as empty arrays.`;
     case "training":
       return "Fill trainings only. Leave others as empty arrays.";
     case "solution":
@@ -315,7 +315,7 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "New partner onboarding",
     intro:
       "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
-    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, tier (A/B/C). If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industries, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, tier (A/B/C). If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).
 
 Identity checkpoints (important):
 - ONLY emit tier:"required" identity clarifications (kind:"identity") when there is genuine ambiguity — multiple distinct company names, multiple plausible websites, or search_partners close matches. tier:"required" means the user MUST answer before AI continues research or ready=true.

@@ -1,5 +1,6 @@
 import { SKILLS } from "./skills";
-import { getToolLabel as getToolLabelFromMap } from "./tool-labels";
+import { getToolCategoryMeta, getToolDesc, getToolLabel as getToolLabelFromMap, type ToolCategoryId } from "./tool-labels";
+import type { Locale } from "./i18n/locale";
 
 export type ToolMeta = {
   name: string;
@@ -44,7 +45,6 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   search_knowhow: { implemented: true, requiresKnowhow: true, priority: "core" },
   read_kms: { implemented: true, requiresKms: true, priority: "core" },
   write_kms: { implemented: true, requiresKms: true, priority: "standard" },
-  create_document: { implemented: true, priority: "core" },
   update_partner: { implemented: true, priority: "assistant" },
   push_wecom: { implemented: true, priority: "standard" },
   list_wecom_chats: { implemented: true, priority: "standard" },
@@ -69,44 +69,51 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   search_knowhow: "knowhow",
   read_kms: "kms",
   write_kms: "kms",
-  create_document: "content",
   push_wecom: "integration",
   list_wecom_chats: "integration",
   send_email: "integration",
 };
 
-const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
-  { id: "partner", label: "Partner profiles", desc: "Search, read, and log partner activity", icon: "◮" },
-  { id: "intel", label: "External intelligence", desc: "LinkedIn and public web — monitor partners, competitors, market signals", icon: "📡" },
-  { id: "kms", label: "Company KMS", desc: "Fanruan internal Confluence docs — read and write (personal token required)", icon: "🏢" },
-  { id: "knowhow", label: "Know-how", desc: "Fanruan Know-how knowledge base — semantic search for cases, solutions, and collateral", icon: "🔍" },
-  { id: "todo", label: "Tasks", desc: "Create and list follow-up todos", icon: "☑" },
-  { id: "content", label: "Knowledge & reports", desc: "Team knowledge base and report center output", icon: "📄" },
-  { id: "integration", label: "Integrations", desc: "WeCom group notifications, email, and outbound messaging", icon: "🔔" },
+const TOOL_CATEGORIES_TEMPLATE: { id: ToolCategoryId; icon: string }[] = [
+  { id: "partner", icon: "◮" },
+  { id: "intel", icon: "📡" },
+  { id: "kms", icon: "🏢" },
+  { id: "knowhow", icon: "🔍" },
+  { id: "todo", icon: "☑" },
+  { id: "content", icon: "📄" },
+  { id: "integration", icon: "🔔" },
 ];
 
-function buildCategories(): ToolCategory[] {
-  const cats = TOOL_CATEGORIES_TEMPLATE.map((c) => ({ ...c, tools: [] as ToolMeta[] }));
+function buildCategories(locale: Locale): ToolCategory[] {
+  const cats = TOOL_CATEGORIES_TEMPLATE.map((c) => {
+    const meta = getToolCategoryMeta(c.id, locale);
+    return { ...c, label: meta.label, desc: meta.desc, tools: [] as ToolMeta[] };
+  });
   const map = new Map(cats.map((c) => [c.id, c]));
   for (const t of SKILLS) {
-    const catId = CATEGORY_BY_TOOL[t.name] ?? "partner";
+    const catId = (CATEGORY_BY_TOOL[t.name] ?? "partner") as ToolCategoryId;
     const meta = TOOL_META[t.name] ?? { implemented: true, priority: "standard" as const };
     map.get(catId)?.tools.push({
       name: t.name,
-      label: t.label,
-      desc: t.desc,
+      label: getToolLabelFromMap(t.name, locale),
+      desc: getToolDesc(t.name, locale),
       ...meta,
     });
   }
   return cats.filter((c) => c.tools.length > 0);
 }
 
-export const BUILTIN_TOOL_CATEGORIES = buildCategories();
+export function getBuiltinToolCategories(locale: Locale = "en") {
+  return buildCategories(locale);
+}
+
+/** @deprecated Prefer getBuiltinToolCategories(locale) */
+export const BUILTIN_TOOL_CATEGORIES = getBuiltinToolCategories("en");
 
 export const BUILTIN_TOOL_COUNT = SKILLS.length;
 
-export function getToolLabel(name: string) {
-  return getToolLabelFromMap(name);
+export function getToolLabel(name: string, locale?: Locale) {
+  return getToolLabelFromMap(name, locale ?? "en");
 }
 
 export function isToolAvailable(name: string, opts?: { webSearchReady?: boolean }) {

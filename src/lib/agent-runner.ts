@@ -91,7 +91,6 @@ export async function runAgent(
 
   const run = await db.agentRun.create({ data: { agentId: agent.id, status: "RUNNING" } });
   const toolLog: { tool: string; args: unknown; result: string }[] = [];
-  let documentSaved = false;
 
   try {
     const resolved = await resolveAgentSkills(agent.id, agent.skills);
@@ -158,11 +157,10 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
 2. For Fanruan/Middle East strategy background, use search_knowledge first, then read_kms / write_kms for internal docs (if KMS token configured).
 3. When you find valuable partner-related signals, use add_timeline_event on that partner's timeline (if tool enabled).
 4. To change partner profile fields, call update_partner — the system converts to a proposal for human approval.
-5. For pre-meeting briefs, joint solutions, etc., save with create_document to the report center (if skill enabled).
-6. To push to a WeCom group during the run, use push_wecom with chatId from get_partner (WeCom group line) or list_wecom_chats. If not bound, skip push and mention in the final brief.
-7. To send email, use send_email with explicit recipient address(es), subject, and body (requires team SMTP in Settings).
-8. When done, output a final brief in Markdown (English): one-line conclusion first, then findings/recommendations/actions taken. If nothing new to report, say "No new findings this run" and summarize what was checked.
-9. The brief is your final message; no tool call needed to send it.`;
+5. To push to a WeCom group during the run, use push_wecom with chatId from get_partner (WeCom group line) or list_wecom_chats. If not bound, skip push and mention in the final brief.
+6. To send email, use send_email with explicit recipient address(es), subject, and body (requires team SMTP in Settings).
+7. When done, output a final brief in Markdown (English): one-line conclusion first, then findings/recommendations/actions taken. If nothing new to report, say "No new findings this run" and summarize what was checked.
+8. The brief is your final message; no tool call needed to send it.`;
 
     const chat: ChatMessage[] = [
       { role: "system", content: system },
@@ -194,7 +192,6 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
         }
         const result = await runSkill(tc.function.name, args, ctx);
         toolLog.push({ tool: tc.function.name, args, result: result.slice(0, 500) });
-        if (tc.function.name === "create_document") documentSaved = true;
         return result;
       },
     })) ?? "(Step limit reached; task may be incomplete. See log for actions taken.)";
@@ -213,9 +210,9 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
       data: { status: "SUCCESS", output, toolLog: JSON.stringify(toolLog), finishedAt: new Date() },
     });
 
-    // Auto-save report agents if create_document was not called
+    // Auto-save report agent output to the report center
     const isReportAgent = REPORT_AGENT_KEYWORDS.some((k) => agent.name.includes(k));
-    if (isReportAgent && output && !documentSaved) {
+    if (isReportAgent && output) {
       const docType = /联合|joint/i.test(agent.name) ? "JOINT_SOLUTION" : "MEETING_PREP";
       await db.document.create({
         data: {

@@ -10,7 +10,7 @@ export type GtmLibraryRow = {
   title: string;
   playbook: string | null;
   pitch: string | null;
-  industry: string | null;
+  industries: string | null;
   valuePattern: string | null;
   partnerArchetype: string | null;
   category: string | null;
@@ -50,7 +50,7 @@ export async function searchGtmLibraryAction(q: string): Promise<GtmLibraryRow[]
       title: r.title,
       playbook: r.playbook,
       pitch: r.pitch,
-      industry: r.industry,
+      industries: r.industries,
       valuePattern: r.valuePattern,
       partnerArchetype: r.partnerArchetype,
       category: r.category,
@@ -113,7 +113,6 @@ export async function saveToGtmLibraryAction(
     playbook: playbook || null,
     pitch: pitch || null,
     industries: stringifyIndustries(industryCodes),
-    industry: industryCodes[0] ?? null,
     valuePattern: String(formData.get("valuePattern") ?? "").trim() || partner.valuePattern || null,
     partnerArchetype: String(formData.get("partnerArchetype") ?? "").trim() || partner.partnerArchetype || null,
     category: String(formData.get("category") ?? "").trim() || partner.category || null,

@@ -60,7 +60,7 @@ export function formatTierLabel(tier: PartnerTier | string): string {
 }
 
 export function isDeprecatedPartnerGradingField(field: string): boolean {
-  return field === "priority" || field === "fitScore";
+  return field === "priority" || field === "fitScore" || field === "industry";
 }
 
 /** Map intake/proposal field value to DB value; returns undefined to skip. */

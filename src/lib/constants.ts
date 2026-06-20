@@ -81,7 +81,6 @@ export const MONITOR_SENTIMENT_TONE: Record<
 export const PARTNER_FIELD_LABELS: Record<string, string> = {
   name: "Company Name",
   category: "Competitor Category",
-  industry: "Primary Industry (single, legacy)",
   industries: "Primary Industries",
   tier: "Tier",
   partnerArchetype: "Partner Archetype",

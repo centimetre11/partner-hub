@@ -69,7 +69,15 @@ export function AiClarificationCard({
     return picked[c.id] ?? "";
   }
 
-  const allAnswered = clarifications.every((c) => answerFor(c).length > 0);
+  function selectAnswered(c: ClarificationItem): boolean {
+    if (otherText[c.id]?.trim()) return true;
+    if (c.multi) return (multiPicked[c.id]?.size ?? 0) > 0;
+    return Boolean(picked[c.id]?.trim());
+  }
+
+  const allAnswered = clarifications.every((c) =>
+    c.control === "select" ? selectAnswered(c) : answerFor(c).length > 0
+  );
 
   function presetOptions(c: ClarificationItem) {
     return c.options.filter((o) => !isOpenEndedClarificationOption(o));
@@ -178,25 +186,87 @@ export function AiClarificationCard({
         {clarifications.map((c) => {
           if (c.control === "select") {
             const value = picked[c.id] ?? "";
+            const showManual = c.allowOther !== false;
+            const manualOnly = c.options.length === 0;
+
+            if (manualOnly) {
+              return (
+                <div key={c.id} className="space-y-2">
+                  <label htmlFor={`clarify-${c.id}`} className="text-sm font-medium text-slate-800 leading-relaxed">
+                    {c.question}
+                  </label>
+                  <input
+                    id={`clarify-${c.id}`}
+                    type={/email|邮箱/i.test(`${c.id} ${c.question}`) ? "email" : "text"}
+                    disabled={disabled}
+                    value={otherText[c.id] ?? ""}
+                    onChange={(e) => onOtherChange(c, e.target.value)}
+                    placeholder={c.placeholder ?? cf.manualInputHint}
+                    className={selectCls}
+                  />
+                </div>
+              );
+            }
+
             return (
               <div key={c.id} className="space-y-2">
                 <label htmlFor={`clarify-${c.id}`} className="text-sm font-medium text-slate-800 leading-relaxed">
                   {c.question}
                 </label>
-                <select
-                  id={`clarify-${c.id}`}
-                  disabled={disabled}
-                  value={value}
-                  onChange={(e) => setPicked((prev) => ({ ...prev, [c.id]: e.target.value }))}
-                  className={selectCls}
-                >
-                  <option value="">{c.placeholder ?? cf.selectPlaceholder}</option>
-                  {c.options.map((opt) => (
-                    <option key={`${c.id}-${opt}`} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+                {c.multi ? (
+                  <select
+                    id={`clarify-${c.id}`}
+                    multiple
+                    disabled={disabled}
+                    value={[...(multiPicked[c.id] ?? [])]}
+                    onChange={(e) => {
+                      const selected = Array.from(e.target.selectedOptions, (o) => o.value);
+                      setMultiPicked((prev) => ({ ...prev, [c.id]: new Set(selected) }));
+                      setOtherText((prev) => ({ ...prev, [c.id]: "" }));
+                    }}
+                    className={`${selectCls} min-h-[7rem]`}
+                  >
+                    {c.options.map((opt) => (
+                      <option key={`${c.id}-${opt}`} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    id={`clarify-${c.id}`}
+                    disabled={disabled}
+                    value={value}
+                    onChange={(e) => {
+                      setPicked((prev) => ({ ...prev, [c.id]: e.target.value }));
+                      setOtherText((prev) => ({ ...prev, [c.id]: "" }));
+                    }}
+                    className={selectCls}
+                  >
+                    <option value="">{c.placeholder ?? cf.selectPlaceholder}</option>
+                    {c.options.map((opt) => (
+                      <option key={`${c.id}-${opt}`} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {c.multi && (
+                  <p className="text-[11px] text-slate-400">{cf.multiSelectHint}</p>
+                )}
+                {showManual && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[11px] text-slate-500">{cf.manualInputHint}</div>
+                    <input
+                      type={/email|邮箱/i.test(`${c.id} ${c.question}`) ? "email" : "text"}
+                      disabled={disabled}
+                      value={otherText[c.id] ?? ""}
+                      onChange={(e) => onOtherChange(c, e.target.value)}
+                      placeholder={am.clarifyOtherPlaceholder}
+                      className={selectCls}
+                    />
+                  </div>
+                )}
               </div>
             );
           }

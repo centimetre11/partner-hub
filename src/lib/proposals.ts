@@ -246,10 +246,9 @@ export async function applyProposal(opts: {
   const data: Record<string, unknown> = {};
   for (const f of proposal.fieldUpdates) {
     if (!(f.field in PARTNER_FIELD_LABELS) || f.field === "name") continue;
-    if (f.field === "industries" || f.field === "industry") {
+    if (f.field === "industries") {
       const norm = normalizeIndustriesInput(f.newValue);
       data.industries = norm.industries;
-      data.industry = norm.industry;
     } else {
       const parsed = partnerFieldValueFromText(f.field, f.newValue);
       if (parsed !== undefined) data[f.field] = parsed;

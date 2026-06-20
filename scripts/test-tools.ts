@@ -95,18 +95,6 @@ async function main() {
   }
   results.push({ tool: "add_timeline_event", status: timelineOk ? "pass" : "fail", preview: timelineOut });
 
-  const docOut = await runSkill(
-    "create_document",
-    { title: `[tool-test] ${Date.now()}`, content: "# test", type: "CUSTOM" },
-    ctx
-  );
-  const docOk = docOut.includes("已写入报告中心");
-  if (docOk) {
-    const idMatch = docOut.match(/\/documents\/([a-z0-9]+)/i);
-    if (idMatch) await prisma.document.delete({ where: { id: idMatch[1] } }).catch(() => null);
-  }
-  results.push({ tool: "create_document", status: docOk ? "pass" : "fail", preview: docOut });
-
   const wecomChat = await prisma.wecomChat.findFirst();
   if (wecomChat) {
     const pushOut = await runSkill("push_wecom", { chatId: wecomChat.chatId, content: "[tool-test] push" }, ctx);

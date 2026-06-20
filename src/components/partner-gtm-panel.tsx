@@ -93,8 +93,7 @@ export function PartnerGtmPanel({
     fd.set("mode", libMode);
     fd.set("targetId", libTargetId);
     fd.set("notes", libNotes);
-    fd.set("industry", parseIndustries(partner)[0] ?? "");
-    fd.set("industries", partner.industries ?? (partner.industry ? JSON.stringify([partner.industry]) : ""));
+    fd.set("industries", partner.industries ?? "");
     fd.set("valuePattern", partner.valuePattern ?? "");
     fd.set("partnerArchetype", partner.partnerArchetype ?? "");
     fd.set("category", partner.category ?? "");

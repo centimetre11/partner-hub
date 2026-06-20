@@ -77,6 +77,35 @@ function isBuiltinClarificationId(id: string): boolean {
   return id === "partner-pick" || id === "wecom-pick" || id === "email-pick" || id === "delivery-pick";
 }
 
+function clarificationBlob(c: AutomationBuilderClarification): string {
+  return `${c.id} ${c.question} ${c.options.join(" ")}`;
+}
+
+function isEmailTopicClarification(c: AutomationBuilderClarification): boolean {
+  if (c.id === "email-pick") return true;
+  if (isBuiltinClarificationId(c.id)) return false;
+  return /邮件|email|邮箱/i.test(clarificationBlob(c));
+}
+
+function isPartnerTopicClarification(c: AutomationBuilderClarification): boolean {
+  if (c.id === "partner-pick") return true;
+  if (isBuiltinClarificationId(c.id)) return false;
+  return /伙伴|partner|客户|customer/i.test(clarificationBlob(c));
+}
+
+function isWecomTopicClarification(c: AutomationBuilderClarification): boolean {
+  if (c.id === "wecom-pick") return true;
+  if (isBuiltinClarificationId(c.id)) return false;
+  return /企微|wecom|微信群|群/i.test(clarificationBlob(c));
+}
+
+function stripTopicClarifications(
+  clarifications: AutomationBuilderClarification[],
+  match: (c: AutomationBuilderClarification) => boolean
+): AutomationBuilderClarification[] {
+  return clarifications.filter((c) => !match(c));
+}
+
 /** 用户已说清渠道或 AI 已填渠道时，去掉重复追问 */
 function stripRedundantDeliveryClarifications(
   clarifications: AutomationBuilderClarification[],
@@ -130,6 +159,7 @@ export function followUpClarificationsAfterDeliveryPick(
       question: locale === "zh" ? "推送到哪个企微群？" : "Which WeCom group should receive pushes?",
       options: opts.wecomChats.map((c) => wecomOptionLabel(c)),
       control: "select",
+      allowOther: true,
       placeholder: locale === "zh" ? "选择企微群…" : "Select WeCom group…",
       tier: "required",
     });
@@ -140,6 +170,7 @@ export function followUpClarificationsAfterDeliveryPick(
       question: locale === "zh" ? "发送到哪个邮箱？" : "Which email should receive pushes?",
       options: opts.emails.map((e) => emailOptionLabel(e)),
       control: "select",
+      allowOther: true,
       placeholder: locale === "zh" ? "选择邮箱…" : "Select email…",
       tier: "required",
     });
@@ -217,23 +248,24 @@ export function enrichAutomationClarifications(opts: {
     !opts.partnerId.trim() &&
     !opts.boundPartnerId &&
     opts.partners.length > 0 &&
-    mentionsPartnerRef(userText) &&
-    !mentionsAllPartnersScope(userText);
-  if (needPartner && !hasClarificationAbout(out, /伙伴|partner|客户/i)) {
-    const options = opts.partners.map((p) => p.name);
-    if (opts.locale === "zh") {
-      options.push("暂不指定（与伙伴无关）");
-    } else {
-      options.push("None (not partner-scoped)");
-    }
+    !mentionsAllPartnersScope(userText) &&
+    (mentionsPartnerRef(userText) || out.some(isPartnerTopicClarification));
+  if (needPartner) {
+    out = stripTopicClarifications(out, isPartnerTopicClarification);
     out.unshift({
       id: "partner-pick",
       question:
         opts.locale === "zh"
           ? "你提到「这个伙伴/客户」— 具体是哪位？"
           : "You mentioned “this partner/customer” — which one?",
-      options,
+      options: (() => {
+        const options = opts.partners.map((p) => p.name);
+        if (opts.locale === "zh") options.push("暂不指定（与伙伴无关）");
+        else options.push("None (not partner-scoped)");
+        return options;
+      })(),
       control: "select",
+      allowOther: true,
       placeholder: opts.locale === "zh" ? "选择伙伴 / 客户…" : "Select partner / customer…",
       tier: "required",
     });
@@ -241,29 +273,37 @@ export function enrichAutomationClarifications(opts: {
 
   const userWantsWecom = mentionsWecomPush(userText);
   const userWantsEmail = mentionsEmailPush(userText);
+  const aiAskedWecom = out.some(isWecomTopicClarification);
+  const aiAskedEmail = out.some(isEmailTopicClarification);
+
   const needWecom =
-    !opts.wecomPushChatId.trim() && userWantsWecom && opts.wecomChats.length > 0;
-  if (needWecom && !hasClarificationAbout(out, /企微|wecom|群/i)) {
+    !opts.wecomPushChatId.trim() && opts.wecomChats.length > 0 && (userWantsWecom || aiAskedWecom);
+  if (needWecom) {
+    out = stripTopicClarifications(out, isWecomTopicClarification);
     out.unshift({
       id: "wecom-pick",
       question: opts.locale === "zh" ? "推送到哪个企微群？" : "Which WeCom group should receive pushes?",
       options: opts.wecomChats.map((c) => wecomOptionLabel(c)),
       control: "select",
+      allowOther: true,
       placeholder: opts.locale === "zh" ? "选择企微群…" : "Select WeCom group…",
       tier: "required",
     });
   }
 
-  const needEmail = !effectiveEmail && userWantsEmail && opts.emails.length > 0;
-  if (needEmail && !hasClarificationAbout(out, /邮件|email/i)) {
+  const needEmail =
+    !effectiveEmail && (userWantsEmail || aiAskedEmail) && (opts.emails.length > 0 || aiAskedEmail);
+  if (needEmail) {
+    out = stripTopicClarifications(out, isEmailTopicClarification);
     out.unshift({
       id: "email-pick",
       question:
         opts.locale === "zh"
-          ? "你提到发邮件 — 请选择收件邮箱："
-          : "You asked for email — pick the recipient:",
+          ? "请选择收件邮箱，或手动输入："
+          : "Pick recipient email or type manually:",
       options: opts.emails.map((e) => emailOptionLabel(e)),
       control: "select",
+      allowOther: true,
       placeholder: opts.locale === "zh" ? "选择邮箱…" : "Select email…",
       tier: "required",
     });
@@ -295,7 +335,7 @@ function normalizeAutomationClarifications(items: AutomationBuilderClarification
       out.push({
         ...raw,
         tier: raw.tier ?? "required",
-        allowOther: false,
+        allowOther: raw.allowOther !== false,
       });
       continue;
     }

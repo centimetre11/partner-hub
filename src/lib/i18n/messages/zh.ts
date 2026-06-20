@@ -1446,6 +1446,8 @@ export const messagesZh: Messages = {
     preferenceHint: "AI 已按推荐项继续，你可随时点击调整。",
     recommended: "推荐",
     selectPlaceholder: "请选择…",
+    manualInputHint: "或手动输入",
+    multiSelectHint: "按住 Ctrl / ⌘ 可多选",
   },
   builderCommon: {
     modeAuto: "自动",

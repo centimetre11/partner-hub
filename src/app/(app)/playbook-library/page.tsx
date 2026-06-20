@@ -78,7 +78,7 @@ export default async function PlaybookLibraryPage({
                           {versions.length > 1 && (
                             <Badge tone="zinc">{m.playbookLibrary.versions.replace("{n}", String(versions.length))}</Badge>
                           )}
-                          {(latest.industries ? parseIndustries({ industries: latest.industries }) : latest.industry ? [latest.industry] : []).map((code) => (
+                          {parseIndustries({ industries: latest.industries }).map((code) => (
                             <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
                           ))}
                           {latest.valuePattern && (

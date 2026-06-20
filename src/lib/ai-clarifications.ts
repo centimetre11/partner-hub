@@ -85,7 +85,7 @@ export function normalizeAiClarification(
     question: raw.question.trim(),
     options,
     multi: raw.multi,
-    allowOther: control === "select" ? false : raw.allowOther,
+    allowOther: control === "select" ? raw.allowOther !== false : raw.allowOther,
     control,
     placeholder: raw.placeholder?.trim() || undefined,
     tier,

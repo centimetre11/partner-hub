@@ -70,10 +70,7 @@ export default async function PartnersPage({
       ...(sp.tier ? { tier: sp.tier } : {}),
       ...(sp.industry
         ? {
-            OR: [
-              { industry: sp.industry },
-              { industries: { contains: `"${sp.industry}"` } },
-            ],
+            OR: [{ industries: { contains: `"${sp.industry}"` } }],
           }
         : {}),
     },

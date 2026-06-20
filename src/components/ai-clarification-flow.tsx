@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { AiClarification, ClarificationAnswer } from "@/lib/ai-clarifications";
 import { getClarificationTier, partitionClarificationsByTier, shouldBlockChatInput } from "@/lib/ai-clarifications";
 import { getClarificationMode } from "@/lib/clarification-apply";
@@ -30,8 +31,18 @@ export function AiClarificationFlow({
   directClarifications?: AiClarification[];
 }) {
   const { assistant: am, clarifications: cf } = useMessages();
+  const anchorRef = useRef<HTMLDivElement>(null);
   const all = mergeClarifications(clarifications, directClarifications);
   const { required, preference } = partitionClarificationsByTier(all);
+  const scrollKey = all.map((c) => c.id).join("-");
+
+  useEffect(() => {
+    if (!all.length) return;
+    const t = window.setTimeout(() => {
+      anchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [scrollKey, all.length]);
 
   const requiredDirect = required.filter((c) => getClarificationMode(c) === "direct");
   const requiredAi = required.filter((c) => getClarificationMode(c) !== "direct");
@@ -52,7 +63,7 @@ export function AiClarificationFlow({
   }
 
   return (
-    <div className="space-y-3 w-full">
+    <div ref={anchorRef} className="space-y-3 w-full scroll-mt-4">
       {requiredIdentityDirect.length > 0 && onDirectPick && (
         <AiClarificationCard
           key={requiredIdentityDirect.map((c) => c.id).join("-")}

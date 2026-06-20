@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
-import { BUILTIN_TOOL_CATEGORIES, getToolAvailability } from "@/lib/tools-registry";
+import { getBuiltinToolCategories, getToolAvailability } from "@/lib/tools-registry";
 import { getKmsConfigStatus } from "@/lib/kms";
 import { isKnowhowConfigured } from "@/lib/knowhow";
 import { isEmailServiceConfigured } from "@/lib/email-config";
@@ -12,7 +12,7 @@ import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function ToolsPage() {
   const user = await requireUser();
-  const { messages: m } = await getServerI18n();
+  const { messages: m, locale } = await getServerI18n();
   const equippedAgents = await db.agent.findMany({
     where: { isTemplate: false },
     select: { skills: true },
@@ -31,10 +31,11 @@ export default async function ToolsPage() {
   const webSearchReady = await isWebSearchAvailable();
   const searchBackend = webSearchReady ? await webSearchBackendLabel() : null;
   const admin = isSuperAdmin(user);
-  const readyCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).filter(
+  const toolCategories = getBuiltinToolCategories(locale);
+  const readyCount = toolCategories.flatMap((c) => c.tools).filter(
     (t) => getToolAvailability(t.name, { kmsConfigured, knowhowConfigured, webSearchReady, emailConfigured }) === "ready"
   ).length;
-  const totalCount = BUILTIN_TOOL_CATEGORIES.flatMap((c) => c.tools).length;
+  const totalCount = toolCategories.flatMap((c) => c.tools).length;
 
   return (
     <div className="pb-16">
@@ -91,7 +92,7 @@ export default async function ToolsPage() {
           <span className="font-medium">{m.tools.scenarioPriority}</span> {m.tools.scenarioBody}
         </div>
 
-        {BUILTIN_TOOL_CATEGORIES.map((cat) => (
+        {toolCategories.map((cat) => (
           <section key={cat.id}>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">{cat.icon}</span>

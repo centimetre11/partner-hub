@@ -138,7 +138,6 @@ export const labelsZh: LabelsBundle = {
   partnerFieldLabels: {
     name: "公司全称",
     category: "竞品基因",
-    industry: "主攻行业（单选，旧字段）",
     industries: "主攻行业",
     tier: "Tier",
     partnerArchetype: "伙伴类型",

@@ -1447,6 +1447,8 @@ export const messagesEn = {
     preferenceHint: "AI continued with the recommended option. Tap anytime to adjust.",
     recommended: "recommended",
     selectPlaceholder: "Select…",
+    manualInputHint: "Or type manually",
+    multiSelectHint: "Hold Ctrl / ⌘ to select multiple",
   },
   builderCommon: {
     modeAuto: "Auto",

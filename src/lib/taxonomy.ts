@@ -53,16 +53,15 @@ export function slugTaxonomyCode(label: string) {
   return s || `CUSTOM_${Date.now()}`;
 }
 
-export function parseIndustries(p: { industries?: string | null; industry?: string | null }): string[] {
-  if (p.industries) {
-    try {
-      const parsed = JSON.parse(p.industries);
-      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
-    } catch {
-      /* fall through */
-    }
+export function parseIndustries(p: { industries?: string | null }): string[] {
+  if (!p.industries) return [];
+  try {
+    const parsed = JSON.parse(p.industries);
+    if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+  } catch {
+    /* invalid JSON */
   }
-  return p.industry ? [p.industry] : [];
+  return [];
 }
 
 export function stringifyIndustries(codes: string[]) {
@@ -70,26 +69,26 @@ export function stringifyIndustries(codes: string[]) {
   return uniq.length ? JSON.stringify(uniq) : null;
 }
 
-export function normalizeIndustriesInput(raw: unknown): { industries: string | null; industry: string | null } {
+export function normalizeIndustriesInput(raw: unknown): { industries: string | null } {
   if (Array.isArray(raw)) {
     const codes = raw.map(String).map((s) => s.trim()).filter(Boolean);
-    return { industries: stringifyIndustries(codes), industry: codes[0] ?? null };
+    return { industries: stringifyIndustries(codes) };
   }
   const trimmed = String(raw ?? "").trim();
-  if (!trimmed) return { industries: null, industry: null };
+  if (!trimmed) return { industries: null };
   if (trimmed.startsWith("[")) {
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
         const codes = parsed.map(String).filter(Boolean);
-        return { industries: stringifyIndustries(codes), industry: codes[0] ?? null };
+        return { industries: stringifyIndustries(codes) };
       }
     } catch {
       /* fall through */
     }
   }
   const codes = trimmed.includes(",") ? trimmed.split(",").map((s) => s.trim()).filter(Boolean) : [trimmed];
-  return { industries: stringifyIndustries(codes), industry: codes[0] ?? null };
+  return { industries: stringifyIndustries(codes) };
 }
 
 let builtinLabelsSynced = false;

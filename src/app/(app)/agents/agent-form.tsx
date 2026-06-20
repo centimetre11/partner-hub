@@ -4,7 +4,7 @@ import { useState } from "react";
 import { upsertAgentAction } from "@/lib/agent-actions";
 import type { PromptSkillOption, ToolOption } from "@/lib/skill-resolver";
 import { useMessages, useLocale } from "@/lib/i18n/context";
-import { getToolLabel } from "@/lib/tool-labels";
+import { getToolDesc, getToolLabel } from "@/lib/tool-labels";
 
 const AGENT_PUSH_SKILLS = ["push_wecom", "send_email"] as const;
 
@@ -101,7 +101,7 @@ export function AgentForm({
               <span className="min-w-0">
                 <span className="text-sm font-medium text-slate-800 block">{getToolLabel(t.name, locale)}</span>
                 <span className="text-xs text-slate-400 font-mono">{t.name}</span>
-                <span className="text-xs text-slate-400 block mt-0.5">{t.desc}</span>
+                <span className="text-xs text-slate-400 block mt-0.5">{getToolDesc(t.name, locale)}</span>
               </span>
             </label>
           ))}

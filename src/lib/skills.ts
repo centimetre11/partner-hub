@@ -820,54 +820,6 @@ const writeKms: Skill = {
     }),
 };
 
-// ---- Save to report center ----
-const createDocument: Skill = {
-  name: "create_document",
-  label: "Save to report center",
-  desc: "Save a Markdown report to the report center, optionally linked to a partner",
-  def: {
-    type: "function",
-    function: {
-      name: "create_document",
-      description: "Save a completed Markdown report to the report center. For pre-meeting briefs, joint solution reports, etc.",
-      parameters: {
-        type: "object",
-        properties: {
-          title: { type: "string", description: "Report title" },
-          content: { type: "string", description: "Markdown body" },
-          type: {
-            type: "string",
-            enum: ["AGENT_BRIEF", "JOINT_SOLUTION", "MEETING_PREP", "CUSTOM"],
-            description: "Report type",
-          },
-          partnerName: { type: "string", description: "Linked partner name (optional)" },
-        },
-        required: ["title", "content"],
-      },
-    },
-  },
-  run: async (args, ctx) => {
-    let partnerId: string | null = null;
-    if (args.partnerName) {
-      const p = await findPartnerByName(String(args.partnerName));
-      partnerId = p?.id ?? null;
-    }
-    const doc = await db.document.create({
-      data: {
-        title: String(args.title),
-        content: String(args.content),
-        type: String(args.type ?? "AGENT_BRIEF"),
-        status: "DRAFT",
-        partnerId,
-        createdById: ctx.userId,
-      },
-    });
-    const msg = `Saved to report center: ${doc.title} (/documents/${doc.id})`;
-    ctx.actions.push(msg);
-    return msg;
-  },
-};
-
 // ---- Push to WeCom group ----
 const pushWecom: Skill = {
   name: "push_wecom",
@@ -1001,7 +953,6 @@ export const SKILLS: Skill[] = [
   searchKnowhow,
   readKms,
   writeKms,
-  createDocument,
   pushWecom,
   listWecomChatsTool,
   sendEmailTool,
