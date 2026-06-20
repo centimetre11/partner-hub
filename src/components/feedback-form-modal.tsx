@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useCallback, useEffect, useRef, useState } from "react";
 import { createFeedbackAction } from "@/lib/feedback-actions";
 import { useMessages } from "@/lib/i18n/context";
 
@@ -9,40 +9,48 @@ const input =
 
 type UploadedImage = { id: string; filename: string; previewUrl?: string };
 
+function imageFilesFromClipboard(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  return [...data.items]
+    .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+    .map((it) => it.getAsFile())
+    .filter((f): f is File => !!f);
+}
+
+async function uploadImageFiles(files: File[]): Promise<UploadedImage[]> {
+  const uploaded: UploadedImage[] = [];
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Upload failed");
+    const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
+    uploaded.push({ id: data.asset.id, filename: data.asset.filename, previewUrl });
+  }
+  return uploaded;
+}
+
 function ImageUploadField({
   images,
   onChange,
+  onUploadFiles,
+  loading,
+  error,
 }: {
   images: UploadedImage[];
   onChange: (images: UploadedImage[]) => void;
+  onUploadFiles: (files: File[]) => Promise<void>;
+  loading: boolean;
+  error: string | null;
 }) {
   const m = useMessages();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  async function uploadFiles(e: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadFromInput(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     if (!files?.length) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const uploaded: UploadedImage[] = [];
-      for (const file of Array.from(files)) {
-        const fd = new FormData();
-        fd.append("file", file);
-        const res = await fetch("/api/upload", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Upload failed");
-        const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-        uploaded.push({ id: data.asset.id, filename: data.asset.filename, previewUrl });
-      }
-      onChange([...images, ...uploaded]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-      e.target.value = "";
-    }
+    await onUploadFiles(Array.from(files));
+    e.target.value = "";
   }
 
   function removeImage(id: string) {
@@ -59,22 +67,23 @@ function ImageUploadField({
           type="file"
           accept="image/*"
           multiple
-          onChange={uploadFiles}
+          onChange={uploadFromInput}
           disabled={loading}
           className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
         />
       </label>
+      <p className="text-xs text-slate-400">{m.feedback.pasteHint}</p>
       {loading && <span className="text-xs text-slate-400">{m.feedback.uploading}</span>}
       {error && <span className="block text-xs text-red-500">{error}</span>}
       {images.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           {images.map((img) => (
             <div key={img.id} className="relative group">
               {img.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={img.previewUrl} alt={img.filename} className="h-16 w-16 rounded-lg object-cover border border-slate-200" />
+                <img src={img.previewUrl} alt={img.filename} className="h-24 w-24 rounded-lg object-cover border border-slate-200" />
               ) : (
-                <div className="h-16 w-16 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-500 border border-slate-200">
+                <div className="h-24 w-24 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-500 border border-slate-200">
                   📎
                 </div>
               )}
@@ -97,6 +106,10 @@ function ImageUploadField({
 function FeedbackForm({ onClose }: { onClose: () => void }) {
   const m = useMessages();
   const [images, setImages] = useState<UploadedImage[]>([]);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const imagesRef = useRef<UploadedImage[]>([]);
+  imagesRef.current = images;
   const [state, action, pending] = useActionState(
     async (_: unknown, formData: FormData) => {
       images.forEach((img) => formData.append("assetIds", img.id));
@@ -105,22 +118,70 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
     null,
   );
 
+  const handleUploadFiles = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    if (!imageFiles.length) return;
+    setUploadLoading(true);
+    setUploadError(null);
+    try {
+      const uploaded = await uploadImageFiles(imageFiles);
+      setImages((prev) => [...prev, ...uploaded]);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploadLoading(false);
+    }
+  }, []);
+
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent | ClipboardEvent) => {
+      const files = imageFilesFromClipboard(e.clipboardData);
+      if (!files.length) return;
+      e.preventDefault();
+      void handleUploadFiles(files);
+    },
+    [handleUploadFiles],
+  );
+
   useEffect(() => {
     if (state?.ok) onClose();
   }, [state, onClose]);
 
+  useEffect(() => {
+    function onWindowPaste(e: ClipboardEvent) {
+      handlePaste(e);
+    }
+    document.addEventListener("paste", onWindowPaste);
+    return () => document.removeEventListener("paste", onWindowPaste);
+  }, [handlePaste]);
+
+  useEffect(() => {
+    return () => {
+      imagesRef.current.forEach((img) => {
+        if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
+      });
+    };
+  }, []);
+
   return (
-    <form action={action} className="space-y-4">
-      <label className="block space-y-1">
+    <form action={action} className="space-y-5" onPaste={handlePaste}>
+      <label className="block space-y-1.5">
         <span className="text-xs text-slate-500">{m.feedback.descLabel}</span>
         <textarea
           name="description"
-          rows={5}
+          rows={8}
           placeholder={m.feedback.descPlaceholder}
-          className={`${input} resize-y min-h-[120px]`}
+          onPaste={handlePaste}
+          className={`${input} resize-y min-h-[180px] text-[15px] leading-relaxed`}
         />
       </label>
-      <ImageUploadField images={images} onChange={setImages} />
+      <ImageUploadField
+        images={images}
+        onChange={setImages}
+        onUploadFiles={handleUploadFiles}
+        loading={uploadLoading}
+        error={uploadError}
+      />
       {state?.error && (
         <p className="text-xs text-red-600">
           {state.error === "content_required" ? m.feedback.contentRequired : state.error}
@@ -146,13 +207,13 @@ export function FeedbackFormModal({ open, onClose }: { open: boolean; onClose: (
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4 sm:p-6" onClick={onClose}>
       <div
-        className="bg-white rounded-lg w-full border border-slate-200 max-w-md p-6 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xl w-full border border-slate-200 max-w-2xl p-6 sm:p-8 max-h-[92vh] overflow-y-auto shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold mb-1">{m.feedback.modalTitle}</h3>
-        <p className="text-xs text-slate-500 mb-4">{m.feedback.modalDesc}</p>
+        <h3 className="text-lg font-semibold mb-1">{m.feedback.modalTitle}</h3>
+        <p className="text-sm text-slate-500 mb-5">{m.feedback.modalDesc}</p>
         <FeedbackForm onClose={onClose} />
       </div>
     </div>

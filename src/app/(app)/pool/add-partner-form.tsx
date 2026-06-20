@@ -6,6 +6,7 @@ import { createPartnerAction } from "@/lib/actions";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { AiIntakePanel } from "@/components/ai-intake-panel";
+import { useMessages } from "@/lib/i18n/context";
 
 export function AddPartnerForm({
   intent = "prospect",
@@ -17,6 +18,7 @@ export function AddPartnerForm({
   const [open, setOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const isActive = intent === "active";
+  const p = useMessages().pool;
 
   return (
     <>
@@ -25,13 +27,13 @@ export function AddPartnerForm({
           onClick={() => setAiOpen(true)}
           className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:opacity-90"
         >
-          ✦ AI Intake
+          {p.aiIntake}
         </button>
         <button
           onClick={() => setOpen(true)}
           className="rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50"
         >
-          + Add manually
+          {p.addManually}
         </button>
       </div>
 

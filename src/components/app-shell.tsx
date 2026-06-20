@@ -1,14 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { logoutAction } from "@/lib/actions";
 import { NavLinks } from "@/components/nav-links";
-import { LocaleSwitcher } from "@/components/locale-switcher";
+import { SidebarFooter } from "@/components/sidebar-footer";
 import { isSuperAdmin } from "@/lib/user-roles";
-import { useAssistant } from "@/lib/assistant-context";
-import { FeedbackButton } from "@/components/feedback-form-modal";
 import { useMessages } from "@/lib/i18n/context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import type { Locale } from "@/lib/i18n/locale";
@@ -25,7 +21,6 @@ export function AppShell({
   locale: Locale;
 }) {
   const m = useMessages();
-  const { openAssistant } = useAssistant();
   const pathname = usePathname();
   const [navOpen, setNavOpen] = useState(false);
 
@@ -107,30 +102,7 @@ export function AppShell({
           </button>
         </div>
         <NavLinks unread={unread} onNavigate={() => setNavOpen(false)} showTeamSettings={isSuperAdmin(user)} />
-        <div className="mt-auto border-t border-slate-100 px-3 py-4 space-y-2">
-          <FeedbackButton onOpen={() => setNavOpen(false)} />
-          <button
-            type="button"
-            onClick={() => {
-              openAssistant();
-              setNavOpen(false);
-            }}
-            className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-white bg-slate-900 hover:bg-slate-800"
-          >
-            <span className="text-base w-5 text-center">✦</span>
-            <span>{m.assistant.fabTitle}</span>
-          </button>
-          <LocaleSwitcher locale={locale} />
-          <Link
-            href="/account"
-            className="block text-xs text-slate-500 mb-2 truncate hover:text-slate-900"
-          >
-            {user.name} · {user.email}
-          </Link>
-          <form action={logoutAction}>
-            <button className="text-xs text-slate-400 hover:text-slate-700">{m.shell.signOut}</button>
-          </form>
-        </div>
+        <SidebarFooter user={user} locale={locale} onNavigate={() => setNavOpen(false)} />
       </aside>
 
       <main className="app-main flex-1 lg:ml-56 min-w-0 max-w-full overflow-x-hidden pt-14 lg:pt-0 pb-safe">

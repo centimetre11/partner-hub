@@ -33,6 +33,31 @@ export function LocaleSwitcher({ locale }: { locale: Locale }) {
   );
 }
 
+export function LocaleSwitcherSegmented({ locale }: { locale: Locale }) {
+  const lm = { zh: "中文", en: "EN" };
+  return (
+    <div
+      className="inline-flex rounded-md border border-slate-200 p-0.5 bg-slate-50"
+      role="group"
+      aria-label="Language"
+    >
+      {(["zh", "en"] as const).map((code) => (
+        <form key={code} action={setLocaleAction} className="contents">
+          <input type="hidden" name="locale" value={code} />
+          <button
+            type="submit"
+            className={`rounded px-2.5 py-1 text-xs font-medium ${
+              locale === code ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            {lm[code]}
+          </button>
+        </form>
+      ))}
+    </div>
+  );
+}
+
 export function LoginLocaleSwitcher({ locale }: { locale: Locale }) {
   return (
     <div className="flex justify-center gap-2 mb-4">

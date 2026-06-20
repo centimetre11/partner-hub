@@ -17,38 +17,7 @@ export default async function KnowhowPage() {
       <PageHeader title={m.knowhow.title} desc={m.knowhow.desc} />
       <AiCenterNav />
       <div className="px-8 max-w-4xl">
-        <KnowhowSearchPanel
-          configured={status.configured}
-          isAdmin={admin}
-          labels={{
-            query: m.knowhow.query,
-            queryPlaceholder: m.knowhow.queryPlaceholder,
-            search: m.knowhow.search,
-            filters: m.knowhow.filters,
-            businessDomain: m.knowhow.businessDomain,
-            project: m.knowhow.project,
-            contract: m.knowhow.contract,
-            tags: m.knowhow.tags,
-            tagsPlaceholder: m.knowhow.tagsPlaceholder,
-            quality: m.knowhow.quality,
-            qualityPlaceholder: m.knowhow.qualityPlaceholder,
-            nodePath: m.knowhow.nodePath,
-            nodePathPlaceholder: m.knowhow.nodePathPlaceholder,
-            industry: m.knowhow.industry,
-            industryPlaceholder: m.knowhow.industryPlaceholder,
-            topK: m.knowhow.topK,
-            notConfigured: m.knowhow.notConfigured,
-            notConfiguredAdmin: m.knowhow.notConfiguredAdmin,
-            noResults: m.knowhow.noResults,
-            score: m.knowhow.score,
-            viewDetail: m.knowhow.viewDetail,
-            backToResults: m.knowhow.backToResults,
-            searching: m.knowhow.searching,
-            openSource: m.knowhow.openSource,
-            detailFallback: m.knowhow.detailFallback,
-            noContent: m.knowhow.noContent,
-          }}
-        />
+        <KnowhowSearchPanel configured={status.configured} isAdmin={admin} apiBaseUrl={status.baseUrl} />
       </div>
     </div>
   );

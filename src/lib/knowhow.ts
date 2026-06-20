@@ -1,7 +1,9 @@
 import { db } from "./db";
 import { normalizeKnowhowApiKey } from "./knowhow-token";
+import { resolveKnowhowSourceUrl } from "./knowhow-url";
 
 export { normalizeKnowhowApiKey } from "./knowhow-token";
+export { buildKnowhowDocumentWebUrl, resolveKnowhowSourceUrl } from "./knowhow-url";
 
 export const KNOWHOW_DEFAULT_BASE_URL = "https://digitchat.fanruan.com/dataset";
 
@@ -136,6 +138,8 @@ function extractSourceUrl(
     metadata.page_url,
     metadata.kh_url,
     metadata.kms_url,
+    metadata.original_url,
+    metadata.originalUrl,
   );
 }
 
@@ -347,7 +351,10 @@ export async function retrieveKnowhow(
     }),
   });
 
-  const hits = extractHits(payload);
+  const hits = extractHits(payload).map((hit) => ({
+    ...hit,
+    sourceUrl: resolveKnowhowSourceUrl(hit, cred.baseUrl),
+  }));
   if (!hits.length) {
     console.warn("[knowhow] retrieve returned 0 parsed hits", {
       query: request.query,
@@ -408,7 +415,7 @@ export async function getKnowhowDocumentDetail(
     id: hit.detailDocumentId,
     title: hit.title,
     content: hit.content,
-    sourceUrl: hit.sourceUrl,
+    sourceUrl: resolveKnowhowSourceUrl(hit),
     metadata: hit.metadata,
   };
 
@@ -422,7 +429,7 @@ export async function getKnowhowDocumentDetail(
       id: doc.id,
       title: doc.title || hit.title,
       content: doc.content || hit.content,
-      sourceUrl: doc.sourceUrl || hit.sourceUrl,
+      sourceUrl: resolveKnowhowSourceUrl({ ...hit, sourceUrl: doc.sourceUrl || hit.sourceUrl }),
       metadata: { ...hit.metadata, ...doc.metadata },
       fromSearchFallback: !doc.content && !!hit.content,
     };
