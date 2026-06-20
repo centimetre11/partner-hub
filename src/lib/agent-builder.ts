@@ -1,5 +1,6 @@
 import { AIError, chatJson } from "./ai";
 import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
+import { clarificationSchemaHint, hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
 import { db } from "./db";
 import type { Locale } from "./i18n/locale";
 import { resolveAgentSkills } from "./skill-resolver";
@@ -51,7 +52,8 @@ function outputSchema(locale: Locale) {
     {
       "id": "stable_snake_id e.g. delivery_mode",
       "question": "${replyLang} one-line confirmation question",
-      "options": ["${replyLang} 2-4 concrete choices; FIRST option is your recommended default for this Agent"]
+      "options": ["${replyLang} 2-4 concrete choices; FIRST option is your recommended default for this Agent"],
+      "tier": "required | preference — see clarification rules below"
     }
   ],
   "questions": ["Deprecated — mirror clarification questions as plain strings for legacy clients; prefer clarifications"],
@@ -91,7 +93,7 @@ Language (CRITICAL):
 
 How you work:
 1. Understand business goal, inputs, trigger timing, deliverables, delivery channel, risk boundaries.
-2. When info is insufficient, output clarifications[] (max 4): each item is one confirmation with 2-4 options. Put your recommended choice FIRST in options. Do NOT include "Other" — the UI adds it. Avoid open-ended questions in reply; use clarifications instead.
+2. When info is insufficient, output clarifications[] (max 4): each item is one confirmation with 2-4 options. Put your recommended choice FIRST in options. Do NOT include "Other" — the UI adds it. Use tier:"required" when the user must answer before you can proceed; tier:"preference" for refinements that do not block (e.g. 9:00 vs 10:00) — for preference, already apply the first option to draft and mention it in reply.
 3. Pick tools from the tool list (draft.skills) and methodology skills (draft.skillIds); prefer fewer, precise choices.
 4. If no skill fits exactly, don't block; note the gap in missingSkillNotes and write interim steps in instructions.
 5. For company strategy/product knowledge, prefer search_knowledge in instructions.
@@ -105,8 +107,10 @@ How you work:
      * wecom_chat — push to the WeCom chat where the user is building (use when user says current group / 本群 / 这个群)
      * partner_group — push to partner's bound WeCom group (requires scopeType=PARTNER)
      * webhook — external webhook URL in draft.webhookUrl
-8. ready=true only when name, instructions, deliveryMode are set; webhook mode also requires webhookUrl.
+8. ready=true only when name, instructions, deliveryMode are set; webhook mode also requires webhookUrl; and no unanswered tier:"required" clarifications remain.
 9. NEVER claim the Agent is already saved/created in the system. When ready=true, say the draft is ready and the user must reply 确认 or 创建Agent in WeCom to persist it.
+
+${clarificationSchemaHint(locale)}
 
 【Available tools (draft.skills = name)】
 ${toolLines}
@@ -154,22 +158,7 @@ function legacyQuestionOptions(locale: Locale): string[] {
 }
 
 function normalizeClarifications(raw: unknown, questions: string[], locale: Locale): AgentBuilderClarification[] {
-  const out: AgentBuilderClarification[] = [];
-  if (Array.isArray(raw)) {
-    for (let i = 0; i < raw.length && out.length < 4; i++) {
-      const c = raw[i] as Partial<AgentBuilderClarification> | null;
-      if (!c || typeof c.question !== "string") continue;
-      const options = Array.isArray(c.options)
-        ? c.options.map((o) => String(o).trim()).filter(Boolean).slice(0, 5)
-        : [];
-      if (!options.length) continue;
-      out.push({
-        id: typeof c.id === "string" && c.id.trim() ? c.id.trim() : `confirm-${i}`,
-        question: c.question.trim(),
-        options,
-      });
-    }
-  }
+  const out = normalizeAiClarifications(raw, { max: 4, defaultTier: "required" });
   if (out.length) return out;
   const qs = questions.map((q) => String(q).trim()).filter(Boolean).slice(0, 4);
   return qs.map((question, i) => ({
@@ -238,7 +227,7 @@ function normalizeTurn(
     reply: raw.reply?.trim() || defaultReply,
     questions,
     clarifications,
-    ready: !!raw.ready && isDraftReady(normalizedDraft) && clarifications.length === 0,
+    ready: !!raw.ready && isDraftReady(normalizedDraft) && !hasRequiredClarifications(clarifications),
     draft: normalizedDraft,
   };
 }

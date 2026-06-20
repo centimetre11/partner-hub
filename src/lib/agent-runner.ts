@@ -3,6 +3,7 @@ import { db } from "./db";
 import type { ChatMessage, ToolDef } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
 import type { TraceEmitter } from "./ai-trace";
+import { computeNextRunFromCron } from "./cron";
 import {
   newSkillContext,
   REPORT_AGENT_KEYWORDS,
@@ -13,9 +14,21 @@ import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
 
 const MAX_STEPS = 12;
 
+function agentMaxSteps(agent: Pick<Agent, "maxIterations" | "isAutomation">): number {
+  if (agent.isAutomation && agent.maxIterations > 0) return agent.maxIterations;
+  return MAX_STEPS;
+}
+
 // ============ Schedule time calculation ============
 
-export function computeNextRunAt(agent: Pick<Agent, "frequency" | "runHour" | "runWeekday">, from = new Date()): Date {
+export function computeNextRunAt(
+  agent: Pick<Agent, "frequency" | "runHour" | "runWeekday" | "cronExpr">,
+  from = new Date()
+): Date {
+  if (agent.cronExpr) {
+    const fromCron = computeNextRunFromCron(agent.cronExpr, from);
+    if (fromCron) return fromCron;
+  }
   const next = new Date(from);
   if (agent.frequency === "HOURLY") {
     next.setMinutes(0, 0, 0);
@@ -130,7 +143,7 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
       temperature: 0.3,
       feature: `Agent run: ${agent.name}`,
       userId: agent.createdById ?? undefined,
-      maxSteps: MAX_STEPS,
+      maxSteps: agentMaxSteps(agent),
       emit,
       executeTool: async (tc) => {
         if (tc.function.name === "$web_search") return tc.function.arguments;
@@ -179,14 +192,16 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
     }
 
     // Inbox notifications
-    await db.notification.create({
-      data: {
-        title: `${agent.icon} ${agent.name} run completed`,
-        content: output,
-        agentRunId: run.id,
-        partnerId: agent.partnerId,
-      },
-    });
+    if (!agent.isAutomation || agent.notifyOnSuccess !== false) {
+      await db.notification.create({
+        data: {
+          title: `${agent.icon} ${agent.name} run completed`,
+          content: output,
+          agentRunId: run.id,
+          partnerId: agent.partnerId,
+        },
+      });
+    }
     // Separate notification per pending proposal
     for (const p of ctx.pendingProposals) {
       await db.notification.create({
@@ -237,9 +252,11 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
       where: { id: run.id },
       data: { status: "FAILED", error: msg, toolLog: JSON.stringify(toolLog), finishedAt: new Date() },
     });
-    await db.notification.create({
-      data: { title: `${agent.icon} ${agent.name} run failed`, content: msg, agentRunId: run.id },
-    });
+    if (!agent.isAutomation || agent.notifyOnFailure !== false) {
+      await db.notification.create({
+        data: { title: `${agent.icon} ${agent.name} run failed`, content: msg, agentRunId: run.id },
+      });
+    }
     throw e;
   }
 }

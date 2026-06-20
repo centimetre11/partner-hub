@@ -3,6 +3,7 @@ import type { IntakeScope } from "./ai-locale";
 import type { IntakeMessage } from "./ai-intake";
 import { stripIntakeSystemHint } from "./intake-text";
 import { isAgentBuilderIntent } from "./agent-builder-intent";
+import { isAutomationBuilderIntent } from "./automation-builder-intent";
 import type { Locale } from "./i18n/locale";
 import {
   focusIsFresh,
@@ -156,6 +157,15 @@ function heuristicRoute(
 ): ResolvedAssistantRoute {
   const lastRaw = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const last = stripIntakeSystemHint(lastRaw);
+
+  if (isAutomationBuilderIntent(lastRaw)) {
+    return {
+      actionId: "automation.builder",
+      route: { mode: "automation_builder" },
+      confidence: "medium",
+      source: "heuristic",
+    };
+  }
 
   if (isAgentBuilderIntent(lastRaw)) {
     const action = BUILTIN_ACTIONS.find((a) => a.route.mode === "agent_builder");

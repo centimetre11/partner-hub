@@ -1,4 +1,11 @@
 import type { IntakeClarification, IntakeProposal } from "@/lib/ai-intake";
+import type { AiClarification } from "@/lib/ai-clarifications";
+import {
+  formatClarificationAnswers,
+  getClarificationTier,
+  hasRequiredClarifications,
+  shouldBlockChatInput,
+} from "./ai-clarifications";
 import { PARTNER_FIELD_LABELS } from "@/lib/constants";
 import {
   isConfirmUnlinkedTodoOption,
@@ -44,8 +51,10 @@ export function isIdentityClarification(c: IntakeClarification): boolean {
 }
 
 export function hasBlockingClarifications(clarifications: IntakeClarification[]): boolean {
-  return clarifications.some((c) => c.blocking);
+  return hasRequiredClarifications(clarifications as AiClarification[]);
 }
+
+export { shouldBlockChatInput, hasRequiredClarifications, getClarificationTier };
 
 export function getClarificationMode(c: IntakeClarification): ClarificationApplyMode {
   if (c.apply === "direct" || c.apply === "ai") return c.apply;
@@ -180,7 +189,5 @@ export function applyProposalEdit(
 export type ClarificationAnswer = { id: string; question: string; value: string };
 
 export function formatAiClarificationMessage(answers: ClarificationAnswer[], locale: "zh" | "en" = "zh"): string {
-  const prefix = locale === "zh" ? "【确认选择】" : "[Confirmations]";
-  const sep = locale === "zh" ? "：" : ": ";
-  return `${prefix}\n${answers.map((a, i) => `${i + 1}. ${a.question}${sep}${a.value}`).join("\n")}`;
+  return formatClarificationAnswers(answers, locale);
 }

@@ -53,7 +53,7 @@ export function NavLinks({
     ...(INBOX_NAV_ENABLED
       ? [{ href: "/inbox" as const, label: m.nav.inbox, icon: "✉", badge: "unread" as const }]
       : []),
-    { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge"] },
+    { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge", "/automations"] },
     { href: "/settings", label: m.nav.teamSettings, icon: "⚙" },
   ];
 

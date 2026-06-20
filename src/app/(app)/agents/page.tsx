@@ -11,7 +11,7 @@ export default async function AgentsPage() {
   const user = await requireUser();
   const { messages: m, bcp47, locale } = await getServerI18n();
   const agents = await db.agent.findMany({
-    where: { isTemplate: false },
+    where: { isTemplate: false, isAutomation: false },
     include: { partner: true, createdBy: true, runs: { orderBy: { startedAt: "desc" }, take: 1 } },
     orderBy: { createdAt: "desc" },
   });

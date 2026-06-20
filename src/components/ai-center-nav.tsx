@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useLocale } from "@/lib/i18n/context";
 
 const tabs = [
-  { href: "/ai", label: "Overview", icon: "✦", exact: true },
-  { href: "/agents", label: "Agent", icon: "❖" },
-  { href: "/tools", label: "Tools", icon: "🔧" },
-  { href: "/skills", label: "Skills", icon: "⚡" },
-  { href: "/knowledge", label: "Knowledge", icon: "📚" },
+  { href: "/ai", label: "Overview", labelZh: "总览", icon: "✦", exact: true },
+  { href: "/automations", label: "Automations", labelZh: "自动化", icon: "⚡" },
+  { href: "/agents", label: "Agent", labelZh: "Agent", icon: "❖" },
+  { href: "/tools", label: "Tools", labelZh: "工具", icon: "🔧" },
+  { href: "/skills", label: "Skills", labelZh: "技能", icon: "📋" },
+  { href: "/knowledge", label: "Knowledge", labelZh: "知识", icon: "📚" },
 ];
 
 export function AiCenterNav() {
   const pathname = usePathname();
+  const locale = useLocale();
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 pb-4">
@@ -31,7 +34,7 @@ export function AiCenterNav() {
                 }`}
               >
                 <span className="text-base leading-none">{tab.icon}</span>
-                {tab.label}
+                {locale === "zh" ? tab.labelZh : tab.label}
               </Link>
             );
           })}

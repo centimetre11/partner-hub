@@ -1,4 +1,5 @@
-import type { AgentBuilderDraft, AgentBuilderTurn } from "./agent-builder";
+import type { AgentBuilderDraft, AgentBuilderTurn } from "./agent-builder-types";
+import { partitionClarificationsByTier } from "./ai-clarifications";
 import type { CreateAgentResult } from "./agent-create";
 
 const DELIVERY_LABELS: Record<string, string> = {
@@ -67,14 +68,27 @@ export function formatAgentBuilderWecomReply(opts: {
   parts.push(checklist.join("\n"));
 
   if (turn.clarifications.length) {
-    parts.push(
-      `\n**待确认：**\n${turn.clarifications
-        .map((c) => {
-          const opts = c.options.map((o, i) => `${i === 0 ? "★ " : ""}${String.fromCharCode(65 + i)}. ${o}`).join("\n   ");
-          return `• ${c.question}\n   ${opts}`;
-        })
-        .join("\n")}`
-    );
+    const { required, preference } = partitionClarificationsByTier(turn.clarifications);
+    if (required.length) {
+      parts.push(
+        `\n**待确认（必答）：**\n${required
+          .map((c) => {
+            const opts = c.options.map((o, i) => `${i === 0 ? "★ " : ""}${String.fromCharCode(65 + i)}. ${o}`).join("\n   ");
+            return `• ${c.question}\n   ${opts}`;
+          })
+          .join("\n")}`
+      );
+    }
+    if (preference.length) {
+      parts.push(
+        `\n**偏好选项（可选，已按 ★ 推荐继续）：**\n${preference
+          .map((c) => {
+            const opts = c.options.map((o, i) => `${i === 0 ? "★ " : ""}${String.fromCharCode(65 + i)}. ${o}`).join("\n   ");
+            return `• ${c.question}\n   ${opts}`;
+          })
+          .join("\n")}`
+      );
+    }
   } else if (turn.questions.length) {
     parts.push(`\n**待确认：**\n${turn.questions.map((q) => `• ${q}`).join("\n")}`);
   }

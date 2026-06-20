@@ -2,7 +2,9 @@ import type { TraceEmitter } from "./ai-trace";
 import type { IntakeMessage, IntakeScope } from "./ai-intake";
 import { runProposeTurn } from "./ai-intake";
 import { shouldUseAgentBuilderMode } from "./agent-builder-intent";
+import { shouldUseAutomationBuilderMode } from "./automation-builder-intent";
 import { runAgentBuilderTurn, type AgentBuilderMessage } from "./agent-builder";
+import { runAutomationBuilderTurn, type AutomationBuilderMessage } from "./automation-builder";
 import { runQueryAssistant, type AssistantLocale } from "./assistant-core";
 import {
   buildFocusFromListItems,
@@ -51,13 +53,22 @@ export type AssistantAgentBuilderResult = Awaited<ReturnType<typeof runAgentBuil
   mode: "agent_builder";
 };
 
+export type AssistantAutomationBuilderResult = Awaited<ReturnType<typeof runAutomationBuilderTurn>> & {
+  mode: "automation_builder";
+};
+
 export type AssistantTurnResult =
   | AssistantQueryResult
   | AssistantIntentConfirmResult
   | Awaited<ReturnType<typeof runProposeTurn>>
-  | AssistantAgentBuilderResult;
+  | AssistantAgentBuilderResult
+  | AssistantAutomationBuilderResult;
 
 function toAgentBuilderMessages(messages: IntakeMessage[]): AgentBuilderMessage[] {
+  return messages.map((m) => ({ role: m.role, content: m.content }));
+}
+
+function toAutomationBuilderMessages(messages: IntakeMessage[]): AutomationBuilderMessage[] {
   return messages.map((m) => ({ role: m.role, content: m.content }));
 }
 
@@ -179,6 +190,7 @@ export async function runAssistantTurn(opts: {
   emit?: TraceEmitter;
   forcePropose?: boolean;
   forceAgentBuilder?: boolean;
+  forceAutomationBuilder?: boolean;
   previousScope?: IntakeScope;
   agentBuilderContext?: string;
   confirmedActionId?: string;
@@ -191,6 +203,16 @@ export async function runAssistantTurn(opts: {
   patchInstruction?: string;
 }): Promise<AssistantTurnResult> {
   const locale = opts.locale as Locale;
+
+  if (opts.forceAutomationBuilder || shouldUseAutomationBuilderMode(opts.messages)) {
+    const turn = await runAutomationBuilderTurn({
+      messages: toAutomationBuilderMessages(opts.messages),
+      userId: opts.userId,
+      emit: opts.emit,
+      locale,
+    });
+    return { ...turn, mode: "automation_builder" };
+  }
 
   if (opts.forceAgentBuilder || shouldUseAgentBuilderMode(opts.messages)) {
     const builderMessages = toAgentBuilderMessages(opts.messages);
@@ -285,6 +307,16 @@ export async function runAssistantTurn(opts: {
       focus,
       lastQueryActionId: route.actionId,
     };
+  }
+
+  if (route.route.mode === "automation_builder") {
+    const turn = await runAutomationBuilderTurn({
+      messages: toAutomationBuilderMessages(opts.messages),
+      userId: opts.userId,
+      emit: opts.emit,
+      locale,
+    });
+    return { ...turn, mode: "automation_builder" };
   }
 
   if (route.route.mode === "agent_builder") {

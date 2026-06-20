@@ -42,7 +42,7 @@ export function AiClarificationCard({
   onImmediatePick?: (answer: Answer) => void;
   showSkip?: boolean;
   continueLabel?: string;
-  variant?: "default" | "identity" | "direct";
+  variant?: "default" | "identity" | "direct" | "required";
 }) {
   const m = useMessages();
   const ag = m.agents;
@@ -144,9 +144,17 @@ export function AiClarificationCard({
       ? "border-amber-300"
       : variant === "direct"
         ? "border-emerald-200"
-        : "border-slate-200";
+        : variant === "required"
+          ? "border-orange-200"
+          : "border-slate-200";
   const headerBg =
-    variant === "identity" ? "bg-amber-50/80" : variant === "direct" ? "bg-emerald-50/80" : "bg-slate-50/80";
+    variant === "identity"
+      ? "bg-amber-50/80"
+      : variant === "direct"
+        ? "bg-emerald-50/80"
+        : variant === "required"
+          ? "bg-orange-50/80"
+          : "bg-slate-50/80";
 
   if (!clarifications.length) return null;
 

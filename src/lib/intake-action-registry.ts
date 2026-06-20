@@ -8,7 +8,8 @@ export type BuiltinActionRoute =
   | { mode: "propose"; scope: IntakeScope }
   | { mode: "query"; queryKind: "list_todos" | "list_opportunities" | "list_business_records" | "general" }
   | { mode: "patch"; entityKind: FocusEntityKind }
-  | { mode: "agent_builder" };
+  | { mode: "agent_builder" }
+  | { mode: "automation_builder" };
 
 export type BuiltinActionDef = {
   id: string;
@@ -250,9 +251,11 @@ export function actionCatalogForAi(locale: "zh" | "en"): string {
         ? `propose/${a.route.scope}`
         : a.route.mode === "query"
           ? `query/${a.route.queryKind}`
-          : a.route.mode === "patch"
+            : a.route.mode === "patch"
             ? `patch/${a.route.entityKind}`
-            : "agent_builder";
+            : a.route.mode === "automation_builder"
+              ? "automation_builder"
+              : "agent_builder";
     return `- ${a.id} (${label}, ${route}): ${desc}`;
   }).join("\n");
 }

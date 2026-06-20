@@ -30,6 +30,23 @@ import {
   formatAgentTrialRunReply,
 } from "@/lib/agent-builder-wecom-format";
 import { createAgentFromDraft } from "@/lib/agent-create";
+import type { AutomationBuilderDraft, AutomationBuilderMessage } from "@/lib/automation-builder-types";
+import { runAutomationBuilderTurn } from "@/lib/automation-builder";
+import {
+  isAutomationBuilderIntent,
+  shouldUseAutomationBuilderMode,
+} from "@/lib/automation-builder-intent";
+import {
+  formatAutomationBuilderWecomReply,
+  formatAutomationCreatedReply,
+  formatAutomationTrialRunReply,
+} from "@/lib/automation-builder-wecom-format";
+import { createAutomationFromDraft } from "@/lib/automation-create";
+import {
+  isBuilderCancel,
+  isBuilderConfirm,
+  isBuilderTrialRun,
+} from "@/lib/builder-intent-shared";
 import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
@@ -102,6 +119,37 @@ type AgentBuilderSession = {
 };
 
 const agentBuilderSessions = new Map<string, AgentBuilderSession>();
+
+type AutomationBuilderSession = {
+  messages: AutomationBuilderMessage[];
+  draft: AutomationBuilderDraft;
+  ready: boolean;
+  sourceChatId: string;
+  lastCreatedAgentId?: string;
+};
+
+const automationBuilderSessions = new Map<string, AutomationBuilderSession>();
+
+const EMPTY_AUTOMATION_DRAFT: AutomationBuilderDraft = {
+  slug: "",
+  name: "",
+  description: "",
+  taskMd: "",
+  triggerType: "SCHEDULE",
+  cronExpr: "0 9 * * *",
+  timezone: "Asia/Shanghai",
+  validityDays: 7,
+  variables: [],
+  maxIterations: 30,
+  timeoutMinutes: 60,
+  notifyOnSuccess: true,
+  notifyOnFailure: true,
+  wecomPushChatId: "",
+  webhookUrl: "",
+  rationale: "",
+  questionnaire: [],
+  missingSkillNotes: [],
+};
 
 const EMPTY_AGENT_DRAFT: AgentBuilderDraft = {
   name: "",
@@ -286,6 +334,19 @@ function buildAgentBuilderContextHint(opts: {
   return parts.join("；");
 }
 
+function buildAutomationBuilderContextHint(opts: {
+  sourceChatId: string;
+  chatType: "group" | "single";
+}): string {
+  const parts: string[] = [];
+  if (opts.chatType === "group" && opts.sourceChatId) {
+    parts.push(
+      `系统提示：用户正在企微群 chatId=${opts.sourceChatId} 中构建自动化；若需推送结果到本群，可设 wecomPushChatId=${opts.sourceChatId}`
+    );
+  }
+  return parts.join("；");
+}
+
 function resolveSourceChatId(frame: WsFrame, chatId?: string | null): string {
   return chatId ?? frame.body?.chatid ?? frame.body?.from?.userid ?? "default";
 }
@@ -324,6 +385,43 @@ async function persistAgentBuilderSession(opts: {
   });
   const reply = formatAgentCreatedReply(created, draft);
   console.log(`[wecom-bot] Agent 已创建 id=${created.id.slice(0, 8)}… actor=${actorUserId.slice(0, 8)}…`);
+  return { created, draft, reply };
+}
+
+async function persistAutomationBuilderSession(opts: {
+  automationSession: AutomationBuilderSession;
+  actorUserId: string;
+  actor: Awaited<ReturnType<typeof resolveWecomActorUserId>>;
+  key: string;
+}): Promise<
+  | { created: Awaited<ReturnType<typeof createAutomationFromDraft>>; draft: AutomationBuilderDraft; reply: string }
+  | { error: string }
+> {
+  const { automationSession, actorUserId, actor, key } = opts;
+  if (!automationSession.ready) {
+    return {
+      error: "自动化草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」或「创建自动化」，或回复「取消」放弃。",
+    };
+  }
+  if (actor.matchedBy === "fallback") {
+    return {
+      error:
+        "⚠️ 未识别到你的 Partner Hub 账号。请先在 Web 个人中心生成绑定码，再 @我 绑定 XXXXXX 后再创建自动化。",
+    };
+  }
+  const draft = automationSession.draft;
+  const created = await createAutomationFromDraft(draft, actorUserId, {
+    wecomPushChatId: automationSession.sourceChatId,
+  });
+  automationBuilderSessions.set(key, {
+    ...automationSession,
+    ready: false,
+    lastCreatedAgentId: created.id,
+    messages: [],
+    draft: EMPTY_AUTOMATION_DRAFT,
+  });
+  const reply = formatAutomationCreatedReply(created, draft);
+  console.log(`[wecom-bot] Automation 已创建 id=${created.id.slice(0, 8)}… actor=${actorUserId.slice(0, 8)}…`);
   return { created, draft, reply };
 }
 
@@ -403,6 +501,13 @@ async function applyAssistantTurnResult(opts: {
       ready: result.ready,
       crmOnlyReady: result.crmOnlyReady,
       questions: result.questions,
+      chatType,
+    });
+  }
+
+  if (result.mode === "automation_builder") {
+    return formatAutomationBuilderWecomReply({
+      turn: result,
       chatType,
     });
   }
@@ -513,15 +618,114 @@ async function handleTextMessage(frame: WsFrame) {
   const sourceChatId = resolveSourceChatId(frame, chat?.chatId);
   let session = proposeSessions.get(key);
   let agentSession = agentBuilderSessions.get(key);
+  let automationSession = automationBuilderSessions.get(key);
   let intentSession = intentConfirmSessions.get(key);
 
   try {
+    if (isAutomationBuilderIntent(text)) {
+      proposeSessions.delete(key);
+      intentConfirmSessions.delete(key);
+      focusSessions.delete(key);
+      agentBuilderSessions.delete(key);
+      session = undefined;
+      intentSession = undefined;
+      agentSession = undefined;
+    }
     if (isAgentBuilderIntent(text)) {
       proposeSessions.delete(key);
       intentConfirmSessions.delete(key);
       focusSessions.delete(key);
+      automationBuilderSessions.delete(key);
       session = undefined;
       intentSession = undefined;
+      automationSession = undefined;
+    }
+
+    // ---- Automation Builder session (priority over Agent Builder) ----
+    if (automationSession && isBuilderCancel(text)) {
+      automationBuilderSessions.delete(key);
+      const reply = "已取消自动化草案。你可以继续正常提问，或重新描述要构建的自动化任务。";
+      appendHistory(key, "assistant", reply);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    if (automationSession && isBuilderTrialRun(text)) {
+      if (!automationSession.lastCreatedAgentId && automationSession.ready) {
+        const persisted = await persistAutomationBuilderSession({ automationSession, actorUserId, actor, key });
+        if ("error" in persisted) {
+          appendHistory(key, "assistant", persisted.error);
+          await wsClient.replyStream(frame, streamId, persisted.error, true);
+          return;
+        }
+        automationSession = automationBuilderSessions.get(key);
+      }
+      if (!automationSession?.lastCreatedAgentId) {
+        const reply = "暂无可试运行的自动化。请先 @我 **确认** 或 **创建自动化** 完成创建。";
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+        return;
+      }
+      await wsClient.replyStream(frame, streamId, "正在试运行自动化，请稍候…", false);
+      try {
+        const agent = await db.agent.findUniqueOrThrow({ where: { id: automationSession.lastCreatedAgentId } });
+        const output = await runAgent(automationSession.lastCreatedAgentId, "manual");
+        const reply = formatAutomationTrialRunReply(output, agent.name);
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        await wsClient.replyStream(frame, streamId, `试运行失败：${msg}`, true);
+      }
+      return;
+    }
+
+    if (automationSession && isBuilderConfirm(text)) {
+      const persisted = await persistAutomationBuilderSession({ automationSession, actorUserId, actor, key });
+      if ("error" in persisted) {
+        appendHistory(key, "assistant", persisted.error);
+        await wsClient.replyStream(frame, streamId, persisted.error, true);
+        return;
+      }
+      appendHistory(key, "assistant", persisted.reply);
+      await wsClient.replyStream(frame, streamId, persisted.reply, true);
+      return;
+    }
+
+    const skipAutomationTurn =
+      !!automationSession?.ready && isBuilderConfirm(text);
+    const inAutomationBuilder =
+      !skipAutomationTurn && (!!automationSession || shouldUseAutomationBuilderMode(history));
+    if (inAutomationBuilder) {
+      proposeSessions.delete(key);
+      if (!automationSession) {
+        automationSession = {
+          messages: [],
+          draft: EMPTY_AUTOMATION_DRAFT,
+          ready: false,
+          sourceChatId,
+        };
+      }
+      automationSession.messages.push({ role: "user", content: text });
+      const contextHint = buildAutomationBuilderContextHint({ sourceChatId, chatType });
+      const builderMessages = automationSession.messages.map((m, i, arr) => {
+        if (i !== arr.length - 1 || m.role !== "user" || !contextHint) return m;
+        return { role: "user" as const, content: `${m.content}\n\n（${contextHint}）` };
+      });
+      const turn = await runAutomationBuilderTurn({
+        messages: builderMessages,
+        userId: actorUserId,
+        locale: "zh",
+      });
+      automationSession.messages.push({ role: "assistant", content: turn.reply });
+      automationSession.draft = turn.draft;
+      automationSession.ready = turn.ready;
+      automationBuilderSessions.set(key, automationSession);
+      const reply = formatAutomationBuilderWecomReply({ turn, chatType });
+      appendHistory(key, "assistant", reply);
+      console.log(`[wecom-bot] AutomationBuilder ready=${turn.ready} name=${turn.draft.name || "(draft)"}`);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
     }
 
     // ---- Agent Builder session (priority over Propose) ----

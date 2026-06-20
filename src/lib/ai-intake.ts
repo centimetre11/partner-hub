@@ -1,4 +1,5 @@
 import { isAgentBuilderIntent } from "./agent-builder-intent";
+import { isAutomationBuilderIntent } from "./automation-builder-intent";
 import { resolveProposeScope } from "./intake-route-resolver";
 import {
   isListTodosAction,
@@ -152,6 +153,8 @@ export type IntakeClarification = {
   kind?: "identity" | "field";
   /** When true, final save stays disabled until user picks (identity checkpoints) */
   blocking?: boolean;
+  /** required = must answer; preference = optional refine (defaults to first option) */
+  tier?: "required" | "preference";
 };
 
 export type IntakeTurn = {
@@ -243,6 +246,14 @@ function normalizeClarifications(raw: unknown, scope?: IntakeScope): IntakeClari
     const isIdentity =
       kind === "identity" || id === "partnerName" || id === "name" || id === "website" || id === "dedupe";
     const isTodoPartnerNotFound = id === "todo-partner-not-found";
+    const tier =
+      c.tier === "required" || c.tier === "preference"
+        ? c.tier
+        : c.blocking === false
+          ? "preference"
+          : isTodoPartnerNotFound || isIdentity || c.blocking === true
+            ? "required"
+            : "required";
     out.push({
       id,
       question: c.question.trim(),
@@ -251,7 +262,8 @@ function normalizeClarifications(raw: unknown, scope?: IntakeScope): IntakeClari
       allowOther: c.allowOther !== false,
       apply: c.apply === "direct" || c.apply === "ai" ? c.apply : undefined,
       kind: isIdentity ? "identity" : kind,
-      blocking: isTodoPartnerNotFound ? true : (c.blocking ?? isIdentity),
+      tier,
+      blocking: tier === "required",
     });
   }
   return out;
@@ -736,6 +748,7 @@ export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
   if (lastUser && isListTodosAction(lastUser.content)) return false;
   if (lastUser && isAgentBuilderIntent(lastUser.content)) return false;
+  if (lastUser && isAutomationBuilderIntent(lastUser.content)) return false;
   const text = messages
     .filter((m) => m.role === "user")
     .map((m) => normalizeActionText(m.content))

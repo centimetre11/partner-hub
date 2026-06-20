@@ -437,6 +437,16 @@ model Agent {
   pushEmailTo      String? // 默认邮件推送收件人（send_email）
   wecomPushChatId  String? // 运行完成后推送到指定企微 chatId
   isTemplate       Boolean   @default(false) // 模板库条目，克隆使用
+  isAutomation     Boolean   @default(false) // 自动化管道（区别于交互式 Agent）
+  slug             String?   @unique // 自动化英文标识符
+  cronExpr         String?   // Cron 表达式，如 0 9 * * *
+  timezone         String?   @default("Asia/Shanghai")
+  validityDays     Int       @default(7) // 任务有效期（天）
+  variables        String?   // JSON：[{ key, value, label? }]
+  maxIterations    Int       @default(30) // 单次执行最大迭代次数
+  timeoutMinutes   Int       @default(60) // 超时时间（分钟）
+  notifyOnSuccess  Boolean   @default(true)
+  notifyOnFailure  Boolean   @default(true)
   createdById  String?
   createdBy    User?     @relation(fields: [createdById], references: [id])
   lastRunAt    DateTime?

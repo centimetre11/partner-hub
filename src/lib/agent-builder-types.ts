@@ -27,11 +27,9 @@ export type AgentBuilderDraft = {
   rationale: string;
 };
 
-export type AgentBuilderClarification = {
-  id: string;
-  question: string;
-  options: string[];
-};
+import type { AiClarification } from "./ai-clarifications";
+
+export type AgentBuilderClarification = AiClarification;
 
 export type AgentBuilderTurn = {
   reply: string;

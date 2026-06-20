@@ -44,6 +44,7 @@ export function AiWorkflowPanel({
   clarifications,
   onDirectClarify,
   onAiClarify,
+  onPreferenceClarify,
   onProposalEdit,
   ready,
   scope,
@@ -63,6 +64,7 @@ export function AiWorkflowPanel({
   headerExtra,
   leftFooter,
   showDraftPanel = true,
+  draftPanel,
 }: {
   onClose?: () => void;
   messages: Msg[];
@@ -77,6 +79,7 @@ export function AiWorkflowPanel({
   clarifications?: IntakeClarification[];
   onDirectClarify?: (id: string, value: string) => void;
   onAiClarify?: (answers: ClarificationAnswer[]) => void;
+  onPreferenceClarify?: (answer: ClarificationAnswer) => void;
   onProposalEdit?: (patch: ProposalEditPatch) => void;
   ready?: boolean;
   scope?: IntakeScope;
@@ -96,6 +99,7 @@ export function AiWorkflowPanel({
   headerExtra?: ReactNode;
   leftFooter?: ReactNode;
   showDraftPanel?: boolean;
+  draftPanel?: ReactNode;
 }) {
   const { intakePanel: ip } = useMessages();
   const pendingAiClarify = hasPendingAiClarifications(clarifications ?? []);
@@ -174,6 +178,7 @@ export function AiWorkflowPanel({
                   disabled={loading}
                   onDirectClarify={onDirectClarify}
                   onAiClarify={onAiClarify}
+                  onPreferenceClarify={onPreferenceClarify}
                 />
               </div>
             )}
@@ -304,26 +309,28 @@ export function AiWorkflowPanel({
         {/* Right: live draft */}
         {showDraftPanel && (
           <div className="xl:col-span-2 flex flex-col min-h-0 space-y-4">
-            <LiveProposalDraft
-              proposal={proposal}
-              changes={patchChanges}
-              onConfirm={apply}
-              confirmLabel={
-                scope === "business_record"
-                  ? ready
-                    ? ip.confirmSyncReady
-                    : ip.confirmSyncDraft
-                  : ready
-                    ? ip.confirmReady
-                    : ip.confirmDraft
-              }
-              questions={questions}
-              ready={ready}
-              loading={loading}
-              scope={scope}
-              onProposalEdit={onProposalEdit}
-              identityBlocked={(clarifications?.length ?? 0) > 0}
-            />
+            {draftPanel ?? (
+              <LiveProposalDraft
+                proposal={proposal}
+                changes={patchChanges}
+                onConfirm={apply}
+                confirmLabel={
+                  scope === "business_record"
+                    ? ready
+                      ? ip.confirmSyncReady
+                      : ip.confirmSyncDraft
+                    : ready
+                      ? ip.confirmReady
+                      : ip.confirmDraft
+                }
+                questions={questions}
+                ready={ready}
+                loading={loading}
+                scope={scope}
+                onProposalEdit={onProposalEdit}
+                identityBlocked={(clarifications?.length ?? 0) > 0}
+              />
+            )}
           </div>
         )}
       </div>

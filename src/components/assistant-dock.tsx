@@ -17,8 +17,12 @@ import {
   type ClarificationAnswer,
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
+import { formatPreferencePick } from "@/lib/ai-clarifications";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
+import { AssistantBuilderPanel } from "@/components/assistant-builder-panel";
+import type { AgentBuilderDraft } from "@/lib/agent-builder-types";
+import type { AutomationBuilderDraft } from "@/lib/automation-builder-types";
 import { useAssistant } from "@/lib/assistant-context";
 import { useMessages, useLocale } from "@/lib/i18n/context";
 
@@ -55,6 +59,8 @@ type IntentConfirmResult = {
 
 import type { FocusEntity } from "@/lib/focus-entity";
 
+type BuilderKind = "agent" | "automation" | null;
+
 type PendingIntent = {
   actionId: string;
   alternatives: Array<{ actionId: string; label: string; index: number }>;
@@ -86,6 +92,8 @@ export function AssistantDock() {
   const [patchChanges, setPatchChanges] = useState<ProposalChanges | null>(null);
   const [proposeMode, setProposeMode] = useState(false);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
+  const [builderKind, setBuilderKind] = useState<BuilderKind>(null);
+  const [builderDraft, setBuilderDraft] = useState<AgentBuilderDraft | AutomationBuilderDraft | null>(null);
   const [focusEntity, setFocusEntity] = useState<FocusEntity | null>(null);
   const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
@@ -95,7 +103,7 @@ export function AssistantDock() {
     abortRef.current?.abort();
   }
 
-  const showDraft = proposeMode || !!proposal || (loading && proposeMode);
+  const showDraft = proposeMode || !!proposal || !!builderKind || (loading && (proposeMode || !!builderKind));
 
   function applyStream(state: AiStreamState) {
     setLiveTrace(state.trace);
@@ -130,6 +138,10 @@ export function AssistantDock() {
     void send(formatAiClarificationMessage(answers, locale));
   }
 
+  function handlePreferenceClarify(answer: ClarificationAnswer) {
+    void send(formatPreferencePick(answer, locale));
+  }
+
   async function send(text?: string) {
     const content = (text ?? input).trim();
     if ((!content && !pendingImages.length) || loading) return;
@@ -148,7 +160,7 @@ export function AssistantDock() {
     setLoading(true);
     setLiveTrace([]);
     setReplyText("");
-    if (!preserveDraft) {
+    if (!preserveDraft && !builderKind) {
       setProposal(null);
       setQuestions([]);
       setClarifications([]);
@@ -223,6 +235,8 @@ export function AssistantDock() {
 
       if ((data as ProposeResult).mode === "propose") {
         const p = data as ProposeResult;
+        setBuilderKind(null);
+        setBuilderDraft(null);
         setPendingIntent(null);
         setProposeMode(true);
         setProposal((prev) => {
@@ -236,6 +250,38 @@ export function AssistantDock() {
         setClarifications((prev) => (p.clarifications?.length ? p.clarifications : prev));
         setReady(p.ready);
         setMessages([...next, { role: "assistant", content: p.reply || finalReply, trace: [...trace] }]);
+      } else if ((data as { mode?: string }).mode === "agent_builder") {
+        const b = data as {
+          mode: "agent_builder";
+          reply: string;
+          ready: boolean;
+          clarifications?: IntakeClarification[];
+          draft: AgentBuilderDraft;
+        };
+        setPendingIntent(null);
+        setProposeMode(false);
+        setProposal(null);
+        setBuilderKind("agent");
+        setBuilderDraft(b.draft);
+        setClarifications(b.clarifications ?? []);
+        setReady(b.ready);
+        setMessages([...next, { role: "assistant", content: b.reply || finalReply, trace: [...trace] }]);
+      } else if ((data as { mode?: string }).mode === "automation_builder") {
+        const b = data as {
+          mode: "automation_builder";
+          reply: string;
+          ready: boolean;
+          clarifications?: IntakeClarification[];
+          draft: AutomationBuilderDraft;
+        };
+        setPendingIntent(null);
+        setProposeMode(false);
+        setProposal(null);
+        setBuilderKind("automation");
+        setBuilderDraft(b.draft);
+        setClarifications(b.clarifications ?? []);
+        setReady(b.ready);
+        setMessages([...next, { role: "assistant", content: b.reply || finalReply, trace: [...trace] }]);
       } else if ((data as IntentConfirmResult & PendingIntent).mode === "intent_confirm") {
         const ic = data as IntentConfirmResult & PendingIntent;
         setPendingIntent({
@@ -247,12 +293,16 @@ export function AssistantDock() {
           patchTargetLabel: ic.patchTargetLabel,
         });
         if (ic.focus) setFocusEntity(ic.focus);
+        setBuilderKind(null);
+        setBuilderDraft(null);
         setProposeMode(false);
         setProposal(null);
         setMessages([...next, { role: "assistant", content: ic.reply || finalReply, trace: [...trace] }]);
       } else {
         const q = data as QueryResult & { focus?: FocusEntity | null };
         setPendingIntent(null);
+        setBuilderKind(null);
+        setBuilderDraft(null);
         if (q.focus) setFocusEntity(q.focus);
         setMessages([...next, { role: "assistant", content: q.reply || finalReply, actions: q.actions, trace: [...trace] }]);
         if (q.actions?.length) router.refresh();
@@ -333,6 +383,7 @@ export function AssistantDock() {
             clarifications={clarifications}
             onDirectClarify={handleDirectClarify}
             onAiClarify={handleAiClarify}
+            onPreferenceClarify={handlePreferenceClarify}
             onProposalEdit={handleProposalEdit}
             ready={ready}
             scope={proposeScope}
@@ -349,6 +400,11 @@ export function AssistantDock() {
             inputPlaceholder={showDraft ? am.inputDraft : am.inputQuery}
             sendDisabled={loading || (!input.trim() && !pendingImages.length)}
             showDraftPanel={showDraft}
+            draftPanel={
+              builderKind && builderDraft ? (
+                <AssistantBuilderPanel kind={builderKind} draft={builderDraft} ready={ready} />
+              ) : undefined
+            }
           />
         </AiFullscreenOverlay>
       )}

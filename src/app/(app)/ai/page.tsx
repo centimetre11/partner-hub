@@ -15,14 +15,16 @@ export default async function AiCenterPage() {
   const user = await requireUser();
   const { locale, messages: m, bcp47 } = await getServerI18n();
   const today = new Date().toISOString().slice(0, 10);
-  const [agents, templates, promptSkills, knowledge, apiConfigs, todayUsage, recentRuns] = await Promise.all([
-    db.agent.count({ where: { isTemplate: false } }),
+  const [agents, automations, templates, promptSkills, knowledge, apiConfigs, todayUsage, recentRuns] = await Promise.all([
+    db.agent.count({ where: { isTemplate: false, isAutomation: false } }),
+    db.agent.count({ where: { isAutomation: true, isTemplate: false } }),
     db.agent.count({ where: { isTemplate: true } }),
     db.skill.count({ where: { kind: "PROMPT", isBuiltin: false } }),
     db.knowledgeArticle.count(),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }], take: 4 }),
     db.aiDailyTokenUsage.findMany({ where: { day: today }, orderBy: { totalTokens: "desc" } }),
     db.agentRun.findMany({
+      where: { agent: { isAutomation: false } },
       orderBy: { startedAt: "desc" },
       take: 5,
       include: { agent: true },
@@ -78,6 +80,7 @@ export default async function AiCenterPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
             { label: m.ai.statsAgents, value: agents, href: "/agents", desc: `${templates} ${m.ai.templates}`, tone: "text-sky-600" },
+            { label: m.automations.title, value: automations, href: "/automations", desc: m.automations.desc.slice(0, 20) + "…", tone: "text-amber-600" },
             { label: m.ai.statsTools, value: BUILTIN_TOOL_COUNT, href: "/tools", desc: m.ai.builtinCapabilities, tone: "text-sky-600" },
             { label: m.ai.statsSkills, value: promptSkills, href: "/skills", desc: m.ai.methodologyFlows, tone: "text-purple-600" },
             { label: m.ai.statsKnowledge, value: knowledge, href: "/knowledge", desc: m.ai.agentSearchable, tone: "text-emerald-600" },
@@ -92,7 +95,12 @@ export default async function AiCenterPage() {
         </div>
 
         <Card title={m.ai.workbench}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+            <Link href="/automations" className="rounded-lg border border-slate-100 p-4 hover:border-slate-300">
+              <div className="text-lg">⚡</div>
+              <div className="text-sm font-semibold text-slate-900 mt-2">{m.automations.title}</div>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">{m.automations.desc}</p>
+            </Link>
             <Link href="/agents" className="rounded-lg border border-slate-100 p-4 hover:border-slate-300">
               <div className="text-lg">❖</div>
               <div className="text-sm font-semibold text-slate-900 mt-2">{m.ai.agentOrchestration}</div>

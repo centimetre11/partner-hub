@@ -17,6 +17,7 @@ import {
   type ClarificationAnswer,
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
+import { formatPreferencePick } from "@/lib/ai-clarifications";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { useMessages, useLocale } from "@/lib/i18n/context";
@@ -95,6 +96,10 @@ export function AiIntakePanel({
 
   function handleAiClarify(answers: ClarificationAnswer[]) {
     void send(formatAiClarificationMessage(answers, locale));
+  }
+
+  function handlePreferenceClarify(answer: ClarificationAnswer) {
+    void send(formatPreferencePick(answer, locale));
   }
 
   async function tryAutoApply(
@@ -280,6 +285,7 @@ export function AiIntakePanel({
           clarifications={clarifications}
           onDirectClarify={handleDirectClarify}
           onAiClarify={handleAiClarify}
+          onPreferenceClarify={handlePreferenceClarify}
           onProposalEdit={handleProposalEdit}
           ready={ready}
           scope={scope}
