@@ -5,7 +5,7 @@ import { saveCrmSalesmanMappingAction } from "@/lib/crm-actions";
 import { useMessages } from "@/lib/i18n/context";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function CrmUserSetup({
   crmSalesmanName,
@@ -34,7 +34,7 @@ export function CrmUserSetup({
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-xs text-zinc-500 leading-relaxed">{crm.userMappingHint}</p>
+      <p className="text-xs text-slate-500 leading-relaxed">{crm.userMappingHint}</p>
 
       {crmSalesmanName ? (
         <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
@@ -48,7 +48,7 @@ export function CrmUserSetup({
 
       {salesmen.length > 0 && (
         <label className="block space-y-1">
-          <span className="text-xs text-zinc-500">{crm.selectSalesman}</span>
+          <span className="text-xs text-slate-500">{crm.selectSalesman}</span>
           <select
             value={salesmen.includes(selected) ? selected : ""}
             onChange={(e) => setSelected(e.target.value)}
@@ -65,21 +65,21 @@ export function CrmUserSetup({
       )}
 
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{crm.manualSalesman}</span>
+        <span className="text-xs text-slate-500">{crm.manualSalesman}</span>
         <input
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
           placeholder="Fay.Wen"
           className={input}
         />
-        <p className="text-xs text-zinc-400">{crm.syncFirstHint}</p>
+        <p className="text-xs text-slate-400">{crm.syncFirstHint}</p>
       </label>
 
       <button
         type="button"
         disabled={pending}
         onClick={save}
-        className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+        className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
       >
         {crm.saveMapping}
       </button>

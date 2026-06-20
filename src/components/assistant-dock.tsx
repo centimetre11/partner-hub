@@ -235,7 +235,7 @@ export function AssistantDock() {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="lg:hidden fixed bottom-4 left-4 sm:bottom-6 z-50 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-xl flex items-center justify-center text-xl hover:scale-105 transition-transform safe-bottom"
+          className="lg:hidden fixed bottom-4 left-4 sm:bottom-6 z-50 rounded-full bg-slate-900 text-white flex items-center justify-center text-xl safe-bottom"
           style={{ width: 56, height: 56 }}
           title={am.fabTitle}
           aria-label={am.fabTitle}

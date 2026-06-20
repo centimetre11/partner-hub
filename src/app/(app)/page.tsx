@@ -40,23 +40,23 @@ export default async function HomePage({
   return (
     <div className="pb-16">
       <div className="px-8 pt-5 sm:pt-7 pb-3">
-        <h1 className="text-lg sm:text-xl font-bold text-zinc-900">
+        <h1 className="text-lg sm:text-xl font-bold text-slate-900">
           {greeting}，{user.name}
         </h1>
-        <p className="text-sm text-zinc-500 mt-1">
+        <p className="text-sm text-slate-500 mt-1">
           {dateStr} · {m.app.hubTagline}
         </p>
-        <div className="mt-4 flex gap-1 border-b border-zinc-200">
+        <div className="mt-4 flex gap-1 border-b border-slate-200">
           {tabs.map((t) => {
             const active = (t.key === "board") === isBoard;
             return (
               <Link
                 key={t.key}
                 href={t.href}
-                className={`px-3.5 py-2 text-sm -mb-px border-b-2 transition-colors ${
+                className={`px-3.5 py-2 text-sm -mb-px border-b-2 ${
                   active
-                    ? "border-indigo-600 text-indigo-600 font-medium"
-                    : "border-transparent text-zinc-500 hover:text-zinc-800"
+                    ? "border-slate-900 text-slate-900 font-medium"
+                    : "border-transparent text-slate-500 hover:text-slate-800"
                 }`}
               >
                 {t.label}
@@ -120,14 +120,14 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
     <>
       <div className="px-8 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
-          { label: m.dashboard.statsActivePartners, value: activeCount, href: "/partners", tone: "text-indigo-600" },
+          { label: m.dashboard.statsActivePartners, value: activeCount, href: "/partners", tone: "text-sky-600" },
           { label: m.dashboard.pocBeyond, value: pocPlusCount, href: "/partners", tone: "text-purple-600" },
           { label: m.dashboard.statsActiveOpps, value: activeOppCount, href: "/partners", tone: "text-sky-600" },
           { label: m.dashboard.stalePartners, value: stalePartners.length, href: "/partners", tone: stalePartners.length ? "text-red-600" : "text-emerald-600" },
         ].map((s) => (
-          <Link key={s.label} href={s.href} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 hover:border-indigo-300 transition-colors">
+          <Link key={s.label} href={s.href} className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300">
             <div className={`text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</div>
-            <div className="text-xs text-zinc-400 mt-1">{s.label}</div>
+            <div className="text-xs text-slate-400 mt-1">{s.label}</div>
           </Link>
         ))}
       </div>
@@ -135,8 +135,8 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
       {(openTodoCount > 0 || overdueTodos.length > 0 || signedPlusCount > 0) && (
         <div className="px-8 mb-4 flex flex-wrap gap-3 text-xs">
           {openTodoCount > 0 && (
-            <Link href="/?todos=all#workbench" className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-zinc-600 hover:border-indigo-300">
-              {m.dashboard.openTodosChip} <span className="font-semibold text-zinc-900">{openTodoCount}</span>
+            <Link href="/?todos=all#workbench" className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300">
+              {m.dashboard.openTodosChip} <span className="font-semibold text-slate-900">{openTodoCount}</span>
             </Link>
           )}
           {overdueTodos.length > 0 && (
@@ -145,7 +145,7 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
             </Link>
           )}
           {signedPlusCount > 0 && (
-            <span className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-indigo-700">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sky-700">
               {m.dashboard.signedOnboarding} <span className="font-semibold">{signedPlusCount}</span> {m.dashboard.partnersUnit}
             </span>
           )}
@@ -160,16 +160,16 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
                 {overdueTodos.map((t) => (
                   <div key={t.id} className="flex items-start gap-2.5">
                     <form action={toggleTodoAction.bind(null, t.id)}>
-                      <button className="w-4 h-4 mt-0.5 rounded border border-zinc-300 hover:border-indigo-400" />
+                      <button className="w-4 h-4 mt-0.5 rounded border border-slate-300 hover:border-slate-400" />
                     </form>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm text-zinc-800">{t.title}</div>
+                      <div className="text-sm text-slate-800">{t.title}</div>
                       <div className="text-xs text-red-500">
                         {fmtDate(t.dueDate, bcp47)} {m.common.overdue}
                         {t.partner && (
                           <>
                             {" · "}
-                            <Link href={`/partners/${t.partner.id}`} className="text-indigo-600 hover:underline">
+                            <Link href={`/partners/${t.partner.id}`} className="text-sky-600 hover:underline">
                               {t.partner.name}
                             </Link>
                           </>
@@ -197,17 +197,17 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
               {stalePartners.map(({ p, days }) => (
                 <div key={p.id} className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
-                    <Link href={`/partners/${p.id}`} className="text-sm font-medium text-zinc-800 hover:text-indigo-600">
+                    <Link href={`/partners/${p.id}`} className="text-sm font-medium text-slate-800 hover:text-sky-600">
                       {p.name}
                     </Link>
                     <TierBadge tier={p.tier} />
-                    <span className="text-xs text-zinc-400">{stageName(labels, p.pipelineStage)}</span>
+                    <span className="text-xs text-slate-400">{stageName(labels, p.pipelineStage)}</span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs text-red-500 font-medium">{m.dashboard.noActivityDays.replace("{days}", String(days))}</span>
                     <Link
                       href={`/partners/${p.id}`}
-                      className="text-xs rounded-md border border-zinc-200 px-2 py-1 text-zinc-600 hover:border-indigo-300 hover:text-indigo-600"
+                      className="text-xs rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:border-slate-300 hover:text-sky-600"
                     >
                       {m.common.review}
                     </Link>
@@ -223,14 +223,14 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
           {INBOX_NAV_ENABLED && unreadNotifications.length > 0 && (
             <Card
               title={m.dashboard.unreadInboxTitle.replace("{count}", String(unreadNotifications.length))}
-              className="border-indigo-200"
-              actions={<Link href="/inbox" className="text-xs text-indigo-600 hover:underline">{m.common.viewAll} →</Link>}
+              className="border-slate-200"
+              actions={<Link href="/inbox" className="text-xs text-sky-600 hover:underline">{m.common.viewAll} →</Link>}
             >
               <div className="space-y-2.5">
                 {unreadNotifications.map((n) => (
                   <Link key={n.id} href="/inbox" className="block group">
-                    <div className="text-sm text-zinc-800 group-hover:text-indigo-600 line-clamp-1">{n.title}</div>
-                    <div className="text-xs text-zinc-400 line-clamp-1">
+                    <div className="text-sm text-slate-800 group-hover:text-sky-600 line-clamp-1">{n.title}</div>
+                    <div className="text-xs text-slate-400 line-clamp-1">
                       {n.proposal && <span className="text-amber-600 mr-1">{m.dashboard.pendingProposal}</span>}
                       {n.content?.slice(0, 80) ?? ""}
                     </div>
@@ -242,21 +242,21 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
           <WeeklyReport />
           <Card title={m.dashboard.quickLinks}>
             <div className="space-y-2 text-sm">
-              <div className="rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">{m.dashboard.aiOnboarding}</div>
-                <div className="text-xs text-zinc-400 mt-0.5 mb-2">{m.dashboard.aiOnboardingDesc}</div>
+              <div className="rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
+                <div className="font-medium text-slate-800">{m.dashboard.aiOnboarding}</div>
+                <div className="text-xs text-slate-400 mt-0.5 mb-2">{m.dashboard.aiOnboardingDesc}</div>
                 <AiAddButton scope="new_partner" label={m.dashboard.startOnboarding} variant="soft" />
               </div>
-              <Link href="/partners?tier=A" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">{m.dashboard.tierAPartners}</div>
-                <div className="text-xs text-zinc-400 mt-0.5">{m.dashboard.tierAPartnersDesc}</div>
+              <Link href="/partners?tier=A" className="block rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
+                <div className="font-medium text-slate-800">{m.dashboard.tierAPartners}</div>
+                <div className="text-xs text-slate-400 mt-0.5">{m.dashboard.tierAPartnersDesc}</div>
               </Link>
-              <Link href="/?tab=board" className="block rounded-lg border border-zinc-100 px-4 py-3 hover:border-indigo-300 transition-colors">
-                <div className="font-medium text-zinc-800">{m.dashboard.businessDashboardLink}</div>
-                <div className="text-xs text-zinc-400 mt-0.5">{m.dashboard.businessDashboardDesc}</div>
+              <Link href="/?tab=board" className="block rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
+                <div className="font-medium text-slate-800">{m.dashboard.businessDashboardLink}</div>
+                <div className="text-xs text-slate-400 mt-0.5">{m.dashboard.businessDashboardDesc}</div>
               </Link>
-              <Link href="/pool" className="block rounded-lg border border-dashed border-zinc-200 px-4 py-2.5 hover:border-zinc-300 transition-colors">
-                <div className="text-xs text-zinc-500">{m.dashboard.prospectPoolLink}</div>
+              <Link href="/pool" className="block rounded-lg border border-dashed border-slate-200 px-4 py-2.5 hover:border-slate-300">
+                <div className="text-xs text-slate-500">{m.dashboard.prospectPoolLink}</div>
               </Link>
             </div>
           </Card>

@@ -47,9 +47,9 @@ export function BusinessRecordsSection({
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
-        <h3 className="text-sm font-semibold text-zinc-800">
+    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <h3 className="text-sm font-semibold text-slate-800">
           {pd.businessRecords.replace("{count}", String(records.length))}
         </h3>
         {!showForm && (
@@ -63,7 +63,7 @@ export function BusinessRecordsSection({
             <button
               type="button"
               onClick={() => setShowForm(true)}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
+              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white hover:bg-slate-800"
             >
               {pd.addBusinessRecord}
             </button>
@@ -72,7 +72,7 @@ export function BusinessRecordsSection({
       </div>
       <div className="p-4 space-y-3">
         {showForm && (
-          <div className="rounded-lg border border-indigo-100 bg-indigo-50/30 p-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-3">
             <BusinessRecordForm
               partnerId={partnerId}
               source="MANUAL"
@@ -89,17 +89,17 @@ export function BusinessRecordsSection({
                 <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="text-sm font-medium text-zinc-800">{r.title}</div>
+                    <div className="text-sm font-medium text-slate-800">{r.title}</div>
                     <button
                       type="button"
                       disabled={pending}
                       onClick={() => removeRecord(r.id)}
-                      className="text-xs text-zinc-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      className="text-xs text-slate-400 hover:text-red-600 opacity-0 group-hover:opacity-100 shrink-0"
                     >
                       {common.delete}
                     </button>
                   </div>
-                  <div className="text-xs text-zinc-400 mt-0.5 flex flex-wrap gap-x-2 gap-y-1 items-center">
+                  <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap gap-x-2 gap-y-1 items-center">
                     <span>{labels.businessRecordCategoryLabels[r.category] ?? r.category}</span>
                     <span>· {fmtDate(r.occurredAt, bcp47)}</span>
                     {r.contact && <span>· {r.contact.name}</span>}
@@ -107,7 +107,7 @@ export function BusinessRecordsSection({
                   </div>
                   <BusinessRecordCrmStatus record={r} />
                   {r.content && (
-                    <p className="text-xs text-zinc-600 mt-1 whitespace-pre-wrap">{r.content}</p>
+                    <p className="text-xs text-slate-600 mt-1 whitespace-pre-wrap">{r.content}</p>
                   )}
                 </div>
               </li>
@@ -140,7 +140,7 @@ export function BusinessRecordDialogButton({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-100"
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-sky-700 hover:bg-slate-100"
         >
           {label ?? pd.logBusinessRecord}
         </button>
@@ -148,10 +148,10 @@ export function BusinessRecordDialogButton({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setOpen(false)}>
           <div
-            className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-3"
+            className="bg-white rounded-lg border border-slate-200 max-w-md w-full p-5 space-y-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold text-zinc-800">{pd.logBusinessRecord}</h3>
+            <h3 className="text-sm font-semibold text-slate-800">{pd.logBusinessRecord}</h3>
             <BusinessRecordForm
               partnerId={partnerId}
               source="RELATIONSHIP_TAB"

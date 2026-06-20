@@ -36,8 +36,8 @@ export function BusinessRecordForm({
   const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "info"; text: string } | null>(null);
 
   const input = compact
-    ? "w-full rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-    : "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+    ? "w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-400"
+    : "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,7 +68,7 @@ export function BusinessRecordForm({
     <form onSubmit={(e) => void submit(e)} className={`space-y-3 ${compact ? "text-xs" : "text-sm"}`}>
       <div className={`grid gap-2 ${compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
         <label className="block space-y-1 sm:col-span-2">
-          <span className="text-xs text-zinc-500">{pd.businessRecordTitle}</span>
+          <span className="text-xs text-slate-500">{pd.businessRecordTitle}</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -78,7 +78,7 @@ export function BusinessRecordForm({
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-zinc-500">{pd.businessRecordCategory}</span>
+          <span className="text-xs text-slate-500">{pd.businessRecordCategory}</span>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className={input}>
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>
@@ -88,12 +88,12 @@ export function BusinessRecordForm({
           </select>
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-zinc-500">{pd.businessRecordOccurredAt}</span>
+          <span className="text-xs text-slate-500">{pd.businessRecordOccurredAt}</span>
           <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} className={input} />
         </label>
         {contacts.length > 0 && (
           <label className="block space-y-1 sm:col-span-2">
-            <span className="text-xs text-zinc-500">{pd.businessRecordContact}</span>
+            <span className="text-xs text-slate-500">{pd.businessRecordContact}</span>
             <select value={contactId} onChange={(e) => setContactId(e.target.value)} className={input}>
               <option value="">—</option>
               {contacts.map((c) => (
@@ -103,7 +103,7 @@ export function BusinessRecordForm({
           </label>
         )}
         <label className="block space-y-1 sm:col-span-2">
-          <span className="text-xs text-zinc-500">{pd.businessRecordContent}</span>
+          <span className="text-xs text-slate-500">{pd.businessRecordContent}</span>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -119,7 +119,7 @@ export function BusinessRecordForm({
               ? "bg-emerald-50 text-emerald-800"
               : feedback.tone === "warn"
                 ? "bg-amber-50 text-amber-800"
-                : "bg-zinc-50 text-zinc-600"
+                : "bg-slate-50 text-slate-600"
           }`}
         >
           {feedback.text}
@@ -127,14 +127,14 @@ export function BusinessRecordForm({
       )}
       <div className="flex justify-end gap-2">
         {onDone && (
-          <button type="button" onClick={onDone} className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600">
+          <button type="button" onClick={onDone} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600">
             {pd.skipMilestone}
           </button>
         )}
         <button
           type="submit"
           disabled={submitting || !title.trim()}
-          className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+          className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
         >
           {sourceTodoId ? pd.confirmMilestone : pd.addBusinessRecord}
         </button>

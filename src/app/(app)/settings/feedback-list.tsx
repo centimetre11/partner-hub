@@ -40,20 +40,20 @@ function FeedbackItem({ item, bcp47 }: { item: FeedbackRow; bcp47: string }) {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-zinc-900">{item.createdBy.name}</span>
+            <span className="text-sm font-semibold text-slate-900">{item.createdBy.name}</span>
             <Badge tone={STATUS_TONES[item.status] ?? "zinc"}>{statusLabel}</Badge>
           </div>
-          <div className="text-xs text-zinc-400 mt-1">
+          <div className="text-xs text-slate-400 mt-1">
             {item.createdBy.email} · {fmtDateTime(item.createdAt, bcp47)}
           </div>
           {item.description ? (
-            <p className="text-sm text-zinc-600 mt-2 whitespace-pre-wrap">{item.description}</p>
+            <p className="text-sm text-slate-600 mt-2 whitespace-pre-wrap">{item.description}</p>
           ) : (
-            <p className="text-sm text-zinc-400 mt-2 italic">{m.feedback.screenshotOnly}</p>
+            <p className="text-sm text-slate-400 mt-2 italic">{m.feedback.screenshotOnly}</p>
           )}
           {item.assets.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3">
@@ -66,7 +66,7 @@ function FeedbackItem({ item, bcp47 }: { item: FeedbackRow; bcp47: string }) {
                     <img
                       src={href}
                       alt={asset.filename}
-                      className="h-20 w-20 rounded-lg object-cover border border-zinc-200 hover:border-indigo-300 transition-colors"
+                      className="h-20 w-20 rounded-lg object-cover border border-slate-200 hover:border-slate-300"
                     />
                   </a>
                 ) : (
@@ -75,7 +75,7 @@ function FeedbackItem({ item, bcp47 }: { item: FeedbackRow; bcp47: string }) {
                     href={href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-indigo-600 hover:underline"
+                    className="text-xs text-sky-600 hover:underline"
                   >
                     📎 {asset.filename}
                   </a>
@@ -88,7 +88,7 @@ function FeedbackItem({ item, bcp47 }: { item: FeedbackRow; bcp47: string }) {
           value={item.status}
           disabled={pending}
           onChange={(e) => changeStatus(e.target.value)}
-          className="rounded-lg border border-zinc-200 px-2 py-1.5 text-xs text-zinc-700 shrink-0 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 shrink-0 disabled:opacity-50"
         >
           <option value="OPEN">{m.feedback.statusOpen}</option>
           <option value="IN_PROGRESS">{m.feedback.statusInProgress}</option>

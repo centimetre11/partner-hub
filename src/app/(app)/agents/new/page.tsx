@@ -31,8 +31,8 @@ export default async function NewAgentPage({
         <AgentBuilder />
         <div className="max-w-3xl">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold text-zinc-800">{m.agents.manualCreate}</h2>
-            <p className="text-xs text-zinc-400 mt-1">{m.agents.manualCreateDesc}</p>
+            <h2 className="text-sm font-semibold text-slate-800">{m.agents.manualCreate}</h2>
+            <p className="text-xs text-slate-400 mt-1">{m.agents.manualCreateDesc}</p>
           </div>
           <AgentForm
             agent={{

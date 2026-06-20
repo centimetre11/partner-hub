@@ -1,6 +1,13 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { getLocale } from "@/lib/i18n/locale-server";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Fanruan MEA Partner Hub",
@@ -20,8 +27,8 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   return (
-    <html lang={locale === "zh" ? "zh-CN" : "en"} className="h-full antialiased">
-      <body className="min-h-full">{children}</body>
+    <html lang={locale === "zh" ? "zh-CN" : "en"} className={`h-full antialiased ${inter.variable}`}>
+      <body className="min-h-full font-sans">{children}</body>
     </html>
   );
 }

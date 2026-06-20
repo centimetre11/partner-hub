@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { updateProfileAction } from "@/lib/account-actions";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function ProfileSetup({
   name,
@@ -40,7 +40,7 @@ export function ProfileSetup({
   return (
     <div className="space-y-4 text-sm">
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{labels.displayName}</span>
+        <span className="text-xs text-slate-500">{labels.displayName}</span>
         <input
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
@@ -49,15 +49,15 @@ export function ProfileSetup({
         />
       </label>
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{labels.email}</span>
-        <input value={email} readOnly className={`${input} bg-zinc-50 text-zinc-500`} />
-        <p className="text-xs text-zinc-400">{labels.emailHint}</p>
+        <span className="text-xs text-slate-500">{labels.email}</span>
+        <input value={email} readOnly className={`${input} bg-slate-50 text-slate-500`} />
+        <p className="text-xs text-slate-400">{labels.emailHint}</p>
       </label>
       <button
         type="button"
         disabled={pending || !displayName.trim()}
         onClick={save}
-        className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+        className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
       >
         {labels.save}
       </button>

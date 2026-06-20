@@ -5,7 +5,7 @@ import { createFeedbackAction } from "@/lib/feedback-actions";
 import { useMessages } from "@/lib/i18n/context";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 type UploadedImage = { id: string; filename: string; previewUrl?: string };
 
@@ -54,17 +54,17 @@ function ImageUploadField({
   return (
     <div className="space-y-2">
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{m.feedback.imagesLabel}</span>
+        <span className="text-xs text-slate-500">{m.feedback.imagesLabel}</span>
         <input
           type="file"
           accept="image/*"
           multiple
           onChange={uploadFiles}
           disabled={loading}
-          className="block w-full text-sm text-zinc-600 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-zinc-700 hover:file:bg-zinc-200"
+          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-700 hover:file:bg-slate-200"
         />
       </label>
-      {loading && <span className="text-xs text-zinc-400">{m.feedback.uploading}</span>}
+      {loading && <span className="text-xs text-slate-400">{m.feedback.uploading}</span>}
       {error && <span className="block text-xs text-red-500">{error}</span>}
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -72,16 +72,16 @@ function ImageUploadField({
             <div key={img.id} className="relative group">
               {img.previewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={img.previewUrl} alt={img.filename} className="h-16 w-16 rounded-lg object-cover border border-zinc-200" />
+                <img src={img.previewUrl} alt={img.filename} className="h-16 w-16 rounded-lg object-cover border border-slate-200" />
               ) : (
-                <div className="h-16 w-16 rounded-lg bg-zinc-100 flex items-center justify-center text-xs text-zinc-500 border border-zinc-200">
+                <div className="h-16 w-16 rounded-lg bg-slate-100 flex items-center justify-center text-xs text-slate-500 border border-slate-200">
                   📎
                 </div>
               )}
               <button
                 type="button"
                 onClick={() => removeImage(img.id)}
-                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-zinc-900 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100"
                 aria-label={m.feedback.removeImage}
               >
                 ×
@@ -112,7 +112,7 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
   return (
     <form action={action} className="space-y-4">
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{m.feedback.descLabel}</span>
+        <span className="text-xs text-slate-500">{m.feedback.descLabel}</span>
         <textarea
           name="description"
           rows={5}
@@ -127,12 +127,12 @@ function FeedbackForm({ onClose }: { onClose: () => void }) {
         </p>
       )}
       <div className="flex justify-end gap-2 pt-2">
-        <button type="button" onClick={onClose} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
+        <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
           {m.common.cancel}
         </button>
         <button
           disabled={pending}
-          className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
         >
           {pending ? m.feedback.submitting : m.feedback.submit}
         </button>
@@ -148,11 +148,11 @@ export function FeedbackFormModal({ open, onClose }: { open: boolean; onClose: (
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg w-full border border-slate-200 max-w-md p-6 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-base font-semibold mb-1">{m.feedback.modalTitle}</h3>
-        <p className="text-xs text-zinc-500 mb-4">{m.feedback.modalDesc}</p>
+        <p className="text-xs text-slate-500 mb-4">{m.feedback.modalDesc}</p>
         <FeedbackForm onClose={onClose} />
       </div>
     </div>
@@ -171,7 +171,7 @@ export function FeedbackButton({ onOpen }: { onOpen?: () => void }) {
           onOpen?.();
           setOpen(true);
         }}
-        className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors"
+        className="flex w-full items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       >
         <span className="text-base w-5 text-center">💬</span>
         <span>{m.feedback.entryLabel}</span>

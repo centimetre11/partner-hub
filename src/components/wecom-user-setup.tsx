@@ -5,7 +5,7 @@ import { saveWecomUserIdAction } from "@/lib/wecom-actions";
 import { useMessages } from "@/lib/i18n/context";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function WecomUserSetup({ wecomUserId }: { wecomUserId: string | null }) {
   const w = useMessages().wecom;
@@ -28,10 +28,10 @@ export function WecomUserSetup({ wecomUserId }: { wecomUserId: string | null }) 
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-xs text-zinc-500 leading-relaxed">{w.userMappingHint}</p>
+      <p className="text-xs text-slate-500 leading-relaxed">{w.userMappingHint}</p>
 
-      <details className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 text-xs text-zinc-600">
-        <summary className="cursor-pointer font-medium text-zinc-700">{w.howToFindTitle}</summary>
+      <details className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
+        <summary className="cursor-pointer font-medium text-slate-700">{w.howToFindTitle}</summary>
         <ol className="mt-2 list-decimal list-inside space-y-1.5 leading-relaxed">
           <li>{w.howToFindAdmin}</li>
           <li>{w.howToFindProfile}</li>
@@ -50,7 +50,7 @@ export function WecomUserSetup({ wecomUserId }: { wecomUserId: string | null }) 
       )}
 
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{w.userIdLabel}</span>
+        <span className="text-xs text-slate-500">{w.userIdLabel}</span>
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -59,14 +59,14 @@ export function WecomUserSetup({ wecomUserId }: { wecomUserId: string | null }) 
           autoComplete="off"
           spellCheck={false}
         />
-        <p className="text-xs text-zinc-400">{w.userIdHint}</p>
+        <p className="text-xs text-slate-400">{w.userIdHint}</p>
       </label>
 
       <button
         type="button"
         disabled={pending}
         onClick={save}
-        className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+        className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
       >
         {w.saveMapping}
       </button>

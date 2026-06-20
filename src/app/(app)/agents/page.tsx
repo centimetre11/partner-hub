@@ -33,21 +33,21 @@ export default async function AgentsPage() {
     const skills: string[] = JSON.parse(a.skills || "[]");
     const lastRun = a.runs[0];
     return (
-      <div className={`bg-white rounded-xl border shadow-sm p-5 ${a.enabled ? "border-zinc-200/80" : "border-zinc-200/80 opacity-60"}`}>
+      <div className={`bg-white rounded-lg border shadow-sm p-5 ${a.enabled ? "border-slate-200/80" : "border-slate-200/80 opacity-60"}`}>
         <div className="flex items-start justify-between gap-2">
           <Link href={`/agents/${a.id}`} className="flex items-center gap-2.5 min-w-0 group">
             <span className="text-2xl">{a.icon}</span>
             <div className="min-w-0">
-              <div className="font-semibold text-zinc-900 group-hover:text-indigo-600 truncate">{a.name}</div>
-              <div className="text-xs text-zinc-400 truncate">{a.description ?? "—"}</div>
+              <div className="font-semibold text-slate-900 group-hover:text-sky-600 truncate">{a.name}</div>
+              <div className="text-xs text-slate-400 truncate">{a.description ?? "—"}</div>
             </div>
           </Link>
           <form action={toggleAgentAction.bind(null, a.id)}>
             <button
-              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${a.enabled ? "bg-indigo-600" : "bg-zinc-200"}`}
+              className={`relative w-9 h-5 rounded-full shrink-0 ${a.enabled ? "bg-slate-900" : "bg-slate-200"}`}
               title={a.enabled ? m.agents.enabledTitle : m.agents.disabledTitle}
             >
-              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${a.enabled ? "left-[18px]" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white ${a.enabled ? "left-[18px]" : "left-0.5"}`} />
             </button>
           </form>
         </div>
@@ -62,18 +62,18 @@ export default async function AgentsPage() {
           {skills.slice(0, 3).map((s) => (
             <Badge key={s} tone="zinc">{getToolLabel(s)}</Badge>
           ))}
-          {skills.length > 3 && <span className="text-xs text-zinc-400">+{skills.length - 3}</span>}
+          {skills.length > 3 && <span className="text-xs text-slate-400">+{skills.length - 3}</span>}
         </div>
-        <div className="mt-3 flex items-center justify-between text-xs text-zinc-400">
+        <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
           <span>
             {a.createdBy?.name ?? m.agents.system} · {lastRun ? m.agents.lastRunAt.replace("{time}", fmtDateTime(lastRun.startedAt, bcp47)) : m.agents.lastRunNever}
             {lastRun?.status === "FAILED" && <span className="text-red-500 ml-1">{m.agents.lastRunFailed}</span>}
           </span>
           <span className="flex gap-2">
             <form action={cloneAgentAction.bind(null, a.id)}>
-              <button className="text-zinc-400 hover:text-indigo-600">{m.common.clone}</button>
+              <button className="text-slate-400 hover:text-sky-600">{m.common.clone}</button>
             </form>
-            <Link href={`/agents/${a.id}`} className="text-indigo-600 hover:underline">
+            <Link href={`/agents/${a.id}`} className="text-sky-600 hover:underline">
               {m.agents.detailsArrow}
             </Link>
           </span>
@@ -88,7 +88,7 @@ export default async function AgentsPage() {
         title={m.agents.title}
         desc={m.agents.desc}
         actions={
-          <Link href="/agents/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+          <Link href="/agents/new" className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800">
             {m.agents.buildAgent}
           </Link>
         }
@@ -96,16 +96,16 @@ export default async function AgentsPage() {
       <AiCenterNav />
       <div className="px-8 space-y-7">
         <div>
-          <h2 className="text-sm font-semibold text-zinc-700 mb-3">{m.agents.templateLibrary}</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">{m.agents.templateLibrary}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {templates.map((t) => (
-              <div key={t.id} className="bg-gradient-to-br from-zinc-50 to-indigo-50/50 rounded-xl border border-dashed border-zinc-300 p-4 flex items-start gap-3">
+              <div key={t.id} className="bg-slate-50 rounded-lg border border-dashed border-slate-300 p-4 flex items-start gap-3">
                 <span className="text-2xl">{t.icon}</span>
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-zinc-800">{t.name}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5 line-clamp-2">{t.description}</div>
+                  <div className="text-sm font-semibold text-slate-800">{t.name}</div>
+                  <div className="text-xs text-slate-500 mt-0.5 line-clamp-2">{t.description}</div>
                   <form action={cloneAgentAction.bind(null, t.id)} className="mt-2">
-                    <button className="text-xs rounded-md bg-white border border-zinc-200 px-2.5 py-1 text-indigo-600 hover:border-indigo-300">
+                    <button className="text-xs rounded-md bg-white border border-slate-200 px-2.5 py-1 text-sky-600 hover:border-slate-300">
                       {m.agents.createFromTemplate}
                     </button>
                   </form>
@@ -116,7 +116,7 @@ export default async function AgentsPage() {
         </div>
 
         <div>
-          <h2 className="text-sm font-semibold text-zinc-700 mb-3">{m.agents.myAgentsCount.replace("{count}", String(mine.length))}</h2>
+          <h2 className="text-sm font-semibold text-slate-700 mb-3">{m.agents.myAgentsCount.replace("{count}", String(mine.length))}</h2>
           {mine.length ? (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {mine.map((a) => (
@@ -124,7 +124,7 @@ export default async function AgentsPage() {
               ))}
             </div>
           ) : (
-            <div className="text-sm text-zinc-400 bg-white rounded-xl border border-zinc-200/80 p-6 text-center">
+            <div className="text-sm text-slate-400 bg-white rounded-lg border border-slate-200/80 p-6 text-center">
               {m.agents.emptyMine}
             </div>
           )}
@@ -132,7 +132,7 @@ export default async function AgentsPage() {
 
         {shared.length > 0 && (
           <div>
-            <h2 className="text-sm font-semibold text-zinc-700 mb-3">{m.agents.teamSharedCount.replace("{count}", String(shared.length))}</h2>
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">{m.agents.teamSharedCount.replace("{count}", String(shared.length))}</h2>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               {shared.map((a) => (
                 <AgentCard key={a.id} a={a} />

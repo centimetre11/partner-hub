@@ -23,17 +23,17 @@ export function AiAddButton({
 
   const base =
     variant === "solid"
-      ? "bg-indigo-600 text-white hover:bg-indigo-700"
+      ? "bg-slate-900 text-white hover:bg-slate-800"
       : variant === "soft"
-        ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
-        : "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50";
+        ? "bg-slate-50 text-sky-700 hover:bg-slate-100"
+        : "text-sky-600 hover:text-sky-700 hover:bg-slate-50";
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={className ?? `rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${base}`}
+        className={className ?? `rounded-lg px-3 py-1.5 text-xs font-medium ${base}`}
       >
         {label}
       </button>

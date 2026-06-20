@@ -54,19 +54,19 @@ export async function DashboardWorkbenchTodos({
   const toggle = (
     <div className="flex items-center gap-2 shrink-0">
       <CreateTodoDrawer userId={userId} partners={partners} users={users} />
-      <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 text-xs">
+      <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
       <Link
         href="/?todos=mine#workbench"
-        className={`rounded-md px-2.5 py-1 transition-colors ${
-          !isAll ? "bg-white text-zinc-900 shadow-sm font-medium" : "text-zinc-500 hover:text-zinc-800"
+        className={`rounded-md px-2.5 py-1 ${
+          !isAll ? "bg-white text-slate-900 shadow-sm font-medium" : "text-slate-500 hover:text-slate-800"
         }`}
       >
         {m.common.mine}
       </Link>
       <Link
         href="/?todos=all#workbench"
-        className={`rounded-md px-2.5 py-1 transition-colors ${
-          isAll ? "bg-white text-zinc-900 shadow-sm font-medium" : "text-zinc-500 hover:text-zinc-800"
+        className={`rounded-md px-2.5 py-1 ${
+          isAll ? "bg-white text-slate-900 shadow-sm font-medium" : "text-slate-500 hover:text-slate-800"
         }`}
       >
         {m.common.viewAll}
@@ -89,16 +89,16 @@ export async function DashboardWorkbenchTodos({
               <form action={toggleTodoAction.bind(null, t.id)}>
                 <button
                   type="submit"
-                  className="w-4 h-4 mt-0.5 rounded border border-zinc-300 hover:border-indigo-400 shrink-0"
+                  className="w-4 h-4 mt-0.5 rounded border border-slate-300 hover:border-slate-400 shrink-0"
                   aria-label={m.common.done}
                 />
               </form>
               <div className="min-w-0 flex-1">
-                <div className="text-sm text-zinc-800">
+                <div className="text-sm text-slate-800">
                   {t.title}
                   {t.source === "AI" && <span className="ml-1.5 text-[10px] text-purple-500">AI</span>}
                 </div>
-                <div className="text-xs text-zinc-400">
+                <div className="text-xs text-slate-400">
                   {t.dueDate && (
                     <span className={overdue ? "text-red-500 font-medium" : ""}>
                       {fmtDate(t.dueDate, bcp47)}
@@ -108,7 +108,7 @@ export async function DashboardWorkbenchTodos({
                   {t.partner && (
                     <>
                       {t.dueDate && " · "}
-                      <Link href={`/partners/${t.partner.id}`} className="text-indigo-600 hover:underline">
+                      <Link href={`/partners/${t.partner.id}`} className="text-sky-600 hover:underline">
                         {t.partner.name}
                       </Link>
                     </>
@@ -136,7 +136,7 @@ export async function DashboardWorkbenchTodos({
                   <button
                     type="submit"
                     title={m.todos.deleteTitle}
-                    className="text-zinc-300 hover:text-red-500 text-sm px-1"
+                    className="text-slate-300 hover:text-red-500 text-sm px-1"
                   >
                     ✕
                   </button>

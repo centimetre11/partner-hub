@@ -10,7 +10,7 @@ import type { AmmoConfigForClient } from "@/lib/ammo-config";
 import { useMessages } from "@/lib/i18n/context";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
   const s = useMessages().ammoSettings;
@@ -59,10 +59,10 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-zinc-600">{s.desc}</p>
+      <p className="text-sm text-slate-600">{s.desc}</p>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-800">{s.gdriveFolderUrl}</label>
+        <label className="block text-sm font-medium text-slate-800">{s.gdriveFolderUrl}</label>
         <input
           value={folderUrl}
           onChange={(e) => setFolderUrl(e.target.value)}
@@ -72,8 +72,8 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-zinc-800">{s.gdriveServiceAccount}</label>
-        <p className="text-xs text-zinc-500 leading-relaxed">{s.gdriveServiceAccountHint}</p>
+        <label className="block text-sm font-medium text-slate-800">{s.gdriveServiceAccount}</label>
+        <p className="text-xs text-slate-500 leading-relaxed">{s.gdriveServiceAccountHint}</p>
         {config.gdriveServiceAccountConfigured && (
           <p className="text-xs text-emerald-700">
             {s.gdriveSaConfigured}
@@ -92,7 +92,7 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
             type="button"
             onClick={clearSa}
             disabled={pending}
-            className="text-xs text-zinc-400 hover:text-red-600"
+            className="text-xs text-slate-400 hover:text-red-600"
           >
             {s.clearServiceAccount}
           </button>
@@ -104,7 +104,7 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
           type="button"
           onClick={() => run(saveSystemAmmoConfigAction)}
           disabled={pending}
-          className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm disabled:opacity-50"
+          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm disabled:opacity-50"
         >
           {s.save}
         </button>
@@ -112,7 +112,7 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
           type="button"
           onClick={() => testGdrive(false)}
           disabled={pending}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
         >
           {s.testGdrive}
         </button>
@@ -121,7 +121,7 @@ export function AmmoSetup({ config }: { config: AmmoConfigForClient }) {
             type="button"
             onClick={() => testGdrive(true)}
             disabled={pending}
-            className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+            className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
           >
             {s.testGdriveStored}
           </button>

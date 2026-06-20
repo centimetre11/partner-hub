@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { changePasswordAction } from "@/lib/account-actions";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function PasswordSetup({
   labels,
@@ -45,7 +45,7 @@ export function PasswordSetup({
   return (
     <div className="space-y-4 text-sm">
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{labels.current}</span>
+        <span className="text-xs text-slate-500">{labels.current}</span>
         <input
           type="password"
           value={currentPassword}
@@ -55,7 +55,7 @@ export function PasswordSetup({
         />
       </label>
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{labels.newPassword}</span>
+        <span className="text-xs text-slate-500">{labels.newPassword}</span>
         <input
           type="password"
           value={newPassword}
@@ -65,7 +65,7 @@ export function PasswordSetup({
         />
       </label>
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">{labels.confirm}</span>
+        <span className="text-xs text-slate-500">{labels.confirm}</span>
         <input
           type="password"
           value={confirmPassword}
@@ -78,7 +78,7 @@ export function PasswordSetup({
         type="button"
         disabled={pending || !currentPassword || !newPassword}
         onClick={save}
-        className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+        className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
       >
         {labels.save}
       </button>

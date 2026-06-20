@@ -23,7 +23,7 @@ export function attitudeDotClass(a: number | null | undefined) {
   if (v >= 2) return "bg-purple-600 text-white"; // 3教练 / 2支持并排他
   if (v === 1) return "bg-amber-400 text-white"; // 支持不排他
   if (v < 0) return "bg-red-600 text-white"; // 反对
-  return "bg-zinc-400 text-white"; // 未接触或中立
+  return "bg-slate-400 text-white"; // 未接触或中立
 }
 
 // 角色影响力 → 节点视觉：影响力越高，卡片越大、角色徽标越深
@@ -34,38 +34,38 @@ export function roleInfluenceStyle(role: string): RoleInfluenceStyle {
   switch (roleInfluence(role)) {
     case 5: // D 决策者
       return {
-        card: "min-w-[160px] px-5 py-3 border-indigo-500 ring-2 ring-indigo-200",
+        card: "min-w-[160px] px-5 py-3 border-slate-700 ring-2 ring-slate-200",
         name: "text-base",
         sub: "text-xs",
-        badge: "w-7 h-7 text-sm bg-indigo-700",
+        badge: "w-7 h-7 text-sm bg-slate-800",
       };
     case 4: // A 审批者
       return {
-        card: "min-w-[144px] px-4 py-2.5 border-indigo-400",
+        card: "min-w-[144px] px-4 py-2.5 border-slate-500",
         name: "text-sm",
         sub: "text-xs",
-        badge: "w-6 h-6 text-xs bg-indigo-600",
+        badge: "w-6 h-6 text-xs bg-slate-900",
       };
     case 3: // E 评估者
       return {
-        card: "min-w-[128px] px-4 py-2 border-zinc-400",
+        card: "min-w-[128px] px-4 py-2 border-slate-400",
         name: "text-sm",
         sub: "text-xs",
-        badge: "w-5 h-5 text-[11px] bg-indigo-500",
+        badge: "w-5 h-5 text-[11px] bg-slate-500",
       };
     case 2: // I 影响者
       return {
-        card: "min-w-[116px] px-3.5 py-1.5 border-zinc-300",
+        card: "min-w-[116px] px-3.5 py-1.5 border-slate-300",
         name: "text-[13px]",
         sub: "text-[11px]",
-        badge: "w-5 h-5 text-[10px] bg-indigo-400",
+        badge: "w-5 h-5 text-[10px] bg-slate-400",
       };
     default: // S 支持者(1) / 未知(0)
       return {
-        card: "min-w-[106px] px-3 py-1.5 border-zinc-300",
+        card: "min-w-[106px] px-3 py-1.5 border-slate-300",
         name: "text-xs",
         sub: "text-[11px]",
-        badge: "w-4.5 h-4.5 text-[10px] bg-indigo-300",
+        badge: "w-4.5 h-4.5 text-[10px] bg-slate-300",
       };
   }
 }
@@ -89,8 +89,8 @@ function NodeCard({ c }: { c: PowerMapContact }) {
         {c.attitude}
       </span>
       <div className={`border bg-white text-center shadow-sm ${s.card}`}>
-        <div className={`font-medium text-zinc-900 whitespace-nowrap ${s.name}`}>{c.name}</div>
-        <div className={`text-zinc-500 whitespace-nowrap ${s.sub}`}>
+        <div className={`font-medium text-slate-900 whitespace-nowrap ${s.name}`}>{c.name}</div>
+        <div className={`text-slate-500 whitespace-nowrap ${s.sub}`}>
           {c.department || c.title || "—"}
         </div>
       </div>
@@ -117,19 +117,19 @@ function TreeNode({
       {children.length > 0 && (
         <>
           {/* 向下的连接线 */}
-          <div className="w-px h-5 bg-zinc-400" />
+          <div className="w-px h-5 bg-slate-400" />
           <div className="flex items-start">
             {children.map((child, i) => (
               <div key={child.id} className="relative flex flex-col items-center px-2.5 pt-5">
                 {/* 横向连接线：首尾子节点只画半边 */}
                 {children.length > 1 && i > 0 && (
-                  <span className="absolute top-0 left-0 w-1/2 h-px bg-zinc-400" />
+                  <span className="absolute top-0 left-0 w-1/2 h-px bg-slate-400" />
                 )}
                 {children.length > 1 && i < children.length - 1 && (
-                  <span className="absolute top-0 right-0 w-1/2 h-px bg-zinc-400" />
+                  <span className="absolute top-0 right-0 w-1/2 h-px bg-slate-400" />
                 )}
                 {/* 垂直短线接到子节点 */}
-                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-5 bg-zinc-400" />
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-5 bg-slate-400" />
                 <TreeNode contact={child} childrenMap={childrenMap} visited={visited} />
               </div>
             ))}
@@ -142,13 +142,13 @@ function TreeNode({
 
 export function PowerMapLegend() {
   return (
-    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-zinc-600">
+    <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-600">
       {/* 角色影响力：按 D>A>E>I>S 从高到低，徽标越深、节点越大代表影响力越强 */}
       <div className="flex items-center gap-1.5">
-        <span className="text-zinc-400 mr-0.5">Influence</span>
+        <span className="text-slate-400 mr-0.5">Influence</span>
         {CONTACT_ROLES_BY_INFLUENCE.map((k, i) => (
           <span key={k} className="flex items-center gap-1">
-            {i > 0 && <span className="text-zinc-300">›</span>}
+            {i > 0 && <span className="text-slate-300">›</span>}
             <span
               className={`rounded-sm text-white font-bold flex items-center justify-center ${roleInfluenceStyle(k).badge}`}
               title={`Influence ${roleInfluence(k)}/5`}

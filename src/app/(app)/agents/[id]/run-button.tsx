@@ -35,9 +35,9 @@ export function RunButton({ agentId, compact }: { agentId: string; compact?: boo
   return (
     <div className="flex flex-col items-end gap-1">
       {running && liveText && (
-        <div className="max-w-md text-xs text-zinc-500 bg-zinc-50 border border-zinc-100 rounded-lg p-2 max-h-24 overflow-y-auto whitespace-pre-wrap">
+        <div className="max-w-md text-xs text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-2 max-h-24 overflow-y-auto whitespace-pre-wrap">
           {liveText}
-          <span className="inline-block w-1 h-3 bg-emerald-400 ml-0.5 animate-pulse align-middle" />
+          <span className="inline-block w-1 h-3 bg-emerald-400 ml-0.5 align-middle" />
         </div>
       )}
       <div className="flex items-center gap-2">

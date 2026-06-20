@@ -12,15 +12,15 @@ export default async function LoginPage() {
   const { locale, messages: m } = await getServerI18n();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-amber-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md">
         <LoginLocaleSwitcher locale={locale} />
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-indigo-600 text-white text-2xl font-bold mb-4 shadow-lg shadow-indigo-200">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-md bg-slate-900 text-white text-xl font-semibold mb-4">
             F
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900">{m.login.title}</h1>
-          <p className="text-sm text-zinc-500 mt-2">
+          <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">{m.login.title}</h1>
+          <p className="text-sm text-slate-500 mt-2">
             {firstRun ? m.login.firstRunDesc : m.login.normalDesc}
           </p>
         </div>

@@ -91,8 +91,8 @@ function ContactNode({ data }: NodeProps<Node<NodeData>>) {
       </span>
       {/* 卡片大小随影响力变化 */}
       <div className={`border bg-white text-center shadow-sm rounded ${s.card}`}>
-        <div className={`font-medium text-zinc-900 whitespace-nowrap ${s.name}`}>{c.name}</div>
-        <div className={`text-zinc-500 whitespace-nowrap ${s.sub}`}>{c.department || c.title || "—"}</div>
+        <div className={`font-medium text-slate-900 whitespace-nowrap ${s.name}`}>{c.name}</div>
+        <div className={`text-slate-500 whitespace-nowrap ${s.sub}`}>{c.department || c.title || "—"}</div>
       </div>
       {/* 底部：作为上级的连接点（从这里拖到下级） */}
       <Handle type="source" position={Position.Bottom} className="pm-handle" />
@@ -203,35 +203,25 @@ const FLOW_CSS = `
   width: 11px !important;
   height: 11px !important;
   background: #fff !important;
-  border: 2px solid #6366f1 !important;
+  border: 2px solid #475569 !important;
   opacity: 0.55;
-  transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
 }
-.pm-node:hover .pm-handle { opacity: 1; transform: scale(1.25); }
+.pm-node:hover .pm-handle { opacity: 1; }
 .pm-handle:hover {
   opacity: 1 !important;
-  transform: scale(1.6) !important;
-  box-shadow: 0 0 0 4px rgba(99,102,241,0.25) !important;
-  animation: pm-pulse 1s ease-in-out infinite;
+  box-shadow: 0 0 0 3px rgba(71,85,105,0.2) !important;
 }
-.react-flow__handle-connecting { background: #6366f1 !important; }
+.react-flow__handle-connecting { background: #475569 !important; }
 .react-flow__handle-valid {
   background: #22c55e !important;
   border-color: #22c55e !important;
-  box-shadow: 0 0 0 6px rgba(34,197,94,0.25) !important;
-}
-@keyframes pm-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px rgba(99,102,241,0.2); }
-  50% { box-shadow: 0 0 0 7px rgba(99,102,241,0.35); }
+  box-shadow: 0 0 0 4px rgba(34,197,94,0.2) !important;
 }
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #6366f1 !important;
+  stroke: #475569 !important;
   stroke-width: 2.5 !important;
-  stroke-dasharray: 6 !important;
-  animation: pm-dash 0.55s linear infinite;
 }
-@keyframes pm-dash { to { stroke-dashoffset: -12; } }
-.react-flow__edge:hover .react-flow__edge-path { stroke: #818cf8 !important; }
+.react-flow__edge:hover .react-flow__edge-path { stroke: #64748b !important; }
 `;
 
 type UndoEntry = { label: string; run: () => void };
@@ -439,29 +429,29 @@ function FlowInner({
     return () => window.removeEventListener("keydown", onKey);
   }, [undo]);
 
-  const btn = "rounded-md px-2.5 py-1 border transition-colors";
-  const btnIdle = "border-zinc-200 text-zinc-600 hover:border-zinc-300";
+  const btn = "rounded-md px-2.5 py-1 border";
+  const btnIdle = "border-slate-200 text-slate-600 hover:border-slate-300";
 
   return (
     <div>
       <style>{FLOW_CSS}</style>
       <div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
-        <span className="text-zinc-400">{pm.connectionType}</span>
+        <span className="text-slate-400">{pm.connectionType}</span>
         <button
           type="button"
           onClick={() => setLineMode("SOLID")}
-          className={`${btn} ${lineMode === "SOLID" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
+          className={`${btn} ${lineMode === "SOLID" ? "bg-slate-900 text-white border-slate-900" : btnIdle}`}
         >
           {pm.solidLine}
         </button>
         <button
           type="button"
           onClick={() => setLineMode("DOTTED")}
-          className={`${btn} ${lineMode === "DOTTED" ? "bg-zinc-900 text-white border-zinc-900" : btnIdle}`}
+          className={`${btn} ${lineMode === "DOTTED" ? "bg-slate-900 text-white border-slate-900" : btnIdle}`}
         >
           {pm.dottedLine}
         </button>
-        <span className="text-zinc-300">|</span>
+        <span className="text-slate-300">|</span>
         <button
           type="button"
           onClick={undo}
@@ -484,8 +474,8 @@ function FlowInner({
           {pm.resetLayout}
         </button>
       </div>
-      <p className="text-[11px] text-zinc-400 mb-2">{pm.tip}</p>
-      <div className="h-[460px] rounded-lg border border-zinc-100 bg-zinc-50/40">
+      <p className="text-[11px] text-slate-400 mb-2">{pm.tip}</p>
+      <div className="h-[460px] rounded-lg border border-slate-100 bg-slate-50/40">
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -516,7 +506,7 @@ function FlowInner({
 // ============ 编辑抽屉：点节点 / 点列表行 → 就地编辑该人 ============
 
 const DRAWER_INPUT =
-  "w-full rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none";
+  "w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:border-slate-500 focus:outline-none";
 
 function EditDrawer({
   partnerId,
@@ -558,23 +548,23 @@ function EditDrawer({
   return (
     <>
       <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-[340px] max-w-[88vw] bg-white shadow-xl z-50 flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100">
-          <span className="font-medium text-zinc-900">
+      <div className="fixed right-0 top-0 h-full w-[340px] max-w-[88vw] bg-white border border-slate-200 z-50 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <span className="font-medium text-slate-900">
             {isNew ? pm.addContact : pm.editContact.replace("{name}", contact?.name ?? "")}
           </span>
-          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">
             ×
           </button>
         </div>
         <form ref={formRef} className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
           {!isNew && <input type="hidden" name="id" value={contact!.id} />}
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.name}</span>
+            <span className="text-xs text-slate-500">{pm.name}</span>
             <input name="name" defaultValue={contact?.name ?? ""} placeholder={pm.name} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.role}</span>
+            <span className="text-xs text-slate-500">{pm.role}</span>
             <select name="role" defaultValue={contact?.role ?? "INFLUENCER"} className={DRAWER_INPUT}>
               {CONTACT_ROLES_BY_INFLUENCE.map((k) => (
                 <option key={k} value={k}>
@@ -584,7 +574,7 @@ function EditDrawer({
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.attitude}</span>
+            <span className="text-xs text-slate-500">{pm.attitude}</span>
             <select name="attitude" defaultValue={String(contact?.attitude ?? 0)} className={DRAWER_INPUT}>
               {Object.entries(labels.attitudeLabels)
                 .sort((a, b) => Number(b[0]) - Number(a[0]))
@@ -596,15 +586,15 @@ function EditDrawer({
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.title}</span>
+            <span className="text-xs text-slate-500">{pm.title}</span>
             <input name="title" defaultValue={contact?.title ?? ""} placeholder={pm.title} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.department}</span>
+            <span className="text-xs text-slate-500">{pm.department}</span>
             <input name="department" defaultValue={contact?.department ?? ""} placeholder={pm.department} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.reportsTo}</span>
+            <span className="text-xs text-slate-500">{pm.reportsTo}</span>
             <select name="reportsToId" defaultValue={contact?.reportsToId ?? ""} className={DRAWER_INPUT}>
               <option value="">{pm.noneTopLevel}</option>
               {allContacts
@@ -617,25 +607,25 @@ function EditDrawer({
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.contactInfo}</span>
+            <span className="text-xs text-slate-500">{pm.contactInfo}</span>
             <input name="contactInfo" defaultValue={contact?.contactInfo ?? ""} placeholder={pm.contactInfo} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.bestApproach}</span>
+            <span className="text-xs text-slate-500">{pm.bestApproach}</span>
             <input name="approach" defaultValue={contact?.approach ?? ""} placeholder={pm.bestApproach} className={DRAWER_INPUT} />
           </label>
           <label className="block">
-            <span className="text-xs text-zinc-500">{pm.notes}</span>
+            <span className="text-xs text-slate-500">{pm.notes}</span>
             <textarea name="notes" defaultValue={contact?.notes ?? ""} placeholder={pm.notes} rows={3} className={DRAWER_INPUT} />
           </label>
         </form>
-        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-zinc-100">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-slate-100">
           {!isNew ? (
             <button
               type="button"
               onClick={remove}
               disabled={pending}
-              className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-40"
+              className="text-xs text-slate-400 hover:text-red-600 disabled:opacity-40"
             >
               {common.delete}
             </button>
@@ -646,7 +636,7 @@ function EditDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-300"
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:border-slate-300"
             >
               {common.cancel}
             </button>
@@ -654,7 +644,7 @@ function EditDrawer({
               type="button"
               onClick={save}
               disabled={pending}
-              className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700 disabled:opacity-50"
+              className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-700 disabled:opacity-50"
             >
               {pending ? pm.saving : common.save}
             </button>
@@ -708,14 +698,14 @@ function ContactList({
   }, [sorted, q, labels]);
 
   return (
-    <div className="mt-4 rounded-lg border border-zinc-100">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-100">
+    <div className="mt-4 rounded-lg border border-slate-100">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1 text-sm font-medium text-zinc-700"
+          className="flex items-center gap-1 text-sm font-medium text-slate-700"
         >
-          <span className={`text-zinc-300 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+          <span className={`text-slate-300 ${open ? "rotate-90" : ""}`}>›</span>
           {pm.keyContacts.replace("{count}", String(contacts.length))}
         </button>
         <div className="flex-1" />
@@ -724,13 +714,13 @@ function ContactList({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={pm.searchPlaceholder}
-            className="w-44 rounded-md border border-zinc-200 px-2.5 py-1 text-xs focus:border-indigo-400 focus:outline-none"
+            className="w-44 rounded-md border border-slate-200 px-2.5 py-1 text-xs focus:border-slate-500 focus:outline-none"
           />
         )}
         <button
           type="button"
           onClick={onAdd}
-          className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700"
+          className="rounded-md bg-slate-900 text-white px-2.5 py-1 text-xs hover:bg-slate-800"
         >
           {pm.addContactBtn}
         </button>
@@ -744,12 +734,12 @@ function ContactList({
                 key={c.id}
                 type="button"
                 onClick={() => onSelect(c.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-zinc-50 ${
-                  selectedId === c.id ? "bg-indigo-50" : ""
+                className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 ${
+                  selectedId === c.id ? "bg-slate-50" : ""
                 }`}
               >
                 <div className="relative shrink-0">
-                  <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-600 flex items-center justify-center text-sm font-semibold">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-sm font-semibold">
                     {c.name.slice(0, 1)}
                   </div>
                   <span
@@ -760,7 +750,7 @@ function ContactList({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-zinc-900 truncate">{c.name}</span>
+                    <span className="font-medium text-slate-900 truncate">{c.name}</span>
                     <span
                       className={`shrink-0 rounded-sm text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center ${s.badge}`}
                       title={`${labels.contactRoleLabels[c.role] ?? c.role} (${pm.influence.replace("{n}", String(roleInfluence(c.role)))})`}
@@ -768,16 +758,16 @@ function ContactList({
                       {CONTACT_ROLE_CODES[c.role] ?? "I"}
                     </span>
                   </div>
-                  <div className="text-xs text-zinc-400 truncate">
+                  <div className="text-xs text-slate-400 truncate">
                     {[c.title, c.department].filter(Boolean).join(" · ") || "—"}
                   </div>
                 </div>
-                <span className="text-zinc-300 text-xs shrink-0">{pm.editArrow}</span>
+                <span className="text-slate-300 text-xs shrink-0">{pm.editArrow}</span>
               </button>
             );
           })}
           {filtered.length === 0 && (
-            <div className="px-3 py-6 text-center text-xs text-zinc-400">
+            <div className="px-3 py-6 text-center text-xs text-slate-400">
               {q ? pm.noMatch : pm.noContacts}
             </div>
           )}
@@ -818,7 +808,7 @@ export function PowerMapSection({
 
   return (
     <div>
-      <div className="mb-3 rounded-lg bg-zinc-50/80 border border-zinc-100 px-4 py-3">
+      <div className="mb-3 rounded-lg bg-slate-50/80 border border-slate-100 px-4 py-3">
         <PowerMapLegend />
       </div>
       {contacts.length > 0 ? (
@@ -826,7 +816,7 @@ export function PowerMapSection({
           <FlowInner partnerId={partnerId} contacts={contacts} links={links} onSelectContact={selectContact} />
         </ReactFlowProvider>
       ) : (
-        <div className="rounded-lg border border-dashed border-zinc-200 px-4 py-8 text-center text-sm text-zinc-400">
+        <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
           {pm.emptyCanvas}
         </div>
       )}

@@ -9,7 +9,7 @@ import {
 import { normalizeKnowhowApiKey } from "@/lib/knowhow-token";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export type SystemKnowhowForClient = {
   configured: boolean;
@@ -76,9 +76,9 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-xs text-zinc-500 leading-relaxed">
-        团队 Know-how 知识库检索 API 令牌（与 KMS 令牌不同），供工作台搜索与 Agent 工具 search_knowhow 使用。请在「Know-how 检索令牌」卡片配置，不要与上方「团队 KMS 回退令牌」混淆。粘贴时无需加 <code className="text-xs bg-zinc-100 px-1 rounded">Bearer</code> 前缀或引号，系统会自动清洗。优先级：团队数据库配置 →{" "}
-        <code className="text-xs bg-zinc-100 px-1 rounded">KNOWHOW_API_KEY</code> 环境变量。
+      <p className="text-xs text-slate-500 leading-relaxed">
+        团队 Know-how 知识库检索 API 令牌（与 KMS 令牌不同），供工作台搜索与 Agent 工具 search_knowhow 使用。请在「Know-how 检索令牌」卡片配置，不要与上方「团队 KMS 回退令牌」混淆。粘贴时无需加 <code className="text-xs bg-slate-100 px-1 rounded">Bearer</code> 前缀或引号，系统会自动清洗。优先级：团队数据库配置 →{" "}
+        <code className="text-xs bg-slate-100 px-1 rounded">KNOWHOW_API_KEY</code> 环境变量。
       </p>
       {credential.configured ? (
         <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
@@ -91,7 +91,7 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
         </div>
       )}
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">API 令牌（Bearer Token）</span>
+        <span className="text-xs text-slate-500">API 令牌（Bearer Token）</span>
         <input
           type="password"
           value={token}
@@ -112,7 +112,7 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
           type="button"
           disabled={pending || !token.trim()}
           onClick={() => run(saveSystemKnowhowCredentialAction)}
-          className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
         >
           保存令牌
         </button>
@@ -120,13 +120,13 @@ export function SystemKnowhowSetup({ credential }: { credential: SystemKnowhowFo
           type="button"
           disabled={pending || (!token.trim() && !credential.configured)}
           onClick={testConnection}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:border-indigo-300 disabled:opacity-40"
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:border-slate-300 disabled:opacity-40"
         >
           测试连接
         </button>
         {credential.configured && (
           <>
-            <button type="button" disabled={pending} onClick={testStored} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">
+            <button type="button" disabled={pending} onClick={testStored} className="rounded-lg border border-slate-200 px-4 py-2 text-sm">
               测试已保存
             </button>
             <button type="button" disabled={pending} onClick={remove} className="rounded-lg border border-red-200 text-red-600 px-4 py-2 text-sm">

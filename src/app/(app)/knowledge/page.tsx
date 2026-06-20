@@ -21,7 +21,7 @@ export default async function KnowledgePage() {
         title={m.knowledge.title}
         desc={m.knowledge.desc}
         actions={
-          <Link href="/knowledge/new" className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+          <Link href="/knowledge/new" className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800">
             {m.knowledge.newArticle}
           </Link>
         }
@@ -29,20 +29,20 @@ export default async function KnowledgePage() {
       <AiCenterNav />
       <div className="px-8 max-w-4xl space-y-3">
         {articles.map((a) => (
-          <div key={a.id} className="bg-white rounded-xl border p-5 flex justify-between gap-3">
+          <div key={a.id} className="bg-white rounded-lg border p-5 flex justify-between gap-3">
             <div>
-              <Link href={`/knowledge/${a.id}`} className="font-semibold text-zinc-900 hover:text-indigo-600">{a.title}</Link>
-              <div className="text-xs text-zinc-400 mt-1 flex gap-2">
+              <Link href={`/knowledge/${a.id}`} className="font-semibold text-slate-900 hover:text-sky-600">{a.title}</Link>
+              <div className="text-xs text-slate-400 mt-1 flex gap-2">
                 <Badge tone="purple">{L.KNOWLEDGE_CATEGORY_LABELS[a.category] ?? a.category}</Badge>
                 <span>{a.createdBy?.name} · {fmtDateTime(a.updatedAt, bcp47)}</span>
               </div>
             </div>
             <form action={deleteKnowledgeAction.bind(null, a.id)}>
-              <button className="text-xs text-zinc-400 hover:text-red-600">{m.common.delete}</button>
+              <button className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
             </form>
           </div>
         ))}
-        {articles.length === 0 && <div className="text-center text-sm text-zinc-400 py-12">{m.knowledge.empty}</div>}
+        {articles.length === 0 && <div className="text-center text-sm text-slate-400 py-12">{m.knowledge.empty}</div>}
       </div>
     </div>
   );

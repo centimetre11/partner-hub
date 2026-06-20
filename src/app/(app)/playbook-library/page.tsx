@@ -54,13 +54,13 @@ export default async function PlaybookLibraryPage({
             name="q"
             defaultValue={q}
             placeholder={m.playbookLibrary.searchPlaceholder}
-            className="flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
           />
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm hover:bg-zinc-700">{m.common.search}</button>
+          <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-700">{m.common.search}</button>
         </form>
 
         {grouped.length === 0 ? (
-          <div className="text-center text-sm text-zinc-400 py-16 bg-white rounded-xl border">
+          <div className="text-center text-sm text-slate-400 py-16 bg-white rounded-lg border">
             {m.playbookLibrary.emptyExtended}
           </div>
         ) : (
@@ -68,11 +68,11 @@ export default async function PlaybookLibraryPage({
             {grouped.map(([groupId, versions]) => {
               const latest = versions[0];
               return (
-                <div key={groupId} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-zinc-100">
+                <div key={groupId} className="bg-white rounded-lg border border-slate-200/80 shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h2 className="font-semibold text-zinc-900">{latest.title}</h2>
+                        <h2 className="font-semibold text-slate-900">{latest.title}</h2>
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           <Badge tone="indigo">{m.playbookLibrary.latestVersion.replace("{n}", String(latest.version))}</Badge>
                           {versions.length > 1 && (
@@ -89,7 +89,7 @@ export default async function PlaybookLibraryPage({
                           )}
                           <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, latest.category ?? "OTHER")}</Badge>
                         </div>
-                        <p className="text-xs text-zinc-400 mt-2">
+                        <p className="text-xs text-slate-400 mt-2">
                           {latest.sourcePartnerName && <>{m.playbookLibrary.source} {latest.sourcePartnerName} · </>}
                           {latest.createdBy?.name ?? "—"} · {fmtDateTime(latest.updatedAt, bcp47)}
                           {latest.notes && <> · {latest.notes}</>}
@@ -99,43 +99,43 @@ export default async function PlaybookLibraryPage({
                   </div>
                   <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <h3 className="text-xs font-medium text-zinc-500 mb-1">{m.playbookLibrary.playbookLabel}</h3>
-                      <p className="text-zinc-700 whitespace-pre-wrap leading-relaxed">
-                        {latest.playbook || <span className="text-zinc-300">—</span>}
+                      <h3 className="text-xs font-medium text-slate-500 mb-1">{m.playbookLibrary.playbookLabel}</h3>
+                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">
+                        {latest.playbook || <span className="text-slate-300">—</span>}
                       </p>
                     </div>
                     <div>
-                      <h3 className="text-xs font-medium text-zinc-500 mb-1">{m.playbookLibrary.pitchLabel}</h3>
-                      <p className="text-zinc-700 whitespace-pre-wrap leading-relaxed">
-                        {latest.pitch || <span className="text-zinc-300">—</span>}
+                      <h3 className="text-xs font-medium text-slate-500 mb-1">{m.playbookLibrary.pitchLabel}</h3>
+                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">
+                        {latest.pitch || <span className="text-slate-300">—</span>}
                       </p>
                     </div>
                   </div>
                   {versions.length > 1 && (
                     <details className="px-5 pb-4">
-                      <summary className="text-xs text-indigo-600 cursor-pointer hover:underline">
+                      <summary className="text-xs text-sky-600 cursor-pointer hover:underline">
                         {m.playbookLibrary.viewHistoryCount.replace("{count}", String(versions.length - 1))}
                       </summary>
-                      <ul className="mt-3 space-y-3 border-t border-zinc-50 pt-3">
+                      <ul className="mt-3 space-y-3 border-t border-slate-50 pt-3">
                         {versions.slice(1).map((v) => (
-                          <li key={v.id} className="rounded-lg bg-zinc-50 p-3">
+                          <li key={v.id} className="rounded-lg bg-slate-50 p-3">
                             <div className="flex justify-between gap-2 items-start">
-                              <span className="text-xs font-medium text-zinc-600">v{v.version} · {fmtDateTime(v.updatedAt, bcp47)}</span>
+                              <span className="text-xs font-medium text-slate-600">v{v.version} · {fmtDateTime(v.updatedAt, bcp47)}</span>
                               <form action={deleteGtmLibraryAction.bind(null, v.id)}>
-                                <button className="text-xs text-zinc-400 hover:text-red-600">{m.common.delete}</button>
+                                <button className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
                               </form>
                             </div>
                             {v.playbook && (
-                              <p className="text-xs text-zinc-600 mt-2 line-clamp-3 whitespace-pre-wrap">{v.playbook}</p>
+                              <p className="text-xs text-slate-600 mt-2 line-clamp-3 whitespace-pre-wrap">{v.playbook}</p>
                             )}
                           </li>
                         ))}
                       </ul>
                     </details>
                   )}
-                  <div className="px-5 py-3 bg-zinc-50/80 border-t border-zinc-100 flex justify-end">
+                  <div className="px-5 py-3 bg-slate-50/80 border-t border-slate-100 flex justify-end">
                     <form action={deleteGtmLibraryAction.bind(null, latest.id)}>
-                      <button className="text-xs text-zinc-400 hover:text-red-600">{m.playbookLibrary.deleteLatest}</button>
+                      <button className="text-xs text-slate-400 hover:text-red-600">{m.playbookLibrary.deleteLatest}</button>
                     </form>
                   </div>
                 </div>
@@ -144,7 +144,7 @@ export default async function PlaybookLibraryPage({
           </div>
         )}
 
-        <p className="text-xs text-zinc-400 mt-6">{m.playbookLibrary.footerHint}</p>
+        <p className="text-xs text-slate-400 mt-6">{m.playbookLibrary.footerHint}</p>
       </div>
     </div>
   );

@@ -36,7 +36,7 @@ export function TodoEditButton({
   const [saving, setSaving] = useState(false);
 
   const input =
-    "rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-full";
+    "rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 w-full";
 
   return (
     <>
@@ -44,7 +44,7 @@ export function TodoEditButton({
         type="button"
         title="Edit todo"
         onClick={() => setOpen(true)}
-        className="text-zinc-300 hover:text-indigo-500 text-sm transition-colors opacity-60 group-hover:opacity-100"
+        className="text-slate-300 hover:text-slate-500 text-sm opacity-60 group-hover:opacity-100"
       >
         ✎
       </button>
@@ -55,15 +55,15 @@ export function TodoEditButton({
           onClick={() => !saving && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"
+            className="w-full max-w-md rounded-lg bg-white p-5 border border-slate-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-zinc-800">Edit todo</h3>
+              <h3 className="text-sm font-semibold text-slate-800">Edit todo</h3>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600"
+                className="text-slate-400 hover:text-slate-600"
               >
                 ✕
               </button>
@@ -81,12 +81,12 @@ export function TodoEditButton({
               className="space-y-3"
             >
               <div>
-                <label className="mb-1 block text-xs text-zinc-500">Title</label>
+                <label className="mb-1 block text-xs text-slate-500">Title</label>
                 <input name="title" required defaultValue={todo.title} className={input} />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs text-zinc-500">Notes</label>
+                <label className="mb-1 block text-xs text-slate-500">Notes</label>
                 <input
                   name="detail"
                   defaultValue={todo.detail ?? ""}
@@ -97,7 +97,7 @@ export function TodoEditButton({
 
               {partners && (
                 <div>
-                  <label className="mb-1 block text-xs text-zinc-500">Partner</label>
+                  <label className="mb-1 block text-xs text-slate-500">Partner</label>
                   <select name="partnerId" defaultValue={todo.partnerId ?? ""} className={input}>
                     <option value="">No partner</option>
                     {partners.map((p) => (
@@ -111,7 +111,7 @@ export function TodoEditButton({
 
               <div className="flex gap-3">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-zinc-500">Assignee</label>
+                  <label className="mb-1 block text-xs text-slate-500">Assignee</label>
                   <select name="assigneeId" defaultValue={todo.assigneeId ?? ""} className={input}>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -121,7 +121,7 @@ export function TodoEditButton({
                   </select>
                 </div>
                 <div className="w-32">
-                  <label className="mb-1 block text-xs text-zinc-500">Priority</label>
+                  <label className="mb-1 block text-xs text-slate-500">Priority</label>
                   <select name="priority" defaultValue={todo.priority} className={input}>
                     <option value="HIGH">High</option>
                     <option value="MEDIUM">Medium</option>
@@ -131,7 +131,7 @@ export function TodoEditButton({
               </div>
 
               <div>
-                <label className="mb-1 block text-xs text-zinc-500">Due date</label>
+                <label className="mb-1 block text-xs text-slate-500">Due date</label>
                 <input
                   name="dueDate"
                   type="date"
@@ -145,13 +145,13 @@ export function TodoEditButton({
                   type="button"
                   onClick={() => setOpen(false)}
                   disabled={saving}
-                  className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   disabled={saving}
-                  className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                 >
                   {saving ? "Saving…" : "Save"}
                 </button>

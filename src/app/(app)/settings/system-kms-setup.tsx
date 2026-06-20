@@ -8,7 +8,7 @@ import {
 } from "@/lib/system-kms-actions";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export type SystemKmsForClient = {
   configured: boolean;
@@ -61,9 +61,9 @@ export function SystemKmsSetup({ credential }: { credential: SystemKmsForClient 
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-xs text-zinc-500 leading-relaxed">
+      <p className="text-xs text-slate-500 leading-relaxed">
         Team fallback KMS token for users who have not saved a personal token. Priority: personal → team DB →{" "}
-        <code className="text-xs bg-zinc-100 px-1 rounded">KMS_SYSTEM_TOKEN</code> env.
+        <code className="text-xs bg-slate-100 px-1 rounded">KMS_SYSTEM_TOKEN</code> env.
       </p>
       {credential.configured ? (
         <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-800">
@@ -76,7 +76,7 @@ export function SystemKmsSetup({ credential }: { credential: SystemKmsForClient 
         </div>
       )}
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">Team access token</span>
+        <span className="text-xs text-slate-500">Team access token</span>
         <input
           type="password"
           value={token}
@@ -91,7 +91,7 @@ export function SystemKmsSetup({ credential }: { credential: SystemKmsForClient 
           type="button"
           disabled={pending || !token.trim()}
           onClick={() => run(saveSystemKmsCredentialAction)}
-          className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
         >
           Save team token
         </button>
@@ -99,13 +99,13 @@ export function SystemKmsSetup({ credential }: { credential: SystemKmsForClient 
           type="button"
           disabled={pending}
           onClick={() => run(testSystemKmsCredentialAction)}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:border-indigo-300 disabled:opacity-40"
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:border-slate-300 disabled:opacity-40"
         >
           Test (pageId=1420741418)
         </button>
         {credential.configured && (
           <>
-            <button type="button" disabled={pending} onClick={testStored} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm">
+            <button type="button" disabled={pending} onClick={testStored} className="rounded-lg border border-slate-200 px-4 py-2 text-sm">
               Test stored
             </button>
             <button type="button" disabled={pending} onClick={remove} className="rounded-lg border border-red-200 text-red-600 px-4 py-2 text-sm">

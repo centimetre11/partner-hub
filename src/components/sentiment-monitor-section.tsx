@@ -34,7 +34,7 @@ type ScanMeta = {
 };
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 const ALL_KEY = "__all__";
 
@@ -49,7 +49,7 @@ const STEP_TONE: Record<ScanStepStatus, string> = {
   ok: "text-emerald-600 bg-emerald-50",
   warn: "text-amber-600 bg-amber-50",
   fail: "text-red-600 bg-red-50",
-  skip: "text-zinc-400 bg-zinc-100",
+  skip: "text-slate-400 bg-slate-100",
 };
 
 function buildPlannedSteps(
@@ -106,14 +106,14 @@ function ScanProgressPanel({
   const mon = useMessages().monitor;
   const showSteps = steps && steps.length > 0;
   return (
-    <div className="mb-5 rounded-xl border border-indigo-100 bg-gradient-to-b from-indigo-50/80 to-white overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-indigo-100/80">
+    <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200/80">
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium text-zinc-800">
+          <div className="text-sm font-medium text-slate-800">
             {mon.scanProgress}
             {partnerName ? ` · ${partnerName}` : ""}
           </div>
-          <div className="text-xs text-zinc-500 mt-0.5">
+          <div className="text-xs text-slate-500 mt-0.5">
             {scanning
               ? mon.scanning
               : meta?.searchBackend
@@ -125,17 +125,17 @@ function ScanProgressPanel({
           onClick={onScan}
           disabled={scanning || !canScan}
           title={!canScan ? mon.selectDimsFirst : mon.scanAllDims}
-          className="shrink-0 rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
         >
           {scanning ? mon.scanningBtn : scanLabel}
         </button>
       </div>
 
       {scanMsg && (
-        <div className="mx-4 mt-3 rounded-lg bg-white border border-zinc-100 px-3 py-2 text-xs text-zinc-700">
+        <div className="mx-4 mt-3 rounded-lg bg-white border border-slate-100 px-3 py-2 text-xs text-slate-700">
           {scanMsg}
           {meta && (meta.rawChars !== undefined || meta.classified !== undefined) && (
-            <span className="text-zinc-400 ml-2">
+            <span className="text-slate-400 ml-2">
               {mon.fetchedMeta
                 .replace("{chars}", String(meta.rawChars ?? 0))
                 .replace("{classified}", String(meta.classified ?? 0))
@@ -155,10 +155,10 @@ function ScanProgressPanel({
                 {scanning && i === steps!.length - 1 ? "…" : STEP_ICON[st.status]}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-zinc-700">{st.label}</div>
-                {st.detail && <div className="text-zinc-500 mt-0.5 break-words">{st.detail}</div>}
+                <div className="font-medium text-slate-700">{st.label}</div>
+                {st.detail && <div className="text-slate-500 mt-0.5 break-words">{st.detail}</div>}
                 {st.preview && (
-                  <div className="mt-1 rounded-md bg-zinc-50 border border-zinc-100 px-2 py-1.5 text-zinc-500 leading-relaxed">
+                  <div className="mt-1 rounded-md bg-slate-50 border border-slate-100 px-2 py-1.5 text-slate-500 leading-relaxed">
                     {st.preview}
                   </div>
                 )}
@@ -169,7 +169,7 @@ function ScanProgressPanel({
       )}
 
       {scanning && !showSteps && (
-        <div className="px-4 py-6 text-center text-xs text-indigo-500 animate-pulse">{mon.initScan}</div>
+        <div className="px-4 py-6 text-center text-xs text-slate-500">{mon.initScan}</div>
       )}
     </div>
   );
@@ -304,9 +304,9 @@ export function SentimentMonitorSection({
       />
 
       <div className="mb-5">
-        <div className="text-xs text-zinc-400 mb-2">
+        <div className="text-xs text-slate-400 mb-2">
           {mon.selectDims}
-          {savingDims && <span className="ml-2 text-zinc-300">{mon.saving}</span>}
+          {savingDims && <span className="ml-2 text-slate-300">{mon.saving}</span>}
         </div>
         <div className="flex flex-wrap gap-1.5">
           {MONITOR_DIMENSIONS.map((d) => {
@@ -315,10 +315,10 @@ export function SentimentMonitorSection({
               <button
                 key={d}
                 onClick={() => toggleDim(d)}
-                className={`rounded-full px-3 py-1 text-xs border transition-colors ${
+                className={`rounded-full px-3 py-1 text-xs border ${
                   on
-                    ? "bg-indigo-600 text-white border-indigo-600"
-                    : "bg-white text-zinc-500 border-zinc-200 hover:border-indigo-300"
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
                 }`}
               >
                 {labels.monitorDimensionLabels[d]}
@@ -328,10 +328,10 @@ export function SentimentMonitorSection({
         </div>
       </div>
 
-      <div className="mb-5 pb-5 border-b border-zinc-100">
-        <div className="text-xs text-zinc-400 mb-2">
+      <div className="mb-5 pb-5 border-b border-slate-100">
+        <div className="text-xs text-slate-400 mb-2">
           {mon.linkSources}
-          <span className="block mt-0.5 text-zinc-300">
+          <span className="block mt-0.5 text-slate-300">
             {mon.linkedinNote}
             {partnerWebsite?.trim() ? partnerWebsite : mon.notSet}
             {mon.websiteSuffix}
@@ -339,12 +339,12 @@ export function SentimentMonitorSection({
         </div>
         <div className="space-y-2">
           {sources.map((s) => (
-            <div key={s.id} className="flex items-center gap-3 rounded-lg border border-zinc-100 px-3 py-2">
+            <div key={s.id} className="flex items-center gap-3 rounded-lg border border-slate-100 px-3 py-2">
               {s.thumbnailUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.thumbnailUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
               ) : (
-                <div className="w-8 h-8 rounded bg-zinc-100 flex items-center justify-center text-xs text-zinc-400 shrink-0">
+                <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-xs text-slate-400 shrink-0">
                   {labels.monitorSourceTypeLabels[s.sourceType]?.slice(0, 1) ?? "L"}
                 </div>
               )}
@@ -354,7 +354,7 @@ export function SentimentMonitorSection({
                     href={s.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sm text-zinc-800 hover:text-indigo-600 truncate"
+                    className="text-sm text-slate-800 hover:text-sky-600 truncate"
                   >
                     {s.label}
                   </a>
@@ -362,12 +362,12 @@ export function SentimentMonitorSection({
                     {labels.monitorSourceTypeLabels[s.sourceType] ?? s.sourceType}
                   </Badge>
                 </div>
-                <div className="text-xs text-zinc-400 truncate">{s.url}</div>
+                <div className="text-xs text-slate-400 truncate">{s.url}</div>
               </div>
               <form action={toggleMonitorSourceAction.bind(null, partnerId, s.id)}>
                 <button
                   className={`text-xs px-2 py-1 rounded-md ${
-                    s.enabled ? "text-emerald-600 hover:bg-emerald-50" : "text-zinc-400 hover:bg-zinc-50"
+                    s.enabled ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-400 hover:bg-slate-50"
                   }`}
                   title={s.enabled ? mon.enabledTitle : mon.disabledTitle}
                 >
@@ -375,17 +375,17 @@ export function SentimentMonitorSection({
                 </button>
               </form>
               <form action={deleteMonitorSourceAction.bind(null, partnerId, s.id)}>
-                <button className="text-zinc-300 hover:text-red-500 text-sm px-1" title={common.delete}>
+                <button className="text-slate-300 hover:text-red-500 text-sm px-1" title={common.delete}>
                   ✕
                 </button>
               </form>
             </div>
           ))}
-          {sources.length === 0 && <p className="text-xs text-zinc-400">{mon.noSources}</p>}
+          {sources.length === 0 && <p className="text-xs text-slate-400">{mon.noSources}</p>}
         </div>
 
-        <details className="mt-2 rounded-lg border border-dashed border-zinc-200">
-          <summary className="px-3 py-2 text-sm text-indigo-600 cursor-pointer list-none">{mon.addLink}</summary>
+        <details className="mt-2 rounded-lg border border-dashed border-slate-200">
+          <summary className="px-3 py-2 text-sm text-sky-600 cursor-pointer list-none">{mon.addLink}</summary>
           <form
             action={addMonitorSourceAction.bind(null, partnerId)}
             className="px-3 pb-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm"
@@ -393,7 +393,7 @@ export function SentimentMonitorSection({
             <input name="url" required placeholder={mon.urlPlaceholder} className={`${input} md:col-span-2`} />
             <input name="label" placeholder={mon.labelPlaceholder} className={input} />
             <div className="md:col-span-3 flex justify-end">
-              <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs hover:bg-indigo-700">
+              <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-800">
                 {common.add}
               </button>
             </div>
@@ -407,7 +407,7 @@ export function SentimentMonitorSection({
           <button
             onClick={() => setSentFilter(null)}
             className={`text-xs px-2 py-0.5 rounded-md border ${
-              !sentFilter ? "border-zinc-400 text-zinc-700" : "border-zinc-200 text-zinc-400"
+              !sentFilter ? "border-slate-400 text-slate-700" : "border-slate-200 text-slate-400"
             }`}
           >
             {mon.allSentiments}
@@ -417,7 +417,7 @@ export function SentimentMonitorSection({
               key={s}
               onClick={() => setSentFilter(sentFilter === s ? null : s)}
               className={`text-xs px-2 py-0.5 rounded-md border ${
-                sentFilter === s ? "border-zinc-400" : "border-zinc-200"
+                sentFilter === s ? "border-slate-400" : "border-slate-200"
               }`}
             >
               <Badge tone={MONITOR_SENTIMENT_TONE[s]}>{labels.monitorSentimentLabels[s]}</Badge>
@@ -434,12 +434,12 @@ export function SentimentMonitorSection({
             const dimItems = (itemsByDim.get(d) ?? []).filter((it) => !sentFilter || it.sentiment === sentFilter);
             const total = itemsByDim.get(d)?.length ?? 0;
             return (
-              <details key={d} open={total > 0} className="group rounded-lg border border-zinc-100">
+              <details key={d} open={total > 0} className="group rounded-lg border border-slate-100">
                 <summary className="flex items-center gap-2 px-4 py-2.5 cursor-pointer list-none">
-                  <span className="text-zinc-300 group-open:rotate-90 transition-transform">›</span>
-                  <span className="text-sm font-medium text-zinc-800">{labels.monitorDimensionLabels[d]}</span>
+                  <span className="text-slate-300 group-open:rotate-90">›</span>
+                  <span className="text-sm font-medium text-slate-800">{labels.monitorDimensionLabels[d]}</span>
                   <Badge tone="zinc">{total}</Badge>
-                  {!dims.includes(d) && <span className="text-[10px] text-zinc-300">{mon.notSubscribed}</span>}
+                  {!dims.includes(d) && <span className="text-[10px] text-slate-300">{mon.notSubscribed}</span>}
                   <span className="flex-1" />
                   <button
                     onClick={(e) => {
@@ -447,14 +447,14 @@ export function SentimentMonitorSection({
                       runScan([d], d);
                     }}
                     disabled={scanning}
-                    className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-50"
+                    className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600 disabled:opacity-50"
                   >
                     {scanningDim === d ? mon.scanningBtn : mon.scanBtn}
                   </button>
                 </summary>
-                <div className="px-4 pb-3 pt-1 space-y-2.5 border-t border-zinc-50">
+                <div className="px-4 pb-3 pt-1 space-y-2.5 border-t border-slate-50">
                   {dimItems.map((it) => (
-                    <div key={it.id} className="group/item rounded-lg border border-zinc-100 px-3 py-2.5 hover:border-zinc-200">
+                    <div key={it.id} className="group/item rounded-lg border border-slate-100 px-3 py-2.5 hover:border-slate-200">
                       <div className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap mb-0.5">
@@ -466,16 +466,16 @@ export function SentimentMonitorSection({
                                 href={it.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-sm font-medium text-zinc-800 hover:text-indigo-600"
+                                className="text-sm font-medium text-slate-800 hover:text-sky-600"
                               >
                                 {it.title}
                               </a>
                             ) : (
-                              <span className="text-sm font-medium text-zinc-800">{it.title}</span>
+                              <span className="text-sm font-medium text-slate-800">{it.title}</span>
                             )}
                           </div>
-                          {it.summary && <p className="text-xs text-zinc-600 leading-relaxed">{it.summary}</p>}
-                          <div className="text-xs text-zinc-400 mt-1">
+                          {it.summary && <p className="text-xs text-slate-600 leading-relaxed">{it.summary}</p>}
+                          <div className="text-xs text-slate-400 mt-1">
                             {it.sourceName && `${it.sourceName} · `}
                             {fmtDate(it.publishedAt ?? it.createdAt, bcp47)}
                           </div>
@@ -483,7 +483,7 @@ export function SentimentMonitorSection({
                         <form action={archiveMonitorItemAction.bind(null, partnerId, it.id)}>
                           <button
                             title={mon.archive}
-                            className="text-zinc-300 hover:text-zinc-600 text-xs opacity-60 group-hover/item:opacity-100"
+                            className="text-slate-300 hover:text-slate-600 text-xs opacity-60 group-hover/item:opacity-100"
                           >
                             {mon.archive}
                           </button>
@@ -491,9 +491,9 @@ export function SentimentMonitorSection({
                       </div>
                     </div>
                   ))}
-                  {total === 0 && <p className="text-xs text-zinc-400 py-1">{mon.notScanned}</p>}
+                  {total === 0 && <p className="text-xs text-slate-400 py-1">{mon.notScanned}</p>}
                   {total > 0 && dimItems.length === 0 && (
-                    <p className="text-xs text-zinc-400 py-1">{mon.noFilterResults}</p>
+                    <p className="text-xs text-slate-400 py-1">{mon.noFilterResults}</p>
                   )}
                 </div>
               </details>

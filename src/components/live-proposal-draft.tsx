@@ -37,7 +37,7 @@ const ROW_COLORS: Record<RowTone, string> = {
   training: "border-l-orange-400",
   solution: "border-l-violet-400",
   business: "border-l-amber-500",
-  partner: "border-l-indigo-400",
+  partner: "border-l-slate-500",
 };
 
 function DraftRow({
@@ -67,7 +67,7 @@ function DraftRow({
   const flash = flashKeys.has(k);
   return (
     <div
-      className={`flex items-start gap-2.5 rounded-lg border border-zinc-100 border-l-4 ${ROW_COLORS[tone]} px-3 py-2.5 transition-all duration-300 ${off ? "opacity-40" : ""} ${flash && isNew ? "bg-emerald-50/80 animate-in slide-in-from-right-2" : ""} ${flash && isUpdated ? "bg-amber-50/80" : ""}`}
+      className={`flex items-start gap-2.5 rounded-md border border-slate-100 border-l-4 ${ROW_COLORS[tone]} px-3 py-2.5 ${off ? "opacity-40" : ""} ${flash && isNew ? "bg-emerald-50/80" : ""} ${flash && isUpdated ? "bg-amber-50/80" : ""}`}
     >
       <input
         type="checkbox"
@@ -211,7 +211,7 @@ export function LiveProposalDraft({
   if (!proposal || !normalized) {
     return (
       <div className="flex flex-col h-full min-h-0">
-        <div className="flex-1 flex items-center justify-center text-base text-zinc-400 text-center px-8">
+        <div className="flex-1 flex items-center justify-center text-base text-slate-400 text-center px-8">
           {loading ? ip.liveLoading : ip.liveEmpty}
         </div>
       </div>
@@ -243,8 +243,8 @@ export function LiveProposalDraft({
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 flex items-center justify-between mb-3">
-        <div className="text-base font-semibold text-zinc-700">{ip.liveTitle}</div>
-        <div className="text-sm text-zinc-400">
+        <div className="text-base font-semibold text-slate-700">{ip.liveTitle}</div>
+        <div className="text-sm text-slate-400">
           {ip.foundItems.replace("{count}", String(count))}
           {changes && (changes.added.length > 0 || changes.updated.length > 0) && (
             <span className="text-emerald-600 ml-1">
@@ -265,19 +265,19 @@ export function LiveProposalDraft({
       )}
 
       {(normalized.summary || normalized.partnerName) && (
-        <div className="shrink-0 rounded-lg bg-indigo-50 border border-indigo-100 p-3 mb-3">
+        <div className="shrink-0 rounded-lg bg-slate-50 border border-slate-200 p-3 mb-3">
           {normalized.summaryTitle && (
-            <div className="text-xs font-semibold text-indigo-700 mb-1">{normalized.summaryTitle}</div>
+            <div className="text-xs font-semibold text-sky-700 mb-1">{normalized.summaryTitle}</div>
           )}
           {normalized.summary && (
-            <p className="text-sm text-indigo-900 whitespace-pre-wrap leading-relaxed">{normalized.summary}</p>
+            <p className="text-sm text-slate-900 whitespace-pre-wrap leading-relaxed">{normalized.summary}</p>
           )}
         </div>
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
         {total === 0 ? (
-          <p className="text-sm text-zinc-400 text-center py-8">{ip.nothingToSave}</p>
+          <p className="text-sm text-slate-400 text-center py-8">{ip.nothingToSave}</p>
         ) : (
           <>
             {(sections.partnerName && (normalized.partnerName || (onProposalEdit && !partnerNameClarifyPending))) && (
@@ -293,13 +293,13 @@ export function LiveProposalDraft({
                 badgeUpdated={ip.badgeUpdated}
               >
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full">
-                  <span className="font-medium text-zinc-800 shrink-0">{am.editPartnerName}</span>
+                  <span className="font-medium text-slate-800 shrink-0">{am.editPartnerName}</span>
                   {onProposalEdit ? (
                     <DraftInlineEdit
                       value={normalized.partnerName ?? ""}
                       placeholder={am.editPartnerName}
                       onCommit={(v) => onProposalEdit({ type: "partnerName", value: v })}
-                      className="flex-1 min-w-0 rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm text-emerald-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                      className="flex-1 min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-emerald-800 focus:outline-none focus:ring-1 focus:ring-slate-400"
                     />
                   ) : (
                     <span className="text-emerald-700 font-medium">{normalized.partnerName}</span>
@@ -325,9 +325,9 @@ export function LiveProposalDraft({
                   badgeUpdated={ip.badgeUpdated}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 w-full">
-                    <span className="font-medium text-zinc-800 shrink-0">{f.label}</span>
+                    <span className="font-medium text-slate-800 shrink-0">{f.label}</span>
                     {f.oldValue ? (
-                      <span className="text-zinc-400 line-through decoration-red-300 text-xs">{f.oldValue}</span>
+                      <span className="text-slate-400 line-through decoration-red-300 text-xs">{f.oldValue}</span>
                     ) : null}
                     {editableWebsite ? (
                       <DraftInlineEdit
@@ -346,7 +346,7 @@ export function LiveProposalDraft({
             {sections.websiteHint && !websiteField && onProposalEdit && (
               <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/40 px-3 py-2.5">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                  <span className="text-sm font-medium text-zinc-700 shrink-0">{am.editWebsite}</span>
+                  <span className="text-sm font-medium text-slate-700 shrink-0">{am.editWebsite}</span>
                   <DraftInlineEdit
                     value=""
                     placeholder="example.com"
@@ -372,10 +372,10 @@ export function LiveProposalDraft({
                   badgeNew={ip.badgeNew}
                   badgeUpdated={ip.badgeUpdated}
                 >
-                  <span className="font-medium text-zinc-800">
+                  <span className="font-medium text-slate-800">
                     {c.action === "update" ? ip.updateContact : ip.contact}: {c.name}
                   </span>
-                  <span className="text-zinc-500 ml-1.5 text-xs">
+                  <span className="text-slate-500 ml-1.5 text-xs">
                     {[c.title, c.role && (labels.contactRoleLabels[c.role] ?? c.role), typeof c.attitude === "number" && `${ip.attitude}: ${attitudeLabelFromLabels(labels, c.attitude)}`]
                       .filter(Boolean)
                       .join(" · ")}
@@ -399,10 +399,10 @@ export function LiveProposalDraft({
                   badgeNew={ip.badgeNew}
                   badgeUpdated={ip.badgeUpdated}
                 >
-                  <span className="font-medium text-zinc-800">
+                  <span className="font-medium text-slate-800">
                     {o.action === "update" ? ip.updateOpportunity : ip.opportunity}: {o.name}
                   </span>
-                  <span className="text-zinc-500 ml-1.5 text-xs">
+                  <span className="text-slate-500 ml-1.5 text-xs">
                     {[o.client, o.amount, o.stage].filter(Boolean).join(" · ")}
                   </span>
                 </DraftRow>
@@ -424,7 +424,7 @@ export function LiveProposalDraft({
                   badgeNew={ip.badgeNew}
                   badgeUpdated={ip.badgeUpdated}
                 >
-                  <span className="font-medium text-zinc-800">{ip.todo}: {t.title}</span>
+                  <span className="font-medium text-slate-800">{ip.todo}: {t.title}</span>
                 </DraftRow>
               );
             })}
@@ -444,20 +444,20 @@ export function LiveProposalDraft({
                   badgeNew={ip.badgeNew}
                   badgeUpdated={ip.badgeUpdated}
                 >
-                  <span className="font-medium text-zinc-800">{ip.milestone}: {r.title}</span>
-                  <span className="text-zinc-500 ml-1.5 text-xs block mt-0.5">
+                  <span className="font-medium text-slate-800">{ip.milestone}: {r.title}</span>
+                  <span className="text-slate-500 ml-1.5 text-xs block mt-0.5">
                     {[r.category, r.occurredAt, r.contactName].filter(Boolean).join(" · ")}
                   </span>
                   {onProposalEdit && (
                     <div className="mt-2 flex flex-wrap gap-2 items-center">
-                      <label className="text-xs text-zinc-500 flex items-center gap-1">
+                      <label className="text-xs text-slate-500 flex items-center gap-1">
                         {ip.traceNatureLabel}
                         <select
                           value={r.traceNature ?? ""}
                           onChange={(e) =>
                             onProposalEdit({ type: "businessRecord", index: i, field: "traceNature", value: e.target.value })
                           }
-                          className="text-xs border border-zinc-200 rounded px-1.5 py-0.5 bg-white"
+                          className="text-xs border border-slate-200 rounded px-1.5 py-0.5 bg-white"
                         >
                           <option value="">{ip.selectPlaceholder}</option>
                           {CRM_TRACE_NATURES.map((n) => (
@@ -467,14 +467,14 @@ export function LiveProposalDraft({
                           ))}
                         </select>
                       </label>
-                      <label className="text-xs text-zinc-500 flex items-center gap-1">
+                      <label className="text-xs text-slate-500 flex items-center gap-1">
                         {ip.traceActionLabel}
                         <select
                           value={r.traceAction ?? ""}
                           onChange={(e) =>
                             onProposalEdit({ type: "businessRecord", index: i, field: "traceAction", value: e.target.value })
                           }
-                          className="text-xs border border-zinc-200 rounded px-1.5 py-0.5 bg-white max-w-[10rem]"
+                          className="text-xs border border-slate-200 rounded px-1.5 py-0.5 bg-white max-w-[10rem]"
                         >
                           <option value="">{ip.selectPlaceholder}</option>
                           {CRM_TRACE_ACTIONS.map((a) => (
@@ -506,18 +506,18 @@ export function LiveProposalDraft({
         </div>
       )}
 
-      <div className="shrink-0 sticky bottom-0 pt-3 mt-2 border-t border-zinc-100 bg-white/95 backdrop-blur-sm flex flex-col gap-2">
+      <div className="shrink-0 sticky bottom-0 pt-3 mt-2 border-t border-slate-100 bg-white flex flex-col gap-2">
         {identityBlocked && (
           <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{am.confirmBlockedIdentity}</div>
         )}
         {scope === "business_record" && !saveDisabled && !applying && (
-          <div className="text-xs text-zinc-500">{ip.crmSyncHint}</div>
+          <div className="text-xs text-slate-500">{ip.crmSyncHint}</div>
         )}
         {scope === "business_record" && saveDisabled && total - excluded.size > 0 && !identityBlocked && (
           <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{ip.crmFieldsRequired}</div>
         )}
         <div className="flex items-center justify-between gap-3">
-          <div className="text-xs text-zinc-400">
+          <div className="text-xs text-slate-400">
             {ip.itemsSummary.replace("{total}", String(total)).replace("{excluded}", String(excluded.size))}
           </div>
           <button
@@ -655,7 +655,7 @@ function ClarifyPanels({
                 type="button"
                 disabled={disabled || (mode === "direct" && done)}
                 onClick={() => pickOption(c, opt, mode)}
-                className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+                className={`rounded-full border px-3 py-1 text-xs disabled:opacity-50 ${
                   active ? activeStyle : idleStyle
                 }`}
               >
@@ -668,7 +668,7 @@ function ClarifyPanels({
               type="button"
               disabled={disabled || (mode === "direct" && done)}
               onClick={() => setOtherOpen((prev) => ({ ...prev, [c.id]: true }))}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors disabled:opacity-50 ${idleStyle}`}
+              className={`rounded-full border px-3 py-1 text-xs disabled:opacity-50 ${idleStyle}`}
             >
               {am.clarifyOther}
             </button>
@@ -687,13 +687,13 @@ function ClarifyPanels({
                 }
               }}
               placeholder={am.clarifyOtherPlaceholder}
-              className="flex-1 min-w-0 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              className="flex-1 min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
             <button
               type="button"
               disabled={disabled || !otherText[c.id]?.trim()}
               onClick={() => submitOther(c)}
-              className="rounded-md bg-zinc-800 text-white px-3 py-1.5 text-xs font-medium hover:bg-zinc-900 disabled:opacity-40 shrink-0"
+              className="rounded-md bg-slate-800 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-900 disabled:opacity-40 shrink-0"
             >
               {am.clarifyOtherConfirm}
             </button>
@@ -704,7 +704,7 @@ function ClarifyPanels({
             type="button"
             disabled={disabled}
             onClick={() => submitAiSingle(c)}
-            className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
+            className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-800 disabled:opacity-40"
           >
             {am.clarifyOtherConfirm}
           </button>
@@ -715,7 +715,7 @@ function ClarifyPanels({
 
   const identityPanel =
     identity.length > 0 && (onDirectClarify || onAiClarify) ? (
-      <div className="rounded-xl border-2 border-amber-300 bg-amber-50/90 p-3 space-y-2.5 mb-3">
+      <div className="rounded-lg border-2 border-amber-300 bg-amber-50/90 p-3 space-y-2.5 mb-3">
         <div>
           <div className="text-xs font-semibold text-amber-900">{am.clarifyIdentityTitle}</div>
           <div className="text-[10px] text-amber-800/90 mt-0.5">{am.clarifyIdentityHint}</div>
@@ -725,7 +725,7 @@ function ClarifyPanels({
           const done = directDone.has(c.id);
           return (
             <div key={c.id} className="space-y-1.5">
-              <div className="text-xs text-zinc-800 flex items-center gap-2 font-medium">
+              <div className="text-xs text-slate-800 flex items-center gap-2 font-medium">
                 <span>{c.question}</span>
                 {mode === "direct" && done && (
                   <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
@@ -746,14 +746,14 @@ function ClarifyPanels({
 
   const directPanel =
     direct.length > 0 && onDirectClarify ? (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 space-y-2.5">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 space-y-2.5">
         <div>
           <div className="text-xs font-semibold text-emerald-900">{am.clarifyDirectTitle}</div>
           <div className="text-[10px] text-emerald-700/90 mt-0.5">{am.clarifyDirectHint}</div>
         </div>
         {direct.map((c) => (
           <div key={c.id} className="space-y-1.5">
-            <div className="text-xs text-zinc-700 flex items-center gap-2">
+            <div className="text-xs text-slate-700 flex items-center gap-2">
               <span>{c.question}</span>
               {directDone.has(c.id) && (
                 <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
@@ -773,26 +773,26 @@ function ClarifyPanels({
 
   const aiPanel =
     ai.length > 0 && onAiClarify ? (
-      <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 space-y-2.5">
+      <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-2.5">
         <div>
-          <div className="text-xs font-semibold text-indigo-900">{am.clarifyAiTitle}</div>
-          <div className="text-[10px] text-indigo-700/90 mt-0.5">{am.clarifyAiHint}</div>
+          <div className="text-xs font-semibold text-slate-900">{am.clarifyAiTitle}</div>
+          <div className="text-[10px] text-sky-700/90 mt-0.5">{am.clarifyAiHint}</div>
         </div>
         {ai.map((c) => (
           <div key={c.id} className="space-y-1.5">
-            <div className="text-xs text-zinc-700">{c.question}</div>
+            <div className="text-xs text-slate-700">{c.question}</div>
             {renderOptions(
               c,
               "ai",
               false,
-              "border-indigo-500 bg-indigo-500 text-white",
-              "border-indigo-300 bg-white text-indigo-900 hover:border-indigo-500 hover:bg-indigo-100"
+              "border-slate-700 bg-slate-500 text-white",
+              "border-slate-300 bg-white text-slate-900 hover:border-slate-700 hover:bg-slate-100"
             )}
           </div>
         ))}
         <div className="flex items-center justify-between gap-2 pt-1">
           {!aiAllAnswered && (
-            <span className="text-[10px] text-indigo-600">
+            <span className="text-[10px] text-sky-600">
               {am.clarifyAiPending.replace("{n}", String(ai.length - aiAnsweredCount))}
             </span>
           )}
@@ -800,7 +800,7 @@ function ClarifyPanels({
             type="button"
             disabled={disabled || !aiAllAnswered}
             onClick={submitAiBatch}
-            className="ml-auto rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-medium hover:bg-indigo-700 disabled:opacity-40"
+            className="ml-auto rounded-lg bg-slate-900 text-white px-4 py-2 text-xs font-medium hover:bg-slate-800 disabled:opacity-40"
           >
             {am.clarifyAiSubmit}
           </button>

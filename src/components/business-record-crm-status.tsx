@@ -51,14 +51,14 @@ export function BusinessRecordCrmStatus({ record }: { record: RecordCrmFields })
         {sync.status === "SYNCED" && sync.syncedAt ? ` · ${fmtDate(sync.syncedAt, bcp47)}` : ""}
       </span>
       {sync.reason && sync.status !== "SYNCED" && (
-        <span className="text-zinc-500">{sync.reason}</span>
+        <span className="text-slate-500">{sync.reason}</span>
       )}
       {(sync.status === "FAILED" || sync.status === "SKIPPED") && (
         <button
           type="button"
           disabled={pending}
           onClick={retry}
-          className="text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+          className="text-sky-600 hover:text-slate-800 disabled:opacity-50"
         >
           {pd.crmSyncRetry}
         </button>

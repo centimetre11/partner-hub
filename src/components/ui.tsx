@@ -6,16 +6,16 @@ export function Badge({
   tone?: "zinc" | "indigo" | "green" | "amber" | "red" | "blue" | "purple";
 }) {
   const tones: Record<string, string> = {
-    zinc: "bg-zinc-100 text-zinc-600",
-    indigo: "bg-indigo-50 text-indigo-700",
+    zinc: "bg-slate-100 text-slate-600",
+    indigo: "bg-sky-50 text-sky-700",
     green: "bg-emerald-50 text-emerald-700",
     amber: "bg-amber-50 text-amber-700",
     red: "bg-red-50 text-red-700",
     blue: "bg-sky-50 text-sky-700",
-    purple: "bg-purple-50 text-purple-700",
+    purple: "bg-violet-50 text-violet-700",
   };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${tones[tone]}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${tones[tone]}`}>
       {children}
     </span>
   );
@@ -45,10 +45,10 @@ export function ScoreBar({ score }: { score: number }) {
   const color = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
   return (
     <div className="flex items-center gap-2 min-w-[90px]">
-      <div className="flex-1 h-1.5 rounded-full bg-zinc-100 overflow-hidden">
+      <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
         <div className={`h-full rounded-full ${color}`} style={{ width: `${score}%` }} />
       </div>
-      <span className="text-xs tabular-nums text-zinc-500 w-8">{score}%</span>
+      <span className="text-xs tabular-nums text-slate-500 w-8">{score}%</span>
     </div>
   );
 }
@@ -65,8 +65,8 @@ export function PageHeader({
   return (
     <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 pb-4 sm:pb-5">
       <div className="min-w-0">
-        <h1 className="text-lg sm:text-xl font-bold text-zinc-900">{title}</h1>
-        {desc && <p className="text-sm text-zinc-500 mt-1">{desc}</p>}
+        <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">{title}</h1>
+        {desc && <p className="text-sm text-slate-500 mt-1">{desc}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0 flex-wrap">{actions}</div>}
     </div>
@@ -87,10 +87,10 @@ export function Card({
   id?: string;
 }) {
   return (
-    <div id={id} className={`bg-white rounded-xl border border-zinc-200/80 shadow-sm ${className}`}>
+    <div id={id} className={`ui-card ${className}`}>
       {(title || actions) && (
-        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 sm:py-3.5 border-b border-zinc-100">
-          <h3 className="text-sm font-semibold text-zinc-800 min-w-0">{title}</h3>
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b border-slate-100">
+          <h3 className="text-sm font-medium text-slate-800 min-w-0">{title}</h3>
           {actions}
         </div>
       )}
@@ -100,7 +100,7 @@ export function Card({
 }
 
 export function EmptyState({ text }: { text: string }) {
-  return <div className="text-center py-8 text-sm text-zinc-400">{text}</div>;
+  return <div className="text-center py-8 text-sm text-slate-400">{text}</div>;
 }
 
 export function fmtDate(d: Date | string | null | undefined, locale = "en-US") {

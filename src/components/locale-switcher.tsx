@@ -10,20 +10,20 @@ export function LocaleSwitcher({ locale }: { locale: Locale }) {
         <input type="hidden" name="locale" value="zh" />
         <button
           type="submit"
-          className={`px-2 py-1 rounded text-xs transition-colors ${
-            locale === "zh" ? "bg-indigo-600/30 text-indigo-200 font-medium" : "text-zinc-500 hover:text-zinc-300"
+          className={`px-2 py-1 rounded text-xs ${
+            locale === "zh" ? "bg-slate-100 text-slate-900 font-medium" : "text-slate-400 hover:text-slate-700"
           }`}
         >
           中文
         </button>
       </form>
-      <span className="text-zinc-600 text-xs">/</span>
+      <span className="text-slate-300 text-xs">/</span>
       <form action={setLocaleAction}>
         <input type="hidden" name="locale" value="en" />
         <button
           type="submit"
-          className={`px-2 py-1 rounded text-xs transition-colors ${
-            locale === "en" ? "bg-indigo-600/30 text-indigo-200 font-medium" : "text-zinc-500 hover:text-zinc-300"
+          className={`px-2 py-1 rounded text-xs ${
+            locale === "en" ? "bg-slate-100 text-slate-900 font-medium" : "text-slate-400 hover:text-slate-700"
           }`}
         >
           EN
@@ -40,10 +40,10 @@ export function LoginLocaleSwitcher({ locale }: { locale: Locale }) {
         <input type="hidden" name="locale" value="zh" />
         <button
           type="submit"
-          className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+          className={`px-3 py-1 rounded-md text-xs border ${
             locale === "zh"
-              ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-medium"
-              : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+              ? "border-slate-900 bg-slate-900 text-white font-medium"
+              : "border-slate-200 text-slate-500 hover:border-slate-300"
           }`}
         >
           中文
@@ -53,10 +53,10 @@ export function LoginLocaleSwitcher({ locale }: { locale: Locale }) {
         <input type="hidden" name="locale" value="en" />
         <button
           type="submit"
-          className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+          className={`px-3 py-1 rounded-md text-xs border ${
             locale === "en"
-              ? "border-indigo-600 bg-indigo-50 text-indigo-700 font-medium"
-              : "border-zinc-200 text-zinc-500 hover:border-zinc-300"
+              ? "border-slate-900 bg-slate-900 text-white font-medium"
+              : "border-slate-200 text-slate-500 hover:border-slate-300"
           }`}
         >
           EN

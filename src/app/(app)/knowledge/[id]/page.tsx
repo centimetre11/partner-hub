@@ -13,14 +13,14 @@ export default async function KnowledgeDetailPage({ params }: { params: Promise<
   const { id } = await params;
   const a = await db.knowledgeArticle.findUnique({ where: { id } });
   if (!a) notFound();
-  const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   return (
     <div className="pb-16">
       <PageHeader title={m.knowledge.editTitle} />
       <form action={upsertKnowledgeAction} className="px-8 max-w-4xl space-y-4">
         <input type="hidden" name="id" value={a.id} />
-        <div className="bg-white rounded-xl border p-5 space-y-3">
+        <div className="bg-white rounded-lg border p-5 space-y-3">
           <input name="title" required defaultValue={a.title} className={input} />
           <input name="slug" defaultValue={a.slug} placeholder={m.knowledge.slugPlaceholder} className={input} />
           <select name="category" defaultValue={a.category} className={input}>
@@ -34,7 +34,7 @@ export default async function KnowledgeDetailPage({ params }: { params: Promise<
           </label>
           <RichEditor defaultValue={a.content} />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">{m.common.save}</button>
+        <button className="rounded-lg bg-slate-900 text-white px-6 py-2.5 text-sm">{m.common.save}</button>
       </form>
     </div>
   );

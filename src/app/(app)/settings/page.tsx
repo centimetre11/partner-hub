@@ -145,26 +145,26 @@ export default async function SettingsPage() {
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-2">
               <span className={`w-2.5 h-2.5 rounded-full ${aiConfigured ? "bg-emerald-500" : "bg-red-400"}`} />
-              <span className="text-zinc-700">{aiConfigured ? m.settings.aiReady : m.settings.aiNotConfigured}</span>
+              <span className="text-slate-700">{aiConfigured ? m.settings.aiReady : m.settings.aiNotConfigured}</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg bg-zinc-50 p-3">
-                <div className="text-lg font-bold text-zinc-900">{aiApis.length}</div>
-                <div className="text-xs text-zinc-400">{m.settings.apiConfigs}</div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <div className="text-lg font-bold text-slate-900">{aiApis.length}</div>
+                <div className="text-xs text-slate-400">{m.settings.apiConfigs}</div>
               </div>
-              <div className="rounded-lg bg-zinc-50 p-3">
-                <div className="text-lg font-bold text-zinc-900">{aiApis.filter((api) => api.enabled).length}</div>
-                <div className="text-xs text-zinc-400">{m.settings.enabledCount}</div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <div className="text-lg font-bold text-slate-900">{aiApis.filter((api) => api.enabled).length}</div>
+                <div className="text-xs text-slate-400">{m.settings.enabledCount}</div>
               </div>
-              <div className="rounded-lg bg-zinc-50 p-3">
-                <div className="text-lg font-bold text-zinc-900">{fmtTokens(todayTokens, locale)}</div>
-                <div className="text-xs text-zinc-400">{m.settings.todayTokens}</div>
+              <div className="rounded-lg bg-slate-50 p-3">
+                <div className="text-lg font-bold text-slate-900">{fmtTokens(todayTokens, locale)}</div>
+                <div className="text-xs text-slate-400">{m.settings.todayTokens}</div>
               </div>
             </div>
-            <div className="text-xs text-zinc-500 leading-relaxed bg-zinc-50 rounded-lg p-4">
+            <div className="text-xs text-slate-500 leading-relaxed bg-slate-50 rounded-lg p-4">
               {m.settings.preferDbApisDetail}
             </div>
-            <div className="text-xs text-zinc-400">{m.settings.aiCapabilitiesDetail}</div>
+            <div className="text-xs text-slate-400">{m.settings.aiCapabilitiesDetail}</div>
           </div>
         </Card>
 
@@ -181,9 +181,9 @@ export default async function SettingsPage() {
               updatedAt: systemKms?.updatedAt?.toISOString(),
             }}
           />
-          <p className="text-xs text-zinc-500 mt-4">
+          <p className="text-xs text-slate-500 mt-4">
             {m.settings.personalKmsHint}{" "}
-            <a href="/account" className="text-indigo-600 hover:underline">{m.nav.account}</a>
+            <a href="/account" className="text-sky-600 hover:underline">{m.nav.account}</a>
           </p>
         </Card>
 
@@ -217,8 +217,8 @@ export default async function SettingsPage() {
           {dailyUsage.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="text-xs text-zinc-400">
-                  <tr className="border-b border-zinc-100">
+                <thead className="text-xs text-slate-400">
+                  <tr className="border-b border-slate-100">
                     <th className="py-2 text-left font-medium">{m.settings.date}</th>
                     <th className="py-2 text-left font-medium">{m.settings.api}</th>
                     <th className="py-2 text-right font-medium">{m.settings.requests}</th>
@@ -230,12 +230,12 @@ export default async function SettingsPage() {
                 <tbody className="divide-y divide-zinc-100">
                   {dailyUsage.map((row) => (
                     <tr key={row.id}>
-                      <td className="py-2 text-zinc-700">{row.day}</td>
-                      <td className="py-2 text-zinc-700">{row.apiName}</td>
-                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.requestCount, locale)}</td>
-                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.promptTokens, locale)}</td>
-                      <td className="py-2 text-right tabular-nums text-zinc-600">{fmtTokens(row.completionTokens, locale)}</td>
-                      <td className="py-2 text-right tabular-nums font-semibold text-zinc-900">{fmtTokens(row.totalTokens, locale)}</td>
+                      <td className="py-2 text-slate-700">{row.day}</td>
+                      <td className="py-2 text-slate-700">{row.apiName}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.requestCount, locale)}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.promptTokens, locale)}</td>
+                      <td className="py-2 text-right tabular-nums text-slate-600">{fmtTokens(row.completionTokens, locale)}</td>
+                      <td className="py-2 text-right tabular-nums font-semibold text-slate-900">{fmtTokens(row.totalTokens, locale)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -250,19 +250,19 @@ export default async function SettingsPage() {
           {recentUsage.length ? (
             <div className="space-y-2.5">
               {recentUsage.map((row) => (
-                <div key={row.id} className="flex items-center justify-between gap-4 rounded-lg border border-zinc-100 px-4 py-3">
+                <div key={row.id} className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 px-4 py-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-zinc-800">{row.feature}</span>
+                      <span className="text-sm font-medium text-slate-800">{row.feature}</span>
                       <Badge tone={row.status === "SUCCESS" ? "green" : "red"}>{row.status === "SUCCESS" ? m.common.success : m.common.failed}</Badge>
                     </div>
-                    <div className="text-xs text-zinc-400 mt-1">
+                    <div className="text-xs text-slate-400 mt-1">
                       {row.apiName} · {row.model} · {row.user?.name ?? m.agents.system} · {fmtDateTime(row.createdAt, bcp47)}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-sm font-semibold text-zinc-900 tabular-nums">{fmtTokens(row.totalTokens, locale)}</div>
-                    <div className="text-xs text-zinc-400">{m.settings.tokens}</div>
+                    <div className="text-sm font-semibold text-slate-900 tabular-nums">{fmtTokens(row.totalTokens, locale)}</div>
+                    <div className="text-xs text-slate-400">{m.settings.tokens}</div>
                   </div>
                 </div>
               ))}

@@ -31,7 +31,7 @@ export default function RichEditorInner({
   }, [editor, defaultValue]);
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white overflow-hidden">
+    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
       <input type="hidden" name={name} value={markdown} />
       <BlockNoteView
         editor={editor}

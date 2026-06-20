@@ -6,14 +6,14 @@ import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
-function Bar({ label, value, max, tone = "bg-indigo-500", suffix }: { label: string; value: number; max: number; tone?: string; suffix?: string }) {
+function Bar({ label, value, max, tone = "bg-slate-500", suffix }: { label: string; value: number; max: number; tone?: string; suffix?: string }) {
   return (
     <div className="flex items-center gap-3 text-sm">
-      <div className="w-36 text-zinc-600 text-xs shrink-0 truncate">{label}</div>
-      <div className="flex-1 h-5 bg-zinc-50 rounded-md overflow-hidden">
-        <div className={`h-full ${tone} rounded-md transition-all`} style={{ width: max ? `${(value / max) * 100}%` : 0 }} />
+      <div className="w-36 text-slate-600 text-xs shrink-0 truncate">{label}</div>
+      <div className="flex-1 h-5 bg-slate-50 rounded-md overflow-hidden">
+        <div className={`h-full ${tone} rounded-md`} style={{ width: max ? `${(value / max) * 100}%` : 0 }} />
       </div>
-      <div className="w-12 text-right text-xs tabular-nums text-zinc-500 shrink-0">
+      <div className="w-12 text-right text-xs tabular-nums text-slate-500 shrink-0">
         {value}{suffix}
       </div>
     </div>
@@ -86,23 +86,23 @@ export async function BoardOverview() {
     <div className="px-8 space-y-5">
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
-          { label: b.statActivePartners, value: active.length, tone: "text-indigo-600" },
+          { label: b.statActivePartners, value: active.length, tone: "text-sky-600" },
           { label: b.statPocOnward, value: pocPlus, tone: "text-purple-600" },
           { label: b.statActiveOpps, value: activeOppCount, tone: "text-sky-600" },
-          { label: b.statOpenTodos, value: openTodos, tone: "text-zinc-900" },
-          { label: b.statOverdueTodos, value: overdueTodos, tone: overdueTodos ? "text-red-600" : "text-zinc-900" },
+          { label: b.statOpenTodos, value: openTodos, tone: "text-slate-900" },
+          { label: b.statOverdueTodos, value: overdueTodos, tone: overdueTodos ? "text-red-600" : "text-slate-900" },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-4">
+          <div key={s.label} className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
             <div className={`text-2xl font-bold tabular-nums ${s.tone}`}>{s.value}</div>
-            <div className="text-xs text-zinc-400 mt-0.5">{s.label}</div>
+            <div className="text-xs text-slate-400 mt-0.5">{s.label}</div>
           </div>
         ))}
       </div>
 
       {prospects.length > 0 && (
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-slate-400">
           {b.prospectPool.replace("{count}", String(prospects.length))}{" "}
-          <Link href="/pool" className="text-indigo-600 hover:underline">
+          <Link href="/pool" className="text-sky-600 hover:underline">
             {b.goToPool}
           </Link>
           {b.notInBoardStats}
@@ -118,7 +118,7 @@ export async function BoardOverview() {
                 label={f.label}
                 value={f.value}
                 max={funnel[0].value || 1}
-                tone={["bg-indigo-400", "bg-indigo-500", "bg-indigo-600", "bg-purple-600", "bg-purple-700"][i]}
+                tone={["bg-slate-400", "bg-slate-500", "bg-slate-900", "bg-purple-600", "bg-purple-700"][i]}
               />
             ))}
           </div>
@@ -135,12 +135,12 @@ export async function BoardOverview() {
         <Card title={b.tierCategoryTitle}>
           <div className="flex gap-3 mb-5">
             {tierDist.map(({ t, n }) => (
-              <Link key={t} href={`/partners?tier=${t}`} className="flex-1 rounded-lg border border-zinc-100 p-3 text-center hover:border-indigo-300">
+              <Link key={t} href={`/partners?tier=${t}`} className="flex-1 rounded-lg border border-slate-100 p-3 text-center hover:border-slate-300">
                 <Badge tone={tierTone(t)}>{b.tierLabel.replace("{tier}", t)}</Badge>
                 <div className="text-xl font-bold mt-1.5 tabular-nums">{n}</div>
               </Link>
             ))}
-            <div className="flex-1 rounded-lg border border-zinc-100 p-3 text-center">
+            <div className="flex-1 rounded-lg border border-slate-100 p-3 text-center">
               <Badge tone="zinc">{b.notTiered}</Badge>
               <div className="text-xl font-bold mt-1.5 tabular-nums">{noTier}</div>
             </div>
@@ -166,7 +166,7 @@ export async function BoardOverview() {
           <div className="divide-y divide-zinc-50">
             {staleActive.map(({ p, stale }) => (
               <div key={p.id} className="flex items-center justify-between gap-3 py-2.5">
-                <Link href={`/partners/${p.id}`} className="text-sm font-medium text-zinc-800 hover:text-indigo-600 truncate">
+                <Link href={`/partners/${p.id}`} className="text-sm font-medium text-slate-800 hover:text-sky-600 truncate">
                   {p.name}
                 </Link>
                 <span className="text-xs text-red-500 shrink-0">{b.daysIdle.replace("{days}", String(stale))}</span>
@@ -180,14 +180,14 @@ export async function BoardOverview() {
         <div className="divide-y divide-zinc-50">
           {ranked.map(({ p, c, stale }) => (
             <div key={p.id} className="flex items-center gap-4 py-3">
-              <Link href={`/partners/${p.id}`} className="w-48 shrink-0 text-sm font-medium text-zinc-800 hover:text-indigo-600 truncate">
+              <Link href={`/partners/${p.id}`} className="w-48 shrink-0 text-sm font-medium text-slate-800 hover:text-sky-600 truncate">
                 {p.name}
               </Link>
               {p.tier && <TierBadge tier={p.tier} />}
               <div className="w-36 shrink-0">
                 <ScoreBar score={c.score} />
               </div>
-              <div className="flex-1 text-xs text-zinc-400 truncate">
+              <div className="flex-1 text-xs text-slate-400 truncate">
                 {b.missing}{c.missing.slice(0, 5).join(", ")}{c.missing.length > 5 ? "…" : ""}
               </div>
               {stale > 30 && (
@@ -195,7 +195,7 @@ export async function BoardOverview() {
               )}
             </div>
           ))}
-          {ranked.length === 0 && <p className="py-6 text-sm text-zinc-400 text-center">{b.noActivePartners}</p>}
+          {ranked.length === 0 && <p className="py-6 text-sm text-slate-400 text-center">{b.noActivePartners}</p>}
         </div>
       </Card>
     </div>

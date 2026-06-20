@@ -35,17 +35,17 @@ export function PartnerAgentsPanel({
 }) {
   return (
     <Card title={copy.title.replace("{count}", String(agents.length))}>
-      <p className="text-xs text-zinc-500 mb-4">{copy.desc}</p>
+      <p className="text-xs text-slate-500 mb-4">{copy.desc}</p>
       <div className="space-y-3">
         {agents.map((a) => (
-          <div key={a.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 px-3 py-2.5">
+          <div key={a.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2.5">
             <div className="min-w-0">
-              <Link href={`/agents/${a.id}`} className="text-sm font-medium text-zinc-900 hover:text-indigo-600">
+              <Link href={`/agents/${a.id}`} className="text-sm font-medium text-slate-900 hover:text-sky-600">
                 {a.icon} {a.name}
               </Link>
-              {a.description && <p className="text-xs text-zinc-400 truncate">{a.description}</p>}
+              {a.description && <p className="text-xs text-slate-400 truncate">{a.description}</p>}
               {a.lastRunAt && (
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-slate-400">
                   {copy.lastRun.replace("{date}", fmtDateTime(a.lastRunAt, bcp47))}
                 </p>
               )}
@@ -57,12 +57,12 @@ export function PartnerAgentsPanel({
       </div>
 
       {templates.length > 0 && (
-        <div className="mt-5 pt-4 border-t border-zinc-100">
-          <div className="text-xs text-zinc-500 mb-2">{copy.templatesHint}</div>
+        <div className="mt-5 pt-4 border-t border-slate-100">
+          <div className="text-xs text-slate-500 mb-2">{copy.templatesHint}</div>
           <div className="flex flex-wrap gap-2">
             {templates.map((t) => (
               <form key={t.id} action={clonePartnerAgentAction.bind(null, t.id, partnerId)}>
-                <button className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-700 hover:border-indigo-300 hover:text-indigo-600">
+                <button className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-700 hover:border-slate-300 hover:text-sky-600">
                   {t.icon} {t.name}
                 </button>
               </form>
@@ -71,7 +71,7 @@ export function PartnerAgentsPanel({
         </div>
       )}
 
-      <Link href={`/agents/new?partnerId=${partnerId}`} className="mt-4 text-sm text-indigo-600 hover:underline block">
+      <Link href={`/agents/new?partnerId=${partnerId}`} className="mt-4 text-sm text-sky-600 hover:underline block">
         {copy.customAgent}
       </Link>
     </Card>

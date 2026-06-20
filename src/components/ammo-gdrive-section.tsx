@@ -38,9 +38,9 @@ export function AmmoGdriveSection({
 
   if (!result.ok) {
     return (
-      <section className="bg-white rounded-xl border">
+      <section className="bg-white rounded-lg border">
         <div className="px-5 py-4 border-b">
-          <h2 className="font-semibold text-zinc-900">{labels.title}</h2>
+          <h2 className="font-semibold text-slate-900">{labels.title}</h2>
         </div>
         <div className="p-5">
           <AmmoEmptyState
@@ -97,17 +97,17 @@ export function AmmoGdriveSection({
     .replace("{files}", String(result.files.length));
 
   return (
-    <section className="bg-white rounded-xl border">
+    <section className="bg-white rounded-lg border">
       <div className="px-5 py-4 border-b flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-semibold text-zinc-900">{labels.title}</h2>
-          <p className="text-xs text-zinc-400 mt-0.5">{pending ? labels.loading : summary}</p>
-          <nav className="flex flex-wrap items-center gap-1 text-xs text-zinc-500 mt-2">
+          <h2 className="font-semibold text-slate-900">{labels.title}</h2>
+          <p className="text-xs text-slate-400 mt-0.5">{pending ? labels.loading : summary}</p>
+          <nav className="flex flex-wrap items-center gap-1 text-xs text-slate-500 mt-2">
             <button
               type="button"
               onClick={() => goToCrumb(-1)}
               disabled={pending}
-              className="hover:text-indigo-600 disabled:opacity-50"
+              className="hover:text-sky-600 disabled:opacity-50"
             >
               {labels.root}
             </button>
@@ -118,7 +118,7 @@ export function AmmoGdriveSection({
                   type="button"
                   onClick={() => goToCrumb(index)}
                   disabled={pending || index === crumbs.length - 1}
-                  className="hover:text-indigo-600 disabled:opacity-50 truncate max-w-[12rem]"
+                  className="hover:text-sky-600 disabled:opacity-50 truncate max-w-[12rem]"
                   title={crumb.name}
                 >
                   {crumb.name}
@@ -131,7 +131,7 @@ export function AmmoGdriveSection({
           href={result.folderUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm text-indigo-600 hover:underline shrink-0"
+          className="text-sm text-sky-600 hover:underline shrink-0"
         >
           {labels.openFolder}
         </a>
@@ -139,7 +139,7 @@ export function AmmoGdriveSection({
 
       <div className={`p-5 ${pending ? "opacity-60 pointer-events-none" : ""}`}>
         {result.folders.length === 0 && result.files.length === 0 && (
-          <p className="text-sm text-zinc-400 text-center py-8">{labels.empty}</p>
+          <p className="text-sm text-slate-400 text-center py-8">{labels.empty}</p>
         )}
 
         {(result.folders.length > 0 || result.files.length > 0) && (
@@ -166,15 +166,15 @@ function GdriveFolderRow({ folder, onOpen }: { folder: GdriveFolderItem; onOpen:
     <button
       type="button"
       onClick={onOpen}
-      className="flex w-full items-center gap-3 py-3 first:pt-0 last:pb-0 text-left hover:bg-zinc-50 -mx-2 px-2 rounded-lg transition-colors"
+      className="flex w-full items-center gap-3 py-3 first:pt-0 last:pb-0 text-left hover:bg-slate-50 -mx-2 px-2 rounded-lg"
     >
       <div className="h-12 w-16 rounded bg-amber-50 border border-amber-100 flex items-center justify-center text-xl shrink-0">
         📁
       </div>
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-sm text-zinc-900 line-clamp-2">{folder.name}</p>
+        <p className="font-medium text-sm text-slate-900 line-clamp-2">{folder.name}</p>
       </div>
-      <span className="text-xs text-zinc-400 shrink-0">›</span>
+      <span className="text-xs text-slate-400 shrink-0">›</span>
     </button>
   );
 }
@@ -193,9 +193,9 @@ function GdriveFileRow({
     <div className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
       {file.thumbnailLink ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={file.thumbnailLink} alt="" className="h-12 w-16 rounded object-cover bg-zinc-50 border shrink-0" />
+        <img src={file.thumbnailLink} alt="" className="h-12 w-16 rounded object-cover bg-slate-50 border shrink-0" />
       ) : (
-        <div className="h-12 w-16 rounded bg-zinc-100 border flex items-center justify-center text-xl shrink-0">
+        <div className="h-12 w-16 rounded bg-slate-100 border flex items-center justify-center text-xl shrink-0">
           {gdriveFileIcon(file.mimeType)}
         </div>
       )}
@@ -204,15 +204,15 @@ function GdriveFileRow({
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-sm text-zinc-900 hover:text-indigo-600 line-clamp-2"
+          className="font-medium text-sm text-slate-900 hover:text-sky-600 line-clamp-2"
         >
           {file.name}
         </a>
         {file.modifiedTime && (
-          <p className="text-xs text-zinc-400 mt-0.5">{fmtDateTime(new Date(file.modifiedTime), bcp47)}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{fmtDateTime(new Date(file.modifiedTime), bcp47)}</p>
         )}
       </div>
-      <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline shrink-0">
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs text-sky-600 hover:underline shrink-0">
         {openLabel}
       </a>
     </div>
@@ -230,9 +230,9 @@ function AmmoEmptyState({
 }) {
   return (
     <div className="text-center py-8 space-y-3">
-      <p className="text-sm text-zinc-500 whitespace-pre-wrap">{message}</p>
+      <p className="text-sm text-slate-500 whitespace-pre-wrap">{message}</p>
       {showConfigure && (
-        <Link href="/settings" className="inline-block text-sm text-indigo-600 hover:underline">
+        <Link href="/settings" className="inline-block text-sm text-sky-600 hover:underline">
           {configureLabel}
         </Link>
       )}

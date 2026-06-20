@@ -3,7 +3,7 @@
 import type { User } from "@prisma/client";
 import { USER_ROLES, USER_ROLE_LABELS } from "@/lib/user-roles";
 
-const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function PartnerTeamFields({
   users,
@@ -22,7 +22,7 @@ export function PartnerTeamFields({
   return (
     <>
       <label className="space-y-1">
-        <span className="text-xs text-zinc-500">Sales</span>
+        <span className="text-xs text-slate-500">Sales</span>
         <select name="salesUserId" defaultValue={salesUserId ?? ""} className={className}>
           <option value="">Unassigned</option>
           {salesUsers.map((u) => (
@@ -31,7 +31,7 @@ export function PartnerTeamFields({
         </select>
       </label>
       <label className="space-y-1">
-        <span className="text-xs text-zinc-500">Pre-sales</span>
+        <span className="text-xs text-slate-500">Pre-sales</span>
         <select name="presalesUserId" defaultValue={presalesUserId ?? ""} className={className}>
           <option value="">Unassigned</option>
           {presalesUsers.map((u) => (

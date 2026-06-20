@@ -76,7 +76,7 @@ export default async function AccountPage() {
                 updatedAt: personalKms?.updatedAt.toISOString(),
               }}
             />
-            <p className="text-xs text-zinc-500 leading-relaxed">{am.kmsFallbackHint}</p>
+            <p className="text-xs text-slate-500 leading-relaxed">{am.kmsFallbackHint}</p>
           </div>
         </Card>
 

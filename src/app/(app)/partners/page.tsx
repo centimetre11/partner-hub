@@ -101,39 +101,39 @@ export default async function PartnersPage({
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          <input name="q" defaultValue={sp.q} placeholder={m.partners.searchPlaceholder} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44" />
-          <select name="stage" defaultValue={sp.stage ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+          <input name="q" defaultValue={sp.q} placeholder={m.partners.searchPlaceholder} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44" />
+          <select name="stage" defaultValue={sp.stage ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.partners.allStages}</option>
             {Array.from({ length: 10 }, (_, i) => i + 1).map((s) => (
               <option key={s} value={s}>{s}. {stageName(labels, s)}</option>
             ))}
           </select>
-          <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+          <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.partners.allTeamMembers}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
-          <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+          <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.partners.allTiers}</option>
             <option value="A">{m.partners.tierA}</option>
             <option value="B">{m.partners.tierB}</option>
             <option value="C">{m.partners.tierC}</option>
           </select>
-          <select name="industry" defaultValue={sp.industry ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+          <select name="industry" defaultValue={sp.industry ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.partners.allIndustries}</option>
             {industryOptions.map((o) => (
               <option key={o.code} value={o.code}>{o.label}</option>
             ))}
           </select>
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">{m.common.filter}</button>
+          <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">{m.common.filter}</button>
         </form>
 
         {partners.length === 0 ? (
-          <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm">
+          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm">
             <EmptyState text={m.partners.empty} />
             <div className="text-center pb-8 -mt-4">
-              <Link href="/pool" className="text-sm text-indigo-600 hover:underline">{m.partners.goToPool}</Link>
+              <Link href="/pool" className="text-sm text-sky-600 hover:underline">{m.partners.goToPool}</Link>
             </div>
           </div>
         ) : (
@@ -145,17 +145,17 @@ export default async function PartnersPage({
               const openTodos = p.todos.filter((t) => t.status === "OPEN");
               const nextTodo = pickNextTodo(p.todos);
               const activeOpp = pickActiveOpportunity(p.opportunities);
-              const activityTone = stale > 30 ? "text-red-600" : stale > 14 ? "text-amber-600" : "text-zinc-700";
+              const activityTone = stale > 30 ? "text-red-600" : stale > 14 ? "text-amber-600" : "text-slate-700";
               return (
                 <Link
                   key={p.id}
                   href={`/partners/${p.id}`}
-                  className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 hover:border-indigo-300 hover:shadow-md transition-all block"
+                  className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300 block"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-zinc-900">{p.name}</span>
+                        <span className="font-semibold text-slate-900">{p.name}</span>
                         <TierBadge tier={p.tier} />
                         <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, p.category)}</Badge>
                         {parseIndustries(p).map((code) => (
@@ -163,48 +163,48 @@ export default async function PartnersPage({
                         ))}
                         {stale > 30 && <Badge tone="red">{m.partners.stalled.replace("{days}", String(stale))}</Badge>}
                       </div>
-                      <div className="text-xs text-zinc-400 mt-1">
+                      <div className="text-xs text-slate-400 mt-1">
                         {p.city ?? p.country ?? "—"} · {m.partners.salesOwner}: {p.salesUser?.name ?? p.owner?.name ?? "—"} · {m.partners.presalesOwner}: {p.presalesUser?.name ?? "—"}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-xs text-zinc-400">{m.partners.stageOf.replace("{n}", String(p.pipelineStage))}</div>
-                      <div className="text-sm font-medium text-indigo-700">{stageName(labels, p.pipelineStage)}</div>
+                      <div className="text-xs text-slate-400">{m.partners.stageOf.replace("{n}", String(p.pipelineStage))}</div>
+                      <div className="text-sm font-medium text-sky-700">{stageName(labels, p.pipelineStage)}</div>
                     </div>
                   </div>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 min-w-0">
-                      <div className="text-[11px] text-zinc-400">{m.partners.lastActivity}</div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 min-w-0">
+                      <div className="text-[11px] text-slate-400">{m.partners.lastActivity}</div>
                       <div className={`text-xs font-medium mt-0.5 truncate ${activityTone}`}>
                         {fmtDate(activityAt, bcp47)}
                         {" · "}
                         {stale === 0 ? m.partners.activityToday : m.partners.activityDaysAgo.replace("{days}", String(stale))}
                       </div>
                     </div>
-                    <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 min-w-0">
-                      <div className="text-[11px] text-zinc-400">{m.partners.openTodos}</div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 min-w-0">
+                      <div className="text-[11px] text-slate-400">{m.partners.openTodos}</div>
                       {openTodos.length > 0 ? (
-                        <div className="text-xs text-zinc-700 mt-0.5 truncate" title={nextTodo?.title}>
+                        <div className="text-xs text-slate-700 mt-0.5 truncate" title={nextTodo?.title}>
                           {m.partners.openTodosCount.replace("{n}", String(openTodos.length))}
                           {nextTodo ? ` · ${truncate(nextTodo.title)}` : ""}
                         </div>
                       ) : (
-                        <div className="text-xs text-zinc-400 mt-0.5">{m.partners.noOpenTodos}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{m.partners.noOpenTodos}</div>
                       )}
                     </div>
-                    <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-2 min-w-0">
-                      <div className="text-[11px] text-zinc-400">{m.partners.activeDeal}</div>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 min-w-0">
+                      <div className="text-[11px] text-slate-400">{m.partners.activeDeal}</div>
                       {activeOpp ? (
-                        <div className="text-xs text-zinc-700 mt-0.5 truncate" title={activeOpp.name}>
+                        <div className="text-xs text-slate-700 mt-0.5 truncate" title={activeOpp.name}>
                           {truncate(activeOpp.name)}
                           {activeOpp.amount ? ` · ${activeOpp.amount}` : ""}
                         </div>
                       ) : (
-                        <div className="text-xs text-zinc-400 mt-0.5">{m.partners.noActiveDeal}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{m.partners.noActiveDeal}</div>
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
                     <span>
                       {m.partners.contactsCount.replace("{n}", String(p.contacts.length))} · {m.partners.opportunitiesCount.replace("{n}", String(p.opportunities.length))} · {m.partners.activitiesCount.replace("{n}", String(p.events.length))}
                     </span>

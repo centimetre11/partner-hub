@@ -85,8 +85,8 @@ export function PartnerWorkspaceShell({
     <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-12 sm:pb-16">
       <div className="flex flex-col gap-3 mb-5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs text-zinc-500">{m.workspace.clickModule}</p>
-          <Link href="/framework" className="text-xs text-indigo-600 hover:underline shrink-0">
+          <p className="text-xs text-slate-500">{m.workspace.clickModule}</p>
+          <Link href="/framework" className="text-xs text-sky-600 hover:underline shrink-0">
             {m.workspace.frameworkGuide}
           </Link>
         </div>
@@ -99,14 +99,14 @@ export function PartnerWorkspaceShell({
                 key={p.id}
                 type="button"
                 onClick={() => setActivePanel(p.id)}
-                className={`rounded-xl border px-4 py-3 text-left transition-all ${
+                className={`rounded-lg border px-4 py-3 text-left ${
                   active
-                    ? "border-indigo-500 bg-indigo-600 text-white shadow-md shadow-indigo-200"
-                    : "border-zinc-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/40"
+                    ? "border-slate-700 bg-slate-900 text-white border border-slate-300"
+                    : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/40"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`text-sm font-semibold ${active ? "text-white" : "text-zinc-900"}`}>{p.label}</span>
+                  <span className={`text-sm font-semibold ${active ? "text-white" : "text-slate-900"}`}>{p.label}</span>
                   {badge && (
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded-full shrink-0 ${
@@ -117,7 +117,7 @@ export function PartnerWorkspaceShell({
                     </span>
                   )}
                 </div>
-                <p className={`text-[11px] mt-1 line-clamp-1 ${active ? "text-indigo-100" : "text-zinc-400"}`}>
+                <p className={`text-[11px] mt-1 line-clamp-1 ${active ? "text-slate-400" : "text-slate-400"}`}>
                   {p.desc}
                 </p>
               </button>
@@ -130,9 +130,9 @@ export function PartnerWorkspaceShell({
         <button
           type="button"
           onClick={() => setMapOpen((v) => !v)}
-          className="flex items-center gap-2 text-xs text-zinc-500 hover:text-indigo-600 mb-2"
+          className="flex items-center gap-2 text-xs text-slate-500 hover:text-sky-600 mb-2"
         >
-          <span className={`transition-transform ${mapOpen ? "rotate-90" : ""}`}>▸</span>
+          <span className={mapOpen ? "rotate-90" : ""}>▸</span>
           {m.workspace.instanceMap}
           {missingCount > 0 ? m.workspace.itemsToFill.replace("{n}", String(missingCount)) : ")"}
         </button>
@@ -157,10 +157,10 @@ export function PartnerWorkspaceShell({
         )}
       </div>
 
-      <div className="rounded-2xl border border-zinc-200/80 bg-white shadow-sm overflow-hidden">
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-zinc-100 bg-zinc-50/50">
-          <h2 className="text-base font-semibold text-zinc-900">{activeMeta.label}</h2>
-          <p className="text-sm text-zinc-500 mt-0.5">{activeMeta.desc}</p>
+      <div className="rounded-lg border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="text-base font-semibold text-slate-900">{activeMeta.label}</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{activeMeta.desc}</p>
         </div>
         <div className="p-4 sm:p-6">{panels[activePanel]}</div>
       </div>

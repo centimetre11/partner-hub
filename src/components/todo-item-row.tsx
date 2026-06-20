@@ -62,17 +62,17 @@ export function TodoItemRow({
           disabled={loading}
           onClick={() => void handleToggle()}
           className={`w-4.5 h-4.5 mt-0.5 rounded border flex items-center justify-center text-[10px] shrink-0 ${
-            isDone ? "bg-indigo-600 border-indigo-600 text-white" : "border-zinc-300 hover:border-indigo-400"
+            isDone ? "bg-slate-900 border-slate-900 text-white" : "border-slate-300 hover:border-slate-400"
           }`}
         >
           {isDone && "✓"}
         </button>
         <div className="min-w-0 flex-1">
-          <div className={`text-sm ${isDone ? "line-through text-zinc-300" : "text-zinc-800"}`}>
+          <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>
             {todo.title}
             {todo.source === "AI" && <span className="ml-1.5 text-[10px] text-purple-500">AI</span>}
           </div>
-          <div className="text-xs text-zinc-400">
+          <div className="text-xs text-slate-400">
             {todo.dueDate && (
               <span className={overdue ? "text-red-500 font-medium" : ""}>
                 {fmtDate(todo.dueDate, bcp47)}{overdue && ` ${m.overdue}`}
@@ -99,9 +99,9 @@ export function TodoItemRow({
         </div>
       </div>
       {prompt && !isDone && (
-        <div className="ml-7 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 space-y-2">
-          <div className="text-xs font-medium text-zinc-800">{pd.recordAsMilestone}</div>
-          <p className="text-xs text-zinc-500">{pd.recordAsMilestoneHint}</p>
+        <div className="ml-7 rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+          <div className="text-xs font-medium text-slate-800">{pd.recordAsMilestone}</div>
+          <p className="text-xs text-slate-500">{pd.recordAsMilestoneHint}</p>
           <BusinessRecordForm
             partnerId={partnerId}
             source="TODO"
@@ -118,7 +118,7 @@ export function TodoItemRow({
             type="button"
             disabled={loading}
             onClick={() => void markDoneOnly()}
-            className="text-xs text-zinc-500 hover:text-zinc-700"
+            className="text-xs text-slate-500 hover:text-slate-700"
           >
             {pd.skipMilestone}
           </button>

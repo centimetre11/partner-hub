@@ -19,7 +19,7 @@ import {
 import { useMessages } from "@/lib/i18n/context";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function PartnerGtmPanel({
   partner,
@@ -126,7 +126,7 @@ export function PartnerGtmPanel({
               setRefQ("");
               setRefItems(libraryItems);
             }}
-            className="text-xs rounded-lg border border-zinc-200 px-3 py-1.5 text-zinc-600 hover:bg-zinc-50"
+            className="text-xs rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
           >
             {g.browseLibrary}
           </button>
@@ -137,7 +137,7 @@ export function PartnerGtmPanel({
               setLibTitle(partner.name);
               setLibError("");
             }}
-            className="text-xs rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-indigo-700 hover:bg-indigo-100"
+            className="text-xs rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sky-700 hover:bg-slate-100"
           >
             {g.saveToLibrary}
           </button>
@@ -145,7 +145,7 @@ export function PartnerGtmPanel({
             type="button"
             onClick={savePartner}
             disabled={pending}
-            className="text-xs rounded-lg bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="text-xs rounded-lg bg-slate-900 px-3 py-1.5 text-white hover:bg-slate-800 disabled:opacity-50"
           >
             {saved ? g.saved : pending ? g.saving : g.saveToPartner}
           </button>
@@ -154,7 +154,7 @@ export function PartnerGtmPanel({
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-zinc-500">{g.playbookHowToWin}</span>
+          <span className="text-xs font-medium text-slate-500">{g.playbookHowToWin}</span>
           <textarea
             value={playbook}
             onChange={(e) => setPlaybook(e.target.value)}
@@ -164,7 +164,7 @@ export function PartnerGtmPanel({
           />
         </label>
         <label className="block space-y-1.5">
-          <span className="text-xs font-medium text-zinc-500">{g.pitchScript}</span>
+          <span className="text-xs font-medium text-slate-500">{g.pitchScript}</span>
           <textarea
             value={pitch}
             onChange={(e) => setPitch(e.target.value)}
@@ -186,9 +186,9 @@ export function PartnerGtmPanel({
             autoFocus
           />
           {refLoading ? (
-            <p className="text-sm text-zinc-400 py-6 text-center">{g.searching}</p>
+            <p className="text-sm text-slate-400 py-6 text-center">{g.searching}</p>
           ) : refItems.length === 0 ? (
-            <p className="text-sm text-zinc-400 py-6 text-center">{g.noMatches}</p>
+            <p className="text-sm text-slate-400 py-6 text-center">{g.noMatches}</p>
           ) : (
             <ul className="max-h-80 overflow-y-auto space-y-2">
               {refItems.map((item) => (
@@ -196,18 +196,18 @@ export function PartnerGtmPanel({
                   <button
                     type="button"
                     onClick={() => applyReference(item)}
-                    className="w-full text-left rounded-lg border border-zinc-100 px-3 py-2.5 hover:border-indigo-200 hover:bg-indigo-50/50 transition-colors"
+                    className="w-full text-left rounded-lg border border-slate-100 px-3 py-2.5 hover:border-slate-300 hover:bg-slate-50"
                   >
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm text-zinc-900">{item.title}</span>
+                      <span className="font-medium text-sm text-slate-900">{item.title}</span>
                       <Badge tone="zinc">v{item.version}</Badge>
                       {item.sourcePartnerName && (
-                        <span className="text-xs text-zinc-400">
+                        <span className="text-xs text-slate-400">
                           {g.fromPartner.replace("{name}", item.sourcePartnerName)}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-500 mt-1 line-clamp-2">
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">
                       {item.playbook?.slice(0, 120) || item.pitch?.slice(0, 120) || "—"}
                     </p>
                   </button>
@@ -223,11 +223,11 @@ export function PartnerGtmPanel({
         <Modal title={g.saveModalTitle} onClose={() => setLibOpen(false)}>
           <div className="space-y-3 text-sm">
             <label className="block space-y-1">
-              <span className="text-xs text-zinc-500">{g.titleLabel}</span>
+              <span className="text-xs text-slate-500">{g.titleLabel}</span>
               <input value={libTitle} onChange={(e) => setLibTitle(e.target.value)} className={input} />
             </label>
             <fieldset className="space-y-2">
-              <legend className="text-xs text-zinc-500 mb-1">{g.saveMode}</legend>
+              <legend className="text-xs text-slate-500 mb-1">{g.saveMode}</legend>
               {(
                 [
                   ["new", g.modeNew],
@@ -243,13 +243,13 @@ export function PartnerGtmPanel({
                     onChange={() => setLibMode(v)}
                     className="mt-1"
                   />
-                  <span className="text-zinc-700">{label}</span>
+                  <span className="text-slate-700">{label}</span>
                 </label>
               ))}
             </fieldset>
             {(libMode === "replace" || libMode === "version") && (
               <label className="block space-y-1">
-                <span className="text-xs text-zinc-500">{g.selectEntry}</span>
+                <span className="text-xs text-slate-500">{g.selectEntry}</span>
                 <select
                   value={libTargetId}
                   onChange={(e) => setLibTargetId(e.target.value)}
@@ -265,10 +265,10 @@ export function PartnerGtmPanel({
               </label>
             )}
             <label className="block space-y-1">
-              <span className="text-xs text-zinc-500">{g.notesOptional}</span>
+              <span className="text-xs text-slate-500">{g.notesOptional}</span>
               <input value={libNotes} onChange={(e) => setLibNotes(e.target.value)} className={input} />
             </label>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-slate-400">
               {g.profileTagsHint}
               {parseIndustries(partner).length > 0 &&
                 ` ${labelsFromMap(labelMaps.INDUSTRY, parseIndustries(partner))}`}
@@ -278,14 +278,14 @@ export function PartnerGtmPanel({
             </p>
             {libError && <p className="text-xs text-red-600">{libError}</p>}
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setLibOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
+              <button type="button" onClick={() => setLibOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                 {common.cancel}
               </button>
               <button
                 type="button"
                 onClick={submitToLibrary}
                 disabled={pending}
-                className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-50"
+                className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
               >
                 {g.confirmSave}
               </button>
@@ -309,12 +309,12 @@ function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-5 max-h-[85vh] overflow-y-auto"
+        className="bg-white rounded-lg w-full border border-slate-200 max-w-lg p-5 max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold">{title}</h3>
-          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none">
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">
             ×
           </button>
         </div>

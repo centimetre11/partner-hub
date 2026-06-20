@@ -5,7 +5,7 @@ import type { TaxonomyDimension, TaxonomyOptionRow } from "@/lib/taxonomy";
 import { useLabels, useMessages } from "@/lib/i18n/context";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 const LIBRARY_PATHS: Record<TaxonomyDimension, string> = {
   ARCHETYPE: "/taxonomy?dim=ARCHETYPE",
@@ -33,11 +33,11 @@ export function TaxonomySelectField({
   return (
     <label className="space-y-1 block">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-zinc-500">{meta.label}</span>
+        <span className="text-xs text-slate-500">{meta.label}</span>
         <Link
           href={LIBRARY_PATHS[dimension]}
           target="_blank"
-          className="text-xs text-indigo-600 hover:underline shrink-0"
+          className="text-xs text-sky-600 hover:underline shrink-0"
         >
           {m.common.taxonomyPlus}
         </Link>
@@ -72,24 +72,24 @@ export function TaxonomyMultiField({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-zinc-500">{meta.label} ({m.common.multiSelect})</span>
+        <span className="text-xs text-slate-500">{meta.label} ({m.common.multiSelect})</span>
         <Link
           href={LIBRARY_PATHS[dimension]}
           target="_blank"
-          className="text-xs text-indigo-600 hover:underline shrink-0"
+          className="text-xs text-sky-600 hover:underline shrink-0"
         >
           {m.common.taxonomyPlus}
         </Link>
       </div>
-      <div className="rounded-lg border border-zinc-200 p-2 max-h-36 overflow-y-auto grid grid-cols-2 gap-1">
+      <div className="rounded-lg border border-slate-200 p-2 max-h-36 overflow-y-auto grid grid-cols-2 gap-1">
         {options.map((o) => (
-          <label key={o.code} className="flex items-center gap-2 text-xs text-zinc-700 cursor-pointer py-1 px-1 rounded hover:bg-zinc-50">
+          <label key={o.code} className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer py-1 px-1 rounded hover:bg-slate-50">
             <input
               type="checkbox"
               name={name}
               value={o.code}
               defaultChecked={selected.includes(o.code)}
-              className="rounded border-zinc-300"
+              className="rounded border-slate-300"
             />
             <span>{o.label}</span>
           </label>

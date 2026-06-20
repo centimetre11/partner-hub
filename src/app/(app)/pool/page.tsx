@@ -76,7 +76,7 @@ export default async function PoolPage({
       />
 
       <div className="px-8">
-        <div className="flex items-center gap-1 mb-4 border-b border-zinc-200 overflow-x-auto pb-px -mx-1 px-1">
+        <div className="flex items-center gap-1 mb-4 border-b border-slate-200 overflow-x-auto pb-px -mx-1 px-1">
           {VIEWS.map((v) => {
             const active = v.k === view;
             const badge = v.k === "prospect" ? counts.prospect : v.k === "archived" ? counts.archived : counts.prospect + counts.archived;
@@ -84,12 +84,12 @@ export default async function PoolPage({
               <Link
                 key={v.k}
                 href={qs({ view: v.k, flag: undefined })}
-                className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${
-                  active ? "border-indigo-600 text-indigo-600 font-medium" : "border-transparent text-zinc-500 hover:text-zinc-800"
+                className={`px-4 py-2 text-sm border-b-2 -mb-px ${
+                  active ? "border-slate-900 text-slate-900 font-medium" : "border-transparent text-slate-500 hover:text-slate-800"
                 }`}
               >
                 {v.label}
-                <span className="ml-1.5 text-xs text-zinc-400">{badge}</span>
+                <span className="ml-1.5 text-xs text-slate-400">{badge}</span>
               </Link>
             );
           })}
@@ -101,47 +101,47 @@ export default async function PoolPage({
             name="q"
             defaultValue={sp.q}
             placeholder={m.pool.searchPlaceholder}
-            className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44 focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
-          <select name="category" defaultValue={sp.category ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+          <select name="category" defaultValue={sp.category ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.pool.allCategories}</option>
             {categoryOptions.map((o) => (
               <option key={o.code} value={o.code}>{o.label}</option>
             ))}
           </select>
-          <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+          <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.pool.allTiers}</option>
             <option value="A">{m.pool.tierADesc}</option>
             <option value="B">{m.pool.tierBDesc}</option>
             <option value="C">{m.pool.tierCDesc}</option>
           </select>
           {view !== "archived" && (
-            <select name="flag" defaultValue={sp.flag ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+            <select name="flag" defaultValue={sp.flag ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
               <option value="">{m.pool.allStatuses}</option>
               {Object.entries(L.POOL_FLAG_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
           )}
-          <select name="country" defaultValue={sp.country ?? ""} className="rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm">
+          <select name="country" defaultValue={sp.country ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.pool.allCountries}</option>
             {countries.filter((c) => c.country).map((c) => (
               <option key={c.country!} value={c.country!}>{c.country}</option>
             ))}
           </select>
-          <button className="rounded-lg bg-zinc-900 text-white px-4 py-1.5 text-sm hover:bg-zinc-700">{m.common.filter}</button>
+          <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">{m.common.filter}</button>
           {(sp.q || sp.category || sp.tier || sp.flag || sp.country) && (
-            <Link href={qs({ q: undefined, category: undefined, tier: undefined, country: undefined, flag: undefined })} className="rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-800">
+            <Link href={qs({ q: undefined, category: undefined, tier: undefined, country: undefined, flag: undefined })} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500 hover:text-slate-800">
               {m.common.clear}
             </Link>
           )}
         </form>
 
-        <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
-              <tr className="border-b border-zinc-100 text-left text-xs text-zinc-500">
+              <tr className="border-b border-slate-100 text-left text-xs text-slate-500">
                 <th className="px-4 py-3 font-medium">{m.common.company}</th>
                 <th className="px-3 py-3 font-medium">{m.common.category}</th>
                 <th className="px-3 py-3 font-medium">{m.common.region}</th>
@@ -157,19 +157,19 @@ export default async function PoolPage({
                 const c = computeCompleteness(p, labels);
                 const archived = p.status === "ARCHIVED";
                 return (
-                  <tr key={p.id} className={`border-b border-zinc-50 hover:bg-zinc-50/60 ${archived ? "opacity-70" : ""}`}>
+                  <tr key={p.id} className={`border-b border-slate-50 hover:bg-slate-50/60 ${archived ? "opacity-70" : ""}`}>
                     <td className="px-4 py-3">
-                      <Link href={`/partners/${p.id}`} className="font-medium text-zinc-900 hover:text-indigo-600">
+                      <Link href={`/partners/${p.id}`} className="font-medium text-slate-900 hover:text-sky-600">
                         {p.name}
                       </Link>
                       {p.knownClients && (
-                        <div className="text-xs text-zinc-400 mt-0.5 max-w-[260px] truncate">{p.knownClients}</div>
+                        <div className="text-xs text-slate-400 mt-0.5 max-w-[260px] truncate">{p.knownClients}</div>
                       )}
                     </td>
-                    <td className="px-3 py-3 text-zinc-600">{labelFromMap(labelMaps.CATEGORY, p.category)}</td>
-                    <td className="px-3 py-3 text-zinc-600 whitespace-nowrap">{p.city ?? p.country ?? "—"}</td>
+                    <td className="px-3 py-3 text-slate-600">{labelFromMap(labelMaps.CATEGORY, p.category)}</td>
+                    <td className="px-3 py-3 text-slate-600 whitespace-nowrap">{p.city ?? p.country ?? "—"}</td>
                     <td className="px-3 py-3">
-                      {normalizePartnerTier(p.tier) ? <TierBadge tier={p.tier} /> : <span className="text-zinc-300">—</span>}
+                      {normalizePartnerTier(p.tier) ? <TierBadge tier={p.tier} /> : <span className="text-slate-300">—</span>}
                     </td>
                     <td className="px-3 py-3">
                       <Badge tone={p.aiVerified === "VERIFIED" ? "green" : "zinc"}>
@@ -188,29 +188,29 @@ export default async function PoolPage({
                       <div className="flex items-center justify-end gap-1.5">
                         {archived ? (
                           <form action={restorePartnerAction.bind(null, p.id)}>
-                            <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title={p.prevStatus === "ACTIVE" ? m.pool.restoreAsActive : m.pool.restoreAsProspect}>
+                            <button className="rounded-md bg-slate-900 text-white px-2.5 py-1 text-xs hover:bg-slate-800" title={p.prevStatus === "ACTIVE" ? m.pool.restoreAsActive : m.pool.restoreAsProspect}>
                               {m.common.restore}{p.prevStatus === "ACTIVE" ? ` ${m.pool.restoreAsActive}` : ` ${m.pool.restoreAsProspect}`}
                             </button>
                           </form>
                         ) : (
                           <>
                             <form action={promotePartnerAction.bind(null, p.id)}>
-                              <button className="rounded-md bg-indigo-600 text-white px-2.5 py-1 text-xs hover:bg-indigo-700" title={m.pool.promoteTitle}>
+                              <button className="rounded-md bg-slate-900 text-white px-2.5 py-1 text-xs hover:bg-slate-800" title={m.pool.promoteTitle}>
                                 {m.pool.promote}
                               </button>
                             </form>
                             {p.poolFlag !== "WATCHING" && (
                               <form action={setPoolFlagAction.bind(null, p.id, "WATCHING")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">{m.common.watch}</button>
+                                <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50">{m.common.watch}</button>
                               </form>
                             )}
                             {p.poolFlag !== "DROPPED" ? (
                               <form action={setPoolFlagAction.bind(null, p.id, "DROPPED")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-400 hover:text-red-600 hover:border-red-200">{m.common.drop}</button>
+                                <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-400 hover:text-red-600 hover:border-red-200">{m.common.drop}</button>
                               </form>
                             ) : (
                               <form action={setPoolFlagAction.bind(null, p.id, "NEW")}>
-                                <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50">{m.common.restore}</button>
+                                <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50">{m.common.restore}</button>
                               </form>
                             )}
                           </>

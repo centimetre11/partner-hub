@@ -89,28 +89,28 @@ export function AiPanel({
   }
 
   return (
-    <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-sm p-5 text-white">
+    <div className="bg-slate-900 rounded-lg shadow-sm p-5 text-white">
       <h3 className="text-sm font-semibold flex items-center gap-1.5">✦ {ap.title}</h3>
-      <p className="text-xs text-indigo-200 mt-1 mb-4">{ap.subtitle}</p>
+      <p className="text-xs text-slate-400 mt-1 mb-4">{ap.subtitle}</p>
       <div className="flex flex-wrap gap-2">
         <button
           onClick={genQuestions}
           disabled={loading !== null}
-          className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
+          className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50"
         >
           {loading === "q" ? ap.generating : ap.fillGaps.replace("{count}", String(missing.length))}
         </button>
         <button
           onClick={genSummary}
           disabled={loading !== null}
-          className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors"
+          className="flex-1 min-w-[120px] rounded-lg bg-white/15 hover:bg-white/25 px-3 py-2 text-xs font-medium disabled:opacity-50"
         >
           {loading === "s" ? ap.generating : ap.genSummary}
         </button>
         <button
           onClick={toggleGuidance}
           disabled={loading !== null}
-          className={`flex-1 min-w-[120px] rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50 transition-colors ${
+          className={`flex-1 min-w-[120px] rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-50 ${
             showGuidance ? "bg-white/30" : "bg-white/15 hover:bg-white/25"
           }`}
         >
@@ -126,7 +126,7 @@ export function AiPanel({
       {questions && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
           <div className="text-xs font-semibold mb-2">{ap.questionsTitle}</div>
-          <ol className="text-xs space-y-1.5 list-decimal list-inside text-indigo-50">
+          <ol className="text-xs space-y-1.5 list-decimal list-inside text-slate-200">
             {questions.map((q, i) => (
               <li key={i}>{q}</li>
             ))}
@@ -136,16 +136,16 @@ export function AiPanel({
       {loading === "s" && liveText && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
           <div className="text-xs font-semibold mb-2">{ap.genSummaryProgress}</div>
-          <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">
+          <p className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
             {liveText}
-            <span className="inline-block w-1 h-3 bg-indigo-200 ml-0.5 animate-pulse align-middle" />
+            <span className="inline-block w-1 h-3 bg-slate-300 ml-0.5 align-middle" />
           </p>
         </div>
       )}
       {summary && loading !== "s" && (
         <div className="mt-4 bg-white/10 rounded-lg p-3.5">
           <div className="text-xs font-semibold mb-2">{ap.summarySaved}</div>
-          <p className="text-xs text-indigo-50 whitespace-pre-wrap leading-relaxed">{summary}</p>
+          <p className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">{summary}</p>
         </div>
       )}
     </div>

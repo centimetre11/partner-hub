@@ -21,10 +21,10 @@ import { AiCapabilityBadges, AiCapabilityFields } from "./ai-capability-fields";
 import type { AiCapability } from "@/lib/ai-capabilities";
 
 const monoInput =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono";
 const textInput =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500";
-const label = "text-xs font-medium text-zinc-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500";
+const label = "text-xs font-medium text-slate-500";
 
 function StateMessage({ state }: { state: AiApiActionState }) {
   if (state?.error) return <p className="text-xs text-red-600 whitespace-pre-wrap">{state.error}</p>;
@@ -110,17 +110,17 @@ function VolcengineConfigCard({
   const extraSummary = cfg.extraConfig ? summarizeVolcengineExtra(cfg.extraConfig) : [];
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-zinc-900">{cfg.name}</span>
+            <span className="text-sm font-semibold text-slate-900">{cfg.name}</span>
             <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700">Volcengine</span>
             {cfg.isDefault && (
-              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">Default</span>
+              <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">Default</span>
             )}
             <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.enabled ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
             >
               {cfg.enabled ? "Enabled" : "Disabled"}
             </span>
@@ -130,26 +130,26 @@ function VolcengineConfigCard({
           </div>
           <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
             <div>
-              <dt className="text-zinc-400">Endpoint</dt>
-              <dd className="font-mono text-zinc-800 mt-0.5">{cfg.model}</dd>
+              <dt className="text-slate-400">Endpoint</dt>
+              <dd className="font-mono text-slate-800 mt-0.5">{cfg.model}</dd>
             </div>
             <div>
-              <dt className="text-zinc-400">API Key</dt>
-              <dd className="font-mono text-zinc-800 mt-0.5">Tail {cfg.keyTail}</dd>
+              <dt className="text-slate-400">API Key</dt>
+              <dd className="font-mono text-slate-800 mt-0.5">Tail {cfg.keyTail}</dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-zinc-400">Base URL</dt>
-              <dd className="font-mono text-zinc-800 mt-0.5 break-all">{cfg.baseUrl}</dd>
+              <dt className="text-slate-400">Base URL</dt>
+              <dd className="font-mono text-slate-800 mt-0.5 break-all">{cfg.baseUrl}</dd>
             </div>
             <div className="sm:col-span-2">
-              <dt className="text-zinc-400">Daily token limit</dt>
+              <dt className="text-slate-400">Daily token limit</dt>
               {cfg.dailyTokenLimit ? (
-                <dd className={`font-mono mt-0.5 ${cfg.usedTodayTokens >= cfg.dailyTokenLimit ? "text-red-600" : "text-zinc-800"}`}>
+                <dd className={`font-mono mt-0.5 ${cfg.usedTodayTokens >= cfg.dailyTokenLimit ? "text-red-600" : "text-slate-800"}`}>
                   Today {fmtNum(cfg.usedTodayTokens)} / {fmtNum(cfg.dailyTokenLimit)}
                   {cfg.usedTodayTokens >= cfg.dailyTokenLimit ? " (limit reached; switched to another model today)" : ""}
                 </dd>
               ) : (
-                <dd className="font-mono text-zinc-400 mt-0.5">Unlimited</dd>
+                <dd className="font-mono text-slate-400 mt-0.5">Unlimited</dd>
               )}
             </div>
           </dl>
@@ -171,19 +171,19 @@ function VolcengineConfigCard({
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-orange-300 hover:text-orange-700"
+            className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-orange-300 hover:text-orange-700"
           >
             Edit
           </button>
           {!cfg.isDefault && (
             <form action={setDefaultAiApiAction.bind(null, cfg.id)}>
-              <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
+              <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
                 Set default
               </button>
             </form>
           )}
           <form action={toggleAiApiAction.bind(null, cfg.id, !cfg.enabled)}>
-            <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
+            <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
               {cfg.enabled ? "Disable" : "Enable"}
             </button>
           </form>
@@ -217,13 +217,13 @@ function VolcengineEditForm({
   const [testState, testAction, testing] = useActionState(testVolcengineApiAction, null);
 
   return (
-    <div className="rounded-xl border border-orange-200 bg-orange-50/50 p-4 space-y-4">
+    <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-4 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-zinc-900">{existing ? "Edit Volcengine configuration" : "Add Volcengine configuration"}</div>
+        <div className="text-sm font-semibold text-slate-900">{existing ? "Edit Volcengine configuration" : "Add Volcengine configuration"}</div>
         <button
           type="button"
           onClick={onCancel}
-          className="text-xs text-zinc-500 hover:text-zinc-800"
+          className="text-xs text-slate-500 hover:text-slate-800"
         >
           Cancel
         </button>
@@ -270,7 +270,7 @@ function VolcengineEditForm({
             placeholder={VOLCENGINE_SNIPPET_PLACEHOLDER}
             className={`${monoInput} resize-y min-h-[220px]`}
           />
-          <p className="text-[11px] text-zinc-500 leading-relaxed">
+          <p className="text-[11px] text-slate-500 leading-relaxed">
             Paste the official curl; <strong>enter the key in the field above</strong>. The <code className="bg-white px-1 rounded">$ARK_API_KEY</code> in curl is only a placeholder.
             {existing ? " To change only the key, you can leave the content below unchanged." : ""}
           </p>
@@ -304,13 +304,13 @@ function VolcengineEditForm({
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
           <label className="inline-flex items-center gap-1.5">
-            <input name="enabled" type="checkbox" defaultChecked={existing?.enabled ?? true} className="rounded border-zinc-300" />
+            <input name="enabled" type="checkbox" defaultChecked={existing?.enabled ?? true} className="rounded border-slate-300" />
             Enabled
           </label>
           <label className="inline-flex items-center gap-1.5">
-            <input name="isDefault" type="checkbox" defaultChecked={existing?.isDefault ?? !existing} className="rounded border-zinc-300" />
+            <input name="isDefault" type="checkbox" defaultChecked={existing?.isDefault ?? !existing} className="rounded border-slate-300" />
             Set as default
           </label>
         </div>
@@ -340,7 +340,7 @@ function VolcengineEditForm({
           >
             {testing ? "Testing..." : "Test current form (before save)"}
           </button>
-          <p className="text-xs text-zinc-500 flex-1 min-w-[200px]">
+          <p className="text-xs text-slate-500 flex-1 min-w-[200px]">
             Uses the new key above if provided; otherwise reads from the database. After saving, use &quot;Test connection&quot; on the card.
           </p>
           <div className="w-full">
@@ -363,8 +363,8 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
             V
           </div>
           <div>
-            <div className="text-sm font-semibold text-zinc-900">Volcengine</div>
-            <div className="text-xs text-zinc-500 mt-1 leading-relaxed max-w-2xl">
+            <div className="text-sm font-semibold text-slate-900">Volcengine</div>
+            <div className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
               Responses API with built-in web search. Configuration list and edit form are separate: view status normally, click &quot;Edit&quot; when you need to change the key or curl.
             </div>
           </div>
@@ -385,7 +385,7 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
       )}
 
       {panel !== "add" && configs.length === 0 && (
-        <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/30 p-6 text-center text-sm text-zinc-500">
+        <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50/30 p-6 text-center text-sm text-slate-500">
           Volcengine is not configured yet. Click &quot;Add configuration&quot; in the top right, enter your API key, and paste the curl.
         </div>
       )}

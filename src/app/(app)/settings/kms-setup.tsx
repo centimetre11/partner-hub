@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { saveKmsCredentialAction, testKmsCredentialAction, deleteKmsCredentialAction } from "@/lib/kms-actions";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export type KmsCredentialForClient = {
   configured: boolean;
@@ -57,14 +57,14 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-xs text-zinc-500 leading-relaxed">
+      <p className="text-xs text-slate-500 leading-relaxed">
         Connect to FanRuan KMS (Confluence 7.x). Enter your{" "}
-        <a href="https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html" className="text-indigo-600 hover:underline" target="_blank" rel="noreferrer">
+        <a href="https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html" className="text-sky-600 hover:underline" target="_blank" rel="noreferrer">
           Personal Access Token
         </a>
         {" "}once; after saving, the Agent and AI assistant will use it automatically when calling{" "}
-        <code className="text-xs bg-zinc-100 px-1 rounded">read_kms</code> /{" "}
-        <code className="text-xs bg-zinc-100 px-1 rounded">write_kms</code> — no need to re-enter it.
+        <code className="text-xs bg-slate-100 px-1 rounded">read_kms</code> /{" "}
+        <code className="text-xs bg-slate-100 px-1 rounded">write_kms</code> — no need to re-enter it.
       </p>
 
       {credential.configured ? (
@@ -79,7 +79,7 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
       )}
 
       <label className="block space-y-1">
-        <span className="text-xs text-zinc-500">Personal access token {credential.configured && "(leave blank to update other fields or test stored token)"}</span>
+        <span className="text-xs text-slate-500">Personal access token {credential.configured && "(leave blank to update other fields or test stored token)"}</span>
         <input
           name="accessToken"
           type="password"
@@ -96,7 +96,7 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
           type="button"
           disabled={pending || !token.trim()}
           onClick={() => run(saveKmsCredentialAction)}
-          className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
         >
           Save token
         </button>
@@ -104,13 +104,13 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
           type="button"
           disabled={pending}
           onClick={() => run(testKmsCredentialAction)}
-          className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:border-indigo-300 disabled:opacity-40"
+          className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:border-slate-300 disabled:opacity-40"
         >
           Test (pageId=1420741418)
         </button>
         {credential.configured && (
           <>
-            <button type="button" disabled={pending} onClick={testStored} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm hover:border-indigo-300 disabled:opacity-40">
+            <button type="button" disabled={pending} onClick={testStored} className="rounded-lg border border-slate-200 px-4 py-2 text-sm hover:border-slate-300 disabled:opacity-40">
               Test with stored token
             </button>
             <button type="button" disabled={pending} onClick={remove} className="rounded-lg border border-red-200 text-red-600 px-4 py-2 text-sm hover:bg-red-50 disabled:opacity-40">

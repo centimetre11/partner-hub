@@ -48,7 +48,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
         actions={
           <>
             <form action={deleteAgentAction.bind(null, agent.id)}>
-              <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-red-500 hover:bg-red-50">{m.agents.deleteBtn}</button>
+              <button className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-red-500 hover:bg-red-50">{m.agents.deleteBtn}</button>
             </form>
             <RunButton agentId={agent.id} />
           </>
@@ -86,24 +86,24 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
             {agent.runs.length ? (
               <div className="space-y-4">
                 {agent.runs.map((r) => (
-                  <details key={r.id} className="group border border-zinc-100 rounded-lg">
+                  <details key={r.id} className="group border border-slate-100 rounded-lg">
                     <summary className="flex items-center justify-between gap-2 px-3.5 py-2.5 cursor-pointer list-none">
                       <span className="flex items-center gap-2 text-sm">
                         <Badge tone={r.status === "SUCCESS" ? "green" : r.status === "FAILED" ? "red" : "amber"}>
                           {r.status === "SUCCESS" ? m.common.success : r.status === "FAILED" ? m.common.failed : m.common.running}
                         </Badge>
-                        <span className="text-zinc-600">{fmtDateTime(r.startedAt, bcp47)}</span>
+                        <span className="text-slate-600">{fmtDateTime(r.startedAt, bcp47)}</span>
                       </span>
-                      <span className="text-xs text-zinc-400 group-open:rotate-180 transition-transform">▾</span>
+                      <span className="text-xs text-slate-400 group-open:rotate-180">▾</span>
                     </summary>
-                    <div className="px-3.5 pb-3 border-t border-zinc-100 pt-2.5">
+                    <div className="px-3.5 pb-3 border-t border-slate-100 pt-2.5">
                       {r.error && <p className="text-xs text-red-500 mb-2">{m.agents.error} {r.error}</p>}
                       {r.output && (
-                        <pre className="text-xs text-zinc-700 whitespace-pre-wrap font-sans bg-zinc-50 rounded-lg p-3 max-h-72 overflow-auto">{r.output}</pre>
+                        <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans bg-slate-50 rounded-lg p-3 max-h-72 overflow-auto">{r.output}</pre>
                       )}
                       {r.toolLog && JSON.parse(r.toolLog).length > 0 && (
                         <details className="mt-2">
-                          <summary className="text-xs text-zinc-500 cursor-pointer font-medium">
+                          <summary className="text-xs text-slate-500 cursor-pointer font-medium">
                             {m.agents.toolTrace.replace("{n}", String(JSON.parse(r.toolLog).length))}
                           </summary>
                           <div className="mt-2">

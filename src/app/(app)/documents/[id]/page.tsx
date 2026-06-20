@@ -29,7 +29,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
     orderBy: { name: "asc" },
   });
 
-  const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   return (
     <div className="pb-16">
@@ -39,7 +39,7 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
       />
       <form action={upsertDocumentAction} className="px-8 max-w-4xl space-y-4">
         <input type="hidden" name="id" value={doc.id} />
-        <div className="bg-white rounded-xl border p-5 space-y-3">
+        <div className="bg-white rounded-lg border p-5 space-y-3">
           <input name="title" required defaultValue={doc.title} className={input} />
           <div className="grid grid-cols-2 gap-3">
             <select name="type" defaultValue={doc.type} className={input}>
@@ -60,22 +60,22 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
           </select>
           <RichEditor defaultValue={doc.content} />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-indigo-700">{m.common.save}</button>
+        <button className="rounded-lg bg-slate-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-slate-800">{m.common.save}</button>
       </form>
 
       <div className="px-8 max-w-4xl mt-4">
-        <div className="bg-white rounded-xl border p-5 space-y-3">
-          <div className="text-sm font-medium text-zinc-700">{m.documents.attachmentsCloud}</div>
+        <div className="bg-white rounded-lg border p-5 space-y-3">
+          <div className="text-sm font-medium text-slate-700">{m.documents.attachmentsCloud}</div>
           <ul className="space-y-2">
             {doc.assets.map((a) => (
               <li key={a.assetId} className="flex items-center gap-2">
                 <AssetCard asset={a.asset} label={a.label} />
                 <form action={unlinkDocumentAssetAction.bind(null, doc.id, a.assetId)}>
-                  <button className="text-xs text-zinc-400 hover:text-red-600">{m.common.remove}</button>
+                  <button className="text-xs text-slate-400 hover:text-red-600">{m.common.remove}</button>
                 </form>
               </li>
             ))}
-            {doc.assets.length === 0 && <li className="text-xs text-zinc-400">{m.documents.noAttachments}</li>}
+            {doc.assets.length === 0 && <li className="text-xs text-slate-400">{m.documents.noAttachments}</li>}
           </ul>
           <DocumentAssetUpload documentId={doc.id} action={linkDocumentAssetAction} />
         </div>

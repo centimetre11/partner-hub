@@ -12,7 +12,7 @@ export default async function SkillDetailPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const s = await db.skill.findUnique({ where: { id } });
   if (!s || s.isBuiltin) notFound();
-  const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   return (
     <div className="pb-16">
@@ -20,7 +20,7 @@ export default async function SkillDetailPage({ params }: { params: Promise<{ id
       <AiCenterNav />
       <form action={upsertSkillAction} className="px-8 max-w-3xl space-y-4">
         <input type="hidden" name="id" value={s.id} />
-        <div className="bg-white rounded-xl border p-5 space-y-3">
+        <div className="bg-white rounded-lg border p-5 space-y-3">
           <input name="name" required defaultValue={s.name} placeholder={m.skills.identifierShort} className={input} />
           <input name="label" required defaultValue={s.label} placeholder={m.skills.displayName} className={input} />
           <input name="description" defaultValue={s.description ?? ""} placeholder={m.skills.oneLineDesc} className={input} />
@@ -37,7 +37,7 @@ export default async function SkillDetailPage({ params }: { params: Promise<{ id
             className={input}
           />
         </div>
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm">{m.common.save}</button>
+        <button className="rounded-lg bg-slate-900 text-white px-6 py-2.5 text-sm">{m.common.save}</button>
       </form>
     </div>
   );

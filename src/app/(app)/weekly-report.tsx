@@ -64,7 +64,7 @@ export function WeeklyReport() {
       : null;
 
   return (
-    <div className="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl shadow-sm p-5 text-white">
+    <div className="bg-slate-900 rounded-lg shadow-sm p-5 text-white">
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-semibold">{wr.title}</h3>
         <button
@@ -77,14 +77,14 @@ export function WeeklyReport() {
       </div>
       {displayContent ? (
         <>
-          {generatedLabel && <div className="text-[11px] text-indigo-200 mb-3">{generatedLabel}</div>}
-          <p className="text-xs leading-relaxed whitespace-pre-wrap text-indigo-50">
+          {generatedLabel && <div className="text-[11px] text-slate-400 mb-3">{generatedLabel}</div>}
+          <p className="text-xs leading-relaxed whitespace-pre-wrap text-slate-200">
             {displayContent}
-            {loading && <span className="inline-block w-1 h-3 bg-indigo-200 ml-0.5 animate-pulse align-middle" />}
+            {loading && <span className="inline-block w-1 h-3 bg-slate-300 ml-0.5 align-middle" />}
           </p>
         </>
       ) : (
-        <p className="text-xs text-indigo-200 mt-2">{wr.desc}</p>
+        <p className="text-xs text-slate-400 mt-2">{wr.desc}</p>
       )}
       {error && <p className="text-xs text-amber-200 mt-2">{error}</p>}
     </div>

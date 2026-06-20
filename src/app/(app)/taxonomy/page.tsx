@@ -32,7 +32,7 @@ export default async function TaxonomyPage({
     include: { createdBy: { select: { name: true } } },
   });
 
-  const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm";
+  const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm";
   const howBullets = [
     m.taxonomy.howItWorksBullet1,
     m.taxonomy.howItWorksBullet2,
@@ -50,10 +50,10 @@ export default async function TaxonomyPage({
             <Link
               key={dim}
               href={`/taxonomy?dim=${dim}`}
-              className={`rounded-full px-4 py-1.5 text-sm border transition-colors ${
+              className={`rounded-full px-4 py-1.5 text-sm border ${
                 dim === activeDim
-                  ? "bg-indigo-600 text-white border-indigo-600"
-                  : "bg-white text-zinc-600 border-zinc-200 hover:border-indigo-300"
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
               }`}
             >
               {labels.taxonomyMeta[dim].label}
@@ -61,33 +61,33 @@ export default async function TaxonomyPage({
           ))}
         </div>
 
-        <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 mb-6 text-sm text-indigo-900">
+        <div className="bg-slate-50/60 border border-slate-200 rounded-lg p-4 mb-6 text-sm text-slate-900">
           <p className="font-medium mb-1">{m.taxonomy.howItWorks}</p>
-          <ul className="text-xs text-indigo-800/90 space-y-1 list-disc pl-4">
+          <ul className="text-xs text-slate-600 space-y-1 list-disc pl-4">
             {howBullets.map((bullet) => (
               <li key={bullet}>{bullet}</li>
             ))}
           </ul>
         </div>
 
-        <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 mb-6">
+        <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 mb-6">
           <h2 className="text-sm font-semibold mb-3">{m.taxonomy.addLabel.replace("{dim}", labels.taxonomyMeta[activeDim].label)}</h2>
           <form action={createTaxonomyOptionAction} className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
             <input type="hidden" name="dimension" value={activeDim} />
             <label className="space-y-1 md:col-span-2">
-              <span className="text-xs text-zinc-500">{m.taxonomy.displayName}</span>
+              <span className="text-xs text-slate-500">{m.taxonomy.displayName}</span>
               <input name="label" required placeholder={m.taxonomy.namePlaceholder} className={input} />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-zinc-500">{m.taxonomy.codeOptional}</span>
+              <span className="text-xs text-slate-500">{m.taxonomy.codeOptional}</span>
               <input name="code" placeholder={m.taxonomy.codePlaceholder} className={input} />
             </label>
             <label className="space-y-1">
-              <span className="text-xs text-zinc-500">{m.taxonomy.descriptionOptional}</span>
+              <span className="text-xs text-slate-500">{m.taxonomy.descriptionOptional}</span>
               <input name="description" placeholder={m.taxonomy.descPlaceholder} className={input} />
             </label>
             <div className="md:col-span-2 flex justify-end">
-              <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">
+              <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">
                 {m.taxonomy.addToLibrary}
               </button>
             </div>
@@ -95,41 +95,41 @@ export default async function TaxonomyPage({
         </div>
 
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-zinc-700">
+          <h2 className="text-sm font-semibold text-slate-700">
             {m.taxonomy.currentOptions.replace("{count}", String(options.length))}
           </h2>
           {options.map((o) => (
             <div
               key={o.id}
-              className="bg-white rounded-lg border border-zinc-200/80 px-4 py-3 flex items-start justify-between gap-3"
+              className="bg-white rounded-lg border border-slate-200/80 px-4 py-3 flex items-start justify-between gap-3"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-zinc-900">{o.label}</span>
-                  <code className="text-xs text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded">{o.code}</code>
+                  <span className="font-medium text-slate-900">{o.label}</span>
+                  <code className="text-xs text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">{o.code}</code>
                   {o.isBuiltin ? (
                     <Badge tone="zinc">{m.taxonomy.builtin}</Badge>
                   ) : (
                     <Badge tone="green">{m.taxonomy.custom}</Badge>
                   )}
                 </div>
-                {o.description && <p className="text-xs text-zinc-500 mt-1">{o.description}</p>}
+                {o.description && <p className="text-xs text-slate-500 mt-1">{o.description}</p>}
                 {!o.isBuiltin && (
-                  <p className="text-xs text-zinc-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     {o.createdBy?.name ?? "—"} · {fmtDateTime(o.createdAt, bcp47)}
                   </p>
                 )}
               </div>
               {!o.isBuiltin && (
                 <form action={deleteTaxonomyOptionAction.bind(null, o.id)}>
-                  <button className="text-xs text-zinc-400 hover:text-red-600 shrink-0">{m.common.delete}</button>
+                  <button className="text-xs text-slate-400 hover:text-red-600 shrink-0">{m.common.delete}</button>
                 </form>
               )}
             </div>
           ))}
         </div>
 
-        <p className="text-xs text-zinc-400 mt-8">{m.taxonomy.returnToPartnerDetails}</p>
+        <p className="text-xs text-slate-400 mt-8">{m.taxonomy.returnToPartnerDetails}</p>
       </div>
     </div>
   );

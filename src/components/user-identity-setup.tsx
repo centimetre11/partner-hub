@@ -5,7 +5,7 @@ import { saveMyUserIdentityAction, generateWecomBindCodeAction } from "@/lib/use
 import { useMessages } from "@/lib/i18n/context";
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 type Props = {
   hubName: string;
@@ -67,14 +67,14 @@ export function UserIdentitySetup({
 
   return (
     <div className="space-y-5 text-sm">
-      <p className="text-xs text-zinc-500 leading-relaxed">{id.desc}</p>
+      <p className="text-xs text-slate-500 leading-relaxed">{id.desc}</p>
 
-      <div className="rounded-lg border border-zinc-100 bg-zinc-50/80 px-3 py-3 text-xs space-y-1.5">
-        <div className="font-medium text-zinc-700">{id.statusTitle.replace("{name}", hubName)}</div>
+      <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-3 text-xs space-y-1.5">
+        <div className="font-medium text-slate-700">{id.statusTitle.replace("{name}", hubName)}</div>
         <div className={wecomOk ? "text-emerald-700" : "text-amber-700"}>
           {wecomOk ? id.wecomUserIdOk.replace("{id}", wecomUserId!) : id.wecomUserIdMissing}
         </div>
-        <div className={displayOk ? "text-emerald-700" : "text-zinc-500"}>
+        <div className={displayOk ? "text-emerald-700" : "text-slate-500"}>
           {displayOk
             ? id.wecomDisplayOk.replace("{name}", wecomDisplayName!)
             : id.wecomDisplayOptional}
@@ -89,39 +89,39 @@ export function UserIdentitySetup({
         )}
       </div>
 
-      <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-3 text-xs space-y-2">
-        <div className="font-medium text-indigo-900">{id.botBindTitle}</div>
-        <p className="text-indigo-800/90 leading-relaxed">{id.botBindDesc}</p>
+      <div className="rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-3 text-xs space-y-2">
+        <div className="font-medium text-slate-900">{id.botBindTitle}</div>
+        <p className="text-slate-600 leading-relaxed">{id.botBindDesc}</p>
         <button
           type="button"
           disabled={pending}
           onClick={generateBindCode}
-          className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-xs hover:bg-indigo-700 disabled:opacity-40"
+          className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-800 disabled:opacity-40"
         >
           {id.generateBindCode}
         </button>
         {bindCode && (
-          <div className="rounded-lg bg-white border border-indigo-200 px-3 py-2 text-indigo-950">
+          <div className="rounded-lg bg-white border border-slate-200 px-3 py-2 text-slate-950">
             <div className="font-mono text-lg font-bold tracking-widest">{bindCode}</div>
-            <div className="mt-1 text-indigo-700">{id.botBindSend.replace("{code}", bindCode)}</div>
+            <div className="mt-1 text-sky-700">{id.botBindSend.replace("{code}", bindCode)}</div>
           </div>
         )}
-        {bindCodeHint && <p className="text-indigo-700">{bindCodeHint}</p>}
+        {bindCodeHint && <p className="text-sky-700">{bindCodeHint}</p>}
       </div>
 
-      <details className="rounded-lg border border-indigo-100 bg-indigo-50/40 px-3 py-2 text-xs text-indigo-900">
+      <details className="rounded-lg border border-slate-200 bg-slate-50/40 px-3 py-2 text-xs text-slate-900">
         <summary className="cursor-pointer font-medium">{id.howToFindUserid}</summary>
-        <ol className="mt-2 list-decimal list-inside space-y-1.5 leading-relaxed text-indigo-800/90">
+        <ol className="mt-2 list-decimal list-inside space-y-1.5 leading-relaxed text-slate-600">
           <li>{w.howToFindBot}</li>
           <li>{id.howToWhoami}</li>
           <li>{w.howToFindAdmin}</li>
         </ol>
       </details>
 
-      <div className="space-y-4 border-t border-zinc-100 pt-4">
-        <h4 className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">{id.stepWecom}</h4>
+      <div className="space-y-4 border-t border-slate-100 pt-4">
+        <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{id.stepWecom}</h4>
         <label className="block space-y-1">
-          <span className="text-xs text-zinc-500">{w.userIdLabel}</span>
+          <span className="text-xs text-slate-500">{w.userIdLabel}</span>
           <input
             value={wecomId}
             onChange={(e) => setWecomId(e.target.value)}
@@ -130,10 +130,10 @@ export function UserIdentitySetup({
             autoComplete="off"
             spellCheck={false}
           />
-          <p className="text-xs text-zinc-400">{w.userIdHint} {id.userIdCopyHint}</p>
+          <p className="text-xs text-slate-400">{w.userIdHint} {id.userIdCopyHint}</p>
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-zinc-500">{id.displayNameLabel}</span>
+          <span className="text-xs text-slate-500">{id.displayNameLabel}</span>
           <input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
@@ -141,16 +141,16 @@ export function UserIdentitySetup({
             className={input}
             autoComplete="off"
           />
-          <p className="text-xs text-zinc-400">{id.displayNameHint}</p>
+          <p className="text-xs text-slate-400">{id.displayNameHint}</p>
         </label>
       </div>
 
-      <div className="space-y-4 border-t border-zinc-100 pt-4">
-        <h4 className="text-xs font-semibold text-zinc-600 uppercase tracking-wide">{id.stepCrm}</h4>
-        <p className="text-xs text-zinc-500">{crm.userMappingHint}</p>
+      <div className="space-y-4 border-t border-slate-100 pt-4">
+        <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{id.stepCrm}</h4>
+        <p className="text-xs text-slate-500">{crm.userMappingHint}</p>
         {salesmen.length > 0 && (
           <label className="block space-y-1">
-            <span className="text-xs text-zinc-500">{crm.selectSalesman}</span>
+            <span className="text-xs text-slate-500">{crm.selectSalesman}</span>
             <select
               value={salesmen.includes(crmUser) ? crmUser : ""}
               onChange={(e) => setCrmUser(e.target.value)}
@@ -166,14 +166,14 @@ export function UserIdentitySetup({
           </label>
         )}
         <label className="block space-y-1">
-          <span className="text-xs text-zinc-500">{crm.manualSalesman}</span>
+          <span className="text-xs text-slate-500">{crm.manualSalesman}</span>
           <input
             value={crmUser}
             onChange={(e) => setCrmUser(e.target.value)}
             placeholder="Fay.Wen"
             className={input}
           />
-          <p className="text-xs text-zinc-400">{crm.syncFirstHint}</p>
+          <p className="text-xs text-slate-400">{crm.syncFirstHint}</p>
         </label>
       </div>
 
@@ -181,7 +181,7 @@ export function UserIdentitySetup({
         type="button"
         disabled={pending}
         onClick={save}
-        className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700 disabled:opacity-40"
+        className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
       >
         {id.saveAll}
       </button>

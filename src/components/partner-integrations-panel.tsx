@@ -105,22 +105,22 @@ export function PartnerIntegrationsPanel({
     setCrmCustomer(customer ?? null);
   }
 
-  const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   return (
-    <details className="rounded-xl border border-zinc-200 bg-white group">
-      <summary className="px-4 py-3 text-sm font-semibold text-zinc-800 cursor-pointer list-none flex items-center justify-between">
+    <details className="rounded-lg border border-slate-200 bg-white group">
+      <summary className="px-4 py-3 text-sm font-semibold text-slate-800 cursor-pointer list-none flex items-center justify-between">
         {intg.title}
-        <span className="text-zinc-400 text-xs font-normal group-open:rotate-180 transition-transform">▼</span>
+        <span className="text-slate-400 text-xs font-normal group-open:rotate-180">▼</span>
       </summary>
-      <div className="px-4 pb-4 space-y-4 border-t border-zinc-100 pt-4 text-sm">
+      <div className="px-4 pb-4 space-y-4 border-t border-slate-100 pt-4 text-sm">
         <div className="space-y-2">
-          <div className="text-xs font-medium text-zinc-700">{intg.wecomChatId}</div>
-          <p className="text-xs text-zinc-500">{intg.wecomChatIdHint}</p>
+          <div className="text-xs font-medium text-slate-700">{intg.wecomChatId}</div>
+          <p className="text-xs text-slate-500">{intg.wecomChatIdHint}</p>
           {boundChat ? (
-            <div className="rounded-lg bg-zinc-50 p-2.5 text-xs font-mono break-all text-zinc-700">
+            <div className="rounded-lg bg-slate-50 p-2.5 text-xs font-mono break-all text-slate-700">
               {boundChat.chatId}
-              {boundChat.label && <span className="text-zinc-500 ml-2">({boundChat.label})</span>}
+              {boundChat.label && <span className="text-slate-500 ml-2">({boundChat.label})</span>}
             </div>
           ) : (
             <input
@@ -144,7 +144,7 @@ export function PartnerIntegrationsPanel({
                 type="button"
                 disabled={loading || !chatId.trim()}
                 onClick={() => void bindWecom()}
-                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
               >
                 保存绑定
               </button>
@@ -153,7 +153,7 @@ export function PartnerIntegrationsPanel({
                 type="button"
                 disabled={loading}
                 onClick={() => void unbindWecom()}
-                className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs text-zinc-600"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
               >
                 解绑
               </button>
@@ -163,8 +163,8 @@ export function PartnerIntegrationsPanel({
 
         <form onSubmit={(e) => void saveIntegrations(e)} className="space-y-3">
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-zinc-700">{intg.kmsRootPath}</span>
-            <p className="text-xs text-zinc-500">{intg.kmsRootPathHint}</p>
+            <span className="text-xs font-medium text-slate-700">{intg.kmsRootPath}</span>
+            <p className="text-xs text-slate-500">{intg.kmsRootPathHint}</p>
             <input
               value={kms}
               onChange={(e) => setKms(e.target.value)}
@@ -173,8 +173,8 @@ export function PartnerIntegrationsPanel({
             />
           </label>
           <div className="space-y-1">
-            <span className="text-xs font-medium text-zinc-700">{intg.crmCustomerId}</span>
-            <p className="text-xs text-zinc-500">{intg.crmCustomerIdHint}</p>
+            <span className="text-xs font-medium text-slate-700">{intg.crmCustomerId}</span>
+            <p className="text-xs text-slate-500">{intg.crmCustomerIdHint}</p>
             <CrmCustomerPicker
               value={crm}
               onChange={handleCrmChange}
@@ -186,13 +186,13 @@ export function PartnerIntegrationsPanel({
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-white disabled:opacity-50"
           >
             {intg.save}
           </button>
         </form>
 
-        {msg && <p className="text-xs text-indigo-600">{msg}</p>}
+        {msg && <p className="text-xs text-sky-600">{msg}</p>}
       </div>
     </details>
   );

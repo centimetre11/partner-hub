@@ -17,12 +17,12 @@ export function StageGuidanceContent({
   const total = guidance.exitChecks.length;
   const isDark = variant === "dark";
 
-  const textMain = isDark ? "text-indigo-50" : "text-zinc-600";
-  const textMuted = isDark ? "text-indigo-200" : "text-zinc-400";
-  const textLabel = isDark ? "text-indigo-100" : "text-zinc-700";
-  const domainBg = isDark ? "bg-white/10 border-white/10" : "bg-zinc-50/50 border-zinc-100";
-  const domainTitle = isDark ? "text-indigo-100" : "text-indigo-700";
-  const borderTop = isDark ? "border-white/10" : "border-zinc-100";
+  const textMain = isDark ? "text-slate-200" : "text-slate-600";
+  const textMuted = isDark ? "text-slate-400" : "text-slate-400";
+  const textLabel = isDark ? "text-slate-400" : "text-slate-700";
+  const domainBg = isDark ? "bg-white/10 border-white/10" : "bg-slate-50/50 border-slate-100";
+  const domainTitle = isDark ? "text-slate-400" : "text-sky-700";
+  const borderTop = isDark ? "border-white/10" : "border-slate-100";
 
   return (
     <div>

@@ -9,7 +9,7 @@ import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
 import { useMessages } from "@/lib/i18n/context";
 
-const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export type TaxonomyOptionsMap = Record<TaxonomyDimension, TaxonomyOptionRow[]>;
 
@@ -28,13 +28,13 @@ export function ProfileEditor({
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="text-xs text-indigo-600 hover:underline">
+      <button onClick={() => setOpen(true)} className="text-xs text-sky-600 hover:underline">
         {pe.editProfile}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto"
+            className="bg-white rounded-lg w-full border border-slate-200 max-w-3xl p-6 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-semibold mb-4">{pe.title.replace("{name}", p.name)}</h3>
@@ -46,11 +46,11 @@ export function ProfileEditor({
               className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm"
             >
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">{pe.fullName}</span>
+                <span className="text-xs text-slate-500">{pe.fullName}</span>
                 <input name="name" defaultValue={p.name} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">{m.common.tier}</span>
+                <span className="text-xs text-slate-500">{m.common.tier}</span>
                 <select name="tier" defaultValue={tierSelectValue(p.tier)} className={input}>
                   <option value="">{pe.notTiered}</option>
                   <option value="A">{pe.tierA}</option>
@@ -87,59 +87,59 @@ export function ProfileEditor({
                 emptyLabel={pe.toBeSelected}
               />
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">{pe.dedicatedHeadcountLabel}</span>
+                <span className="text-xs text-slate-500">{pe.dedicatedHeadcountLabel}</span>
                 <input name="dedicatedHeadcount" defaultValue={p.dedicatedHeadcount ?? ""} placeholder={pe.dedicatedHeadcountPlaceholder} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.valuePartnerOffer}</span>
+                <span className="text-xs text-slate-500">{pe.valuePartnerOffer}</span>
                 <input name="valuePartnerOffer" defaultValue={p.valuePartnerOffer ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.valueFanruanOffer}</span>
+                <span className="text-xs text-slate-500">{pe.valueFanruanOffer}</span>
                 <input name="valueFanruanOffer" defaultValue={p.valueFanruanOffer ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.valueCustomerOutcome}</span>
+                <span className="text-xs text-slate-500">{pe.valueCustomerOutcome}</span>
                 <input name="valueCustomerOutcome" defaultValue={p.valueCustomerOutcome ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">{pe.city}</span>
+                <span className="text-xs text-slate-500">{pe.city}</span>
                 <input name="city" defaultValue={p.city ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">{pe.country}</span>
+                <span className="text-xs text-slate-500">{pe.country}</span>
                 <input name="country" defaultValue={p.country ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">{pe.headcount}</span>
+                <span className="text-xs text-slate-500">{pe.headcount}</span>
                 <input name="headcount" defaultValue={p.headcount ?? ""} className={input} />
               </label>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">{pe.website}</span>
+                <span className="text-xs text-slate-500">{pe.website}</span>
                 <input name="website" defaultValue={p.website ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.coreBusiness}</span>
+                <span className="text-xs text-slate-500">{pe.coreBusiness}</span>
                 <input name="coreBusiness" defaultValue={p.coreBusiness ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.capability}</span>
+                <span className="text-xs text-slate-500">{pe.capability}</span>
                 <input name="capability" defaultValue={p.capability ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.knownClients}</span>
+                <span className="text-xs text-slate-500">{pe.knownClients}</span>
                 <input name="knownClients" defaultValue={p.knownClients ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.currentTools}</span>
+                <span className="text-xs text-slate-500">{pe.currentTools}</span>
                 <input name="currentTools" defaultValue={p.currentTools ?? ""} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.corePlaybook}</span>
+                <span className="text-xs text-slate-500">{pe.corePlaybook}</span>
                 <textarea name="playbook" defaultValue={p.playbook ?? ""} rows={2} className={input} />
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.pitch}</span>
+                <span className="text-xs text-slate-500">{pe.pitch}</span>
                 <textarea name="pitch" defaultValue={p.pitch ?? ""} rows={2} className={input} />
               </label>
               <PartnerTeamFields
@@ -150,17 +150,17 @@ export function ProfileEditor({
               />
               <label className="flex items-center gap-2 mt-5">
                 <input type="checkbox" name="manualChecked" defaultChecked={p.manualChecked} className="rounded" />
-                <span className="text-xs text-zinc-600">{pe.manuallyVerified}</span>
+                <span className="text-xs text-slate-600">{pe.manuallyVerified}</span>
               </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-zinc-500">{pe.notes}</span>
+                <span className="text-xs text-slate-500">{pe.notes}</span>
                 <textarea name="notes" defaultValue={p.notes ?? ""} rows={2} className={input} />
               </label>
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
+                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                   {m.common.cancel}
                 </button>
-                <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">{pe.save}</button>
+                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">{pe.save}</button>
               </div>
             </form>
           </div>

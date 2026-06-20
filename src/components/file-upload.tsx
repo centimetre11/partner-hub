@@ -70,23 +70,23 @@ export function FileUploadField({
     }
   }
 
-  const tabBase = "px-3 py-1 text-xs rounded-md transition-colors";
+  const tabBase = "px-3 py-1 text-xs rounded-md";
 
   return (
     <div className="space-y-2">
       <input type="hidden" name={name} value={assetId} />
-      <div className="inline-flex rounded-lg bg-zinc-100 p-0.5">
+      <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
         <button
           type="button"
           onClick={() => { setMode("file"); setError(null); }}
-          className={`${tabBase} ${mode === "file" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"}`}
+          className={`${tabBase} ${mode === "file" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}
         >
           Upload file
         </button>
         <button
           type="button"
           onClick={() => { setMode("link"); setError(null); }}
-          className={`${tabBase} ${mode === "link" ? "bg-white shadow-sm text-zinc-900" : "text-zinc-500"}`}
+          className={`${tabBase} ${mode === "link" ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}
         >
           Paste cloud link
         </button>
@@ -100,43 +100,43 @@ export function FileUploadField({
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="Paste cloud / document share link"
-            className="flex-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
           />
           <button
             type="button"
             onClick={parseLink}
             disabled={loading || !url.trim()}
-            className="rounded-lg bg-zinc-900 text-white px-3 py-1.5 text-xs disabled:opacity-40"
+            className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs disabled:opacity-40"
           >
             Parse
           </button>
         </div>
       )}
 
-      {loading && <span className="text-xs text-zinc-400">{mode === "file" ? "Uploading…" : "Parsing…"}</span>}
+      {loading && <span className="text-xs text-slate-400">{mode === "file" ? "Uploading…" : "Parsing…"}</span>}
       {error && <span className="block text-xs text-red-500">{error}</span>}
 
       {assetId && link && (
-        <div className="flex items-center gap-3 rounded-lg border border-zinc-200 p-2 max-w-sm">
+        <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-2 max-w-sm">
           {link.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={link.thumbnailUrl} alt="" className="h-12 w-16 rounded object-cover bg-zinc-50" />
+            <img src={link.thumbnailUrl} alt="" className="h-12 w-16 rounded object-cover bg-slate-50" />
           ) : (
-            <div className="h-12 w-16 rounded bg-zinc-100 flex items-center justify-center text-lg">🔗</div>
+            <div className="h-12 w-16 rounded bg-slate-100 flex items-center justify-center text-lg">🔗</div>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm text-zinc-800">{filename}</div>
-            <a href={link.url} target="_blank" className="truncate block text-xs text-indigo-500 hover:underline">
+            <div className="truncate text-sm text-slate-800">{filename}</div>
+            <a href={link.url} target="_blank" className="truncate block text-xs text-slate-500 hover:underline">
               {link.url}
             </a>
           </div>
-          <button type="button" onClick={reset} className="text-xs text-zinc-400 hover:text-red-600">Clear</button>
+          <button type="button" onClick={reset} className="text-xs text-slate-400 hover:text-red-600">Clear</button>
         </div>
       )}
       {assetId && !link && filename && (
         <span className="flex items-center gap-2 text-xs text-emerald-600">
           Uploaded: {filename}
-          <button type="button" onClick={reset} className="text-zinc-400 hover:text-red-600">Clear</button>
+          <button type="button" onClick={reset} className="text-slate-400 hover:text-red-600">Clear</button>
         </span>
       )}
     </div>

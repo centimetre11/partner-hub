@@ -33,8 +33,8 @@ function fmtNum(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
-const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
-const label = "text-xs font-medium text-zinc-500";
+const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
+const label = "text-xs font-medium text-slate-500";
 
 function StateMessage({ state }: { state: AiApiActionState }) {
   if (state?.error) return <p className="text-xs text-red-600">{state.error}</p>;
@@ -54,10 +54,10 @@ function ApiEditForm({
   const [state, action, pending] = useActionState(upsertAiApiAction, null);
 
   return (
-    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-zinc-900">{api ? "Edit API" : "Add API"}</div>
-        <button type="button" onClick={onCancel} className="text-xs text-zinc-500 hover:text-zinc-800">
+        <div className="text-sm font-semibold text-slate-900">{api ? "Edit API" : "Add API"}</div>
+        <button type="button" onClick={onCancel} className="text-xs text-slate-500 hover:text-slate-800">
           Cancel
         </button>
       </div>
@@ -105,18 +105,18 @@ function ApiEditForm({
             />
           </label>
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-600">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
           <label className="inline-flex items-center gap-1.5">
-            <input name="enabled" type="checkbox" defaultChecked={api?.enabled ?? true} className="rounded border-zinc-300" />
+            <input name="enabled" type="checkbox" defaultChecked={api?.enabled ?? true} className="rounded border-slate-300" />
             Enabled
           </label>
           <label className="inline-flex items-center gap-1.5">
-            <input name="isDefault" type="checkbox" defaultChecked={api?.isDefault ?? false} className="rounded border-zinc-300" />
+            <input name="isDefault" type="checkbox" defaultChecked={api?.isDefault ?? false} className="rounded border-slate-300" />
             Set as default
           </label>
         </div>
         <StateMessage state={state} />
-        <button disabled={pending} className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm hover:bg-zinc-700 disabled:opacity-50">
+        <button disabled={pending} className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-700 disabled:opacity-50">
           {pending ? "Saving..." : submitText}
         </button>
       </form>
@@ -126,13 +126,13 @@ function ApiEditForm({
 
 function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () => void }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-zinc-900">{api.name}</span>
-            {api.isDefault && <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">Default</span>}
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${api.enabled ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
+            <span className="text-sm font-semibold text-slate-900">{api.name}</span>
+            {api.isDefault && <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">Default</span>}
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${api.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
               {api.enabled ? "Enabled" : "Disabled"}
             </span>
             {api.priority !== 0 && (
@@ -140,18 +140,18 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
             )}
           </div>
           <dl className="mt-2 space-y-1 text-xs">
-            <div><span className="text-zinc-400">Model </span><span className="font-mono text-zinc-700">{api.model}</span></div>
-            <div><span className="text-zinc-400">Base URL </span><span className="font-mono text-zinc-700 break-all">{api.baseUrl}</span></div>
-            <div><span className="text-zinc-400">Key tail </span><span className="font-mono text-zinc-700">{api.keyTail}</span></div>
+            <div><span className="text-slate-400">Model </span><span className="font-mono text-slate-700">{api.model}</span></div>
+            <div><span className="text-slate-400">Base URL </span><span className="font-mono text-slate-700 break-all">{api.baseUrl}</span></div>
+            <div><span className="text-slate-400">Key tail </span><span className="font-mono text-slate-700">{api.keyTail}</span></div>
             <div>
-              <span className="text-zinc-400">Daily limit </span>
+              <span className="text-slate-400">Daily limit </span>
               {api.dailyTokenLimit ? (
-                <span className={`font-mono ${api.usedTodayTokens >= api.dailyTokenLimit ? "text-red-600" : "text-zinc-700"}`}>
+                <span className={`font-mono ${api.usedTodayTokens >= api.dailyTokenLimit ? "text-red-600" : "text-slate-700"}`}>
                   Today {fmtNum(api.usedTodayTokens)} / {fmtNum(api.dailyTokenLimit)} tokens
                   {api.usedTodayTokens >= api.dailyTokenLimit ? " (limit reached; switched today)" : ""}
                 </span>
               ) : (
-                <span className="font-mono text-zinc-400">Unlimited</span>
+                <span className="font-mono text-slate-400">Unlimited</span>
               )}
             </div>
           </dl>
@@ -161,19 +161,19 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600"
+            className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600"
           >
             Edit
           </button>
           {!api.isDefault && (
             <form action={setDefaultAiApiAction.bind(null, api.id)}>
-              <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
+              <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
                 Set default
               </button>
             </form>
           )}
           <form action={toggleAiApiAction.bind(null, api.id, !api.enabled)}>
-            <button className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs text-zinc-600 hover:border-indigo-300 hover:text-indigo-600">
+            <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
               {api.enabled ? "Disable" : "Enable"}
             </button>
           </form>
@@ -205,14 +205,14 @@ export function AiApiManager({
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-zinc-800">Other OpenAI-compatible APIs</div>
-            <div className="text-xs text-zinc-400 mt-1">Kimi, DeepSeek, Tongyi, and other Chat Completions endpoints</div>
+            <div className="text-sm font-semibold text-slate-800">Other OpenAI-compatible APIs</div>
+            <div className="text-xs text-slate-400 mt-1">Kimi, DeepSeek, Tongyi, and other Chat Completions endpoints</div>
           </div>
           {genericPanel === "list" && (
             <button
               type="button"
               onClick={() => setGenericPanel("add")}
-              className="rounded-lg bg-zinc-900 text-white px-3 py-1.5 text-xs hover:bg-zinc-700 shrink-0"
+              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-700 shrink-0"
             >
               + Add API
           </button>
@@ -232,7 +232,7 @@ export function AiApiManager({
             )
           )}
           {genericApis.length === 0 && genericPanel !== "add" && (
-            <div className="rounded-xl border border-dashed border-zinc-200 p-6 text-center text-sm text-zinc-400">
+            <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
               No other API configurations yet. Until you add one, AI_API_KEY in `.env` remains the compatibility fallback.
             </div>
           )}

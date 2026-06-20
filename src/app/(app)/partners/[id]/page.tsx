@@ -135,7 +135,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     }
   }
 
-  const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   const openTodos = p.todos.filter((t) => t.status !== "DONE");
   const doneTodos = p.todos.filter((t) => t.status === "DONE");
@@ -143,11 +143,11 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   return (
     <div>
       {/* Header: identity + pipeline */}
-      <div className="px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-zinc-200/60 bg-white">
+      <div className="px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-slate-200/60 bg-white">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 break-words">{p.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{p.name}</h1>
               <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "ARCHIVED" ? "zinc" : "blue"}>
                 {L.STATUS_LABELS[p.status]}
               </Badge>
@@ -164,12 +164,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               )}
               {stale > 30 && p.status === "ACTIVE" && <Badge tone="red">{m.partners.stalled.replace("{days}", String(stale))}</Badge>}
             </div>
-            <div className="text-sm text-zinc-500 mt-1.5">
+            <div className="text-sm text-slate-500 mt-1.5">
               {[p.city, p.country].filter(Boolean).join(" · ") || m.common.unknownRegion}
               {p.website && (
                 <>
                   {" · "}
-                  <a href={`https://${p.website.replace(/^https?:\/\//, "")}`} target="_blank" className="text-indigo-600 hover:underline">
+                  <a href={`https://${p.website.replace(/^https?:\/\//, "")}`} target="_blank" className="text-sky-600 hover:underline">
                     {p.website}
                   </a>
                 </>
@@ -182,20 +182,20 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {p.status === "PROSPECT" && (
               <form action={promotePartnerAction.bind(null, p.id)}>
-                <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800">
                   {m.partnerDetail.promoteActive}
                 </button>
               </form>
             )}
             {p.status !== "ARCHIVED" ? (
               <form action={archivePartnerAction.bind(null, p.id)}>
-                <button className="rounded-lg border border-zinc-200 px-3 py-2 text-sm text-zinc-400 hover:text-red-600">
+                <button className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-400 hover:text-red-600">
                   {m.partnerDetail.archive}
                 </button>
               </form>
             ) : (
               <form action={restorePartnerAction.bind(null, p.id)}>
-                <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700">
+                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800">
                   {m.common.restore}{p.prevStatus === "ACTIVE" ? m.partnerDetail.restoreAsActive : m.partnerDetail.restoreAsProspect}
                 </button>
               </form>
@@ -211,12 +211,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               <form key={s.stage} action={setPipelineStageAction.bind(null, p.id, s.stage)} className="shrink-0">
                 <button
                   title={s.desc}
-                  className={`rounded-full px-3 py-1.5 text-xs whitespace-nowrap transition-colors border ${
+                  className={`rounded-full px-3 py-1.5 text-xs whitespace-nowrap border ${
                     current
-                      ? "bg-indigo-600 text-white border-indigo-600 font-medium"
+                      ? "bg-slate-900 text-white border-slate-900 font-medium"
                       : passed
-                        ? "bg-indigo-50 text-indigo-600 border-indigo-100"
-                        : "bg-white text-zinc-400 border-zinc-200 hover:border-indigo-300 hover:text-indigo-600"
+                        ? "bg-slate-50 text-sky-600 border-slate-200"
+                        : "bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-sky-600"
                   }`}
                 >
                   {s.stage}. {s.name}
@@ -261,13 +261,13 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                 <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4">
                   <input type="hidden" name="partnerId" value={p.id} />
                   <input name="title" required placeholder={m.partnerDetail.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
-                  <select name="assigneeId" defaultValue={user.id} className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0" aria-label={m.common.owner}>
+                  <select name="assigneeId" defaultValue={user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" aria-label={m.common.owner}>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
-                  <input name="dueDate" type="date" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm w-36 shrink-0" />
-                  <button className="rounded-lg bg-zinc-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-zinc-700">+</button>
+                  <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm w-36 shrink-0" />
+                  <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
                 </form>
                 <TodoList todos={p.todos} users={users} partnerId={p.id} contacts={contactOptions} m={m} L={L} bcp47={bcp47} />
               </Card>
@@ -322,8 +322,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               <ProfileEditor partner={p} users={users} taxonomy={taxonomy} />
             </div>
 
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-5">
-              <h3 className="text-sm font-semibold text-indigo-800 mb-3">{m.partnerDetail.jointValuePattern}</h3>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-5">
+              <h3 className="text-sm font-semibold text-slate-800 mb-3">{m.partnerDetail.jointValuePattern}</h3>
               <dl className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
                 {[
                   [m.partnerDetail.partnerOffers, p.valuePartnerOffer],
@@ -331,8 +331,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   [m.partnerDetail.customerGets, p.valueCustomerOutcome],
                 ].map(([k, v]) => (
                   <div key={k as string}>
-                    <dt className="text-xs text-zinc-500">{k}</dt>
-                    <dd className={v ? "text-zinc-800 mt-1" : "text-zinc-300 mt-1"}>{v || m.partnerDetail.valuePatternTbd}</dd>
+                    <dt className="text-xs text-slate-500">{k}</dt>
+                    <dd className={v ? "text-slate-800 mt-1" : "text-slate-300 mt-1"}>{v || m.partnerDetail.valuePatternTbd}</dd>
                   </div>
                 ))}
               </dl>
@@ -354,8 +354,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     [m.partners.presalesOwner, p.presalesUser?.name],
                   ].map(([k, v]) => (
                     <div key={k as string} className="flex justify-between gap-3">
-                      <dt className="text-zinc-400 shrink-0">{k}</dt>
-                      <dd className={`text-right ${v ? "text-zinc-800" : "text-zinc-300"}`}>{v || "—"}</dd>
+                      <dt className="text-slate-400 shrink-0">{k}</dt>
+                      <dd className={`text-right ${v ? "text-slate-800" : "text-slate-300"}`}>{v || "—"}</dd>
                     </div>
                   ))}
                 </dl>
@@ -370,8 +370,8 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                     [m.partnerDetail.knownClients, p.knownClients],
                   ].map(([k, v]) => (
                     <div key={k as string}>
-                      <dt className="text-xs text-zinc-400">{k}</dt>
-                      <dd className={v ? "text-zinc-800 mt-0.5" : "text-zinc-300 mt-0.5"}>{v || m.common.toBeFilled}</dd>
+                      <dt className="text-xs text-slate-400">{k}</dt>
+                      <dd className={v ? "text-slate-800 mt-0.5" : "text-slate-300 mt-0.5"}>{v || m.common.toBeFilled}</dd>
                     </div>
                   ))}
                 </dl>
@@ -428,11 +428,11 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             >
               <form action={addNoteAction.bind(null, p.id)} className="flex gap-2 mb-5">
                 <input name="content" required placeholder={m.partnerDetail.logActivityPlaceholder} className={input} />
-                <select name="type" className="rounded-lg border border-zinc-200 px-2 py-2 text-sm shrink-0">
+                <select name="type" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0">
                   <option value="NOTE">{m.common.note}</option>
                   <option value="NEWS">{m.common.externalNews}</option>
                 </select>
-                <button className="rounded-lg bg-zinc-900 text-white px-4 py-2 text-sm shrink-0 hover:bg-zinc-700">{m.common.log}</button>
+                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm shrink-0 hover:bg-slate-700">{m.common.log}</button>
               </form>
               <TimelineList events={p.events} L={L} bcp47={bcp47} m={m} />
             </Card>
@@ -474,7 +474,7 @@ function TodoList({
       bcp47={bcp47}
       deleteAction={
         <form action={deleteTodoAction.bind(null, t.id)}>
-          <button title={m.common.delete} className="text-zinc-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
+          <button title={m.common.delete} className="text-slate-300 hover:text-red-500 text-sm opacity-60 group-hover:opacity-100">✕</button>
         </form>
       }
     />
@@ -485,7 +485,7 @@ function TodoList({
       {openTodos.map(renderTodo)}
       {doneTodos.length > 0 && (
         <details className="group/done">
-          <summary className="text-xs text-zinc-400 cursor-pointer list-none py-1">{m.partnerDetail.completedCount.replace("{count}", String(doneTodos.length))}</summary>
+          <summary className="text-xs text-slate-400 cursor-pointer list-none py-1">{m.partnerDetail.completedCount.replace("{count}", String(doneTodos.length))}</summary>
           <div className="space-y-2 mt-1">{doneTodos.map(renderTodo)}</div>
         </details>
       )}
@@ -510,24 +510,24 @@ function OpportunityList({
   return (
     <div className="space-y-3">
       {opportunities.map((o) => (
-        <details key={o.id} className="group rounded-lg border border-zinc-100 hover:border-zinc-200">
+        <details key={o.id} className="group rounded-lg border border-slate-100 hover:border-slate-200">
           <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-zinc-900">{o.name}</span>
+                <span className="font-medium text-slate-900">{o.name}</span>
                 <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
                   {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
                 </Badge>
                 <Badge tone="blue">{o.stage}</Badge>
               </div>
-              <div className="text-xs text-zinc-400 mt-0.5">
+              <div className="text-xs text-slate-400 mt-0.5">
                 {m.common.client}: {o.client ?? "—"} · {m.common.amount}: {o.amount ?? "—"}
                 {o.followUpAt && ` · ${m.partnerDetail.followUp}: ${fmtDate(o.followUpAt, bcp47)}`}
               </div>
             </div>
-            <span className="text-zinc-300 group-open:rotate-90 transition-transform">›</span>
+            <span className="text-slate-300 group-open:rotate-90">›</span>
           </summary>
-          <div className="px-4 pb-4 pt-1 border-t border-zinc-50">
+          <div className="px-4 pb-4 pt-1 border-t border-slate-50">
             <form action={upsertOpportunityAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
               <input type="hidden" name="id" value={o.id} />
               <input name="name" defaultValue={o.name} className={input} />
@@ -543,16 +543,16 @@ function OpportunityList({
                 <option value="PAUSED">{m.common.paused}</option>
               </select>
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
-                <button formAction={deleteOpportunityAction.bind(null, partnerId, o.id)} className="text-xs text-zinc-400 hover:text-red-600">{m.common.delete}</button>
-                <button className="rounded-md bg-zinc-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
+                <button formAction={deleteOpportunityAction.bind(null, partnerId, o.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
+                <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
               </div>
             </form>
           </div>
         </details>
       ))}
       {opportunities.length === 0 && <EmptyState text={m.partnerDetail.noOpportunities} />}
-      <details className="rounded-lg border border-dashed border-zinc-200">
-        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">{m.partnerDetail.addOpportunity}</summary>
+      <details className="rounded-lg border border-dashed border-slate-200">
+        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{m.partnerDetail.addOpportunity}</summary>
         <form action={upsertOpportunityAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
           <input name="name" required placeholder={m.partnerDetail.opportunityName} className={input} />
           <input name="client" placeholder={m.common.client} className={input} />
@@ -561,7 +561,7 @@ function OpportunityList({
           <input name="nextStep" placeholder={m.common.nextStep} className={input} />
           <input name="followUpAt" type="date" className={input} />
           <div className="col-span-2 md:col-span-3 flex justify-end">
-            <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
+            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
           </div>
         </form>
       </details>
@@ -595,19 +595,19 @@ function TrainingList({
             <option value="DONE">{m.common.completed}</option>
           </select>
           <div className="flex gap-1 justify-end">
-            <button className="rounded-md bg-zinc-900 text-white px-2.5 py-1.5 text-xs">{m.common.save}</button>
-            <button formAction={deleteTrainingAction.bind(null, partnerId, t.id)} className="text-xs text-zinc-400 hover:text-red-600 px-1">{m.partnerDetail.trainingDel}</button>
+            <button className="rounded-md bg-slate-900 text-white px-2.5 py-1.5 text-xs">{m.common.save}</button>
+            <button formAction={deleteTrainingAction.bind(null, partnerId, t.id)} className="text-xs text-slate-400 hover:text-red-600 px-1">{m.partnerDetail.trainingDel}</button>
           </div>
         </form>
       ))}
-      <details className="rounded-lg border border-dashed border-zinc-200">
-        <summary className="px-4 py-2.5 text-sm text-indigo-600 cursor-pointer list-none">{m.partnerDetail.addTrainingPlan}</summary>
+      <details className="rounded-lg border border-dashed border-slate-200">
+        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{m.partnerDetail.addTrainingPlan}</summary>
         <form action={upsertTrainingAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
           <input name="person" required placeholder={m.partnerDetail.personRequired} className={input} />
           <input name="currentSkill" placeholder={m.common.currentSkill} className={input} />
           <input name="targetCert" placeholder={m.common.targetCert} className={input} />
           <input name="deadline" type="date" className={input} />
-          <button className="rounded-md bg-indigo-600 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
+          <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
         </form>
       </details>
     </div>
@@ -629,28 +629,28 @@ function TimelineList({
     <div className="space-y-0">
       {events.map((e, i) => (
         <div key={e.id} className="flex gap-3 relative">
-          {i < events.length - 1 && <div className="absolute left-[5px] top-5 bottom-0 w-px bg-zinc-100" />}
+          {i < events.length - 1 && <div className="absolute left-[5px] top-5 bottom-0 w-px bg-slate-100" />}
           <div
             className={`w-[11px] h-[11px] rounded-full mt-1.5 shrink-0 ${
               e.type === "MEETING" ? "bg-emerald-500"
               : e.type === "CHAT_IMPORT" ? "bg-purple-500"
-              : e.type === "AI_SUMMARY" ? "bg-indigo-500"
+              : e.type === "AI_SUMMARY" ? "bg-slate-500"
               :               e.type === "NEWS" ? "bg-sky-500"
               : e.type === "MILESTONE" ? "bg-amber-500"
               : e.type === "CHANGE" ? "bg-amber-400"
-              : "bg-zinc-300"
+              : "bg-slate-300"
             }`}
           />
           <div className="pb-5 min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-medium text-zinc-800">{e.title}</span>
+              <span className="text-sm font-medium text-slate-800">{e.title}</span>
               <Badge tone="zinc">{L.EVENT_TYPE_LABELS[e.type] ?? e.type}</Badge>
-              <span className="text-xs text-zinc-400">
+              <span className="text-xs text-slate-400">
                 {fmtDateTime(e.createdAt, bcp47)}
                 {e.createdBy && ` · ${e.createdBy.name}`}
               </span>
             </div>
-            {e.content && <p className="text-sm text-zinc-600 mt-1 whitespace-pre-wrap leading-relaxed">{e.content}</p>}
+            {e.content && <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap leading-relaxed">{e.content}</p>}
           </div>
         </div>
       ))}

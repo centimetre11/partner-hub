@@ -23,13 +23,13 @@ export function AddPartnerForm({
       <div className="flex gap-2">
         <button
           onClick={() => setAiOpen(true)}
-          className="rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:opacity-90"
         >
           ✦ AI Intake
         </button>
         <button
           onClick={() => setOpen(true)}
-          className="rounded-lg border border-zinc-200 bg-white text-zinc-700 px-4 py-2 text-sm font-medium hover:bg-zinc-50"
+          className="rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50"
         >
           + Add manually
         </button>
@@ -41,34 +41,34 @@ export function AddPartnerForm({
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-lg w-full border border-slate-200 max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-semibold mb-4">{isActive ? "Add active partner" : "Add prospect"}</h3>
             <form action={createPartnerAction} className="space-y-3">
               <input type="hidden" name="intent" value={intent} />
-              <input name="name" required placeholder="Company name *" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
+              <input name="name" required placeholder="Company name *" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               {taxonomy ? (
                 <>
                   <TaxonomySelectField dimension="CATEGORY" name="category" value="OTHER" options={taxonomy.CATEGORY} />
                   <TaxonomyMultiField dimension="INDUSTRY" name="industries" selected={[]} options={taxonomy.INDUSTRY} />
                 </>
               ) : (
-                <p className="text-xs text-zinc-400">
-                  Refresh the page to load taxonomy options, or manage them in the <Link href="/taxonomy" className="text-indigo-600 hover:underline">Taxonomy Library</Link>
+                <p className="text-xs text-slate-400">
+                  Refresh the page to load taxonomy options, or manage them in the <Link href="/taxonomy" className="text-sky-600 hover:underline">Taxonomy Library</Link>
                 </p>
               )}
               <div className="flex gap-2">
-                <input name="city" placeholder="City" className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
-                <input name="country" placeholder="Country" className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
+                <input name="city" placeholder="City" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input name="country" placeholder="Country" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               </div>
-              <input name="coreBusiness" placeholder="Core business (one line)" className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm" />
+              <input name="coreBusiness" placeholder="Core business (one line)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600">
+                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                   Cancel
                 </button>
-                <button className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm hover:bg-indigo-700">Add</button>
+                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">Add</button>
               </div>
             </form>
-            <p className="text-xs text-zinc-400 mt-3">
+            <p className="text-xs text-slate-400 mt-3">
               {isActive
                 ? "Creates an active partner with starter tasks. Prefer not to fill out the form? Use ✦ AI Intake above."
                 : "Prefer not to fill out the form? Use ✦ AI Intake above — paste meeting notes or a company intro for AI to process."}

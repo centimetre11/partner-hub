@@ -52,33 +52,33 @@ export default async function ToolsPage() {
       <AiCenterNav />
       <div className="px-8 max-w-5xl space-y-6">
         {!webSearchReady && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <span className="font-medium">{m.tools.webSearchBanner}</span>{" "}
             {admin ? m.tools.webSearchBannerAdmin : m.tools.webSearchBannerNonAdmin}.{" "}
             {m.tools.webSearchBannerModels}
           </div>
         )}
         {!kmsConfigured && (
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900">
             <span className="font-medium">{m.tools.kmsBanner}</span>{" "}
             <a href="/account" className="underline font-medium">{m.tools.kmsBannerLink}</a>{" "}
             {m.tools.kmsBannerDetail}
           </div>
         )}
         {kmsConfigured && kmsStatus.fallback && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {m.tools.kmsFallbackBanner}
           </div>
         )}
 
         {!knowhowConfigured && (
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900">
             <span className="font-medium">{m.tools.knowhowBanner}</span>{" "}
             {admin ? m.tools.knowhowBannerAdmin : m.tools.knowhowBannerNonAdmin}
           </div>
         )}
 
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 px-4 py-3 text-sm text-indigo-900/80">
+        <div className="rounded-lg border border-slate-200 bg-slate-50/40 px-4 py-3 text-sm text-slate-900/80">
           <span className="font-medium">{m.tools.scenarioPriority}</span> {m.tools.scenarioBody}
         </div>
 
@@ -87,8 +87,8 @@ export default async function ToolsPage() {
             <div className="flex items-center gap-2 mb-3">
               <span className="text-lg">{cat.icon}</span>
               <div className="flex-1">
-                <h2 className="text-sm font-semibold text-zinc-800">{cat.label}</h2>
-                <p className="text-xs text-zinc-400">{cat.desc}</p>
+                <h2 className="text-sm font-semibold text-slate-800">{cat.label}</h2>
+                <p className="text-xs text-slate-400">{cat.desc}</p>
               </div>
               <Badge tone="zinc">{cat.tools.length}</Badge>
             </div>
@@ -98,18 +98,18 @@ export default async function ToolsPage() {
                 return (
                   <div
                     key={tool.name}
-                    className={`bg-white rounded-xl border p-4 transition-colors ${
-                      status === "ready" ? "border-zinc-200/80 hover:border-indigo-200" : "border-zinc-200/60 opacity-80"
+                    className={`bg-white rounded-lg border p-4 ${
+                      status === "ready" ? "border-slate-200/80 hover:border-slate-300" : "border-slate-200/60 opacity-80"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <div className="text-sm font-semibold text-zinc-900">{tool.label}</div>
+                          <div className="text-sm font-semibold text-slate-900">{tool.label}</div>
                           {tool.priority === "core" && <Badge tone="indigo">{m.tools.core}</Badge>}
                         </div>
-                        <div className="text-xs text-zinc-400 font-mono mt-0.5">{tool.name}</div>
-                        <p className="text-xs text-zinc-500 mt-2 leading-relaxed">{tool.desc}</p>
+                        <div className="text-xs text-slate-400 font-mono mt-0.5">{tool.name}</div>
+                        <p className="text-xs text-slate-500 mt-2 leading-relaxed">{tool.desc}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" || status === "needs_knowhow" ? "amber" : "zinc"}>

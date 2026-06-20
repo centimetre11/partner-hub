@@ -8,7 +8,7 @@ import { useMessages } from "@/lib/i18n/context";
 type Option = { id: string; name: string };
 
 const input =
-  "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function CreateTodoDrawer({
   userId,
@@ -43,7 +43,7 @@ export function CreateTodoDrawer({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-zinc-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-zinc-700 shrink-0"
+        className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
       >
         + {m.dashboard.createTodo}
       </button>
@@ -59,16 +59,16 @@ export function CreateTodoDrawer({
             role="dialog"
             aria-modal
             aria-labelledby="create-todo-title"
-            className="fixed right-0 top-0 z-50 flex h-full w-[min(22rem,92vw)] flex-col bg-white shadow-xl"
+            className="fixed right-0 top-0 z-50 flex h-full w-[min(22rem,92vw)] flex-col bg-white border border-slate-200"
           >
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
-              <h2 id="create-todo-title" className="text-sm font-semibold text-zinc-900">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <h2 id="create-todo-title" className="text-sm font-semibold text-slate-900">
                 {m.dashboard.createTodo}
               </h2>
               <button
                 type="button"
                 onClick={() => !saving && setOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 text-lg leading-none"
+                className="text-slate-400 hover:text-slate-600 text-lg leading-none"
                 aria-label={m.common.cancel}
               >
                 ×
@@ -90,7 +90,7 @@ export function CreateTodoDrawer({
             >
               <div className="space-y-3 text-sm flex-1">
                 <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-500">{m.todos.fieldTitle}</span>
+                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldTitle}</span>
                   <input
                     name="title"
                     required
@@ -101,7 +101,7 @@ export function CreateTodoDrawer({
                 </label>
 
                 <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-500">{m.todos.fieldPartner}</span>
+                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldPartner}</span>
                   <select name="partnerId" className={input} defaultValue="">
                     <option value="">{m.todos.noPartner}</option>
                     {partners.map((p) => (
@@ -113,7 +113,7 @@ export function CreateTodoDrawer({
                 </label>
 
                 <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-500">{m.common.owner}</span>
+                  <span className="mb-1 block text-xs text-slate-500">{m.common.owner}</span>
                   <select name="assigneeId" className={input} defaultValue={userId}>
                     {users.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -125,11 +125,11 @@ export function CreateTodoDrawer({
 
                 <div className="flex gap-3">
                   <label className="block flex-1">
-                    <span className="mb-1 block text-xs text-zinc-500">{m.todos.fieldDueDate}</span>
+                    <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldDueDate}</span>
                     <input name="dueDate" type="date" className={input} />
                   </label>
                   <label className="block w-28">
-                    <span className="mb-1 block text-xs text-zinc-500">{m.todos.fieldPriority}</span>
+                    <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldPriority}</span>
                     <select name="priority" className={input} defaultValue="MEDIUM">
                       <option value="HIGH">{m.common.high}</option>
                       <option value="MEDIUM">{m.common.medium}</option>
@@ -139,24 +139,24 @@ export function CreateTodoDrawer({
                 </div>
 
                 <label className="block">
-                  <span className="mb-1 block text-xs text-zinc-500">{m.todos.fieldNotes}</span>
+                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldNotes}</span>
                   <input name="detail" placeholder={m.todos.fieldNotesOptional} className={input} />
                 </label>
               </div>
 
-              <div className="mt-4 flex justify-end gap-2 border-t border-zinc-100 pt-4">
+              <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button
                   type="button"
                   disabled={saving}
                   onClick={() => setOpen(false)}
-                  className="rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                 >
                   {m.common.cancel}
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+                  className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
                 >
                   {saving ? m.intakePanel.saving : m.dashboard.createTodo}
                 </button>

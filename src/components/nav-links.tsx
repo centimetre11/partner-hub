@@ -16,7 +16,7 @@ function isGroup(e: Entry): e is Group {
 
 function Badge({ count }: { count: number }) {
   return (
-    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-semibold flex items-center justify-center">
+    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-medium flex items-center justify-center">
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -63,7 +63,7 @@ export function NavLinks({
       : pathname.startsWith(l.href) || (l.aliases ?? []).some((href) => pathname.startsWith(href));
 
   return (
-    <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+    <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
       {nav
         .filter((entry) => !isGroup(entry) && entry.href === "/settings" ? showTeamSettings : true)
         .map((entry) =>
@@ -94,11 +94,11 @@ function NavLeaf({
     <Link
       href={leaf.href}
       onClick={onNavigate}
-      className={`flex items-center gap-3 ${nested ? "pl-9 pr-3" : "px-3"} py-2 rounded-lg text-sm transition-colors ${
-        active ? "bg-indigo-600/20 text-indigo-300 font-medium" : "hover:bg-zinc-800 hover:text-white"
+      className={`flex items-center gap-3 ${nested ? "pl-9 pr-3" : "px-3"} py-2 rounded-md text-sm ${
+        active ? "bg-slate-100 text-slate-900 font-medium" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       }`}
     >
-      <span className="text-base w-5 text-center">{leaf.icon}</span>
+      <span className="text-sm w-5 text-center opacity-70">{leaf.icon}</span>
       <span className="flex-1">{leaf.label}</span>
       {leaf.badge === "unread" && unread > 0 && <Badge count={unread} />}
     </Link>
@@ -126,17 +126,17 @@ function NavGroup({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-          hasActiveChild ? "text-zinc-100" : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
+        className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm ${
+          hasActiveChild ? "text-slate-900 font-medium" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
         }`}
       >
-        <span className="text-base w-5 text-center">{group.icon}</span>
+        <span className="text-sm w-5 text-center opacity-70">{group.icon}</span>
         <span className="flex-1 text-left">{group.label}</span>
         {!expanded && groupUnread > 0 && <Badge count={groupUnread} />}
-        <span className={`text-[10px] text-zinc-500 transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>
+        <span className={`text-[10px] text-slate-400 ${expanded ? "rotate-90" : ""}`}>▶</span>
       </button>
       {expanded && (
-        <div className="mt-1 space-y-1">
+        <div className="mt-0.5 space-y-0.5">
           {group.children.map((c) => (
             <NavLeaf key={c.href} leaf={c} active={leafActive(c)} unread={unread} nested onNavigate={onNavigate} />
           ))}

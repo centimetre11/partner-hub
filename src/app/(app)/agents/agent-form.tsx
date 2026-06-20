@@ -24,7 +24,7 @@ type AgentData = {
   webhookUrl: string;
 };
 
-const input = "w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
+const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export function AgentForm({
   agent,
@@ -45,24 +45,24 @@ export function AgentForm({
     <form action={upsertAgentAction} className="space-y-5">
       {agent.id && <input type="hidden" name="id" value={agent.id} />}
 
-      <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-zinc-800">Basic Info</h3>
+      <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-800">Basic Info</h3>
         <div className="flex gap-3">
           <label className="space-y-1 w-20">
-            <span className="text-xs text-zinc-500">Icon</span>
+            <span className="text-xs text-slate-500">Icon</span>
             <input name="icon" defaultValue={agent.icon} className={`${input} text-center text-lg`} />
           </label>
           <label className="space-y-1 flex-1">
-            <span className="text-xs text-zinc-500">Name *</span>
+            <span className="text-xs text-slate-500">Name *</span>
             <input name="name" required defaultValue={agent.name} placeholder="e.g. Beinex LinkedIn Activity Radar" className={input} />
           </label>
         </div>
         <label className="space-y-1 block">
-          <span className="text-xs text-zinc-500">One-line description</span>
+          <span className="text-xs text-slate-500">One-line description</span>
           <input name="description" defaultValue={agent.description} placeholder="What it helps you do" className={input} />
         </label>
         <label className="space-y-1 block">
-          <span className="text-xs text-zinc-500">Task instructions * (tell the Agent who it is, what to do each run, and what to output)</span>
+          <span className="text-xs text-slate-500">Task instructions * (tell the Agent who it is, what to do each run, and what to output)</span>
           <textarea
             name="instructions"
             required
@@ -74,22 +74,22 @@ export function AgentForm({
         </label>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-3">
+      <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-3">
         <div>
-          <h3 className="text-sm font-semibold text-zinc-800">Tool Kit</h3>
-          <p className="text-xs text-zinc-400 mt-0.5">Capability units the Agent can call directly—read profiles, search the web, create todos, etc.</p>
+          <h3 className="text-sm font-semibold text-slate-800">Tool Kit</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Capability units the Agent can call directly—read profiles, search the web, create todos, etc.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {toolOptions.map((t) => (
             <label
               key={t.name}
-              className="flex items-start gap-2.5 rounded-lg border border-zinc-100 px-3.5 py-2.5 cursor-pointer hover:border-indigo-200"
+              className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-300"
             >
               <input type="checkbox" name="skills" value={t.name} defaultChecked={agent.skills.includes(t.name)} className="mt-0.5 rounded" />
               <span className="min-w-0">
-                <span className="text-sm font-medium text-zinc-800 block">{t.label}</span>
-                <span className="text-xs text-zinc-400 font-mono">{t.name}</span>
-                <span className="text-xs text-zinc-400 block mt-0.5">{t.desc}</span>
+                <span className="text-sm font-medium text-slate-800 block">{t.label}</span>
+                <span className="text-xs text-slate-400 font-mono">{t.name}</span>
+                <span className="text-xs text-slate-400 block mt-0.5">{t.desc}</span>
               </span>
             </label>
           ))}
@@ -97,10 +97,10 @@ export function AgentForm({
       </div>
 
       {promptSkillOptions.length > 0 && (
-        <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-3">
+        <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-3">
           <div>
-            <h3 className="text-sm font-semibold text-zinc-800">Skill Library</h3>
-            <p className="text-xs text-zinc-400 mt-0.5">Methodology and professional workflows—injected into system instructions to guide how the Agent combines tools</p>
+            <h3 className="text-sm font-semibold text-slate-800">Skill Library</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Methodology and professional workflows—injected into system instructions to guide how the Agent combines tools</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {promptSkillOptions.map((s) => (
@@ -110,9 +110,9 @@ export function AgentForm({
               >
                 <input type="checkbox" name="skillIds" value={s.id} defaultChecked={agent.skillIds.includes(s.id)} className="mt-0.5 rounded" />
                 <span className="min-w-0">
-                  <span className="text-sm font-medium text-zinc-800 block">{s.label}</span>
+                  <span className="text-sm font-medium text-slate-800 block">{s.label}</span>
                   <span className="text-xs text-purple-500">Methodology</span>
-                  <span className="text-xs text-zinc-400 block">{s.desc}</span>
+                  <span className="text-xs text-slate-400 block">{s.desc}</span>
                 </span>
               </label>
             ))}
@@ -120,11 +120,11 @@ export function AgentForm({
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-zinc-800">Trigger & Scope</h3>
+      <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-800">Trigger & Scope</h3>
         <div className="flex flex-wrap gap-3 items-end">
           <label className="space-y-1">
-            <span className="text-xs text-zinc-500">Trigger</span>
+            <span className="text-xs text-slate-500">Trigger</span>
             <select name="trigger" value={trigger} onChange={(e) => setTrigger(e.target.value)} className={input}>
               <option value="MANUAL">Manual run</option>
               <option value="SCHEDULE">Scheduled run</option>
@@ -133,7 +133,7 @@ export function AgentForm({
           {trigger === "SCHEDULE" && (
             <>
               <label className="space-y-1">
-                <span className="text-xs text-zinc-500">Frequency</span>
+                <span className="text-xs text-slate-500">Frequency</span>
                 <select name="frequency" value={frequency} onChange={(e) => setFrequency(e.target.value)} className={input}>
                   <option value="HOURLY">Hourly</option>
                   <option value="DAILY">Daily</option>
@@ -142,7 +142,7 @@ export function AgentForm({
               </label>
               {frequency === "WEEKLY" && (
                 <label className="space-y-1">
-                  <span className="text-xs text-zinc-500">Day of week</span>
+                  <span className="text-xs text-slate-500">Day of week</span>
                   <select name="runWeekday" defaultValue={agent.runWeekday} className={input}>
                     {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => (
                       <option key={d} value={i + 1}>{d}</option>
@@ -152,7 +152,7 @@ export function AgentForm({
               )}
               {frequency !== "HOURLY" && (
                 <label className="space-y-1">
-                  <span className="text-xs text-zinc-500">Time</span>
+                  <span className="text-xs text-slate-500">Time</span>
                   <select name="runHour" defaultValue={agent.runHour} className={input}>
                     {Array.from({ length: 24 }, (_, h) => (
                       <option key={h} value={h}>{h}:00</option>
@@ -163,7 +163,7 @@ export function AgentForm({
             </>
           )}
           <label className="space-y-1">
-            <span className="text-xs text-zinc-500">Scope</span>
+            <span className="text-xs text-slate-500">Scope</span>
             <select name="scopeType" value={scopeType} onChange={(e) => setScopeType(e.target.value)} className={input}>
               <option value="ALL">Global (no partner binding)</option>
               <option value="PARTNER">Bind to a partner</option>
@@ -171,7 +171,7 @@ export function AgentForm({
           </label>
           {scopeType === "PARTNER" && (
             <label className="space-y-1">
-              <span className="text-xs text-zinc-500">Partner</span>
+              <span className="text-xs text-slate-500">Partner</span>
               <select name="partnerId" defaultValue={agent.partnerId} className={input}>
                 <option value="">Select partner…</option>
                 {partners.map((p) => (
@@ -183,23 +183,23 @@ export function AgentForm({
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-zinc-800">Push & Sharing</h3>
+      <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-800">Push & Sharing</h3>
         <label className="space-y-1 block">
-          <span className="text-xs text-zinc-500">Webhook URL (optional — push run results to Feishu/WeCom/DingTalk/Slack group bots)</span>
+          <span className="text-xs text-slate-500">Webhook URL (optional — push run results to Feishu/WeCom/DingTalk/Slack group bots)</span>
           <input name="webhookUrl" defaultValue={agent.webhookUrl} placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" className={input} />
         </label>
         <label className="flex items-center gap-2">
           <input type="checkbox" name="shared" defaultChecked={agent.shared} className="rounded" />
-          <span className="text-sm text-zinc-700">Share with team (visible and cloneable by other members)</span>
+          <span className="text-sm text-slate-700">Share with team (visible and cloneable by other members)</span>
         </label>
-        <p className="text-xs text-zinc-400">
+        <p className="text-xs text-slate-400">
           Run results always go to the system inbox. Agent changes to partner profiles become proposals and take effect after human approval; timeline writes and todo creation execute directly with audit trail.
         </p>
       </div>
 
       <div className="flex justify-end gap-2">
-        <button className="rounded-lg bg-indigo-600 text-white px-6 py-2.5 text-sm font-medium hover:bg-indigo-700">
+        <button className="rounded-lg bg-slate-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-slate-800">
           {agent.id ? "Save Changes" : "Create Agent"}
         </button>
       </div>
