@@ -720,7 +720,13 @@ export async function runIntakeTurn(opts: {
 /** List/query todos — must use Query mode + list_todos, not propose intake */
 export function isTodoListQueryIntent(text: string): boolean {
   const t = stripIntakeSystemHint(text).trim();
-  if (/^(创建|添加|记|加|新建|录入).{0,4}待办|create todo|add todo|log todo/i.test(t)) return false;
+  if (
+    /建.{0,4}待办|创建待办|加.{0,2}待办|帮.{0,8}待办|添加待办|记.{0,4}待办|create todo|add todo|log todo/i.test(
+      t
+    )
+  ) {
+    return false;
+  }
   if (!/待办|todos?\b/i.test(t)) return false;
   return /看一下|看看|查|查询|列出|列举|显示|展示|有什么|有哪些|多少|所有|全部|当前|现在|我的|哪些|事项|list|show|what|open|view/i.test(
     t
