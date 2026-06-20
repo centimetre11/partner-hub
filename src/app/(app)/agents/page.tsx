@@ -10,14 +10,11 @@ import { getServerI18n } from "@/lib/server-i18n";
 export default async function AgentsPage() {
   const user = await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
-  const [agents, templates] = await Promise.all([
-    db.agent.findMany({
-      where: { isTemplate: false },
-      include: { partner: true, createdBy: true, runs: { orderBy: { startedAt: "desc" }, take: 1 } },
-      orderBy: { createdAt: "desc" },
-    }),
-    db.agent.findMany({ where: { isTemplate: true }, orderBy: { createdAt: "asc" } }),
-  ]);
+  const agents = await db.agent.findMany({
+    where: { isTemplate: false },
+    include: { partner: true, createdBy: true, runs: { orderBy: { startedAt: "desc" }, take: 1 } },
+    orderBy: { createdAt: "desc" },
+  });
 
   const mine = agents.filter((a) => a.createdById === user.id);
   const shared = agents.filter((a) => a.createdById !== user.id && a.shared);
@@ -95,26 +92,6 @@ export default async function AgentsPage() {
       />
       <AiCenterNav />
       <div className="px-8 space-y-7">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-700 mb-3">{m.agents.templateLibrary}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {templates.map((t) => (
-              <div key={t.id} className="bg-slate-50 rounded-lg border border-dashed border-slate-300 p-4 flex items-start gap-3">
-                <span className="text-2xl">{t.icon}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold text-slate-800">{t.name}</div>
-                  <div className="text-xs text-slate-500 mt-0.5 line-clamp-2">{t.description}</div>
-                  <form action={cloneAgentAction.bind(null, t.id)} className="mt-2">
-                    <button className="text-xs rounded-md bg-white border border-slate-200 px-2.5 py-1 text-sky-600 hover:border-slate-300">
-                      {m.agents.createFromTemplate}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         <div>
           <h2 className="text-sm font-semibold text-slate-700 mb-3">{m.agents.myAgentsCount.replace("{count}", String(mine.length))}</h2>
           {mine.length ? (

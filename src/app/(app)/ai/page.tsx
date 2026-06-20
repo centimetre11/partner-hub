@@ -131,16 +131,7 @@ export default async function AiCenterPage() {
             </div>
           </Card>
 
-          <Card
-            title={m.ai.llmStatus}
-            actions={
-              admin ? (
-                <Link href="/settings" className="text-xs text-sky-600 hover:underline">{m.ai.manage}</Link>
-              ) : (
-                <span className="text-xs text-slate-400">{m.ai.superAdminOnly}</span>
-              )
-            }
-          >
+          <Card title={m.ai.llmStatus}>
             <div className="space-y-3">
               {apiConfigs.map((api) => (
                 <div key={api.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
