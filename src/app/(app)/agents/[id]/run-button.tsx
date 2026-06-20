@@ -4,24 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AiStreamState } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
+import { automationSaveErrorMessage } from "@/lib/automation-save-errors";
 import { saveAutomationAction, type PersistAutomationResult } from "@/lib/automation-actions";
 import { useMessages } from "@/lib/i18n";
 
 type SaveAction = (formData: FormData) => Promise<PersistAutomationResult>;
 
 function saveErrorMessage(code: string, automations: ReturnType<typeof useMessages>["automations"]): string {
-  switch (code) {
-    case "description_required":
-      return automations.saveErrorDescription;
-    case "delivery_required":
-      return automations.saveErrorDelivery;
-    case "partner_not_found":
-      return automations.saveErrorPartner;
-    case "slug_exists":
-      return automations.saveErrorSlug;
-    default:
-      return automations.saveErrorGeneric;
-  }
+  return automationSaveErrorMessage(code, automations);
 }
 
 export function RunButton({

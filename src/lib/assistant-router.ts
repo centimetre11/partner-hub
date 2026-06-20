@@ -27,6 +27,11 @@ import { normalizeActionText } from "./intake-action-registry";
 import { resolveAssistantRoute, type ResolvedAssistantRoute } from "./intake-route-resolver";
 import { runPatchAssistant } from "./patch-assistant";
 import { db } from "./db";
+import {
+  modeFromAssistantTurn,
+  recordAiConversation,
+  replyFromAssistantTurn,
+} from "./activity-log";
 
 export type AssistantQueryResult = {
   mode: "query";
@@ -198,6 +203,58 @@ export async function runAssistantTurn(opts: {
   /** Active focus from prior list/query in this chat */
   focus?: FocusEntity | null;
   /** Execute patch after user confirmed (from intent session) */
+  patchTargetId?: string;
+  patchTargetLabel?: string;
+  patchInstruction?: string;
+}): Promise<AssistantTurnResult> {
+  const started = Date.now();
+  const userMessage = lastUserText(opts.messages);
+  const channel = opts.feature.startsWith("WeCom") ? "WECOM" as const : "WEB" as const;
+  try {
+    const result = await runAssistantTurnCore(opts);
+    void recordAiConversation({
+      userId: opts.userId,
+      channel,
+      feature: opts.feature,
+      mode: modeFromAssistantTurn(result),
+      userMessage,
+      assistantReply: replyFromAssistantTurn(result),
+      partnerId: opts.partnerId,
+      durationMs: Date.now() - started,
+      meta: { partnerName: opts.partnerName ?? undefined },
+    });
+    return result;
+  } catch (e) {
+    void recordAiConversation({
+      userId: opts.userId,
+      channel,
+      feature: opts.feature,
+      userMessage,
+      partnerId: opts.partnerId,
+      status: "FAILED",
+      error: e instanceof Error ? e.message : String(e),
+      durationMs: Date.now() - started,
+    });
+    throw e;
+  }
+}
+
+async function runAssistantTurnCore(opts: {
+  messages: IntakeMessage[];
+  userId: string;
+  partnerId?: string;
+  partnerName?: string;
+  locale: Locale | AssistantLocale;
+  feature: string;
+  emit?: TraceEmitter;
+  forcePropose?: boolean;
+  forceAgentBuilder?: boolean;
+  forceAutomationBuilder?: boolean;
+  previousScope?: IntakeScope;
+  agentBuilderContext?: string;
+  confirmedActionId?: string;
+  skipIntentConfirm?: boolean;
+  focus?: FocusEntity | null;
   patchTargetId?: string;
   patchTargetLabel?: string;
   patchInstruction?: string;

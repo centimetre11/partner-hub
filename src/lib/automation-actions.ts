@@ -39,7 +39,10 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
   const pushEmailTo = String(formData.get("pushEmailTo") ?? "").trim() || null;
   const notifyOnSuccess = formData.get("notifyOnSuccess") === "on";
   const notifyOnFailure = formData.get("notifyOnFailure") === "on";
+  const enabledInput = formData.get("enabled");
   const activate = formData.get("activate") === "on";
+  const enabled =
+    enabledInput === "on" || enabledInput === "off" ? enabledInput === "on" : activate;
   const description = String(formData.get("description") ?? "").trim();
   const nameInput = String(formData.get("name") ?? "").trim();
 

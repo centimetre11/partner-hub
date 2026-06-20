@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
-import { createSession, destroySession, requireUser, requireSuperAdmin } from "./session";
+import { createSession, destroySession, getCurrentUser, requireUser, requireSuperAdmin } from "./session";
 import { stageName } from "./constants";
 import { stringifyIndustries } from "./taxonomy";
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
@@ -13,6 +13,7 @@ import { getLocale } from "./i18n/locale-server";
 import { getMessages } from "./i18n/messages";
 import { normalizePartnerTier } from "./tier";
 import { persistBusinessRecord, normalizeBusinessRecordCategory } from "./business-record-core";
+import { recordSystemEvent } from "./activity-log";
 
 // ============ 认证 ============
 
@@ -31,6 +32,13 @@ export async function loginAction(_: unknown, formData: FormData) {
       data: { email, name, passwordHash: await bcrypt.hash(password, 10), role: "ADMIN" },
     });
     await createSession(user.id);
+    void recordSystemEvent({
+      category: "AUTH",
+      action: "auth.bootstrap_admin",
+      actorId: user.id,
+      actorLabel: user.name,
+      summary: `首个管理员账号已创建：${user.email}`,
+    });
     redirect("/");
   }
 
@@ -39,11 +47,19 @@ export async function loginAction(_: unknown, formData: FormData) {
     return { error: err.invalidCredentials };
   }
   await createSession(user.id);
+  void recordSystemEvent({
+    category: "AUTH",
+    action: "auth.login",
+    actorId: user.id,
+    actorLabel: user.name,
+    summary: `${user.name} 登录`,
+    meta: { email: user.email },
+  });
   redirect("/");
 }
 
 export async function registerAction(_: unknown, formData: FormData) {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
   const password = String(formData.get("password") ?? "");
@@ -52,12 +68,21 @@ export async function registerAction(_: unknown, formData: FormData) {
   const exists = await db.user.findUnique({ where: { email } });
   if (exists) return { error: "This email is already registered" };
   await db.user.create({ data: { email, name, passwordHash: await bcrypt.hash(password, 10), role } });
+  void recordSystemEvent({
+    category: "USER",
+    action: "user.register",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetLabel: name,
+    summary: `新成员已注册：${name}（${email}）`,
+    meta: { email, role },
+  });
   revalidatePath("/settings");
   return { ok: true };
 }
 
 export async function updateUserAction(userId: string, formData: FormData) {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const role = normalizeUserRole(String(formData.get("role") ?? ""));
@@ -70,12 +95,33 @@ export async function updateUserAction(userId: string, formData: FormData) {
   const data: { name: string; email: string; role: string; passwordHash?: string } = { name, email, role };
   if (password.length >= 6) data.passwordHash = await bcrypt.hash(password, 10);
   await db.user.update({ where: { id: userId }, data });
+  void recordSystemEvent({
+    category: "USER",
+    action: "user.update",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetType: "User",
+    targetId: userId,
+    targetLabel: name,
+    summary: `成员资料已更新：${name}`,
+    meta: { email, role, passwordChanged: password.length >= 6 },
+  });
   revalidatePath("/settings");
   revalidatePath("/partners");
   return { ok: true };
 }
 
 export async function logoutAction() {
+  const user = await getCurrentUser();
+  if (user) {
+    void recordSystemEvent({
+      category: "AUTH",
+      action: "auth.logout",
+      actorId: user.id,
+      actorLabel: user.name,
+      summary: `${user.name} 退出登录`,
+    });
+  }
   await destroySession();
   redirect("/login");
 }
@@ -168,6 +214,17 @@ export async function createPartnerAction(formData: FormData) {
       data: { partnerId: partner.id, type: "SYSTEM", title: "Manually added prospect" },
     });
   }
+  void recordSystemEvent({
+    category: "PARTNER",
+    action: "partner.create",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Partner",
+    targetId: partner.id,
+    targetLabel: partner.name,
+    summary: asActive ? `新建正式伙伴：${partner.name}` : `新建候选伙伴：${partner.name}`,
+    meta: { status: partner.status },
+  });
   revalidatePath("/pool");
   revalidatePath("/partners");
   redirect(`/partners/${partner.id}`);

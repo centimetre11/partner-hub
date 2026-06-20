@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "./db";
+import { recordSystemEvent } from "./activity-log";
 import { chatJson } from "./ai";
 import { PARTNER_FIELD_LABELS } from "./constants";
 import { normalizeIndustriesInput } from "./taxonomy";
@@ -373,6 +374,18 @@ export async function applyProposal(opts: {
         sourceText: opts.sourceText?.slice(0, 8000),
       }),
     },
+  });
+
+  void recordSystemEvent({
+    category: "AI",
+    action: "proposal.apply",
+    actorId: userId,
+    targetType: "Partner",
+    targetId: partnerId,
+    targetLabel: partner.name,
+    summary: locale === "zh" ? `AI 提案已确认并写入` : `AI proposal applied`,
+    detail: applied.join(locale === "zh" ? "；" : "; "),
+    meta: { eventType: opts.eventType, applied },
   });
 
   return { applied, eventId: event.id };

@@ -56,7 +56,8 @@ export async function DashboardWorkbenchTodos({
       <CreateTodoDrawer userId={userId} partners={partners} users={users} />
       <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
       <Link
-        href="/?todos=mine#workbench"
+        href="/?todos=mine"
+        scroll={false}
         className={`rounded-md px-2.5 py-1 ${
           !isAll ? "bg-white text-slate-900 shadow-sm font-medium" : "text-slate-500 hover:text-slate-800"
         }`}
@@ -64,7 +65,8 @@ export async function DashboardWorkbenchTodos({
         {m.common.mine}
       </Link>
       <Link
-        href="/?todos=all#workbench"
+        href="/?todos=all"
+        scroll={false}
         className={`rounded-md px-2.5 py-1 ${
           isAll ? "bg-white text-slate-900 shadow-sm font-medium" : "text-slate-500 hover:text-slate-800"
         }`}

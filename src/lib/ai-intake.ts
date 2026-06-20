@@ -10,6 +10,7 @@ import { stripIntakeSystemHint } from "./intake-text";
 import { PROPOSE_INTENT_RE } from "./propose-intent";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
+import { recordAiConversation, recordSystemEvent } from "./activity-log";
 import { chatCompletion, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import type { AiTaskTier } from "./ai-capabilities";
 import { maxTokensForTaskTier } from "./ai-capabilities";
@@ -562,6 +563,55 @@ export async function runIntakeTurn(opts: {
   userId?: string;
   emit?: TraceEmitter;
   locale: Locale;
+  /** 由 runProposeTurn / runAssistantTurn 调用时跳过，避免重复记录 */
+  skipConversationLog?: boolean;
+}): Promise<IntakeTurn> {
+  const started = Date.now();
+  const userMessage =
+    [...opts.messages].reverse().find((m) => m.role === "user")?.content?.trim() || "（空消息）";
+  const feature = `AI intake: ${opts.scope}`;
+  try {
+    const turn = await runIntakeTurnCore(opts);
+    if (!opts.skipConversationLog) {
+      void recordAiConversation({
+        userId: opts.userId,
+        channel: "WEB",
+        feature,
+        mode: "intake",
+        userMessage,
+        assistantReply: turn.reply,
+        partnerId: opts.partnerId,
+        durationMs: Date.now() - started,
+        meta: { scope: opts.scope, ready: turn.ready },
+      });
+    }
+    return turn;
+  } catch (e) {
+    if (!opts.skipConversationLog) {
+      void recordAiConversation({
+        userId: opts.userId,
+        channel: "WEB",
+        feature,
+        mode: "intake",
+        userMessage,
+        partnerId: opts.partnerId,
+        status: "FAILED",
+        error: e instanceof Error ? e.message : String(e),
+        durationMs: Date.now() - started,
+      });
+    }
+    throw e;
+  }
+}
+
+async function runIntakeTurnCore(opts: {
+  scope: IntakeScope;
+  partnerId?: string;
+  messages: IntakeMessage[];
+  today: string;
+  userId?: string;
+  emit?: TraceEmitter;
+  locale: Locale;
 }): Promise<IntakeTurn> {
   const locale = opts.locale;
   const fast = isFastIntakeScope(opts.scope);
@@ -838,6 +888,7 @@ export async function runProposeTurn(opts: {
     userId: opts.userId,
     emit: opts.emit,
     locale: opts.locale,
+    skipConversationLog: true,
   });
   return { ...turn, scope, mode: "propose" };
 }
@@ -1169,6 +1220,17 @@ export async function applyIntake(opts: {
       },
     });
   }
+
+  void recordSystemEvent({
+    category: "AI",
+    action: "intake.apply",
+    actorId: userId,
+    targetType: partnerId ? "Partner" : undefined,
+    targetId: partnerId || undefined,
+    summary: locale === "zh" ? `AI 录入已确认（${scope}）` : `AI intake applied (${scope})`,
+    detail: applied.join(locale === "zh" ? "；" : "; "),
+    meta: { scope, applied },
+  });
 
   return { applied, partnerId };
 }

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
-import { upsertAutomationAction } from "@/lib/automation-actions";
+import { automationSaveErrorMessage } from "@/lib/automation-save-errors";
+import { saveAutomationAction, type PersistAutomationResult } from "@/lib/automation-actions";
 import { getToolLabel } from "@/lib/tool-labels";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 
@@ -41,6 +43,8 @@ export function AutomationForm({
   const locale = useLocale();
   const a = m.automations;
   const bc = m.builderCommon;
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
 
   const [slug, setSlug] = useState(initial.slug);
   const [name, setName] = useState(initial.name);
@@ -52,6 +56,8 @@ export function AutomationForm({
   const [pushEmailTo, setPushEmailTo] = useState(initial.pushEmailTo);
   const [wecomChats, setWecomChats] = useState<WecomOption[]>([]);
   const [emails, setEmails] = useState<EmailOption[]>([]);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState(false);
 
   useEffect(() => {
     void fetch("/api/builder-options")
@@ -60,10 +66,10 @@ export function AutomationForm({
         setWecomChats(data.wecomChats ?? []);
         setEmails(data.emails ?? []);
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cronDesc = useMemo(() => describeCron(cronExpr, locale === "zh" ? "zh" : "en"), [cronExpr, locale]);
+  const deliveryMissing = !wecomPushChatId.trim() && !pushEmailTo.trim();
 
   const inputCls =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400";
@@ -74,10 +80,34 @@ export function AutomationForm({
     return parts.length ? parts.join(" · ") : c.chatId.slice(0, 16);
   }
 
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaveError(null);
+    setSaveOk(false);
+    const form = e.currentTarget;
+    if (!form.reportValidity()) return;
+
+    const fd = new FormData(form);
+    startTransition(async () => {
+      const result = await saveAutomationAction(fd);
+      if (!result.ok) {
+        setSaveError(automationSaveErrorMessage(result.error, a));
+        return;
+      }
+      setSaveOk(true);
+      if (!initial.id) {
+        router.push(`/automations/${result.agentId}`);
+        return;
+      }
+      router.refresh();
+      window.setTimeout(() => setSaveOk(false), 4000);
+    });
+  }
+
   return (
-    <form id="automation-edit-form" action={upsertAutomationAction} className="min-h-[calc(100vh-8rem)] flex flex-col">
+    <form id="automation-edit-form" onSubmit={handleSubmit} className="min-h-[calc(100vh-8rem)] flex flex-col">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
-      <input type="hidden" name="activate" value="on" />
+      <input type="hidden" name="enabled" value={initial.enabled ? "on" : "off"} />
       <input type="hidden" name="notifyOnFailure" value="on" />
 
       <div className="flex items-center justify-between gap-4 px-8 py-4 border-b border-slate-200/80 bg-white sticky top-0 z-10">
@@ -92,13 +122,29 @@ export function AutomationForm({
             <p className="text-xs text-slate-400 truncate">{a.monitorFormDesc}</p>
           </div>
         </div>
-        <button
-          type="submit"
-          title={a.saveHint}
-          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 shrink-0"
-        >
-          {initial.id ? a.saveAndActivate : a.createAndActivate}
-        </button>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-center gap-2">
+            {saveOk && (
+              <span className="text-xs text-emerald-600 font-medium">{a.saveSuccess}</span>
+            )}
+            {saveError && (
+              <span className="text-xs text-red-600 max-w-[220px] text-right leading-snug" title={saveError}>
+                {saveError}
+              </span>
+            )}
+            <button
+              type="submit"
+              disabled={pending}
+              title={a.saveHint}
+              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
+            >
+              {pending ? a.saving : initial.id ? a.saveAndActivate : a.createAndActivate}
+            </button>
+          </div>
+          {initial.id && (
+            <p className="text-[11px] text-slate-400">{a.saveOptionalRunHint}</p>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 max-w-2xl px-8 py-6 space-y-6">
@@ -179,6 +225,9 @@ export function AutomationForm({
 
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.pushResults}</h2>
+          {deliveryMissing && (
+            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{a.saveErrorDelivery}</p>
+          )}
           {runtimeTools && runtimeTools.length > 0 && (
             <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-3">
               <div className="text-xs font-semibold text-slate-700 mb-1.5">{a.runtimeTools}</div>
@@ -221,19 +270,22 @@ export function AutomationForm({
           </div>
           <div>
             <label className={labelCls}>{bc.emailLabel}</label>
-            <select
+            <input
               name="pushEmailTo"
+              list="automation-email-options"
               className={inputCls}
               value={pushEmailTo}
               onChange={(e) => setPushEmailTo(e.target.value)}
-            >
-              <option value="">{bc.emailNone}</option>
+              placeholder={a.emailInputPlaceholder}
+            />
+            <datalist id="automation-email-options">
               {emails.map((u) => (
                 <option key={u.id} value={u.email}>
                   {u.name ? `${u.name} · ${u.email}` : u.email}
                 </option>
               ))}
-            </select>
+            </datalist>
+            <p className="text-xs text-slate-400 mt-1">{a.emailInputHint}</p>
           </div>
         </section>
 

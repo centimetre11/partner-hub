@@ -5,6 +5,7 @@ import { db } from "./db";
 import { requireSuperAdmin } from "./session";
 import { parseVolcengineSnippet, normalizeApiKeyInput } from "./volcengine-config";
 import { parseCapabilitiesFromForm, serializeAiCapabilities } from "./ai-capabilities";
+import { recordSystemEvent } from "./activity-log";
 
 function resolveVolcengineApiKey(opts: {
   formKey?: string;
@@ -61,7 +62,7 @@ async function ensureDefaultApi() {
 }
 
 export async function upsertAiApiAction(_: AiApiActionState, formData: FormData): Promise<AiApiActionState> {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
   const id = cleanText(formData.get("id"));
   const name = cleanText(formData.get("name"));
   const baseUrl = cleanText(formData.get("baseUrl")).replace(/\/+$/, "");
@@ -92,6 +93,16 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
     });
     if (isDefault) await makeOnlyDefault(id);
     else await ensureDefaultApi();
+    void recordSystemEvent({
+      category: "SETTINGS",
+      action: "ai.api.update",
+      actorId: admin.id,
+      actorLabel: admin.name,
+      targetType: "AiApiConfig",
+      targetId: id,
+      targetLabel: name,
+      summary: `AI API 已更新：${name}`,
+    });
     revalidatePath("/settings");
     return { ok: true, message: "API configuration updated" };
   }
@@ -112,32 +123,75 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
   });
   if (created.isDefault) await makeOnlyDefault(created.id);
   else await ensureDefaultApi();
+  void recordSystemEvent({
+    category: "SETTINGS",
+    action: "ai.api.create",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetType: "AiApiConfig",
+    targetId: created.id,
+    targetLabel: name,
+    summary: `AI API 已添加：${name}`,
+  });
   revalidatePath("/settings");
   return { ok: true, message: "API configuration added" };
 }
 
 export async function setDefaultAiApiAction(id: string) {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
+  const api = await db.aiApiConfig.findUnique({ where: { id } });
   await makeOnlyDefault(id);
+  void recordSystemEvent({
+    category: "SETTINGS",
+    action: "ai.api.set_default",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetType: "AiApiConfig",
+    targetId: id,
+    targetLabel: api?.name,
+    summary: `默认 AI API 已切换：${api?.name ?? id}`,
+  });
   revalidatePath("/settings");
 }
 
 export async function toggleAiApiAction(id: string, enabled: boolean) {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
+  const api = await db.aiApiConfig.findUnique({ where: { id } });
   await db.aiApiConfig.update({ where: { id }, data: { enabled } });
   await ensureDefaultApi();
+  void recordSystemEvent({
+    category: "SETTINGS",
+    action: enabled ? "ai.api.enable" : "ai.api.disable",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetType: "AiApiConfig",
+    targetId: id,
+    targetLabel: api?.name,
+    summary: enabled ? `AI API 已启用：${api?.name}` : `AI API 已停用：${api?.name}`,
+  });
   revalidatePath("/settings");
 }
 
 export async function deleteAiApiAction(id: string) {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
+  const api = await db.aiApiConfig.findUnique({ where: { id } });
   await db.aiApiConfig.delete({ where: { id } });
   await ensureDefaultApi();
+  void recordSystemEvent({
+    category: "SETTINGS",
+    action: "ai.api.delete",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetType: "AiApiConfig",
+    targetId: id,
+    targetLabel: api?.name,
+    summary: `AI API 已删除：${api?.name ?? id}`,
+  });
   revalidatePath("/settings");
 }
 
 export async function upsertVolcengineApiAction(_: AiApiActionState, formData: FormData): Promise<AiApiActionState> {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
   const id = cleanText(formData.get("id"));
   const name = cleanText(formData.get("name")) || "火山方舟 Doubao";
   const manualKey = normalizeApiKeyInput(cleanText(formData.get("apiKey")));

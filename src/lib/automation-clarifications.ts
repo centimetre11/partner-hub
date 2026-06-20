@@ -23,7 +23,7 @@ export function mentionsWecomPush(text: string): boolean {
 }
 
 export function mentionsEmailPush(text: string): boolean {
-  return /发到.*邮箱|推到.*邮箱|发送?到.*邮箱|发到我的邮箱|我的邮箱|用邮箱|通过邮件|邮件推送|发邮件|邮件给我|email me|send email|push.*email|to my (email|mailbox)|via email/i.test(
+  return /发(邮件|邮箱)|推到.*邮箱|发到.*邮箱|发送?到.*邮箱|发到我的邮箱|我的邮箱|用邮箱|通过邮件|邮件推送|邮件给我|邮箱给我|发邮箱|推邮箱|email me|send email|push.*email|to my (email|mailbox)|via email|by email/i.test(
     text
   );
 }
@@ -36,7 +36,7 @@ export function mentionsAllPartnersScope(text: string): boolean {
 }
 
 export function mentionsMyEmail(text: string): boolean {
-  return /我的邮箱|my email|my mailbox|发给我/i.test(text);
+  return /我的邮箱|my email|my mailbox|(发|推|送到|发送?).{0,12}给我|to me\b/i.test(text);
 }
 
 /** 从用户原文推断推送邮箱（「我的邮箱」→ 当前登录用户） */
@@ -99,6 +99,12 @@ function isWecomTopicClarification(c: AutomationBuilderClarification): boolean {
   return /企微|wecom|微信群|群/i.test(clarificationBlob(c));
 }
 
+function isDeliveryTopicClarification(c: AutomationBuilderClarification): boolean {
+  if (c.id === "delivery-pick") return true;
+  if (isBuiltinClarificationId(c.id)) return false;
+  return /推送到哪里|结果推送|where should.*deliver|delivery channel|推送.*哪里/i.test(clarificationBlob(c));
+}
+
 function stripTopicClarifications(
   clarifications: AutomationBuilderClarification[],
   match: (c: AutomationBuilderClarification) => boolean
@@ -119,6 +125,11 @@ function stripRedundantDeliveryClarifications(
   if (!wantsEmail && !wantsWecom) return clarifications;
 
   return clarifications.filter((c) => {
+    if (c.id === "delivery-pick") {
+      if (wantsEmail && !wantsWecom) return false;
+      if (wantsWecom && !wantsEmail) return false;
+      if (hasEmail || hasWecom) return false;
+    }
     if (isBuiltinClarificationId(c.id)) return true;
     const blob = `${c.question} ${c.options.join(" ")}`;
     if (wantsEmail && /推送|delivery|渠道|是否|要不要|需不需要|用.*邮件|use.*email|send.*email/i.test(blob)) {
@@ -144,6 +155,21 @@ function emailOptionLabel(e: EmailOption): string {
   return e.name ? `${e.name} · ${e.email}` : e.email;
 }
 
+/** 解析下拉/多选/手输的邮箱答案 → 逗号分隔地址 */
+export function resolveEmailPickValue(value: string, emails: EmailOption[]): string {
+  const parts = value
+    .split(/[,，;；\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const resolved: string[] = [];
+  for (const part of parts) {
+    const matched = emails.find((x) => part === emailOptionLabel(x) || part.includes(x.email));
+    if (matched) resolved.push(matched.email);
+    else if (part.includes("@")) resolved.push(part);
+  }
+  return [...new Set(resolved)].join(", ");
+}
+
 export function followUpClarificationsAfterDeliveryPick(
   deliveryAnswer: string,
   draft: AutomationBuilderDraft,
@@ -167,9 +193,10 @@ export function followUpClarificationsAfterDeliveryPick(
   if (wantsEmail && !draft.pushEmailTo.trim() && opts.emails.length > 0) {
     out.push({
       id: "email-pick",
-      question: locale === "zh" ? "发送到哪个邮箱？" : "Which email should receive pushes?",
+      question: locale === "zh" ? "发送到哪些邮箱？（可多选）" : "Which email(s) should receive pushes?",
       options: opts.emails.map((e) => emailOptionLabel(e)),
       control: "select",
+      multi: true,
       allowOther: true,
       placeholder: locale === "zh" ? "选择邮箱…" : "Select email…",
       tier: "required",
@@ -198,9 +225,8 @@ export function applyClarificationAnswersToDraft(
       if (chat) next = { ...next, wecomPushChatId: chat.chatId };
     }
     if (ans.id === "email-pick") {
-      const e = opts.emails.find((x) => ans.value.includes(x.email));
-      if (e) next = { ...next, pushEmailTo: e.email };
-      else if (ans.value.includes("@")) next = { ...next, pushEmailTo: ans.value.trim() };
+      const resolved = resolveEmailPickValue(ans.value, opts.emails);
+      if (resolved) next = { ...next, pushEmailTo: resolved };
     }
   }
   return next;
@@ -273,6 +299,13 @@ export function enrichAutomationClarifications(opts: {
 
   const userWantsWecom = mentionsWecomPush(userText);
   const userWantsEmail = mentionsEmailPush(userText);
+
+  if (userWantsEmail && !userWantsWecom) {
+    out = stripTopicClarifications(out, isDeliveryTopicClarification);
+  } else if (userWantsWecom && !userWantsEmail) {
+    out = stripTopicClarifications(out, isDeliveryTopicClarification);
+  }
+
   const aiAskedWecom = out.some(isWecomTopicClarification);
   const aiAskedEmail = out.some(isEmailTopicClarification);
 
@@ -299,17 +332,23 @@ export function enrichAutomationClarifications(opts: {
       id: "email-pick",
       question:
         opts.locale === "zh"
-          ? "请选择收件邮箱，或手动输入："
-          : "Pick recipient email or type manually:",
+          ? "请选择收件邮箱（可多选），或手动输入："
+          : "Pick recipient email(s) or type manually:",
       options: opts.emails.map((e) => emailOptionLabel(e)),
       control: "select",
+      multi: true,
       allowOther: true,
       placeholder: opts.locale === "zh" ? "选择邮箱…" : "Select email…",
       tier: "required",
     });
   }
 
-  const needDelivery = !hasDelivery && !hasClarificationAbout(out, /推送|delivery|渠道/i);
+  const needDelivery =
+    !hasDelivery &&
+    !userWantsEmail &&
+    !userWantsWecom &&
+    !out.some((c) => c.id === "email-pick" || c.id === "wecom-pick") &&
+    !hasClarificationAbout(out, /推送|delivery|渠道/i);
   if (needDelivery) {
     out.unshift({
       id: "delivery-pick",
@@ -336,6 +375,7 @@ function normalizeAutomationClarifications(items: AutomationBuilderClarification
         ...raw,
         tier: raw.tier ?? "required",
         allowOther: raw.allowOther !== false,
+        multi: raw.multi ?? raw.id === "email-pick",
       });
       continue;
     }

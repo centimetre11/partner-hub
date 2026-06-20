@@ -5,10 +5,27 @@ import { db } from "./db";
 import { requireSuperAdmin, requireUser } from "./session";
 import { syncCrmData } from "./crm-sync";
 import { getCrmRecorderNames, getCrmExtraRecordersFromSettings, saveCrmExtraRecorders } from "./crm-recorders";
+import { recordSystemEvent } from "./activity-log";
 
 export async function triggerCrmSyncAction() {
-  await requireSuperAdmin();
+  const admin = await requireSuperAdmin();
   const result = await syncCrmData();
+  void recordSystemEvent({
+    category: "CRM",
+    action: "crm.sync",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    summary: result.ok
+      ? `CRM 同步完成：${result.customerCount} 客户、${result.contactCount} 联系人`
+      : "CRM 同步失败",
+    status: result.ok ? "SUCCESS" : "FAILED",
+    detail: result.error ?? undefined,
+    meta: {
+      customerCount: result.customerCount,
+      contactCount: result.contactCount,
+      durationMs: result.durationMs,
+    },
+  });
   revalidatePath("/settings");
   revalidatePath("/account");
   if (!result.ok) return { error: result.error ?? "CRM sync failed" };

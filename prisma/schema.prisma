@@ -29,6 +29,8 @@ model User {
   taxonomyOptions   TaxonomyOption[]
   skills       Skill[]
   aiTokenUsages AiTokenUsage[]
+  aiConversationLogs AiConversationLog[]
+  systemEventLogs SystemEventLog[] @relation("SystemEventActor")
   kmsCredential UserKmsCredential?
   businessRecords BusinessRecord[]
   feedbackSubmissions FeedbackSubmission[]
@@ -106,6 +108,7 @@ model Partner {
   monitorItems  MonitorItem[]
   wecomChat     WecomChat?
   businessRecords BusinessRecord[]
+  aiConversationLogs AiConversationLog[]
 }
 
 // 商务记录：伙伴关键进展（双写活动线 MILESTONE）
@@ -715,6 +718,53 @@ model CrmContact {
   syncedAt   DateTime    @updatedAt
 
   @@index([customerId])
+}
+
+// AI 对话记录（问题、回复、操作者、渠道等）
+model AiConversationLog {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  channel        String   @default("WEB") // WEB | WECOM
+  feature        String
+  mode           String?
+  userMessage    String
+  assistantReply String?
+  partnerId      String?
+  partner        Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  status         String   @default("SUCCESS") // SUCCESS | FAILED
+  error          String?
+  durationMs     Int?
+  meta           String?
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([channel, createdAt])
+  @@index([feature, createdAt])
+}
+
+// 系统事件埋点（登录、建档、同步、配置变更等）
+model SystemEventLog {
+  id          String   @id @default(cuid())
+  category    String
+  action      String
+  actorId     String?
+  actor       User?    @relation("SystemEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorLabel  String?
+  targetType  String?
+  targetId    String?
+  targetLabel String?
+  summary     String?
+  detail      String?
+  meta        String?
+  status      String   @default("SUCCESS")
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([category, createdAt])
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
 }
 
 // CRM 数据同步日志

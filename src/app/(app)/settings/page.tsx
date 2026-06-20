@@ -22,6 +22,8 @@ import { getEmailConfigForClient } from "@/lib/email-config";
 import { EmailSetup } from "./email-setup";
 import { getServerI18n } from "@/lib/server-i18n";
 import { SettingsShell, SettingsSection } from "./settings-shell";
+import { ActivityLogsCard } from "./activity-logs-card";
+import { getActivityLogStats } from "@/lib/activity-log";
 
 function maskKey(apiKey: string, notSet: string) {
   if (!apiKey) return notSet;
@@ -40,7 +42,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems, activityStats, aiConversationLogs, systemEventLogs] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -66,6 +68,22 @@ export default async function SettingsPage() {
       include: {
         createdBy: { select: { name: true, email: true } },
         assets: { include: { asset: { select: { id: true, filename: true, mimeType: true, kind: true } } } },
+      },
+    }),
+    getActivityLogStats(),
+    db.aiConversationLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 80,
+      include: {
+        user: { select: { name: true, email: true } },
+        partner: { select: { name: true } },
+      },
+    }),
+    db.systemEventLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 80,
+      include: {
+        actor: { select: { name: true } },
       },
     }),
   ]);
@@ -124,6 +142,7 @@ export default async function SettingsPage() {
   const nav = [
     { id: "team", label: m.settings.sectionTeam },
     { id: "ai", label: m.settings.sectionAi },
+    { id: "logs", label: m.activityLogs.sectionTitle },
     { id: "knowledge", label: m.settings.sectionKnowledge },
     { id: "integrations", label: m.settings.sectionIntegrations },
   ];
@@ -244,6 +263,42 @@ export default async function SettingsPage() {
             ) : (
               <EmptyState text={m.settings.noCallHistory} />
             )}
+          </Card>
+        </SettingsSection>
+
+        <SettingsSection id="logs" title={m.activityLogs.sectionTitle} desc={m.activityLogs.sectionDesc}>
+          <Card title={m.activityLogs.title} className="lg:col-span-2">
+            <ActivityLogsCard
+              aiLogs={aiConversationLogs.map((row) => ({
+                id: row.id,
+                channel: row.channel,
+                feature: row.feature,
+                mode: row.mode,
+                userMessage: row.userMessage,
+                assistantReply: row.assistantReply,
+                status: row.status,
+                error: row.error,
+                durationMs: row.durationMs,
+                createdAt: row.createdAt.toISOString(),
+                user: row.user,
+                partner: row.partner,
+              }))}
+              systemLogs={systemEventLogs.map((row) => ({
+                id: row.id,
+                category: row.category,
+                action: row.action,
+                actorLabel: row.actorLabel,
+                targetType: row.targetType,
+                targetLabel: row.targetLabel,
+                summary: row.summary,
+                detail: row.detail,
+                status: row.status,
+                createdAt: row.createdAt.toISOString(),
+                actor: row.actor,
+              }))}
+              stats={activityStats}
+              bcp47={bcp47}
+            />
           </Card>
         </SettingsSection>
 

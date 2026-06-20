@@ -256,7 +256,9 @@ export function AiClarificationCard({
                 )}
                 {showManual && (
                   <div className="space-y-1.5 pt-1">
-                    <div className="text-[11px] text-slate-500">{cf.manualInputHint}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {/email|邮箱/i.test(`${c.id} ${c.question}`) ? cf.manualInputEmailHint : cf.manualInputHint}
+                    </div>
                     <input
                       type={/email|邮箱/i.test(`${c.id} ${c.question}`) ? "email" : "text"}
                       disabled={disabled}
