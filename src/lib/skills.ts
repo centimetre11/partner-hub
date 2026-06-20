@@ -57,6 +57,20 @@ async function findPartnerByName(name: string) {
   );
 }
 
+async function findUserByName(name: string) {
+  const q = String(name).trim();
+  if (!q) return null;
+  const users = await db.user.findMany({ take: 50 });
+  const lower = q.toLowerCase();
+  return (
+    users.find((u) => u.name?.toLowerCase() === lower) ??
+    users.find((u) => u.name?.toLowerCase().includes(lower)) ??
+    users.find((u) => u.email?.toLowerCase().includes(lower)) ??
+    users.find((u) => u.crmSalesmanName?.toLowerCase().includes(lower)) ??
+    null
+  );
+}
+
 // ---- Search partners ----
 const searchPartners: Skill = {
   name: "search_partners",
@@ -278,10 +292,219 @@ const listTodos: Skill = {
       ? todos
           .map(
             (t) =>
-              `[${t.priority}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
+              `[id:${t.id}] [${t.priority}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
           )
           .join("\n")
       : "No open todos";
+  },
+};
+
+// ---- Update todo ----
+const updateTodo: Skill = {
+  name: "update_todo",
+  label: "Update todo",
+  desc: "Update an existing todo (assignee, due date, title, priority, detail)",
+  def: {
+    type: "function",
+    function: {
+      name: "update_todo",
+      description: "Update fields on an existing todo item by todoId.",
+      parameters: {
+        type: "object",
+        properties: {
+          todoId: { type: "string", description: "Todo item id" },
+          title: { type: "string" },
+          detail: { type: "string" },
+          assigneeName: { type: "string", description: "Assignee name (fuzzy match)" },
+          dueDate: { type: "string", description: "Due date YYYY-MM-DD or empty to clear" },
+          priority: { type: "string", enum: ["HIGH", "MEDIUM", "LOW"] },
+          status: { type: "string", enum: ["OPEN", "DONE", "CANCELLED"] },
+        },
+        required: ["todoId"],
+      },
+    },
+  },
+  run: async (args, ctx) => {
+    const todoId = String(args.todoId ?? "");
+    const existing = await db.todoItem.findUnique({
+      where: { id: todoId },
+      include: { assignee: true, partner: true },
+    });
+    if (!existing) return `Todo not found: ${todoId}`;
+
+    const data: Record<string, unknown> = {};
+    const changes: string[] = [];
+    if (args.title != null) {
+      data.title = String(args.title);
+      changes.push(`title → ${data.title}`);
+    }
+    if (args.detail != null) {
+      data.detail = String(args.detail) || null;
+      changes.push(`detail updated`);
+    }
+    if (args.priority != null && ["HIGH", "MEDIUM", "LOW"].includes(String(args.priority))) {
+      data.priority = String(args.priority);
+      changes.push(`priority → ${data.priority}`);
+    }
+    if (args.status != null && ["OPEN", "DONE", "CANCELLED"].includes(String(args.status))) {
+      data.status = String(args.status);
+      if (data.status === "DONE") data.doneAt = new Date();
+      changes.push(`status → ${data.status}`);
+    }
+    if (args.dueDate !== undefined) {
+      const d = String(args.dueDate ?? "").trim();
+      data.dueDate = d ? new Date(d) : null;
+      changes.push(`due → ${d || "(cleared)"}`);
+    }
+    if (args.assigneeName != null) {
+      const u = await findUserByName(String(args.assigneeName));
+      if (!u) return `No user found matching assignee "${args.assigneeName}"`;
+      data.assigneeId = u.id;
+      changes.push(`assignee → ${u.name ?? u.email}`);
+    }
+    if (!changes.length) return "No fields to update";
+
+    await db.todoItem.update({ where: { id: todoId }, data });
+    const msg = `Updated todo「${existing.title}」: ${changes.join("; ")}`;
+    ctx.actions.push(msg);
+    return msg;
+  },
+};
+
+// ---- List opportunities ----
+const listOpportunities: Skill = {
+  name: "list_opportunities",
+  label: "List opportunities",
+  desc: "List sales opportunities for a partner",
+  def: {
+    type: "function",
+    function: {
+      name: "list_opportunities",
+      description: "List opportunities, optionally filtered by partner name.",
+      parameters: {
+        type: "object",
+        properties: {
+          partnerName: { type: "string", description: "Filter by partner company name" },
+          status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
+        },
+      },
+    },
+  },
+  run: async (args) => {
+    let partnerId: string | undefined;
+    if (args.partnerName) {
+      const p = await findPartnerByName(String(args.partnerName));
+      if (!p) return `No partner found matching "${args.partnerName}"`;
+      partnerId = p.id;
+    }
+    const rows = await db.opportunity.findMany({
+      where: {
+        ...(partnerId ? { partnerId } : {}),
+        ...(args.status ? { status: String(args.status) } : {}),
+      },
+      include: { partner: true },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+    });
+    return rows.length
+      ? rows
+          .map(
+            (o) =>
+              `[id:${o.id}] ${o.name} | Partner:${o.partner.name} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status}`
+          )
+          .join("\n")
+      : "No opportunities found";
+  },
+};
+
+// ---- Update opportunity ----
+const updateOpportunity: Skill = {
+  name: "update_opportunity",
+  label: "Update opportunity",
+  desc: "Update an existing opportunity",
+  def: {
+    type: "function",
+    function: {
+      name: "update_opportunity",
+      description: "Update fields on an existing opportunity by opportunityId.",
+      parameters: {
+        type: "object",
+        properties: {
+          opportunityId: { type: "string" },
+          name: { type: "string" },
+          client: { type: "string" },
+          amount: { type: "string" },
+          stage: { type: "string" },
+          nextStep: { type: "string" },
+          status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
+          notes: { type: "string" },
+        },
+        required: ["opportunityId"],
+      },
+    },
+  },
+  run: async (args, ctx) => {
+    const id = String(args.opportunityId ?? "");
+    const existing = await db.opportunity.findUnique({ where: { id }, include: { partner: true } });
+    if (!existing) return `Opportunity not found: ${id}`;
+
+    const data: Record<string, unknown> = {};
+    const changes: string[] = [];
+    for (const key of ["name", "client", "amount", "stage", "nextStep", "status", "notes"] as const) {
+      if (args[key] != null) {
+        data[key] = String(args[key]);
+        changes.push(`${key} → ${data[key]}`);
+      }
+    }
+    if (!changes.length) return "No fields to update";
+
+    await db.opportunity.update({ where: { id }, data });
+    const msg = `Updated opportunity「${existing.name}」: ${changes.join("; ")}`;
+    ctx.actions.push(msg);
+    return msg;
+  },
+};
+
+// ---- List business records ----
+const listBusinessRecords: Skill = {
+  name: "list_business_records",
+  label: "List business records",
+  desc: "List recent business records for a partner",
+  def: {
+    type: "function",
+    function: {
+      name: "list_business_records",
+      description: "List business records (visits, meetings, follow-ups).",
+      parameters: {
+        type: "object",
+        properties: {
+          partnerName: { type: "string" },
+          limit: { type: "number" },
+        },
+      },
+    },
+  },
+  run: async (args) => {
+    let partnerId: string | undefined;
+    if (args.partnerName) {
+      const p = await findPartnerByName(String(args.partnerName));
+      if (!p) return `No partner found matching "${args.partnerName}"`;
+      partnerId = p.id;
+    }
+    const rows = await db.businessRecord.findMany({
+      where: partnerId ? { partnerId } : {},
+      include: { partner: true },
+      orderBy: { occurredAt: "desc" },
+      take: Math.min(Number(args.limit) || 20, 50),
+    });
+    return rows.length
+      ? rows
+          .map(
+            (r) =>
+              `[id:${r.id}] ${r.title} | Partner:${r.partner.name} | ${r.category} | ${r.occurredAt.toISOString().slice(0, 10)}`
+          )
+          .join("\n")
+      : "No business records found";
   },
 };
 
@@ -754,7 +977,11 @@ export const SKILLS: Skill[] = [
   getPartner,
   updatePartner,
   createTodo,
+  updateTodo,
   listTodos,
+  listOpportunities,
+  updateOpportunity,
+  listBusinessRecords,
   linkedinSearchTool,
   webSearch,
   scanSentiment,
@@ -803,7 +1030,11 @@ export const ASSISTANT_SKILLS = [
   "get_partner",
   "update_partner",
   "create_todo",
+  "update_todo",
   "list_todos",
+  "list_opportunities",
+  "update_opportunity",
+  "list_business_records",
   "linkedin_search",
   "web_search",
   "read_kms",

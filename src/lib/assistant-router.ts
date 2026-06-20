@@ -4,6 +4,14 @@ import { runProposeTurn } from "./ai-intake";
 import { shouldUseAgentBuilderMode } from "./agent-builder-intent";
 import { runAgentBuilderTurn, type AgentBuilderMessage } from "./agent-builder";
 import { runQueryAssistant, type AssistantLocale } from "./assistant-core";
+import {
+  buildFocusFromListItems,
+  extractListItemsFromFormattedReply,
+  focusIsFresh,
+  inferFocusKindFromQueryAction,
+  resolveFocusTarget,
+  type FocusEntity,
+} from "./focus-entity";
 import type { Locale } from "./i18n/locale";
 import {
   buildIntentConfirmSession,
@@ -13,12 +21,18 @@ import {
   sourceTextForRouting,
   type IntentConfirmAlternative,
 } from "./intake-intent-confirm";
+import { normalizeActionText } from "./intake-action-registry";
 import { resolveAssistantRoute, type ResolvedAssistantRoute } from "./intake-route-resolver";
+import { runPatchAssistant } from "./patch-assistant";
+import { db } from "./db";
 
 export type AssistantQueryResult = {
   mode: "query";
   reply: string;
   actions?: string[];
+  /** Updated focus after a list query — client/session should persist */
+  focus?: FocusEntity | null;
+  lastQueryActionId?: string;
 };
 
 export type AssistantIntentConfirmResult = {
@@ -27,6 +41,10 @@ export type AssistantIntentConfirmResult = {
   actionId: string;
   route: ResolvedAssistantRoute["route"];
   alternatives: IntentConfirmAlternative[];
+  focus?: FocusEntity;
+  patchInstruction?: string;
+  patchTargetId?: string;
+  patchTargetLabel?: string;
 };
 
 export type AssistantAgentBuilderResult = Awaited<ReturnType<typeof runAgentBuilderTurn>> & {
@@ -44,13 +62,113 @@ function toAgentBuilderMessages(messages: IntakeMessage[]): AgentBuilderMessage[
 }
 
 function queryFeature(route: ResolvedAssistantRoute, base: string): string {
-  if (route.route.mode === "query" && route.route.queryKind === "list_todos") {
-    return `${base} · List todos`;
-  }
+  if (route.route.mode !== "query") return base;
+  const kind = route.route.queryKind;
+  if (kind === "list_todos") return `${base} · List todos`;
+  if (kind === "list_opportunities") return `${base} · List opportunities`;
+  if (kind === "list_business_records") return `${base} · List business records`;
   return base;
 }
 
-/** Route assistant / WeCom messages: AgentBuilder > Query > IntentConfirm > Propose */
+function lastUserText(messages: IntakeMessage[]): string {
+  return normalizeActionText(
+    [...messages].reverse().find((m) => m.role === "user")?.content ?? ""
+  );
+}
+
+function buildFocusAfterQuery(opts: {
+  actionId: string;
+  reply: string;
+  partnerId?: string;
+  partnerName?: string;
+}): FocusEntity | null {
+  const kind = inferFocusKindFromQueryAction(opts.actionId);
+  if (!kind) return null;
+  const items = extractListItemsFromFormattedReply(opts.reply);
+  return buildFocusFromListItems({
+    kind,
+    items,
+    partnerId: opts.partnerId,
+    partnerName: opts.partnerName,
+  });
+}
+
+/** Load focus items from DB when reply text lacks [id:…] lines (LLM reformatted output). */
+async function buildFocusAfterQueryAsync(opts: {
+  actionId: string;
+  reply: string;
+  partnerId?: string;
+  partnerName?: string;
+}): Promise<FocusEntity | null> {
+  const fromReply = buildFocusAfterQuery(opts);
+  if (fromReply?.listItems?.length || fromReply?.id) return fromReply;
+
+  const kind = inferFocusKindFromQueryAction(opts.actionId);
+  if (!kind) return null;
+
+  if (kind === "todo") {
+    const todos = await db.todoItem.findMany({
+      where: {
+        status: "OPEN",
+        ...(opts.partnerId ? { partnerId: opts.partnerId } : {}),
+      },
+      orderBy: { dueDate: "asc" },
+      take: 50,
+    });
+    return buildFocusFromListItems({
+      kind,
+      items: todos.map((t) => ({ id: t.id, label: t.title })),
+      partnerId: opts.partnerId,
+      partnerName: opts.partnerName,
+    });
+  }
+  if (kind === "opportunity" && opts.partnerId) {
+    const rows = await db.opportunity.findMany({
+      where: { partnerId: opts.partnerId, status: "ACTIVE" },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+    });
+    return buildFocusFromListItems({
+      kind,
+      items: rows.map((o) => ({ id: o.id, label: o.name })),
+      partnerId: opts.partnerId,
+      partnerName: opts.partnerName,
+    });
+  }
+  if (kind === "business_record" && opts.partnerId) {
+    const rows = await db.businessRecord.findMany({
+      where: { partnerId: opts.partnerId },
+      orderBy: { occurredAt: "desc" },
+      take: 20,
+    });
+    return buildFocusFromListItems({
+      kind,
+      items: rows.map((r) => ({ id: r.id, label: r.title })),
+      partnerId: opts.partnerId,
+      partnerName: opts.partnerName,
+    });
+  }
+  return fromReply;
+}
+
+function disambiguationReply(
+  items: Array<{ id: string; label: string }>,
+  locale: Locale
+): string {
+  if (locale === "zh") {
+    return (
+      "有多条记录，请指明要改哪一条：\n" +
+      items.map((it, i) => `${i + 1}️⃣ ${it.label}`).join("\n") +
+      "\n\n回复 @我 **1** / **2** … 或包含标题关键词。"
+    );
+  }
+  return (
+    "Multiple records match — which one?\n" +
+    items.map((it, i) => `${i + 1}. ${it.label}`).join("\n")
+  );
+}
+
+/** Route assistant / WeCom messages: AgentBuilder > FocusPatch > Query > IntentConfirm > Propose */
 export async function runAssistantTurn(opts: {
   messages: IntakeMessage[];
   userId: string;
@@ -63,10 +181,14 @@ export async function runAssistantTurn(opts: {
   forceAgentBuilder?: boolean;
   previousScope?: IntakeScope;
   agentBuilderContext?: string;
-  /** User confirmed intent — skip intent confirm gate */
   confirmedActionId?: string;
-  /** Skip intent confirm (e.g. continuing propose draft session) */
   skipIntentConfirm?: boolean;
+  /** Active focus from prior list/query in this chat */
+  focus?: FocusEntity | null;
+  /** Execute patch after user confirmed (from intent session) */
+  patchTargetId?: string;
+  patchTargetLabel?: string;
+  patchInstruction?: string;
 }): Promise<AssistantTurnResult> {
   const locale = opts.locale as Locale;
 
@@ -90,6 +212,31 @@ export async function runAssistantTurn(opts: {
     return { ...turn, mode: "agent_builder" };
   }
 
+  // Confirmed patch execution (after intent confirm)
+  if (
+    opts.patchTargetId &&
+    opts.patchInstruction &&
+    opts.focus &&
+    opts.confirmedActionId?.startsWith("patch.")
+  ) {
+    const patch = await runPatchAssistant({
+      focus: opts.focus,
+      targetId: opts.patchTargetId,
+      targetLabel: opts.patchTargetLabel ?? opts.focus.label,
+      instruction: opts.patchInstruction,
+      userId: opts.userId,
+      locale,
+      emit: opts.emit,
+      feature: opts.feature,
+    });
+    return {
+      mode: "query",
+      reply: patch.reply,
+      actions: patch.actions,
+      focus: { ...opts.focus, id: opts.patchTargetId, label: opts.patchTargetLabel ?? opts.focus.label, updatedAt: Date.now() },
+    };
+  }
+
   let route: ResolvedAssistantRoute;
   if (opts.confirmedActionId) {
     const confirmed = routeFromConfirmedActionId(opts.confirmedActionId);
@@ -101,6 +248,7 @@ export async function runAssistantTurn(opts: {
         userId: opts.userId,
         locale,
         previousScope: opts.previousScope,
+        focus: opts.focus,
       });
     } else {
       route = confirmed;
@@ -113,6 +261,7 @@ export async function runAssistantTurn(opts: {
       userId: opts.userId,
       locale,
       previousScope: opts.previousScope,
+      focus: opts.focus,
     });
   }
 
@@ -121,8 +270,21 @@ export async function runAssistantTurn(opts: {
       locale: opts.locale as AssistantLocale,
       feature: queryFeature(route, opts.feature),
       emit: opts.emit,
+      queryKind: route.route.queryKind,
     });
-    return { mode: "query", reply: result.reply, actions: result.actions };
+    const focus = await buildFocusAfterQueryAsync({
+      actionId: route.actionId,
+      reply: result.reply,
+      partnerId: opts.partnerId,
+      partnerName: opts.partnerName,
+    });
+    return {
+      mode: "query",
+      reply: result.reply,
+      actions: result.actions,
+      focus,
+      lastQueryActionId: route.actionId,
+    };
   }
 
   if (route.route.mode === "agent_builder") {
@@ -133,6 +295,63 @@ export async function runAssistantTurn(opts: {
       locale,
     });
     return { ...turn, mode: "agent_builder" };
+  }
+
+  if (route.route.mode === "patch") {
+    const instruction = lastUserText(opts.messages);
+    if (!opts.focus || !focusIsFresh(opts.focus)) {
+      return {
+        mode: "query",
+        reply:
+          locale === "zh"
+            ? "请先查询要修改的记录（如「有多少待办」「有哪些商机」），再说要改什么。"
+            : "List the records first (e.g. todos/opportunities), then say what to change.",
+        focus: null,
+      };
+    }
+    const resolved = resolveFocusTarget(opts.focus, instruction);
+    if (!resolved) {
+      return {
+        mode: "query",
+        reply: locale === "zh" ? "找不到要修改的目标记录。" : "No target record to patch.",
+        focus: opts.focus,
+      };
+    }
+    if ("ambiguous" in resolved) {
+      return {
+        mode: "query",
+        reply: disambiguationReply(resolved.ambiguous, locale),
+        focus: opts.focus,
+      };
+    }
+    if (
+      needsIntentConfirm(route) &&
+      !opts.confirmedActionId &&
+      !opts.skipIntentConfirm
+    ) {
+      const sourceText = sourceTextForRouting(opts.messages);
+      const session = buildIntentConfirmSession({
+        route,
+        sourceText,
+        locale,
+        partnerName: opts.partnerName,
+        focus: opts.focus,
+        patchInstruction: instruction,
+        patchTargetId: resolved.id,
+        patchTargetLabel: resolved.label,
+      });
+      return {
+        mode: "intent_confirm",
+        reply: formatIntentConfirmReply(session, locale),
+        actionId: session.actionId,
+        route: session.route,
+        alternatives: session.alternatives,
+        focus: opts.focus,
+        patchInstruction: instruction,
+        patchTargetId: resolved.id,
+        patchTargetLabel: resolved.label,
+      };
+    }
   }
 
   if (

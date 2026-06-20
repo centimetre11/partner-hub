@@ -1,11 +1,13 @@
 import type { IntakeScope } from "./ai-locale";
+import type { FocusEntityKind } from "./focus-entity";
 import { stripIntakeSystemHint } from "./intake-text";
 import { stripWecomCommandPrefix } from "./wecom-user-resolve";
 
 /** Routable builtin actions — single source of truth for intent / scope classification. */
 export type BuiltinActionRoute =
   | { mode: "propose"; scope: IntakeScope }
-  | { mode: "query"; queryKind: "list_todos" | "general" }
+  | { mode: "query"; queryKind: "list_todos" | "list_opportunities" | "list_business_records" | "general" }
+  | { mode: "patch"; entityKind: FocusEntityKind }
   | { mode: "agent_builder" };
 
 export type BuiltinActionDef = {
@@ -23,6 +25,12 @@ const TODO_QUERY_RE =
 
 const TODO_CREATE_VERB_RE =
   /建.{0,4}待办|创建待办|新.{0,2}待办|录入待办|加.{0,2}待办|帮.{0,12}(?:建|创|加|记|写|添).{0,6}待办|添加待办|记.{0,4}待办|\b(create|add|log|new)\s+todos?\b|待办[：:，]|^事项[是：:]|^the item is\b/i;
+
+const OPP_QUERY_RE =
+  /有哪些商机|有什么商机|多少商机|列出商机|查询商机|看看商机|商机.{0,12}(有哪些|有什么|多少|几个|列表)|\b(list|show|how many).{0,12}opportunit/i;
+
+const BR_QUERY_RE =
+  /有哪些商务记录|商务记录.{0,12}(有哪些|有什么|多少|列表)|最近.{0,8}拜访|最近.{0,8}会议|列出.{0,6}商务|\b(list|show).{0,12}business record/i;
 
 export function normalizeActionText(text: string): string {
   return stripWecomCommandPrefix(stripIntakeSystemHint(text)).trim();
@@ -66,6 +74,60 @@ export const BUILTIN_ACTIONS: BuiltinActionDef[] = [
       /\btodos?\b.{0,16}(list|show|what|open|view)/i,
     ],
     priority: 88,
+  },
+  {
+    id: "query.list_opportunities",
+    route: { mode: "query", queryKind: "list_opportunities" },
+    label: { zh: "查询商机", en: "List opportunities" },
+    description: { zh: "查看已有商机列表", en: "List existing opportunities" },
+    signals: [
+      /有哪些商机|有什么商机|多少商机|列出商机|查询商机|看看商机/i,
+      /商机.{0,16}(有哪些|有什么|多少|几个|列表)/i,
+      /\b(list|show|how many).{0,16}opportunit/i,
+    ],
+    priority: 87,
+  },
+  {
+    id: "query.list_business_records",
+    route: { mode: "query", queryKind: "list_business_records" },
+    label: { zh: "查询商务记录", en: "List business records" },
+    description: { zh: "查看拜访/会议/跟进记录列表", en: "List visit/meeting/follow-up records" },
+    signals: [
+      /有哪些商务记录|商务记录.{0,16}(有哪些|有什么|多少|列表)/i,
+      /最近.{0,8}拜访|最近.{0,8}会议|列出.{0,6}商务/i,
+      /\b(list|show).{0,16}business record/i,
+    ],
+    priority: 86,
+  },
+  {
+    id: "patch.todo",
+    route: { mode: "patch", entityKind: "todo" },
+    label: { zh: "修改待办", en: "Update todo" },
+    description: { zh: "修改已有待办字段（责任人、截止日期等）", en: "Update fields on an existing todo" },
+    signals: [
+      /责任人.{0,6}改|负责人.{0,6}改|assignee/i,
+      /截止.{0,4}改|due date/i,
+      /改.{0,4}待办|更新待办|modify todo|update todo/i,
+    ],
+    priority: 92,
+  },
+  {
+    id: "patch.opportunity",
+    route: { mode: "patch", entityKind: "opportunity" },
+    label: { zh: "修改商机", en: "Update opportunity" },
+    description: { zh: "修改已有商机（阶段、金额、下一步等）", en: "Update an existing opportunity" },
+    signals: [
+      /阶段.{0,6}改|金额.{0,6}改|改.{0,4}商机|更新商机|update opportunit/i,
+    ],
+    priority: 91,
+  },
+  {
+    id: "patch.partner",
+    route: { mode: "patch", entityKind: "partner" },
+    label: { zh: "修改伙伴档案", en: "Update partner" },
+    description: { zh: "修改伙伴字段（阶段、层级等）", en: "Update partner profile fields" },
+    signals: [/阶段.{0,6}改|tier.{0,6}改|改.{0,4}档案|更新.{0,4}伙伴|update partner/i],
+    priority: 90,
   },
   {
     id: "intake.todo",
@@ -154,6 +216,9 @@ export function scoreBuiltinActions(text: string): ActionScore[] {
     }
     if (action.id === "intake.todo" && todoQuery) score = 0;
     if (action.id === "query.list_todos" && todoQuery) score += 15;
+    if (action.id.startsWith("intake.") && /改成|改为|更新|修改|adjust|change to|set to/i.test(t) && !TODO_CREATE_VERB_RE.test(t) && !OPP_QUERY_RE.test(t) && !BR_QUERY_RE.test(t)) {
+      score = Math.max(0, score - 12);
+    }
     if (score > 0) score += action.priority / 100;
     return { action, score };
   })
@@ -185,7 +250,9 @@ export function actionCatalogForAi(locale: "zh" | "en"): string {
         ? `propose/${a.route.scope}`
         : a.route.mode === "query"
           ? `query/${a.route.queryKind}`
-          : "agent_builder";
+          : a.route.mode === "patch"
+            ? `patch/${a.route.entityKind}`
+            : "agent_builder";
     return `- ${a.id} (${label}, ${route}): ${desc}`;
   }).join("\n");
 }
@@ -194,8 +261,10 @@ export function actionExamplesForAi(locale: "zh" | "en"): string {
   if (locale === "zh") {
     return `Examples:
 - 「现在多少待办」「有哪些待办」→ query.list_todos
+- 查完待办后「责任人改成 X」→ patch.todo（不是 intake.todo）
 - 「帮我建个待办…看看 poc」→ intake.todo
-- 「记个待办：下周跟进」→ intake.todo
+- 「有哪些商机」→ query.list_opportunities
+- 「阶段改成 L2」且刚查过伙伴 → patch.partner
 - 「补全 AkLogiks 画像」→ intake.profile`;
   }
   return `Examples:
@@ -228,6 +297,15 @@ export function isProposeBuiltinAction(text: string): boolean {
 export function isQueryBuiltinAction(text: string): boolean {
   const top = topBuiltinAction(text);
   return top?.action.route.mode === "query";
+}
+
+export function isPatchBuiltinAction(text: string): boolean {
+  const top = topBuiltinAction(text);
+  return top?.action.route.mode === "patch";
+}
+
+export function patchActionIdForEntityKind(kind: FocusEntityKind): string {
+  return `patch.${kind}`;
 }
 
 export function conversationTopAction(text: string): ActionScore | null {

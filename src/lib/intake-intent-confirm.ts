@@ -1,4 +1,5 @@
 import type { Locale } from "./i18n/locale";
+import type { FocusEntity } from "./focus-entity";
 import {
   builtinActionById,
   getAlternativeActions,
@@ -20,6 +21,11 @@ export type IntentConfirmSession = {
   alternatives: IntentConfirmAlternative[];
   sourceText: string;
   partnerName?: string;
+  /** Patch flow — entity being modified */
+  focus?: FocusEntity;
+  patchInstruction?: string;
+  patchTargetId?: string;
+  patchTargetLabel?: string;
 };
 
 const INTENT_CONFIRM_RE =
@@ -77,6 +83,10 @@ export function buildIntentConfirmSession(opts: {
   sourceText: string;
   locale: Locale;
   partnerName?: string;
+  focus?: FocusEntity;
+  patchInstruction?: string;
+  patchTargetId?: string;
+  patchTargetLabel?: string;
 }): IntentConfirmSession {
   const action = builtinActionById(opts.route.actionId);
   const alts = getAlternativeActions(opts.sourceText, opts.route.actionId, 3).map((s, i) => ({
@@ -90,6 +100,10 @@ export function buildIntentConfirmSession(opts: {
     alternatives: alts,
     sourceText: opts.sourceText,
     partnerName: opts.partnerName,
+    focus: opts.focus,
+    patchInstruction: opts.patchInstruction,
+    patchTargetId: opts.patchTargetId,
+    patchTargetLabel: opts.patchTargetLabel,
   };
 }
 
@@ -106,14 +120,34 @@ export function formatIntentConfirmReply(session: IntentConfirmSession, locale: 
       : ` (${session.partnerName})`
     : "";
 
+  const isPatch = session.route.mode === "patch";
+  const targetLine =
+    session.patchTargetLabel &&
+    (locale === "zh"
+      ? `目标：**${session.patchTargetLabel}**`
+      : `Target: **${session.patchTargetLabel}**`);
+  const instructionLine =
+    session.patchInstruction &&
+    (locale === "zh"
+      ? `变更：${session.patchInstruction}`
+      : `Change: ${session.patchInstruction}`);
+
   if (locale === "zh") {
     const lines = [
-      `**【意图确认】**`,
+      isPatch ? `**【修改确认】**` : `**【意图确认】**`,
       "",
-      `我理解你要：**${label}**${partnerLine}`,
-      "",
-      "• 回复 @我 **确认** → 继续生成草案",
+      isPatch
+        ? `是否**${label}**？${partnerLine}`
+        : `我理解你要：**${label}**${partnerLine}`,
     ];
+    if (targetLine) lines.push(targetLine);
+    if (instructionLine) lines.push(instructionLine);
+    lines.push(
+      "",
+      isPatch
+        ? "• 回复 @我 **确认** → 执行修改"
+        : "• 回复 @我 **确认** → 继续生成草案"
+    );
     if (session.alternatives.length) {
       lines.push("• 或改选：");
       for (const alt of session.alternatives) {
@@ -126,12 +160,18 @@ export function formatIntentConfirmReply(session: IntentConfirmSession, locale: 
   }
 
   const lines = [
-    `**Intent confirmation**`,
+    isPatch ? `**Modification confirmation**` : `**Intent confirmation**`,
     "",
-    `I think you want: **${label}**${partnerLine}`,
-    "",
-    "• Reply @me **confirm** → continue to draft",
+    isPatch
+      ? `Confirm **${label}**?${partnerLine}`
+      : `I think you want: **${label}**${partnerLine}`,
   ];
+  if (targetLine) lines.push(targetLine);
+  if (instructionLine) lines.push(instructionLine);
+  lines.push(
+    "",
+    isPatch ? "• Reply @me **confirm** → apply change" : "• Reply @me **confirm** → continue to draft"
+  );
   if (session.alternatives.length) {
     lines.push("• Or choose:");
     for (const alt of session.alternatives) {
@@ -154,7 +194,7 @@ export function routeFromConfirmedActionId(actionId: string): ResolvedAssistantR
 }
 
 export function needsIntentConfirm(route: ResolvedAssistantRoute): boolean {
-  return route.route.mode === "propose";
+  return route.route.mode === "propose" || route.route.mode === "patch";
 }
 
 /** Last user line for scoring — excludes intent-confirm command noise */

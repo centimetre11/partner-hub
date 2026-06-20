@@ -17,8 +17,23 @@ export async function POST(req: NextRequest) {
     forcePropose?: boolean;
     confirmedActionId?: string;
     skipIntentConfirm?: boolean;
+    focus?: import("@/lib/focus-entity").FocusEntity | null;
+    patchTargetId?: string;
+    patchTargetLabel?: string;
+    patchInstruction?: string;
   };
-  const { messages, stream, partnerId, forcePropose, confirmedActionId, skipIntentConfirm } = body;
+  const {
+    messages,
+    stream,
+    partnerId,
+    forcePropose,
+    confirmedActionId,
+    skipIntentConfirm,
+    focus,
+    patchTargetId,
+    patchTargetLabel,
+    patchInstruction,
+  } = body;
   const locale = await getLocale();
 
   try {
@@ -34,6 +49,10 @@ export async function POST(req: NextRequest) {
           forcePropose,
           confirmedActionId,
           skipIntentConfirm,
+          focus,
+          patchTargetId,
+          patchTargetLabel,
+          patchInstruction,
         });
         emit({ event: "done", data: result });
       });
@@ -47,6 +66,10 @@ export async function POST(req: NextRequest) {
       forcePropose,
       confirmedActionId,
       skipIntentConfirm,
+      focus,
+      patchTargetId,
+      patchTargetLabel,
+      patchInstruction,
     });
     return NextResponse.json(result);
   } catch (e) {

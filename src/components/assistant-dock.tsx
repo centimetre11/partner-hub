@@ -53,9 +53,15 @@ type IntentConfirmResult = {
   alternatives: Array<{ actionId: string; label: string; index: number }>;
 };
 
+import type { FocusEntity } from "@/lib/focus-entity";
+
 type PendingIntent = {
   actionId: string;
   alternatives: Array<{ actionId: string; label: string; index: number }>;
+  focus?: FocusEntity;
+  patchInstruction?: string;
+  patchTargetId?: string;
+  patchTargetLabel?: string;
 };
 
 export function AssistantDock() {
@@ -79,6 +85,7 @@ export function AssistantDock() {
   const [patchChanges, setPatchChanges] = useState<ProposalChanges | null>(null);
   const [proposeMode, setProposeMode] = useState(false);
   const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
+  const [focusEntity, setFocusEntity] = useState<FocusEntity | null>(null);
   const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
   const abortRef = useRef<AbortController | null>(null);
@@ -191,6 +198,10 @@ export function AssistantDock() {
           forcePropose: (proposeMode || !!proposal) && !pendingIntent,
           confirmedActionId,
           skipIntentConfirm: !!proposal,
+          focus: focusEntity,
+          patchTargetId: pendingIntent?.patchTargetId,
+          patchTargetLabel: pendingIntent?.patchTargetLabel,
+          patchInstruction: pendingIntent?.patchInstruction ?? (confirmedActionId ? content : undefined),
         }),
         signal: ac.signal,
       });
@@ -224,15 +235,24 @@ export function AssistantDock() {
         setClarifications((prev) => (p.clarifications?.length ? p.clarifications : prev));
         setReady(p.ready);
         setMessages([...next, { role: "assistant", content: p.reply || finalReply, trace: [...trace] }]);
-      } else if ((data as IntentConfirmResult).mode === "intent_confirm") {
-        const ic = data as IntentConfirmResult;
-        setPendingIntent({ actionId: ic.actionId, alternatives: ic.alternatives ?? [] });
+      } else if ((data as IntentConfirmResult & PendingIntent).mode === "intent_confirm") {
+        const ic = data as IntentConfirmResult & PendingIntent;
+        setPendingIntent({
+          actionId: ic.actionId,
+          alternatives: ic.alternatives ?? [],
+          focus: ic.focus,
+          patchInstruction: ic.patchInstruction,
+          patchTargetId: ic.patchTargetId,
+          patchTargetLabel: ic.patchTargetLabel,
+        });
+        if (ic.focus) setFocusEntity(ic.focus);
         setProposeMode(false);
         setProposal(null);
         setMessages([...next, { role: "assistant", content: ic.reply || finalReply, trace: [...trace] }]);
       } else {
-        const q = data as QueryResult;
+        const q = data as QueryResult & { focus?: FocusEntity | null };
         setPendingIntent(null);
+        if (q.focus) setFocusEntity(q.focus);
         setMessages([...next, { role: "assistant", content: q.reply || finalReply, actions: q.actions, trace: [...trace] }]);
         if (q.actions?.length) router.refresh();
       }

@@ -51,6 +51,7 @@ import {
   sourceTextForRouting,
   type IntentConfirmSession,
 } from "@/lib/intake-intent-confirm";
+import type { FocusEntity } from "@/lib/focus-entity";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
   formatWecomBotHelpReply,
@@ -83,6 +84,13 @@ type ProposeSession = {
 const proposeSessions = new Map<string, ProposeSession>();
 
 const intentConfirmSessions = new Map<string, IntentConfirmSession>();
+
+const focusSessions = new Map<string, FocusEntity>();
+
+/** Hide internal [id:…] prefixes from user-facing list replies. */
+function stripInternalIdsFromReply(reply: string): string {
+  return reply.replace(/^\[id:[^\]]+\]\s*/gm, "");
+}
 
 type AgentBuilderSession = {
   messages: AgentBuilderMessage[];
@@ -358,8 +366,13 @@ async function applyAssistantTurnResult(opts: {
         sourceText,
         locale: "zh",
         partnerName: boundPartnerName,
+        focus: result.focus,
+        patchInstruction: result.patchInstruction,
+        patchTargetId: result.patchTargetId,
+        patchTargetLabel: result.patchTargetLabel,
       })
     );
+    if (result.focus) focusSessions.set(key, result.focus);
     proposeSessions.delete(key);
     console.log(`[wecom-bot] 意图确认 action=${result.actionId}`);
     return result.reply;
@@ -406,9 +419,19 @@ async function applyAssistantTurnResult(opts: {
     proposeSessions.delete(key);
   }
   intentConfirmSessions.delete(key);
+
+  if (result.mode !== "query") {
+    console.warn(`[wecom-bot] Unexpected assistant mode: ${(result as { mode?: string }).mode}`);
+    return "抱歉，未能生成回复。";
+  }
+
+  if (result.focus) {
+    focusSessions.set(key, result.focus);
+    console.log(`[wecom-bot] Focus ${result.focus.kind} items=${result.focus.listItems?.length ?? 1}`);
+  }
   const modeLabel = isTodoListQueryIntent(text) ? "待办查询" : text.slice(0, 20);
   console.log(`[wecom-bot] 回复(${modeLabel}…): ${result.reply.slice(0, 120)}…`);
-  return result.reply;
+  return stripInternalIdsFromReply(result.reply);
 }
 
 async function handleTextMessage(frame: WsFrame) {
@@ -496,6 +519,7 @@ async function handleTextMessage(frame: WsFrame) {
     if (isAgentBuilderIntent(text)) {
       proposeSessions.delete(key);
       intentConfirmSessions.delete(key);
+      focusSessions.delete(key);
       session = undefined;
       intentSession = undefined;
     }
@@ -609,15 +633,20 @@ async function handleTextMessage(frame: WsFrame) {
     if (intentSession && isIntentConfirmCommand(text)) {
       intentConfirmSessions.delete(key);
       const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
+      const focus = intentSession.focus ?? focusSessions.get(key);
       const result = await runAssistantTurn({
         messages,
         userId: actorUserId,
         partnerId: boundPartnerId ?? session?.partnerId,
         partnerName: boundPartnerName,
         locale: "zh",
-        feature: "WeCom Bot · Propose",
+        feature: intentSession.route.mode === "patch" ? "WeCom Bot · Patch" : "WeCom Bot · Propose",
         confirmedActionId: intentSession.actionId,
         previousScope: session?.scope,
+        focus,
+        patchTargetId: intentSession.patchTargetId,
+        patchTargetLabel: intentSession.patchTargetLabel,
+        patchInstruction: intentSession.patchInstruction,
       });
       const reply = await applyAssistantTurnResult({
         result,
@@ -650,6 +679,7 @@ async function handleTextMessage(frame: WsFrame) {
           feature: altActionId.startsWith("query.") ? "WeCom Bot" : "WeCom Bot · Propose",
           confirmedActionId: altActionId,
           previousScope: session?.scope,
+          focus: focusSessions.get(key),
         });
         const reply = await applyAssistantTurnResult({
           result,
@@ -762,6 +792,7 @@ async function handleTextMessage(frame: WsFrame) {
     agentBuilderSessions.delete(key);
     const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
     const continuingPropose = !isAgentBuilderIntent(text) && !!session;
+    const focus = focusSessions.get(key);
 
     const result = await runAssistantTurn({
       messages,
@@ -773,6 +804,7 @@ async function handleTextMessage(frame: WsFrame) {
       forcePropose: continuingPropose,
       skipIntentConfirm: continuingPropose,
       previousScope: session?.scope,
+      focus,
     });
 
     const reply = await applyAssistantTurnResult({

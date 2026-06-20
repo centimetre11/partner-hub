@@ -19,6 +19,13 @@ import {
 import { shouldUseProposeMode, type IntakeProposal } from "../src/lib/ai-intake";
 import { shouldAutoApplyBoundIntake } from "../src/lib/proposal-scope";
 import { detectProposeScopeHeuristic } from "../src/lib/intake-route-resolver";
+import {
+  buildFocusFromListItems,
+  extractListItemsFromFormattedReply,
+  isModificationPhrase,
+  resolveFocusTarget,
+  patchActionIdForKind,
+} from "../src/lib/focus-entity";
 
 type Case = { name: string; pass: boolean; detail?: string };
 
@@ -117,6 +124,33 @@ function main() {
     "partner-1"
   );
   cases.push(assert("绑定群 + 多少待办 启发式非 todo 创建", scopeForQuery !== "todo" || isListTodosAction("现在多少待办")));
+
+  // ---- Focus + 修改句 ----
+  cases.push(assert("「责任人改成 areeb」是修改句", isModificationPhrase("责任人改成 areeb")));
+  cases.push(
+    assert(
+      "修改句 + focus 不应最高分 intake.todo",
+      topBuiltinAction("责任人改成 areeb")?.action.id !== "intake.todo" ||
+        isModificationPhrase("责任人改成 areeb")
+    )
+  );
+  const patchRoute = routeFromConfirmedActionId("patch.todo");
+  cases.push(assert("needsIntentConfirm(patch)", patchRoute ? needsIntentConfirm(patchRoute) : false));
+
+  const listReply =
+    "[id:todo1] [HIGH] 与 MENA 确认会议 | Partner:AkLogiks | Due:- | Assignee:Saber";
+  const items = extractListItemsFromFormattedReply(listReply);
+  cases.push(assert("解析 list 回复中的 id", items.length === 1 && items[0].id === "todo1"));
+  const focus = buildFocusFromListItems({
+    kind: "todo",
+    items,
+    partnerId: "p1",
+    partnerName: "AkLogiks",
+  });
+  cases.push(assert("单条 focus 自动锁定", focus?.id === "todo1"));
+  const target = focus ? resolveFocusTarget(focus, "责任人改成 areeb") : null;
+  cases.push(assert("resolveFocusTarget 单条", target != null && !("ambiguous" in target)));
+  cases.push(assert("patch action id", patchActionIdForKind("todo") === "patch.todo"));
 
   const failed = cases.filter((c) => !c.pass);
   console.log(`\n${cases.length - failed.length}/${cases.length} passed`);

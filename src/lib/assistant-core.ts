@@ -72,14 +72,31 @@ export async function runQueryAssistant(
     locale?: AssistantLocale;
     feature?: string;
     emit?: Parameters<typeof runToolLoop>[0]["emit"];
+    queryKind?: "list_todos" | "list_opportunities" | "list_business_records" | "general";
   }
 ) {
   const locale = options?.locale ?? "en";
   const kmsConfigured = await isKmsConfiguredForUser(uid);
   const knowhowConfigured = await isKnowhowConfigured();
   const tools = await skillsToTools(ASSISTANT_SKILLS);
+  let systemContent = buildSystemPrompt(locale, kmsConfigured, knowhowConfigured);
+  const kindHint =
+    options?.queryKind === "list_todos"
+      ? locale === "zh"
+        ? "\n\n本轮用户要查待办：必须先调用 list_todos，回复中保留每条 [id:…] 前缀。"
+        : "\n\nUser wants todos: call list_todos first; keep [id:…] prefixes in the reply."
+      : options?.queryKind === "list_opportunities"
+        ? locale === "zh"
+          ? "\n\n本轮用户要查商机：必须先调用 list_opportunities。"
+          : "\n\nUser wants opportunities: call list_opportunities first."
+        : options?.queryKind === "list_business_records"
+          ? locale === "zh"
+            ? "\n\n本轮用户要查商务记录：必须先调用 list_business_records。"
+            : "\n\nUser wants business records: call list_business_records first."
+          : "";
+  systemContent += kindHint;
   const chat: ChatMessage[] = [
-    { role: "system", content: buildSystemPrompt(locale, kmsConfigured, knowhowConfigured) },
+    { role: "system", content: systemContent },
     ...messages.map((m) => ({ role: m.role, content: m.content, images: m.images }) as ChatMessage),
   ];
   const ctx = newSkillContext({ mode: "assistant", userId: uid });

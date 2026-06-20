@@ -5,6 +5,12 @@ import { stripIntakeSystemHint } from "./intake-text";
 import { isAgentBuilderIntent } from "./agent-builder-intent";
 import type { Locale } from "./i18n/locale";
 import {
+  focusIsFresh,
+  isModificationPhrase,
+  patchActionIdForKind,
+  type FocusEntity,
+} from "./focus-entity";
+import {
   actionCatalogForAi,
   actionExamplesForAi,
   BUILTIN_ACTIONS,
@@ -61,6 +67,7 @@ Rules:
 4. Do NOT default to intake.profile just because a partner exists.
 5. Count/list questions (多少/有哪些/how many + 待办) → query.list_todos, NOT intake.todo.
 6. Create/log verbs (建/加/记/创建 + 待办) → intake.todo; follow-up verbs inside the task (看看 poc) stay intake.todo.
+7. After listing an entity, field changes (改成/更新/责任人/阶段/金额) → patch.* for that entity, NOT intake.create.
 
 Output exactly one JSON object:
 {"actionId":"<id from catalog>","confidence":"high|medium|low","reason":"one short sentence"}`;
@@ -207,6 +214,7 @@ export async function resolveAssistantRoute(opts: {
   locale: Locale;
   previousScope?: IntakeScope;
   forcedScope?: IntakeScope;
+  focus?: FocusEntity | null;
 }): Promise<ResolvedAssistantRoute> {
   if (opts.forcedScope) {
     const id = actionIdFromScope(opts.forcedScope);
@@ -217,6 +225,22 @@ export async function resolveAssistantRoute(opts: {
       confidence: "high",
       source: "forced",
     };
+  }
+
+  const lastRaw = [...opts.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  if (opts.focus && focusIsFresh(opts.focus) && isModificationPhrase(lastRaw)) {
+    const actionId = patchActionIdForKind(opts.focus.kind);
+    const action = builtinActionById(actionId);
+    if (action) {
+      console.log(`[intake-route] focus → ${actionId} (${opts.focus.label})`);
+      return {
+        actionId,
+        route: action.route,
+        confidence: "high",
+        source: "forced",
+        reason: "focus + modification phrase",
+      };
+    }
   }
 
   const previousActionId = opts.previousScope ? actionIdFromScope(opts.previousScope) : undefined;
