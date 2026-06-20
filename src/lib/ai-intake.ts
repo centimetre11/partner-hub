@@ -1,6 +1,10 @@
 import { isAgentBuilderIntent } from "./agent-builder-intent";
 import { resolveProposeScope } from "./intake-route-resolver";
-import { conversationHasBuiltinAction, isListTodosAction } from "./intake-action-registry";
+import {
+  isListTodosAction,
+  isProposeBuiltinAction,
+  normalizeActionText,
+} from "./intake-action-registry";
 import { stripIntakeSystemHint } from "./intake-text";
 import { PROPOSE_INTENT_RE } from "./propose-intent";
 import { Prisma } from "@prisma/client";
@@ -721,7 +725,11 @@ export async function runIntakeTurn(opts: {
 
 export { stripIntakeSystemHint } from "./intake-text";
 export { isListTodosAction as isTodoListQueryIntent } from "./intake-action-registry";
-export { conversationHasBuiltinAction } from "./intake-action-registry";
+export {
+  isProposeBuiltinAction,
+  isQueryBuiltinAction,
+  normalizeActionText,
+} from "./intake-action-registry";
 
 /** Detect propose-confirm mode (collaborative agents: onboarding, records, opportunities, etc.) */
 export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
@@ -730,9 +738,9 @@ export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   if (lastUser && isAgentBuilderIntent(lastUser.content)) return false;
   const text = messages
     .filter((m) => m.role === "user")
-    .map((m) => stripIntakeSystemHint(m.content))
+    .map((m) => normalizeActionText(m.content))
     .join("\n");
-  return conversationHasBuiltinAction(text) || PROPOSE_INTENT_RE.test(text);
+  return isProposeBuiltinAction(text) || PROPOSE_INTENT_RE.test(text);
 }
 
 export { detectProposeScope } from "./intake-route-resolver";

@@ -31,9 +31,8 @@ import {
 } from "@/lib/agent-builder-wecom-format";
 import { createAgentFromDraft } from "@/lib/agent-create";
 import { runAgent } from "@/lib/agent-runner";
-import { runAssistantTurn } from "@/lib/assistant-router";
+import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
-import { shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { enrichBusinessRecordCompanyTarget } from "@/lib/business-record-intake";
 import {
@@ -41,7 +40,17 @@ import {
   intakeScopeRequiresPartner,
   lookupSinglePartnerByName,
 } from "@/lib/intake-partner-binding";
-import { applyDirectClarification } from "@/lib/clarification-apply";
+import {
+  applyDirectClarification,
+} from "@/lib/clarification-apply";
+import {
+  buildIntentConfirmSession,
+  isIntentCancelCommand,
+  isIntentConfirmCommand,
+  parseIntentAlternativePick,
+  sourceTextForRouting,
+  type IntentConfirmSession,
+} from "@/lib/intake-intent-confirm";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
   formatWecomBotHelpReply,
@@ -72,6 +81,8 @@ type ProposeSession = {
 };
 
 const proposeSessions = new Map<string, ProposeSession>();
+
+const intentConfirmSessions = new Map<string, IntentConfirmSession>();
 
 type AgentBuilderSession = {
   messages: AgentBuilderMessage[];
@@ -308,6 +319,98 @@ async function persistAgentBuilderSession(opts: {
   return { created, draft, reply };
 }
 
+async function applyAssistantTurnResult(opts: {
+  result: AssistantTurnResult;
+  key: string;
+  history: IntakeMessage[];
+  session: ProposeSession | undefined;
+  boundPartnerId?: string;
+  boundPartnerName?: string;
+  chatType: "group" | "single";
+  actorUserId: string;
+  actor: Awaited<ReturnType<typeof resolveWecomActorUserId>>;
+  text: string;
+}): Promise<string> {
+  const {
+    result,
+    key,
+    history,
+    session,
+    boundPartnerId,
+    boundPartnerName,
+    chatType,
+    actorUserId,
+    actor,
+    text,
+  } = opts;
+
+  if (result.mode === "intent_confirm") {
+    const sourceText = sourceTextForRouting(history);
+    intentConfirmSessions.set(
+      key,
+      buildIntentConfirmSession({
+        route: {
+          actionId: result.actionId,
+          route: result.route,
+          confidence: "high",
+          source: "forced",
+        },
+        sourceText,
+        locale: "zh",
+        partnerName: boundPartnerName,
+      })
+    );
+    proposeSessions.delete(key);
+    console.log(`[wecom-bot] 意图确认 action=${result.actionId}`);
+    return result.reply;
+  }
+
+  if (result.mode === "propose") {
+    const merged = mergeFinalProposal(session?.proposal ?? null, result.proposal, new Set());
+    const sourceText = history
+      .filter((m) => m.role === "user")
+      .map((m) => m.content)
+      .join("\n");
+    const scope = result.scope;
+    const partnerId = boundPartnerId ?? session?.partnerId;
+
+    proposeSessions.set(key, {
+      scope,
+      partnerId,
+      proposal: merged,
+      ready: result.ready,
+      crmOnlyReady: result.crmOnlyReady,
+      sourceText,
+    });
+    console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
+    return formatProposeWecomReply({
+      scope: result.scope,
+      reply: result.reply,
+      proposal: merged,
+      ready: result.ready,
+      crmOnlyReady: result.crmOnlyReady,
+      questions: result.questions,
+      chatType,
+    });
+  }
+
+  if (result.mode === "agent_builder") {
+    return formatAgentBuilderWecomReply({
+      turn: result,
+      chatType,
+      boundPartnerName,
+    });
+  }
+
+  if (session && !shouldUseProposeMode(history)) {
+    proposeSessions.delete(key);
+  }
+  intentConfirmSessions.delete(key);
+  const modeLabel = isTodoListQueryIntent(text) ? "待办查询" : text.slice(0, 20);
+  console.log(`[wecom-bot] 回复(${modeLabel}…): ${result.reply.slice(0, 120)}…`);
+  return result.reply;
+}
+
 async function handleTextMessage(frame: WsFrame) {
   if (!wsClient || !botUserId) return;
   const text = frame.body?.text?.content?.trim();
@@ -387,11 +490,14 @@ async function handleTextMessage(frame: WsFrame) {
   const sourceChatId = resolveSourceChatId(frame, chat?.chatId);
   let session = proposeSessions.get(key);
   let agentSession = agentBuilderSessions.get(key);
+  let intentSession = intentConfirmSessions.get(key);
 
   try {
     if (isAgentBuilderIntent(text)) {
       proposeSessions.delete(key);
+      intentConfirmSessions.delete(key);
       session = undefined;
+      intentSession = undefined;
     }
 
     // ---- Agent Builder session (priority over Propose) ----
@@ -491,6 +597,80 @@ async function handleTextMessage(frame: WsFrame) {
       return;
     }
 
+    // ---- Intent confirm (priority over propose content confirm — both use @确认) ----
+    if (intentSession && isIntentCancelCommand(text)) {
+      intentConfirmSessions.delete(key);
+      const reply = "已取消，未开始录入。你可以继续正常提问，或重新描述要执行的操作。";
+      appendHistory(key, "assistant", reply);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    if (intentSession && isIntentConfirmCommand(text)) {
+      intentConfirmSessions.delete(key);
+      const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
+      const result = await runAssistantTurn({
+        messages,
+        userId: actorUserId,
+        partnerId: boundPartnerId ?? session?.partnerId,
+        partnerName: boundPartnerName,
+        locale: "zh",
+        feature: "WeCom Bot · Propose",
+        confirmedActionId: intentSession.actionId,
+        previousScope: session?.scope,
+      });
+      const reply = await applyAssistantTurnResult({
+        result,
+        key,
+        history,
+        session,
+        boundPartnerId,
+        boundPartnerName,
+        chatType,
+        actorUserId,
+        actor,
+        text,
+      });
+      appendHistory(key, "assistant", reply);
+      await wsClient.replyStream(frame, streamId, reply, true);
+      return;
+    }
+
+    if (intentSession) {
+      const altActionId = parseIntentAlternativePick(text, intentSession);
+      if (altActionId) {
+        intentConfirmSessions.delete(key);
+        const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
+        const result = await runAssistantTurn({
+          messages,
+          userId: actorUserId,
+          partnerId: boundPartnerId ?? session?.partnerId,
+          partnerName: boundPartnerName,
+          locale: "zh",
+          feature: altActionId.startsWith("query.") ? "WeCom Bot" : "WeCom Bot · Propose",
+          confirmedActionId: altActionId,
+          previousScope: session?.scope,
+        });
+        const reply = await applyAssistantTurnResult({
+          result,
+          key,
+          history,
+          session,
+          boundPartnerId,
+          boundPartnerName,
+          chatType,
+          actorUserId,
+          actor,
+          text,
+        });
+        appendHistory(key, "assistant", reply);
+        await wsClient.replyStream(frame, streamId, reply, true);
+        return;
+      }
+      intentConfirmSessions.delete(key);
+      intentSession = undefined;
+    }
+
     // ---- Propose session ----
     if (session && isProposeCancel(text)) {
       proposeSessions.delete(key);
@@ -573,14 +753,15 @@ async function handleTextMessage(frame: WsFrame) {
 
     if (isTodoListQueryIntent(text)) {
       proposeSessions.delete(key);
+      intentConfirmSessions.delete(key);
       agentBuilderSessions.delete(key);
       session = undefined;
+      intentSession = undefined;
     }
 
     agentBuilderSessions.delete(key);
     const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
-    const inPropose =
-      !isAgentBuilderIntent(text) && (!!session || shouldUseProposeMode(messages));
+    const continuingPropose = !isAgentBuilderIntent(text) && !!session;
 
     const result = await runAssistantTurn({
       messages,
@@ -588,77 +769,24 @@ async function handleTextMessage(frame: WsFrame) {
       partnerId: boundPartnerId ?? session?.partnerId,
       partnerName: boundPartnerName,
       locale: "zh",
-      feature: inPropose ? "WeCom Bot · Propose" : "WeCom Bot",
-      forcePropose: inPropose,
+      feature: continuingPropose ? "WeCom Bot · Propose" : "WeCom Bot",
+      forcePropose: continuingPropose,
+      skipIntentConfirm: continuingPropose,
       previousScope: session?.scope,
     });
 
-    let reply: string;
-    if (result.mode === "propose") {
-      const merged = mergeFinalProposal(session?.proposal ?? null, result.proposal, new Set());
-      const sourceText = history
-        .filter((m) => m.role === "user")
-        .map((m) => m.content)
-        .join("\n");
-      const scope = result.scope;
-      const partnerId = boundPartnerId ?? session?.partnerId;
-
-      if (
-        shouldAutoApplyBoundIntake({
-          scope,
-          partnerId,
-          ready: result.ready,
-          clarifications: result.clarifications,
-          proposal: merged,
-        })
-      ) {
-        const applied = await applyIntake({
-          scope,
-          partnerId,
-          proposal: merged,
-          userId: actorUserId,
-          sourceText,
-          locale: "zh",
-        });
-        proposeSessions.delete(key);
-        reply = `${result.reply.trim()}\n\n${formatProposeAppliedReply(applied.applied, applied.partnerId, scope)}`;
-        console.log(`[wecom-bot] 绑定伙伴自动保存 scope=${scope} partner=${applied.partnerId.slice(0, 8)}…`);
-      } else {
-        proposeSessions.set(key, {
-          scope,
-          partnerId,
-          proposal: merged,
-          ready: result.ready,
-          crmOnlyReady: result.crmOnlyReady,
-          sourceText,
-        });
-        reply = formatProposeWecomReply({
-          scope: result.scope,
-          reply: result.reply,
-          proposal: merged,
-          ready: result.ready,
-          crmOnlyReady: result.crmOnlyReady,
-          questions: result.questions,
-          chatType,
-        });
-        console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
-      }
-    } else if (result.mode === "agent_builder") {
-      reply = formatAgentBuilderWecomReply({
-        turn: result,
-        chatType,
-        boundPartnerName,
-      });
-      console.log(`[wecom-bot] AgentBuilder(via router) ready=${result.ready}`);
-    } else {
-      if (session && !shouldUseProposeMode(messages)) {
-        // User pivoted to a normal query — drop stale draft
-        proposeSessions.delete(key);
-      }
-      reply = result.reply;
-      const modeLabel = isTodoListQueryIntent(text) ? "待办查询" : text.slice(0, 20);
-      console.log(`[wecom-bot] 回复(${modeLabel}…): ${result.reply.slice(0, 120)}…`);
-    }
+    const reply = await applyAssistantTurnResult({
+      result,
+      key,
+      history,
+      session,
+      boundPartnerId,
+      boundPartnerName,
+      chatType,
+      actorUserId,
+      actor,
+      text,
+    });
 
     appendHistory(key, "assistant", reply);
     await wsClient.replyStream(frame, streamId, reply, true);

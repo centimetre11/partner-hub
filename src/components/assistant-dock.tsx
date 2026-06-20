@@ -46,6 +46,18 @@ type QueryResult = {
   actions?: string[];
 };
 
+type IntentConfirmResult = {
+  mode: "intent_confirm";
+  reply: string;
+  actionId: string;
+  alternatives: Array<{ actionId: string; label: string; index: number }>;
+};
+
+type PendingIntent = {
+  actionId: string;
+  alternatives: Array<{ actionId: string; label: string; index: number }>;
+};
+
 export function AssistantDock() {
   const m = useMessages();
   const am = m.assistant;
@@ -66,6 +78,7 @@ export function AssistantDock() {
   const [phaseLabel, setPhaseLabel] = useState("");
   const [patchChanges, setPatchChanges] = useState<ProposalChanges | null>(null);
   const [proposeMode, setProposeMode] = useState(false);
+  const [pendingIntent, setPendingIntent] = useState<PendingIntent | null>(null);
   const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
   const abortRef = useRef<AbortController | null>(null);
@@ -135,7 +148,36 @@ export function AssistantDock() {
       setPatchChanges(null);
     }
     const likelyPropose = PROPOSE_INTENT_RE.test(content);
-    if (likelyPropose) setProposeMode(true);
+    let confirmedActionId: string | undefined;
+    if (pendingIntent) {
+      if (/^(确认|confirm)$/i.test(content)) {
+        confirmedActionId = pendingIntent.actionId;
+      } else {
+        const num = content.match(/^([1-9])$/);
+        if (num) {
+          const alt = pendingIntent.alternatives.find((a) => a.index === Number(num[1]));
+          if (alt) confirmedActionId = alt.actionId;
+        } else {
+          for (const alt of pendingIntent.alternatives) {
+            if (content.includes(alt.label)) {
+              confirmedActionId = alt.actionId;
+              break;
+            }
+          }
+        }
+      }
+    }
+    if (pendingIntent && /^(取消|cancel)$/i.test(content)) {
+      setPendingIntent(null);
+      setMessages([...next, { role: "assistant", content: am.stopped.replace("已停止", "已取消") || "已取消。" }]);
+      setLoading(false);
+      return;
+    }
+    if (confirmedActionId) setPendingIntent(null);
+    else if (pendingIntent && !/^(确认|confirm|[1-9])$/i.test(content)) {
+      setPendingIntent(null);
+    }
+    if (likelyPropose && !pendingIntent && !confirmedActionId) setProposeMode(true);
     const ac = new AbortController();
     abortRef.current = ac;
     try {
@@ -146,7 +188,9 @@ export function AssistantDock() {
           messages: next.map(({ role, content: c, images }) => ({ role, content: c, images })),
           stream: true,
           partnerId: proposePartnerId,
-          forcePropose: proposeMode || !!proposal || likelyPropose,
+          forcePropose: (proposeMode || !!proposal) && !pendingIntent,
+          confirmedActionId,
+          skipIntentConfirm: !!proposal,
         }),
         signal: ac.signal,
       });
@@ -167,6 +211,7 @@ export function AssistantDock() {
 
       if ((data as ProposeResult).mode === "propose") {
         const p = data as ProposeResult;
+        setPendingIntent(null);
         setProposeMode(true);
         setProposal((prev) => {
           if (!p.proposal || countProposalItems(p.proposal) <= 0) return prev ?? p.proposal;
@@ -179,8 +224,15 @@ export function AssistantDock() {
         setClarifications((prev) => (p.clarifications?.length ? p.clarifications : prev));
         setReady(p.ready);
         setMessages([...next, { role: "assistant", content: p.reply || finalReply, trace: [...trace] }]);
+      } else if ((data as IntentConfirmResult).mode === "intent_confirm") {
+        const ic = data as IntentConfirmResult;
+        setPendingIntent({ actionId: ic.actionId, alternatives: ic.alternatives ?? [] });
+        setProposeMode(false);
+        setProposal(null);
+        setMessages([...next, { role: "assistant", content: ic.reply || finalReply, trace: [...trace] }]);
       } else {
         const q = data as QueryResult;
+        setPendingIntent(null);
         setMessages([...next, { role: "assistant", content: q.reply || finalReply, actions: q.actions, trace: [...trace] }]);
         if (q.actions?.length) router.refresh();
       }

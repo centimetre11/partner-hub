@@ -6,8 +6,10 @@ import { isAgentBuilderIntent } from "./agent-builder-intent";
 import type { Locale } from "./i18n/locale";
 import {
   actionCatalogForAi,
+  actionExamplesForAi,
   BUILTIN_ACTIONS,
   builtinActionById,
+  normalizeActionText,
   scoreBuiltinActions,
   topBuiltinAction,
   type BuiltinActionDef,
@@ -36,26 +38,29 @@ function formatConversation(messages: IntakeMessage[]): string {
 function conversationText(messages: IntakeMessage[]): string {
   return messages
     .filter((m) => m.role === "user")
-    .map((m) => stripIntakeSystemHint(m.content))
+    .map((m) => normalizeActionText(m.content))
     .join("\n");
 }
 
 function buildClassifierSystem(locale: Locale): string {
   const lang = locale === "zh" ? "Chinese" : "English";
   const catalog = actionCatalogForAi(locale === "zh" ? "zh" : "en");
+  const examples = actionExamplesForAi(locale === "zh" ? "zh" : "en");
   return `You pick the single best builtin action for a Partner Hub assistant message.
 Reply in ${lang} only inside the JSON "reason" field.
 
 Builtin actions (pick exactly one actionId):
 ${catalog}
 
+${examples}
+
 Rules:
-1. Prefer the builtin action that best matches the user's primary goal across the FULL conversation.
+1. Prefer the action that best matches the user's primary goal across the FULL conversation.
 2. Follow-up lines without a new action verb continue the previous action unless the user clearly switches task.
 3. When a WeCom group is bound to a partner, prefer intake.* over intake.new_partner unless onboarding a new company.
-4. Do NOT default to intake.profile just because a partner exists — only when enriching profile fields.
-5. Prefer intake.todo over query.list_todos when the user wants to CREATE/LOG a task; use query.list_todos only when listing existing todos.
-6. Verbs like 看看/了解/跟进 in a todo description are part of intake.todo, not query.list_todos.
+4. Do NOT default to intake.profile just because a partner exists.
+5. Count/list questions (多少/有哪些/how many + 待办) → query.list_todos, NOT intake.todo.
+6. Create/log verbs (建/加/记/创建 + 待办) → intake.todo; follow-up verbs inside the task (看看 poc) stay intake.todo.
 
 Output exactly one JSON object:
 {"actionId":"<id from catalog>","confidence":"high|medium|low","reason":"one short sentence"}`;

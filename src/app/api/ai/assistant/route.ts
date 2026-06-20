@@ -15,8 +15,10 @@ export async function POST(req: NextRequest) {
     stream?: boolean;
     partnerId?: string;
     forcePropose?: boolean;
+    confirmedActionId?: string;
+    skipIntentConfirm?: boolean;
   };
-  const { messages, stream, partnerId, forcePropose } = body;
+  const { messages, stream, partnerId, forcePropose, confirmedActionId, skipIntentConfirm } = body;
   const locale = await getLocale();
 
   try {
@@ -30,6 +32,8 @@ export async function POST(req: NextRequest) {
           feature: "Global AI Assistant",
           emit,
           forcePropose,
+          confirmedActionId,
+          skipIntentConfirm,
         });
         emit({ event: "done", data: result });
       });
@@ -41,6 +45,8 @@ export async function POST(req: NextRequest) {
       locale,
       feature: "Global AI Assistant",
       forcePropose,
+      confirmedActionId,
+      skipIntentConfirm,
     });
     return NextResponse.json(result);
   } catch (e) {

@@ -242,17 +242,13 @@ export function isFastIntakeScope(scope: IntakeScope): boolean {
   return FAST_INTAKE_SCOPES.includes(scope);
 }
 
-/** Bound partner + fast scope + ready draft → skip confirm and save immediately. */
-export function shouldAutoApplyBoundIntake(opts: {
+/** Bound partner + fast scope + ready draft → skip content confirm (disabled: intent confirm required first). */
+export function shouldAutoApplyBoundIntake(_opts: {
   scope: IntakeScope;
   partnerId?: string;
   ready: boolean;
   clarifications?: IntakeClarification[];
   proposal: IntakeProposal | null;
 }): boolean {
-  if (!opts.partnerId || !opts.ready || !opts.proposal) return false;
-  if (opts.scope === "business_record") return false;
-  if (!isFastIntakeScope(opts.scope)) return false;
-  if ((opts.clarifications ?? []).some((c) => c.blocking)) return false;
-  return countProposalItems(opts.proposal) > 0;
+  return false;
 }

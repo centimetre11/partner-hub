@@ -1,4 +1,6 @@
 import type { IntakeScope } from "./ai-locale";
+import { stripIntakeSystemHint } from "./intake-text";
+import { stripWecomCommandPrefix } from "./wecom-user-resolve";
 
 /** Routable builtin actions — single source of truth for intent / scope classification. */
 export type BuiltinActionRoute =
@@ -10,13 +12,27 @@ export type BuiltinActionDef = {
   id: string;
   route: BuiltinActionRoute;
   label: { zh: string; en: string };
-  /** When the user clearly wants this action */
   description: { zh: string; en: string };
-  /** Heuristic fallback: any match adds to score */
   signals: RegExp[];
-  /** Higher wins ties after signal score */
   priority: number;
 };
+
+/** User asks to list/count todos — not create */
+const TODO_QUERY_RE =
+  /看看.{0,10}待办|看一下.{0,10}待办|查.{0,8}待办|查询.{0,6}待办|列出.{0,6}待办|现在.{0,8}多少.{0,8}待办|当前.{0,8}待办|有多少.{0,8}待办|有几.{0,8}待办|待办.{0,12}(有哪些|有什么|多少|几个|数量|总数|几条|列表|清单|\bopen\b|\ball\b)|(有哪些|有什么|多少|几个|列出|查询|显示|展示).{0,16}待办|^(看看|看一下|查|查询|列出|显示|展示).{0,20}待办|\b(list|show|what|open|view|how many).{0,16}todos?\b|\btodos?\b.{0,16}(list|show|what|open|view)/i;
+
+const TODO_CREATE_VERB_RE =
+  /建.{0,4}待办|创建待办|新.{0,2}待办|录入待办|加.{0,2}待办|帮.{0,12}(?:建|创|加|记|写|添).{0,6}待办|添加待办|记.{0,4}待办|\b(create|add|log|new)\s+todos?\b|待办[：:，]|^事项[是：:]|^the item is\b/i;
+
+export function normalizeActionText(text: string): string {
+  return stripWecomCommandPrefix(stripIntakeSystemHint(text)).trim();
+}
+
+export function isTodoQueryPhrase(text: string): boolean {
+  const t = normalizeActionText(text);
+  if (!/待办|todos?\b/i.test(t)) return false;
+  return TODO_QUERY_RE.test(t) && !TODO_CREATE_VERB_RE.test(t);
+}
 
 export const BUILTIN_ACTIONS: BuiltinActionDef[] = [
   {
@@ -33,11 +49,30 @@ export const BUILTIN_ACTIONS: BuiltinActionDef[] = [
     priority: 90,
   },
   {
+    id: "query.list_todos",
+    route: { mode: "query", queryKind: "list_todos" },
+    label: { zh: "查询待办", en: "List todos" },
+    description: {
+      zh: "查看/统计已有 open 待办（如「现在多少待办」「有哪些待办」），不是新建",
+      en: "List or count existing open todos, not creating new ones",
+    },
+    signals: [
+      /看看.{0,10}待办|看一下.{0,10}待办|查.{0,8}待办|查询.{0,6}待办|列出.{0,6}待办/i,
+      /现在.{0,8}多少.{0,8}待办|当前.{0,8}待办|有多少.{0,8}待办|有几.{0,8}待办/i,
+      /待办.{0,16}(有哪些|有什么|多少|几个|数量|总数|几条|列表|清单|\bopen\b|\ball\b)/i,
+      /(有哪些|有什么|多少|几个|列出|查询|显示|展示).{0,16}待办/i,
+      /^(看看|看一下|查|查询|列出|显示|展示).{0,20}待办/i,
+      /\b(list|show|what|open|view|how many).{0,16}todos?\b/i,
+      /\btodos?\b.{0,16}(list|show|what|open|view)/i,
+    ],
+    priority: 88,
+  },
+  {
     id: "intake.todo",
     route: { mode: "propose", scope: "todo" },
     label: { zh: "创建待办", en: "Create todo" },
     description: {
-      zh: "新建或补充一条待办/跟进任务；描述里可含任意后续动作（如了解 poc、安排会议）",
+      zh: "新建或补充一条待办/跟进任务；描述里可含后续动作（如了解 poc、安排会议）",
       en: "Create or fill in a todo/follow-up; description may include follow-up steps",
     },
     signals: [
@@ -48,24 +83,6 @@ export const BUILTIN_ACTIONS: BuiltinActionDef[] = [
       /^事项[是：:]|^the item is\b/i,
     ],
     priority: 85,
-  },
-  {
-    id: "query.list_todos",
-    route: { mode: "query", queryKind: "list_todos" },
-    label: { zh: "查询待办", en: "List todos" },
-    description: {
-      zh: "查看/列举已有 open 待办，不是新建",
-      en: "List or view existing open todos, not creating new ones",
-    },
-    signals: [
-      /看看.{0,10}待办|看一下.{0,10}待办|查.{0,8}待办|查询.{0,6}待办|列出.{0,6}待办/i,
-      /待办.{0,16}(有哪些|有什么|多少|几个|列表|清单|\bopen\b|\ball\b)/i,
-      /(有哪些|有什么|多少|几个|列出|查询|显示|展示).{0,16}待办/i,
-      /^(看看|看一下|查|查询|列出|显示|展示).{0,20}待办/i,
-      /\b(list|show|what|open|view).{0,16}todos?\b/i,
-      /\btodos?\b.{0,16}(list|show|what|open|view)/i,
-    ],
-    priority: 75,
   },
   {
     id: "intake.opportunity",
@@ -125,19 +142,25 @@ export type ActionScore = { action: BuiltinActionDef; score: number };
 const SCORE_THRESHOLD = 8;
 
 export function scoreBuiltinActions(text: string): ActionScore[] {
-  const t = text.trim();
+  const t = normalizeActionText(text);
   if (!t) return [];
 
-  return BUILTIN_ACTIONS.map((action) => {
+  const todoQuery = isTodoQueryPhrase(t);
+
+  const scored = BUILTIN_ACTIONS.map((action) => {
     let score = 0;
     for (const re of action.signals) {
       if (re.test(t)) score += 10;
     }
+    if (action.id === "intake.todo" && todoQuery) score = 0;
+    if (action.id === "query.list_todos" && todoQuery) score += 15;
     if (score > 0) score += action.priority / 100;
     return { action, score };
   })
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score || b.action.priority - a.action.priority);
+
+  return scored;
 }
 
 export function topBuiltinAction(text: string): ActionScore | null {
@@ -145,6 +168,12 @@ export function topBuiltinAction(text: string): ActionScore | null {
   const top = ranked[0];
   if (!top || top.score < SCORE_THRESHOLD) return null;
   return top;
+}
+
+export function getAlternativeActions(text: string, excludeActionId: string, limit = 3): ActionScore[] {
+  return scoreBuiltinActions(text)
+    .filter((s) => s.action.id !== excludeActionId)
+    .slice(0, limit);
 }
 
 export function actionCatalogForAi(locale: "zh" | "en"): string {
@@ -161,6 +190,21 @@ export function actionCatalogForAi(locale: "zh" | "en"): string {
   }).join("\n");
 }
 
+export function actionExamplesForAi(locale: "zh" | "en"): string {
+  if (locale === "zh") {
+    return `Examples:
+- 「现在多少待办」「有哪些待办」→ query.list_todos
+- 「帮我建个待办…看看 poc」→ intake.todo
+- 「记个待办：下周跟进」→ intake.todo
+- 「补全 AkLogiks 画像」→ intake.profile`;
+  }
+  return `Examples:
+- "how many open todos" / "list todos" → query.list_todos
+- "create a todo to follow up with poc" → intake.todo
+- "log a todo: follow up next week" → intake.todo
+- "enrich AkLogiks profile" → intake.profile`;
+}
+
 export function builtinActionById(id: string): BuiltinActionDef | undefined {
   return BUILTIN_ACTIONS.find((a) => a.id === id);
 }
@@ -171,11 +215,6 @@ export function scopeFromActionId(id: string): IntakeScope | undefined {
   return undefined;
 }
 
-/** Coarse gate: any builtin intake/query action detected in conversation */
-export function conversationHasBuiltinAction(text: string): boolean {
-  return scoreBuiltinActions(text).some((s) => s.score >= SCORE_THRESHOLD);
-}
-
 export function isListTodosAction(text: string): boolean {
   const top = topBuiltinAction(text);
   return top?.action.id === "query.list_todos";
@@ -184,4 +223,13 @@ export function isListTodosAction(text: string): boolean {
 export function isProposeBuiltinAction(text: string): boolean {
   const top = topBuiltinAction(text);
   return top?.action.route.mode === "propose";
+}
+
+export function isQueryBuiltinAction(text: string): boolean {
+  const top = topBuiltinAction(text);
+  return top?.action.route.mode === "query";
+}
+
+export function conversationTopAction(text: string): ActionScore | null {
+  return topBuiltinAction(text);
 }
