@@ -14,6 +14,8 @@ import {
 import { MONITOR_DIMENSIONS, MONITOR_SENTIMENT_LABELS } from "./constants";
 import { formatTierLabel, partnerFieldValueFromText } from "./tier";
 import { overdueDueDateBefore } from "./todo-dates";
+import { enqueueWecomPush } from "./wecom-push";
+import { getWecomChatByChatId, listWecomChats } from "./wecom-chats";
 
 // ============ Skill execution context ============
 
@@ -632,6 +634,119 @@ const createDocument: Skill = {
   },
 };
 
+// ---- Push to WeCom group ----
+const pushWecom: Skill = {
+  name: "push_wecom",
+  label: "Push to WeCom group",
+  desc: "Enqueue a Markdown message to a WeCom group chatId (chat must be registered by the bot)",
+  def: {
+    type: "function",
+    function: {
+      name: "push_wecom",
+      description:
+        "Push a Markdown message to a WeCom group. Requires chatId from get_partner (WeCom group line) or list_wecom_chats. The chat must exist in the system (bot has seen the group).",
+      parameters: {
+        type: "object",
+        properties: {
+          chatId: { type: "string", description: "WeCom group chat ID" },
+          content: { type: "string", description: "Markdown message body" },
+        },
+        required: ["chatId", "content"],
+      },
+    },
+  },
+  run: async (args, ctx) => {
+    const chatId = String(args.chatId ?? "").trim();
+    const content = String(args.content ?? "").trim();
+    if (!chatId) return "Please provide chatId";
+    if (!content) return "Please provide content";
+    const chat = await getWecomChatByChatId(chatId);
+    if (!chat) {
+      return `Chat ID "${chatId}" is not registered. @ the bot in the group first, or bind the chat on the partner page.`;
+    }
+    const job = await enqueueWecomPush(chatId, content);
+    const msg = `WeCom push queued (job ${job.id}); delivers within seconds if the bot is connected.`;
+    ctx.actions.push(msg);
+    return msg;
+  },
+};
+
+// ---- List WeCom chats ----
+const listWecomChatsTool: Skill = {
+  name: "list_wecom_chats",
+  label: "List WeCom chats",
+  desc: "List registered WeCom group/single chats and partner bindings",
+  def: {
+    type: "function",
+    function: {
+      name: "list_wecom_chats",
+      description:
+        "List WeCom chats the bot has seen. Use to find chatId before push_wecom, or check whether a partner has a bound group (prefer get_partner for a single partner).",
+      parameters: {
+        type: "object",
+        properties: {
+          partnerName: { type: "string", description: "If set, return binding for this partner only" },
+          unboundOnly: { type: "boolean", description: "If true, only chats not linked to a partner" },
+        },
+      },
+    },
+  },
+  run: async (args) => {
+    if (args.partnerName) {
+      const p = await findPartnerByName(String(args.partnerName));
+      if (!p) return `No partner found matching "${args.partnerName}"`;
+      const chats = await listWecomChats();
+      const bound = chats.find((c) => c.partnerId === p.id);
+      if (bound) {
+        return `Partner ${p.name}: chatId=${bound.chatId}${bound.label ? ` label=${bound.label}` : ""}`;
+      }
+      return `Partner ${p.name}: WeCom group not bound. Use list_wecom_chats with unboundOnly=true to see available groups, or bind on the partner page.`;
+    }
+    let chats = await listWecomChats();
+    if (args.unboundOnly === true) chats = chats.filter((c) => !c.partnerId);
+    if (!chats.length) {
+      return args.unboundOnly
+        ? "No unbound WeCom chats registered. @ the bot in a group first."
+        : "No WeCom chats registered yet. @ the bot in a group or single chat first.";
+    }
+    return chats
+      .map(
+        (c, i) =>
+          `${i + 1}. chatId=${c.chatId} | ${c.chatType} | label=${c.label ?? "—"} | partner=${c.partnerName ?? "unbound"}`,
+      )
+      .join("\n");
+  },
+};
+
+// ---- Send email ----
+const sendEmailTool: Skill = {
+  name: "send_email",
+  label: "Send email",
+  desc: "Send an email via team SMTP (QQ mailbox). Agent supplies recipient, subject, and body.",
+  def: {
+    type: "function",
+    function: {
+      name: "send_email",
+      description:
+        "Send an email through the team-configured SMTP service (Settings → Email). Provide recipient address(es), subject, and body. Comma-separated to for multiple recipients.",
+      parameters: {
+        type: "object",
+        properties: {
+          to: { type: "string", description: "Recipient email(s), comma-separated if multiple" },
+          subject: { type: "string", description: "Email subject line" },
+          body: { type: "string", description: "Plain-text email body" },
+          html: { type: "string", description: "Optional HTML body (uses body as fallback if omitted)" },
+        },
+        required: ["to", "subject", "body"],
+      },
+    },
+  },
+  run: async (args, ctx) => {
+    const { runSendEmailTool } = await import("./skill-actions/send-email");
+    return runSendEmailTool(args, ctx);
+  },
+};
+
 // ============ Registry ============
 
 export const SKILLS: Skill[] = [
@@ -649,6 +764,9 @@ export const SKILLS: Skill[] = [
   readKms,
   writeKms,
   createDocument,
+  pushWecom,
+  listWecomChatsTool,
+  sendEmailTool,
 ];
 
 export const SKILL_MAP = new Map(SKILLS.map((s) => [s.name, s]));

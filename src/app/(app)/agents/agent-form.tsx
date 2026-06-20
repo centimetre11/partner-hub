@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { upsertAgentAction } from "@/lib/agent-actions";
 import type { PromptSkillOption, ToolOption } from "@/lib/skill-resolver";
+import { useMessages } from "@/lib/i18n/context";
+
+const AGENT_PUSH_SKILLS = ["push_wecom", "send_email"] as const;
 
 type PartnerOption = { id: string; name: string };
 
@@ -22,6 +25,7 @@ type AgentData = {
   partnerId: string;
   shared: boolean;
   webhookUrl: string;
+  pushEmailTo?: string;
 };
 
 const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
@@ -37,9 +41,15 @@ export function AgentForm({
   promptSkillOptions: PromptSkillOption[];
   partners: PartnerOption[];
 }) {
+  const { agents: a } = useMessages();
   const [trigger, setTrigger] = useState(agent.trigger);
   const [frequency, setFrequency] = useState(agent.frequency);
   const [scopeType, setScopeType] = useState(agent.scopeType);
+  const [pushEmail, setPushEmail] = useState(agent.skills.includes("send_email"));
+
+  const toolkitOptions = toolOptions.filter((t) => !AGENT_PUSH_SKILLS.includes(t.name as (typeof AGENT_PUSH_SKILLS)[number]));
+  const pushWecomOption = toolOptions.find((t) => t.name === "push_wecom");
+  const pushEmailOption = toolOptions.find((t) => t.name === "send_email");
 
   return (
     <form action={upsertAgentAction} className="space-y-5">
@@ -80,7 +90,7 @@ export function AgentForm({
           <p className="text-xs text-slate-400 mt-0.5">Capability units the Agent can call directly—read profiles, search the web, create todos, etc.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {toolOptions.map((t) => (
+          {toolkitOptions.map((t) => (
             <label
               key={t.name}
               className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-300"
@@ -184,23 +194,76 @@ export function AgentForm({
       </div>
 
       <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 space-y-4">
-        <h3 className="text-sm font-semibold text-slate-800">Push & Sharing</h3>
+        <h3 className="text-sm font-semibold text-slate-800">{a.pushSharing}</h3>
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-slate-500">{a.pushChannels}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {pushWecomOption && (
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-300">
+                <input
+                  type="checkbox"
+                  name="skills"
+                  value="push_wecom"
+                  defaultChecked={agent.skills.includes("push_wecom")}
+                  className="mt-0.5 rounded"
+                />
+                <span className="min-w-0">
+                  <span className="text-sm font-medium text-slate-800 block">{a.pushWecom}</span>
+                  <span className="text-xs text-slate-400 font-mono">push_wecom</span>
+                  <span className="text-xs text-slate-400 block mt-0.5">{a.pushWecomDesc}</span>
+                </span>
+              </label>
+            )}
+            {pushEmailOption && (
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-300">
+                <input
+                  type="checkbox"
+                  name="skills"
+                  value="send_email"
+                  defaultChecked={agent.skills.includes("send_email")}
+                  onChange={(e) => setPushEmail(e.target.checked)}
+                  className="mt-0.5 rounded"
+                />
+                <span className="min-w-0">
+                  <span className="text-sm font-medium text-slate-800 block">{a.pushEmail}</span>
+                  <span className="text-xs text-slate-400 font-mono">send_email</span>
+                  <span className="text-xs text-slate-400 block mt-0.5">{a.pushEmailDesc}</span>
+                </span>
+              </label>
+            )}
+          </div>
+        </div>
+        {pushEmail && (
+          <label className="space-y-1 block">
+            <span className="text-xs text-slate-500">{a.pushEmailTo}</span>
+            <input
+              name="pushEmailTo"
+              type="email"
+              defaultValue={agent.pushEmailTo ?? ""}
+              placeholder={a.pushEmailToPlaceholder}
+              className={input}
+            />
+          </label>
+        )}
         <label className="space-y-1 block">
-          <span className="text-xs text-slate-500">Webhook URL (optional — push run results to Feishu/WeCom/DingTalk/Slack group bots)</span>
-          <input name="webhookUrl" defaultValue={agent.webhookUrl} placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/…" className={input} />
+          <span className="text-xs text-slate-500">{a.webhookUrl}</span>
+          <input
+            name="webhookUrl"
+            defaultValue={agent.webhookUrl}
+            placeholder={a.webhookPlaceholder}
+            className={input}
+          />
         </label>
         <label className="flex items-center gap-2">
           <input type="checkbox" name="shared" defaultChecked={agent.shared} className="rounded" />
-          <span className="text-sm text-slate-700">Share with team (visible and cloneable by other members)</span>
+          <span className="text-sm text-slate-700">{a.shareWithTeam}</span>
         </label>
-        <p className="text-xs text-slate-400">
-          Run results always go to the system inbox. Agent changes to partner profiles become proposals and take effect after human approval; timeline writes and todo creation execute directly with audit trail.
-        </p>
+        <p className="text-xs text-slate-400">{a.pushSharingFootnote}</p>
       </div>
 
       <div className="flex justify-end gap-2">
         <button className="rounded-lg bg-slate-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-slate-800">
-          {agent.id ? "Save Changes" : "Create Agent"}
+          {agent.id ? a.saveChanges : a.createAgentBtn}
         </button>
       </div>
     </form>

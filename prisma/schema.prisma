@@ -434,6 +434,7 @@ model Agent {
   shared       Boolean   @default(true)
   enabled      Boolean   @default(true)
   webhookUrl       String?
+  pushEmailTo      String? // 默认邮件推送收件人（send_email）
   wecomPushChatId  String? // 运行完成后推送到指定企微 chatId
   isTemplate       Boolean   @default(false) // 模板库条目，克隆使用
   createdById  String?

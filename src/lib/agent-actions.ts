@@ -33,6 +33,7 @@ export async function upsertAgentAction(formData: FormData) {
     shared: formData.get("shared") === "on",
     enabled: formData.get("enabled") !== "off",
     webhookUrl: String(formData.get("webhookUrl") ?? "").trim() || null,
+    pushEmailTo: String(formData.get("pushEmailTo") ?? "").trim() || null,
   };
   if (!data.name || !data.instructions) return;
   if (data.scopeType === "PARTNER" && !data.partnerId) data.scopeType = "ALL";

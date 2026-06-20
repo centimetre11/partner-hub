@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-intake";
-import { PROPOSE_INTENT_RE } from "@/lib/ai-intake";
+import { PROPOSE_INTENT_RE } from "@/lib/propose-intent";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";

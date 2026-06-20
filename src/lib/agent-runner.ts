@@ -98,7 +98,7 @@ Always reply in English.
 
 【Your task instructions】
 ${agent.instructions}
-${scopeCtx}
+${scopeCtx}${agent.pushEmailTo ? `\n\n【Default email recipient for send_email】\n${agent.pushEmailTo}` : ""}
 ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.promptFragments.join("\n\n")}` : ""}
 
 【Working rules】
@@ -107,8 +107,10 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
 3. When you find valuable partner-related signals, use add_timeline_event on that partner's timeline (if tool enabled).
 4. To change partner profile fields, call update_partner — the system converts to a proposal for human approval.
 5. For pre-meeting briefs, joint solutions, etc., save with create_document to the report center (if skill enabled).
-6. When done, output a final brief in Markdown (English): one-line conclusion first, then findings/recommendations/actions taken. If nothing new to report, say "No new findings this run" and summarize what was checked.
-7. The brief is your final message; no tool call needed to send it.`;
+6. To push to a WeCom group during the run, use push_wecom with chatId from get_partner (WeCom group line) or list_wecom_chats. If not bound, skip push and mention in the final brief.
+7. To send email, use send_email with explicit recipient address(es), subject, and body (requires team SMTP in Settings).
+8. When done, output a final brief in Markdown (English): one-line conclusion first, then findings/recommendations/actions taken. If nothing new to report, say "No new findings this run" and summarize what was checked.
+9. The brief is your final message; no tool call needed to send it.`;
 
     const chat: ChatMessage[] = [
       { role: "system", content: system },

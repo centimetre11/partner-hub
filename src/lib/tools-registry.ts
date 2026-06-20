@@ -1,4 +1,5 @@
 import { SKILLS } from "./skills";
+import { getToolLabel as getToolLabelFromMap } from "./tool-labels";
 
 export type ToolMeta = {
   name: string;
@@ -12,6 +13,8 @@ export type ToolMeta = {
   requiresKms?: boolean;
   /** Requires team Know-how API token */
   requiresKnowhow?: boolean;
+  /** Requires team SMTP email service */
+  requiresEmail?: boolean;
   /** Core scenario priority */
   priority: "core" | "standard" | "assistant";
 };
@@ -39,6 +42,9 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   create_document: { implemented: true, priority: "core" },
   list_todos: { implemented: true, priority: "standard" },
   update_partner: { implemented: true, priority: "assistant" },
+  push_wecom: { implemented: true, priority: "standard" },
+  list_wecom_chats: { implemented: true, priority: "standard" },
+  send_email: { implemented: true, requiresEmail: true, priority: "standard" },
 };
 
 const CATEGORY_BY_TOOL: Record<string, string> = {
@@ -56,6 +62,9 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   read_kms: "kms",
   write_kms: "kms",
   create_document: "content",
+  push_wecom: "integration",
+  list_wecom_chats: "integration",
+  send_email: "integration",
 };
 
 const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
@@ -65,6 +74,7 @@ const TOOL_CATEGORIES_TEMPLATE: Omit<ToolCategory, "tools">[] = [
   { id: "knowhow", label: "Know-how", desc: "Fanruan Know-how knowledge base — semantic search for cases, solutions, and collateral", icon: "🔍" },
   { id: "todo", label: "Tasks", desc: "Create and list follow-up todos", icon: "☑" },
   { id: "content", label: "Knowledge & reports", desc: "Team knowledge base and report center output", icon: "📄" },
+  { id: "integration", label: "Integrations", desc: "WeCom group notifications, email, and outbound messaging", icon: "🔔" },
 ];
 
 function buildCategories(): ToolCategory[] {
@@ -88,7 +98,7 @@ export const BUILTIN_TOOL_CATEGORIES = buildCategories();
 export const BUILTIN_TOOL_COUNT = SKILLS.length;
 
 export function getToolLabel(name: string) {
-  return SKILLS.find((t) => t.name === name)?.label ?? name;
+  return getToolLabelFromMap(name);
 }
 
 export function isToolAvailable(name: string, opts?: { webSearchReady?: boolean }) {
@@ -100,13 +110,14 @@ export function isToolAvailable(name: string, opts?: { webSearchReady?: boolean 
 
 export function getToolAvailability(
   name: string,
-  opts?: { kmsConfigured?: boolean; knowhowConfigured?: boolean; webSearchReady?: boolean },
-): "ready" | "needs_web_search" | "needs_kms" | "needs_knowhow" | "unknown" {
+  opts?: { kmsConfigured?: boolean; knowhowConfigured?: boolean; webSearchReady?: boolean; emailConfigured?: boolean },
+): "ready" | "needs_web_search" | "needs_kms" | "needs_knowhow" | "needs_email" | "unknown" {
   if (!SKILLS.some((t) => t.name === name)) return "unknown";
   const meta = TOOL_META[name];
   if (meta?.requiresWebSearch && !opts?.webSearchReady) return "needs_web_search";
   if (meta?.requiresKms && !opts?.kmsConfigured) return "needs_kms";
   if (meta?.requiresKnowhow && !opts?.knowhowConfigured) return "needs_knowhow";
+  if (meta?.requiresEmail && !opts?.emailConfigured) return "needs_email";
   return "ready";
 }
 

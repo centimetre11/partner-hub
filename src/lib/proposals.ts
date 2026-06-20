@@ -88,9 +88,14 @@ export async function partnerContext(partnerId: string, locale: Locale = "zh"): 
   const labels = getLabels(locale);
   const p = await db.partner.findUnique({
     where: { id: partnerId },
-    include: { contacts: true, opportunities: true, owner: true },
+    include: { contacts: true, opportunities: true, owner: true, wecomChat: true },
   });
   if (!p) return locale === "zh" ? "（未找到伙伴）" : "(Partner not found)";
+  const wecomLine = p.wecomChat
+    ? `- WeCom group[wecom]: chatId=${p.wecomChat.chatId}${p.wecomChat.label ? ` label=${p.wecomChat.label}` : ""}`
+    : locale === "zh"
+      ? "- WeCom group[wecom]: not bound (bind on partner page or Settings → 企业微信会话)"
+      : "- WeCom group[wecom]: not bound (bind on partner page or Settings → WeCom chats)";
   const fields = Object.entries(PARTNER_FIELD_LABELS)
     .map(([field]) => {
       const v = (p as unknown as Record<string, unknown>)[field];
@@ -116,7 +121,7 @@ export async function partnerContext(partnerId: string, locale: Locale = "zh"): 
         )
         .join("\n")
     : noneLabel(locale);
-  return `${partnerContextHeader(locale, p.name)}\n${fields}\n\n${partnerContextSection(locale, "contacts")}\n${contacts}\n\n${partnerContextSection(locale, "opportunities")}\n${opps}`;
+  return `${partnerContextHeader(locale, p.name)}\n${fields}\n${wecomLine}\n\n${partnerContextSection(locale, "contacts")}\n${contacts}\n\n${partnerContextSection(locale, "opportunities")}\n${opps}`;
 }
 
 /** Business record intake: partner name + contacts only (fast attribute extraction) */

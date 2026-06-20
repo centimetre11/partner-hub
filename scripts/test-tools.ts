@@ -17,9 +17,12 @@ function classify(tool: string, out: string, webSearchReady: boolean): "pass" | 
     if (tool === "read_kms") return process.env.KMS_TEST_TOKEN ? "fail" : "skip";
     return webSearchReady ? "fail" : "skip";
   }
-  if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败")) {
+  if (out.includes("未知工具") || out.includes("执行出错") || out.startsWith("搜索失败") || out.includes("Tool ") && out.includes(" failed:")) {
     return "fail";
   }
+  if (tool === "push_wecom" && (out.includes("not registered") || out.includes("Please provide"))) return "skip";
+  if (tool === "list_wecom_chats" && out.includes("No WeCom chats")) return "skip";
+  if (tool === "send_email" && (out.includes("not configured") || out.includes("Please provide"))) return "skip";
   if (tool === "search_knowledge" && out.includes("未找到")) return "fail";
   if (tool === "read_kms" && out.includes("KMS 中未找到")) return "fail";
   if (tool === "search_partners" && out === "没有符合条件的伙伴") return "fail";
@@ -54,6 +57,7 @@ async function main() {
     ["linkedin_search", { company: "Beinex", person: "Shantosh Sridhar", maxResults: 3 }],
     ["web_search", { query: "Beinex Dubai analytics partner news", maxResults: 3, topic: "news" }],
     ["read_kms", { pageId: "1420741418" }],
+    ["list_wecom_chats", {}],
   ];
 
   const results: { tool: string; status: string; preview: string }[] = [];
@@ -102,6 +106,34 @@ async function main() {
     if (idMatch) await prisma.document.delete({ where: { id: idMatch[1] } }).catch(() => null);
   }
   results.push({ tool: "create_document", status: docOk ? "pass" : "fail", preview: docOut });
+
+  const wecomChat = await prisma.wecomChat.findFirst();
+  if (wecomChat) {
+    const pushOut = await runSkill("push_wecom", { chatId: wecomChat.chatId, content: "[tool-test] push" }, ctx);
+    const pushOk = pushOut.includes("queued");
+    if (pushOk) {
+      await prisma.wecomPushJob.deleteMany({ where: { chatId: wecomChat.chatId, content: "[tool-test] push" } });
+    }
+    results.push({ tool: "push_wecom", status: pushOk ? "pass" : "fail", preview: pushOut });
+  } else {
+    results.push({ tool: "push_wecom", status: "skip", preview: "No WecomChat row — skip" });
+  }
+
+  const emailConfigured = await import("../src/lib/email-config").then((m) => m.isEmailServiceConfigured());
+  if (emailConfigured && process.env.EMAIL_TEST_TO) {
+    const mailOut = await runSkill(
+      "send_email",
+      { to: process.env.EMAIL_TEST_TO, subject: "[tool-test] send_email", body: "Automated tool test" },
+      ctx,
+    );
+    results.push({ tool: "send_email", status: mailOut.includes("Email sent") ? "pass" : "fail", preview: mailOut });
+  } else {
+    results.push({
+      tool: "send_email",
+      status: "skip",
+      preview: emailConfigured ? "Set EMAIL_TEST_TO to run live send" : "Email service not configured — skip",
+    });
+  }
 
   const summary = {
     webSearchConfigured: webSearchReady,

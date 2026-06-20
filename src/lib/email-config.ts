@@ -99,3 +99,7 @@ export async function getEmailConfigForClient(): Promise<EmailConfigForClient> {
 export function isEmailConfigured(config: EmailConfig | null): config is EmailConfig {
   return !!config?.fromEmail && !!config.authCode;
 }
+
+export async function isEmailServiceConfigured(): Promise<boolean> {
+  return isEmailConfigured(await resolveEmailConfig());
+}

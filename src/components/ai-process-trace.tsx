@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { AiTraceStep } from "@/lib/ai-trace";
 import { formatToolArgs } from "@/lib/ai-trace";
-import { getToolLabel } from "@/lib/tools-registry";
+import { getToolLabel } from "@/lib/tool-labels";
 
 function StatusIcon({ status }: { status: AiTraceStep["status"] }) {
   if (status === "running") {

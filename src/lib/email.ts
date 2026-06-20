@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import "server-only";
 import { db } from "./db";
 import { isEmailConfigured, resolveEmailConfig, type EmailConfig } from "./email-config";
 

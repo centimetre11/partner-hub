@@ -1,4 +1,4 @@
-import { getToolLabel } from "./tools-registry";
+import { getToolLabel } from "./tool-labels";
 import type { IntakeProposal, IntakeClarification } from "./ai-intake";
 import type { ContactProposal, OpportunityProposal, TodoProposal } from "./proposals";
 import type { ProposalChanges } from "./proposal-merge";

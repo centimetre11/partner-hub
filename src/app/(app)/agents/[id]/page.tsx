@@ -75,6 +75,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ id
               partnerId: agent.partnerId ?? "",
               shared: agent.shared,
               webhookUrl: agent.webhookUrl ?? "",
+              pushEmailTo: agent.pushEmailTo ?? "",
             }}
             toolOptions={toolOptions}
             promptSkillOptions={promptSkillOptions}

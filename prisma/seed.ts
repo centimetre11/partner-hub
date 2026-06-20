@@ -349,8 +349,9 @@ const agentTemplates = [
 2. If none, output "All healthy" and stop.
 3. For each stale partner, use get_partner and suggest one concrete re-engagement action (who to contact, hook, talking points) based on Tier, pipeline stage, and playbook.
 4. For Tier A or pipeline stage >= 4, use create_todo with a high-priority todo (title includes partner name and action).
-5. Output a brief: stale list by risk + revival suggestions + todos created.`,
-    skills: ["search_partners", "get_partner", "create_todo", "list_todos"],
+5. If get_partner shows a WeCom group chatId, use push_wecom to send a short revival summary to that group; if not bound, skip push and note in the brief.
+6. Output a brief: stale list by risk + revival suggestions + todos created + WeCom push status.`,
+    skills: ["search_partners", "get_partner", "create_todo", "list_todos", "list_wecom_chats", "push_wecom"],
     trigger: "SCHEDULE",
     frequency: "DAILY",
     runHour: 8,
@@ -374,13 +375,14 @@ const agentTemplates = [
     icon: "📋",
     description: "Manual (partner-bound): compile profile + latest external updates into a one-page pre-meeting brief.",
     instructions: `You are a meeting prep assistant. Each run, for the bound partner produce a one-page brief:
-1. get_partner for full profile.
+1. get_partner for full profile (includes WeCom group chatId if bound).
 2. list_todos for open items (prior commitments).
 3. linkedin_search for key contacts; web_search for recent news (2 weeks).
 4. search_knowledge for Fanruan talk tracks / competitive ammo.
 5. Structure: one-line status; key people and attitudes; open items; suggested agenda (≤3) and goals; external updates or ammo.
-6. create_document (type=MEETING_PREP) when done.`,
-    skills: ["get_partner", "list_todos", "linkedin_search", "web_search", "search_knowledge", "create_document"],
+6. create_document (type=MEETING_PREP) when done.
+7. If get_partner shows a WeCom group chatId, push_wecom with a concise Markdown summary of the brief; if not bound, skip push and state in the final brief that the partner has no WeCom group bound.`,
+    skills: ["get_partner", "list_todos", "linkedin_search", "web_search", "search_knowledge", "create_document", "push_wecom"],
     trigger: "MANUAL",
     scopeType: "PARTNER",
   },
@@ -493,7 +495,17 @@ async function seedAgentTemplates() {
   });
   for (const t of agentTemplates) {
     const exists = await db.agent.findFirst({ where: { name: t.name, isTemplate: true } });
-    if (exists) continue;
+    if (exists) {
+      await db.agent.update({
+        where: { id: exists.id },
+        data: {
+          description: t.description,
+          instructions: t.instructions,
+          skills: JSON.stringify(t.skills),
+        },
+      });
+      continue;
+    }
     await db.agent.create({
       data: {
         name: t.name,
