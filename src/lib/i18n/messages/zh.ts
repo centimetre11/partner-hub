@@ -805,6 +805,7 @@ export const messagesZh: Messages = {
     builderConfirmHint: "确认草案后，将创建并激活自动化管道；详情页仍可微调 TASK.md 与触发器。",
     builderCreateReady: "确认并创建自动化",
     builderCreatePending: "请先完成左侧确认",
+    builderDeliveryRequired: "请设置定时，并至少选择企微群或邮箱其一作为推送渠道。",
     builderUntitled: "未命名自动化",
     builderWaitingDesc: "等待描述",
     builderTrigger: "触发方式",

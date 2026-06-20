@@ -5,15 +5,20 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { createAutomationFromBuilderAction } from "@/lib/automation-actions";
 import { formatAiClarificationMessage } from "@/lib/clarification-apply";
-import { formatPreferencePick } from "@/lib/ai-clarifications";
+import { formatPreferencePick, shouldBlockChatInput } from "@/lib/ai-clarifications";
 import type {
   AutomationBuilderClarification,
   AutomationBuilderDraft,
   AutomationBuilderMessage,
   AutomationBuilderTurn,
 } from "@/lib/automation-builder-types";
-import { shouldBlockChatInput } from "@/lib/ai-clarifications";
-import { wrapBuilderUserMessage, prefsToAutomationDraftFields } from "@/lib/builder-context-prompt";
+import {
+  wrapBuilderUserMessage,
+  mergeAutomationDraftWithPrefs,
+  isAutomationDraftReady,
+  partnerLabelFromPrefs,
+  pushChannelsLabel,
+} from "@/lib/builder-context-prompt";
 import { describeCron } from "@/lib/cron";
 import { AiClarificationFlow } from "@/components/ai-clarification-flow";
 import { AiProcessTrace } from "@/components/ai-process-trace";
@@ -24,7 +29,13 @@ import { useLocale, useMessages } from "@/lib/i18n";
 const inputCls =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
-function DraftPreview({ draft }: { draft: AutomationBuilderDraft }) {
+function DraftPreview({
+  draft,
+  partnerLabel,
+}: {
+  draft: AutomationBuilderDraft;
+  partnerLabel: string;
+}) {
   const a = useMessages().automations;
   const locale = useLocale();
 
@@ -38,9 +49,7 @@ function DraftPreview({ draft }: { draft: AutomationBuilderDraft }) {
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.monitorPartnerLabel}</div>
-          <div className="font-medium text-slate-800 truncate">
-            {draft.partnerId ? draft.partnerId : a.monitorPartnerAll}
-          </div>
+          <div className="font-medium text-slate-800 truncate">{partnerLabel}</div>
         </div>
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.taskGoalLabel}</div>
@@ -52,12 +61,7 @@ function DraftPreview({ draft }: { draft: AutomationBuilderDraft }) {
         </div>
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.pushResults}</div>
-          <div className="font-medium text-slate-800 truncate">
-            {draft.wecomPushChatId ? "企微" : ""}
-            {draft.wecomPushChatId && draft.pushEmailTo ? " + " : ""}
-            {draft.pushEmailTo ? "邮件" : ""}
-            {!draft.wecomPushChatId && !draft.pushEmailTo ? "—" : ""}
-          </div>
+          <div className="font-medium text-slate-800 truncate">{pushChannelsLabel(draft, locale === "zh" ? "zh" : "en")}</div>
         </div>
       </div>
       {draft.variables.length > 0 && (
@@ -99,6 +103,7 @@ export function AutomationBuilder() {
   const a = useMessages().automations;
   const bc = useMessages().builderCommon;
   const locale = useLocale();
+  const lang = locale === "zh" ? "zh" : "en";
   const starters = a.builderStarters;
   const { prefs, setCronExpr, setWecomChatId, setEmail, setPartnerId, wecomChats, emails, partners } =
     useBuilderDeliveryPrefs();
@@ -112,23 +117,25 @@ export function AutomationBuilder() {
   const [phase, setPhase] = useState("");
   const [phaseLabel, setPhaseLabel] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const draftJson = useMemo(() => {
-    if (!turn?.draft) return "null";
-    const merged = {
-      ...turn.draft,
-      ...prefsToAutomationDraftFields(prefs),
-    };
-    return JSON.stringify(merged);
+
+  const mergedDraft = useMemo(() => {
+    if (!turn?.draft) return null;
+    return mergeAutomationDraftWithPrefs(turn.draft, prefs);
   }, [turn, prefs]);
+
+  const draftJson = useMemo(() => (mergedDraft ? JSON.stringify(mergedDraft) : "null"), [mergedDraft]);
 
   const pendingClarifications = turn?.clarifications?.length ? turn.clarifications : [];
   const clarifyBlocked = shouldBlockChatInput(pendingClarifications) && !loading;
   const showInit = messages.length === 0 && !loading;
 
+  const createReady =
+    !!mergedDraft && isAutomationDraftReady(mergedDraft) && !clarifyBlocked;
+
   async function send(text?: string) {
     const raw = (text ?? inputText).trim();
     if (!raw || loading || clarifyBlocked) return;
-    const content = wrapBuilderUserMessage(raw, prefs, locale, messages.length === 0);
+    const content = wrapBuilderUserMessage(raw, prefs, lang, messages.length === 0);
     const next = [...messages, { role: "user" as const, content }];
     setMessages(next);
     setInputText("");
@@ -218,18 +225,21 @@ export function AutomationBuilder() {
         </>
       }
       preview={
-        turn?.draft ? (
+        mergedDraft ? (
           <>
-            <DraftPreview draft={turn.draft} />
+            <DraftPreview draft={mergedDraft} partnerLabel={partnerLabelFromPrefs(prefs, lang)} />
             <form action={createAutomationFromBuilderAction} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
               <input type="hidden" name="draft" value={draftJson} />
               <p className="text-xs text-slate-500 leading-relaxed">{a.builderConfirmHint}</p>
+              {!isAutomationDraftReady(mergedDraft) && (
+                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{a.builderDeliveryRequired}</p>
+              )}
               <button
                 type="submit"
-                disabled={!turn.ready}
+                disabled={!createReady}
                 className="w-full rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-700 disabled:opacity-40"
               >
-                {turn.ready ? a.builderCreateReady : a.builderCreatePending}
+                {createReady ? a.builderCreateReady : a.builderCreatePending}
               </button>
             </form>
           </>

@@ -95,12 +95,13 @@ Example scenarios (same framework):
 Rules:
 1. triggerType is always SCHEDULE. Runtime tools: list_todos, list_opportunities, web_search, get_partner, search_partners, push_wecom, send_email.
 2. partnerId: use bound partner from system hint when user says「这个客户/该伙伴」; leave EMPTY for「全部/所有伙伴」; never require partner if user wants all.
-3. ready=true requires: draft.description (one-line goal), draft.cronExpr, and at least one of wecomPushChatId or pushEmailTo.
-4. Apply system hints for bound partnerId and current group chatId without re-asking (tier:preference if override).
-5. clarifications tier required only for ambiguous partner when user clearly meant one customer; tier preference for schedule tweaks.
-6. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
-7. Do NOT build unrelated pipelines (gold price, generic coding agents).
-8. Cron presets:
+3. ready=true requires: draft.description, draft.cronExpr, and at least one of wecomPushChatId or pushEmailTo. partnerId is optional (empty = all).
+4. 【构建偏好】is authoritative: if it says 企微不推送 → wecomPushChatId=""; if 邮件不发送 → pushEmailTo="". Never mention WeCom in reply when wecom is off. Never add channels not in prefs/user text.
+5. Apply WeCom group chatId ONLY when user/prefs explicitly enable WeCom push — not by default.
+6. clarifications tier required only for ambiguous partner; tier preference for schedule tweaks.
+7. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
+8. Do NOT build unrelated pipelines (gold price, generic coding agents).
+9. Cron presets:
 ${cronExamples}
 
 ${clarificationSchemaHint(locale)}

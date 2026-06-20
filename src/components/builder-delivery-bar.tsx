@@ -39,8 +39,6 @@ export function useBuilderDeliveryPrefs(defaultCron = "0 9 * * *") {
         setPartners(data.partners ?? []);
         setPrefs((p) => ({
           ...p,
-          wecomChatId: p.wecomChatId || data.wecomChats?.[0]?.chatId || "",
-          wecomChatLabel: p.wecomChatLabel || (data.wecomChats?.[0] ? formatWecomLabel(data.wecomChats[0]) : ""),
           email: p.email || data.emails?.[0]?.email || "",
         }));
       } finally {
@@ -57,15 +55,18 @@ export function useBuilderDeliveryPrefs(defaultCron = "0 9 * * *") {
     setCronExpr: (cronExpr: string) => setPrefs((p) => ({ ...p, cronExpr })),
     setWecomChatId: (chatId: string) => {
       const chat = wecomChats.find((c) => c.chatId === chatId);
-      setPrefs((p) => ({
-        ...p,
-        wecomChatId: chatId,
-        wecomChatLabel: chat ? formatWecomLabel(chat) : "",
-        partnerId: chat?.partnerName
-          ? partners.find((x) => x.name === chat.partnerName)?.id ?? p.partnerId
-          : p.partnerId,
-        partnerName: chat?.partnerName ?? p.partnerName,
-      }));
+      setPrefs((p) => {
+        const next: BuilderDeliveryPrefs = {
+          ...p,
+          wecomChatId: chatId,
+          wecomChatLabel: chat ? formatWecomLabel(chat) : "",
+        };
+        if (chatId && chat?.partnerName && !p.partnerId) {
+          const match = partners.find((x) => x.name === chat.partnerName);
+          if (match) return { ...next, partnerId: match.id, partnerName: match.name };
+        }
+        return next;
+      });
     },
     setEmail: (email: string) => setPrefs((p) => ({ ...p, email })),
     setPartnerId: (partnerId: string) => {

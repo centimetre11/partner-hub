@@ -7,6 +7,7 @@ import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
 import { computeNextRunFromCron, cronToAgentSchedule } from "./cron";
 import { createAutomationFromDraft, buildAutomationInstructions, resolveAutomationDraftContent } from "./automation-create";
+import { isAutomationDraftReady } from "./builder-context-prompt";
 import {
   buildScheduledPushTaskMd,
   defaultAutomationName,
@@ -30,9 +31,7 @@ export async function createAutomationFromBuilderAction(formData: FormData) {
   const raw = String(formData.get("draft") ?? "");
   if (!raw) return;
   const draft = JSON.parse(raw) as AutomationBuilderDraft;
-  if (!draft.cronExpr?.trim()) return;
-  if (!draft.wecomPushChatId?.trim() && !draft.pushEmailTo?.trim()) return;
-  if (!draft.description?.trim() && !draft.taskMd?.trim()) return;
+  if (!isAutomationDraftReady(draft)) return;
 
   const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
   revalidatePath("/automations");

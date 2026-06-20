@@ -806,6 +806,7 @@ export const messagesEn = {
     builderConfirmHint: "After confirming, the pipeline is created and activated; fine-tune on the detail page.",
     builderCreateReady: "Confirm & Create Automation",
     builderCreatePending: "Complete confirmations on the left first",
+    builderDeliveryRequired: "Set a schedule and at least one delivery channel (WeCom group or email).",
     builderUntitled: "Untitled automation",
     builderWaitingDesc: "Waiting for description",
     builderTrigger: "Trigger",
