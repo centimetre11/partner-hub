@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 import { CRON_PRESETS } from "@/lib/cron";
 import type { BuilderDeliveryPrefs } from "@/lib/builder-context-prompt";
 import type { AutomationBuilderDraft } from "@/lib/automation-builder-types";
+import type { DropdownGap } from "@/lib/automation-clarifications";
 import { useLocale, useMessages } from "@/lib/i18n";
+
+function fieldHighlighted(field: "partner" | "wecom" | "email" | "cron", gaps: DropdownGap[]): boolean {
+  if ((gaps as string[]).includes(field)) return true;
+  if (field === "wecom" || field === "email") return gaps.includes("delivery");
+  return false;
+}
 
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
 type EmailOption = { id: string; name: string; email: string };
@@ -112,6 +119,7 @@ export function BuilderDeliveryBar({
   emails,
   partners,
   disabled,
+  highlightFields = [],
 }: {
   prefs: BuilderDeliveryPrefs;
   onCronChange: (cron: string) => void;
@@ -122,6 +130,7 @@ export function BuilderDeliveryBar({
   emails: EmailOption[];
   partners?: PartnerOption[];
   disabled?: boolean;
+  highlightFields?: DropdownGap[];
 }) {
   const b = useMessages().builderCommon;
   const a = useMessages().automations;
@@ -131,12 +140,18 @@ export function BuilderDeliveryBar({
 
   const selectCls =
     "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50";
+  const highlightCls = "border-amber-400 ring-1 ring-amber-300 bg-amber-50/60";
 
   return (
     <div className={`grid grid-cols-1 sm:grid-cols-2 ${showPartner ? "xl:grid-cols-4" : "xl:grid-cols-3"} gap-2`}>
       <div>
         <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.scheduleLabel}</label>
-        <select className={selectCls} value={prefs.cronExpr} disabled={disabled} onChange={(e) => onCronChange(e.target.value)}>
+        <select
+          className={`${selectCls}${fieldHighlighted("cron", highlightFields) ? ` ${highlightCls}` : ""}`}
+          value={prefs.cronExpr}
+          disabled={disabled}
+          onChange={(e) => onCronChange(e.target.value)}
+        >
           <option value="">{b.scheduleUnset}</option>
           {CRON_PRESETS.filter((p) => ["daily9", "daily18", "weekday9", "monday9"].includes(p.id)).map((p) => (
             <option key={p.id} value={p.expr}>
@@ -149,7 +164,7 @@ export function BuilderDeliveryBar({
         <div>
           <label className="block text-[10px] font-medium text-slate-500 mb-1">{a.monitorPartnerLabel}</label>
           <select
-            className={selectCls}
+            className={`${selectCls}${fieldHighlighted("partner", highlightFields) ? ` ${highlightCls}` : ""}`}
             value={prefs.partnerId}
             disabled={disabled}
             onChange={(e) => onPartnerChange!(e.target.value)}
@@ -165,7 +180,12 @@ export function BuilderDeliveryBar({
       )}
       <div>
         <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.wecomLabel}</label>
-        <select className={selectCls} value={prefs.wecomChatId} disabled={disabled} onChange={(e) => onWecomChange(e.target.value)}>
+        <select
+          className={`${selectCls}${fieldHighlighted("wecom", highlightFields) ? ` ${highlightCls}` : ""}`}
+          value={prefs.wecomChatId}
+          disabled={disabled}
+          onChange={(e) => onWecomChange(e.target.value)}
+        >
           <option value="">{b.wecomNone}</option>
           {wecomChats.map((c) => (
             <option key={c.chatId} value={c.chatId}>
@@ -176,7 +196,12 @@ export function BuilderDeliveryBar({
       </div>
       <div>
         <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.emailLabel}</label>
-        <select className={selectCls} value={prefs.email} disabled={disabled} onChange={(e) => onEmailChange(e.target.value)}>
+        <select
+          className={`${selectCls}${fieldHighlighted("email", highlightFields) ? ` ${highlightCls}` : ""}`}
+          value={prefs.email}
+          disabled={disabled}
+          onChange={(e) => onEmailChange(e.target.value)}
+        >
           <option value="">{b.emailNone}</option>
           {emails.map((u) => (
             <option key={u.id} value={u.email}>

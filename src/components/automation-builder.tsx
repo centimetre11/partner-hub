@@ -5,6 +5,11 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { createAutomationFromBuilderAction } from "@/lib/automation-actions";
 import { formatAiClarificationMessage } from "@/lib/clarification-apply";
+import {
+  filterDropdownClarifications,
+  computeDropdownGaps,
+  type DropdownGap,
+} from "@/lib/automation-clarifications";
 import { formatPreferencePick, shouldBlockChatInput } from "@/lib/ai-clarifications";
 import type {
   AutomationBuilderClarification,
@@ -161,14 +166,31 @@ export function AutomationBuilder() {
   const draftJson = useMemo(() => (mergedDraft ? JSON.stringify(mergedDraft) : "null"), [mergedDraft]);
 
   const pendingClarifications = useMemo(() => {
-    const raw = turn?.clarifications?.length ? turn.clarifications : [];
-    return raw.filter((c) => {
-      if (c.id === "partner-pick" && prefs.partnerId) return false;
-      if (c.id === "wecom-pick" && prefs.wecomChatId) return false;
-      if (c.id === "delivery-pick" && (prefs.wecomChatId || prefs.email)) return false;
-      return true;
+    if (!turn?.clarifications?.length) return [];
+    return filterDropdownClarifications(turn.clarifications, partners);
+  }, [turn, partners]);
+
+  const dropdownGaps = useMemo((): DropdownGap[] => {
+    if (!turn || messages.length === 0) return [];
+    return computeDropdownGaps({
+      messages,
+      partnerId: prefs.partnerId,
+      wecomPushChatId: prefs.wecomChatId,
+      pushEmailTo: prefs.email,
     });
-  }, [turn, prefs]);
+  }, [turn, messages, prefs]);
+
+  const dropdownGapHints = useMemo(() => {
+    const hints: string[] = [];
+    for (const gap of dropdownGaps) {
+      if (gap === "partner") hints.push(a.builderPickPartnerHint);
+      else if (gap === "wecom") hints.push(a.builderPickWecomHint);
+      else if (gap === "email") hints.push(a.builderPickEmailHint);
+      else if (gap === "delivery") hints.push(a.builderPickDeliveryHint);
+    }
+    return hints;
+  }, [dropdownGaps, a]);
+
   const clarifyBlocked = shouldBlockChatInput(pendingClarifications) && !loading;
   const showInit = messages.length === 0 && !loading;
 
@@ -214,32 +236,6 @@ export function AutomationBuilder() {
     }
   }
 
-  function resolveWecomFromLabel(value: string) {
-    return wecomChats.find((c) => {
-      const parts = [c.partnerName, c.label].filter(Boolean);
-      const label = parts.length ? parts.join(" · ") : c.chatId.slice(0, 12);
-      return label === value;
-    });
-  }
-
-  function applyClarificationToPrefs(answers: { id: string; value: string }[]) {
-    prefsTouchedRef.current = true;
-    for (const ans of answers) {
-      if (ans.id === "partner-pick") {
-        const none = /暂不指定|None \(not partner/i.test(ans.value);
-        if (none) setPartnerId("");
-        else {
-          const match = partners.find((p) => p.name === ans.value || ans.value.startsWith(p.name));
-          if (match) setPartnerId(match.id);
-        }
-      }
-      if (ans.id === "wecom-pick") {
-        const chat = resolveWecomFromLabel(ans.value);
-        if (chat) setWecomChatId(chat.chatId);
-      }
-    }
-  }
-
   function formatAnswers(answers: { id: string; question: string; value: string }[]) {
     return formatAiClarificationMessage(answers, locale);
   }
@@ -267,6 +263,7 @@ export function AutomationBuilder() {
             wecomChats={wecomChats}
             emails={emails}
             partners={partners}
+            highlightFields={dropdownGaps}
             disabled={loading}
             onCronChange={(v) => {
               prefsTouchedRef.current = true;
@@ -286,6 +283,13 @@ export function AutomationBuilder() {
             }}
           />
           <p className="text-[10px] text-slate-400 leading-relaxed">{a.builderBarHint}</p>
+          {dropdownGapHints.length > 0 && (
+            <div className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 space-y-1">
+              {dropdownGapHints.map((hint) => (
+                <div key={hint}>↓ {hint}</div>
+              ))}
+            </div>
+          )}
           {clarifyBlocked && (
             <div className="text-xs text-sky-700 bg-sky-50 rounded-lg px-3 py-2">{a.builderClarifyBlockedHint}</div>
           )}
@@ -356,7 +360,6 @@ export function AutomationBuilder() {
             clarifications={pendingClarifications as AutomationBuilderClarification[]}
             disabled={loading}
             onRequiredContinue={(answers) => {
-              applyClarificationToPrefs(answers);
               send(formatAnswers(answers));
             }}
             onRequiredSkip={() => send(a.builderSkipMessage)}

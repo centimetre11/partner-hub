@@ -38,7 +38,69 @@ function hasClarificationAbout(clarifications: AutomationBuilderClarification[],
   return clarifications.some((c) => hint.test(c.question) || hint.test(c.id));
 }
 
-/** 补足 AI 未生成的必答澄清（伙伴 / 企微群） */
+const DROPDOWN_CLARIFICATION_IDS = new Set(["partner-pick", "wecom-pick", "delivery-pick"]);
+
+/** Web 构建器已有下拉：去掉伙伴/群/chatId/推送渠道类对话选项 */
+export function isDropdownResolvableClarification(
+  c: AutomationBuilderClarification,
+  partners: PartnerOption[] = []
+): boolean {
+  if (DROPDOWN_CLARIFICATION_IDS.has(c.id)) return true;
+  const q = c.question;
+  const optText = c.options.join(" ");
+  if (/chatId|chat_id|群\s*ID/i.test(q) || /chatId|chat_id/i.test(optText)) return true;
+  if (/企微|微信群|WeCom|wecom/i.test(q) && /群|group|chatId/i.test(q + optText)) return true;
+  if (/伙伴|客户|partner|customer/i.test(q) && partners.some((p) => c.options.includes(p.name))) return true;
+  if (/推送到哪里|推送.*哪里|delivery channel|where.*deliver/i.test(q)) return true;
+  if (/邮件|email/i.test(q) && /推送|push|deliver/i.test(q)) return true;
+  return false;
+}
+
+export function filterDropdownClarifications(
+  clarifications: AutomationBuilderClarification[],
+  partners: PartnerOption[] = []
+): AutomationBuilderClarification[] {
+  return clarifications.filter((c) => !isDropdownResolvableClarification(c, partners));
+}
+
+export type DropdownGap = "partner" | "wecom" | "email" | "delivery";
+
+/** 底部栏待选项（用于提示，不阻塞对话） */
+export function computeDropdownGaps(opts: {
+  messages: AutomationBuilderMessage[];
+  partnerId: string;
+  wecomPushChatId: string;
+  pushEmailTo: string;
+  boundPartnerId?: string;
+}): DropdownGap[] {
+  const userText = extractLastUserPlainText(opts.messages);
+  const gaps: DropdownGap[] = [];
+  const wantsPartner = mentionsPartnerRef(userText);
+  const wantsWecom = mentionsWecomPush(userText);
+  const wantsEmail = mentionsEmailPush(userText);
+
+  if (wantsPartner && !opts.partnerId.trim() && !opts.boundPartnerId) {
+    gaps.push("partner");
+  }
+  if (wantsWecom && !opts.wecomPushChatId.trim()) {
+    gaps.push("wecom");
+  }
+  if (wantsEmail && !opts.pushEmailTo.trim()) {
+    gaps.push("email");
+  }
+  if (
+    !opts.wecomPushChatId.trim() &&
+    !opts.pushEmailTo.trim() &&
+    !wantsWecom &&
+    !wantsEmail &&
+    userText.length > 0
+  ) {
+    gaps.push("delivery");
+  }
+  return gaps;
+}
+
+/** 补足 AI 未生成的必答澄清（仅企微 Bot 等无下拉场景） */
 export function enrichAutomationClarifications(opts: {
   clarifications: AutomationBuilderClarification[];
   messages: AutomationBuilderMessage[];
@@ -49,9 +111,16 @@ export function enrichAutomationClarifications(opts: {
   wecomChats: WecomOption[];
   locale: Locale;
   boundPartnerId?: string;
+  /** Web 构建器用 dropdown，不在对话里重复问伙伴/群/邮箱 */
+  deliveryPicker?: "dropdown" | "chat";
 }): AutomationBuilderClarification[] {
   const userText = extractLastUserPlainText(opts.messages);
-  const out = [...opts.clarifications];
+  const picker = opts.deliveryPicker ?? "chat";
+  let out = filterDropdownClarifications([...opts.clarifications], opts.partners);
+
+  if (picker === "dropdown") {
+    return normalizeAiClarifications(out, { max: 5, defaultTier: "required" }) as AutomationBuilderClarification[];
+  }
 
   const needPartner =
     mentionsPartnerRef(userText) && !opts.partnerId.trim() && !opts.boundPartnerId && opts.partners.length > 0;
