@@ -53,7 +53,7 @@ export default async function AutomationDetailPage({ params }: { params: Promise
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-sm font-semibold text-slate-800">{m.automations.runHistory}</h2>
           <div className="flex items-center gap-2">
-            <RunButton agentId={agent.id} compact />
+            <RunButton agentId={agent.id} compact formId="automation-edit-form" />
             <form action={toggleAutomationAction.bind(null, agent.id)}>
               <button type="submit" className="text-xs text-slate-500 hover:text-slate-800 border border-slate-200 rounded-lg px-3 py-1.5">
                 {agent.enabled ? m.automations.disable : m.automations.enable}

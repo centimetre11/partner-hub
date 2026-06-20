@@ -79,7 +79,7 @@ export function AutomationForm({
   }
 
   return (
-    <form action={upsertAutomationAction} className="min-h-[calc(100vh-8rem)] flex flex-col">
+    <form id="automation-edit-form" action={upsertAutomationAction} className="min-h-[calc(100vh-8rem)] flex flex-col">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="activate" value="on" />
 

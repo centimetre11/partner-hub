@@ -25,20 +25,11 @@ function slugify(raw: string): string {
     .slice(0, 64);
 }
 
-export async function createAutomationFromBuilderAction(formData: FormData) {
-  const user = await requireUser();
-  const raw = String(formData.get("draft") ?? "");
-  if (!raw) return;
-  const draft = JSON.parse(raw) as AutomationBuilderDraft;
-  if (!isAutomationDraftReady(draft)) return;
+export type PersistAutomationResult =
+  | { ok: true; agentId: string }
+  | { ok: false; error: string };
 
-  const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
-  revalidatePath("/automations");
-  revalidatePath("/ai");
-  redirect(`/automations/${created.id}`);
-}
-
-export async function upsertAutomationAction(formData: FormData) {
+async function persistAutomationFromFormData(formData: FormData): Promise<PersistAutomationResult> {
   const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   const partnerId = String(formData.get("partnerId") ?? "").trim();
@@ -52,8 +43,8 @@ export async function upsertAutomationAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim();
   const nameInput = String(formData.get("name") ?? "").trim();
 
-  if (!description) return;
-  if (!wecomPushChatId && !pushEmailTo) return;
+  if (!description) return { ok: false, error: "description_required" };
+  if (!wecomPushChatId && !pushEmailTo) return { ok: false, error: "delivery_required" };
 
   let slug = slugify(String(formData.get("slug") ?? ""));
   let name = nameInput;
@@ -61,16 +52,15 @@ export async function upsertAutomationAction(formData: FormData) {
   const partner = partnerId
     ? await db.partner.findUnique({ where: { id: partnerId }, select: { name: true } })
     : null;
-  if (partnerId && !partner) return;
+  if (partnerId && !partner) return { ok: false, error: "partner_not_found" };
 
-  const partnerName = partner?.name ?? partnerScopeLabel(undefined, "zh");
   if (!slug) slug = defaultAutomationSlug(partner?.name || description.slice(0, 24));
   if (!name) name = defaultAutomationName(description, "zh");
 
   const existingSlug = await db.agent.findFirst({
     where: { slug, ...(id ? { id: { not: id } } : {}) },
   });
-  if (existingSlug) return;
+  if (existingSlug) return { ok: false, error: "slug_exists" };
 
   const draft: AutomationBuilderDraft = {
     slug,
@@ -146,9 +136,39 @@ export async function upsertAutomationAction(formData: FormData) {
       : null;
   await db.agent.update({ where: { id: agentId }, data: { nextRunAt } });
 
+  return { ok: true, agentId };
+}
+
+/** 保存自动化配置（不跳转）— 供「保存并运行」使用 */
+export async function saveAutomationAction(formData: FormData): Promise<PersistAutomationResult> {
+  const result = await persistAutomationFromFormData(formData);
+  if (result.ok) {
+    revalidatePath("/automations");
+    revalidatePath(`/automations/${result.agentId}`);
+    revalidatePath("/ai");
+  }
+  return result;
+}
+
+export async function createAutomationFromBuilderAction(formData: FormData) {
+  const user = await requireUser();
+  const raw = String(formData.get("draft") ?? "");
+  if (!raw) return;
+  const draft = JSON.parse(raw) as AutomationBuilderDraft;
+  if (!isAutomationDraftReady(draft)) return;
+
+  const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
   revalidatePath("/automations");
   revalidatePath("/ai");
-  redirect(`/automations/${agentId}`);
+  redirect(`/automations/${created.id}`);
+}
+
+export async function upsertAutomationAction(formData: FormData) {
+  const result = await persistAutomationFromFormData(formData);
+  if (!result.ok) return;
+  revalidatePath("/automations");
+  revalidatePath("/ai");
+  redirect(`/automations/${result.agentId}`);
 }
 
 export async function toggleAutomationAction(agentId: string) {
