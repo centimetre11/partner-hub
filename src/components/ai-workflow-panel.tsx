@@ -12,8 +12,9 @@ import { AiProcessTrace } from "@/components/ai-process-trace";
 import { LiveProposalDraft } from "@/components/live-proposal-draft";
 import {
   IntakeClarificationChat,
-  hasPendingAiClarifications,
+  hasPendingRequiredClarifications,
 } from "@/components/intake-clarification-chat";
+import { hasBlockingClarifications } from "@/lib/clarification-apply";
 
 import { prepareChatImagesFromFiles } from "@/lib/ai-images";
 import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
@@ -102,8 +103,7 @@ export function AiWorkflowPanel({
   draftPanel?: ReactNode;
 }) {
   const { intakePanel: ip } = useMessages();
-  const pendingAiClarify = hasPendingAiClarifications(clarifications ?? []);
-  const clarifyBlocked = pendingAiClarify && !loading;
+  const clarifyBlocked = hasPendingRequiredClarifications(clarifications ?? []) && !loading;
 
   async function apply(filtered: NormalizedProposal) {
     const res = await fetch("/api/ai/intake/apply", {
@@ -328,7 +328,7 @@ export function AiWorkflowPanel({
                 loading={loading}
                 scope={scope}
                 onProposalEdit={onProposalEdit}
-                identityBlocked={(clarifications?.length ?? 0) > 0}
+                identityBlocked={hasBlockingClarifications(clarifications ?? [])}
               />
             )}
           </div>

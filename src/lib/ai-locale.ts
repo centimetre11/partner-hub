@@ -103,8 +103,8 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
       : `{ "id":"country", "question":"Which country is this company primarily in?", "options":["UAE","Saudi Arabia","Qatar","Egypt"], "multi":false, "allowOther":true, "apply":"direct", "kind":"field" }`;
   const identityExample =
     locale === "zh"
-      ? `{ "id":"partnerName", "question":"确认是哪家公司？", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "blocking":true }`
-      : `{ "id":"partnerName", "question":"Which company is this?", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "blocking":true }`;
+      ? `{ "id":"partnerName", "question":"确认是哪家公司？", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "tier":"required" }`
+      : `{ "id":"partnerName", "question":"Which company is this?", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "tier":"required" }`;
 
   if (scope === "business_record") {
     return `Output a single JSON object. User-facing strings in ${lang}:
@@ -227,11 +227,11 @@ Rules:
 - ready: true when required fields are present. If user says save now / that's all, ready must be true.
 - proposal accumulates confirmed content each turn (do not clear prior extractions).
 - clarifications: when key info is missing and you can enumerate options, give 1–3 multiple-choice items (id = English field name e.g. country/category/headcount; options in ${lang}).
-- Identity checkpoints (new_partner): when company name is ambiguous (multiple candidates), website uncertain, or search_partners finds similar records, emit kind:"identity" + blocking:true clarifications BEFORE claiming ready. Examples:
+- Identity checkpoints (new_partner): ONLY when company name is genuinely ambiguous (multiple distinct candidates), website has multiple plausible URLs, or search_partners finds similar records. Do NOT emit partnerName/website clarifications when KMS or user input already gives one clear company name and website — write them directly to proposal and continue. When clarification IS needed, use tier:"required" + kind:"identity" (blocks user until answered; AI cannot proceed). Examples:
   · partnerName — ${identityExample}
-  · website — id:"website", kind:"identity", blocking:true, apply:"direct", options = candidate URLs + "No website yet"
-  · dedupe — id:"dedupe", kind:"identity", blocking:true, apply:"ai", options = existing partner names + "Create new anyway"
-- For profile field ids (country, headcount, category, industry, pipelineStage, etc.) set apply:"direct", kind:"field".
+  · website — id:"website", kind:"identity", tier:"required", apply:"direct", options = multiple candidate URLs (not when KMS already has one URL)
+  · dedupe — id:"dedupe", kind:"identity", tier:"required", apply:"ai", options = existing partner names + "Create new anyway"
+- For profile field ids (country, headcount, category, industry, pipelineStage, etc.) set apply:"direct", kind:"field", tier:"preference" unless truly blocking.
 - For reporting lines or ambiguous context, set apply:"ai". Empty clarifications array if none needed.`;
 }
 
@@ -275,7 +275,7 @@ Before outputting the JSON proposal, combine tools as below (parallel OK, multip
   · "{Company} clients case study Middle East"
 - If the user pasted Chinese text, extract the English company name / country before searching.
 
-1. User gave KMS link/pageId → read_kms first; then web_search + linkedin_search on company names from the doc for website, size, clients, key people not in KMS
+1. User gave KMS link/pageId → read_kms first (or use system pre-fetched KMS); if KMS clearly states company name + website, write them to proposal without blocking identity clarifications; then web_search + linkedin_search for fields not in KMS
 2. After identifying company name from user/KMS → search_partners dedupe; web_search background; linkedin_search executives/contacts
 3. Still missing category/playbook/Fanruan angle → search_knowledge team knowledge base; for cases/solutions/collateral → search_knowhow Know-how knowledge base
 4. After each tool round, check field checklist; keep researching until major fields are sourced or public channels truly have nothing
@@ -296,11 +296,11 @@ function knowhowStatusBlock(locale: Locale, configured: boolean): string {
 function kmsStatusBlock(locale: Locale, configured: boolean): string {
   if (locale === "zh") {
     return configured
-      ? "【KMS 令牌状态】已配置。用户提供 KMS 链接时，系统会自动预读并注入内容；也可调用 read_kms（支持 pageId 与 /display/ 链接）。禁止说「KMS 未配置」。"
+      ? "【KMS 令牌状态】已配置。用户提供 KMS 链接时，系统会自动预读并注入内容；也可调用 read_kms（支持 pageId 与 /display/ 链接）。若 KMS 中公司名与官网明确，直接写入 proposal，无需 blocking 身份确认。禁止说「KMS 未配置」。"
       : "【KMS 令牌状态】未配置。跳过 read_kms，改用 web_search、linkedin_search 等公开渠道。";
   }
   return configured
-    ? "[KMS token status] Configured. KMS links are auto pre-fetched; you may also call read_kms (pageId and /display/ URLs). Do NOT say KMS is unconfigured."
+    ? "[KMS token status] Configured. KMS links are auto pre-fetched; you may also call read_kms (pageId and /display/ URLs). If KMS gives a clear company name and website, write them to proposal without blocking identity clarifications. Do NOT say KMS is unconfigured."
     : "[KMS token status] Not configured. Skip read_kms; use web_search, linkedin_search, and other public sources.";
 }
 
@@ -318,9 +318,11 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industry, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, tier (A/B/C). If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).
 
 Identity checkpoints (important):
-- After search_partners or when research finds multiple company name/website candidates, emit blocking identity clarifications (kind:"identity", blocking:true) for partnerName and/or website — do NOT set ready=true while blocking clarifications remain.
-- When search_partners finds a close match, emit dedupe clarification (id:"dedupe", apply:"ai") with options = matched partner name(s) + "Create new anyway".
-- Once user confirms identity via clarification, continue deep research and fill profile fields.`,
+- ONLY emit tier:"required" identity clarifications (kind:"identity") when there is genuine ambiguity — multiple distinct company names, multiple plausible websites, or search_partners close matches. tier:"required" means the user MUST answer before AI continues research or ready=true.
+- When KMS or user input already provides a clear, unique company name and website, write them directly to proposal — do NOT ask the user to re-confirm.
+- When search_partners finds a close match, emit dedupe clarification (id:"dedupe", kind:"identity", tier:"required", apply:"ai") with options = matched partner name(s) + "Create new anyway".
+- Profile field clarifications (country, headcount, etc.) use tier:"preference" unless truly blocking.
+- After user confirms identity (when truly ambiguous), continue deep research and fill profile fields.`,
   },
   powermap: {
     title: "Add power map contact",

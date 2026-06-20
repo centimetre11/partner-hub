@@ -1361,7 +1361,7 @@ export const messagesEn = {
     autoSaved: "Saved automatically",
     autoSaving: "Auto-saving…",
     itemsSummary: "{total} items · {excluded} excluded",
-    clarifyBlockedHint: "Complete the confirmation options above before AI continues research.",
+    clarifyBlockedHint: "Complete required confirmations above before AI continues research.",
     clarifyBlockedPlaceholder: "Select confirmations above…",
     scopes: {
       new_partner: {
@@ -1416,7 +1416,7 @@ export const messagesEn = {
     clarifyDirectTitle: "Quick fill",
     clarifyDirectHint: "Applies straight to the draft — no extra AI call",
     clarifyIdentityTitle: "Confirm company identity",
-    clarifyIdentityHint: "Pick the company name or website before research continues",
+    clarifyIdentityHint: "Required — AI continues research after you pick",
     clarifyAiTitle: "Needs AI follow-up",
     clarifyAiHint: "Select all items, then submit once for AI to continue",
     clarifyAiSubmit: "Submit all to AI",
@@ -1425,7 +1425,7 @@ export const messagesEn = {
     clarifyOther: "Other…",
     clarifyOtherPlaceholder: "Type manually",
     clarifyOtherConfirm: "Confirm",
-    confirmBlockedIdentity: "Confirm company identity above first",
+    confirmBlockedIdentity: "Complete required confirmations above first",
     editPartnerName: "Company name",
     editWebsite: "Website",
     suggestions: [

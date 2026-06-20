@@ -1,14 +1,15 @@
 "use client";
 
 import type { AiClarification, ClarificationAnswer } from "@/lib/ai-clarifications";
-import { partitionClarificationsByTier, shouldBlockChatInput } from "@/lib/ai-clarifications";
+import { getClarificationTier, partitionClarificationsByTier, shouldBlockChatInput } from "@/lib/ai-clarifications";
+import { getClarificationMode } from "@/lib/clarification-apply";
 import { AiClarificationCard } from "@/components/ai-clarification-card";
 import { useMessages } from "@/lib/i18n";
 
 /**
  * Unified clarification UI — required gate + optional preferences in one flow.
- * Required: blocks chat until batch submitted.
- * Preference: compact chips; AI already continued with defaults.
+ * Required (tier:"required"): blocks chat until answered — direct picks apply immediately; AI-batch uses Continue.
+ * Preference (tier:"preference"): optional chips / quick confirm; does not block.
  */
 export function AiClarificationFlow({
   clarifications,
@@ -17,6 +18,7 @@ export function AiClarificationFlow({
   onRequiredSkip,
   onPreferencePick,
   onDirectPick,
+  /** @deprecated Pass all items via clarifications; merged when provided for backward compat */
   directClarifications,
 }: {
   clarifications: AiClarification[];
@@ -27,23 +29,49 @@ export function AiClarificationFlow({
   onDirectPick?: (id: string, value: string) => void;
   directClarifications?: AiClarification[];
 }) {
-  const cf = useMessages().clarifications;
-  const { required, preference } = partitionClarificationsByTier(clarifications);
+  const { assistant: am, clarifications: cf } = useMessages();
+  const all = mergeClarifications(clarifications, directClarifications);
+  const { required, preference } = partitionClarificationsByTier(all);
 
-  const requiredAi = required.filter((c) => c.apply !== "direct");
-  const requiredDirect = required.filter((c) => c.apply === "direct");
-  const allDirect = [...(directClarifications ?? []), ...requiredDirect];
+  const requiredDirect = required.filter((c) => getClarificationMode(c) === "direct");
+  const requiredAi = required.filter((c) => getClarificationMode(c) !== "direct");
+  const requiredIdentityDirect = requiredDirect.filter((c) => c.kind === "identity");
+  const requiredOtherDirect = requiredDirect.filter((c) => c.kind !== "identity");
 
-  if (!requiredAi.length && !allDirect.length && !preference.length) return null;
+  const preferenceDirect = preference.filter((c) => getClarificationMode(c) === "direct");
+  const preferenceAi = preference.filter((c) => getClarificationMode(c) !== "direct");
+
+  if (
+    !requiredIdentityDirect.length &&
+    !requiredOtherDirect.length &&
+    !requiredAi.length &&
+    !preferenceDirect.length &&
+    !preferenceAi.length
+  ) {
+    return null;
+  }
 
   return (
     <div className="space-y-3 w-full">
-      {allDirect.length > 0 && onDirectPick && (
+      {requiredIdentityDirect.length > 0 && onDirectPick && (
         <AiClarificationCard
-          key={allDirect.map((c) => c.id).join("-")}
-          clarifications={allDirect.map(toItem)}
-          title={cf.directTitle}
-          variant="direct"
+          key={requiredIdentityDirect.map((c) => c.id).join("-")}
+          clarifications={requiredIdentityDirect.map(toItem)}
+          title={am.clarifyIdentityTitle}
+          hint={am.clarifyIdentityHint}
+          variant="identity"
+          disabled={disabled}
+          showSkip={false}
+          onImmediatePick={(a) => onDirectPick(a.id, a.value)}
+        />
+      )}
+
+      {requiredOtherDirect.length > 0 && onDirectPick && (
+        <AiClarificationCard
+          key={requiredOtherDirect.map((c) => c.id).join("-")}
+          clarifications={requiredOtherDirect.map(toItem)}
+          title={cf.requiredTitle}
+          variant="required"
           disabled={disabled}
           showSkip={false}
           onImmediatePick={(a) => onDirectPick(a.id, a.value)}
@@ -64,14 +92,26 @@ export function AiClarificationFlow({
         />
       )}
 
-      {preference.length > 0 && (
+      {preferenceDirect.length > 0 && onDirectPick && (
+        <AiClarificationCard
+          key={preferenceDirect.map((c) => c.id).join("-")}
+          clarifications={preferenceDirect.map(toItem)}
+          title={cf.directTitle}
+          variant="direct"
+          disabled={disabled}
+          showSkip={false}
+          onImmediatePick={(a) => onDirectPick(a.id, a.value)}
+        />
+      )}
+
+      {preferenceAi.length > 0 && (
         <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate-100 bg-white/80">
             <div className="text-xs font-semibold text-slate-600">{cf.preferenceTitle}</div>
             <div className="text-[11px] text-slate-400 mt-0.5">{cf.preferenceHint}</div>
           </div>
           <div className="p-4 space-y-4">
-            {preference.map((c) => (
+            {preferenceAi.map((c) => (
               <div key={c.id} className="space-y-2">
                 <div className="text-sm text-slate-700">{c.question}</div>
                 <div className="flex flex-wrap gap-2">
@@ -105,7 +145,19 @@ export function AiClarificationFlow({
   );
 }
 
-export { shouldBlockChatInput };
+export { shouldBlockChatInput, getClarificationTier };
+
+function mergeClarifications(
+  clarifications: AiClarification[],
+  directClarifications?: AiClarification[]
+): AiClarification[] {
+  const out = [...clarifications];
+  const seen = new Set(out.map((c) => c.id));
+  for (const c of directClarifications ?? []) {
+    if (!seen.has(c.id)) out.push(c);
+  }
+  return out;
+}
 
 function toItem(c: AiClarification) {
   return {

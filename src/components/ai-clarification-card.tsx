@@ -28,6 +28,7 @@ const optionActive = "border-slate-800 bg-slate-900 text-white";
 export function AiClarificationCard({
   clarifications,
   title,
+  hint,
   disabled,
   onContinue,
   onSkip,
@@ -38,6 +39,7 @@ export function AiClarificationCard({
 }: {
   clarifications: ClarificationItem[];
   title?: string;
+  hint?: string;
   disabled?: boolean;
   onContinue?: (answers: Answer[]) => void;
   onSkip?: () => void;
@@ -167,7 +169,10 @@ export function AiClarificationCard({
   return (
     <div className={`w-full rounded-xl border ${borderClass} bg-white shadow-sm overflow-hidden`}>
       <div className={`flex items-center justify-between px-4 py-2.5 border-b border-slate-100 ${headerBg}`}>
-        <div className="text-xs font-semibold text-slate-700">{cardTitle}</div>
+        <div>
+          <div className="text-xs font-semibold text-slate-700">{cardTitle}</div>
+          {hint && <div className="text-[11px] text-slate-500 mt-0.5 font-normal">{hint}</div>}
+        </div>
       </div>
       <div className="p-4 space-y-5">
         {clarifications.map((c) => {

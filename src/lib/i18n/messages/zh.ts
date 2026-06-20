@@ -1360,7 +1360,7 @@ export const messagesZh: Messages = {
     autoSaved: "已自动保存",
     autoSaving: "正在自动保存…",
     itemsSummary: "{total} 项 · 已排除 {excluded}",
-    clarifyBlockedHint: "请先在上方完成确认选项，AI 才会继续调研。",
+    clarifyBlockedHint: "请先在上方完成必答确认项，AI 才会继续调研。",
     clarifyBlockedPlaceholder: "请点选上方确认项…",
     scopes: {
       new_partner: {
@@ -1415,7 +1415,7 @@ export const messagesZh: Messages = {
     clarifyDirectTitle: "快速补全",
     clarifyDirectHint: "点选后直接写入右侧草稿，无需再调 AI",
     clarifyIdentityTitle: "确认公司身份",
-    clarifyIdentityHint: "请先确认公司名或官网，确认后继续调研",
+    clarifyIdentityHint: "必答项 — 选完后 AI 才会继续调研",
     clarifyAiTitle: "需 AI 理解",
     clarifyAiHint: "全部选完后点击一次提交，由 AI 继续完善",
     clarifyAiSubmit: "选完了，提交给 AI",
@@ -1424,7 +1424,7 @@ export const messagesZh: Messages = {
     clarifyOther: "其他…",
     clarifyOtherPlaceholder: "手动输入",
     clarifyOtherConfirm: "确认",
-    confirmBlockedIdentity: "请先确认上方公司身份",
+    confirmBlockedIdentity: "请先完成上方必答确认项",
     editPartnerName: "公司名称",
     editWebsite: "官网",
     suggestions: [

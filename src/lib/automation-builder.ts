@@ -103,7 +103,8 @@ Rules:
 3. ready=true requires: draft.description, draft.cronExpr, and at least one of wecomPushChatId or pushEmailTo. partnerId is optional (empty = all).
 4. 【构建偏好】wins for filled fields; if user text conflicts (e.g.「发到群」while prefs say no WeCom) → follow user intent and emit clarifications to pick the group — do NOT silently skip WeCom.
 5. Apply WeCom group chatId ONLY when user/prefs explicitly enable WeCom push — not by default.
-6. clarifications tier required for ambiguous partner, WeCom group, or email — always offer concrete names from the partner list / known groups, NEVER ask user to type chatId manually.
+6. clarifications tier required for ambiguous partner, WeCom group, or email — always offer concrete names from the partner list / known groups, NEVER ask user to type chatId manually. Prefer resolving these in your draft/clarifications; the server only adds pickers if you leave a required gap.
+6b. If user already stated delivery channel in plain language (e.g.「发到我的邮箱」「发到微信群」「所有正式合作伙伴的待办」), DO NOT ask again whether to use email/WeCom or which partner scope — set pushEmailTo / wecomPushChatId / partnerId in draft directly.
 7. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
 8. Do NOT build unrelated pipelines (gold price, generic coding agents).
 9. Cron presets:
@@ -291,6 +292,12 @@ ${partnerLines}`;
   });
   emitPhase(opts.emit, "extract", locale === "zh" ? "生成自动化草案" : "Building automation draft");
 
+  let userEmail = "";
+  if (opts.userId) {
+    const me = await db.user.findUnique({ where: { id: opts.userId }, select: { email: true } });
+    userEmail = me?.email?.trim() ?? "";
+  }
+
   try {
     const raw = await chatJson<{
       reply?: string;
@@ -312,6 +319,7 @@ ${partnerLines}`;
         deliveryPrefs: opts.deliveryPrefs,
         boundPartnerId: opts.boundPartnerId,
         sourceChatId: opts.sourceChatId,
+        userEmail,
       }
     );
     turn = {
@@ -360,6 +368,7 @@ ${partnerLines}`;
       emails,
       locale,
       boundPartnerId: opts.boundPartnerId,
+      userEmail,
     });
     turn = {
       ...turn,

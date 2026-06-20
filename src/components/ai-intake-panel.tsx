@@ -14,10 +14,11 @@ import {
   applyDirectClarification,
   applyProposalEdit,
   formatAiClarificationMessage,
+  hasBlockingClarifications,
   type ClarificationAnswer,
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
-import { formatPreferencePick } from "@/lib/ai-clarifications";
+import { formatPreferencePick, getClarificationTier } from "@/lib/ai-clarifications";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { useMessages, useLocale } from "@/lib/i18n/context";
@@ -57,6 +58,7 @@ export function AiIntakePanel({
   const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
   const abortRef = useRef<AbortController | null>(null);
+  const directRequiredAnswersRef = useRef<ClarificationAnswer[]>([]);
   const autoApplyMode = !!(partnerId && isFastIntakeScope(scope) && scope !== "business_record");
   const [autoApplyFailed, setAutoApplyFailed] = useState(false);
   const [autoApplying, setAutoApplying] = useState(false);
@@ -81,10 +83,28 @@ export function AiIntakePanel({
     if (!proposal) return;
     const c = clarifications.find((x) => x.id === id);
     if (!c) return;
+    const tier = getClarificationTier(c);
     const { proposal: next, changes } = applyDirectClarification(proposal, c, value);
     setProposal(next);
-    setClarifications((prev) => prev.filter((x) => x.id !== id));
+    const remaining = clarifications.filter((x) => x.id !== id);
+    setClarifications(remaining);
     setPatchChanges(changes);
+
+    if (tier === "required") {
+      directRequiredAnswersRef.current.push({ id, question: c.question, value });
+    }
+
+    const usesResearch = scope === "new_partner" || scope === "profile";
+    if (
+      usesResearch &&
+      tier === "required" &&
+      !hasBlockingClarifications(remaining) &&
+      directRequiredAnswersRef.current.length > 0
+    ) {
+      const answers = [...directRequiredAnswersRef.current];
+      directRequiredAnswersRef.current = [];
+      void send(formatAiClarificationMessage(answers, locale));
+    }
   }
 
   function handleProposalEdit(patch: ProposalEditPatch) {
@@ -158,6 +178,7 @@ export function AiIntakePanel({
   async function send(override?: string) {
     const text = (override ?? input).trim();
     if ((!text && !pendingImages.length) || loading) return;
+    if (!override && hasBlockingClarifications(clarifications)) return;
     const next = [
       ...messages,
       {
@@ -176,6 +197,7 @@ export function AiIntakePanel({
     setClarifications([]);
     setPatchChanges(null);
     setAutoApplyFailed(false);
+    directRequiredAnswersRef.current = [];
     const ac = new AbortController();
     abortRef.current = ac;
     try {

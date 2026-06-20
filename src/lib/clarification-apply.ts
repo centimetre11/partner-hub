@@ -1,4 +1,4 @@
-import type { IntakeClarification, IntakeProposal } from "@/lib/ai-intake";
+import type { IntakeClarification, IntakeProposal, IntakeScope, IntakeTurn } from "@/lib/ai-intake";
 import type { AiClarification } from "@/lib/ai-clarifications";
 import {
   formatClarificationAnswers,
@@ -41,9 +41,68 @@ const DIRECT_CLARIFICATION_IDS = new Set([
 ]);
 
 const OPEN_ENDED_OPTION = /^(other|unknown|not sure|tbd|n\/a|不详|其他|未知|待判定|不清楚)/i;
+const NO_WEBSITE_OPTION = /^(no website|暂无官网|没有官网|无官网|未发现官网|website unknown)/i;
 
 export function isOpenEndedClarificationOption(option: string): boolean {
-  return OPEN_ENDED_OPTION.test(option.trim());
+  const t = option.trim();
+  return OPEN_ENDED_OPTION.test(t) || NO_WEBSITE_OPTION.test(t);
+}
+
+function concreteClarificationOptions(options: string[]): string[] {
+  return options.map((o) => o.trim()).filter(Boolean).filter((o) => !isOpenEndedClarificationOption(o));
+}
+
+function draftIdentityValue(id: string, proposal: IntakeProposal): string | undefined {
+  if (id === "website") {
+    return proposal.fields.find((f) => f.field === "website")?.newValue?.trim() || undefined;
+  }
+  if (id === "partnerName" || id === "name") {
+    return (
+      proposal.partnerName?.trim() ||
+      proposal.fields.find((f) => f.field === "name")?.newValue?.trim() ||
+      undefined
+    );
+  }
+  return undefined;
+}
+
+/** True when partnerName/website clarification adds no real disambiguation (e.g. KMS already gave one clear answer). */
+export function isRedundantIdentityClarification(c: IntakeClarification, proposal: IntakeProposal): boolean {
+  if (c.id !== "partnerName" && c.id !== "name" && c.id !== "website") return false;
+
+  const draft = draftIdentityValue(c.id, proposal);
+  if (!draft) return false;
+
+  const concrete = concreteClarificationOptions(c.options);
+  if (!concrete.length) return true;
+  if (concrete.length === 1 && concrete[0]!.toLowerCase() === draft.toLowerCase()) return true;
+
+  if (c.id === "website") {
+    const urls = concrete.filter((o) => /https?:\/\//i.test(o) || /^[\w.-]+\.[a-z]{2,}/i.test(o));
+    const norm = (s: string) => s.toLowerCase().replace(/\/+$/, "");
+    if (urls.length === 1 && norm(urls[0]!) === norm(draft)) return true;
+  }
+
+  return false;
+}
+
+/** Drop partnerName/website checkpoints when the draft already has a single confident answer. */
+export function pruneRedundantIdentityClarifications(turn: IntakeTurn, scope: IntakeScope): IntakeTurn {
+  if (scope !== "new_partner") return turn;
+
+  const clarifications = turn.clarifications.filter(
+    (c) => !isRedundantIdentityClarification(c, turn.proposal)
+  );
+  if (clarifications.length === turn.clarifications.length) return turn;
+
+  const noBlocking = !hasRequiredClarifications(clarifications);
+  const hasName = !!draftIdentityValue("partnerName", turn.proposal);
+
+  return {
+    ...turn,
+    clarifications,
+    ready: noBlocking && hasName ? true : turn.ready,
+  };
 }
 
 export function isIdentityClarification(c: IntakeClarification): boolean {

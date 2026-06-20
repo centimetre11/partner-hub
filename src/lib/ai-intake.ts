@@ -253,7 +253,9 @@ function normalizeClarifications(raw: unknown, scope?: IntakeScope): IntakeClari
           ? "preference"
           : isTodoPartnerNotFound || isIdentity || c.blocking === true
             ? "required"
-            : "required";
+            : kind === "field"
+              ? "preference"
+              : "required";
     out.push({
       id,
       question: c.question.trim(),
@@ -322,7 +324,11 @@ async function finalizeIntakeTurn(
     const { enrichProposalPartnerFromText } = await import("./intake-partner-binding");
     proposal = await enrichProposalPartnerFromText(proposal, opts.userText, opts?.partnerId);
   }
-  const next = { ...turn, proposal };
+  let next = { ...turn, proposal };
+  if (scope === "new_partner") {
+    const { pruneRedundantIdentityClarifications } = await import("./clarification-apply");
+    next = pruneRedundantIdentityClarifications(next, scope);
+  }
   return isFastIntakeScope(scope)
     ? await finalizeFastIntakeTurn(scope, next, locale, {
         boundPartnerId: opts?.partnerId,
@@ -631,8 +637,8 @@ export async function runIntakeTurn(opts: {
         role: "user",
         content:
           locale === "zh"
-            ? `[系统已自动读取 KMS，以下内容可直接用于建档，勿说 KMS 未配置]\n\n${kmsPrefetch.content}`
-            : `[System pre-fetched KMS — use directly for onboarding; do NOT say KMS is unconfigured]\n\n${kmsPrefetch.content}`,
+            ? `[系统已自动读取 KMS，以下内容可直接用于建档，勿说 KMS 未配置。若 KMS 中公司名与官网明确且唯一，直接写入 proposal，无需 blocking 身份确认；仅在名称/官网存在多个候选或 search_partners 有重复时才发出 identity 澄清。]\n\n${kmsPrefetch.content}`
+            : `[System pre-fetched KMS — use directly for onboarding; do NOT say KMS is unconfigured. If KMS gives a clear unique company name and website, write them to proposal without blocking identity clarifications; only emit identity clarifications when multiple name/website candidates exist or search_partners finds duplicates.]\n\n${kmsPrefetch.content}`,
       });
       opts.emit?.({
         event: "trace_patch",

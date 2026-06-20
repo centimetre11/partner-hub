@@ -23,7 +23,28 @@ export function mentionsWecomPush(text: string): boolean {
 }
 
 export function mentionsEmailPush(text: string): boolean {
-  return /发邮件|邮件给我|email me|send email|push.*email/i.test(text);
+  return /发到.*邮箱|推到.*邮箱|发送?到.*邮箱|发到我的邮箱|我的邮箱|用邮箱|通过邮件|邮件推送|发邮件|邮件给我|email me|send email|push.*email|to my (email|mailbox)|via email/i.test(
+    text
+  );
+}
+
+/** 用户明确要查全部/所有正式伙伴 — 不应再问「哪个伙伴」 */
+export function mentionsAllPartnersScope(text: string): boolean {
+  return /所有.*(伙伴|客户|合作伙伴)|全部.*(伙伴|客户)|正式伙伴|正式合作伙伴|all partners|all active partners|every partner/i.test(
+    text
+  );
+}
+
+export function mentionsMyEmail(text: string): boolean {
+  return /我的邮箱|my email|my mailbox|发给我/i.test(text);
+}
+
+/** 从用户原文推断推送邮箱（「我的邮箱」→ 当前登录用户） */
+export function inferPushEmailFromText(text: string, userEmail?: string): string {
+  if (!mentionsEmailPush(text)) return "";
+  if (userEmail && mentionsMyEmail(text)) return userEmail.trim();
+  const explicit = text.match(/[\w.+-]+@[\w.-]+\.\w{2,}/);
+  return explicit?.[0]?.trim() ?? "";
 }
 
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
@@ -54,6 +75,31 @@ function hasClarificationAbout(clarifications: AutomationBuilderClarification[],
 
 function isBuiltinClarificationId(id: string): boolean {
   return id === "partner-pick" || id === "wecom-pick" || id === "email-pick" || id === "delivery-pick";
+}
+
+/** 用户已说清渠道或 AI 已填渠道时，去掉重复追问 */
+function stripRedundantDeliveryClarifications(
+  clarifications: AutomationBuilderClarification[],
+  userText: string,
+  draft: { pushEmailTo: string; wecomPushChatId: string }
+): AutomationBuilderClarification[] {
+  const hasEmail = Boolean(draft.pushEmailTo.trim());
+  const hasWecom = Boolean(draft.wecomPushChatId.trim());
+  const wantsEmail = mentionsEmailPush(userText) || hasEmail;
+  const wantsWecom = mentionsWecomPush(userText) || hasWecom;
+  if (!wantsEmail && !wantsWecom) return clarifications;
+
+  return clarifications.filter((c) => {
+    if (isBuiltinClarificationId(c.id)) return true;
+    const blob = `${c.question} ${c.options.join(" ")}`;
+    if (wantsEmail && /推送|delivery|渠道|是否|要不要|需不需要|用.*邮件|use.*email|send.*email/i.test(blob)) {
+      return false;
+    }
+    if (wantsWecom && !wantsEmail && /推送|delivery|渠道|是否|要不要|企微|wecom|group/i.test(blob)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 /** 去掉 AI 生成的「请提供 chatId」类澄清，改由系统选项接管 */
@@ -142,7 +188,7 @@ export function filterSatisfiedClarifications(
   });
 }
 
-/** 补足 AI 未生成的必答澄清（伙伴 / 企微群 / 邮箱） */
+/** 仅在 AI 草案/澄清仍有缺口时补系统澄清（fallback，非每轮重判） */
 export function enrichAutomationClarifications(opts: {
   clarifications: AutomationBuilderClarification[];
   messages: AutomationBuilderMessage[];
@@ -154,12 +200,25 @@ export function enrichAutomationClarifications(opts: {
   emails: EmailOption[];
   locale: Locale;
   boundPartnerId?: string;
+  userEmail?: string;
 }): AutomationBuilderClarification[] {
   const userText = extractLastUserPlainText(opts.messages);
-  const out = stripManualIdClarifications([...opts.clarifications]);
+  const inferredEmail = inferPushEmailFromText(userText, opts.userEmail);
+  const effectiveEmail = opts.pushEmailTo.trim() || inferredEmail;
+  const hasDelivery = Boolean(opts.wecomPushChatId.trim() || effectiveEmail);
+
+  let out = stripManualIdClarifications([...opts.clarifications]);
+  out = stripRedundantDeliveryClarifications(out, userText, {
+    pushEmailTo: effectiveEmail,
+    wecomPushChatId: opts.wecomPushChatId,
+  });
 
   const needPartner =
-    mentionsPartnerRef(userText) && !opts.partnerId.trim() && !opts.boundPartnerId && opts.partners.length > 0;
+    !opts.partnerId.trim() &&
+    !opts.boundPartnerId &&
+    opts.partners.length > 0 &&
+    mentionsPartnerRef(userText) &&
+    !mentionsAllPartnersScope(userText);
   if (needPartner && !hasClarificationAbout(out, /伙伴|partner|客户/i)) {
     const options = opts.partners.map((p) => p.name);
     if (opts.locale === "zh") {
@@ -182,7 +241,8 @@ export function enrichAutomationClarifications(opts: {
 
   const userWantsWecom = mentionsWecomPush(userText);
   const userWantsEmail = mentionsEmailPush(userText);
-  const needWecom = userWantsWecom && !opts.wecomPushChatId.trim() && opts.wecomChats.length > 0;
+  const needWecom =
+    !opts.wecomPushChatId.trim() && userWantsWecom && opts.wecomChats.length > 0;
   if (needWecom && !hasClarificationAbout(out, /企微|wecom|群/i)) {
     out.unshift({
       id: "wecom-pick",
@@ -194,11 +254,14 @@ export function enrichAutomationClarifications(opts: {
     });
   }
 
-  const needEmail = userWantsEmail && !opts.pushEmailTo.trim() && opts.emails.length > 0;
+  const needEmail = !effectiveEmail && userWantsEmail && opts.emails.length > 0;
   if (needEmail && !hasClarificationAbout(out, /邮件|email/i)) {
     out.unshift({
       id: "email-pick",
-      question: opts.locale === "zh" ? "发送到哪个邮箱？" : "Which email should receive pushes?",
+      question:
+        opts.locale === "zh"
+          ? "你提到发邮件 — 请选择收件邮箱："
+          : "You asked for email — pick the recipient:",
       options: opts.emails.map((e) => emailOptionLabel(e)),
       control: "select",
       placeholder: opts.locale === "zh" ? "选择邮箱…" : "Select email…",
@@ -206,12 +269,7 @@ export function enrichAutomationClarifications(opts: {
     });
   }
 
-  const needDelivery =
-    !opts.wecomPushChatId.trim() &&
-    !opts.pushEmailTo.trim() &&
-    !userWantsWecom &&
-    !userWantsEmail &&
-    !hasClarificationAbout(out, /推送|delivery|渠道/i);
+  const needDelivery = !hasDelivery && !hasClarificationAbout(out, /推送|delivery|渠道/i);
   if (needDelivery) {
     out.unshift({
       id: "delivery-pick",
@@ -251,7 +309,7 @@ export function clarificationsBlockReady(clarifications: AutomationBuilderClarif
   return clarifications.some((c) => getClarificationTier(c) === "required");
 }
 
-/** 按用户原文 + 显式配置修正草案，去掉 AI 臆造的默认邮箱/伙伴/企微 */
+/** AI 草案为主；规则仅在填空、纠正冲突、或补 AI 遗漏的必答澄清时介入 */
 export function applyUserDeliveryIntent(
   draft: AutomationBuilderDraft,
   opts: {
@@ -259,12 +317,14 @@ export function applyUserDeliveryIntent(
     deliveryPrefs?: Partial<BuilderDeliveryPrefs>;
     boundPartnerId?: string;
     sourceChatId?: string;
+    userEmail?: string;
   }
 ): AutomationBuilderDraft {
   const userText = extractLastUserPlainText(opts.messages);
   const wantsWecom = mentionsWecomPush(userText);
   const wantsEmail = mentionsEmailPush(userText);
   const wantsPartner = mentionsPartnerRef(userText);
+  const allPartners = mentionsAllPartnersScope(userText);
 
   const prefPartner = opts.deliveryPrefs?.partnerId?.trim() ?? "";
   const prefWecom = opts.deliveryPrefs?.wecomChatId?.trim() ?? "";
@@ -275,18 +335,30 @@ export function applyUserDeliveryIntent(
   let pushEmailTo = draft.pushEmailTo.trim();
 
   if (prefPartner) partnerId = prefPartner;
-  else if (wantsPartner && opts.boundPartnerId) partnerId = opts.boundPartnerId;
-  else if (wantsPartner && !prefPartner && !opts.boundPartnerId) partnerId = "";
-
   if (prefWecom) wecomPushChatId = prefWecom;
-  else if (wantsWecom && opts.sourceChatId) wecomPushChatId = opts.sourceChatId;
-  else if (wantsWecom && !prefWecom) wecomPushChatId = wecomPushChatId || "";
-
   if (prefEmail) pushEmailTo = prefEmail;
-  else if (wantsEmail) pushEmailTo = pushEmailTo;
-  else pushEmailTo = "";
 
-  if (wantsWecom && !wantsEmail && !prefEmail) pushEmailTo = "";
+  if (allPartners) {
+    partnerId = "";
+  } else if (!partnerId && wantsPartner && opts.boundPartnerId) {
+    partnerId = opts.boundPartnerId;
+  }
+
+  if (!wecomPushChatId && wantsWecom && opts.sourceChatId) {
+    wecomPushChatId = opts.sourceChatId;
+  }
+
+  const inferredEmail = inferPushEmailFromText(userText, opts.userEmail);
+  if (!pushEmailTo && inferredEmail) {
+    pushEmailTo = inferredEmail;
+  }
+
+  if (wantsWecom && !wantsEmail && !prefEmail && !inferredEmail) {
+    pushEmailTo = "";
+  }
+  if (wantsEmail && !wantsWecom && !prefWecom) {
+    wecomPushChatId = "";
+  }
 
   return { ...draft, partnerId, wecomPushChatId, pushEmailTo };
 }
