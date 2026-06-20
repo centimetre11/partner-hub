@@ -728,6 +728,8 @@ export const messagesZh: Messages = {
     builderBuildFailed: "构建失败",
     builderConfirmPrefix: "【确认选择】",
     builderSkipMessage: "跳过上述确认，请按当前理解继续完善草案。",
+    builderClarifyBlockedHint: "请先在上方完成确认选项，AI 才会继续下一步。",
+    builderClarifyBlockedPlaceholder: "请点选上方确认项…",
     builderStarters: [
       "帮我做一个 Agent：每天早上扫描停滞伙伴并创建待办",
       "我要会前简报 Agent：查伙伴档案和知识库，输出会议议程",
@@ -1238,6 +1240,8 @@ export const messagesZh: Messages = {
     autoSaved: "已自动保存",
     autoSaving: "正在自动保存…",
     itemsSummary: "{total} 项 · 已排除 {excluded}",
+    clarifyBlockedHint: "请先在上方完成确认选项，AI 才会继续调研。",
+    clarifyBlockedPlaceholder: "请点选上方确认项…",
     scopes: {
       new_partner: {
         title: "AI 建档",

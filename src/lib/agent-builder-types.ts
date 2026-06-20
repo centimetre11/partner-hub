@@ -1,4 +1,8 @@
-export type AgentBuilderMessage = { role: "user" | "assistant"; content: string };
+export type AgentBuilderMessage = {
+  role: "user" | "assistant";
+  content: string;
+  trace?: import("./ai-trace").AiTraceStep[];
+};
 
 export type AgentDeliveryMode = "inbox" | "wecom_chat" | "partner_group" | "webhook";
 

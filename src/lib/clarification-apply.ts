@@ -179,6 +179,8 @@ export function applyProposalEdit(
 
 export type ClarificationAnswer = { id: string; question: string; value: string };
 
-export function formatAiClarificationMessage(answers: ClarificationAnswer[]): string {
-  return answers.map((a) => `${a.question} ${a.value}`).join("\n");
+export function formatAiClarificationMessage(answers: ClarificationAnswer[], locale: "zh" | "en" = "zh"): string {
+  const prefix = locale === "zh" ? "【确认选择】" : "[Confirmations]";
+  const sep = locale === "zh" ? "：" : ": ";
+  return `${prefix}\n${answers.map((a, i) => `${i + 1}. ${a.question}${sep}${a.value}`).join("\n")}`;
 }

@@ -51,7 +51,7 @@ export function AiFullscreenOverlay({
       aria-modal="true"
     >
       <div
-        className="flex-1 min-h-0 m-1 sm:m-1.5 md:m-2 rounded-lg md:rounded-lg overflow-hidden w-full border border-slate-200 bg-white ring-1 ring-white/20 overscroll-contain"
+        className="flex-1 min-h-0 m-0.5 sm:m-1 rounded-lg overflow-hidden w-full border border-slate-200 bg-white overscroll-contain"
         onClick={(e) => e.stopPropagation()}
       >
         {children}

@@ -20,7 +20,7 @@ import {
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { useAssistant } from "@/lib/assistant-context";
-import { useMessages } from "@/lib/i18n/context";
+import { useMessages, useLocale } from "@/lib/i18n/context";
 
 type Msg = {
   role: "user" | "assistant";
@@ -67,6 +67,7 @@ type PendingIntent = {
 export function AssistantDock() {
   const m = useMessages();
   const am = m.assistant;
+  const locale = useLocale();
   const router = useRouter();
   const { open, setOpen } = useAssistant();
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -126,7 +127,7 @@ export function AssistantDock() {
   }
 
   function handleAiClarify(answers: ClarificationAnswer[]) {
-    void send(formatAiClarificationMessage(answers));
+    void send(formatAiClarificationMessage(answers, locale));
   }
 
   async function send(text?: string) {
@@ -319,8 +320,6 @@ export function AssistantDock() {
       {open && (
         <AiFullscreenOverlay onClose={() => setOpen(false)} zIndex={55}>
           <AiWorkflowPanel
-            title={showDraft ? am.onboardingTitle : am.title}
-            subtitle={showDraft ? am.onboardingSubtitle : am.subtitle}
             onClose={() => setOpen(false)}
             messages={panelMessages}
             loading={loading}

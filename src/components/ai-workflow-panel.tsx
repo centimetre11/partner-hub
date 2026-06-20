@@ -10,15 +10,27 @@ import { normalizedToIntake } from "@/lib/proposal-normalize";
 import type { NormalizedProposal } from "@/lib/proposal-normalize";
 import { AiProcessTrace } from "@/components/ai-process-trace";
 import { LiveProposalDraft } from "@/components/live-proposal-draft";
+import {
+  IntakeClarificationChat,
+  hasPendingAiClarifications,
+} from "@/components/intake-clarification-chat";
 
 import { prepareChatImagesFromFiles } from "@/lib/ai-images";
+import { AutoResizeTextarea } from "@/components/auto-resize-textarea";
 import { useMessages } from "@/lib/i18n/context";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
 
+const chatBubble = {
+  user: "max-w-[86%] rounded-lg px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-slate-900 text-white",
+  assistant:
+    "max-w-[86%] rounded-lg px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-slate-100 text-slate-800",
+};
+
+const inputClass =
+  "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
+
 export function AiWorkflowPanel({
-  title,
-  subtitle,
   onClose,
   messages,
   loading,
@@ -52,8 +64,6 @@ export function AiWorkflowPanel({
   leftFooter,
   showDraftPanel = true,
 }: {
-  title: string;
-  subtitle?: string;
   onClose?: () => void;
   messages: Msg[];
   loading: boolean;
@@ -72,13 +82,11 @@ export function AiWorkflowPanel({
   scope?: IntakeScope;
   partnerId?: string;
   sourceText?: string;
-  /** new_partner: active = create as a formal partner immediately */
   intent?: "prospect" | "active";
   onApplied?: (partnerId: string) => void;
   input: string;
   onInputChange: (v: string) => void;
   onSend: () => void;
-  /** Stop the current AI stream */
   onStop?: () => void;
   pendingImages?: ChatImage[];
   onAddImages?: (images: ChatImage[]) => void;
@@ -87,10 +95,11 @@ export function AiWorkflowPanel({
   sendDisabled?: boolean;
   headerExtra?: ReactNode;
   leftFooter?: ReactNode;
-  /** Whether to show the right-hand live draft panel (can hide in query mode) */
   showDraftPanel?: boolean;
 }) {
   const { intakePanel: ip } = useMessages();
+  const pendingAiClarify = hasPendingAiClarifications(clarifications ?? []);
+  const clarifyBlocked = pendingAiClarify && !loading;
 
   async function apply(filtered: NormalizedProposal) {
     const res = await fetch("/api/ai/intake/apply", {
@@ -110,40 +119,39 @@ export function AiWorkflowPanel({
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-white">
-      <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b flex items-center justify-between bg-slate-900 text-white">
-        <div className="min-w-0 flex-1 pr-2">
-          <div className="text-sm sm:text-base font-semibold truncate">✦ {title}</div>
-          {subtitle && <div className="text-[11px] sm:text-xs text-slate-400 mt-0.5 line-clamp-2">{subtitle}</div>}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+    <div className="relative flex flex-col h-full min-h-0 bg-white">
+      {(onClose || headerExtra) && (
+        <div className="absolute top-2 right-2 z-20 flex items-center gap-1">
           {headerExtra}
           {onClose && (
-            <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none px-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-8 w-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 text-xl leading-none flex items-center justify-center"
+              aria-label="Close"
+            >
               ×
             </button>
           )}
         </div>
-      </div>
+      )}
 
-      <div
-        className={`flex-1 min-h-0 grid grid-cols-1 ${showDraftPanel ? "md:grid-cols-[38%_62%]" : ""}`}
-      >
-        {/* Left: research */}
-        <div className="flex flex-col min-h-0 border-r border-slate-100">
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-4">
+      <div className={`flex-1 min-h-0 grid grid-cols-1 ${showDraftPanel ? "xl:grid-cols-5 gap-4 p-3" : "p-3"}`}>
+        {/* Left: conversation */}
+        <div
+          className={`flex flex-col min-h-0 bg-white rounded-lg border border-slate-200/80 shadow-sm ${
+            showDraftPanel ? "xl:col-span-3" : ""
+          }`}
+        >
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-3">
             {messages.map((m, i) => (
               <div key={i} className={`flex flex-col gap-2 ${m.role === "user" ? "items-end" : "items-start"}`}>
                 {m.role === "assistant" && m.trace && m.trace.length > 0 && (
-                  <AiProcessTrace steps={m.trace} className="w-full" />
+                  <AiProcessTrace steps={m.trace} className="w-full max-w-[92%]" />
                 )}
-                <div
-                  className={`max-w-[96%] rounded-lg px-4 py-3 text-[15px] whitespace-pre-wrap leading-relaxed ${
-                    m.role === "user" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
-                  }`}
-                >
+                <div className={m.role === "user" ? chatBubble.user : chatBubble.assistant}>
                   {m.images && m.images.length > 0 && (
-                    <div className={`flex flex-wrap gap-2 mb-2 ${m.role === "user" ? "" : ""}`}>
+                    <div className="flex flex-wrap gap-2 mb-2">
                       {m.images.map((img, j) => (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -159,11 +167,27 @@ export function AiWorkflowPanel({
                 </div>
               </div>
             ))}
+            {(clarifications?.length ?? 0) > 0 && !loading && (
+              <div className="flex justify-start w-full">
+                <IntakeClarificationChat
+                  clarifications={clarifications!}
+                  disabled={loading}
+                  onDirectClarify={onDirectClarify}
+                  onAiClarify={onAiClarify}
+                />
+              </div>
+            )}
             {loading && (
               <div className="w-full space-y-2">
-                <AiProcessTrace steps={liveTrace} loading phase={phase} phaseLabel={phaseLabel} />
+                <AiProcessTrace
+                  steps={liveTrace}
+                  loading
+                  phase={phase}
+                  phaseLabel={phaseLabel}
+                  className="max-w-[92%]"
+                />
                 {replyText && (
-                  <div className="rounded-lg px-4 py-3 text-[15px] whitespace-pre-wrap leading-relaxed bg-slate-100 text-slate-800 border border-slate-200">
+                  <div className={`${chatBubble.assistant} border border-slate-200/80`}>
                     {replyText}
                     <span className="inline-block w-1.5 h-4 bg-slate-400 ml-0.5 align-middle" />
                   </div>
@@ -171,15 +195,22 @@ export function AiWorkflowPanel({
               </div>
             )}
           </div>
-          <div className="shrink-0 border-t p-4">
+          <div className="shrink-0 border-t border-slate-100 p-3">
             {leftFooter ?? (
               <div className="space-y-2">
+                {clarifyBlocked && (
+                  <div className="text-xs text-sky-700 bg-sky-50 rounded-lg px-3 py-2">{ip.clarifyBlockedHint}</div>
+                )}
                 {pendingImages.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {pendingImages.map((img, i) => (
                       <div key={i} className="relative">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img.url} alt={img.name ?? "Pending"} className="h-16 w-16 rounded-lg object-cover border border-slate-200" />
+                        <img
+                          src={img.url}
+                          alt={img.name ?? "Pending"}
+                          className="h-16 w-16 rounded-lg object-cover border border-slate-200"
+                        />
                         {onRemoveImage && (
                           <button
                             type="button"
@@ -193,72 +224,77 @@ export function AiWorkflowPanel({
                     ))}
                   </div>
                 )}
-                <div className="flex gap-3 items-end">
-                {onAddImages && (
-                  <label className="shrink-0 cursor-pointer rounded-lg border border-slate-200 px-3 py-3 text-slate-500 hover:border-slate-300 hover:text-sky-600" title={ip.addImageTitle}>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = [...(e.target.files ?? [])];
-                        if (!files.length) return;
-                        void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
-                        e.target.value = "";
-                      }}
-                    />
-                    📷
-                  </label>
-                )}
-                <textarea
-                  value={input}
-                  onChange={(e) => onInputChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                <div className="flex gap-2 items-end">
+                  {onAddImages && (
+                    <label
+                      className="shrink-0 cursor-pointer rounded-lg border border-slate-200 px-3 py-2 text-slate-500 hover:border-slate-300 hover:text-sky-600"
+                      title={ip.addImageTitle}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = [...(e.target.files ?? [])];
+                          if (!files.length) return;
+                          void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
+                          e.target.value = "";
+                        }}
+                      />
+                      📷
+                    </label>
+                  )}
+                  <AutoResizeTextarea
+                    value={input}
+                    onChange={(e) => onInputChange(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !clarifyBlocked) {
+                        e.preventDefault();
+                        onSend();
+                      }
+                    }}
+                    onPaste={(e) => {
+                      if (!onAddImages || clarifyBlocked) return;
+                      const files = [...e.clipboardData.items]
+                        .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+                        .map((it) => it.getAsFile())
+                        .filter((f): f is File => !!f);
+                      if (!files.length) return;
                       e.preventDefault();
-                      onSend();
+                      void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
+                    }}
+                    onDrop={(e) => {
+                      if (!onAddImages || clarifyBlocked) return;
+                      const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+                      if (!files.length) return;
+                      e.preventDefault();
+                      void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
+                    }}
+                    disabled={clarifyBlocked}
+                    placeholder={
+                      clarifyBlocked ? ip.clarifyBlockedPlaceholder : (inputPlaceholder ?? ip.inputDefault)
                     }
-                  }}
-                  onPaste={(e) => {
-                    if (!onAddImages) return;
-                    const files = [...e.clipboardData.items]
-                      .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
-                      .map((it) => it.getAsFile())
-                      .filter((f): f is File => !!f);
-                    if (!files.length) return;
-                    e.preventDefault();
-                    void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
-                  }}
-                  onDrop={(e) => {
-                    if (!onAddImages) return;
-                    const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
-                    if (!files.length) return;
-                    e.preventDefault();
-                    void prepareChatImagesFromFiles(files).then((imgs) => imgs.length && onAddImages(imgs));
-                  }}
-                  rows={3}
-                  placeholder={inputPlaceholder ?? ip.inputDefault}
-                  className="flex-1 rounded-lg border border-slate-200 px-4 py-3 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-slate-400"
-                />
-                {loading && onStop ? (
-                  <button
-                    onClick={onStop}
-                    className="rounded-lg bg-red-500 text-white px-6 py-3 text-[15px] font-medium hover:bg-red-600 shrink-0 flex items-center gap-2"
-                    title={ip.stopTitle}
-                  >
-                    <span className="inline-block w-3 h-3 bg-white rounded-[2px]" />
-                    {ip.stop}
-                  </button>
-                ) : (
-                  <button
-                    onClick={onSend}
-                    disabled={sendDisabled}
-                    className="rounded-lg bg-slate-900 text-white px-6 py-3 text-[15px] font-medium hover:bg-slate-800 disabled:opacity-50 shrink-0"
-                  >
-                    {ip.send}
-                  </button>
-                )}
+                    className={`${inputClass} flex-1 resize-none disabled:bg-slate-50 disabled:text-slate-400`}
+                  />
+                  {loading && onStop ? (
+                    <button
+                      onClick={onStop}
+                      className="rounded-lg bg-red-500 text-white px-4 py-2 text-sm font-medium hover:bg-red-600 shrink-0 flex items-center gap-2"
+                      title={ip.stopTitle}
+                    >
+                      <span className="inline-block w-3 h-3 bg-white rounded-[2px]" />
+                      {ip.stop}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={onSend}
+                      disabled={sendDisabled || clarifyBlocked}
+                      className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40 shrink-0"
+                    >
+                      {ip.send}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -267,30 +303,28 @@ export function AiWorkflowPanel({
 
         {/* Right: live draft */}
         {showDraftPanel && (
-        <div className="flex flex-col min-h-0 p-5 md:p-6 bg-slate-50/50">
-          <LiveProposalDraft
-            proposal={proposal}
-            changes={patchChanges}
-            onConfirm={apply}
-          confirmLabel={
-            scope === "business_record"
-              ? ready
-                ? ip.confirmSyncReady
-                : ip.confirmSyncDraft
-              : ready
-                ? ip.confirmReady
-                : ip.confirmDraft
-          }
-            questions={questions}
-            clarifications={clarifications}
-            onDirectClarify={onDirectClarify}
-            onAiClarify={onAiClarify}
-            onProposalEdit={onProposalEdit}
-            ready={ready}
-            loading={loading}
-            scope={scope}
-          />
-        </div>
+          <div className="xl:col-span-2 flex flex-col min-h-0 space-y-4">
+            <LiveProposalDraft
+              proposal={proposal}
+              changes={patchChanges}
+              onConfirm={apply}
+              confirmLabel={
+                scope === "business_record"
+                  ? ready
+                    ? ip.confirmSyncReady
+                    : ip.confirmSyncDraft
+                  : ready
+                    ? ip.confirmReady
+                    : ip.confirmDraft
+              }
+              questions={questions}
+              ready={ready}
+              loading={loading}
+              scope={scope}
+              onProposalEdit={onProposalEdit}
+              identityBlocked={(clarifications?.length ?? 0) > 0}
+            />
+          </div>
         )}
       </div>
     </div>

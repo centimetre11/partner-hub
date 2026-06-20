@@ -1,5 +1,5 @@
 import { AIError, chatJson } from "./ai";
-import { emitReplyChunks, type TraceEmitter } from "./ai-trace";
+import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
 import { db } from "./db";
 import type { Locale } from "./i18n/locale";
 import { resolveAgentSkills } from "./skill-resolver";
@@ -284,19 +284,89 @@ export async function runAgentBuilderTurn(opts: {
       ? `【当前对话】\n${conversation || "用户尚未描述需求，请引导其说明想构建的 Agent。"}`
       : `【Current conversation】\n${conversation || "User has not described a need yet. Guide them on what Agent they want to build."}`;
 
+  const emit = opts.emit;
+  const reasonId = nextTraceId("reason");
+  if (emit) {
+    emitPhase(
+      emit,
+      "research",
+      locale === "zh" ? "分析需求与匹配工具" : "Analyzing requirements"
+    );
+    emit({
+      event: "trace",
+      step: {
+        type: "reasoning",
+        id: reasonId,
+        content:
+          locale === "zh"
+            ? "加载工具目录、技能库、伙伴列表与知识库索引…"
+            : "Loading tools, skills, partner catalog, and knowledge index…",
+        status: "running",
+      },
+    });
+  }
+
   let raw: Partial<AgentBuilderTurn>;
   try {
+    if (emit) {
+      emit({
+        event: "trace_patch",
+        id: reasonId,
+        patch: {
+          status: "done",
+          content:
+            locale === "zh"
+              ? "已加载平台资源，开始设计 Agent 配置…"
+              : "Platform resources loaded — designing Agent configuration…",
+        },
+      });
+      emitPhase(emit, "extract", locale === "zh" ? "生成 Agent 草案" : "Building Agent draft");
+    }
+    const architectId = nextTraceId("tool");
+    if (emit) {
+      emit({
+        event: "trace",
+        step: {
+          type: "tool",
+          id: architectId,
+          name: "agent_architect",
+          label: locale === "zh" ? "Agent 架构师" : "Agent architect",
+          args: { turns: opts.messages.length },
+          argHint: locale === "zh" ? "匹配工具、触发器与交付方式" : "Matching tools, trigger, and delivery",
+          status: "running",
+        },
+      });
+    }
     raw = await chatJson<Partial<AgentBuilderTurn>>(system, userPrompt, {
       feature: locale === "zh" ? "企微 Agent Builder" : "Conversational Agent builder",
       userId: opts.userId,
       temperature: 0.2,
     });
+    if (emit) {
+      emit({
+        event: "trace_patch",
+        id: architectId,
+        patch: {
+          status: "done",
+          result:
+            locale === "zh"
+              ? `草案：${raw.draft?.name?.trim() || "未命名"} · 工具 ${(raw.draft?.skills ?? []).length} 个`
+              : `Draft: ${raw.draft?.name?.trim() || "Untitled"} · ${(raw.draft?.skills ?? []).length} tool(s)`,
+        },
+      });
+    }
   } catch (e) {
+    if (emit) {
+      emit({ event: "trace_patch", id: reasonId, patch: { status: "done" } });
+    }
     const detail = e instanceof AIError ? e.message : e instanceof Error ? e.message : String(e);
     return fallbackTurn(locale, detail);
   }
 
   const turn = normalizeTurn(raw, locale, builtinNames, promptSkillIds, partnerIds);
+  if (emit) {
+    emitPhase(emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
+  }
   await emitReplyChunks(opts.emit, turn.reply);
   return turn;
 }

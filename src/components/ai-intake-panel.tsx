@@ -19,7 +19,7 @@ import {
 } from "@/lib/clarification-apply";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
-import { useMessages } from "@/lib/i18n/context";
+import { useMessages, useLocale } from "@/lib/i18n/context";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[]; images?: ChatImage[] };
 
@@ -38,6 +38,7 @@ export function AiIntakePanel({
 }) {
   const router = useRouter();
   const { intakePanel: ip, assistant: am } = useMessages();
+  const locale = useLocale();
   const meta = ip.scopes[scope];
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -93,7 +94,7 @@ export function AiIntakePanel({
   }
 
   function handleAiClarify(answers: ClarificationAnswer[]) {
-    void send(formatAiClarificationMessage(answers));
+    void send(formatAiClarificationMessage(answers, locale));
   }
 
   async function tryAutoApply(
@@ -264,8 +265,6 @@ export function AiIntakePanel({
     <AiFullscreenOverlay onClose={onClose}>
       <div className="relative h-full min-h-0 flex flex-col">
         <AiWorkflowPanel
-          title={meta.title}
-          subtitle={ip.subtitle}
           onClose={onClose}
           messages={
             messages.length === 0 ? [{ role: "assistant", content: meta.placeholder }] : messages

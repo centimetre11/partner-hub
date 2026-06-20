@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { IntakeProposal, IntakeClarification } from "@/lib/ai-intake";
+import type { IntakeProposal } from "@/lib/ai-intake";
 import type { IntakeScope } from "@/lib/ai-locale";
 import {
   countProposalItems,
@@ -16,14 +16,7 @@ import { filterNormalized, normalizeProposal, type NormalizedProposal } from "@/
 import { scopeDraftSections } from "@/lib/proposal-scope";
 import { CRM_TRACE_ACTIONS, CRM_TRACE_NATURES } from "@/lib/crm-trace-constants";
 import { businessRecordCrmFieldsComplete } from "@/lib/crm-trace-payload";
-import {
-  getClarificationMode,
-  hasBlockingClarifications,
-  isOpenEndedClarificationOption,
-  partitionClarifications,
-  type ClarificationAnswer,
-  type ProposalEditPatch,
-} from "@/lib/clarification-apply";
+import { type ProposalEditPatch } from "@/lib/clarification-apply";
 import { useLabels, useMessages } from "@/lib/i18n/context";
 import { attitudeLabelFromLabels } from "@/lib/i18n/labels";
 
@@ -133,13 +126,12 @@ type Props = {
   onConfirm: (filtered: NormalizedProposal) => Promise<void> | void;
   confirmLabel?: string;
   questions?: string[];
-  clarifications?: IntakeClarification[];
-  onDirectClarify?: (id: string, value: string) => void;
-  onAiClarify?: (answers: ClarificationAnswer[]) => void;
   onProposalEdit?: (patch: ProposalEditPatch) => void;
   ready?: boolean;
   loading?: boolean;
   scope?: IntakeScope;
+  /** When true, save is blocked until left-chat AI clarifications are answered */
+  identityBlocked?: boolean;
 };
 
 export function LiveProposalDraft({
@@ -148,13 +140,11 @@ export function LiveProposalDraft({
   onConfirm,
   confirmLabel,
   questions = [],
-  clarifications = [],
-  onDirectClarify,
-  onAiClarify,
   onProposalEdit,
   ready = false,
   loading = false,
   scope,
+  identityBlocked: identityBlockedProp,
 }: Props) {
   const { assistant: am, intakePanel: ip } = useMessages();
   const labels = useLabels();
@@ -170,11 +160,8 @@ export function LiveProposalDraft({
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const count = proposal ? countProposalItems(proposal) : 0;
-  const identityBlocked = hasBlockingClarifications(clarifications);
+  const identityBlocked = identityBlockedProp ?? false;
   const websiteField = normalized?.fieldUpdates.find((f) => f.field === "website");
-  const partnerNameClarifyPending = clarifications.some(
-    (c) => c.blocking && (c.id === "partnerName" || c.id === "name")
-  );
 
   useEffect(() => {
     if (!changes) return;
@@ -210,8 +197,8 @@ export function LiveProposalDraft({
 
   if (!proposal || !normalized) {
     return (
-      <div className="flex flex-col h-full min-h-0">
-        <div className="flex-1 flex items-center justify-center text-base text-slate-400 text-center px-8">
+      <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-400 flex flex-col h-full min-h-0">
+        <div className="flex-1 flex items-center justify-center text-center px-4">
           {loading ? ip.liveLoading : ip.liveEmpty}
         </div>
       </div>
@@ -241,10 +228,10 @@ export function LiveProposalDraft({
       ));
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="shrink-0 flex items-center justify-between mb-3">
-        <div className="text-base font-semibold text-slate-700">{ip.liveTitle}</div>
-        <div className="text-sm text-slate-400">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 flex flex-col h-full min-h-0 space-y-3">
+      <div className="shrink-0 flex items-center justify-between">
+        <div className="text-sm font-semibold text-slate-900">{ip.liveTitle}</div>
+        <div className="text-xs text-slate-400">
           {ip.foundItems.replace("{count}", String(count))}
           {changes && (changes.added.length > 0 || changes.updated.length > 0) && (
             <span className="text-emerald-600 ml-1">
@@ -255,17 +242,8 @@ export function LiveProposalDraft({
         </div>
       </div>
 
-      {(clarifications.length > 0 && (onDirectClarify || onAiClarify)) && (
-        <ClarifyPanels
-          clarifications={clarifications}
-          onDirectClarify={onDirectClarify}
-          onAiClarify={onAiClarify}
-          disabled={loading}
-        />
-      )}
-
       {(normalized.summary || normalized.partnerName) && (
-        <div className="shrink-0 rounded-lg bg-slate-50 border border-slate-200 p-3 mb-3">
+        <div className="shrink-0 rounded-lg bg-white border border-slate-200 p-3">
           {normalized.summaryTitle && (
             <div className="text-xs font-semibold text-sky-700 mb-1">{normalized.summaryTitle}</div>
           )}
@@ -280,7 +258,7 @@ export function LiveProposalDraft({
           <p className="text-sm text-slate-400 text-center py-8">{ip.nothingToSave}</p>
         ) : (
           <>
-            {(sections.partnerName && (normalized.partnerName || (onProposalEdit && !partnerNameClarifyPending))) && (
+            {(sections.partnerName && (normalized.partnerName || onProposalEdit)) && (
               <DraftRow
                 k="partner"
                 tone="partner"
@@ -494,7 +472,7 @@ export function LiveProposalDraft({
         <div ref={bottomRef} />
       </div>
 
-      {questions.length > 0 && !ready && clarifications.length === 0 && (
+      {questions.length > 0 && !ready && (
         <div className="shrink-0 mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
           {ip.questionsHint.replace("{questions}", questions.join("; "))}
         </div>
@@ -506,7 +484,7 @@ export function LiveProposalDraft({
         </div>
       )}
 
-      <div className="shrink-0 sticky bottom-0 pt-3 mt-2 border-t border-slate-100 bg-white flex flex-col gap-2">
+      <div className="shrink-0 sticky bottom-0 pt-3 mt-auto border-t border-slate-200/80 flex flex-col gap-2">
         {identityBlocked && (
           <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{am.confirmBlockedIdentity}</div>
         )}
@@ -523,298 +501,12 @@ export function LiveProposalDraft({
           <button
             onClick={confirm}
             disabled={saveDisabled}
-            className="rounded-lg bg-emerald-600 text-white font-medium px-5 py-2.5 text-sm hover:bg-emerald-700 disabled:opacity-50 shrink-0"
+            className="rounded-lg bg-slate-900 text-white font-medium px-5 py-2 text-sm hover:bg-slate-800 disabled:opacity-40 shrink-0"
           >
             {applying ? ip.saving : ready ? `✓ ${confirmBtn}` : confirmBtn}
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function ClarifyPanels({
-  clarifications,
-  onDirectClarify,
-  onAiClarify,
-  disabled,
-}: {
-  clarifications: IntakeClarification[];
-  onDirectClarify?: (id: string, value: string) => void;
-  onAiClarify?: (answers: ClarificationAnswer[]) => void;
-  disabled?: boolean;
-}) {
-  const am = useMessages().assistant;
-  const { identity, direct, ai } = partitionClarifications(clarifications);
-  const [aiPicked, setAiPicked] = useState<Record<string, string | Set<string>>>({});
-  const [directDone, setDirectDone] = useState<Set<string>>(new Set());
-  const [otherOpen, setOtherOpen] = useState<Record<string, boolean>>({});
-  const [otherText, setOtherText] = useState<Record<string, string>>({});
-
-  const aiAnsweredCount = ai.filter((c) => {
-    const v = aiPicked[c.id];
-    if (c.multi) return v instanceof Set && v.size > 0;
-    return typeof v === "string" && v.length > 0;
-  }).length;
-  const aiAllAnswered = ai.length > 0 && aiAnsweredCount === ai.length;
-
-  const identityAi = identity.filter((c) => getClarificationMode(c) === "ai");
-  const identityDirect = identity.filter((c) => getClarificationMode(c) === "direct");
-
-  function applyDirect(c: IntakeClarification, value: string) {
-    if (!onDirectClarify || disabled) return;
-    onDirectClarify(c.id, value);
-    setDirectDone((prev) => new Set(prev).add(c.id));
-    setOtherOpen((prev) => ({ ...prev, [c.id]: false }));
-    setOtherText((prev) => ({ ...prev, [c.id]: "" }));
-  }
-
-  function applyAi(c: IntakeClarification, value: string) {
-    if (!onAiClarify || disabled) return;
-    onAiClarify([{ id: c.id, question: c.question, value }]);
-    setOtherOpen((prev) => ({ ...prev, [c.id]: false }));
-    setOtherText((prev) => ({ ...prev, [c.id]: "" }));
-    setAiPicked((prev) => {
-      const next = { ...prev };
-      delete next[c.id];
-      return next;
-    });
-  }
-
-  function pickOption(c: IntakeClarification, opt: string, mode: "direct" | "ai") {
-    if (disabled) return;
-    if (isOpenEndedClarificationOption(opt)) {
-      setOtherOpen((prev) => ({ ...prev, [c.id]: true }));
-      return;
-    }
-    if (mode === "direct") applyDirect(c, opt);
-    else pickAiSingle(c, opt);
-  }
-
-  function pickAiSingle(c: IntakeClarification, opt: string) {
-    if (disabled) return;
-    setAiPicked((prev) => ({ ...prev, [c.id]: opt }));
-  }
-
-  function toggleAiMulti(id: string, opt: string) {
-    if (disabled) return;
-    setAiPicked((prev) => {
-      const next = { ...prev };
-      const set = new Set(prev[id] instanceof Set ? (prev[id] as Set<string>) : []);
-      if (set.has(opt)) set.delete(opt);
-      else set.add(opt);
-      next[id] = set;
-      return next;
-    });
-  }
-
-  function submitOther(c: IntakeClarification) {
-    const text = otherText[c.id]?.trim();
-    if (!text || disabled) return;
-    if (getClarificationMode(c) === "direct") applyDirect(c, text);
-    else applyAi(c, text);
-  }
-
-  function submitAiSingle(c: IntakeClarification) {
-    const v = aiPicked[c.id];
-    const value = typeof v === "string" ? v : "";
-    if (!value.trim()) return;
-    applyAi(c, value);
-  }
-
-  function submitAiBatch() {
-    if (disabled || !onAiClarify || !aiAllAnswered) return;
-    const answers: ClarificationAnswer[] = ai.map((c) => {
-      const v = aiPicked[c.id];
-      const value =
-        c.multi && v instanceof Set ? [...v].join(", ") : typeof v === "string" ? v : "";
-      return { id: c.id, question: c.question, value };
-    });
-    onAiClarify(answers);
-    setAiPicked({});
-  }
-
-  function renderOptions(
-    c: IntakeClarification,
-    mode: "direct" | "ai",
-    done: boolean,
-    activeStyle: string,
-    idleStyle: string
-  ) {
-    const v = aiPicked[c.id];
-    return (
-      <div className="space-y-1.5">
-        <div className="flex flex-wrap gap-1.5">
-          {c.options.map((opt) => {
-            if (isOpenEndedClarificationOption(opt)) return null;
-            const active =
-              mode === "ai" && (c.multi && v instanceof Set ? v.has(opt) : v === opt);
-            return (
-              <button
-                key={opt}
-                type="button"
-                disabled={disabled || (mode === "direct" && done)}
-                onClick={() => pickOption(c, opt, mode)}
-                className={`rounded-full border px-3 py-1 text-xs disabled:opacity-50 ${
-                  active ? activeStyle : idleStyle
-                }`}
-              >
-                {opt}
-              </button>
-            );
-          })}
-          {c.allowOther && !otherOpen[c.id] && (
-            <button
-              type="button"
-              disabled={disabled || (mode === "direct" && done)}
-              onClick={() => setOtherOpen((prev) => ({ ...prev, [c.id]: true }))}
-              className={`rounded-full border px-3 py-1 text-xs disabled:opacity-50 ${idleStyle}`}
-            >
-              {am.clarifyOther}
-            </button>
-          )}
-        </div>
-        {otherOpen[c.id] && (
-          <div className="flex gap-1.5 items-center" onMouseDown={(e) => e.stopPropagation()}>
-            <input
-              type="text"
-              value={otherText[c.id] ?? ""}
-              onChange={(e) => setOtherText((prev) => ({ ...prev, [c.id]: e.target.value }))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  submitOther(c);
-                }
-              }}
-              placeholder={am.clarifyOtherPlaceholder}
-              className="flex-1 min-w-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-            />
-            <button
-              type="button"
-              disabled={disabled || !otherText[c.id]?.trim()}
-              onClick={() => submitOther(c)}
-              className="rounded-md bg-slate-800 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-900 disabled:opacity-40 shrink-0"
-            >
-              {am.clarifyOtherConfirm}
-            </button>
-          </div>
-        )}
-        {mode === "ai" && !c.multi && !otherOpen[c.id] && typeof v === "string" && v.length > 0 && (
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => submitAiSingle(c)}
-            className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-800 disabled:opacity-40"
-          >
-            {am.clarifyOtherConfirm}
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  const identityPanel =
-    identity.length > 0 && (onDirectClarify || onAiClarify) ? (
-      <div className="rounded-lg border-2 border-amber-300 bg-amber-50/90 p-3 space-y-2.5 mb-3">
-        <div>
-          <div className="text-xs font-semibold text-amber-900">{am.clarifyIdentityTitle}</div>
-          <div className="text-[10px] text-amber-800/90 mt-0.5">{am.clarifyIdentityHint}</div>
-        </div>
-        {[...identityDirect, ...identityAi].map((c) => {
-          const mode = getClarificationMode(c);
-          const done = directDone.has(c.id);
-          return (
-            <div key={c.id} className="space-y-1.5">
-              <div className="text-xs text-slate-800 flex items-center gap-2 font-medium">
-                <span>{c.question}</span>
-                {mode === "direct" && done && (
-                  <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
-                )}
-              </div>
-              {renderOptions(
-                c,
-                mode,
-                done,
-                "border-amber-600 bg-amber-600 text-white",
-                "border-amber-400 bg-white text-amber-950 hover:border-amber-600 hover:bg-amber-100"
-              )}
-            </div>
-          );
-        })}
-      </div>
-    ) : null;
-
-  const directPanel =
-    direct.length > 0 && onDirectClarify ? (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 space-y-2.5">
-        <div>
-          <div className="text-xs font-semibold text-emerald-900">{am.clarifyDirectTitle}</div>
-          <div className="text-[10px] text-emerald-700/90 mt-0.5">{am.clarifyDirectHint}</div>
-        </div>
-        {direct.map((c) => (
-          <div key={c.id} className="space-y-1.5">
-            <div className="text-xs text-slate-700 flex items-center gap-2">
-              <span>{c.question}</span>
-              {directDone.has(c.id) && (
-                <span className="text-[10px] text-emerald-600 font-medium">{am.clarifyApplied}</span>
-              )}
-            </div>
-            {renderOptions(
-              c,
-              "direct",
-              directDone.has(c.id),
-              "border-emerald-600 bg-emerald-600 text-white",
-              "border-emerald-300 bg-white text-emerald-900 hover:border-emerald-500 hover:bg-emerald-100"
-            )}
-          </div>
-        ))}
-      </div>
-    ) : null;
-
-  const aiPanel =
-    ai.length > 0 && onAiClarify ? (
-      <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 space-y-2.5">
-        <div>
-          <div className="text-xs font-semibold text-slate-900">{am.clarifyAiTitle}</div>
-          <div className="text-[10px] text-sky-700/90 mt-0.5">{am.clarifyAiHint}</div>
-        </div>
-        {ai.map((c) => (
-          <div key={c.id} className="space-y-1.5">
-            <div className="text-xs text-slate-700">{c.question}</div>
-            {renderOptions(
-              c,
-              "ai",
-              false,
-              "border-slate-700 bg-slate-500 text-white",
-              "border-slate-300 bg-white text-slate-900 hover:border-slate-700 hover:bg-slate-100"
-            )}
-          </div>
-        ))}
-        <div className="flex items-center justify-between gap-2 pt-1">
-          {!aiAllAnswered && (
-            <span className="text-[10px] text-sky-600">
-              {am.clarifyAiPending.replace("{n}", String(ai.length - aiAnsweredCount))}
-            </span>
-          )}
-          <button
-            type="button"
-            disabled={disabled || !aiAllAnswered}
-            onClick={submitAiBatch}
-            className="ml-auto rounded-lg bg-slate-900 text-white px-4 py-2 text-xs font-medium hover:bg-slate-800 disabled:opacity-40"
-          >
-            {am.clarifyAiSubmit}
-          </button>
-        </div>
-      </div>
-    ) : null;
-
-  if (!identityPanel && !directPanel && !aiPanel) return null;
-
-  return (
-    <div className="shrink-0 mt-2 space-y-3">
-      {identityPanel}
-      {directPanel}
-      {aiPanel}
     </div>
   );
 }

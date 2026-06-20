@@ -729,6 +729,8 @@ export const messagesEn = {
     builderBuildFailed: "Build failed",
     builderConfirmPrefix: "[Confirmations]",
     builderSkipMessage: "Skip confirmations — continue with your current understanding.",
+    builderClarifyBlockedHint: "Complete the confirmation options above before AI continues.",
+    builderClarifyBlockedPlaceholder: "Select confirmations above…",
     builderStarters: [
       "Help me build an Agent that scans stalled partners every morning and creates todos",
       "I want a pre-meeting brief Agent: look up partner profile and knowledge base, then output a meeting agenda",
@@ -1239,6 +1241,8 @@ export const messagesEn = {
     autoSaved: "Saved automatically",
     autoSaving: "Auto-saving…",
     itemsSummary: "{total} items · {excluded} excluded",
+    clarifyBlockedHint: "Complete the confirmation options above before AI continues research.",
+    clarifyBlockedPlaceholder: "Select confirmations above…",
     scopes: {
       new_partner: {
         title: "AI Onboarding",
