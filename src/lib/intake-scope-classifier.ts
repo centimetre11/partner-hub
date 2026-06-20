@@ -1,7 +1,7 @@
 import { AIError, chatCompletion, isAiConfigured, parseJsonLoose } from "./ai";
 import type { IntakeScope } from "./ai-locale";
 import type { IntakeMessage } from "./ai-intake";
-import { stripIntakeSystemHint } from "./ai-intake";
+import { stripIntakeSystemHint } from "./intake-text";
 import { isAgentBuilderIntent } from "./agent-builder-intent";
 import type { Locale } from "./i18n/locale";
 
@@ -25,7 +25,7 @@ export type ScopeClassification = {
 function scopeGuide(locale: Locale): string {
   if (locale === "zh") {
     return `scope 含义（只输出其中一个 key）：
-- todo：创建/添加待办、跟进任务、提醒事项（含「帮加个待办」「事项是…」等续写）
+- todo：创建/添加待办、跟进任务、提醒事项（含「帮加个待办」「事项是…」等续写；句中的「看看 poc / 了解进展」是待办内容里的跟进动作，不是查待办列表）
 - powermap：添加/更新联系人、权力地图、名片
 - opportunity：添加/更新商机
 - business_record：商务记录、拜访、会议纪要、跟进记录
@@ -69,6 +69,7 @@ Rules:
 3. "帮加个待办" / "add a todo" / "the item is …" after a todo request → todo, NOT profile.
 4. Do NOT choose profile just because a partner is bound; profile is only for enriching partner fields (tier, industry, website, etc.).
 5. List/query todos ("有哪些待办") is out of scope here — if the user only asks to list todos with no create intent, still pick todo only when they want to create/log one.
+6. 「看看/了解/跟进 X」紧跟在建待办语句中（如「建个待办…并且看看 poc」）→ todo；只有「看看待办 / 有哪些待办」才是查列表，不是 todo 创建。
 
 Output exactly one JSON object:
 {"scope":"todo|powermap|opportunity|business_record|profile|training|solution|new_partner","confidence":"high|medium|low","reason":"one short sentence"}`;

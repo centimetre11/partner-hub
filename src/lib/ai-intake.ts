@@ -1,5 +1,7 @@
 import { isAgentBuilderIntent } from "./agent-builder-intent";
 import { resolveProposeScope } from "./intake-scope-classifier";
+import { isTodoListQueryIntent } from "./intake-intent-score";
+import { stripIntakeSystemHint } from "./intake-text";
 import { PROPOSE_INTENT_RE } from "./propose-intent";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
@@ -717,21 +719,8 @@ export async function runIntakeTurn(opts: {
   return turn;
 }
 
-/** List/query todos — must use Query mode + list_todos, not propose intake */
-export function isTodoListQueryIntent(text: string): boolean {
-  const t = stripIntakeSystemHint(text).trim();
-  if (
-    /建.{0,4}待办|创建待办|加.{0,2}待办|帮.{0,8}待办|添加待办|记.{0,4}待办|create todo|add todo|log todo/i.test(
-      t
-    )
-  ) {
-    return false;
-  }
-  if (!/待办|todos?\b/i.test(t)) return false;
-  return /看一下|看看|查|查询|列出|列举|显示|展示|有什么|有哪些|多少|所有|全部|当前|现在|我的|哪些|事项|list|show|what|open|view/i.test(
-    t
-  );
-}
+export { stripIntakeSystemHint } from "./intake-text";
+export { isTodoListQueryIntent, isTodoCreateIntent, scoreTodoIntent } from "./intake-intent-score";
 
 /** Detect propose-confirm mode (collaborative agents: onboarding, records, opportunities, etc.) */
 export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
@@ -743,15 +732,6 @@ export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
     .map((m) => stripIntakeSystemHint(m.content))
     .join("\n");
   return PROPOSE_INTENT_RE.test(text);
-}
-
-/** Strip partner-binding suffix appended to WeCom user messages before scope detection. */
-export function stripIntakeSystemHint(content: string): string {
-  const zh = content.indexOf("\n\n（系统提示：");
-  if (zh >= 0) return content.slice(0, zh).trim();
-  const en = content.indexOf("\n\n[System ");
-  if (en >= 0) return content.slice(0, en).trim();
-  return content.trim();
 }
 
 export { detectProposeScope } from "./intake-scope-classifier";
