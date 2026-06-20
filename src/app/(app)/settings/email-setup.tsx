@@ -76,13 +76,14 @@ export function EmailSetup({ config }: { config: EmailConfigForClient }) {
         <label className="block space-y-1 sm:col-span-2">
           <span className="text-xs text-slate-500">发件 QQ 邮箱</span>
           <input
-            type="email"
+            type="text"
             value={fromEmail}
             onChange={(e) => setFromEmail(e.target.value)}
-            placeholder="yourname@qq.com"
+            placeholder="544050789@qq.com"
             className={input}
             autoComplete="off"
           />
+          <p className="text-xs text-slate-400">可只填 QQ 号，系统会自动补全 @qq.com</p>
         </label>
         <label className="block space-y-1">
           <span className="text-xs text-slate-500">发件人显示名称（可选）</span>

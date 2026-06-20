@@ -31,10 +31,31 @@ function parseSmtpPort(raw: string | undefined, fallback: number) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/** 纯 QQ 号自动补 @qq.com；已是完整邮箱则原样返回（小写） */
+export function normalizeFromEmail(raw: string): string {
+  const value = raw.trim().toLowerCase();
+  if (!value) return value;
+  if (value.includes("@")) return value;
+  if (/^\d{5,11}$/.test(value)) return `${value}@qq.com`;
+  return value;
+}
+
+export function validateFromEmail(email: string): string | null {
+  if (!email) return "请填写发件 QQ 邮箱";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return "发件邮箱格式不正确，请填写完整 QQ 邮箱，例如 544050789@qq.com";
+  }
+  return null;
+}
+
+function normalizeConfigEmail(config: EmailConfig): EmailConfig {
+  return { ...config, fromEmail: normalizeFromEmail(config.fromEmail) };
+}
+
 function configFromEnv(): EmailConfig | null {
-  const fromEmail = process.env.SMTP_USER?.trim();
+  const fromEmail = normalizeFromEmail(process.env.SMTP_USER?.trim() ?? "");
   const authCode = process.env.SMTP_PASS?.trim();
-  if (!fromEmail || !authCode) return null;
+  if (!fromEmail || !authCode || validateFromEmail(fromEmail)) return null;
   return {
     smtpHost: process.env.SMTP_HOST?.trim() || QQ_SMTP_DEFAULTS.smtpHost,
     smtpPort: parseSmtpPort(process.env.SMTP_PORT, QQ_SMTP_DEFAULTS.smtpPort),
@@ -48,14 +69,14 @@ function configFromEnv(): EmailConfig | null {
 export async function resolveEmailConfig(): Promise<EmailConfig | null> {
   const row = await db.systemEmailConfig.findUnique({ where: { id: "singleton" } });
   if (row?.fromEmail?.trim() && row.authCode?.trim()) {
-    return {
+    return normalizeConfigEmail({
       smtpHost: row.smtpHost,
       smtpPort: row.smtpPort,
       smtpSecure: row.smtpSecure,
       fromEmail: row.fromEmail.trim(),
       fromName: row.fromName?.trim() || null,
       authCode: row.authCode,
-    };
+    });
   }
   return configFromEnv();
 }

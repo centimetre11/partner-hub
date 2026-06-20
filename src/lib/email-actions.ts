@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "./session";
 import { db } from "./db";
-import { QQ_SMTP_DEFAULTS, resolveEmailConfig, type EmailConfig } from "./email-config";
+import { QQ_SMTP_DEFAULTS, normalizeFromEmail, resolveEmailConfig, validateFromEmail, type EmailConfig } from "./email-config";
 import { sendEmail, testEmailConnection } from "./email";
 
 function clean(raw: FormDataEntryValue | null) {
@@ -17,7 +17,8 @@ function parseSmtpPort(raw: FormDataEntryValue | null) {
 }
 
 async function resolveConfigFromForm(formData: FormData, allowStoredAuth = false): Promise<EmailConfig | null> {
-  const fromEmail = clean(formData.get("fromEmail"));
+  const fromEmailRaw = clean(formData.get("fromEmail"));
+  const fromEmail = fromEmailRaw ? normalizeFromEmail(fromEmailRaw) : null;
   const authCode = clean(formData.get("authCode"));
   const smtpHost = clean(formData.get("smtpHost")) ?? QQ_SMTP_DEFAULTS.smtpHost;
   const smtpPort = parseSmtpPort(formData.get("smtpPort"));
@@ -47,14 +48,16 @@ async function resolveConfigFromForm(formData: FormData, allowStoredAuth = false
 
 export async function saveSystemEmailConfigAction(formData: FormData) {
   await requireSuperAdmin();
-  const fromEmail = clean(formData.get("fromEmail"));
+  const fromEmailRaw = clean(formData.get("fromEmail"));
+  const fromEmail = fromEmailRaw ? normalizeFromEmail(fromEmailRaw) : null;
   const authCode = clean(formData.get("authCode"));
   const smtpHost = clean(formData.get("smtpHost")) ?? QQ_SMTP_DEFAULTS.smtpHost;
   const smtpPort = parseSmtpPort(formData.get("smtpPort"));
   const smtpSecure = formData.get("smtpSecure") !== "false";
   const fromName = clean(formData.get("fromName"));
 
-  if (!fromEmail) return { error: "请填写发件 QQ 邮箱" };
+  const emailError = fromEmail ? validateFromEmail(fromEmail) : "请填写发件 QQ 邮箱";
+  if (emailError || !fromEmail) return { error: emailError ?? "请填写发件 QQ 邮箱" };
 
   const stored = await db.systemEmailConfig.findUnique({ where: { id: "singleton" } });
   const finalAuthCode = authCode || stored?.authCode || process.env.SMTP_PASS?.trim() || null;
