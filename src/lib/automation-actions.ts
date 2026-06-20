@@ -6,12 +6,15 @@ import { db } from "./db";
 import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
 import { computeNextRunFromCron, cronToAgentSchedule } from "./cron";
-import { DEFAULT_AGENT_SKILLS } from "./skills";
-import { createAutomationFromDraft, buildAutomationInstructions } from "./automation-create";
+import { createAutomationFromDraft, buildAutomationInstructions, resolveAutomationDraftContent } from "./automation-create";
+import {
+  buildScheduledPushTaskMd,
+  defaultAutomationName,
+  defaultAutomationSlug,
+  DEFAULT_AUTOMATION_SKILLS,
+  partnerScopeLabel,
+} from "./automation-push";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
-import { DEFAULT_TASK_MD } from "./automation-defaults";
-
-import type { AutomationVariable } from "./automation-builder-types";
 
 function slugify(raw: string): string {
   return raw
@@ -22,28 +25,16 @@ function slugify(raw: string): string {
     .slice(0, 64);
 }
 
-function parseVariables(raw: string): AutomationVariable[] {
-  if (!raw.trim()) return [];
-  try {
-    const arr = JSON.parse(raw) as AutomationVariable[];
-    return Array.isArray(arr) ? arr.filter((v) => v.key?.trim()) : [];
-  } catch {
-    return [];
-  }
-}
-
-function buildInstructions(taskMd: string, variables: AutomationVariable[]): string {
-  return buildAutomationInstructions(taskMd, variables);
-}
-
 export async function createAutomationFromBuilderAction(formData: FormData) {
   const user = await requireUser();
   const raw = String(formData.get("draft") ?? "");
   if (!raw) return;
   const draft = JSON.parse(raw) as AutomationBuilderDraft;
-  if (!draft.name?.trim() || !draft.taskMd?.trim()) return;
+  if (!draft.cronExpr?.trim()) return;
+  if (!draft.wecomPushChatId?.trim() && !draft.pushEmailTo?.trim()) return;
+  if (!draft.description?.trim() && !draft.taskMd?.trim()) return;
 
-  const created = await createAutomationFromDraft(draft, user.id);
+  const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
   revalidatePath("/automations");
   revalidatePath("/ai");
   redirect(`/automations/${created.id}`);
@@ -52,35 +43,70 @@ export async function createAutomationFromBuilderAction(formData: FormData) {
 export async function upsertAutomationAction(formData: FormData) {
   const user = await requireUser();
   const id = String(formData.get("id") ?? "");
-  const slug = slugify(String(formData.get("slug") ?? ""));
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim() || null;
-  const taskMd = String(formData.get("taskMd") ?? "").trim() || DEFAULT_TASK_MD;
-  const triggerType = String(formData.get("triggerType") ?? "SCHEDULE");
+  const partnerId = String(formData.get("partnerId") ?? "").trim();
   const cronExpr = String(formData.get("cronExpr") ?? "0 9 * * *").trim();
   const timezone = String(formData.get("timezone") ?? "Asia/Shanghai").trim();
-  const validityDays = parseInt(String(formData.get("validityDays") ?? "7"), 10) || 7;
-  const maxIterations = parseInt(String(formData.get("maxIterations") ?? "30"), 10) || 30;
-  const timeoutMinutes = parseInt(String(formData.get("timeoutMinutes") ?? "60"), 10) || 60;
+  const wecomPushChatId = String(formData.get("wecomPushChatId") ?? "").trim() || null;
+  const pushEmailTo = String(formData.get("pushEmailTo") ?? "").trim() || null;
   const notifyOnSuccess = formData.get("notifyOnSuccess") === "on";
   const notifyOnFailure = formData.get("notifyOnFailure") === "on";
-  const wecomPushChatId = String(formData.get("wecomPushChatId") ?? "").trim() || null;
-  const webhookUrl = String(formData.get("webhookUrl") ?? "").trim() || null;
   const activate = formData.get("activate") === "on";
+  const description = String(formData.get("description") ?? "").trim();
+  const nameInput = String(formData.get("name") ?? "").trim();
 
-  const variablesRaw = String(formData.get("variables") ?? "[]");
-  const variables = parseVariables(variablesRaw);
+  if (!description) return;
+  if (!wecomPushChatId && !pushEmailTo) return;
 
-  if (!slug || !name) return;
+  let slug = slugify(String(formData.get("slug") ?? ""));
+  let name = nameInput;
+
+  const partner = partnerId
+    ? await db.partner.findUnique({ where: { id: partnerId }, select: { name: true } })
+    : null;
+  if (partnerId && !partner) return;
+
+  const partnerName = partner?.name ?? partnerScopeLabel(undefined, "zh");
+  if (!slug) slug = defaultAutomationSlug(partner?.name || description.slice(0, 24));
+  if (!name) name = defaultAutomationName(description, "zh");
 
   const existingSlug = await db.agent.findFirst({
     where: { slug, ...(id ? { id: { not: id } } : {}) },
   });
   if (existingSlug) return;
 
+  const draft: AutomationBuilderDraft = {
+    slug,
+    name,
+    description,
+    taskMd: buildScheduledPushTaskMd({
+      goal: description,
+      partnerId: partnerId || undefined,
+      partnerName: partner?.name,
+      wecomPushChatId: wecomPushChatId ?? "",
+      pushEmailTo: pushEmailTo ?? "",
+      locale: "zh",
+    }),
+    triggerType: "SCHEDULE",
+    cronExpr,
+    timezone,
+    validityDays: 7,
+    variables: [],
+    maxIterations: 30,
+    timeoutMinutes: 60,
+    notifyOnSuccess,
+    notifyOnFailure,
+    wecomPushChatId: wecomPushChatId ?? "",
+    webhookUrl: "",
+    pushEmailTo: pushEmailTo ?? "",
+    partnerId,
+    rationale: "",
+    questionnaire: [],
+    missingSkillNotes: [],
+  };
+
   const schedule = cronToAgentSchedule(cronExpr);
-  const trigger = triggerType === "SCHEDULE" ? "SCHEDULE" : "MANUAL";
-  const instructions = buildInstructions(taskMd, variables);
+  const { taskMd, variables } = await resolveAutomationDraftContent(draft, { locale: "zh" });
+  const instructions = buildAutomationInstructions(taskMd, variables);
 
   const data = {
     name,
@@ -88,23 +114,24 @@ export async function upsertAutomationAction(formData: FormData) {
     icon: "⚡",
     description,
     instructions,
-    skills: JSON.stringify(DEFAULT_AGENT_SKILLS),
-    trigger,
-    frequency: trigger === "SCHEDULE" ? schedule.frequency : null,
+    skills: JSON.stringify([...DEFAULT_AUTOMATION_SKILLS]),
+    trigger: "SCHEDULE" as const,
+    frequency: schedule.frequency,
     runHour: schedule.runHour,
     runWeekday: schedule.runWeekday,
-    cronExpr: trigger === "SCHEDULE" ? cronExpr : null,
+    cronExpr,
     timezone,
-    validityDays,
+    validityDays: 7,
     variables: JSON.stringify(variables),
-    maxIterations,
-    timeoutMinutes,
+    maxIterations: 30,
+    timeoutMinutes: 60,
     notifyOnSuccess,
     notifyOnFailure,
     wecomPushChatId,
-    webhookUrl: triggerType === "WEBHOOK" ? webhookUrl : webhookUrl,
-    scopeType: "ALL" as const,
-    partnerId: null,
+    pushEmailTo,
+    webhookUrl: null,
+    scopeType: partnerId ? ("PARTNER" as const) : ("ALL" as const),
+    partnerId: partnerId || null,
     shared: true,
     enabled: activate,
     isAutomation: true,

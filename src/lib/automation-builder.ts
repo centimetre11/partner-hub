@@ -1,9 +1,15 @@
 import { AIError, chatJson } from "./ai";
 import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
 import { clarificationSchemaHint, hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
-import { CRON_PRESETS } from "./cron";
+import {
+  buildScheduledPushTaskMd,
+  defaultAutomationName,
+  defaultAutomationSlug,
+  partnerScopeLabel,
+} from "./automation-push";
+import { CRON_PRESETS, describeCron } from "./cron";
+import { db } from "./db";
 import type { Locale } from "./i18n/locale";
-import { DEFAULT_TASK_MD } from "./automation-defaults";
 import type {
   AutomationBuilderClarification,
   AutomationBuilderDraft,
@@ -22,7 +28,7 @@ const DEFAULT_DRAFT: AutomationBuilderDraft = {
   slug: "",
   name: "",
   description: "",
-  taskMd: DEFAULT_TASK_MD,
+  taskMd: buildScheduledPushTaskMd({ goal: "定时查询并推送", locale: "zh" }),
   triggerType: "SCHEDULE",
   cronExpr: "0 9 * * *",
   timezone: "Asia/Shanghai",
@@ -34,6 +40,8 @@ const DEFAULT_DRAFT: AutomationBuilderDraft = {
   notifyOnFailure: true,
   wecomPushChatId: "",
   webhookUrl: "",
+  pushEmailTo: "",
+  partnerId: "",
   rationale: "",
   questionnaire: [],
   missingSkillNotes: [],
@@ -41,36 +49,28 @@ const DEFAULT_DRAFT: AutomationBuilderDraft = {
 
 function outputSchema(locale: Locale) {
   const replyLang = locale === "zh" ? "Chinese" : "English";
-  return `Output exactly one JSON object. ALL user-visible text fields MUST be in ${replyLang}. draft.slug stays lowercase English kebab-case.
+  return `Output exactly one JSON object. ALL user-visible text fields MUST be in ${replyLang}. draft.slug stays English kebab-case.
 {
-  "reply": "${replyLang} concise reply explaining understanding and next step",
-  "clarifications": [
-    {
-      "id": "stable_snake_id",
-      "question": "${replyLang} one-line confirmation question",
-      "options": ["${replyLang} 2-4 choices; FIRST is recommended"],
-      "tier": "required | preference"
-    }
-  ],
+  "reply": "${replyLang} concise reply",
+  "clarifications": [{ "id", "question", "options", "tier": "required|preference" }],
   "questions": [],
   "ready": true/false,
   "draft": {
-    "slug": "english-kebab-case e.g. gold-price-monitor",
+    "slug": "e.g. acme-opportunities-daily",
     "name": "${replyLang} display name",
-    "description": "${replyLang} one-line description",
-    "taskMd": "Full TASK.md with YAML frontmatter (name, description) and sections: 任务目标/执行步骤/输出要求 (or English equivalents)",
-    "triggerType": "SCHEDULE | WEBHOOK | EVENT",
-    "cronExpr": "5-field cron e.g. 0 9 * * * (required when SCHEDULE)",
+    "description": "${replyLang} one-line task goal (REQUIRED)",
+    "taskMd": "Optional detailed TASK.md; if empty server uses standard scheduled-push template",
+    "triggerType": "SCHEDULE",
+    "cronExpr": "0 9 * * *",
     "timezone": "Asia/Shanghai",
-    "validityDays": 7,
-    "variables": [{"key": "var_name", "value": "default", "label": "${replyLang} label"}],
-    "maxIterations": 30,
-    "timeoutMinutes": 60,
+    "partnerId": "partner id or empty string for ALL partners",
+    "dueWithinDays": "optional number — only for todo/due-date scenarios",
+    "wecomPushChatId": "WeCom group chatId",
+    "pushEmailTo": "email or empty",
     "notifyOnSuccess": true,
     "notifyOnFailure": true,
-    "wecomPushChatId": "",
-    "webhookUrl": "",
-    "rationale": "${replyLang} why this schedule, steps, and delivery",
+    "rationale": "${replyLang} brief",
+    "variables": [],
     "questionnaire": [],
     "missingSkillNotes": []
   }
@@ -81,30 +81,27 @@ function buildSystemPrompt(locale: Locale) {
   const lang = locale === "zh" ? "Chinese (简体中文)" : "English";
   const cronExamples = CRON_PRESETS.map((p) => `${p.expr} = ${locale === "zh" ? p.labelZh : p.labelEn}`).join("\n");
 
-  return `You are the conversational "Automation Pipeline Architect" in the AI Center.
-Goal: help users create scheduled or webhook-triggered automation pipelines through dialogue — NOT interactive Agents.
+  return `You are the "Scheduled Partner Push" automation builder in Fanruan Partner Hub.
+ONLY create scheduled pipelines: query partner data (or all partners) → format → push to WeCom group and/or email.
 
-Language: UI locale is ${lang}. Write reply, clarifications, and draft user-facing fields in ${lang}. draft.slug stays English kebab-case.
+Language: ${lang}. draft.slug = English kebab-case.
 
-What automations are:
-- Pipelines defined in TASK.md (SKILL.md-compatible format with YAML frontmatter)
-- Run on Cron schedule or external Webhook trigger
-- Execute autonomously with tools; output Markdown summary when done
+Example scenarios (same framework):
+1. 「每天把这个客户 3 天内过期的待办推送到这个群」→ list_todos + dueWithinDays=3
+2. 「每天把这个客户的商机发邮件给我」→ list_opportunities + send_email
+3. 「每天搜一下这个客户的投标动态发邮件给我」→ web_search + send_email
+4. 「每周一汇总全部伙伴 stalled 商机推送到群」→ partnerId empty (ALL) + list_opportunities
 
-How you work:
-1. Understand: business goal, data sources, schedule, outputs, notifications.
-2. When info is insufficient, output clarifications[] (max 4) with 2-4 options each. Put recommended choice FIRST. No "Other" — UI adds it. tier:"required" when user must answer; tier:"preference" for optional refinements (e.g. run at 9:00 vs 10:00) — apply first option to draft for preference.
-3. Write taskMd as complete TASK.md:
-   - YAML frontmatter: name, description
-   - # 任务目标 (or # Goal)
-   - ## 执行步骤 (numbered steps referencing tools when useful: web_search, search_knowledge, create_document, push_wecom, etc.)
-   - ## 输出要求
-   - Use {{variable_name}} for configurable variables; list them in draft.variables
-4. Default triggerType=SCHEDULE unless user wants webhook-only.
-5. Common cron presets:
+Rules:
+1. triggerType is always SCHEDULE. Runtime tools: list_todos, list_opportunities, web_search, get_partner, search_partners, push_wecom, send_email.
+2. partnerId: use bound partner from system hint when user says「这个客户/该伙伴」; leave EMPTY for「全部/所有伙伴」; never require partner if user wants all.
+3. ready=true requires: draft.description (one-line goal), draft.cronExpr, and at least one of wecomPushChatId or pushEmailTo.
+4. Apply system hints for bound partnerId and current group chatId without re-asking (tier:preference if override).
+5. clarifications tier required only for ambiguous partner when user clearly meant one customer; tier preference for schedule tweaks.
+6. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
+7. Do NOT build unrelated pipelines (gold price, generic coding agents).
+8. Cron presets:
 ${cronExamples}
-6. Before ready=true confirm: goal clear, taskMd complete, trigger + schedule (if SCHEDULE), slug derived from purpose; no unanswered tier:"required" clarifications.
-7. EVENT trigger is not available yet — if user asks, suggest SCHEDULE or WEBHOOK and note EVENT coming soon.
 
 ${clarificationSchemaHint(locale)}
 
@@ -112,9 +109,9 @@ ${outputSchema(locale)}`;
 }
 
 function isDraftReady(draft: AutomationBuilderDraft): boolean {
-  if (!draft.slug.trim() || !draft.name.trim() || !draft.taskMd.trim()) return false;
-  if (draft.triggerType === "SCHEDULE" && !draft.cronExpr.trim()) return false;
-  if (draft.triggerType === "EVENT") return false;
+  if (!draft.cronExpr.trim()) return false;
+  if (!draft.description.trim() && !draft.taskMd.trim()) return false;
+  if (!draft.wecomPushChatId.trim() && !draft.pushEmailTo.trim()) return false;
   return true;
 }
 
@@ -135,61 +132,97 @@ function normalizeClarifications(raw: unknown, questions: string[], locale: Loca
   }));
 }
 
-function normalizeTriggerType(v: unknown): AutomationBuilderDraft["triggerType"] {
-  const s = String(v ?? "").toUpperCase();
-  if (s === "WEBHOOK") return "WEBHOOK";
-  if (s === "EVENT") return "EVENT";
-  return "SCHEDULE";
-}
-
-function normalizeDraft(raw: Partial<AutomationBuilderDraft>): AutomationBuilderDraft {
-  const triggerType = normalizeTriggerType(raw.triggerType);
+function normalizeDraft(raw: Partial<AutomationBuilderDraft>, partnerNameHint?: string, locale: Locale = "zh"): AutomationBuilderDraft {
   let cronExpr = String(raw.cronExpr ?? "0 9 * * *").trim();
   if (!cronExpr) cronExpr = "0 9 * * *";
 
-  const variables = Array.isArray(raw.variables)
-    ? raw.variables
-        .filter((v) => v && typeof v.key === "string")
-        .map((v) => ({
-          key: String(v.key).trim(),
-          value: String(v.value ?? ""),
-          label: v.label ? String(v.label) : undefined,
-        }))
-        .filter((v) => v.key)
-    : [];
+  const partnerId = String(raw.partnerId ?? "").trim();
+  const dueWithinDays =
+    raw.dueWithinDays != null && Number.isInteger(raw.dueWithinDays) && raw.dueWithinDays > 0
+      ? raw.dueWithinDays
+      : undefined;
+  const wecomPushChatId = String(raw.wecomPushChatId ?? "").trim();
+  const pushEmailTo = String(raw.pushEmailTo ?? "").trim();
+  const description = String(raw.description ?? "").trim();
+  const scopeName = partnerNameHint || (partnerId ? "" : partnerScopeLabel(undefined, locale));
+
+  let slug = String(raw.slug ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  if (!slug) slug = defaultAutomationSlug(partnerNameHint || description.slice(0, 24));
+
+  let name = String(raw.name ?? "").trim();
+  if (!name) name = defaultAutomationName(description || partnerNameHint, locale);
+
+  const goal = description || name;
+  const taskMdRaw = String(raw.taskMd ?? "").trim();
+  const taskMd =
+    taskMdRaw && taskMdRaw.length > 80 && !taskMdRaw.includes("scheduled-partner-push")
+      ? taskMdRaw
+      : buildScheduledPushTaskMd({
+          goal,
+          partnerId,
+          partnerName: partnerNameHint || scopeName,
+          dueWithinDays,
+          wecomPushChatId,
+          pushEmailTo,
+          locale,
+        });
 
   return {
-    slug: String(raw.slug ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9-]+/g, "-")
-      .replace(/^-+|-+$/g, "")
-      .slice(0, 64),
-    name: String(raw.name ?? "").trim(),
-    description: String(raw.description ?? "").trim(),
-    taskMd: String(raw.taskMd ?? DEFAULT_TASK_MD).trim() || DEFAULT_TASK_MD,
-    triggerType,
+    slug,
+    name,
+    description: goal,
+    taskMd,
+    triggerType: "SCHEDULE",
     cronExpr,
     timezone: String(raw.timezone ?? "Asia/Shanghai").trim() || "Asia/Shanghai",
     validityDays: Number.isInteger(raw.validityDays) ? (raw.validityDays as number) : 7,
-    variables,
+    variables: [],
     maxIterations: Number.isInteger(raw.maxIterations) ? (raw.maxIterations as number) : 30,
     timeoutMinutes: Number.isInteger(raw.timeoutMinutes) ? (raw.timeoutMinutes as number) : 60,
     notifyOnSuccess: raw.notifyOnSuccess !== false,
     notifyOnFailure: raw.notifyOnFailure !== false,
-    wecomPushChatId: String(raw.wecomPushChatId ?? ""),
-    webhookUrl: String(raw.webhookUrl ?? ""),
+    wecomPushChatId,
+    webhookUrl: "",
+    pushEmailTo,
+    partnerId,
+    dueWithinDays,
     rationale: String(raw.rationale ?? ""),
-    questionnaire: Array.isArray(raw.questionnaire) ? raw.questionnaire.map(String) : [],
+    questionnaire: [],
     missingSkillNotes: Array.isArray(raw.missingSkillNotes) ? raw.missingSkillNotes.map(String) : [],
   };
 }
 
-function normalizeTurn(raw: Partial<AutomationBuilderTurn>, locale: Locale): AutomationBuilderTurn {
-  const draft = normalizeDraft({ ...DEFAULT_DRAFT, ...(raw.draft ?? {}) });
+export function applyAutomationDraftDefaults(
+  draft: AutomationBuilderDraft,
+  opts: { boundPartnerId?: string; boundPartnerName?: string; sourceChatId?: string }
+): AutomationBuilderDraft {
+  return normalizeDraft(
+    {
+      ...draft,
+      partnerId: draft.partnerId || opts.boundPartnerId || "",
+      wecomPushChatId: draft.wecomPushChatId || opts.sourceChatId || "",
+    },
+    opts.boundPartnerName,
+    "zh"
+  );
+}
+
+function normalizeTurn(
+  raw: Partial<AutomationBuilderTurn>,
+  locale: Locale,
+  partnerNameHint?: string
+): AutomationBuilderTurn {
+  const draft = normalizeDraft({ ...DEFAULT_DRAFT, ...(raw.draft ?? {}) }, partnerNameHint, locale);
   const clarifications = normalizeClarifications(raw.clarifications, Array.isArray(raw.questions) ? raw.questions : [], locale);
   const defaultReply =
-    locale === "zh" ? "我已整理自动化管道草案，请确认或补充。" : "I've drafted an automation pipeline — please confirm or add details.";
+    locale === "zh"
+      ? "我已整理定时推送自动化草案，请确认任务目标、范围（伙伴或全部）与推送渠道。"
+      : "I've drafted a scheduled push automation — confirm goal, scope (partner or all), and delivery.";
   return {
     reply: raw.reply?.trim() || defaultReply,
     questions: clarifications.map((c) => c.question),
@@ -200,11 +233,11 @@ function normalizeTurn(raw: Partial<AutomationBuilderTurn>, locale: Locale): Aut
 }
 
 function fallbackTurn(locale: Locale, detail: string, partial?: Partial<AutomationBuilderTurn>): AutomationBuilderTurn {
-  const draft = normalizeDraft({ ...DEFAULT_DRAFT, ...(partial?.draft ?? {}) });
+  const draft = normalizeDraft({ ...DEFAULT_DRAFT, ...(partial?.draft ?? {}) }, undefined, locale);
   const reply =
     locale === "zh"
       ? `抱歉，AI 返回格式有误。请继续补充需求或简化描述后重试。\n\n（${detail.slice(0, 120)}）`
-      : `Sorry — format error. Please add detail or retry.\n\n(${detail.slice(0, 120)})`;
+      : `Sorry — format error. Please retry.\n\n(${detail.slice(0, 120)})`;
   const questions = Array.isArray(partial?.questions) ? partial!.questions! : [];
   return {
     reply: partial?.reply?.trim() || reply,
@@ -220,78 +253,80 @@ export async function runAutomationBuilderTurn(opts: {
   userId?: string;
   emit?: TraceEmitter;
   locale?: Locale;
+  boundPartnerId?: string;
+  boundPartnerName?: string;
+  sourceChatId?: string;
 }): Promise<AutomationBuilderTurn> {
   const locale = opts.locale ?? "en";
-  const system = buildSystemPrompt(locale);
+  const partners = await db.partner.findMany({
+    where: { status: { not: "ARCHIVED" } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+    take: 80,
+  });
+  const partnerLines = partners.map((p) => `${p.id} | ${p.name}`).join("\n") || "(none)";
+  const system = `${buildSystemPrompt(locale)}
+
+【Partners — draft.partnerId; empty = ALL partners】
+${partnerLines}`;
   const conversation = opts.messages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
   const userPrompt =
     locale === "zh"
-      ? `【当前对话】\n${conversation || "用户尚未描述需求，请引导其说明想创建的自动化任务。"}`
-      : `【Current conversation】\n${conversation || "User has not described a need yet. Guide them on what automation to create."}`;
+      ? `对话历史：\n${conversation}\n\n请输出 JSON（定时查询推送自动化）。`
+      : `Conversation:\n${conversation}\n\nOutput JSON (scheduled query & push automation).`;
 
-  const emit = opts.emit;
   const reasonId = nextTraceId("reason");
-  if (emit) {
-    emitPhase(emit, "research", locale === "zh" ? "分析自动化需求" : "Analyzing automation requirements");
-    emit({
-      event: "trace",
-      step: {
-        type: "reasoning",
-        id: reasonId,
-        content: locale === "zh" ? "设计 TASK.md 与调度配置…" : "Designing TASK.md and schedule…",
-        status: "running",
+  opts.emit?.({
+    event: "trace",
+    step: {
+      type: "reasoning",
+      id: reasonId,
+      content: locale === "zh" ? "理解定时推送需求…" : "Planning scheduled push…",
+      status: "running",
+    },
+  });
+  emitPhase(opts.emit, "extract", locale === "zh" ? "生成自动化草案" : "Building automation draft");
+
+  try {
+    const raw = await chatJson<{
+      reply?: string;
+      draft?: Partial<AutomationBuilderDraft>;
+      clarifications?: unknown;
+      questions?: string[];
+      ready?: boolean;
+    }>(system, userPrompt, {
+      temperature: 0.25,
+      feature: "automation-builder",
+      userId: opts.userId,
+    });
+
+    let turn = normalizeTurn(raw as Partial<AutomationBuilderTurn>, locale, opts.boundPartnerName);
+    turn = {
+      ...turn,
+      draft: applyAutomationDraftDefaults(turn.draft, {
+        boundPartnerId: opts.boundPartnerId,
+        boundPartnerName: opts.boundPartnerName,
+        sourceChatId: opts.sourceChatId,
+      }),
+    };
+    turn.ready = !!raw.ready && isDraftReady(turn.draft) && !hasRequiredClarifications(turn.clarifications);
+
+    opts.emit?.({
+      event: "trace_patch",
+      id: reasonId,
+      patch: {
+        status: "done",
+        content:
+          locale === "zh"
+            ? `草案：${turn.draft.name || "未命名"} · ${describeCron(turn.draft.cronExpr, locale)}`
+            : `Draft: ${turn.draft.name || "Untitled"} · ${describeCron(turn.draft.cronExpr, locale)}`,
       },
     });
-  }
-
-  let raw: Partial<AutomationBuilderTurn>;
-  try {
-    if (emit) {
-      emit({ event: "trace_patch", id: reasonId, patch: { status: "done" } });
-      emitPhase(emit, "extract", locale === "zh" ? "生成自动化草案" : "Building automation draft");
-    }
-    const architectId = nextTraceId("tool");
-    if (emit) {
-      emit({
-        event: "trace",
-        step: {
-          type: "tool",
-          id: architectId,
-          name: "automation_architect",
-          label: locale === "zh" ? "自动化架构师" : "Automation architect",
-          args: { turns: opts.messages.length },
-          status: "running",
-        },
-      });
-    }
-    raw = await chatJson<Partial<AutomationBuilderTurn>>(system, userPrompt, {
-      feature: locale === "zh" ? "自动化 Builder" : "Automation builder",
-      userId: opts.userId,
-      temperature: 0.2,
-    });
-    if (emit) {
-      emit({
-        event: "trace_patch",
-        id: architectId,
-        patch: {
-          status: "done",
-          result:
-            locale === "zh"
-              ? `草案：${raw.draft?.name?.trim() || "未命名"} · ${raw.draft?.cronExpr || ""}`
-              : `Draft: ${raw.draft?.name?.trim() || "Untitled"} · ${raw.draft?.cronExpr || ""}`,
-        },
-      });
-    }
+    emitPhase(opts.emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
+    if (raw.reply) await emitReplyChunks(opts.emit, raw.reply);
+    return turn;
   } catch (e) {
-    if (emit) emit({ event: "trace_patch", id: reasonId, patch: { status: "done" } });
-    const detail = e instanceof AIError ? e.message : e instanceof Error ? e.message : String(e);
+    const detail = e instanceof AIError ? e.message : String(e);
     return fallbackTurn(locale, detail);
   }
-
-  const turn = normalizeTurn(raw, locale);
-  if (emit) emitPhase(emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
-  await emitReplyChunks(opts.emit, turn.reply);
-  return turn;
 }
-
-export { isDraftReady };

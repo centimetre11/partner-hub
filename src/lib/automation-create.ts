@@ -1,9 +1,15 @@
 import { db } from "./db";
 import { computeNextRunAt } from "./agent-runner";
 import { computeNextRunFromCron, cronToAgentSchedule } from "./cron";
-import { DEFAULT_TASK_MD } from "./automation-defaults";
+import {
+  buildAutomationVariables,
+  buildScheduledPushTaskMd,
+  defaultAutomationName,
+  defaultAutomationSlug,
+  DEFAULT_AUTOMATION_SKILLS,
+  partnerScopeLabel,
+} from "./automation-push";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
-import { DEFAULT_AGENT_SKILLS } from "./skills";
 import type { AutomationVariable } from "./automation-builder-types";
 
 function slugify(raw: string): string {
@@ -24,28 +30,101 @@ function injectVariables(taskMd: string, variables: AutomationVariable[]): strin
 }
 
 export function buildAutomationInstructions(taskMd: string, variables: AutomationVariable[]): string {
-  const body = injectVariables(taskMd.trim() || DEFAULT_TASK_MD, variables);
+  const body = injectVariables(taskMd.trim(), variables);
   return `${body}
 
 ---
 【自动化执行说明】
-- 你是定时/触发型自动化管道，按 TASK.md 中的步骤执行
-- 变量已在上方注入；如需读取文件、搜索、推送通知，请使用可用工具
-- 完成后输出 Markdown 执行摘要：结论、关键发现、产出文件路径、下一步建议
+- 定时管道：按 TASK.md 步骤执行，按需使用 list_todos / list_opportunities / web_search / push_wecom / send_email
+- 变量已注入；完成后输出 Markdown 摘要（结论、条数、是否已推送）
 `;
 }
 
 export type CreateAutomationResult = { id: string; name: string; slug: string; nextRunAt: Date | null };
 
-/** 从 AI Builder 草案创建自动化管道 */
+export type CreateAutomationOpts = {
+  wecomPushChatId?: string;
+  partnerId?: string;
+  partnerName?: string;
+  locale?: "zh" | "en";
+};
+
+async function resolvePartnerName(partnerId: string): Promise<string> {
+  if (!partnerId) return "";
+  const p = await db.partner.findUnique({ where: { id: partnerId }, select: { name: true } });
+  return p?.name ?? "";
+}
+
+export async function resolveAutomationDraftContent(
+  draft: AutomationBuilderDraft,
+  opts: CreateAutomationOpts = {}
+): Promise<{
+  taskMd: string;
+  variables: AutomationVariable[];
+  partnerId: string | null;
+  partnerName: string;
+  goal: string;
+}> {
+  const locale = opts.locale ?? "zh";
+  const partnerId = (draft.partnerId?.trim() || opts.partnerId?.trim() || "") || "";
+  let partnerName = draft.variables?.find((v) => v.key === "partner_name")?.value?.trim() ?? "";
+  if (!partnerName && partnerId) partnerName = await resolvePartnerName(partnerId);
+  if (!partnerName && opts.partnerName) partnerName = opts.partnerName.trim();
+
+  const goal =
+    draft.description?.trim() ||
+    draft.name?.trim() ||
+    (locale === "zh" ? "定时查询并推送" : "Scheduled query and push");
+
+  const wecomPushChatId = draft.wecomPushChatId?.trim() || opts.wecomPushChatId?.trim() || "";
+  const pushEmailTo = draft.pushEmailTo?.trim() || "";
+
+  const dueWithinDays =
+    draft.dueWithinDays != null && Number.isInteger(draft.dueWithinDays) && draft.dueWithinDays > 0
+      ? draft.dueWithinDays
+      : undefined;
+
+  const variables = buildAutomationVariables({
+    goal,
+    partnerId,
+    partnerName: partnerName || partnerScopeLabel(undefined, locale),
+    dueWithinDays,
+    wecomPushChatId,
+    pushEmailTo,
+    locale,
+  });
+
+  const customTaskMd = draft.taskMd?.trim();
+  const taskMd =
+    customTaskMd && !customTaskMd.includes("scheduled-partner-push") && customTaskMd.length > 80
+      ? customTaskMd
+      : buildScheduledPushTaskMd({
+          goal,
+          partnerId,
+          partnerName: partnerName || undefined,
+          dueWithinDays,
+          wecomPushChatId,
+          pushEmailTo,
+          locale,
+        });
+
+  return { taskMd, variables, partnerId: partnerId || null, partnerName, goal };
+}
+
 export async function createAutomationFromDraft(
   draft: AutomationBuilderDraft,
   userId: string,
-  opts: { wecomPushChatId?: string } = {}
+  opts: CreateAutomationOpts = {}
 ): Promise<CreateAutomationResult> {
-  const slug = slugify(draft.slug || draft.name);
-  const name = draft.name.trim();
-  const taskMd = draft.taskMd.trim();
+  const { taskMd, variables, partnerId, goal } = await resolveAutomationDraftContent(draft, opts);
+  const locale = opts.locale ?? "zh";
+
+  const slug = slugify(
+    draft.slug?.trim() ||
+      defaultAutomationSlug(variables.find((v) => v.key === "partner_name")?.value || goal.slice(0, 24))
+  );
+  const name = draft.name?.trim() || defaultAutomationName(goal, locale);
+
   if (!slug || !name || !taskMd) {
     throw new Error("Automation slug, name, and taskMd are required");
   }
@@ -55,24 +134,24 @@ export async function createAutomationFromDraft(
     throw new Error(`Slug "${slug}" already exists`);
   }
 
-  const trigger = draft.triggerType === "SCHEDULE" ? "SCHEDULE" : "MANUAL";
   const cronExpr = (draft.cronExpr || "0 9 * * *").trim();
   const schedule = cronToAgentSchedule(cronExpr);
-  const variables = Array.isArray(draft.variables) ? draft.variables.filter((v) => v.key?.trim()) : [];
+  const wecomPushChatId = draft.wecomPushChatId?.trim() || opts.wecomPushChatId?.trim() || null;
+  const pushEmailTo = draft.pushEmailTo?.trim() || null;
 
   const created = await db.agent.create({
     data: {
       name,
       slug,
       icon: "⚡",
-      description: draft.description?.trim() || null,
+      description: draft.description?.trim() || goal,
       instructions: buildAutomationInstructions(taskMd, variables),
-      skills: JSON.stringify(DEFAULT_AGENT_SKILLS),
-      trigger,
-      frequency: trigger === "SCHEDULE" ? schedule.frequency : null,
+      skills: JSON.stringify([...DEFAULT_AUTOMATION_SKILLS]),
+      trigger: "SCHEDULE",
+      frequency: schedule.frequency,
       runHour: schedule.runHour,
       runWeekday: schedule.runWeekday,
-      cronExpr: trigger === "SCHEDULE" ? cronExpr : null,
+      cronExpr,
       timezone: draft.timezone || "Asia/Shanghai",
       validityDays: draft.validityDays || 7,
       variables: JSON.stringify(variables),
@@ -80,10 +159,11 @@ export async function createAutomationFromDraft(
       timeoutMinutes: draft.timeoutMinutes || 60,
       notifyOnSuccess: draft.notifyOnSuccess !== false,
       notifyOnFailure: draft.notifyOnFailure !== false,
-      wecomPushChatId: draft.wecomPushChatId?.trim() || opts.wecomPushChatId?.trim() || null,
-      webhookUrl: draft.webhookUrl?.trim() || null,
-      scopeType: "ALL",
-      partnerId: null,
+      wecomPushChatId,
+      pushEmailTo,
+      webhookUrl: null,
+      scopeType: partnerId ? "PARTNER" : "ALL",
+      partnerId,
       shared: true,
       enabled: true,
       isAutomation: true,
@@ -92,12 +172,7 @@ export async function createAutomationFromDraft(
     },
   });
 
-  const nextRunAt =
-    created.trigger === "SCHEDULE"
-      ? created.cronExpr
-        ? computeNextRunFromCron(created.cronExpr)
-        : computeNextRunAt(created)
-      : null;
+  const nextRunAt = created.cronExpr ? computeNextRunFromCron(created.cronExpr) : computeNextRunAt(created);
   if (nextRunAt) {
     await db.agent.update({ where: { id: created.id }, data: { nextRunAt } });
   }

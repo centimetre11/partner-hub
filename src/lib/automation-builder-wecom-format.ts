@@ -1,6 +1,7 @@
 import type { AutomationBuilderDraft, AutomationBuilderTurn } from "./automation-builder-types";
 import { partitionClarificationsByTier } from "./ai-clarifications";
 import { describeCron } from "./cron";
+import { partnerScopeLabel } from "./automation-push";
 import type { CreateAutomationResult } from "./automation-create";
 
 function checklistLine(done: boolean, label: string, value?: string) {
@@ -8,32 +9,35 @@ function checklistLine(done: boolean, label: string, value?: string) {
   return value ? `${mark} ${label}：${value}` : `${mark} ${label}`;
 }
 
-function triggerLabel(draft: AutomationBuilderDraft): string {
-  if (draft.triggerType === "WEBHOOK") return "Webhook 触发";
-  if (draft.triggerType === "EVENT") return "事件触发（即将推出）";
-  return describeCron(draft.cronExpr, "zh");
-}
-
 /** Render Automation Builder draft as WeCom-friendly markdown */
 export function formatAutomationBuilderWecomReply(opts: {
   turn: AutomationBuilderTurn;
   chatType?: "group" | "single";
+  boundPartnerName?: string;
 }): string {
-  const { turn, chatType } = opts;
+  const { turn, chatType, boundPartnerName } = opts;
   const draft = turn.draft;
   const parts: string[] = [];
 
   if (turn.reply.trim()) parts.push(turn.reply.trim());
 
+  const scopeLabel = draft.partnerId
+    ? boundPartnerName || draft.partnerId
+    : partnerScopeLabel(undefined, "zh");
+
   const checklist = [
-    checklistLine(!!draft.slug && !!draft.name, "管道标识", draft.slug ? `${draft.slug} · ${draft.name}` : undefined),
-    checklistLine(!!draft.taskMd.trim(), "TASK.md", draft.description || undefined),
-    checklistLine(draft.triggerType !== "EVENT", "触发方式", triggerLabel(draft)),
-    checklistLine(draft.variables.length >= 0, "变量", draft.variables.map((v) => v.key).join(", ") || "无"),
+    checklistLine(!!draft.description, "任务目标", draft.description || undefined),
+    checklistLine(true, "数据范围", scopeLabel),
+    checklistLine(!!draft.cronExpr, "定时", describeCron(draft.cronExpr, "zh")),
+    checklistLine(!!draft.wecomPushChatId || !!draft.pushEmailTo, "推送", [
+      draft.wecomPushChatId ? "企微群" : "",
+      draft.pushEmailTo ? `邮件 ${draft.pushEmailTo}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || undefined),
   ];
 
   parts.push(`\n**【自动化草案 · ⚡ ${draft.name || "未命名"}】**`);
-  if (draft.description) parts.push(`_${draft.description}_`);
   parts.push(checklist.join("\n"));
 
   if (turn.clarifications.length) {
@@ -88,7 +92,7 @@ export function formatAutomationCreatedReply(
   const lines = [
     `✅ **自动化已创建：⚡ ${created.name}**`,
     `• 标识：\`${created.slug}\``,
-    `• 调度：${triggerLabel(draft)}`,
+    `• 调度：${describeCron(draft.cronExpr, "zh")}`,
     `• 状态：已启用`,
   ];
   if (created.nextRunAt) {

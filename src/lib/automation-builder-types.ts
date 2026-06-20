@@ -22,6 +22,9 @@ export type AutomationBuilderDraft = {
   notifyOnFailure: boolean;
   wecomPushChatId: string;
   webhookUrl: string;
+  pushEmailTo: string;
+  partnerId: string;
+  dueWithinDays?: number;
   rationale: string;
   questionnaire: string[];
   missingSkillNotes: string[];

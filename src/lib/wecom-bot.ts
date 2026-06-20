@@ -146,6 +146,8 @@ const EMPTY_AUTOMATION_DRAFT: AutomationBuilderDraft = {
   notifyOnFailure: true,
   wecomPushChatId: "",
   webhookUrl: "",
+  pushEmailTo: "",
+  partnerId: "",
   rationale: "",
   questionnaire: [],
   missingSkillNotes: [],
@@ -337,11 +339,18 @@ function buildAgentBuilderContextHint(opts: {
 function buildAutomationBuilderContextHint(opts: {
   sourceChatId: string;
   chatType: "group" | "single";
+  boundPartnerId?: string;
+  boundPartnerName?: string;
 }): string {
   const parts: string[] = [];
+  if (opts.boundPartnerId && opts.boundPartnerName) {
+    parts.push(
+      `系统提示：当前企微群已绑定伙伴「${opts.boundPartnerName}」(partnerId=${opts.boundPartnerId})；用户说「这个客户/该伙伴」时 draft.partnerId 默认使用该值，否则可留空表示全部伙伴`
+    );
+  }
   if (opts.chatType === "group" && opts.sourceChatId) {
     parts.push(
-      `系统提示：用户正在企微群 chatId=${opts.sourceChatId} 中构建自动化；若需推送结果到本群，可设 wecomPushChatId=${opts.sourceChatId}`
+      `系统提示：用户正在企微群 chatId=${opts.sourceChatId} 中构建自动化；推送目标默认 wecomPushChatId=${opts.sourceChatId}`
     );
   }
   return parts.join("；");
@@ -411,7 +420,9 @@ async function persistAutomationBuilderSession(opts: {
   }
   const draft = automationSession.draft;
   const created = await createAutomationFromDraft(draft, actorUserId, {
-    wecomPushChatId: automationSession.sourceChatId,
+    wecomPushChatId: draft.wecomPushChatId || automationSession.sourceChatId,
+    partnerId: draft.partnerId,
+    locale: "zh",
   });
   automationBuilderSessions.set(key, {
     ...automationSession,
@@ -707,7 +718,12 @@ async function handleTextMessage(frame: WsFrame) {
         };
       }
       automationSession.messages.push({ role: "user", content: text });
-      const contextHint = buildAutomationBuilderContextHint({ sourceChatId, chatType });
+      const contextHint = buildAutomationBuilderContextHint({
+        sourceChatId,
+        chatType,
+        boundPartnerId,
+        boundPartnerName,
+      });
       const builderMessages = automationSession.messages.map((m, i, arr) => {
         if (i !== arr.length - 1 || m.role !== "user" || !contextHint) return m;
         return { role: "user" as const, content: `${m.content}\n\n（${contextHint}）` };
@@ -716,12 +732,15 @@ async function handleTextMessage(frame: WsFrame) {
         messages: builderMessages,
         userId: actorUserId,
         locale: "zh",
+        boundPartnerId,
+        boundPartnerName,
+        sourceChatId,
       });
       automationSession.messages.push({ role: "assistant", content: turn.reply });
       automationSession.draft = turn.draft;
       automationSession.ready = turn.ready;
       automationBuilderSessions.set(key, automationSession);
-      const reply = formatAutomationBuilderWecomReply({ turn, chatType });
+      const reply = formatAutomationBuilderWecomReply({ turn, chatType, boundPartnerName });
       appendHistory(key, "assistant", reply);
       console.log(`[wecom-bot] AutomationBuilder ready=${turn.ready} name=${turn.draft.name || "(draft)"}`);
       await wsClient.replyStream(frame, streamId, reply, true);

@@ -13,7 +13,7 @@ import {
 } from "./builtin-search";
 import { MONITOR_DIMENSIONS, MONITOR_SENTIMENT_LABELS } from "./constants";
 import { formatTierLabel, partnerFieldValueFromText } from "./tier";
-import { overdueDueDateBefore } from "./todo-dates";
+import { dueWithinDaysRange, overdueDueDateBefore } from "./todo-dates";
 import { enqueueWecomPush } from "./wecom-push";
 import { getWecomChatByChatId, listWecomChats } from "./wecom-chats";
 
@@ -267,22 +267,33 @@ const listTodos: Skill = {
     type: "function",
     function: {
       name: "list_todos",
-      description: "List todo items.",
+      description: "List open todo items. Filter by partner, overdue only, or due within N days.",
       parameters: {
         type: "object",
         properties: {
-          overdueOnly: { type: "boolean", description: "Overdue only" },
-          partnerName: { type: "string", description: "Filter by partner" },
+          overdueOnly: { type: "boolean", description: "Overdue only (due before today)" },
+          dueWithinDays: {
+            type: "number",
+            description: "Include todos due from today through N calendar days ahead (e.g. 3 = today + next 2 days)",
+          },
+          partnerName: { type: "string", description: "Filter by partner name (contains)" },
+          partnerId: { type: "string", description: "Filter by exact partner id" },
         },
       },
     },
   },
   run: async (args) => {
+    const dueWindow = args.dueWithinDays != null ? dueWithinDaysRange(Number(args.dueWithinDays)) : null;
+    const partnerId = args.partnerId ? String(args.partnerId).trim() : "";
     const todos = await db.todoItem.findMany({
       where: {
         status: "OPEN",
         ...(args.overdueOnly ? { dueDate: { lt: overdueDueDateBefore() } } : {}),
-        ...(args.partnerName ? { partner: { name: { contains: String(args.partnerName) } } } : {}),
+        ...(dueWindow && !args.overdueOnly ? { dueDate: dueWindow } : {}),
+        ...(partnerId ? { partnerId } : {}),
+        ...(args.partnerName && !partnerId
+          ? { partner: { name: { contains: String(args.partnerName) } } }
+          : {}),
       },
       include: { partner: true, assignee: true },
       orderBy: { dueDate: "asc" },
@@ -1010,6 +1021,8 @@ export const DEFAULT_AGENT_SKILLS = [
   "read_kms",
   "write_kms",
 ];
+
+export { DEFAULT_AUTOMATION_SKILLS } from "./automation-push";
 
 export const REPORT_AGENT_KEYWORDS = [
   "Pre-meeting Brief",

@@ -1,30 +1,50 @@
+import { db } from "@/lib/db";
 import { AutomationForm } from "@/components/automation-form";
-import { DEFAULT_TASK_MD } from "@/lib/automation-defaults";
 import { requireUser } from "@/lib/session";
+import { PageHeader } from "@/components/ui";
+import { AiCenterNav } from "@/components/ai-center-nav";
+import { BuilderModeToggle } from "@/components/builder-mode-toggle";
+import { getServerI18n } from "@/lib/server-i18n";
 
 export default async function ManualNewAutomationPage() {
   await requireUser();
+  const { messages: m } = await getServerI18n();
+  const partners = await db.partner.findMany({
+    where: { status: { not: "ARCHIVED" } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 
   return (
-    <AutomationForm
-      initial={{
-        slug: "",
-        name: "",
-        description: "",
-        taskMd: DEFAULT_TASK_MD,
-        triggerType: "SCHEDULE",
-        cronExpr: "0 9 * * *",
-        timezone: "Asia/Shanghai",
-        validityDays: 7,
-        variables: [],
-        maxIterations: 30,
-        timeoutMinutes: 60,
-        notifyOnSuccess: true,
-        notifyOnFailure: true,
-        wecomPushChatId: "",
-        webhookUrl: "",
-        enabled: true,
-      }}
-    />
+    <div className="pb-8">
+      <PageHeader
+        title={m.automations.createTitle}
+        desc={m.automations.manualCreateDesc}
+        actions={
+          <BuilderModeToggle
+            active="manual"
+            autoHref="/automations/new"
+            manualHref="/automations/new/manual"
+          />
+        }
+      />
+      <AiCenterNav />
+      <AutomationForm
+        partners={partners}
+        initial={{
+          slug: "",
+          name: "",
+          description: "",
+          cronExpr: "0 9 * * *",
+          timezone: "Asia/Shanghai",
+          partnerId: "",
+          wecomPushChatId: "",
+          pushEmailTo: "",
+          notifyOnSuccess: true,
+          notifyOnFailure: true,
+          enabled: true,
+        }}
+      />
+    </div>
   );
 }

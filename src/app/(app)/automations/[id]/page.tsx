@@ -4,62 +4,47 @@ import { requireUser } from "@/lib/session";
 import { AutomationForm } from "@/components/automation-form";
 import { Badge, fmtDateTime } from "@/components/ui";
 import { deleteAutomationAction, toggleAutomationAction } from "@/lib/automation-actions";
-import type { AutomationVariable } from "@/lib/automation-builder-types";
 import { describeCron } from "@/lib/cron";
 import { getServerI18n } from "@/lib/server-i18n";
 import { RunButton } from "@/app/(app)/agents/[id]/run-button";
-
-function extractTaskMd(instructions: string): string {
-  const marker = "\n---\n【自动化执行说明】";
-  const idx = instructions.indexOf(marker);
-  if (idx >= 0) return instructions.slice(0, idx).trim();
-  return instructions;
-}
 
 export default async function AutomationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
   const { messages: m, bcp47, locale } = await getServerI18n();
 
-  const agent = await db.agent.findFirst({
-    where: { id, isAutomation: true },
-    include: {
-      createdBy: true,
-      runs: { orderBy: { startedAt: "desc" }, take: 10 },
-    },
-  });
+  const [agent, partners] = await Promise.all([
+    db.agent.findFirst({
+      where: { id, isAutomation: true },
+      include: {
+        createdBy: true,
+        runs: { orderBy: { startedAt: "desc" }, take: 10 },
+      },
+    }),
+    db.partner.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
   if (!agent) notFound();
-
-  let variables: AutomationVariable[] = [];
-  try {
-    variables = JSON.parse(agent.variables || "[]");
-  } catch {
-    variables = [];
-  }
-
-  const triggerType =
-    agent.trigger === "SCHEDULE" ? "SCHEDULE" : agent.webhookUrl ? "WEBHOOK" : "EVENT";
 
   return (
     <div className="pb-16">
       <AutomationForm
+        partners={partners}
         initial={{
           id: agent.id,
           slug: agent.slug ?? "",
           name: agent.name,
           description: agent.description ?? "",
-          taskMd: extractTaskMd(agent.instructions),
-          triggerType: triggerType as "SCHEDULE" | "WEBHOOK" | "EVENT",
           cronExpr: agent.cronExpr ?? "0 9 * * *",
           timezone: agent.timezone ?? "Asia/Shanghai",
-          validityDays: agent.validityDays,
-          variables,
-          maxIterations: agent.maxIterations,
-          timeoutMinutes: agent.timeoutMinutes,
+          partnerId: agent.partnerId ?? "",
+          wecomPushChatId: agent.wecomPushChatId ?? "",
+          pushEmailTo: agent.pushEmailTo ?? "",
           notifyOnSuccess: agent.notifyOnSuccess,
           notifyOnFailure: agent.notifyOnFailure,
-          wecomPushChatId: agent.wecomPushChatId ?? "",
-          webhookUrl: agent.webhookUrl ?? "",
           enabled: agent.enabled,
         }}
       />

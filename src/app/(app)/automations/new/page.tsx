@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
+import { BuilderModeToggle } from "@/components/builder-mode-toggle";
 import { AutomationBuilder } from "@/components/automation-builder";
 import { getServerI18n } from "@/lib/server-i18n";
 
@@ -10,17 +11,16 @@ export default async function NewAutomationPage() {
   const { messages: m } = await getServerI18n();
 
   return (
-    <div className="pb-16">
+    <div className="pb-8">
       <PageHeader
         title={m.automations.createTitle}
         desc={m.automations.createDesc}
         actions={
-          <Link
-            href="/automations/new/manual"
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            {m.automations.manualCreate}
-          </Link>
+          <BuilderModeToggle
+            active="auto"
+            autoHref="/automations/new"
+            manualHref="/automations/new/manual"
+          />
         }
       />
       <AiCenterNav />
