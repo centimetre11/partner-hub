@@ -586,10 +586,11 @@ async function handleTextMessage(frame: WsFrame) {
       messages,
       userId: actorUserId,
       partnerId: boundPartnerId ?? session?.partnerId,
+      partnerName: boundPartnerName,
       locale: "zh",
       feature: inPropose ? "WeCom Bot · Propose" : "WeCom Bot",
       forcePropose: inPropose,
-      proposeScope: session?.scope,
+      previousScope: session?.scope,
     });
 
     let reply: string;
@@ -599,7 +600,7 @@ async function handleTextMessage(frame: WsFrame) {
         .filter((m) => m.role === "user")
         .map((m) => m.content)
         .join("\n");
-      const scope = session?.scope ?? result.scope;
+      const scope = result.scope;
       const partnerId = boundPartnerId ?? session?.partnerId;
 
       if (

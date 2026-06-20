@@ -1,4 +1,5 @@
 import { isAgentBuilderIntent } from "./agent-builder-intent";
+import { resolveProposeScope } from "./intake-scope-classifier";
 import { PROPOSE_INTENT_RE } from "./propose-intent";
 import { Prisma } from "@prisma/client";
 import { db } from "./db";
@@ -733,7 +734,7 @@ export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   if (lastUser && isAgentBuilderIntent(lastUser.content)) return false;
   const text = messages
     .filter((m) => m.role === "user")
-    .map((m) => m.content)
+    .map((m) => stripIntakeSystemHint(m.content))
     .join("\n");
   return PROPOSE_INTENT_RE.test(text);
 }
@@ -747,35 +748,7 @@ export function stripIntakeSystemHint(content: string): string {
   return content.trim();
 }
 
-export function detectProposeScope(messages: IntakeMessage[], partnerId?: string): IntakeScope {
-  const last = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-  const text = stripIntakeSystemHint(last);
-  if (isAgentBuilderIntent(last)) return "new_partner";
-  // Business record before todo — bound-group hints may mention 待办; user may say 记个商务记录.
-  if (
-    /商务记录|拜访记录|会议纪要|跟进记录|见面|记录拜访|记录会议|记.{0,4}商务|拜访|business record|meeting log|visit log|log.{0,6}visit/i.test(
-      text
-    )
-  ) {
-    return "business_record";
-  }
-  if (
-    /记.{0,4}待办|创建待办|加待办|添加待办|^待办[：:，,\s]|待办[：:，,]|create todo|add todo|log todo/i.test(
-      text
-    )
-  ) {
-    return "todo";
-  }
-  if (/商机|添加商机|新建商机|opportunity|pipeline/i.test(text)) return "opportunity";
-  if (/联系人|权力地图|加联系人|添加联系人|新联系人|contact|power map|名片|CTO|CEO/i.test(text)) {
-    return "powermap";
-  }
-  if (/培训|认证|FCA|training plan/i.test(text)) return "training";
-  if (/联合方案|solution/i.test(text)) return "solution";
-  if (/建档|补全|画像|profile|onboard|kms/i.test(text)) return partnerId ? "profile" : "new_partner";
-  if (partnerId) return "profile";
-  return "new_partner";
-}
+export { detectProposeScope } from "./intake-scope-classifier";
 
 const PROPOSE_CONFIRM_RE =
   /^(确认|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save)$/i;
@@ -825,12 +798,24 @@ export type ProposeTurn = IntakeTurn & { scope: IntakeScope; mode: "propose" };
 export async function runProposeTurn(opts: {
   messages: IntakeMessage[];
   partnerId?: string;
+  partnerName?: string;
   userId?: string;
   emit?: TraceEmitter;
+  /** Explicit scope from UI — skips AI classification */
   scope?: IntakeScope;
+  /** Prior turn scope — hint for AI continuity, not a hard lock */
+  previousScope?: IntakeScope;
   locale: Locale;
 }): Promise<ProposeTurn> {
-  const scope = opts.scope ?? detectProposeScope(opts.messages, opts.partnerId);
+  const scope = await resolveProposeScope({
+    messages: opts.messages,
+    partnerId: opts.partnerId,
+    partnerName: opts.partnerName,
+    userId: opts.userId,
+    locale: opts.locale,
+    forcedScope: opts.scope,
+    previousScope: opts.previousScope,
+  });
   const turn = await runIntakeTurn({
     scope,
     partnerId: opts.partnerId,

@@ -30,6 +30,7 @@ export async function runAssistantTurn(opts: {
   messages: IntakeMessage[];
   userId: string;
   partnerId?: string;
+  partnerName?: string;
   locale: Locale | AssistantLocale;
   feature: string;
   emit?: TraceEmitter;
@@ -37,8 +38,8 @@ export async function runAssistantTurn(opts: {
   forcePropose?: boolean;
   /** When true, always use agent builder mode (e.g. ongoing WeCom agent draft) */
   forceAgentBuilder?: boolean;
-  /** Sticky scope for multi-turn propose sessions */
-  proposeScope?: IntakeScope;
+  /** Prior turn scope — hint for AI continuity, not a hard lock */
+  previousScope?: IntakeScope;
   /** Context hint injected into agent builder (WeCom group/partner binding) */
   agentBuilderContext?: string;
 }): Promise<AssistantTurnResult> {
@@ -73,10 +74,11 @@ export async function runAssistantTurn(opts: {
     return runProposeTurn({
       messages: opts.messages,
       partnerId: opts.partnerId,
+      partnerName: opts.partnerName,
       userId: opts.userId,
       emit: opts.emit,
       locale: opts.locale as Locale,
-      scope: opts.proposeScope,
+      previousScope: opts.previousScope,
     });
   }
 
