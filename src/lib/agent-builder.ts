@@ -44,23 +44,23 @@ const VALID_DELIVERY: AgentDeliveryMode[] = ["inbox", "wecom_chat", "partner_gro
 
 function outputSchema(locale: Locale) {
   const replyLang = locale === "zh" ? "Chinese" : "English";
-  return `Output exactly one JSON object:
+  return `Output exactly one JSON object. ALL user-visible text fields MUST be in ${replyLang} (reply, clarifications, draft.name/description/instructions/rationale/missingSkillNotes/questionnaire). Tool ids in draft.skills stay English snake_case.
 {
   "reply": "${replyLang} reply to the user; concise product-consultant tone explaining current understanding and next step",
   "clarifications": [
     {
       "id": "stable_snake_id e.g. delivery_mode",
-      "question": "One-line confirmation question",
-      "options": ["2-4 concrete choices; FIRST option is your recommended default for this Agent"]
+      "question": "${replyLang} one-line confirmation question",
+      "options": ["${replyLang} 2-4 concrete choices; FIRST option is your recommended default for this Agent"]
     }
   ],
   "questions": ["Deprecated — mirror clarification questions as plain strings for legacy clients; prefer clarifications"],
   "ready": true/false,
   "draft": {
-    "name": "Agent name",
+    "name": "${replyLang} Agent name",
     "icon": "one emoji",
-    "description": "one-line description",
-    "instructions": "Full system instructions: identity, run steps each time, tool order, output format, how to proceed when a tool is missing using existing data and reasoning",
+    "description": "${replyLang} one-line description",
+    "instructions": "${replyLang} full system instructions: identity, run steps each time, tool order, output format, how to proceed when a tool is missing using existing data and reasoning",
     "skills": ["tool name, e.g. list_todos"],
     "skillIds": ["skill id"],
     "trigger": "MANUAL or SCHEDULE",
@@ -72,18 +72,22 @@ function outputSchema(locale: Locale) {
     "shared": true,
     "webhookUrl": "required when deliveryMode=webhook, else empty",
     "deliveryMode": "inbox | wecom_chat | partner_group | webhook",
-    "missingSkillNotes": ["When no matching skill exists, explain gap and interim approach"],
-    "questionnaire": ["Survey-style questions for user confirmation"],
-    "rationale": "Why these tools/skills, trigger, and delivery mode were chosen"
+    "missingSkillNotes": ["${replyLang} — when no matching skill exists, explain gap and interim approach"],
+    "questionnaire": ["${replyLang} survey-style questions for user confirmation"],
+    "rationale": "${replyLang} — why these tools/skills, trigger, and delivery mode were chosen"
   }
 }`;
 }
 
 function buildSystemPrompt(locale: Locale, toolLines: string, promptSkillLines: string, partnerLines: string, knowledgeLines: string) {
-  const lang = locale === "zh" ? "Chinese" : "English";
+  const lang = locale === "zh" ? "Chinese (简体中文)" : "English";
   return `You are the conversational "Agent Architect" in the AI Agent platform.
 Goal: help users build runnable Agents through dialogue, not by making them understand every form field.
-Always reply in ${lang}.
+
+Language (CRITICAL):
+- The user's UI locale is ${lang}. Write reply, every clarifications[].question, every clarifications[].options[], and all draft user-facing fields (name, description, instructions, rationale, missingSkillNotes, questionnaire) in ${lang}.
+- Match the language the user writes in when they mix languages, but default to ${lang} for all generated guidance.
+- draft.skills / draft.skillIds values stay as English tool/skill identifiers from the lists below.
 
 How you work:
 1. Understand business goal, inputs, trigger timing, deliverables, delivery channel, risk boundaries.
@@ -145,8 +149,8 @@ function isDraftReady(draft: AgentBuilderDraft): boolean {
 
 function legacyQuestionOptions(locale: Locale): string[] {
   return locale === "zh"
-    ? ["采用当前草案设置（推荐）", "需要换成另一种方式", "暂不确定"]
-    : ["Use draft setting (recommended)", "Prefer a different approach", "Not sure yet"];
+    ? ["采用当前草案中的设置（推荐）", "需要换成另一种方式", "我还不确定"]
+    : ["Use the draft's current setting (recommended)", "Prefer a different approach", "Not sure yet"];
 }
 
 function normalizeClarifications(raw: unknown, questions: string[], locale: Locale): AgentBuilderClarification[] {
