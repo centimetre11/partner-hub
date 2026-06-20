@@ -1,6 +1,7 @@
 import type { TraceEmitter } from "./ai-trace";
 import type { IntakeMessage, IntakeScope } from "./ai-intake";
-import { runProposeTurn, shouldUseProposeMode, isTodoListQueryIntent } from "./ai-intake";
+import { runProposeTurn, shouldUseProposeMode } from "./ai-intake";
+import { isListTodosAction } from "./intake-action-registry";
 import { shouldUseAgentBuilderMode } from "./agent-builder-intent";
 import { runAgentBuilderTurn, type AgentBuilderMessage } from "./agent-builder";
 import { runQueryAssistant, type AssistantLocale } from "./assistant-core";
@@ -44,7 +45,7 @@ export async function runAssistantTurn(opts: {
   agentBuilderContext?: string;
 }): Promise<AssistantTurnResult> {
   const lastUser = [...opts.messages].reverse().find((m) => m.role === "user");
-  const todoListQuery = lastUser ? isTodoListQueryIntent(lastUser.content) : false;
+  const todoListQuery = lastUser ? isListTodosAction(lastUser.content) : false;
   const useAgentBuilder =
     !todoListQuery && (opts.forceAgentBuilder || shouldUseAgentBuilderMode(opts.messages));
   const usePropose =

@@ -1,6 +1,6 @@
 import { isAgentBuilderIntent } from "./agent-builder-intent";
-import { resolveProposeScope } from "./intake-scope-classifier";
-import { isTodoListQueryIntent } from "./intake-intent-score";
+import { resolveProposeScope } from "./intake-route-resolver";
+import { conversationHasBuiltinAction, isListTodosAction } from "./intake-action-registry";
 import { stripIntakeSystemHint } from "./intake-text";
 import { PROPOSE_INTENT_RE } from "./propose-intent";
 import { Prisma } from "@prisma/client";
@@ -720,21 +720,22 @@ export async function runIntakeTurn(opts: {
 }
 
 export { stripIntakeSystemHint } from "./intake-text";
-export { isTodoListQueryIntent, isTodoCreateIntent, scoreTodoIntent } from "./intake-intent-score";
+export { isListTodosAction as isTodoListQueryIntent } from "./intake-action-registry";
+export { conversationHasBuiltinAction } from "./intake-action-registry";
 
 /** Detect propose-confirm mode (collaborative agents: onboarding, records, opportunities, etc.) */
 export function shouldUseProposeMode(messages: IntakeMessage[]): boolean {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  if (lastUser && isTodoListQueryIntent(lastUser.content)) return false;
+  if (lastUser && isListTodosAction(lastUser.content)) return false;
   if (lastUser && isAgentBuilderIntent(lastUser.content)) return false;
   const text = messages
     .filter((m) => m.role === "user")
     .map((m) => stripIntakeSystemHint(m.content))
     .join("\n");
-  return PROPOSE_INTENT_RE.test(text);
+  return conversationHasBuiltinAction(text) || PROPOSE_INTENT_RE.test(text);
 }
 
-export { detectProposeScope } from "./intake-scope-classifier";
+export { detectProposeScope } from "./intake-route-resolver";
 
 const PROPOSE_CONFIRM_RE =
   /^(确认|确认保存|保存|提交|好的保存|可以保存|确认提交|apply|confirm|ok save|save)$/i;
