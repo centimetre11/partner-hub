@@ -1,9 +1,15 @@
 import { db } from "./db";
 import { normalizeKnowhowApiKey } from "./knowhow-token";
-import { resolveKnowhowSourceUrl } from "./knowhow-url";
+import { resolveKnowhowSearchEntryUrl } from "./knowhow-url";
 
 export { normalizeKnowhowApiKey } from "./knowhow-token";
-export { buildKnowhowDocumentWebUrl, resolveKnowhowSourceUrl } from "./knowhow-url";
+export {
+  buildKnowhowDocumentWebUrl,
+  buildKnowhowSearchEntryUrl,
+  isKnowhowDatasetDocumentUrl,
+  resolveKnowhowSearchEntryUrl,
+  resolveKnowhowSourceUrl,
+} from "./knowhow-url";
 
 export const KNOWHOW_DEFAULT_BASE_URL = "https://digitchat.fanruan.com/dataset";
 
@@ -120,6 +126,13 @@ function extractSourceUrl(
   document?: Record<string, unknown> | null,
 ) {
   return pickUrl(
+    metadata.kh_url,
+    metadata.kms_url,
+    metadata.original_url,
+    metadata.originalUrl,
+    metadata.search_entry_url,
+    metadata.entry_url,
+    metadata.portal_url,
     raw.url,
     raw.web_url,
     raw.source_url,
@@ -136,10 +149,6 @@ function extractSourceUrl(
     metadata.document_url,
     metadata.file_url,
     metadata.page_url,
-    metadata.kh_url,
-    metadata.kms_url,
-    metadata.original_url,
-    metadata.originalUrl,
   );
 }
 
@@ -353,7 +362,7 @@ export async function retrieveKnowhow(
 
   const hits = extractHits(payload).map((hit) => ({
     ...hit,
-    sourceUrl: resolveKnowhowSourceUrl(hit, cred.baseUrl),
+    sourceUrl: resolveKnowhowSearchEntryUrl(hit),
   }));
   if (!hits.length) {
     console.warn("[knowhow] retrieve returned 0 parsed hits", {
@@ -415,7 +424,7 @@ export async function getKnowhowDocumentDetail(
     id: hit.detailDocumentId,
     title: hit.title,
     content: hit.content,
-    sourceUrl: resolveKnowhowSourceUrl(hit),
+    sourceUrl: resolveKnowhowSearchEntryUrl(hit),
     metadata: hit.metadata,
   };
 
@@ -429,7 +438,7 @@ export async function getKnowhowDocumentDetail(
       id: doc.id,
       title: doc.title || hit.title,
       content: doc.content || hit.content,
-      sourceUrl: resolveKnowhowSourceUrl({ ...hit, sourceUrl: doc.sourceUrl || hit.sourceUrl }),
+      sourceUrl: resolveKnowhowSearchEntryUrl({ ...hit, sourceUrl: doc.sourceUrl || hit.sourceUrl }),
       metadata: { ...hit.metadata, ...doc.metadata },
       fromSearchFallback: !doc.content && !!hit.content,
     };

@@ -43,17 +43,17 @@ export function NavLinks({
       icon: "▦",
       children: [
         { href: "/framework", label: m.nav.framework, icon: "◎" },
-        { href: "/taxonomy", label: m.nav.taxonomy, icon: "◇" },
-        { href: "/playbook-library", label: m.nav.playbookLibrary, icon: "◈" },
         { href: "/pool", label: m.nav.partnerPool, icon: "◬" },
         { href: "/materials", label: m.nav.materials, icon: "📦" },
         { href: "/knowhow", label: m.nav.knowhow, icon: "🔍" },
+        { href: "/taxonomy", label: m.nav.taxonomy, icon: "◇" },
+        { href: "/playbook-library", label: m.nav.playbookLibrary, icon: "◈" },
       ],
     },
     ...(INBOX_NAV_ENABLED
       ? [{ href: "/inbox" as const, label: m.nav.inbox, icon: "✉", badge: "unread" as const }]
       : []),
-    { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge", "/knowhow"] },
+    { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge"] },
     { href: "/settings", label: m.nav.teamSettings, icon: "⚙" },
   ];
 

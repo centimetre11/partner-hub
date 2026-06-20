@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { searchKnowhowAction, getKnowhowDocumentAction } from "@/lib/knowhow-actions";
-import { resolveKnowhowSourceUrl } from "@/lib/knowhow-url";
+import { resolveKnowhowSearchEntryUrl } from "@/lib/knowhow-url";
 import type { KnowhowSearchHit } from "@/lib/knowhow";
 import { useMessages } from "@/lib/i18n/context";
 import { KnowhowMarkdown } from "./knowhow-markdown";
@@ -14,10 +14,9 @@ const input =
 type Props = {
   configured: boolean;
   isAdmin: boolean;
-  apiBaseUrl: string;
 };
 
-export function KnowhowSearchPanel({ configured, isAdmin, apiBaseUrl }: Props) {
+export function KnowhowSearchPanel({ configured, isAdmin }: Props) {
   const m = useMessages();
   const L = m.knowhow;
 
@@ -42,8 +41,8 @@ export function KnowhowSearchPanel({ configured, isAdmin, apiBaseUrl }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function sourceUrlFor(hit: KnowhowSearchHit) {
-    return resolveKnowhowSourceUrl(hit, apiBaseUrl);
+  function searchEntryUrlFor(hit: KnowhowSearchHit) {
+    return resolveKnowhowSearchEntryUrl(hit);
   }
 
   function search() {
@@ -75,7 +74,7 @@ export function KnowhowSearchPanel({ configured, isAdmin, apiBaseUrl }: Props) {
       setError(null);
       setSelectedHit(hit);
       const res = await getKnowhowDocumentAction(hit);
-      const url = sourceUrlFor(hit);
+      const url = searchEntryUrlFor(hit);
       if (res.error) {
         setError(res.error);
         setDetail({
@@ -92,10 +91,10 @@ export function KnowhowSearchPanel({ configured, isAdmin, apiBaseUrl }: Props) {
         setDetail({
           title: res.doc.title,
           content: res.doc.content,
-          sourceUrl: resolveKnowhowSourceUrl(
-            { ...hit, sourceUrl: res.doc.sourceUrl || hit.sourceUrl },
-            apiBaseUrl,
-          ),
+          sourceUrl: resolveKnowhowSearchEntryUrl({
+            ...hit,
+            sourceUrl: res.doc.sourceUrl || hit.sourceUrl,
+          }),
           metadata: res.doc.metadata,
           fromSearchFallback: res.fromSearchFallback,
           apiError: res.apiError,
@@ -218,7 +217,7 @@ export function KnowhowSearchPanel({ configured, isAdmin, apiBaseUrl }: Props) {
                 rel="noopener noreferrer"
                 className="text-xs rounded-md border border-slate-200 px-2.5 py-1 text-sky-600 hover:bg-slate-50"
               >
-                {L.openOriginal} ↗
+                {L.openSearchEntry} ↗
               </a>
             )}
           </div>
@@ -251,7 +250,7 @@ export function KnowhowSearchPanel({ configured, isAdmin, apiBaseUrl }: Props) {
       {!selectedHit && hits.length > 0 && (
         <div className="space-y-3">
           {hits.map((hit) => {
-            const originalUrl = sourceUrlFor(hit);
+            const searchEntryUrl = searchEntryUrlFor(hit);
             return (
               <div key={hit.documentId} className="rounded-lg border border-slate-200 bg-white p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -264,14 +263,14 @@ export function KnowhowSearchPanel({ configured, isAdmin, apiBaseUrl }: Props) {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {originalUrl && (
+                    {searchEntryUrl && (
                       <a
-                        href={originalUrl}
+                        href={searchEntryUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs rounded-md border border-slate-200 px-2.5 py-1 text-slate-600 hover:border-slate-300 hover:text-sky-600"
                       >
-                        {L.openOriginal}
+                        {L.openSearchEntry}
                       </a>
                     )}
                     <button

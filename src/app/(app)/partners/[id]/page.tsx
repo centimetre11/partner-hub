@@ -32,6 +32,7 @@ import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components
 import { TodoItemRow } from "@/components/todo-item-row";
 import { getWecomChatForPartner } from "@/lib/wecom-chats";
 import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
+import { SENTIMENT_MONITOR_ENABLED } from "@/lib/feature-flags";
 import { AiAddButton } from "@/components/ai-add-button";
 import { TodoEditButton } from "@/components/todo-edit-button";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
@@ -41,7 +42,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   const user = await requireUser();
   const { labels, messages: m, bcp47 } = await getServerI18n();
   const L = labelConstants(labels);
-  const monitorDimensions = Object.keys(L.MONITOR_DIMENSION_LABELS);
+  const monitorDimensions = SENTIMENT_MONITOR_ENABLED ? Object.keys(L.MONITOR_DIMENSION_LABELS) : [];
   const { id } = await params;
   const p = await db.partner.findUnique({
     where: { id },
@@ -52,12 +53,16 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
       events: { orderBy: { createdAt: "desc" }, include: { createdBy: true } },
       trainings: true,
       todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], include: { assignee: true } },
-      monitorSources: { orderBy: { createdAt: "desc" } },
-      monitorItems: {
-        where: { status: "NEW" },
-        orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
-        take: 60,
-      },
+      ...(SENTIMENT_MONITOR_ENABLED
+        ? {
+            monitorSources: { orderBy: { createdAt: "desc" as const } },
+            monitorItems: {
+              where: { status: "NEW" as const },
+              orderBy: [{ publishedAt: "desc" as const }, { createdAt: "desc" as const }],
+              take: 60,
+            },
+          }
+        : {}),
       owner: true,
       salesUser: true,
       presalesUser: true,
@@ -126,7 +131,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   const contactOptions = p.contacts.map((c) => ({ id: c.id, name: c.name }));
   const gtmLibraryItems = await searchGtmLibraryAction("");
   let selectedDims: string[] = [];
-  if (p.monitorDims) {
+  if (SENTIMENT_MONITOR_ENABLED && p.monitorDims) {
     try {
       const parsed = JSON.parse(p.monitorDims);
       if (Array.isArray(parsed)) selectedDims = parsed.map(String).filter((d) => monitorDimensions.includes(d));
@@ -235,22 +240,24 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         taxonomy={taxonomy}
         guide={
           <div className="space-y-5">
-            <SentimentMonitorSection
-              partnerId={p.id}
-              partnerName={p.name}
-              partnerWebsite={p.website}
-              disabled
-              sources={p.monitorSources.map((s) => ({
-                id: s.id, label: s.label, url: s.url, sourceType: s.sourceType,
-                domain: s.domain, title: s.title, thumbnailUrl: s.thumbnailUrl, enabled: s.enabled,
-              }))}
-              items={p.monitorItems.map((m) => ({
-                id: m.id, dimension: m.dimension, sentiment: m.sentiment, title: m.title,
-                summary: m.summary, url: m.url, sourceName: m.sourceName,
-                publishedAt: m.publishedAt, createdAt: m.createdAt,
-              }))}
-              selectedDims={selectedDims}
-            />
+            {SENTIMENT_MONITOR_ENABLED && (
+              <SentimentMonitorSection
+                partnerId={p.id}
+                partnerName={p.name}
+                partnerWebsite={p.website}
+                disabled
+                sources={(p.monitorSources ?? []).map((s) => ({
+                  id: s.id, label: s.label, url: s.url, sourceType: s.sourceType,
+                  domain: s.domain, title: s.title, thumbnailUrl: s.thumbnailUrl, enabled: s.enabled,
+                }))}
+                items={(p.monitorItems ?? []).map((m) => ({
+                  id: m.id, dimension: m.dimension, sentiment: m.sentiment, title: m.title,
+                  summary: m.summary, url: m.url, sourceName: m.sourceName,
+                  publishedAt: m.publishedAt, createdAt: m.createdAt,
+                }))}
+                selectedDims={selectedDims}
+              />
+            )}
             <BusinessRecordsSection
               partnerId={p.id}
               records={p.businessRecords}

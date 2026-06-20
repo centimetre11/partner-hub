@@ -92,7 +92,7 @@ export default async function AiCenterPage() {
         </div>
 
         <Card title={m.ai.workbench}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <Link href="/agents" className="rounded-lg border border-slate-100 p-4 hover:border-slate-300">
               <div className="text-lg">❖</div>
               <div className="text-sm font-semibold text-slate-900 mt-2">{m.ai.agentOrchestration}</div>
@@ -112,11 +112,6 @@ export default async function AiCenterPage() {
               <div className="text-lg">📚</div>
               <div className="text-sm font-semibold text-slate-900 mt-2">{m.ai.knowledgeBase}</div>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">{m.ai.workbenchKnowledgeDesc}</p>
-            </Link>
-            <Link href="/knowhow" className="rounded-lg border border-slate-100 p-4 hover:border-slate-300">
-              <div className="text-lg">🔍</div>
-              <div className="text-sm font-semibold text-slate-900 mt-2">{m.ai.knowhowSearch}</div>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">{m.ai.workbenchKnowhowDesc}</p>
             </Link>
           </div>
         </Card>
