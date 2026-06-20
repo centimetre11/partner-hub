@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
 import { upsertAutomationAction } from "@/lib/automation-actions";
+import { getToolLabel } from "@/lib/tool-labels";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 
 const TIMEZONES = ["Asia/Shanghai", "Asia/Dubai", "Asia/Riyadh", "Europe/London", "America/New_York", "UTC"];
@@ -30,9 +31,11 @@ type EmailOption = { id: string; name: string; email: string };
 export function AutomationForm({
   initial,
   partners,
+  runtimeTools,
 }: {
   initial: AutomationFormData;
   partners: PartnerOption[];
+  runtimeTools?: string[];
 }) {
   const m = useMessages();
   const locale = useLocale();
@@ -47,8 +50,6 @@ export function AutomationForm({
   const [partnerId, setPartnerId] = useState(initial.partnerId || "");
   const [wecomPushChatId, setWecomPushChatId] = useState(initial.wecomPushChatId);
   const [pushEmailTo, setPushEmailTo] = useState(initial.pushEmailTo);
-  const [notifyOnSuccess, setNotifyOnSuccess] = useState(initial.notifyOnSuccess);
-  const [notifyOnFailure, setNotifyOnFailure] = useState(initial.notifyOnFailure);
   const [wecomChats, setWecomChats] = useState<WecomOption[]>([]);
   const [emails, setEmails] = useState<EmailOption[]>([]);
 
@@ -58,11 +59,6 @@ export function AutomationForm({
       .then((data: { wecomChats: WecomOption[]; emails: EmailOption[]; partners?: PartnerOption[] }) => {
         setWecomChats(data.wecomChats ?? []);
         setEmails(data.emails ?? []);
-        // 编辑已有自动化：严格保留库里的推送配置，不用默认值覆盖
-        if (initial.id) return;
-        if (!initial.pushEmailTo && data.emails?.[0]?.email) {
-          setPushEmailTo(data.emails[0].email);
-        }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -82,6 +78,7 @@ export function AutomationForm({
     <form id="automation-edit-form" action={upsertAutomationAction} className="min-h-[calc(100vh-8rem)] flex flex-col">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="activate" value="on" />
+      <input type="hidden" name="notifyOnFailure" value="on" />
 
       <div className="flex items-center justify-between gap-4 px-8 py-4 border-b border-slate-200/80 bg-white sticky top-0 z-10">
         <div className="flex items-center gap-3 min-w-0">
@@ -97,6 +94,7 @@ export function AutomationForm({
         </div>
         <button
           type="submit"
+          title={a.saveHint}
           className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 shrink-0"
         >
           {initial.id ? a.saveAndActivate : a.createAndActivate}
@@ -181,6 +179,22 @@ export function AutomationForm({
 
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.pushResults}</h2>
+          {runtimeTools && runtimeTools.length > 0 && (
+            <div className="rounded-lg border border-sky-100 bg-sky-50/50 p-3">
+              <div className="text-xs font-semibold text-slate-700 mb-1.5">{a.runtimeTools}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {runtimeTools.map((tool) => (
+                  <span
+                    key={tool}
+                    className="rounded-md border border-sky-100 bg-white px-2 py-0.5 text-[11px] text-sky-800 font-mono"
+                    title={tool}
+                  >
+                    {getToolLabel(tool, locale)} · {tool}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <label className={labelCls}>{bc.wecomLabel}</label>
             <select
@@ -233,17 +247,6 @@ export function AutomationForm({
             <label className={labelCls}>{a.displayName}</label>
             <input name="name" className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder={a.taskGoalPlaceholder} />
           </div>
-        </section>
-
-        <section className="space-y-2">
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" name="notifyOnSuccess" checked={notifyOnSuccess} onChange={(e) => setNotifyOnSuccess(e.target.checked)} className="mt-0.5" />
-            <span className="text-sm text-slate-700">{a.notifySuccess}</span>
-          </label>
-          <label className="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" name="notifyOnFailure" checked={notifyOnFailure} onChange={(e) => setNotifyOnFailure(e.target.checked)} className="mt-0.5" />
-            <span className="text-sm text-slate-700">{a.notifyFailure}</span>
-          </label>
         </section>
       </div>
     </form>

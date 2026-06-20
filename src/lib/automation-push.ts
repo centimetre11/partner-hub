@@ -38,7 +38,44 @@ export function inferDueWithinDays(goal: string, draftDays?: number): number | u
 }
 
 export function isTodoDueGoal(goal: string): boolean {
-  return /待办|todo|到期|过期|due\s+(date|within)/i.test(goal);
+  return /待办|代办|todo|到期|过期|due\s+(date|within)/i.test(goal);
+}
+
+const AUTOMATION_SKILL_ORDER = [
+  "list_todos",
+  "list_opportunities",
+  "web_search",
+  "get_partner",
+  "search_partners",
+  "push_wecom",
+  "send_email",
+] as const;
+
+/** 从任务描述与推送配置推断运行时可能调用的工具 */
+export function inferAutomationSkills(input: {
+  description?: string;
+  taskMd?: string;
+  wecomPushChatId?: string;
+  pushEmailTo?: string;
+  partnerId?: string;
+}): string[] {
+  const text = `${input.description ?? ""}\n${input.taskMd ?? ""}`;
+  const picked = new Set<string>();
+
+  if (/list_todos|待办|代办|todo|到期|过期|due\s+(date|within)/i.test(text)) picked.add("list_todos");
+  if (/list_opportunities|商机|opportunit/i.test(text)) picked.add("list_opportunities");
+  if (/web_search|投标|招标|新闻|资讯|\bsearch\b/i.test(text)) picked.add("web_search");
+  if (input.partnerId?.trim()) picked.add("get_partner");
+  else if (/search_partners|哪个伙伴|哪位伙伴|which partner/i.test(text)) picked.add("search_partners");
+
+  if (input.wecomPushChatId?.trim() || /push_wecom|企微|发到群|推到.*群/i.test(text)) picked.add("push_wecom");
+  if (input.pushEmailTo?.trim() || /send_email|发邮件|邮件给我|email/i.test(text)) picked.add("send_email");
+
+  if (picked.size === 0) {
+    for (const s of DEFAULT_AUTOMATION_SKILLS) picked.add(s);
+  }
+
+  return AUTOMATION_SKILL_ORDER.filter((s) => picked.has(s));
 }
 
 export function buildAutomationVariables(params: ScheduledPushParams): AutomationVariable[] {
@@ -119,6 +156,61 @@ ${partnerLine}
 - English brief with count`;
 }
 
+/** 每日 OPEN 待办（不限到期窗口）→ push */
+export function buildOpenTodosTaskMd(params: ScheduledPushParams): string {
+  const isZh = (params.locale ?? "zh") === "zh";
+  const partnerLine =
+    params.partnerId?.trim() || params.partnerName?.trim()
+      ? isZh
+        ? `伙伴 **{{partner_name}}**（partnerId=\`{{partner_id}}\`）`
+        : `partner **{{partner_name}}** (partnerId=\`{{partner_id}}\`)`
+      : isZh
+        ? "不限单个伙伴（partner_id 为空）"
+        : "all partners (partner_id empty)";
+
+  if (isZh) {
+    return `---
+name: open-todos-push
+description: ${params.goal.slice(0, 120)}
+---
+
+# 任务目标
+{{goal}}
+
+## 范围
+${partnerLine}
+
+## 执行步骤（必须按序）
+1. 调用 \`list_todos\`（不传 dueWithinDays，查全部 OPEN 待办）：
+   - 若 \`{{partner_id}}\` 非空：\`partnerId={{partner_id}}\`
+   - 否则若 \`{{partner_name}}\` 非空：\`partnerName={{partner_name}}\`
+2. 将工具返回的**每一行**格式化为 Markdown 列表（保留 [id:…]、标题、截止日期、优先级、负责人）
+3. 若无 OPEN 待办：正文写「✅ 当前无 OPEN 待办」
+4. 若 \`{{wecom_chat_id}}\` 非空：\`push_wecom\`（chatId=\`{{wecom_chat_id}}\`，正文含完整列表）
+5. 若 \`{{push_email_to}}\` 非空：\`send_email\`（相同正文）
+6. **禁止**只写摘要而不列出具体待办条目
+
+## 输出
+- 简体中文；含条数 + 完整列表 + 是否已推送`;
+  }
+
+  return `---
+name: open-todos-push
+description: ${params.goal.slice(0, 120)}
+---
+
+# Goal
+{{goal}}
+
+## Scope
+${partnerLine}
+
+## Steps
+1. \`list_todos\` (all OPEN; partnerId/partnerName if set)
+2. Format every line; push_wecom / send_email when configured
+3. Do NOT summarize away the list`;
+}
+
 export function buildScheduledPushTaskMd(params: ScheduledPushParams): string {
   const isZh = (params.locale ?? "zh") === "zh";
   const goal = params.goal.trim() || (isZh ? "定时查询并推送" : "Scheduled query and push");
@@ -188,8 +280,9 @@ export function pickAutomationTaskMd(params: ScheduledPushParams, draftTaskMd?: 
     return draftTaskMd.trim();
   }
   const dueDays = params.dueWithinDays ?? inferDueWithinDays(params.goal);
-  if (dueDays && isTodoDueGoal(params.goal)) {
-    return buildDueTodosTaskMd({ ...params, dueWithinDays: dueDays });
+  if (isTodoDueGoal(params.goal)) {
+    if (dueDays) return buildDueTodosTaskMd({ ...params, dueWithinDays: dueDays });
+    return buildOpenTodosTaskMd(params);
   }
   return buildScheduledPushTaskMd(params);
 }

@@ -47,20 +47,12 @@ export default async function AutomationsPage() {
         title={m.automations.title}
         desc={m.automations.desc}
         actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/automations/new"
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              {m.automations.buildViaChat}
-            </Link>
-            <Link
-              href="/automations/new/manual"
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800"
-            >
-              {m.automations.createNew}
-            </Link>
-          </div>
+          <Link
+            href="/automations/new"
+            className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800"
+          >
+            {m.automations.createNew}
+          </Link>
         }
       />
       <AiCenterNav />

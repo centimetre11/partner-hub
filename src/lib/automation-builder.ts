@@ -1,6 +1,8 @@
 import { AIError, chatJson } from "./ai";
 import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
 import { clarificationSchemaHint, hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
+import { enrichAutomationClarifications, applyUserDeliveryIntent } from "./automation-clarifications";
+import type { BuilderDeliveryPrefs } from "./builder-context-prompt";
 import {
   pickAutomationTaskMd,
   inferDueWithinDays,
@@ -11,6 +13,7 @@ import {
 } from "./automation-push";
 import { CRON_PRESETS, describeCron } from "./cron";
 import { db } from "./db";
+import { listWecomChats } from "./wecom-chats";
 import type { Locale } from "./i18n/locale";
 import type {
   AutomationBuilderClarification,
@@ -96,11 +99,11 @@ Example scenarios (same framework):
 
 Rules:
 1. triggerType is always SCHEDULE. Runtime tools: list_todos, list_opportunities, web_search, get_partner, search_partners, push_wecom, send_email.
-2. partnerId: use bound partner from system hint when user says「这个客户/该伙伴」; leave EMPTY for「全部/所有伙伴」; never require partner if user wants all.
+2. partnerId: if user says「这个伙伴/该客户」without a bound partner in system hint → ready=false and tier:required clarification listing partner names; do NOT assume「无伙伴关联」. Use bound partner when provided. Leave EMPTY only when user wants all/no partner scope.
 3. ready=true requires: draft.description, draft.cronExpr, and at least one of wecomPushChatId or pushEmailTo. partnerId is optional (empty = all).
-4. 【构建偏好】is authoritative: if it says 企微不推送 → wecomPushChatId=""; if 邮件不发送 → pushEmailTo="". Never mention WeCom in reply when wecom is off. Never add channels not in prefs/user text.
+4. 【构建偏好】wins for filled fields; if user text conflicts (e.g.「发到群」while prefs say no WeCom) → follow user intent and emit clarifications to pick the group — do NOT silently skip WeCom.
 5. Apply WeCom group chatId ONLY when user/prefs explicitly enable WeCom push — not by default.
-6. clarifications tier required only for ambiguous partner; tier preference for schedule tweaks.
+6. clarifications tier required for ambiguous partner or WeCom group; tier preference for schedule tweaks.
 7. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
 8. Do NOT build unrelated pipelines (gold price, generic coding agents).
 9. Cron presets:
@@ -256,6 +259,7 @@ export async function runAutomationBuilderTurn(opts: {
   boundPartnerId?: string;
   boundPartnerName?: string;
   sourceChatId?: string;
+  deliveryPrefs?: Partial<BuilderDeliveryPrefs>;
 }): Promise<AutomationBuilderTurn> {
   const locale = opts.locale ?? "en";
   const partners = await db.partner.findMany({
@@ -301,15 +305,62 @@ ${partnerLines}`;
     });
 
     let turn = normalizeTurn(raw as Partial<AutomationBuilderTurn>, locale, opts.boundPartnerName);
+    const intentDraft = applyUserDeliveryIntent(
+      normalizeDraft({ ...DEFAULT_DRAFT, ...(raw.draft ?? {}) }, opts.boundPartnerName, locale),
+      {
+        messages: opts.messages,
+        deliveryPrefs: opts.deliveryPrefs,
+        boundPartnerId: opts.boundPartnerId,
+        sourceChatId: opts.sourceChatId,
+      }
+    );
     turn = {
       ...turn,
-      draft: applyAutomationDraftDefaults(turn.draft, {
+      draft: applyAutomationDraftDefaults(intentDraft, {
         boundPartnerId: opts.boundPartnerId,
         boundPartnerName: opts.boundPartnerName,
         sourceChatId: opts.sourceChatId,
       }),
     };
-    turn.ready = !!raw.ready && isDraftReady(turn.draft) && !hasRequiredClarifications(turn.clarifications);
+
+    const effectivePartnerId =
+      turn.draft.partnerId.trim() ||
+      opts.deliveryPrefs?.partnerId?.trim() ||
+      opts.boundPartnerId?.trim() ||
+      "";
+    const effectiveWecom =
+      turn.draft.wecomPushChatId.trim() ||
+      opts.deliveryPrefs?.wecomChatId?.trim() ||
+      opts.sourceChatId?.trim() ||
+      "";
+    const effectiveEmail = turn.draft.pushEmailTo.trim() || opts.deliveryPrefs?.email?.trim() || "";
+
+    const wecomChats = (await listWecomChats())
+      .filter((c) => c.chatType === "group")
+      .map((c) => ({ chatId: c.chatId, label: c.label, partnerName: c.partnerName }));
+
+    const clarifications = enrichAutomationClarifications({
+      clarifications: turn.clarifications,
+      messages: opts.messages,
+      partnerId: effectivePartnerId,
+      wecomPushChatId: effectiveWecom,
+      pushEmailTo: effectiveEmail,
+      partners,
+      wecomChats,
+      locale,
+      boundPartnerId: opts.boundPartnerId,
+    });
+    turn = {
+      ...turn,
+      clarifications,
+      questions: clarifications.map((c) => c.question),
+      ready: isDraftReady({
+        ...turn.draft,
+        partnerId: effectivePartnerId,
+        wecomPushChatId: effectiveWecom,
+        pushEmailTo: effectiveEmail,
+      }) && !hasRequiredClarifications(clarifications),
+    };
 
     opts.emit?.({
       event: "trace_patch",

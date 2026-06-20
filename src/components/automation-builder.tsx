@@ -16,9 +16,11 @@ import {
   wrapBuilderUserMessage,
   mergeAutomationDraftWithPrefs,
   isAutomationDraftReady,
-  partnerLabelFromPrefs,
   pushChannelsLabel,
 } from "@/lib/builder-context-prompt";
+import { partnerScopeLabel } from "@/lib/automation-push";
+import { inferAutomationSkills } from "@/lib/automation-push";
+import { getToolLabel } from "@/lib/tool-labels";
 import { describeCron } from "@/lib/cron";
 import { AiClarificationFlow } from "@/components/ai-clarification-flow";
 import { AiProcessTrace } from "@/components/ai-process-trace";
@@ -38,6 +40,14 @@ function DraftPreview({
 }) {
   const a = useMessages().automations;
   const locale = useLocale();
+  const lang = locale === "zh" ? "zh" : "en";
+  const runtimeTools = inferAutomationSkills({
+    description: draft.description,
+    taskMd: draft.taskMd,
+    wecomPushChatId: draft.wecomPushChatId,
+    pushEmailTo: draft.pushEmailTo,
+    partnerId: draft.partnerId,
+  });
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">
@@ -57,13 +67,31 @@ function DraftPreview({
         </div>
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.builderTrigger}</div>
-          <div className="font-medium text-slate-800">{describeCron(draft.cronExpr, locale)}</div>
+          <div className="font-medium text-slate-800">
+            {draft.cronExpr?.trim() ? describeCron(draft.cronExpr, locale) : a.builderScheduleUnset}
+          </div>
         </div>
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.pushResults}</div>
           <div className="font-medium text-slate-800 truncate">{pushChannelsLabel(draft, locale === "zh" ? "zh" : "en")}</div>
         </div>
       </div>
+      {runtimeTools.length > 0 && (
+        <div className="rounded-lg bg-white p-3">
+          <div className="text-xs font-semibold text-slate-700 mb-1.5">{a.runtimeTools}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {runtimeTools.map((tool) => (
+              <span
+                key={tool}
+                className="rounded-md border border-sky-100 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-800 font-mono"
+                title={tool}
+              >
+                {getToolLabel(tool, locale)} · {tool}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       {draft.variables.length > 0 && (
         <div className="rounded-lg bg-white p-3">
           <div className="text-xs font-semibold text-slate-700 mb-1.5">{a.variables}</div>
@@ -105,8 +133,9 @@ export function AutomationBuilder() {
   const locale = useLocale();
   const lang = locale === "zh" ? "zh" : "en";
   const starters = a.builderStarters;
-  const { prefs, setCronExpr, setWecomChatId, setEmail, setPartnerId, wecomChats, emails, partners } =
+  const { prefs, setCronExpr, setWecomChatId, setEmail, setPartnerId, applyFromDraft, wecomChats, emails, partners } =
     useBuilderDeliveryPrefs();
+  const prefsTouchedRef = useRef(false);
   const [messages, setMessages] = useState<AutomationBuilderMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [turn, setTurn] = useState<AutomationBuilderTurn | null>(null);
@@ -123,9 +152,23 @@ export function AutomationBuilder() {
     return mergeAutomationDraftWithPrefs(turn.draft, prefs);
   }, [turn, prefs]);
 
+  const partnerLabel = useMemo(() => {
+    if (!mergedDraft?.partnerId) return partnerScopeLabel(undefined, lang);
+    const p = partners.find((x) => x.id === mergedDraft.partnerId);
+    return p?.name ?? mergedDraft.partnerId;
+  }, [mergedDraft, partners, lang]);
+
   const draftJson = useMemo(() => (mergedDraft ? JSON.stringify(mergedDraft) : "null"), [mergedDraft]);
 
-  const pendingClarifications = turn?.clarifications?.length ? turn.clarifications : [];
+  const pendingClarifications = useMemo(() => {
+    const raw = turn?.clarifications?.length ? turn.clarifications : [];
+    return raw.filter((c) => {
+      if (c.id === "partner-pick" && prefs.partnerId) return false;
+      if (c.id === "wecom-pick" && prefs.wecomChatId) return false;
+      if (c.id === "delivery-pick" && (prefs.wecomChatId || prefs.email)) return false;
+      return true;
+    });
+  }, [turn, prefs]);
   const clarifyBlocked = shouldBlockChatInput(pendingClarifications) && !loading;
   const showInit = messages.length === 0 && !loading;
 
@@ -135,7 +178,7 @@ export function AutomationBuilder() {
   async function send(text?: string) {
     const raw = (text ?? inputText).trim();
     if (!raw || loading || clarifyBlocked) return;
-    const content = wrapBuilderUserMessage(raw, prefs, lang, messages.length === 0);
+    const content = wrapBuilderUserMessage(raw, prefs, lang);
     const next = [...messages, { role: "user" as const, content }];
     setMessages(next);
     setInputText("");
@@ -147,7 +190,7 @@ export function AutomationBuilder() {
       const res = await fetch("/api/ai/automation-builder", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-        body: JSON.stringify({ messages: next, stream: true }),
+        body: JSON.stringify({ messages: next, stream: true, deliveryPrefs: prefs }),
       });
       const { data, trace, replyText: finalReply } = await consumeAiSse(res, (_ev, state: AiStreamState) => {
         setLiveTrace(state.trace);
@@ -158,6 +201,9 @@ export function AutomationBuilder() {
       const nextTurn = data as AutomationBuilderTurn;
       if (!nextTurn) throw new Error(a.builderBuildFailed);
       setTurn(nextTurn);
+      if (!prefsTouchedRef.current && nextTurn.draft) {
+        applyFromDraft(nextTurn.draft);
+      }
       setMessages([...next, { role: "assistant", content: finalReply || nextTurn.reply, trace: [...trace] }]);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (e) {
@@ -165,6 +211,32 @@ export function AutomationBuilder() {
     } finally {
       setLoading(false);
       setReplyText("");
+    }
+  }
+
+  function resolveWecomFromLabel(value: string) {
+    return wecomChats.find((c) => {
+      const parts = [c.partnerName, c.label].filter(Boolean);
+      const label = parts.length ? parts.join(" · ") : c.chatId.slice(0, 12);
+      return label === value;
+    });
+  }
+
+  function applyClarificationToPrefs(answers: { id: string; value: string }[]) {
+    prefsTouchedRef.current = true;
+    for (const ans of answers) {
+      if (ans.id === "partner-pick") {
+        const none = /暂不指定|None \(not partner/i.test(ans.value);
+        if (none) setPartnerId("");
+        else {
+          const match = partners.find((p) => p.name === ans.value || ans.value.startsWith(p.name));
+          if (match) setPartnerId(match.id);
+        }
+      }
+      if (ans.id === "wecom-pick") {
+        const chat = resolveWecomFromLabel(ans.value);
+        if (chat) setWecomChatId(chat.chatId);
+      }
     }
   }
 
@@ -196,11 +268,24 @@ export function AutomationBuilder() {
             emails={emails}
             partners={partners}
             disabled={loading}
-            onCronChange={setCronExpr}
-            onWecomChange={setWecomChatId}
-            onEmailChange={setEmail}
-            onPartnerChange={setPartnerId}
+            onCronChange={(v) => {
+              prefsTouchedRef.current = true;
+              setCronExpr(v);
+            }}
+            onWecomChange={(v) => {
+              prefsTouchedRef.current = true;
+              setWecomChatId(v);
+            }}
+            onEmailChange={(v) => {
+              prefsTouchedRef.current = true;
+              setEmail(v);
+            }}
+            onPartnerChange={(v) => {
+              prefsTouchedRef.current = true;
+              setPartnerId(v);
+            }}
           />
+          <p className="text-[10px] text-slate-400 leading-relaxed">{a.builderBarHint}</p>
           {clarifyBlocked && (
             <div className="text-xs text-sky-700 bg-sky-50 rounded-lg px-3 py-2">{a.builderClarifyBlockedHint}</div>
           )}
@@ -227,7 +312,7 @@ export function AutomationBuilder() {
       preview={
         mergedDraft ? (
           <>
-            <DraftPreview draft={mergedDraft} partnerLabel={partnerLabelFromPrefs(prefs, lang)} />
+            <DraftPreview draft={mergedDraft} partnerLabel={partnerLabel} />
             <form action={createAutomationFromBuilderAction} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
               <input type="hidden" name="draft" value={draftJson} />
               <p className="text-xs text-slate-500 leading-relaxed">{a.builderConfirmHint}</p>
@@ -270,7 +355,10 @@ export function AutomationBuilder() {
             key={pendingClarifications.map((c) => c.id).join("-")}
             clarifications={pendingClarifications as AutomationBuilderClarification[]}
             disabled={loading}
-            onRequiredContinue={(answers) => send(formatAnswers(answers))}
+            onRequiredContinue={(answers) => {
+              applyClarificationToPrefs(answers);
+              send(formatAnswers(answers));
+            }}
             onRequiredSkip={() => send(a.builderSkipMessage)}
             onPreferencePick={(answer) => send(formatPreferencePick(answer, locale))}
           />

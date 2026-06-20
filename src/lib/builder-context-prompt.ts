@@ -11,47 +11,49 @@ export type BuilderDeliveryPrefs = {
   partnerName?: string;
 };
 
+export function hasExplicitPrefs(prefs: BuilderDeliveryPrefs): boolean {
+  return !!(
+    prefs.cronExpr?.trim() ||
+    prefs.partnerId?.trim() ||
+    prefs.wecomChatId?.trim() ||
+    prefs.email?.trim()
+  );
+}
+
+/** 仅列出用户手动选过的字段，避免空栏误写「不推送」等推断 */
 export function formatBuilderContextPrefix(prefs: BuilderDeliveryPrefs, locale: "zh" | "en"): string {
   const lines: string[] = [];
   if (locale === "zh") {
-    lines.push("【构建偏好 — 以下为准，覆盖默认推断】");
-    lines.push(
-      prefs.partnerId
-        ? `伙伴：${prefs.partnerName || prefs.partnerId}（partnerId=${prefs.partnerId}）`
-        : "伙伴：不指定（无伙伴关联，如今日新闻/行业资讯）"
-    );
-    if (prefs.cronExpr) lines.push(`定时：${describeCron(prefs.cronExpr, "zh")}（${prefs.cronExpr}）`);
-    if (prefs.wecomChatId) {
+    lines.push("【用户手动指定的构建偏好 — 覆盖 AI 推断】");
+    if (prefs.cronExpr?.trim()) {
+      lines.push(`定时：${describeCron(prefs.cronExpr, "zh")}（${prefs.cronExpr}）`);
+    }
+    if (prefs.partnerId?.trim()) {
+      lines.push(`伙伴：${prefs.partnerName || prefs.partnerId}（partnerId=${prefs.partnerId}）`);
+    }
+    if (prefs.wecomChatId?.trim()) {
       const label = prefs.wecomChatLabel?.trim();
       lines.push(`企微推送：${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
-    } else {
-      lines.push("企微推送：不推送（wecomPushChatId 留空）");
     }
-    if (prefs.email) {
+    if (prefs.email?.trim()) {
       lines.push(`邮件推送：${prefs.email}`);
-    } else {
-      lines.push("邮件推送：不发送（pushEmailTo 留空）");
     }
     lines.push("");
     lines.push("用户需求：");
   } else {
-    lines.push("[Build preferences — authoritative over defaults]");
-    lines.push(
-      prefs.partnerId
-        ? `Partner: ${prefs.partnerName || prefs.partnerId} (partnerId=${prefs.partnerId})`
-        : `Partner: none (${partnerScopeLabel(undefined, "en")})`
-    );
-    if (prefs.cronExpr) lines.push(`Schedule: ${describeCron(prefs.cronExpr, "en")} (${prefs.cronExpr})`);
-    if (prefs.wecomChatId) {
+    lines.push("[Manual build preferences — override AI inference]");
+    if (prefs.cronExpr?.trim()) {
+      lines.push(`Schedule: ${describeCron(prefs.cronExpr, "en")} (${prefs.cronExpr})`);
+    }
+    if (prefs.partnerId?.trim()) {
+      lines.push(`Partner: ${prefs.partnerName || prefs.partnerId} (partnerId=${prefs.partnerId})`);
+    }
+    if (prefs.wecomChatId?.trim()) {
       const label = prefs.wecomChatLabel?.trim();
       lines.push(`WeCom push: ${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
-    } else {
-      lines.push("WeCom push: none (leave wecomPushChatId empty)");
     }
-    if (prefs.email) {
+    if (prefs.email?.trim()) {
       lines.push(`Email push: ${prefs.email}`);
-    } else {
-      lines.push("Email push: none (leave pushEmailTo empty)");
     }
     lines.push("");
     lines.push("User request:");
@@ -62,11 +64,10 @@ export function formatBuilderContextPrefix(prefs: BuilderDeliveryPrefs, locale: 
 export function wrapBuilderUserMessage(
   text: string,
   prefs: BuilderDeliveryPrefs,
-  locale: "zh" | "en",
-  includePrefs: boolean
+  locale: "zh" | "en"
 ): string {
   const body = text.trim();
-  if (!includePrefs) return body;
+  if (!hasExplicitPrefs(prefs)) return body;
   return `${formatBuilderContextPrefix(prefs, locale)}${body}`;
 }
 
@@ -86,9 +87,9 @@ export function mergeAutomationDraftWithPrefs(
   const merged = {
     ...draft,
     cronExpr: prefs.cronExpr || draft.cronExpr,
-    partnerId: prefs.partnerId,
-    wecomPushChatId: prefs.wecomChatId,
-    pushEmailTo: prefs.email,
+    partnerId: prefs.partnerId || draft.partnerId,
+    wecomPushChatId: prefs.wecomChatId || draft.wecomPushChatId,
+    pushEmailTo: prefs.email || draft.pushEmailTo,
   };
   // 从描述推断待办到期天数（若 AI 未写入 draft.dueWithinDays）
   if (!merged.dueWithinDays && merged.description) {

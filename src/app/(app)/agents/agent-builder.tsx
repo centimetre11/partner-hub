@@ -114,7 +114,7 @@ export function AgentBuilder() {
   async function send(text?: string) {
     const raw = (text ?? inputText).trim();
     if (!raw || loading || clarifyBlocked) return;
-    const content = wrapBuilderUserMessage(raw, prefs, locale, messages.length === 0);
+    const content = wrapBuilderUserMessage(raw, prefs, locale === "zh" ? "zh" : "en");
     const next = [...messages, { role: "user" as const, content }];
     setMessages(next);
     setInputText("");

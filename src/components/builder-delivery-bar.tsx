@@ -3,15 +3,16 @@
 import { useEffect, useState } from "react";
 import { CRON_PRESETS } from "@/lib/cron";
 import type { BuilderDeliveryPrefs } from "@/lib/builder-context-prompt";
+import type { AutomationBuilderDraft } from "@/lib/automation-builder-types";
 import { useLocale, useMessages } from "@/lib/i18n";
 
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
 type EmailOption = { id: string; name: string; email: string };
 type PartnerOption = { id: string; name: string };
 
-export function useBuilderDeliveryPrefs(defaultCron = "0 9 * * *") {
+export function useBuilderDeliveryPrefs() {
   const [prefs, setPrefs] = useState<BuilderDeliveryPrefs>({
-    cronExpr: defaultCron,
+    cronExpr: "",
     wecomChatId: "",
     wecomChatLabel: "",
     email: "",
@@ -37,10 +38,6 @@ export function useBuilderDeliveryPrefs(defaultCron = "0 9 * * *") {
         setWecomChats(data.wecomChats ?? []);
         setEmails(data.emails ?? []);
         setPartners(data.partners ?? []);
-        setPrefs((p) => ({
-          ...p,
-          email: p.email || data.emails?.[0]?.email || "",
-        }));
       } finally {
         /* loaded */
       }
@@ -76,6 +73,23 @@ export function useBuilderDeliveryPrefs(defaultCron = "0 9 * * *") {
         partnerId,
         partnerName: partnerId ? partner?.name ?? "" : "",
       }));
+    },
+    /** AI 解析后回填底部栏（用户未手动改过时才调用） */
+    applyFromDraft: (draft: Pick<AutomationBuilderDraft, "cronExpr" | "partnerId" | "wecomPushChatId" | "pushEmailTo">) => {
+      setPrefs((p) => {
+        const partnerId = draft.partnerId?.trim() ?? "";
+        const partner = partners.find((x) => x.id === partnerId);
+        const wecomChatId = draft.wecomPushChatId?.trim() ?? "";
+        const chat = wecomChats.find((c) => c.chatId === wecomChatId);
+        return {
+          cronExpr: draft.cronExpr?.trim() ?? "",
+          partnerId,
+          partnerName: partnerId ? partner?.name ?? "" : "",
+          wecomChatId,
+          wecomChatLabel: chat ? formatWecomLabel(chat) : "",
+          email: draft.pushEmailTo?.trim() ?? "",
+        };
+      });
     },
     wecomChats,
     emails,
@@ -123,6 +137,7 @@ export function BuilderDeliveryBar({
       <div>
         <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.scheduleLabel}</label>
         <select className={selectCls} value={prefs.cronExpr} disabled={disabled} onChange={(e) => onCronChange(e.target.value)}>
+          <option value="">{b.scheduleUnset}</option>
           {CRON_PRESETS.filter((p) => ["daily9", "daily18", "weekday9", "monday9"].includes(p.id)).map((p) => (
             <option key={p.id} value={p.expr}>
               {isZh ? p.labelZh : p.labelEn}

@@ -104,7 +104,46 @@ export async function runAgent(
       scopeCtx = `\n\n【Bound partner profile】\n${await partnerContext(agent.partnerId)}`;
     }
 
-    const system = `You are an automated Agent in Fanruan's Middle East partner management system (Fanruan — leading Chinese BI vendor; products FineReport/FineBI/FineDataLink). Your name is "${agent.name}".
+    const isZhAutomation =
+      agent.isAutomation && /[\u4e00-\u9fff]/.test(`${agent.description ?? ""}\n${agent.instructions}`.slice(0, 800));
+    const replyLang = isZhAutomation ? "Simplified Chinese (简体中文)" : "English";
+
+    const automationPushRules =
+      agent.isAutomation && (agent.wecomPushChatId || agent.pushEmailTo)
+        ? [
+            agent.wecomPushChatId
+              ? `WeCom push chatId=${agent.wecomPushChatId} — after querying, call push_wecom with the FULL formatted body (include every todo line).`
+              : "",
+            agent.pushEmailTo
+              ? `Default email for send_email: ${agent.pushEmailTo}`
+              : "Do NOT call send_email unless task instructions explicitly require email.",
+            !agent.pushEmailTo && agent.wecomPushChatId
+              ? "User asked for group push only — do NOT send email."
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n")
+        : "";
+
+    const automationRules = agent.isAutomation
+      ? `
+【Automation rules】
+1. Follow TASK.md steps exactly; use list_todos when task mentions 待办/代办/todos.
+2. Include EVERY line from list_todos in the push body — not just a count or summary.
+3. Reply in ${replyLang}.
+${automationPushRules ? `${automationPushRules}\n` : ""}4. Final message: count + full list (or "no open todos") + whether push succeeded.`
+      : "";
+
+    const system = agent.isAutomation
+      ? `You are an automation pipeline in Fanruan's partner management system. Name: "${agent.name}".
+Today is ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}.
+Run trigger: ${triggeredBy === "schedule" ? "scheduled" : "manual"}.
+
+【Task instructions — follow exactly】
+${agent.instructions}
+${scopeCtx}
+${automationRules}`
+      : `You are an automated Agent in Fanruan's Middle East partner management system (Fanruan — leading Chinese BI vendor; products FineReport/FineBI/FineDataLink). Your name is "${agent.name}".
 Today is ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", weekday: "long" })}.
 This run: ${triggeredBy === "schedule" ? "scheduled automatic trigger" : "manual user trigger"}.
 Always reply in English.
