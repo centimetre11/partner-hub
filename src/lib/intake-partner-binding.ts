@@ -6,7 +6,6 @@ import type { Locale } from "./i18n/locale";
 /** Scopes whose primary payload must belong to a specific partner */
 export const PARTNER_REQUIRED_SCOPES: IntakeScope[] = [
   "powermap",
-  "opportunity",
   "profile",
   "training",
   "solution",

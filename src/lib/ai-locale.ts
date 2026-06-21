@@ -1,4 +1,4 @@
-import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
+import { CUSTOMER_FIELD_LABELS, CUSTOMER_FIELD_LABELS_ZH, PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 import { getLabels, type LabelsBundle } from "./i18n";
 import type { Locale } from "./i18n/locale";
 import { intakeClarificationHint } from "./ai-clarifications";
@@ -11,7 +11,36 @@ export type IntakeScope =
   | "training"
   | "solution"
   | "business_record"
-  | "todo";
+  | "todo"
+  | "new_customer"
+  | "customer_profile";
+
+/** Customer (end-customer / account) intake scopes — distinct field set from partner scopes. */
+export function isCustomerScope(scope: IntakeScope): boolean {
+  return scope === "new_customer" || scope === "customer_profile";
+}
+
+export function customerFieldLabels(locale: Locale): Record<string, string> {
+  return locale === "zh" ? CUSTOMER_FIELD_LABELS_ZH : CUSTOMER_FIELD_LABELS;
+}
+
+/** Scope-aware field label: customer scopes use the customer field set, others fall back to partner labels. */
+export function fieldLabelForScope(locale: Locale, scope: IntakeScope, field: string): string {
+  if (isCustomerScope(scope)) {
+    return customerFieldLabels(locale)[field] ?? CUSTOMER_FIELD_LABELS[field] ?? field;
+  }
+  return fieldLabel(locale, field);
+}
+
+/** Scope-aware "field(code)" list for prompts. */
+export function fieldListForScope(locale: Locale, scope: IntakeScope): string {
+  if (isCustomerScope(scope)) {
+    return Object.entries(customerFieldLabels(locale))
+      .map(([f, l]) => `${f}(${l})`)
+      .join(listSep(locale));
+  }
+  return fieldListForAi(locale);
+}
 
 export function replyLanguage(locale: Locale): "Chinese" | "English" {
   return locale === "zh" ? "Chinese" : "English";
@@ -208,6 +237,119 @@ Rules:
 ${clarificationFooter}`;
   }
 
+  if (isCustomerScope(scope)) {
+    const cfl = fieldListForScope(locale, scope);
+    return `Output a single JSON object only. User-facing strings in ${lang}. Structure:
+{
+  "reply": "Your message to the user (${lang}, natural tone; ask clarifications here, at most 1–2 key points)",
+  "questions": ["clarification point 1", "..."],
+  "clarifications": [
+    ${clarifyExample}
+  ],
+  "ready": true/false,
+  "proposal": {
+    "partnerName": "(the END-CUSTOMER / account company name — this is the customer being profiled, NOT a Fanruan partner)",
+    "summary": "One-line summary of what will be saved (${lang})",
+    "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
+    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
+    "opportunities": [],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","detail":"..."}],
+    "trainings": [],
+    "solutions": [],
+    "businessRecords": []
+  }
+}
+Customer field codes for the fields array (use ONLY these): ${cfl}.
+- status values: ACTIVE (合作中) / PROSPECT (潜在) / INACTIVE (已停止).
+Rules:
+- This is END-CUSTOMER (account) profiling — NOT partner onboarding. Never emit partner-only codes (category, tier, industries, playbook, valuePattern, etc.). Use the customer field codes above only.
+- partnerName = the customer's company name (required for new_customer).
+- Put the main contact into the contactName/contactTitle/contactPhone/contactEmail fields; put additional people into the contacts array (power map).
+- Extract only supported content from user text or tool results; cite reason. Do not invent beyond tools.
+- ready: true when the customer name and at least one profile field are present, or when the user says save now.
+- proposal accumulates confirmed content each turn (do not clear prior extractions).
+${clarificationFooter}`;
+  }
+
+  if (scope === "opportunity") {
+    return `Output a single JSON object. User-facing strings in ${lang}:
+{
+  "reply": "Your message to the user (${lang}, brief)",
+  "questions": [],
+  "clarifications": [],
+  "ready": true/false,
+  "proposal": {
+    "partnerName": "(the customer/account this opportunity belongs to; omit when a customer/partner is pre-bound)",
+    "summary": "One-line summary (${lang})",
+    "opportunities": [{"action":"add|update","id":"(when update)","name":"...","client":"...","amount":"...","stage":"...","nextStep":"...","status":"ACTIVE|WON|LOST|PAUSED","reason":"..."}]
+  }
+}
+Rules:
+- Fill opportunities only; all other proposal arrays stay empty (omit them).
+- Opportunities are owned by a CUSTOMER (account). When the company is named in an open session, set proposal.partnerName to it; a bound partner books it under that partner's own customer profile.
+- ready=true when at least one opportunity has a name.
+${clarificationFooter}`;
+  }
+
+  if (scope === "profile") {
+    return `Output a single JSON object. User-facing strings in ${lang}:
+{
+  "reply": "Your message to the user (${lang}, natural tone; 1–2 clarifications max)",
+  "questions": [],
+  "clarifications": [
+    ${clarifyExample}
+  ],
+  "ready": true/false,
+  "proposal": {
+    "summary": "One-line summary of what will be saved (${lang})",
+    "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}]
+  }
+}
+Field codes for fields array (use ONLY these): ${fl}.
+Rules:
+- Fill fields only; all other proposal arrays stay empty (omit them).
+- Extract only supported content; cite reason. Do not invent beyond tools.
+- ready=true when required fields are present, or the user says save now.
+- proposal accumulates confirmed content each turn (do not clear prior extractions).
+${clarificationFooter}`;
+  }
+
+  if (scope === "training") {
+    return `Output a single JSON object. User-facing strings in ${lang}:
+{
+  "reply": "Your message to the user (${lang}, brief)",
+  "questions": [],
+  "clarifications": [],
+  "ready": true/false,
+  "proposal": {
+    "summary": "One-line summary (${lang})",
+    "trainings": [{"person":"...","currentSkill":"...","targetCert":"...","deadline":"YYYY-MM-DD","status":"PLANNED|IN_PROGRESS|DONE","reason":"..."}]
+  }
+}
+Rules:
+- Fill trainings only; all other proposal arrays stay empty (omit them).
+- ready=true when at least one training has a person.
+${clarificationFooter}`;
+  }
+
+  if (scope === "solution") {
+    return `Output a single JSON object. User-facing strings in ${lang}:
+{
+  "reply": "Your message to the user (${lang}, brief)",
+  "questions": [],
+  "clarifications": [],
+  "ready": true/false,
+  "proposal": {
+    "summary": "One-line summary (${lang})",
+    "solutions": [{"name":"...","targetCustomer":"...","painPoint":"...","fanruanOffer":"...","partnerOffer":"...","pricingModel":"...","status":"...","reason":"..."}]
+  }
+}
+Rules:
+- Fill solutions only; all other proposal arrays stay empty (omit them).
+- ready=true when at least one solution has a name.
+${clarificationFooter}`;
+  }
+
   return `Output a single JSON object only. User-facing strings in ${lang}. Structure:
 {
   "reply": "Your message to the user (${lang}, natural tone; ask clarifications here, at most 1–2 key points)",
@@ -250,7 +392,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
     case "powermap":
       return "Fill contacts only (action=add or update with id). Leave fields/opportunities/todos/trainings/solutions as empty arrays.";
     case "opportunity":
-      return "Fill opportunities only. Leave others as empty arrays.";
+      return "Fill opportunities only (owned by a customer/account). Leave others as empty arrays.";
     case "profile":
       return `Fill fields only (FieldUpdate; oldValue may be empty). Field names: ${fl} (category: ${cat}; industries: ${ind}). Use tools when info is insufficient. Leave others as empty arrays.`;
     case "training":
@@ -261,6 +403,10 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
       return "Fill businessRecords only (title, traceNature, traceAction required). Leave other arrays empty.";
     case "todo":
       return "Fill todos only. Leave fields/contacts/opportunities/trainings/solutions/businessRecords as empty arrays.";
+    case "new_customer":
+      return `Set partnerName to the END-CUSTOMER company name; fill customer profile fields in fields (codes only: ${fieldListForScope(locale, scope)}; status: ACTIVE/PROSPECT/INACTIVE). Add people to contacts. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
+    case "customer_profile":
+      return `Fill customer fields only (FieldUpdate; oldValue may be empty). Codes: ${fieldListForScope(locale, scope)}. Use tools when info is insufficient. Add new people to contacts. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
   }
 }
 
@@ -335,7 +481,8 @@ Decide add (action=add) vs update (action=update with id) against the existing l
   },
   opportunity: {
     title: "Add opportunity",
-    intro: "The user wants to add or update an opportunity for this partner.",
+    intro:
+      "The user wants to add or update an opportunity. Opportunities belong to a CUSTOMER (end-customer/account), not a partner. If a partner is bound and self-selling, it is booked under that partner's own customer profile.",
     guide: "For each opportunity try: client, amount, stage, nextStep. Ask one question if key info is missing.",
   },
   profile: {
@@ -377,6 +524,20 @@ If user names a company/partner, set proposal.partnerName — the system will au
 Multiple matches require blocking partnerName clarification. If the company is named but not found in Partner Hub, the system will ask the user to confirm an unlinked todo (do not set ready=true yourself in that case).
 If no company is mentioned, omit partnerName for a global/personal todo.
 No web research. ready=true when title is clear AND no blocking partner clarifications remain.`,
+  },
+  new_customer: {
+    title: "New customer onboarding",
+    intro:
+      "The user wants to create a new END-CUSTOMER (account) — the company that buys/uses Fanruan products (possibly served by a partner), NOT a Fanruan partner. Input may be: company name only, meeting/chat text, a company intro, or a Fanruan KMS link. Combine KMS with web/LinkedIn research to profile the customer as fully as possible.",
+    guide: `Minimum to create: customer company name (partnerName, required). Try to fill profile fields via research (industry, scale, city, country, website, primary contact). Ask 1–2 brief follow-ups only after research.
+This is a CUSTOMER, not a partner: never emit partner-only fields (category, tier, partnerArchetype, valuePattern, playbook, etc.).
+Identity: only emit a tier:"required" identity clarification when the company is genuinely ambiguous; a clear unique name/website from KMS or the user → write it directly.`,
+  },
+  customer_profile: {
+    title: "Complete customer profile",
+    intro:
+      "The user wants to fill or update an existing END-CUSTOMER's profile fields. May include a KMS link or scattered notes; combine the existing record with tool research.",
+    guide: "Map user input and research to the customer profile fields. Use tools when info is insufficient. Add new people to contacts.",
   },
 };
 
@@ -537,9 +698,9 @@ export function weeklyPartnerStatusLine(
 }
 
 export function buildPatchExtractPrompt(scope: IntakeScope, locale: Locale): string {
-  const fl = fieldListForAi(locale);
+  const fl = fieldListForScope(locale, scope);
   const lang = replyLanguage(locale);
-  const exampleLabel = fieldLabel(locale, "country");
+  const exampleLabel = fieldLabelForScope(locale, scope, "country");
 
   return `Extract structured fragments from tool output for database intake. Task scope: ${scope}. Output JSON only:
 { "ops": [

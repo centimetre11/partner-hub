@@ -4,6 +4,16 @@ export const CRM_DEFAULT_DATA_URL =
 export const CRM_TRACE_SUBMIT_URL =
   "https://crm.finereporthelp.com/WebReport/decision/url/datainputcrm/submit?id=zd_trce_in&secret=zd12345";
 
+/** FineReport overseas CRM company detail view (comid = CRM com_id). */
+export const CRM_CUSTOMER_VIEW_BASE =
+  "https://overseas.finereporthelp.com/WebReport/decision/view/report?viewlet=customer%2Fcompany_view.cpt&op=view";
+
+export function buildCrmCustomerViewUrl(comId: string): string {
+  const id = comId.trim();
+  if (!id) return CRM_CUSTOMER_VIEW_BASE;
+  return `${CRM_CUSTOMER_VIEW_BASE}&comid=${encodeURIComponent(id)}`;
+}
+
 export type CrmDataRow = {
   com_id: string;
   com_name: string;

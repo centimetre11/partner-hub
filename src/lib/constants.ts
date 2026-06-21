@@ -107,3 +107,35 @@ export const PARTNER_FIELD_LABELS: Record<string, string> = {
   pipelineStage: "Pipeline Stage",
   notes: "Notes",
 };
+
+/** Fixed English field codes for the end-customer (account) AI intake proposal. */
+export const CUSTOMER_FIELD_LABELS: Record<string, string> = {
+  name: "Customer Name",
+  status: "Status",
+  industry: "Industry",
+  scale: "Scale",
+  city: "City",
+  country: "Country",
+  website: "Website",
+  contactName: "Primary Contact",
+  contactTitle: "Contact Title",
+  contactPhone: "Contact Phone",
+  contactEmail: "Contact Email",
+  notes: "Notes",
+};
+
+/** Chinese display labels for the customer intake draft. */
+export const CUSTOMER_FIELD_LABELS_ZH: Record<string, string> = {
+  name: "客户名称",
+  status: "状态",
+  industry: "行业",
+  scale: "规模",
+  city: "城市",
+  country: "国家",
+  website: "官网",
+  contactName: "主联系人",
+  contactTitle: "联系人职务",
+  contactPhone: "联系电话",
+  contactEmail: "联系邮箱",
+  notes: "备注",
+};

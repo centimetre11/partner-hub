@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { IntakeProposal } from "./ai-intake";
+import { END_CUSTOMER_WHERE } from "./customer-filters";
 import {
   enrichProposalPartnerFromText,
   extractPartnerNameFromIntakeText,
@@ -16,6 +17,9 @@ export type BusinessRecordCompanyTarget = {
   syncPlan: BusinessRecordSyncPlan;
   hubPartnerId?: string;
   hubPartnerName?: string;
+  /** 新「客户」实体（Partner Hub 维护的终端客户） */
+  customerId?: string;
+  customerName?: string;
   crmCustomerId?: string;
   crmCustomerName?: string;
   companyLabel?: string;
@@ -43,13 +47,70 @@ export async function lookupSingleCrmCustomerByName(query: string) {
   return matches.length === 1 ? matches[0]! : null;
 }
 
+async function findCustomersByName(query: string, limit = 6) {
+  const q = query.trim();
+  if (!q) return [];
+  const baseWhere = { ...END_CUSTOMER_WHERE };
+  const exact = await db.customer.findMany({
+    where: { ...baseWhere, name: { equals: q } },
+    select: { id: true, name: true, crmCustomerId: true },
+    take: limit,
+  });
+  if (exact.length) return exact;
+  return db.customer.findMany({
+    where: { ...baseWhere, name: { contains: q } },
+    select: { id: true, name: true, crmCustomerId: true },
+    take: limit,
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function lookupSingleCustomerByName(query: string) {
+  const matches = await findCustomersByName(query);
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+/** Build a target for the new Customer entity (Hub-side customer, may carry its own CRM id). */
+async function customerEntityTarget(customer: {
+  id: string;
+  name: string;
+  crmCustomerId: string | null;
+}): Promise<BusinessRecordCompanyTarget> {
+  let crmCustomerName: string | undefined;
+  if (customer.crmCustomerId) {
+    const crm = await db.crmCustomer.findUnique({
+      where: { id: customer.crmCustomerId },
+      select: { name: true },
+    });
+    crmCustomerName = crm?.name;
+  }
+  return {
+    syncPlan: customer.crmCustomerId ? "both" : "hub_only",
+    customerId: customer.id,
+    customerName: customer.name,
+    crmCustomerId: customer.crmCustomerId ?? undefined,
+    crmCustomerName,
+    companyLabel: customer.name,
+  };
+}
+
 /** Resolve Hub + CRM company targets for a business record draft. */
 export async function resolveBusinessRecordCompanyTarget(opts: {
   proposal: IntakeProposal;
   boundPartnerId?: string;
+  /** 企微群/会话已绑定的「客户」实体 */
+  boundCustomerId?: string;
   saveMode?: IntakeProposal["saveMode"];
 }): Promise<BusinessRecordCompanyTarget> {
   const name = opts.proposal.partnerName?.trim();
+
+  if (opts.boundCustomerId && !opts.boundPartnerId) {
+    const customer = await db.customer.findUnique({
+      where: { id: opts.boundCustomerId },
+      select: { id: true, name: true, crmCustomerId: true },
+    });
+    if (customer) return customerEntityTarget(customer);
+  }
 
   if (opts.boundPartnerId) {
     const partner = await db.partner.findUnique({
@@ -104,6 +165,15 @@ export async function resolveBusinessRecordCompanyTarget(opts: {
       return { syncPlan: "unresolved", companyLabel: name };
     }
 
+    // 无伙伴匹配时，再看新「客户」实体（Hub 维护的终端客户，优先于纯 CRM 客户）
+    const customerMatches = await findCustomersByName(name);
+    if (customerMatches.length === 1) {
+      return customerEntityTarget(customerMatches[0]!);
+    }
+    if (customerMatches.length > 1) {
+      return { syncPlan: "unresolved", companyLabel: name };
+    }
+
     const crmMatches = await findCrmCustomersByName(name);
     if (crmMatches.length === 1) {
       const crm = crmMatches[0]!;
@@ -130,16 +200,18 @@ export async function resolveBusinessRecordCompanyTarget(opts: {
   return { syncPlan: "unresolved", companyLabel: name };
 }
 
-/** Enrich proposal with Hub / CRM company match metadata. */
+/** Enrich proposal with Hub / Customer / CRM company match metadata. */
 export async function enrichBusinessRecordCompanyTarget(
   proposal: IntakeProposal,
   userText: string,
-  boundPartnerId?: string
+  boundPartnerId?: string,
+  boundCustomerId?: string,
 ): Promise<IntakeProposal> {
-  let next = await enrichProposalPartnerFromText(proposal, userText, boundPartnerId);
+  const next = await enrichProposalPartnerFromText(proposal, userText, boundPartnerId);
   const target = await resolveBusinessRecordCompanyTarget({
     proposal: next,
     boundPartnerId,
+    boundCustomerId,
     saveMode: next.saveMode,
   });
 
@@ -151,8 +223,11 @@ export async function enrichBusinessRecordCompanyTarget(
 
   return {
     ...next,
-    partnerName: target.hubPartnerName ?? companyLabel ?? next.partnerName,
+    partnerName:
+      target.hubPartnerName ?? target.customerName ?? companyLabel ?? next.partnerName,
     hubPartnerId: target.hubPartnerId ?? next.hubPartnerId,
+    customerId: target.customerId ?? next.customerId,
+    customerName: target.customerName ?? next.customerName,
     crmCustomerId: target.crmCustomerId ?? next.crmCustomerId,
     crmCustomerName: target.crmCustomerName ?? next.crmCustomerName,
   };

@@ -15,6 +15,7 @@ import { normalizePartnerTier } from "./tier";
 import { persistBusinessRecord, normalizeBusinessRecordCategory } from "./business-record-core";
 import { recordSystemEvent } from "./activity-log";
 import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
+import { END_CUSTOMER_WHERE } from "./customer-filters";
 
 // ============ 认证 ============
 
@@ -626,6 +627,10 @@ export async function updatePartnerIntegrationsAction(partnerId: string, formDat
   const crmCustomerId = String(formData.get("crmCustomerId") ?? "").trim() || null;
   await db.partner.update({
     where: { id: partnerId },
+    data: { kmsRootPath, crmCustomerId },
+  });
+  await db.customer.updateMany({
+    where: { partnerId, partnerRelation: "SELF" },
     data: { kmsRootPath, crmCustomerId },
   });
   revalidatePath(`/partners/${partnerId}`);

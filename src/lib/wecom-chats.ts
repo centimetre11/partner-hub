@@ -44,7 +44,10 @@ export async function registerWecomChat(input: {
       lastSeenAt: new Date(),
       ...(chatType === "group" && snippet && !existing?.label ? { label: snippet } : {}),
     },
-    include: { partner: { select: { id: true, name: true } } },
+    include: {
+      partner: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true } },
+    },
   });
 }
 

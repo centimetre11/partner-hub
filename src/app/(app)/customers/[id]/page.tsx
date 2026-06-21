@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
+import { buildCrmCustomerViewUrl } from "@/lib/crm";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { CustomerWorkspaceShell, type CustomerTab } from "@/components/customer-workspace-shell";
@@ -190,6 +191,59 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     />
   );
 
+  // ============ 待办 ============
+  const todosContent = (
+    <>
+      <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4">
+        <input type="hidden" name="customerId" value={customer.id} />
+        <input name="title" required placeholder={c.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
+        <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" />
+        <select name="assigneeId" defaultValue={customer.ownerId ?? user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[140px]">
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
+        </select>
+        <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
+      </form>
+      <div className="divide-y divide-slate-50">
+        {customer.todos.map((t) => {
+          const isDone = t.status === "DONE";
+          return (
+            <div key={t.id} className="flex items-center gap-3 py-2.5">
+              <form action={toggleTodoAction.bind(null, t.id)}>
+                <button className={`w-4.5 h-4.5 rounded border flex items-center justify-center text-[10px] ${isDone ? "bg-slate-900 border-slate-900 text-white" : "border-slate-300 hover:border-slate-400"}`}>
+                  {isDone && "✓"}
+                </button>
+              </form>
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>{t.title}</div>
+                <div className="text-xs text-slate-400">
+                  {t.dueDate && fmtDate(t.dueDate, bcp47)}
+                  {t.assignee && ` · ${t.assignee.name}`}
+                </div>
+              </div>
+              <form action={deleteTodoAction.bind(null, t.id)}>
+                <button className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
+              </form>
+            </div>
+          );
+        })}
+        {customer.todos.length === 0 && <EmptyState text={c.noTodos} />}
+      </div>
+    </>
+  );
+
+  // ============ 客户概览（三连接 + 商务记录 + 待办） ============
+  const overviewPanel = (
+    <div className="space-y-5">
+      <BusinessRecordsSection owner={owner} records={customer.businessRecords} contacts={contactOptions} />
+      <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos))}>
+        {todosContent}
+      </Card>
+      {integrationsPanel}
+    </div>
+  );
+
   // ============ 商机推进 ============
   const opportunitiesPanel = (
     <div className="space-y-3">
@@ -279,10 +333,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         }))}
       />
       <div className="border-t border-slate-100 pt-5">
-        <BusinessRecordsSection owner={owner} records={customer.businessRecords} contacts={contactOptions} />
-      </div>
-
-      <div className="border-t border-slate-100 pt-5">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h3 className="text-sm font-semibold text-slate-800">{c.timeline.replace("{count}", String(customer.events.length))}</h3>
           <BusinessRecordDialogButton owner={owner} contacts={contactOptions} />
@@ -314,54 +364,29 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     </div>
   );
 
-  // ============ 待办 ============
-  const todosPanel = (
-    <div className="space-y-3">
-      <form action={createTodoAction} className="flex gap-2 mb-2">
-        <input type="hidden" name="customerId" value={customer.id} />
-        <input name="title" required placeholder={c.addTodoPlaceholder} className={input} />
-        <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" />
-        <select name="assigneeId" defaultValue={customer.ownerId ?? user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[140px]">
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-        <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm shrink-0 hover:bg-slate-700">{m.common.add}</button>
-      </form>
-      <div className="divide-y divide-slate-50">
-        {customer.todos.map((t) => {
-          const isDone = t.status === "DONE";
-          return (
-            <div key={t.id} className="flex items-center gap-3 py-2.5">
-              <form action={toggleTodoAction.bind(null, t.id)}>
-                <button className={`w-4.5 h-4.5 rounded border flex items-center justify-center text-[10px] ${isDone ? "bg-slate-900 border-slate-900 text-white" : "border-slate-300 hover:border-slate-400"}`}>
-                  {isDone && "✓"}
-                </button>
-              </form>
-              <div className="min-w-0 flex-1">
-                <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>{t.title}</div>
-                <div className="text-xs text-slate-400">
-                  {t.dueDate && fmtDate(t.dueDate, bcp47)}
-                  {t.assignee && ` · ${t.assignee.name}`}
-                </div>
-              </div>
-              <form action={deleteTodoAction.bind(null, t.id)}>
-                <button className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
-              </form>
-            </div>
-          );
-        })}
-        {customer.todos.length === 0 && <EmptyState text={c.noTodos} />}
-      </div>
-    </div>
-  );
-
   const tabs: CustomerTab[] = [
+    {
+      id: "overview",
+      label: c.tabOverview,
+      desc: c.tabOverviewDesc,
+      badge: openTodos ? String(openTodos) : null,
+      content: overviewPanel,
+    },
     { id: "profile", label: c.tabProfile, desc: c.tabProfileDesc, content: profilePanel },
-    { id: "integrations", label: c.tabIntegrations, desc: c.tabIntegrationsDesc, content: integrationsPanel },
-    { id: "opportunities", label: c.tabOpportunities, desc: c.tabOpportunitiesDesc, badge: customer.opportunities.length ? String(customer.opportunities.length) : null, content: opportunitiesPanel },
-    { id: "relationship", label: c.tabRelationship, desc: c.tabRelationshipDesc, badge: customer.contacts.length ? String(customer.contacts.length) : null, content: relationshipPanel },
-    { id: "todos", label: c.tabTodos, desc: c.tabTodosDesc, badge: openTodos ? String(openTodos) : null, content: todosPanel },
+    {
+      id: "opportunities",
+      label: c.tabOpportunities,
+      desc: c.tabOpportunitiesDesc,
+      badge: customer.opportunities.length ? String(customer.opportunities.length) : null,
+      content: opportunitiesPanel,
+    },
+    {
+      id: "relationship",
+      label: c.tabRelationship,
+      desc: c.tabRelationshipDesc,
+      badge: customer.contacts.length ? String(customer.contacts.length) : null,
+      content: relationshipPanel,
+    },
   ];
 
   return (
@@ -391,6 +416,19 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               )}
               {" · "}{c.createdAt} {fmtDate(customer.createdAt, bcp47)}
               {customer.createdBy && ` · ${customer.createdBy.name}`}
+              {customer.crmCustomerId && (
+                <>
+                  {" · "}
+                  <a
+                    href={buildCrmCustomerViewUrl(customer.crmCustomerId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sky-600 hover:underline"
+                  >
+                    {m.integrations.openInCrm} ↗
+                  </a>
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">

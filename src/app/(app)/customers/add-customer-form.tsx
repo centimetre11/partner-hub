@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createCustomerAction } from "@/lib/customer-actions";
+import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { useMessages } from "@/lib/i18n/context";
 
 type Option = { id: string; name: string };
@@ -24,12 +25,14 @@ export function AddCustomerForm({
   partners,
   users,
   defaultPartnerId,
+  defaultOpen = false,
 }: {
   partners: Option[];
   users: Option[];
   defaultPartnerId?: string;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const messages = useMessages();
   const c = messages.customers;
   const cancelLabel = messages.common.cancel;
@@ -37,12 +40,16 @@ export function AddCustomerForm({
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800"
-      >
-        {c.add}
-      </button>
+      <div className="flex gap-2">
+        <CustomerAiIntakeButton variant="primary" />
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+        >
+          {c.add}
+        </button>
+      </div>
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>

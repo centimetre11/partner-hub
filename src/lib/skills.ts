@@ -1022,6 +1022,8 @@ export function intakeEnrichmentSkillsForScope(scope: string): string[] {
   switch (scope) {
     case "new_partner":
     case "profile":
+    case "new_customer":
+    case "customer_profile":
       return [...INTAKE_ENRICHMENT_SKILLS];
     case "powermap":
       // Extract from user text/images only, no web research

@@ -41,6 +41,8 @@ import {
   defaultIntakeReply,
   extractFinalJsonUserMessage,
   fieldLabel,
+  fieldLabelForScope,
+  isCustomerScope,
   normalizeFieldUpdateLabels,
   type IntakeScope as AiLocaleScope,
 } from "./ai-locale";
@@ -56,7 +58,7 @@ import {
   type OpportunityProposal,
   type TodoProposal,
 } from "./proposals";
-import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
+import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 
 import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
@@ -81,8 +83,9 @@ import {
   loadIntakePartnerBinding,
   resolveIntakePartner,
 } from "./intake-partner-binding";
-import { enrichBusinessRecordCompanyTarget, resolveBusinessRecordCompanyTarget } from "./business-record-intake";
+import { enrichBusinessRecordCompanyTarget, resolveBusinessRecordCompanyTarget, lookupSingleCustomerByName } from "./business-record-intake";
 import { submitBusinessRecordToCrmOnly } from "./crm-business-record";
+import { ownerData, ownerWhere, type OwnerRef } from "./owner";
 import { isFastIntakeScope, sanitizeProposalForScope } from "./proposal-scope";
 
 export type IntakeScope = AiLocaleScope;
@@ -126,6 +129,9 @@ export type IntakeProposal = {
   partnerName?: string;
   /** Partner Hub 伙伴 ID（仅当系统中确有建档时才有） */
   hubPartnerId?: string;
+  /** 新「客户」实体 ID（Partner Hub 维护的终端客户，可独立于伙伴存在） */
+  customerId?: string;
+  customerName?: string;
   /** CRM 客户 ID（com_id），开放录入时可能仅有 CRM 无 Hub 伙伴 */
   crmCustomerId?: string;
   crmCustomerName?: string;
@@ -188,6 +194,52 @@ async function partnerContextForScope(scope: IntakeScope, partnerId: string, loc
   if (scope === "business_record" || scope === "training") return businessRecordContext(partnerId, locale);
   if (isFastIntakeScope(scope)) return intakeBoundPartnerLine(partnerId, locale);
   return partnerContext(partnerId, locale);
+}
+
+/** Existing customer record context for customer_profile /补全 scope. */
+async function customerContextForIntake(customerId: string, locale: Locale): Promise<string> {
+  const c = await db.customer.findUnique({
+    where: { id: customerId },
+    select: {
+      name: true,
+      status: true,
+      industry: true,
+      scale: true,
+      city: true,
+      country: true,
+      website: true,
+      contactName: true,
+      contactTitle: true,
+      contactPhone: true,
+      contactEmail: true,
+      notes: true,
+      contacts: { select: { name: true, title: true, department: true, role: true }, take: 30 },
+    },
+  });
+  if (!c) return "";
+  const lines: string[] = [];
+  const pushIf = (label: string, value: string | null | undefined) => {
+    if (value && value.trim()) lines.push(`${label}: ${value.trim()}`);
+  };
+  pushIf(locale === "zh" ? "名称" : "Name", c.name);
+  pushIf(locale === "zh" ? "状态" : "Status", c.status);
+  pushIf(locale === "zh" ? "行业" : "Industry", c.industry);
+  pushIf(locale === "zh" ? "规模" : "Scale", c.scale);
+  pushIf(locale === "zh" ? "城市" : "City", c.city);
+  pushIf(locale === "zh" ? "国家" : "Country", c.country);
+  pushIf(locale === "zh" ? "官网" : "Website", c.website);
+  pushIf(locale === "zh" ? "主联系人" : "Primary contact", [c.contactName, c.contactTitle].filter(Boolean).join(" / "));
+  pushIf(locale === "zh" ? "联系电话" : "Phone", c.contactPhone);
+  pushIf(locale === "zh" ? "联系邮箱" : "Email", c.contactEmail);
+  pushIf(locale === "zh" ? "备注" : "Notes", c.notes);
+  if (c.contacts.length) {
+    const people = c.contacts
+      .map((p) => [p.name, p.title, p.department].filter(Boolean).join(" / "))
+      .join("; ");
+    lines.push((locale === "zh" ? "现有联系人: " : "Existing contacts: ") + people);
+  }
+  const header = locale === "zh" ? `[客户档案：${c.name}]` : `[Customer profile: ${c.name}]`;
+  return `${header}\n${lines.join("\n")}`;
 }
 
 /** Call LLM for JSON extraction; streams reply_delta when emit is set */
@@ -425,9 +477,11 @@ async function parseIntakeTurnFromContent(
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: IntakeScope): IntakeTurn {
   const p: Partial<IntakeProposal> =
     scope === "business_record" ? backfillBusinessRecordsFromSummary(raw.proposal ?? {}) : (raw.proposal ?? {});
+  const customerScope = isCustomerScope(scope);
+  const allowedFields = customerScope ? CUSTOMER_FIELD_LABELS : PARTNER_FIELD_LABELS;
   const coerceField = (f: FieldUpdate): FieldUpdate => ({
     ...f,
-    label: fieldLabel(locale, f.field) || f.label,
+    label: fieldLabelForScope(locale, scope, f.field) || f.label,
     oldValue: f.oldValue == null ? null : asTrimmedString(f.oldValue),
     newValue: asTrimmedString(f.newValue),
   });
@@ -439,14 +493,18 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
     proposal: {
       partnerName: p.partnerName == null ? undefined : asTrimmedString(p.partnerName),
       hubPartnerId: p.hubPartnerId == null ? undefined : asTrimmedString(p.hubPartnerId),
+      customerId: p.customerId == null ? undefined : asTrimmedString(p.customerId),
+      customerName: p.customerName == null ? undefined : asTrimmedString(p.customerName),
       crmCustomerId: p.crmCustomerId == null ? undefined : asTrimmedString(p.crmCustomerId),
       crmCustomerName: p.crmCustomerName == null ? undefined : asTrimmedString(p.crmCustomerName),
       saveMode: p.saveMode === "crm_only" ? "crm_only" : p.saveMode === "both" ? "both" : undefined,
       summary: asTrimmedString(p.summary),
-      fields: normalizeFieldUpdateLabels(
-        (p.fields ?? []).filter((f) => f.field in PARTNER_FIELD_LABELS && f.field !== "industry").map(coerceField),
-        locale,
-      ),
+      fields: customerScope
+        ? (p.fields ?? []).filter((f) => f.field in allowedFields).map(coerceField)
+        : normalizeFieldUpdateLabels(
+            (p.fields ?? []).filter((f) => f.field in allowedFields && f.field !== "industry").map(coerceField),
+            locale,
+          ),
       contacts: p.contacts ?? [],
       opportunities: p.opportunities ?? [],
       todos: p.todos ?? [],
@@ -571,6 +629,8 @@ async function runIntakeToolCall(tc: ToolCall, userId?: string): Promise<string>
 export async function runIntakeTurn(opts: {
   scope: IntakeScope;
   partnerId?: string;
+  /** 客户实体 ID（客户建档/补全时使用） */
+  customerId?: string;
   messages: IntakeMessage[];
   today: string;
   userId?: string;
@@ -620,6 +680,7 @@ export async function runIntakeTurn(opts: {
 async function runIntakeTurnCore(opts: {
   scope: IntakeScope;
   partnerId?: string;
+  customerId?: string;
   messages: IntakeMessage[];
   today: string;
   userId?: string;
@@ -627,9 +688,10 @@ async function runIntakeTurnCore(opts: {
   locale: Locale;
 }): Promise<IntakeTurn> {
   const locale = opts.locale;
+  const customerScope = isCustomerScope(opts.scope);
   const fast = isFastIntakeScope(opts.scope);
   let taxonomyHint = "";
-  if (!fast) {
+  if (!fast && !customerScope) {
     const [categoryList, industryList, archetypeList, valuePatternList] = await Promise.all([
       taxonomyListForAi("CATEGORY"),
       taxonomyListForAi("INDUSTRY"),
@@ -639,8 +701,10 @@ async function runIntakeTurnCore(opts: {
     taxonomyHint = `Taxonomy values (from library; industries is JSON array, multi-select OK): category=${categoryList}; industries=${industryList}; partnerArchetype=${archetypeList}; valuePattern=${valuePatternList}`;
   }
   let partnerCtx = "";
-  const binding = await loadIntakePartnerBinding(opts.partnerId);
-  if (opts.partnerId) {
+  const binding = await loadIntakePartnerBinding(customerScope ? undefined : opts.partnerId);
+  if (customerScope) {
+    if (opts.customerId) partnerCtx = await customerContextForIntake(opts.customerId, locale);
+  } else if (opts.partnerId) {
     partnerCtx = await partnerContextForScope(opts.scope, opts.partnerId, locale);
   }
 
@@ -649,7 +713,7 @@ async function runIntakeTurnCore(opts: {
   const kmsConfigured = useResearch ? await isKmsConfiguredForUser(opts.userId) : false;
   const knowhowConfigured = useResearch ? await isKnowhowConfigured() : false;
 
-  const bindingBlock = buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
+  const bindingBlock = customerScope ? "" : buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
   const system = fast
     ? buildFastIntakeSystemPrompt({
         locale,
@@ -917,20 +981,235 @@ function parseOptionalDate(raw: unknown): Date | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
+const CUSTOMER_STATUSES = ["ACTIVE", "PROSPECT", "INACTIVE"];
+
+function normalizeCustomerStatus(raw: unknown): string | undefined {
+  const v = asTrimmedString(raw).toUpperCase();
+  return CUSTOMER_STATUSES.includes(v) ? v : undefined;
+}
+
+/** Apply a customer intake proposal: write to the Customer entity + power-map contacts. */
+async function applyCustomerIntake(opts: {
+  scope: IntakeScope;
+  customerId?: string;
+  partnerId?: string;
+  proposal: IntakeProposal;
+  userId: string;
+  locale: Locale;
+  sourceText?: string;
+}): Promise<{ applied: string[]; partnerId: string; customerId: string }> {
+  const { proposal, userId, locale } = opts;
+  const applied: string[] = [];
+
+  // Map proposal.fields → Customer columns (customer field codes only)
+  const data: Record<string, unknown> = {};
+  for (const f of proposal.fields) {
+    const field = f.field;
+    if (!(field in CUSTOMER_FIELD_LABELS) || field === "name") continue;
+    const value = asTrimmedString(f.newValue);
+    if (!value) continue;
+    if (field === "status") {
+      const status = normalizeCustomerStatus(value);
+      if (status) data.status = status;
+    } else {
+      data[field] = value;
+    }
+    applied.push(applyFieldMessage(locale, f.label || fieldLabelForScope(locale, opts.scope, field), value));
+  }
+
+  const proposedName = asTrimmedString(
+    proposal.partnerName || proposal.customerName || proposal.fields.find((f) => f.field === "name")?.newValue || ""
+  );
+
+  let customerId = opts.customerId ?? "";
+  if (customerId) {
+    if (proposedName) data.name = proposedName;
+    await db.customer.update({ where: { id: customerId }, data });
+    applied.push(locale === "zh" ? "已更新客户档案" : "Updated customer profile");
+  } else {
+    if (!proposedName) throw new Error(locale === "zh" ? "请提供客户名称" : "Customer name is required");
+    const created = await db.customer.create({
+      data: {
+        name: proposedName,
+        status: (data.status as string) ?? "PROSPECT",
+        partnerId: opts.partnerId ?? null,
+        createdById: userId,
+        industry: (data.industry as string) ?? null,
+        scale: (data.scale as string) ?? null,
+        city: (data.city as string) ?? null,
+        country: (data.country as string) ?? null,
+        website: (data.website as string) ?? null,
+        contactName: (data.contactName as string) ?? null,
+        contactTitle: (data.contactTitle as string) ?? null,
+        contactPhone: (data.contactPhone as string) ?? null,
+        contactEmail: (data.contactEmail as string) ?? null,
+        notes: (data.notes as string) ?? null,
+      },
+    });
+    customerId = created.id;
+    applied.push(locale === "zh" ? `已创建客户：${created.name}` : `Created customer: ${created.name}`);
+  }
+
+  // Power-map contacts (attach to the customer)
+  for (const c of proposal.contacts) {
+    const name = asTrimmedString(c.name);
+    if (!name) continue;
+    const payload = {
+      name,
+      role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
+      title: c.title,
+      department: c.department,
+      attitude: typeof c.attitude === "number" && c.attitude >= -1 && c.attitude <= 3 ? c.attitude : undefined,
+      contactInfo: c.contactInfo,
+      approach: c.approach,
+      notes: c.notes,
+    };
+    const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null));
+    const existing = await db.contact.findFirst({ where: { customerId, name } });
+    if (existing) {
+      await db.contact.update({ where: { id: existing.id }, data: clean });
+      applied.push(applyContactUpdated(locale, name));
+    } else {
+      await db.contact.create({ data: { customerId, ...clean, name } });
+      applied.push(applyContactAdded(locale, name));
+    }
+  }
+
+  // Todos (optional, e.g. follow-ups captured during onboarding)
+  for (const t of proposal.todos) {
+    const title = asTrimmedString(t.title);
+    if (!title) continue;
+    await db.todoItem.create({
+      data: {
+        title,
+        detail: t.detail,
+        customerId,
+        assigneeId: userId,
+        dueDate: parseOptionalDate(t.dueDate),
+        priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
+        source: "AI",
+      },
+    });
+    applied.push(applyTodoAdded(locale, title));
+  }
+
+  await db.timelineEvent.create({
+    data: {
+      customerId,
+      type: opts.customerId ? "AI_SUMMARY" : "SYSTEM",
+      title: opts.customerId
+        ? locale === "zh"
+          ? "AI 客户档案补全"
+          : "AI customer profile update"
+        : locale === "zh"
+          ? "AI 客户建档"
+          : "AI customer onboarding",
+      content: proposal.summary || applied.join(locale === "zh" ? "；" : "; "),
+      createdById: userId,
+      meta: JSON.stringify({ via: "ai-intake", scope: opts.scope, applied, sourceText: opts.sourceText?.slice(0, 8000) }),
+    },
+  });
+
+  void recordSystemEvent({
+    category: "CUSTOMER",
+    action: opts.customerId ? "customer.ai_update" : "customer.ai_create",
+    actorId: userId,
+    targetType: "Customer",
+    targetId: customerId,
+    summary: opts.customerId
+      ? locale === "zh"
+        ? "AI 补全客户档案"
+        : "AI customer profile update"
+      : locale === "zh"
+        ? "AI 建档新客户"
+        : "AI customer onboarding",
+    detail: applied.join(locale === "zh" ? "；" : "; "),
+    meta: { scope: opts.scope, applied },
+  });
+
+  return { applied, partnerId: opts.partnerId ?? "", customerId };
+}
+
+/**
+ * 商机/带单等必须挂在「客户」名下。伙伴自营时，复用（或按需创建）该伙伴的 SELF 客户档案。
+ */
+async function findOrCreateSelfCustomerId(partnerId: string, userId: string): Promise<string> {
+  const existing = await db.customer.findFirst({
+    where: { partnerId, partnerRelation: "SELF" },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const partner = await db.partner.findUnique({
+    where: { id: partnerId },
+    select: { name: true, city: true, country: true, website: true, crmCustomerId: true, kmsRootPath: true },
+  });
+  if (!partner) throw new Error("伙伴不存在，无法生成自营客户档案");
+  const created = await db.customer.create({
+    data: {
+      name: partner.name,
+      status: "ACTIVE",
+      partnerId,
+      partnerRelation: "SELF",
+      city: partner.city,
+      country: partner.country,
+      website: partner.website,
+      crmCustomerId: partner.crmCustomerId,
+      kmsRootPath: partner.kmsRootPath,
+      createdById: userId,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/** 解析商机的客户归属：绑定客户 → 伙伴自营SELF客户 → 按公司名匹配客户。 */
+async function resolveOpportunityCustomerId(opts: {
+  boundCustomerId?: string;
+  partnerId?: string;
+  partnerName?: string;
+  userId: string;
+}): Promise<string | null> {
+  if (opts.boundCustomerId) return opts.boundCustomerId;
+  if (opts.partnerId) return findOrCreateSelfCustomerId(opts.partnerId, opts.userId);
+  const name = opts.partnerName?.trim();
+  if (name) {
+    const match = await lookupSingleCustomerByName(name);
+    if (match) return match.id;
+  }
+  return null;
+}
+
 export async function applyIntake(opts: {
   scope: IntakeScope;
   partnerId?: string;
+  /** 已绑定的「客户」实体（企微群绑定客户 / 客户详情页录入时） */
+  customerId?: string;
   proposal: IntakeProposal;
   userId: string;
   sourceText?: string;
   /** active: onboard from Active Partners page as ACTIVE; default is PROSPECT */
   intent?: "prospect" | "active";
   locale: Locale;
-}): Promise<{ applied: string[]; partnerId: string }> {
+}): Promise<{ applied: string[]; partnerId: string; customerId?: string }> {
   const { scope, userId, locale } = opts;
   const proposal = sanitizeProposalForScope(scope, opts.proposal);
+
+  if (isCustomerScope(scope)) {
+    return applyCustomerIntake({
+      scope,
+      customerId: opts.customerId,
+      partnerId: opts.partnerId,
+      proposal,
+      userId,
+      locale,
+      sourceText: opts.sourceText,
+    });
+  }
+
   const applied: string[] = [];
   let partnerId = opts.partnerId ?? "";
+  /** 商务记录归属对象：伙伴或客户实体（CRM-only 模式下为 null） */
+  let businessRecordOwner: OwnerRef | null = null;
 
   // ---- New partner ----
   if (scope === "new_partner") {
@@ -974,29 +1253,46 @@ export async function applyIntake(opts: {
       },
     });
     if (asActive) await createStarterTodos(partnerId, created.name, userId);
-  } else if (scope === "todo" || intakeScopeRequiresPartner(scope)) {
-    if (scope === "business_record" && proposal.saveMode === "crm_only" && proposal.crmCustomerId) {
+  } else if (scope === "business_record") {
+    if (proposal.saveMode === "crm_only" && proposal.crmCustomerId) {
       partnerId = "";
     } else {
-      const resolved = await resolveIntakePartner({
-        scope,
-        boundPartnerId: opts.partnerId,
+      const target = await resolveBusinessRecordCompanyTarget({
         proposal,
-        locale,
+        boundPartnerId: opts.partnerId,
+        boundCustomerId: opts.customerId,
+        saveMode: proposal.saveMode,
       });
-      if (!resolved.ok) throw new Error(resolved.error);
-      partnerId = resolved.partnerId;
+      const resolvedPartnerId = opts.partnerId || target.hubPartnerId;
+      const resolvedCustomerId = opts.customerId || target.customerId || proposal.customerId;
+      if (resolvedPartnerId) {
+        partnerId = resolvedPartnerId;
+        businessRecordOwner = { kind: "partner", id: resolvedPartnerId };
+      } else if (resolvedCustomerId) {
+        partnerId = "";
+        businessRecordOwner = { kind: "customer", id: resolvedCustomerId };
+      }
     }
+  } else if (scope === "todo" || intakeScopeRequiresPartner(scope)) {
+    const resolved = await resolveIntakePartner({
+      scope,
+      boundPartnerId: opts.partnerId,
+      proposal,
+      locale,
+    });
+    if (!resolved.ok) throw new Error(resolved.error);
+    partnerId = resolved.partnerId;
   }
 
   if (intakeScopeRequiresPartner(scope) && !partnerId) {
     const crmOnlyOk =
       scope === "business_record" && proposal.saveMode === "crm_only" && !!proposal.crmCustomerId;
-    if (!crmOnlyOk) {
+    const customerOwnerOk = scope === "business_record" && businessRecordOwner?.kind === "customer";
+    if (!crmOnlyOk && !customerOwnerOk) {
       throw new Error(
         locale === "zh"
-          ? "无法确定所属伙伴，请说明公司名称或在伙伴详情页 / 已绑定企微群中录入"
-          : "Could not determine partner — name the company or use a partner page / bound WeCom group"
+          ? "无法确定所属伙伴/客户，请说明公司名称或在伙伴/客户详情页 · 已绑定企微群中录入"
+          : "Could not determine the partner/customer — name the company or use a partner/customer page / bound WeCom group"
       );
     }
   }
@@ -1070,27 +1366,44 @@ export async function applyIntake(opts: {
     }
   }
 
-  // ---- Opportunities ----
-  if (partnerId) for (const o of proposal.opportunities) {
-    const payload = {
-      name: o.name,
-      client: o.client,
-      amount: o.amount,
-      stage: o.stage ?? "Needs Discovery",
-      nextStep: o.nextStep,
-      status: o.status ?? "ACTIVE",
-      notes: o.notes,
-    };
-    const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null));
-    const existing =
-      (o.action === "update" && o.id && (await db.opportunity.findFirst({ where: { id: o.id, partnerId } }))) ||
-      (await db.opportunity.findFirst({ where: { partnerId, name: o.name } }));
-    if (existing) {
-      await db.opportunity.update({ where: { id: existing.id }, data: clean });
-      applied.push(applyOpportunityUpdated(locale, o.name));
-    } else {
-      await db.opportunity.create({ data: { partnerId, ...clean, name: o.name } });
-      applied.push(applyOpportunityAdded(locale, o.name));
+  // ---- Opportunities (商机以客户为主体；伙伴自营时挂其 SELF 客户) ----
+  if (proposal.opportunities.length) {
+    const oppCustomerId = await resolveOpportunityCustomerId({
+      boundCustomerId: opts.customerId,
+      partnerId,
+      partnerName: proposal.partnerName,
+      userId,
+    });
+    if (!oppCustomerId) {
+      throw new Error(
+        locale === "zh"
+          ? "商机需归属客户：未能确定客户，请说明客户公司名或在客户详情页 · 已绑定企微群中录入"
+          : "Opportunities must belong to a customer — name the customer company or use a customer page / bound WeCom group"
+      );
+    }
+    const oppOwner: OwnerRef = { kind: "customer", id: oppCustomerId };
+    const oppWhere = ownerWhere(oppOwner);
+    for (const o of proposal.opportunities) {
+      const payload = {
+        name: o.name,
+        client: o.client,
+        amount: o.amount,
+        stage: o.stage ?? "Needs Discovery",
+        nextStep: o.nextStep,
+        status: o.status ?? "ACTIVE",
+        notes: o.notes,
+      };
+      const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null));
+      const existing =
+        (o.action === "update" && o.id && (await db.opportunity.findFirst({ where: { id: o.id, ...oppWhere } }))) ||
+        (await db.opportunity.findFirst({ where: { ...oppWhere, name: o.name } }));
+      if (existing) {
+        await db.opportunity.update({ where: { id: existing.id }, data: clean });
+        applied.push(applyOpportunityUpdated(locale, o.name));
+      } else {
+        await db.opportunity.create({ data: { ...ownerData(oppOwner), ...clean, name: o.name } });
+        applied.push(applyOpportunityAdded(locale, o.name));
+      }
     }
   }
 
@@ -1131,15 +1444,6 @@ export async function applyIntake(opts: {
   }
 
   // ---- Business records ----
-  const brTarget =
-    scope === "business_record"
-      ? await resolveBusinessRecordCompanyTarget({
-          proposal,
-          boundPartnerId: opts.partnerId,
-          saveMode: proposal.saveMode,
-        })
-      : null;
-
   for (const r of proposal.businessRecords) {
     const title = asTrimmedString(r.title);
     if (!title) continue;
@@ -1169,24 +1473,25 @@ export async function applyIntake(opts: {
       continue;
     }
 
-    const recordPartnerId = partnerId || brTarget?.hubPartnerId;
-    if (!recordPartnerId) {
+    const recordOwner: OwnerRef | null =
+      businessRecordOwner ?? (partnerId ? { kind: "partner", id: partnerId } : null);
+    if (!recordOwner) {
       throw new Error(
         locale === "zh"
-          ? "未找到 Partner Hub 伙伴；若仅在 CRM 有该客户，请回复「仅CRM」"
-          : 'Partner not found in Partner Hub — reply「仅CRM」if the customer exists in CRM only'
+          ? "未找到 Partner Hub 伙伴/客户；若仅在 CRM 有该客户，请回复「仅CRM」"
+          : 'Partner/customer not found in Partner Hub — reply「仅CRM」if it exists in CRM only'
       );
     }
 
     let contactId: string | null = null;
     if (r.contactName) {
       const contact = await db.contact.findFirst({
-        where: { partnerId: recordPartnerId, name: { contains: r.contactName } },
+        where: { ...ownerWhere(recordOwner), name: { contains: r.contactName } },
       });
       contactId = contact?.id ?? null;
     }
     await persistBusinessRecord({
-      owner: { kind: "partner", id: recordPartnerId },
+      owner: recordOwner,
       userId,
       category: r.category ?? "OTHER",
       title,
@@ -1220,7 +1525,7 @@ export async function applyIntake(opts: {
   if (scope !== "new_partner" && scope !== "business_record" && scope !== "todo" && partnerId) {
     const intakeTitle =
       locale === "zh"
-        ? `AI 录入：${{ new_partner: "新伙伴", powermap: "权力地图", opportunity: "商机", profile: "档案补全", training: "培训", solution: "联合方案", business_record: "商务记录", todo: "待办" }[scope]}`
+        ? `AI 录入：${{ new_partner: "新伙伴", powermap: "权力地图", opportunity: "商机", profile: "档案补全", training: "培训", solution: "联合方案", business_record: "商务记录", todo: "待办", new_customer: "新客户", customer_profile: "客户档案补全" }[scope]}`
         : `AI intake: ${scope.replace(/_/g, " ")}`;
     await db.timelineEvent.create({
       data: {

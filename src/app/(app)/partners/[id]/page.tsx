@@ -33,11 +33,13 @@ import { PartnerIntegrationsPanel } from "@/components/partner-integrations-pane
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { TodoItemRow } from "@/components/todo-item-row";
 import { getWecomChatForPartner } from "@/lib/wecom-chats";
+import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
 import { SENTIMENT_MONITOR_ENABLED } from "@/lib/feature-flags";
 import { AiAddButton } from "@/components/ai-add-button";
 import { TodoEditButton } from "@/components/todo-edit-button";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
+import { buildCrmCustomerViewUrl } from "@/lib/crm";
 import type { Messages } from "@/lib/i18n/messages/en";
 
 export default async function PartnerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -89,7 +91,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
   if (!p) notFound();
   const users = await db.user.findMany();
   const unboundCustomers = await db.customer.findMany({
-    where: { partnerId: null },
+    where: { partnerId: null, ...END_CUSTOMER_WHERE },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
@@ -195,6 +197,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               {" · "}{m.partners.salesOwner}: {p.salesUser?.name ?? p.owner?.name ?? m.common.unassigned}
               {" · "}{m.partners.presalesOwner}: {p.presalesUser?.name ?? m.common.unassigned}
               {" · "}{m.partnerDetail.profileCompletenessPct.replace("{score}", String(completeness.score))}
+              {p.crmCustomerId && (
+                <>
+                  {" · "}
+                  <a
+                    href={buildCrmCustomerViewUrl(p.crmCustomerId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sky-600 hover:underline"
+                  >
+                    {m.integrations.openInCrm} ↗
+                  </a>
+                </>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">

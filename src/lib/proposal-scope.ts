@@ -70,6 +70,23 @@ export function sanitizeProposalForScope(scope: IntakeScope, raw: IntakeProposal
         summary,
         fields: raw.fields ?? [],
       };
+    case "customer_profile":
+      return {
+        ...EMPTY_PROPOSAL_ARRAYS,
+        partnerName: raw.partnerName,
+        summary,
+        fields: raw.fields ?? [],
+        contacts: raw.contacts ?? [],
+      };
+    case "new_customer":
+      return {
+        ...EMPTY_PROPOSAL_ARRAYS,
+        partnerName: raw.partnerName,
+        summary,
+        fields: raw.fields ?? [],
+        contacts: raw.contacts ?? [],
+        todos: raw.todos ?? [],
+      };
     case "new_partner":
     default:
       return {
@@ -184,6 +201,30 @@ export function scopeDraftSections(scope?: IntakeScope): ScopeDraftSections {
         solutions: false,
         businessRecords: false,
       };
+    case "customer_profile":
+      return {
+        partnerName: false,
+        fields: true,
+        websiteHint: true,
+        contacts: true,
+        opportunities: false,
+        todos: false,
+        trainings: false,
+        solutions: false,
+        businessRecords: false,
+      };
+    case "new_customer":
+      return {
+        partnerName: true,
+        fields: true,
+        websiteHint: true,
+        contacts: true,
+        opportunities: false,
+        todos: true,
+        trainings: false,
+        solutions: false,
+        businessRecords: false,
+      };
     case "new_partner":
     default:
       return {
@@ -218,6 +259,10 @@ export function scopeSummaryTitle(scope: IntakeScope | undefined, partnerName?: 
       return partnerName ? `档案补全 · ${partnerName}` : "档案补全";
     case "new_partner":
       return partnerName ? `新伙伴：${partnerName}` : "新伙伴建档";
+    case "new_customer":
+      return partnerName ? `新客户：${partnerName}` : "新客户建档";
+    case "customer_profile":
+      return partnerName ? `客户档案补全 · ${partnerName}` : "客户档案补全";
     default:
       return partnerName ? `New partner: ${partnerName}` : undefined;
   }
@@ -225,7 +270,7 @@ export function scopeSummaryTitle(scope: IntakeScope | undefined, partnerName?: 
 
 /** Single-purpose scopes replace the draft each turn instead of merging with prior fields. */
 export function intakeProposalReplacesDraft(scope: IntakeScope): boolean {
-  return scope !== "new_partner" && scope !== "profile";
+  return scope !== "new_partner" && scope !== "profile" && scope !== "new_customer" && scope !== "customer_profile";
 }
 
 /** Lightweight AI Add scopes: one-shot field extraction, no web/KMS research. */

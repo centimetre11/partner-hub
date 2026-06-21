@@ -11,6 +11,8 @@ const SCOPE_LABELS: Record<IntakeScope, string> = {
   solution: "联合方案",
   business_record: "商务记录",
   todo: "待办",
+  new_customer: "新客户",
+  customer_profile: "客户档案补全",
 };
 
 function bullet(lines: string[]) {
@@ -29,12 +31,19 @@ function formatBusinessRecordChecklist(
 ) {
   const r = proposal.businessRecords[0];
 
+  const crmOnly = proposal.saveMode === "crm_only";
   const hubName = proposal.hubPartnerId ? proposal.partnerName?.trim() : undefined;
   const companyName =
     proposal.partnerName?.trim() ||
+    proposal.customerName?.trim() ||
     proposal.crmCustomerName?.trim() ||
     undefined;
-  const hasHub = !!proposal.hubPartnerId && proposal.saveMode !== "crm_only";
+  const hasPartner = !!proposal.hubPartnerId && !crmOnly;
+  const hasCustomer = !!proposal.customerId && !crmOnly;
+  // Hub 侧归属：伙伴或客户档案
+  const hasHub = hasPartner || hasCustomer;
+  const hubLabel = hasCustomer && !hasPartner ? "客户档案" : "Partner Hub 伙伴";
+  const hubName2 = hasCustomer && !hasPartner ? proposal.customerName?.trim() : hubName;
   const hasCrm = !!proposal.crmCustomerId;
   const crmLabel = proposal.crmCustomerName ?? proposal.crmCustomerId ?? companyName ?? "";
   const hasNature = r ? !!normalizeCrmTraceNature(r.traceNature) : false;
@@ -42,7 +51,7 @@ function formatBusinessRecordChecklist(
   const hasDetail = !!r?.title?.trim();
 
   const lines = [
-    checklistLine(hasHub, "Partner Hub 伙伴", hasHub ? hubName : "未建档"),
+    checklistLine(hasHub, hubLabel, hasHub ? hubName2 : "未建档"),
     checklistLine(hasCrm, "帆软 CRM 客户", hasCrm ? crmLabel : "未匹配"),
     checklistLine(hasNature, "现场/非现场", r?.traceNature),
     checklistLine(hasAction, "CRM 商务行为", r?.traceAction),

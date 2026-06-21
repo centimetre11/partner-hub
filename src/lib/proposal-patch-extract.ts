@@ -1,9 +1,9 @@
 import { chatCompletion, safeParseJsonLoose } from "./ai";
-import { PARTNER_FIELD_LABELS } from "./constants";
+import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS } from "./constants";
 import type { IntakeScope } from "./ai-intake";
 import type { ProposalPatchOp } from "./ai-trace";
 import { contactKey, fieldKey } from "./proposal-merge";
-import { buildPatchExtractPrompt, fieldLabel, partnerFieldLabels } from "./ai-locale";
+import { buildPatchExtractPrompt, customerFieldLabels, fieldLabelForScope, isCustomerScope, partnerFieldLabels } from "./ai-locale";
 import type { Locale } from "./i18n/locale";
 
 const PATCH_TOOLS = new Set([
@@ -28,9 +28,11 @@ function isMeaningless(text: string | undefined): boolean {
   return NO_RESULT_RE.test(t);
 }
 
-function heuristicPatch(toolName: string, result: string, locale: Locale): ProposalPatchOp[] {
+function heuristicPatch(toolName: string, result: string, locale: Locale, scope: IntakeScope): ProposalPatchOp[] {
   const ops: ProposalPatchOp[] = [];
-  const labels = partnerFieldLabels(locale);
+  const customer = isCustomerScope(scope);
+  const labels = customer ? customerFieldLabels(locale) : partnerFieldLabels(locale);
+  const allowedFields = customer ? CUSTOMER_FIELD_LABELS : PARTNER_FIELD_LABELS;
   // If entire return is a "not found" style message, skip — no patches
   if (isMeaningless(result) && result.trim().length < 120) return ops;
 
@@ -57,12 +59,12 @@ function heuristicPatch(toolName: string, result: string, locale: Locale): Propo
     const label = m[1].trim();
     const value = m[2].trim();
     const field = Object.entries(labels).find(([code, l]) => l === label || label.includes(l) || code === label)?.[0];
-    if (field && field in PARTNER_FIELD_LABELS && value.length < 500) {
+    if (field && field in allowedFields && value.length < 500) {
       ops.push({
         op: "upsert_field",
         key: fieldKey(field),
         field,
-        label: fieldLabel(locale, field),
+        label: fieldLabelForScope(locale, scope, field),
         newValue: value,
         source: toolName,
         reason: `extracted from ${toolName}`,
@@ -115,7 +117,7 @@ export async function extractPatchFromTool(
     if (parsed && Array.isArray(parsed.ops) && parsed.ops.length) {
       return parsed.ops.map((op) => {
         if (op.op === "upsert_field" && op.field) {
-          return { ...op, label: fieldLabel(locale, op.field) || op.label };
+          return { ...op, label: fieldLabelForScope(locale, scope, op.field) || op.label };
         }
         return op;
       });
@@ -123,5 +125,5 @@ export async function extractPatchFromTool(
   } catch {
     /* fallback */
   }
-  return heuristicPatch(name, result, locale);
+  return heuristicPatch(name, result, locale, scope);
 }

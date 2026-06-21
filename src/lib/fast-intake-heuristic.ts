@@ -529,10 +529,13 @@ export async function finalizeBusinessRecordTurn(
       ...turn.proposal,
       businessRecords: records,
       hubPartnerId: target.hubPartnerId ?? turn.proposal.hubPartnerId,
+      customerId: target.customerId ?? turn.proposal.customerId,
+      customerName: target.customerName ?? turn.proposal.customerName,
       crmCustomerId: target.crmCustomerId ?? turn.proposal.crmCustomerId,
       crmCustomerName: target.crmCustomerName ?? turn.proposal.crmCustomerName,
       partnerName:
         target.hubPartnerName ??
+        target.customerName ??
         turn.proposal.partnerName ??
         target.crmCustomerName ??
         target.companyLabel,

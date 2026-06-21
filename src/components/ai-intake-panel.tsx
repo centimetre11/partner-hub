@@ -28,15 +28,17 @@ type Msg = { role: "user" | "assistant"; content: string; trace?: AiTraceStep[];
 export function AiIntakePanel({
   scope,
   partnerId,
+  customerId,
   intent,
   onClose,
   onDone,
 }: {
   scope: IntakeScope;
   partnerId?: string;
+  customerId?: string;
   intent?: "prospect" | "active";
   onClose: () => void;
-  onDone?: (partnerId: string) => void;
+  onDone?: (id: string) => void;
 }) {
   const router = useRouter();
   const { intakePanel: ip, assistant: am } = useMessages();
@@ -151,13 +153,14 @@ export function AiIntakePanel({
       const result = await applyIntakeProposalClient({
         scope,
         partnerId,
+        customerId,
         proposal: nextProposal,
         sourceText,
         intent,
       });
       const detail = result.applied.length ? result.applied.join("；") : ip.autoSaved;
       setMessages((m) => [...m, { role: "assistant", content: `${turn.reply}\n\n✅ ${detail}` }]);
-      handleApplied(result.partnerId || partnerId!);
+      handleApplied(result.customerId || result.partnerId || partnerId!);
       return true;
     } catch (e) {
       setAutoApplyFailed(true);
@@ -208,7 +211,7 @@ export function AiIntakePanel({
           "Content-Type": "application/json",
           ...(useStream ? { Accept: "text/event-stream" } : {}),
         },
-        body: JSON.stringify({ scope, partnerId, messages: next, stream: useStream }),
+        body: JSON.stringify({ scope, partnerId, customerId, messages: next, stream: useStream }),
         signal: ac.signal,
       });
 
@@ -312,6 +315,7 @@ export function AiIntakePanel({
           ready={ready}
           scope={scope}
           partnerId={partnerId}
+          customerId={customerId}
           intent={intent}
           sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
           onApplied={handleApplied}

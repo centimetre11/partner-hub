@@ -50,6 +50,7 @@ export function AiWorkflowPanel({
   ready,
   scope,
   partnerId,
+  customerId,
   sourceText,
   intent,
   onApplied,
@@ -85,9 +86,10 @@ export function AiWorkflowPanel({
   ready?: boolean;
   scope?: IntakeScope;
   partnerId?: string;
+  customerId?: string;
   sourceText?: string;
   intent?: "prospect" | "active";
-  onApplied?: (partnerId: string) => void;
+  onApplied?: (id: string) => void;
   input: string;
   onInputChange: (v: string) => void;
   onSend: () => void;
@@ -112,6 +114,7 @@ export function AiWorkflowPanel({
       body: JSON.stringify({
         scope: scope ?? "new_partner",
         partnerId,
+        customerId,
         proposal: normalizedToIntake(filtered),
         sourceText,
         intent,
@@ -119,7 +122,7 @@ export function AiWorkflowPanel({
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Failed to save");
-    onApplied?.(data.partnerId);
+    onApplied?.(data.customerId || data.partnerId);
   }
 
   return (

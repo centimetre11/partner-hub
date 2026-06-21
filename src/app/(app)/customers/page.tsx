@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddCustomerForm } from "./add-customer-form";
-import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
+import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -15,7 +15,7 @@ function statusTone(status: string): "green" | "blue" | "zinc" {
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; partner?: string; unbound?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; partner?: string; unbound?: string; add?: string }>;
 }) {
   await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
@@ -24,6 +24,7 @@ export default async function CustomersPage({
 
   const customers = await db.customer.findMany({
     where: {
+      ...END_CUSTOMER_WHERE,
       ...(sp.q ? { name: { contains: sp.q } } : {}),
       ...(sp.status ? { status: sp.status } : {}),
       ...(sp.unbound === "1" ? { partnerId: null } : sp.partner ? { partnerId: sp.partner } : {}),
@@ -46,10 +47,12 @@ export default async function CustomersPage({
         title={c.title}
         desc={c.desc.replace("{count}", String(customers.length))}
         actions={
-          <div className="flex items-center gap-2">
-            <CustomerAiIntakeButton />
-            <AddCustomerForm partners={partners} users={users} />
-          </div>
+          <AddCustomerForm
+            partners={partners}
+            users={users}
+            defaultPartnerId={sp.partner}
+            defaultOpen={sp.add === "1"}
+          />
         }
       />
       <div className="px-8">

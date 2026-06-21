@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useMessages } from "@/lib/i18n/context";
 import { suggestCrmCustomersForPartnerAction, type CrmCustomerSuggestion } from "@/lib/crm-actions";
+import { buildCrmCustomerViewUrl } from "@/lib/crm";
 
 export type CrmCustomerOption = {
   id: string;
@@ -26,7 +27,7 @@ export function CrmCustomerPicker({
   partnerName?: string;
   matchedCustomer?: CrmCustomerOption | null;
 }) {
-  const crm = useMessages().crm;
+  const { crm, integrations: intg } = useMessages();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CrmCustomerOption[]>([]);
@@ -166,11 +167,27 @@ export function CrmCustomerPicker({
           <div className="text-emerald-700/70 mt-1">
             {[matchedCustomer.city, matchedCustomer.status, matchedCustomer.salesman].filter(Boolean).join(" · ")}
           </div>
+          <a
+            href={buildCrmCustomerViewUrl(matchedCustomer.id)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-2 text-sky-700 hover:underline font-sans"
+          >
+            {intg.openInCrm} ↗
+          </a>
         </div>
       ) : value ? (
         <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-900 font-mono break-all">
           {value}
           <div className="text-amber-700 mt-1">{crm.customerNotInCache}</div>
+          <a
+            href={buildCrmCustomerViewUrl(value)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block mt-2 text-sky-700 hover:underline font-sans"
+          >
+            {intg.openInCrm} ↗
+          </a>
         </div>
       ) : null}
 

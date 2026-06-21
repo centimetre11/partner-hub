@@ -5,13 +5,13 @@ import { createSseResponse } from "@/lib/ai-trace";
 import { runIntakeTurn, type IntakeScope, type IntakeMessage } from "@/lib/ai-intake";
 import { getLocale } from "@/lib/i18n/locale-server";
 
-const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profile", "training", "solution", "business_record", "todo"];
+const SCOPES: IntakeScope[] = ["new_partner", "powermap", "opportunity", "profile", "training", "solution", "business_record", "todo", "new_customer", "customer_profile"];
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { scope, partnerId, messages, stream } = await req.json();
+  const { scope, partnerId, customerId, messages, stream } = await req.json();
   if (!SCOPES.includes(scope)) return NextResponse.json({ error: "Invalid intake scope" }, { status: 400 });
   if (!Array.isArray(messages) || !messages.length) {
     return NextResponse.json({ error: "Conversation is empty" }, { status: 400 });
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
   const base = {
     scope: scope as IntakeScope,
     partnerId: partnerId || undefined,
+    customerId: customerId || undefined,
     messages: messages as IntakeMessage[],
     today: new Date().toISOString().slice(0, 10),
     userId: uid,

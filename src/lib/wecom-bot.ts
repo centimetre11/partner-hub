@@ -243,32 +243,46 @@ function appendHistory(key: string, role: "user" | "assistant", content: string)
   return history;
 }
 
-function withPartnerHint(
-  history: IntakeMessage[],
-  boundPartnerId?: string | null,
-  boundPartnerName?: string | null
-): IntakeMessage[] {
-  if (!boundPartnerId || !boundPartnerName || !history.length) return history;
+function appendUserHint(history: IntakeMessage[], hint: string): IntakeMessage[] {
+  if (!hint || !history.length) return history;
   const last = history[history.length - 1];
   if (last.role !== "user") return history;
   return [
     ...history.slice(0, -1),
-    {
-      role: "user" as const,
-      content:
-        last.content +
-        `\n\n（系统提示：当前会话已绑定伙伴「${boundPartnerName}」。商务记录、商机、联系人、培训、联合方案等均默认归属该伙伴；「这个伙伴/该客户」均指该伙伴。）`,
-    },
+    { role: "user" as const, content: last.content + `\n\n（${hint}）` },
   ];
+}
+
+function withPartnerHint(
+  history: IntakeMessage[],
+  boundPartnerId?: string | null,
+  boundPartnerName?: string | null,
+  boundCustomerName?: string | null
+): IntakeMessage[] {
+  if (boundPartnerId && boundPartnerName) {
+    return appendUserHint(
+      history,
+      `系统提示：当前会话已绑定伙伴「${boundPartnerName}」。商务记录、商机、联系人、培训、联合方案等均默认归属该伙伴；「这个伙伴/该客户」均指该伙伴。`
+    );
+  }
+  if (boundCustomerName) {
+    return appendUserHint(
+      history,
+      `系统提示：当前会话已绑定客户「${boundCustomerName}」。商务记录默认归属该客户；proposal.partnerName 请填「${boundCustomerName}」；「这个客户/该客户」均指该客户。`
+    );
+  }
+  return history;
 }
 
 /** Open intake (no bound group): user picks partner by name before confirm. */
 async function applyPartnerPickToSession(
   session: ProposeSession,
   text: string,
-  boundPartnerId?: string
+  boundPartnerId?: string,
+  boundCustomerId?: string
 ): Promise<ProposeSession> {
-  if (boundPartnerId) return session;
+  // 已绑定伙伴或客户的群，无需用户再选公司
+  if (boundPartnerId || boundCustomerId) return session;
 
   let proposal = session.proposal;
   if (!proposal.partnerName?.trim()) {
@@ -295,12 +309,13 @@ async function applyPartnerPickToSession(
 
 async function prepareSessionForApply(
   session: ProposeSession,
-  boundPartnerId?: string
+  boundPartnerId?: string,
+  boundCustomerId?: string
 ): Promise<ProposeSession> {
   if (boundPartnerId) return session;
-  let proposal =
+  const proposal =
     session.scope === "business_record"
-      ? await enrichBusinessRecordCompanyTarget(session.proposal, session.sourceText, boundPartnerId)
+      ? await enrichBusinessRecordCompanyTarget(session.proposal, session.sourceText, boundPartnerId, boundCustomerId)
       : await enrichProposalPartnerFromText(session.proposal, session.sourceText, boundPartnerId);
   if (!proposal.partnerName?.trim() && session.scope !== "business_record") {
     return { ...session, proposal };
@@ -562,10 +577,12 @@ async function handleTextMessage(frame: WsFrame) {
     text,
   });
   if (chat?.chatType === "group") {
-    console.log(
-      `[wecom-bot] 群聊已登记 chatId=${chat.chatId}` +
-        (chat.partner ? ` 已绑定伙伴=${chat.partner.name}` : " 尚未绑定伙伴")
-    );
+    const binding = chat.partner
+      ? ` 已绑定伙伴=${chat.partner.name}`
+      : chat.customer
+        ? ` 已绑定客户=${chat.customer.name}`
+        : " 尚未绑定伙伴/客户";
+    console.log(`[wecom-bot] 群聊已登记 chatId=${chat.chatId}${binding}`);
   }
 
   const key = chatKey(frame);
@@ -624,6 +641,8 @@ async function handleTextMessage(frame: WsFrame) {
 
   const boundPartnerId = chat?.partnerId ?? undefined;
   const boundPartnerName = chat?.partner?.name;
+  const boundCustomerId = chat?.customerId ?? undefined;
+  const boundCustomerName = chat?.customer?.name;
   const chatType: "group" | "single" =
     chat?.chatType === "group" || frame.body?.chattype === "group" ? "group" : "single";
   const sourceChatId = resolveSourceChatId(frame, chat?.chatId);
@@ -869,7 +888,7 @@ async function handleTextMessage(frame: WsFrame) {
 
     if (intentSession && isIntentConfirmCommand(text)) {
       intentConfirmSessions.delete(key);
-      const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
+      const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName);
       const focus = intentSession.focus ?? focusSessions.get(key);
       const result = await runAssistantTurn({
         messages,
@@ -906,7 +925,7 @@ async function handleTextMessage(frame: WsFrame) {
       const altActionId = parseIntentAlternativePick(text, intentSession);
       if (altActionId) {
         intentConfirmSessions.delete(key);
-        const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
+        const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName);
         const result = await runAssistantTurn({
           messages,
           userId: actorUserId,
@@ -955,7 +974,7 @@ async function handleTextMessage(frame: WsFrame) {
         await wsClient.replyStream(frame, streamId, reply, true);
         return;
       }
-      session = await prepareSessionForApply(session, boundPartnerId);
+      session = await prepareSessionForApply(session, boundPartnerId, boundCustomerId);
       session = {
         ...session,
         proposal: { ...session.proposal, saveMode: "crm_only" as const },
@@ -963,6 +982,7 @@ async function handleTextMessage(frame: WsFrame) {
       const applied = await applyIntake({
         scope: session.scope,
         partnerId: boundPartnerId ?? session.partnerId,
+        customerId: boundCustomerId,
         proposal: session.proposal,
         userId: actorUserId,
         sourceText: session.sourceText,
@@ -992,11 +1012,12 @@ async function handleTextMessage(frame: WsFrame) {
         await wsClient.replyStream(frame, streamId, reply, true);
         return;
       }
-      session = await prepareSessionForApply(session, boundPartnerId);
+      session = await prepareSessionForApply(session, boundPartnerId, boundCustomerId);
       proposeSessions.set(key, session);
       const applied = await applyIntake({
         scope: session.scope,
         partnerId: boundPartnerId ?? session.partnerId,
+        customerId: boundCustomerId,
         proposal: session.proposal,
         userId: actorUserId,
         sourceText: session.sourceText,
@@ -1019,7 +1040,7 @@ async function handleTextMessage(frame: WsFrame) {
     }
 
     if (session && !isProposeConfirm(text) && !isProposeCancel(text) && !isProposeCrmOnlyConfirm(text)) {
-      session = await applyPartnerPickToSession(session, text, boundPartnerId);
+      session = await applyPartnerPickToSession(session, text, boundPartnerId, boundCustomerId);
       proposeSessions.set(key, session);
     }
 
@@ -1032,7 +1053,7 @@ async function handleTextMessage(frame: WsFrame) {
     }
 
     agentBuilderSessions.delete(key);
-    const messages = withPartnerHint(history, boundPartnerId, boundPartnerName);
+    const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName);
     const continuingPropose = !isAgentBuilderIntent(text) && !!session;
     const focus = focusSessions.get(key);
 
