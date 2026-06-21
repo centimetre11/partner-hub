@@ -1,6 +1,6 @@
-import { AIError, chatJson } from "./ai";
+import { AIError, chatJsonStream } from "./ai";
 import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
-import { clarificationSchemaHint, hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
+import { hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
 import { enrichAutomationClarifications, applyUserDeliveryIntent } from "./automation-clarifications";
 import type { BuilderDeliveryPrefs } from "./builder-context-prompt";
 import {
@@ -11,7 +11,7 @@ import {
   defaultAutomationSlug,
   partnerScopeLabel,
 } from "./automation-push";
-import { CRON_PRESETS, describeCron } from "./cron";
+import { describeCron } from "./cron";
 import { db } from "./db";
 import { listWecomChats } from "./wecom-chats";
 import type { Locale } from "./i18n/locale";
@@ -56,61 +56,82 @@ function outputSchema(locale: Locale) {
   const replyLang = locale === "zh" ? "Chinese" : "English";
   return `Output exactly one JSON object. ALL user-visible text fields MUST be in ${replyLang}. draft.slug stays English kebab-case.
 {
-  "reply": "${replyLang} concise reply",
-  "clarifications": [{ "id", "question", "options", "tier": "required|preference" }],
-  "questions": [],
+  "reply": "${replyLang} concise reply (1-2 sentences)",
+  "clarifications": [],
   "ready": true/false,
-  "draft": {
-    "slug": "e.g. acme-opportunities-daily",
-    "name": "${replyLang} display name",
-    "description": "${replyLang} one-line task goal (REQUIRED)",
-    "taskMd": "Optional detailed TASK.md; if empty server uses standard scheduled-push template",
-    "triggerType": "SCHEDULE",
+  "intent": {
+    "goal": "${replyLang} one-line: what to query and push",
+    "dataType": "todos|opportunities|web_search|mixed",
+    "partnerScope": "all|named|bound",
+    "partnerNameHint": "only when partnerScope=named — partner/customer name substring, NOT id",
+    "deliveryChannel": "email|wecom|both|unset",
+    "emailRecipient": "mine|unset — mine when user says 我的邮箱/发给我",
     "cronExpr": "0 9 * * *",
+    "dueWithinDays": null
+  },
+  "draft": {
+    "slug": "english-kebab-case",
+    "name": "${replyLang} display name",
+    "description": "same as intent.goal",
+    "taskMd": "",
+    "cronExpr": "same as intent.cronExpr",
     "timezone": "Asia/Shanghai",
-    "partnerId": "partner id or empty string for ALL partners",
-    "dueWithinDays": "optional number — only for todo/due-date scenarios",
-    "wecomPushChatId": "WeCom group chatId",
-    "pushEmailTo": "email or empty",
-    "notifyOnSuccess": true,
-    "notifyOnFailure": true,
-    "rationale": "${replyLang} brief",
-    "variables": [],
-    "questionnaire": [],
-    "missingSkillNotes": []
+    "partnerId": "",
+    "wecomPushChatId": "",
+    "pushEmailTo": "",
+    "rationale": "${replyLang} brief"
   }
-}`;
+}
+Do NOT fill partnerId/wecomPushChatId/pushEmailTo — server resolves from intent + DB.
+Do NOT emit clarifications for partner list, email, or WeCom group — server UI handles.
+Only clarifications[] when task goal itself is ambiguous (max 1).`;
+}
+
+function buildRuntimeContextBlock(
+  locale: Locale,
+  ctx: {
+    partnerCount: number;
+    userName?: string;
+    userEmail?: string;
+    boundPartnerName?: string;
+    boundPartnerId?: string;
+  }
+): string {
+  if (locale === "zh") {
+    return `【服务端上下文 — 勿注入完整列表，只输出 intent 参数，由服务端查库】
+- 非归档伙伴总数: ${ctx.partnerCount}（partnerScope=all 表示查全部）
+- 当前用户: ${ctx.userName ?? "—"}${ctx.userEmail ? ` · 邮箱 ${ctx.userEmail}` : " · 无邮箱"}（emailRecipient=mine 时用此邮箱）
+- 会话绑定伙伴: ${ctx.boundPartnerName ? `${ctx.boundPartnerName} (${ctx.boundPartnerId})` : "无"}（partnerScope=bound 时用此伙伴）
+- 企微群/收件邮箱/伙伴下拉: 由服务端澄清 UI 提供，AI 不要追问或列举`;
+  }
+  return `【Server context — output intent params only; server resolves IDs from DB】
+- Active partners: ${ctx.partnerCount} (partnerScope=all = all partners)
+- Current user: ${ctx.userName ?? "—"}${ctx.userEmail ? ` · ${ctx.userEmail}` : ""} (emailRecipient=mine)
+- Bound partner: ${ctx.boundPartnerName ? `${ctx.boundPartnerName}` : "none"} (partnerScope=bound)
+- WeCom/email/partner pickers: server UI — do NOT ask or list options in clarifications`;
 }
 
 function buildSystemPrompt(locale: Locale) {
   const lang = locale === "zh" ? "Chinese (简体中文)" : "English";
-  const cronExamples = CRON_PRESETS.map((p) => `${p.expr} = ${locale === "zh" ? p.labelZh : p.labelEn}`).join("\n");
 
-  return `You are the "Scheduled Partner Push" automation builder in Fanruan Partner Hub.
-ONLY create scheduled pipelines: query partner data (or all partners) → format → push to WeCom group and/or email.
+  return `You are the Scheduled Partner Push automation builder in Fanruan Partner Hub.
+Parse user intent → output JSON with intent.* semantic fields. Server fills IDs, TASK.md, and delivery pickers.
 
-Language: ${lang}. draft.slug = English kebab-case.
+Language: ${lang}. Keep reply and names in ${lang}; draft.slug in English kebab-case.
 
-Example scenarios (same framework):
-1. 「每天把这个客户 3 天内过期的待办推送到这个群」→ list_todos + dueWithinDays=3
-2. 「每天把这个客户的商机发邮件给我」→ list_opportunities + send_email
-3. 「每天搜一下这个客户的投标动态发邮件给我」→ web_search + send_email
-4. 「每日科技新闻摘要发邮件」→ partnerId 空 + web_search（无伙伴关联）
+Examples:
+- 「每天早上所有伙伴待办发到我邮箱」→ dataType=todos, partnerScope=all, deliveryChannel=email, emailRecipient=mine, cronExpr=0 9 * * *
+- 「每天把 Acme 3 天内过期待办推到群」→ dataType=todos, partnerScope=named, partnerNameHint=Acme, deliveryChannel=wecom, dueWithinDays=3
+- 「每周一汇总商机发邮件」→ dataType=opportunities, partnerScope=all, deliveryChannel=email
 
 Rules:
-1. triggerType is always SCHEDULE. Runtime tools: list_todos, list_opportunities, web_search, get_partner, search_partners, push_wecom, send_email.
-2. partnerId: if user says「这个伙伴/该客户」without a bound partner in system hint → ready=false and tier:required clarification listing partner names; do NOT assume「无伙伴关联」. Use bound partner when provided. Leave EMPTY only when user wants all/no partner scope.
-3. ready=true requires: draft.description, draft.cronExpr, and at least one of wecomPushChatId or pushEmailTo. partnerId is optional (empty = all).
-4. 【构建偏好】wins for filled fields; if user text conflicts (e.g.「发到群」while prefs say no WeCom) → follow user intent and emit clarifications to pick the group — do NOT silently skip WeCom.
-5. Apply WeCom group chatId ONLY when user/prefs explicitly enable WeCom push — not by default.
-6. clarifications tier required for ambiguous partner, WeCom group, or email — always offer concrete names from the partner list / known groups, NEVER ask user to type chatId manually. Prefer resolving these in your draft/clarifications; the server only adds pickers if you leave a required gap.
-6b. If user already stated delivery channel in plain language (e.g.「发到我的邮箱」「发到微信群」「所有正式合作伙伴的待办」), DO NOT ask again whether to use email/WeCom or which partner scope — set pushEmailTo / wecomPushChatId / partnerId in draft directly.
-7. Write taskMd when steps are non-obvious (web_search queries, filters); else leave empty for server template.
-8. Do NOT build unrelated pipelines (gold price, generic coding agents).
-9. Cron presets:
-${cronExamples}
-
-${clarificationSchemaHint(locale)}
+1. triggerType is always SCHEDULE (implicit). Runtime: list_todos, list_opportunities, web_search, push_wecom, send_email.
+2. partnerScope: all=全部伙伴; named=用户点了具体名字(填 partnerNameHint); bound=「这个客户」且上下文有绑定伙伴.
+3. deliveryChannel + emailRecipient: 用户说清「发邮箱/我的邮箱」→ email + mine; 勿再问渠道.
+4. taskMd always "" — server generates TASK.md template.
+5. clarifications always [] unless the task goal is completely unclear.
+6. ready=true when intent.goal, intent.cronExpr, and deliveryChannel≠unset (or emailRecipient=mine for email).
+7. Do NOT build unrelated agents (gold price, generic coding).
 
 ${outputSchema(locale)}`;
 }
@@ -216,6 +237,65 @@ export function applyAutomationDraftDefaults(
   );
 }
 
+type AutomationBuilderAiIntent = {
+  goal?: string;
+  dataType?: string;
+  partnerScope?: "all" | "named" | "bound";
+  partnerNameHint?: string;
+  deliveryChannel?: "email" | "wecom" | "both" | "unset";
+  emailRecipient?: "mine" | "unset";
+  cronExpr?: string;
+  dueWithinDays?: number | null;
+};
+
+/** 将 AI 输出的语义 intent 解析为 draft 字段（伙伴/邮箱由服务端查库） */
+function applySemanticIntentFromAi(
+  draft: AutomationBuilderDraft,
+  intent: AutomationBuilderAiIntent | undefined,
+  rawDraft: Partial<AutomationBuilderDraft>,
+  opts: { partners: { id: string; name: string }[]; boundPartnerId?: string; userEmail?: string }
+): AutomationBuilderDraft {
+  const goal = intent?.goal?.trim() || rawDraft.description?.trim() || draft.description;
+  const cronExpr = intent?.cronExpr?.trim() || rawDraft.cronExpr?.trim() || draft.cronExpr;
+  let partnerId = draft.partnerId;
+  let pushEmailTo = draft.pushEmailTo;
+  let wecomPushChatId = draft.wecomPushChatId;
+  const dueWithinDays =
+    intent?.dueWithinDays != null && Number.isFinite(intent.dueWithinDays)
+      ? Number(intent.dueWithinDays)
+      : rawDraft.dueWithinDays;
+
+  const scope = intent?.partnerScope;
+  if (scope === "all") partnerId = "";
+  else if (scope === "bound" && opts.boundPartnerId) partnerId = opts.boundPartnerId;
+  else if (scope === "named" && intent?.partnerNameHint?.trim()) {
+    const hint = intent.partnerNameHint.trim().toLowerCase();
+    const p = opts.partners.find(
+      (x) => x.name.toLowerCase().includes(hint) || hint.includes(x.name.toLowerCase())
+    );
+    if (p) partnerId = p.id;
+  }
+
+  const channel = intent?.deliveryChannel;
+  if (channel === "email") {
+    if (intent?.emailRecipient === "mine" && opts.userEmail) pushEmailTo = opts.userEmail;
+    wecomPushChatId = "";
+  } else if (channel === "wecom") {
+    pushEmailTo = "";
+  }
+
+  return {
+    ...draft,
+    description: goal,
+    cronExpr,
+    partnerId,
+    pushEmailTo,
+    wecomPushChatId,
+    dueWithinDays,
+    taskMd: "",
+  };
+}
+
 function normalizeTurn(
   raw: Partial<AutomationBuilderTurn>,
   locale: Locale,
@@ -263,22 +343,30 @@ export async function runAutomationBuilderTurn(opts: {
   deliveryPrefs?: Partial<BuilderDeliveryPrefs>;
 }): Promise<AutomationBuilderTurn> {
   const locale = opts.locale ?? "en";
-  const partners = await db.partner.findMany({
-    where: { status: { not: "ARCHIVED" } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-    take: 80,
-  });
-  const partnerLines = partners.map((p) => `${p.id} | ${p.name}`).join("\n") || "(none)";
+
+  let userEmail = "";
+  let userName = "";
+  if (opts.userId) {
+    const me = await db.user.findUnique({ where: { id: opts.userId }, select: { email: true, name: true } });
+    userEmail = me?.email?.trim() ?? "";
+    userName = me?.name?.trim() ?? "";
+  }
+
+  const partnerCount = await db.partner.count({ where: { status: { not: "ARCHIVED" } } });
   const system = `${buildSystemPrompt(locale)}
 
-【Partners — draft.partnerId; empty = ALL partners】
-${partnerLines}`;
+${buildRuntimeContextBlock(locale, {
+  partnerCount,
+  userName,
+  userEmail,
+  boundPartnerName: opts.boundPartnerName,
+  boundPartnerId: opts.boundPartnerId,
+})}`;
   const conversation = opts.messages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
   const userPrompt =
     locale === "zh"
-      ? `对话历史：\n${conversation}\n\n请输出 JSON（定时查询推送自动化）。`
-      : `Conversation:\n${conversation}\n\nOutput JSON (scheduled query & push automation).`;
+      ? `对话历史：\n${conversation}\n\n请输出 JSON（含 intent 语义参数，勿填 partnerId/邮箱/chatId）。`
+      : `Conversation:\n${conversation}\n\nOutput JSON with intent params (no partnerId/email/chatId).`;
 
   const reasonId = nextTraceId("reason");
   opts.emit?.({
@@ -292,29 +380,38 @@ ${partnerLines}`;
   });
   emitPhase(opts.emit, "extract", locale === "zh" ? "生成自动化草案" : "Building automation draft");
 
-  let userEmail = "";
-  if (opts.userId) {
-    const me = await db.user.findUnique({ where: { id: opts.userId }, select: { email: true } });
-    userEmail = me?.email?.trim() ?? "";
-  }
-
   try {
-    const raw = await chatJson<{
+    const { data: raw, streamed } = await chatJsonStream<{
       reply?: string;
+      intent?: AutomationBuilderAiIntent;
       draft?: Partial<AutomationBuilderDraft>;
       clarifications?: unknown;
       questions?: string[];
       ready?: boolean;
     }>(system, userPrompt, {
-      temperature: 0.25,
+      temperature: 0.2,
       feature: "automation-builder",
       userId: opts.userId,
+      taskTier: "fast",
+      maxTokens: 800,
+      emit: opts.emit,
+    });
+
+    const partners = await db.partner.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: 200,
     });
 
     let turn = normalizeTurn(raw as Partial<AutomationBuilderTurn>, locale, opts.boundPartnerName);
-    const intentDraft = applyUserDeliveryIntent(
-      normalizeDraft({ ...DEFAULT_DRAFT, ...(raw.draft ?? {}) }, opts.boundPartnerName, locale),
-      {
+    const baseDraft = normalizeDraft({ ...DEFAULT_DRAFT, ...(raw.draft ?? {}) }, opts.boundPartnerName, locale);
+    const semanticDraft = applySemanticIntentFromAi(baseDraft, raw.intent, raw.draft ?? {}, {
+      partners,
+      boundPartnerId: opts.boundPartnerId,
+      userEmail,
+    });
+    const intentDraft = applyUserDeliveryIntent(semanticDraft, {
         messages: opts.messages,
         deliveryPrefs: opts.deliveryPrefs,
         boundPartnerId: opts.boundPartnerId,
@@ -394,7 +491,10 @@ ${partnerLines}`;
       },
     });
     emitPhase(opts.emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
-    if (raw.reply) await emitReplyChunks(opts.emit, raw.reply);
+    if (raw.reply) {
+      if (streamed && opts.emit) opts.emit({ event: "reply_reset" });
+      await emitReplyChunks(opts.emit, raw.reply);
+    }
     return turn;
   } catch (e) {
     const detail = e instanceof AIError ? e.message : String(e);

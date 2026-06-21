@@ -111,6 +111,24 @@ export function normalizeAiClarifications(
   return out;
 }
 
+/** Compact clarification rules for Intake JSON schemas (avoid duplicating long examples in buildOutputSchema). */
+export function intakeClarificationHint(locale: "zh" | "en"): string {
+  if (locale === "zh") {
+    return `[clarifications 规则 — 最多 3 条]
+- 字段: id, question, options(2-4,首项=默认), tier(required|preference), kind(identity|field), apply(direct|ai)
+- tier:required 仅真歧义(多公司名/多官网/search_partners 近似匹配); KMS/用户已给唯一公司名+官网 → 直接写 proposal，勿 blocking
+- dedupe: id=dedupe, kind=identity, tier=required, apply=ai
+- 档案字段(country/headcount等): tier=preference; 汇报线缺失时最多 1 条
+- 勿列举伙伴列表/邮箱/企微群 — 系统 UI 处理; ready=true 时无未答 tier:required`;
+  }
+  return `[clarifications — max 3]
+- Fields: id, question, options(2-4; first=default), tier(required|preference), kind(identity|field), apply(direct|ai)
+- tier:required only for genuine ambiguity (multiple names/URLs, search_partners near-matches); if KMS/user gives one clear name+website → write proposal directly
+- dedupe: id=dedupe, kind=identity, tier=required, apply=ai
+- Profile fields: tier=preference; at most one clarification for missing reporting line
+- Do NOT list partners/emails/WeCom groups — server UI handles; ready=true requires no unanswered tier:required`;
+}
+
 /** Prompt appendix for LLM JSON schemas */
 export function clarificationSchemaHint(locale: "zh" | "en"): string {
   if (locale === "zh") {

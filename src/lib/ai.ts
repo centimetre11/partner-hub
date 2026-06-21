@@ -1066,28 +1066,94 @@ export function parseJsonLoose<T>(text: string): T {
   throw new AIError(`AI response could not be parsed as JSON: ${preview}`);
 }
 
+async function chatJsonOnce<T>(
+  system: string,
+  user: string,
+  opts: {
+    feature?: string;
+    userId?: string;
+    temperature?: number;
+    taskTier?: import("./ai-capabilities").AiTaskTier;
+    maxTokens?: number;
+    onDelta?: (delta: string) => void;
+    jsonMode?: boolean;
+  }
+): Promise<string> {
+  const { content } = await chatCompletion(
+    [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    {
+      jsonMode: opts.jsonMode !== false,
+      feature: opts.feature,
+      userId: opts.userId,
+      temperature: opts.temperature,
+      taskTier: opts.taskTier,
+      maxTokens: opts.maxTokens,
+      onDelta: opts.onDelta,
+    }
+  );
+  return content ?? "";
+}
+
 export async function chatJson<T>(
   system: string,
   user: string,
-  opts: { feature?: string; userId?: string; temperature?: number } = {}
+  opts: { feature?: string; userId?: string; temperature?: number; taskTier?: import("./ai-capabilities").AiTaskTier; maxTokens?: number } = {}
 ): Promise<T> {
-  // Some compatible APIs don't support response_format; fall back to plain mode
   try {
-    const { content } = await chatCompletion(
-      [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      { jsonMode: true, feature: opts.feature, userId: opts.userId, temperature: opts.temperature }
-    );
-    return parseJsonLoose<T>(content ?? "");
+    return parseJsonLoose<T>(await chatJsonOnce(system, user, opts));
   } catch (e) {
     if (e instanceof AIError && /response_format|json_object|400/.test(e.message)) {
-      const { content } = await chatCompletion([
-        { role: "system", content: system + "\n\nOutput exactly one valid JSON object only. Do not output any other text." },
-        { role: "user", content: user },
-      ], { feature: opts.feature, userId: opts.userId, temperature: opts.temperature });
-      return parseJsonLoose<T>(content ?? "");
+      const content = await chatJsonOnce(
+        system + "\n\nOutput exactly one valid JSON object only. Do not output any other text.",
+        user,
+        { ...opts, jsonMode: false }
+      );
+      return parseJsonLoose<T>(content);
+    }
+    throw e;
+  }
+}
+
+/** chatJson with SSE reply_delta streaming while the model generates JSON. */
+export async function chatJsonStream<T>(
+  system: string,
+  user: string,
+  opts: {
+    feature?: string;
+    userId?: string;
+    temperature?: number;
+    taskTier?: import("./ai-capabilities").AiTaskTier;
+    maxTokens?: number;
+    emit?: import("./ai-trace").TraceEmitter;
+  } = {}
+): Promise<{ data: T; streamed: boolean }> {
+  opts.emit?.({ event: "reply_reset" });
+  let streamed = "";
+  const onDelta = opts.emit
+    ? (d: string) => {
+        streamed += d;
+        opts.emit!({ event: "reply_delta", delta: d });
+      }
+    : undefined;
+
+  const parseMerged = (content: string) => parseJsonLoose<T>((content ?? "").trim() || streamed.trim());
+
+  try {
+    const content = await chatJsonOnce(system, user, { ...opts, onDelta });
+    if (opts.emit && streamed) opts.emit({ event: "reply_done" });
+    return { data: parseMerged(content), streamed: !!streamed };
+  } catch (e) {
+    if (e instanceof AIError && /response_format|json_object|400/.test(e.message)) {
+      const content = await chatJsonOnce(
+        system + "\n\nOutput exactly one valid JSON object only. Do not output any other text.",
+        user,
+        { ...opts, onDelta, jsonMode: false }
+      );
+      if (opts.emit && streamed) opts.emit({ event: "reply_done" });
+      return { data: parseMerged(content), streamed: !!streamed };
     }
     throw e;
   }

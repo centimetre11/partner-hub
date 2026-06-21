@@ -1,6 +1,7 @@
 import { PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 import { getLabels, type LabelsBundle } from "./i18n";
 import type { Locale } from "./i18n/locale";
+import { intakeClarificationHint } from "./ai-clarifications";
 
 export type IntakeScope =
   | "new_partner"
@@ -99,12 +100,10 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
   const fl = fieldListForAi(locale);
   const clarifyExample =
     locale === "zh"
-      ? `{ "id":"country", "question":"该公司主要在哪个国家？", "options":["阿联酋","沙特","卡塔尔","埃及"], "multi":false, "allowOther":true, "apply":"direct", "kind":"field" }`
-      : `{ "id":"country", "question":"Which country is this company primarily in?", "options":["UAE","Saudi Arabia","Qatar","Egypt"], "multi":false, "allowOther":true, "apply":"direct", "kind":"field" }`;
-  const identityExample =
-    locale === "zh"
-      ? `{ "id":"partnerName", "question":"确认是哪家公司？", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "tier":"required" }`
-      : `{ "id":"partnerName", "question":"Which company is this?", "options":["Beinex Analytics","Beinex IT Solutions"], "multi":false, "allowOther":true, "apply":"direct", "kind":"identity", "tier":"required" }`;
+      ? `{ "id":"country", "question":"主要在哪个国家？", "options":["阿联酋","沙特"], "tier":"preference", "apply":"direct", "kind":"field" }`
+      : `{ "id":"country", "question":"Primary country?", "options":["UAE","Saudi Arabia"], "tier":"preference", "apply":"direct", "kind":"field" }`;
+
+  const clarificationFooter = intakeClarificationHint(locale);
 
   if (scope === "business_record") {
     return `Output a single JSON object. User-facing strings in ${lang}:
@@ -142,7 +141,8 @@ Rules:
 - traceNature and traceAction are mandatory for CRM KPI sync — infer from text; user will confirm in UI before save.
 - If traceNature or traceAction cannot be inferred confidently, set ready=false and add clarifications (direct apply) e.g. id "br-0-nature" with options 现场|非现场, or "br-0-action" with CRM action options.
 - category: VISIT=meetings/visits; TRAINING=training; NEGOTIATION=deals; DELIVERY=delivery; RELATIONSHIP=relationship; OTHER=rest.
-- Extract only from user text; do not invent. ready=true only when every record has title + traceNature + traceAction.`;
+- Extract only from user text; do not invent. ready=true only when every record has title + traceNature + traceAction.
+${clarificationFooter}`;
   }
 
   if (scope === "todo") {
@@ -167,7 +167,8 @@ Rules:
 Rules:
 - Fill todos only; other arrays must be empty.
 - ready=true when at least one todo has a clear title and partner lookup is resolved (single match auto-linked; ambiguous/missing partner handled by system clarifications).
-- Set proposal.partnerName when user mentions a company; omit for personal/global todos.`;
+- Set proposal.partnerName when user mentions a company; omit for personal/global todos.
+${clarificationFooter}`;
   }
 
   if (scope === "powermap") {
@@ -198,7 +199,8 @@ Rules:
 - Extract only from material (text/image); cite reason; do not invent.
 - Match [Existing contacts] for add vs update (update must include id).
 - ready=true when core info is enough; use clarifications only for missing reporting lines.
-- role/attitude use English codes; title/department/reason may be ${lang}.`;
+- role/attitude use English codes; title/department/reason may be ${lang}.
+${clarificationFooter}`;
   }
 
   return `Output a single JSON object only. User-facing strings in ${lang}. Structure:
@@ -226,13 +228,8 @@ Rules:
 - Extract only supported content from user text or tool results; cite reason. Do not invent beyond tools.
 - ready: true when required fields are present. If user says save now / that's all, ready must be true.
 - proposal accumulates confirmed content each turn (do not clear prior extractions).
-- clarifications: when key info is missing and you can enumerate options, give 1–3 multiple-choice items (id = English field name e.g. country/category/headcount; options in ${lang}).
-- Identity checkpoints (new_partner): ONLY when company name is genuinely ambiguous (multiple distinct candidates), website has multiple plausible URLs, or search_partners finds similar records. Do NOT emit partnerName/website clarifications when KMS or user input already gives one clear company name and website — write them directly to proposal and continue. When clarification IS needed, use tier:"required" + kind:"identity" (blocks user until answered; AI cannot proceed). Examples:
-  · partnerName — ${identityExample}
-  · website — id:"website", kind:"identity", tier:"required", apply:"direct", options = multiple candidate URLs (not when KMS already has one URL)
-  · dedupe — id:"dedupe", kind:"identity", tier:"required", apply:"ai", options = existing partner names + "Create new anyway"
-- For profile field ids (country, headcount, category, industries, pipelineStage, etc.) set apply:"direct", kind:"field", tier:"preference" unless truly blocking.
-- For reporting lines or ambiguous context, set apply:"ai". Empty clarifications array if none needed.`;
+- clarifications: when key info is missing, 1-3 items max; see rules below.
+${clarificationFooter}`;
 }
 
 export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
@@ -315,14 +312,9 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "New partner onboarding",
     intro:
       "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
-    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill: category, industries, country/city, headcount, website, coreBusiness, capability, knownClients, currentTools, playbook, tier (A/B/C). If key items are missing, ask 1–2 friendly follow-ups, but research proactively first (see tool notes below).
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill profile fields via research (see tool notes). Ask 1–2 brief follow-ups only after research.
 
-Identity checkpoints (important):
-- ONLY emit tier:"required" identity clarifications (kind:"identity") when there is genuine ambiguity — multiple distinct company names, multiple plausible websites, or search_partners close matches. tier:"required" means the user MUST answer before AI continues research or ready=true.
-- When KMS or user input already provides a clear, unique company name and website, write them directly to proposal — do NOT ask the user to re-confirm.
-- When search_partners finds a close match, emit dedupe clarification (id:"dedupe", kind:"identity", tier:"required", apply:"ai") with options = matched partner name(s) + "Create new anyway".
-- Profile field clarifications (country, headcount, etc.) use tier:"preference" unless truly blocking.
-- After user confirms identity (when truly ambiguous), continue deep research and fill profile fields.`,
+Identity: only tier:"required" identity clarifications when genuinely ambiguous; KMS/user clear name+website → write directly. search_partners near-match → dedupe clarification. Profile fields use tier:"preference".`,
   },
   powermap: {
     title: "Add power map contact",

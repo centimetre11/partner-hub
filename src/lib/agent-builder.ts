@@ -1,4 +1,4 @@
-import { AIError, chatJson } from "./ai";
+import { AIError, chatJsonStream } from "./ai";
 import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
 import { clarificationSchemaHint, hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
 import { db } from "./db";
@@ -43,86 +43,114 @@ const DEFAULT_DRAFT: AgentBuilderDraft = {
 
 const VALID_DELIVERY: AgentDeliveryMode[] = ["inbox", "wecom_chat", "partner_group", "webhook"];
 
+type AgentBuilderAiIntent = {
+  goal?: string;
+  trigger?: "MANUAL" | "SCHEDULE";
+  frequency?: "HOURLY" | "DAILY" | "WEEKLY";
+  runHour?: number;
+  runWeekday?: number;
+  partnerScope?: "all" | "named" | "bound";
+  partnerNameHint?: string;
+  deliveryMode?: AgentDeliveryMode | "unset";
+  toolHints?: string[];
+  skillIdHints?: string[];
+};
+
 function outputSchema(locale: Locale) {
   const replyLang = locale === "zh" ? "Chinese" : "English";
-  return `Output exactly one JSON object. ALL user-visible text fields MUST be in ${replyLang} (reply, clarifications, draft.name/description/instructions/rationale/missingSkillNotes/questionnaire). Tool ids in draft.skills stay English snake_case.
+  return `Output exactly one JSON object. User-visible text in ${replyLang}; draft.skills/skillIds stay English identifiers.
 {
-  "reply": "${replyLang} reply to the user; concise product-consultant tone explaining current understanding and next step",
-  "clarifications": [
-    {
-      "id": "stable_snake_id e.g. delivery_mode",
-      "question": "${replyLang} one-line confirmation question",
-      "options": ["${replyLang} 2-4 concrete choices; FIRST option is your recommended default for this Agent"],
-      "tier": "required | preference — see clarification rules below"
-    }
-  ],
-  "questions": ["Deprecated — mirror clarification questions as plain strings for legacy clients; prefer clarifications"],
+  "reply": "${replyLang} concise reply (1-2 sentences)",
+  "clarifications": [],
   "ready": true/false,
+  "intent": {
+    "goal": "${replyLang} one-line business goal",
+    "trigger": "MANUAL|SCHEDULE",
+    "frequency": "HOURLY|DAILY|WEEKLY",
+    "runHour": 9,
+    "runWeekday": 1,
+    "partnerScope": "all|named|bound",
+    "partnerNameHint": "when named — substring, NOT id",
+    "deliveryMode": "inbox|wecom_chat|partner_group|webhook|unset",
+    "toolHints": ["list_todos"],
+    "skillIdHints": []
+  },
   "draft": {
     "name": "${replyLang} Agent name",
     "icon": "one emoji",
-    "description": "${replyLang} one-line description",
-    "instructions": "${replyLang} full system instructions: identity, run steps each time, tool order, output format, how to proceed when a tool is missing using existing data and reasoning",
-    "skills": ["tool name, e.g. list_todos"],
-    "skillIds": ["skill id"],
-    "trigger": "MANUAL or SCHEDULE",
-    "frequency": "HOURLY/DAILY/WEEKLY",
-    "runHour": 0-23,
-    "runWeekday": 1-7,
-    "scopeType": "ALL or PARTNER",
-    "partnerId": "bound partner id or empty string",
-    "shared": true,
-    "webhookUrl": "required when deliveryMode=webhook, else empty",
-    "deliveryMode": "inbox | wecom_chat | partner_group | webhook",
-    "missingSkillNotes": ["${replyLang} — when no matching skill exists, explain gap and interim approach"],
-    "questionnaire": ["${replyLang} survey-style questions for user confirmation"],
-    "rationale": "${replyLang} — why these tools/skills, trigger, and delivery mode were chosen"
+    "description": "same as intent.goal",
+    "instructions": "${replyLang} run steps, tool order, output format (concise)",
+    "skills": [],
+    "skillIds": [],
+    "trigger": "MANUAL|SCHEDULE",
+    "frequency": "DAILY|WEEKLY",
+    "runHour": 9,
+    "runWeekday": 1,
+    "scopeType": "ALL|PARTNER",
+    "partnerId": "",
+    "webhookUrl": "",
+    "deliveryMode": "",
+    "missingSkillNotes": [],
+    "rationale": "${replyLang} brief"
   }
-}`;
+}
+Do NOT fill partnerId — server resolves from intent + DB.
+Do NOT emit clarifications for partner list or delivery channel when intent is clear — server UI handles.
+Only clarifications[] when business goal itself is ambiguous (max 1).`;
 }
 
-function buildSystemPrompt(locale: Locale, toolLines: string, promptSkillLines: string, partnerLines: string, knowledgeLines: string) {
+function buildRuntimeContextBlock(
+  locale: Locale,
+  ctx: {
+    toolNames: string[];
+    skillIds: string[];
+    partnerCount: number;
+    knowledgeCount: number;
+    boundPartnerName?: string;
+    boundPartnerId?: string;
+  }
+): string {
+  const tools = ctx.toolNames.join(", ");
+  const skills = ctx.skillIds.length ? ctx.skillIds.join(", ") : locale === "zh" ? "（暂无自定义技能）" : "(no custom skills)";
+  if (locale === "zh") {
+    return `【服务端上下文 — 输出 intent 参数，勿注入完整列表】
+- 可用工具 (${ctx.toolNames.length}): ${tools}
+- 自定义技能 id (${ctx.skillIds.length}): ${skills}
+- 非归档伙伴: ${ctx.partnerCount}（partnerScope=all=全部; named=填 partnerNameHint; bound=绑定伙伴）
+- 绑定伙伴: ${ctx.boundPartnerName ? `${ctx.boundPartnerName} (${ctx.boundPartnerId})` : "无"}
+- 共享知识库条目: ${ctx.knowledgeCount}（instructions 中引用 search_knowledge 即可，勿列举标题）
+- 交付方式/伙伴选择: 服务端 UI，AI 勿追问`;
+  }
+  return `【Server context — output intent params; do NOT list full catalogs】
+- Tools (${ctx.toolNames.length}): ${tools}
+- Custom skill ids (${ctx.skillIds.length}): ${skills}
+- Active partners: ${ctx.partnerCount} (all|named|bound)
+- Bound partner: ${ctx.boundPartnerName ?? "none"}
+- Shared knowledge articles: ${ctx.knowledgeCount} (use search_knowledge in instructions; do not list titles)
+- Delivery/partner pickers: server UI — do NOT ask in clarifications`;
+}
+
+function buildSystemPrompt(locale: Locale, ctxBlock: string) {
   const lang = locale === "zh" ? "Chinese (简体中文)" : "English";
-  return `You are the conversational "Agent Architect" in the AI Agent platform.
-Goal: help users build runnable Agents through dialogue, not by making them understand every form field.
+  return `You are the conversational Agent Architect in Fanruan Partner Hub.
+Parse user intent → JSON with intent.* semantic fields. Server resolves partnerId and validates tools/skills.
 
-Language (CRITICAL):
-- The user's UI locale is ${lang}. Write reply, every clarifications[].question, every clarifications[].options[], and all draft user-facing fields (name, description, instructions, rationale, missingSkillNotes, questionnaire) in ${lang}.
-- Match the language the user writes in when they mix languages, but default to ${lang} for all generated guidance.
-- draft.skills / draft.skillIds values stay as English tool/skill identifiers from the lists below.
+Language: ${lang}. reply, draft.name/description/instructions/rationale in ${lang}.
 
-How you work:
-1. Understand business goal, inputs, trigger timing, deliverables, delivery channel, risk boundaries.
-2. When info is insufficient, output clarifications[] (max 4): each item is one confirmation with 2-4 options. Put your recommended choice FIRST in options. Do NOT include "Other" — the UI adds it. Use tier:"required" when the user must answer before you can proceed; tier:"preference" for refinements that do not block (e.g. 9:00 vs 10:00) — for preference, already apply the first option to draft and mention it in reply.
-3. Pick tools from the tool list (draft.skills) and methodology skills (draft.skillIds); prefer fewer, precise choices.
-4. If no skill fits exactly, don't block; note the gap in missingSkillNotes and write interim steps in instructions.
-5. For company strategy/product knowledge, prefer search_knowledge in instructions.
-6. Partner profile field edits should go through proposals/human approval; timeline writes, todos, and document creation can be direct actions.
-7. Before ready=true you MUST have confirmed ALL of:
-   - Business goal and instructions
-   - Trigger (MANUAL or SCHEDULE + frequency/runHour if scheduled)
-   - Scope (ALL or PARTNER + partnerId if partner-bound)
-   - Delivery mode (draft.deliveryMode):
-     * inbox — results only in Partner Hub inbox
-     * wecom_chat — push to the WeCom chat where the user is building (use when user says current group / 本群 / 这个群)
-     * partner_group — push to partner's bound WeCom group (requires scopeType=PARTNER)
-     * webhook — external webhook URL in draft.webhookUrl
-8. ready=true only when name, instructions, deliveryMode are set; webhook mode also requires webhookUrl; and no unanswered tier:"required" clarifications remain.
-9. NEVER claim the Agent is already saved/created in the system. When ready=true, say the draft is ready and the user must reply 确认 or 创建Agent in WeCom to persist it.
+Examples:
+- 「每周一汇总所有伙伴逾期待办发到收件箱」→ trigger=SCHEDULE, frequency=WEEKLY, runWeekday=1, partnerScope=all, deliveryMode=inbox, toolHints=[list_todos]
+- 「帮我盯这个客户的商机变化，推送到本群」→ partnerScope=bound, deliveryMode=wecom_chat, toolHints=[list_opportunities]
+
+Rules:
+1. Pick tools from available list (intent.toolHints → draft.skills); prefer fewer precise tools.
+2. intent.skillIdHints → draft.skillIds when methodology skills fit.
+3. deliveryMode: inbox=收件箱; wecom_chat=当前企微群; partner_group=伙伴绑定群(需 PARTNER); webhook=外部URL.
+4. ready=true when intent.goal, draft.instructions, deliveryMode≠unset; webhook needs draft.webhookUrl; no tier:"required" clarifications.
+5. NEVER claim Agent is saved — user must confirm to persist.
 
 ${clarificationSchemaHint(locale)}
 
-【Available tools (draft.skills = name)】
-${toolLines}
-
-【Available skills (draft.skillIds = id)】
-${promptSkillLines}
-
-【Bindable partners】
-${partnerLines || "(no partners yet)"}
-
-【Citable knowledge base】
-${knowledgeLines}
+${ctxBlock}
 
 ${outputSchema(locale)}`;
 }
@@ -166,6 +194,80 @@ function normalizeClarifications(raw: unknown, questions: string[], locale: Loca
     question,
     options: legacyQuestionOptions(locale),
   }));
+}
+
+function applySemanticIntentFromAi(
+  draft: AgentBuilderDraft,
+  intent: AgentBuilderAiIntent | undefined,
+  rawDraft: Partial<AgentBuilderDraft>,
+  opts: {
+    partners: { id: string; name: string }[];
+    boundPartnerId?: string;
+    builtinNames: Set<string>;
+    promptSkillIds: Set<string>;
+  }
+): AgentBuilderDraft {
+  const goal = intent?.goal?.trim() || rawDraft.description?.trim() || draft.description;
+  const trigger = intent?.trigger === "SCHEDULE" || rawDraft.trigger === "SCHEDULE" ? "SCHEDULE" : "MANUAL";
+  const frequency = (["HOURLY", "DAILY", "WEEKLY"].includes(intent?.frequency ?? "")
+    ? intent!.frequency
+    : rawDraft.frequency) as AgentBuilderDraft["frequency"];
+  const runHour = intent?.runHour != null ? clampHour(intent.runHour) : clampHour(rawDraft.runHour);
+  const runWeekday = intent?.runWeekday != null ? clampWeekday(intent.runWeekday) : clampWeekday(rawDraft.runWeekday);
+
+  let partnerId = draft.partnerId;
+  let scopeType: AgentBuilderDraft["scopeType"] = "ALL";
+  const scope = intent?.partnerScope;
+  if (scope === "all") {
+    partnerId = "";
+    scopeType = "ALL";
+  } else if (scope === "bound" && opts.boundPartnerId) {
+    partnerId = opts.boundPartnerId;
+    scopeType = "PARTNER";
+  } else if (scope === "named" && intent?.partnerNameHint?.trim()) {
+    const hint = intent.partnerNameHint.trim().toLowerCase();
+    const p = opts.partners.find(
+      (x) => x.name.toLowerCase().includes(hint) || hint.includes(x.name.toLowerCase())
+    );
+    if (p) {
+      partnerId = p.id;
+      scopeType = "PARTNER";
+    }
+  } else if (rawDraft.scopeType === "PARTNER" && opts.partners.some((p) => p.id === rawDraft.partnerId)) {
+    partnerId = String(rawDraft.partnerId);
+    scopeType = "PARTNER";
+  }
+
+  const toolHints = Array.isArray(intent?.toolHints) ? intent!.toolHints! : [];
+  const draftSkills = Array.isArray(rawDraft.skills) ? rawDraft.skills : draft.skills;
+  const skills = [...new Set([...toolHints, ...draftSkills])]
+    .map((s) => String(s).trim())
+    .filter((s) => opts.builtinNames.has(s));
+
+  const skillHints = Array.isArray(intent?.skillIdHints) ? intent!.skillIdHints! : [];
+  const draftSkillIds = Array.isArray(rawDraft.skillIds) ? rawDraft.skillIds : draft.skillIds;
+  const skillIds = [...new Set([...skillHints, ...draftSkillIds])]
+    .map((s) => String(s).trim())
+    .filter((s) => opts.promptSkillIds.has(s));
+
+  let deliveryMode = normalizeDeliveryMode(rawDraft.deliveryMode);
+  if (intent?.deliveryMode && intent.deliveryMode !== "unset") {
+    deliveryMode = normalizeDeliveryMode(intent.deliveryMode);
+  }
+
+  return {
+    ...draft,
+    description: goal,
+    trigger,
+    frequency: (["HOURLY", "DAILY", "WEEKLY"].includes(frequency ?? "") ? frequency : "WEEKLY") as AgentBuilderDraft["frequency"],
+    runHour,
+    runWeekday,
+    scopeType,
+    partnerId: scopeType === "PARTNER" ? partnerId : "",
+    skills,
+    skillIds,
+    deliveryMode,
+  };
 }
 
 function fallbackTurn(locale: Locale, detail: string, partial?: Partial<AgentBuilderTurn>): AgentBuilderTurn {
@@ -237,21 +339,20 @@ export async function runAgentBuilderTurn(opts: {
   userId?: string;
   emit?: TraceEmitter;
   locale?: Locale;
+  boundPartnerId?: string;
+  boundPartnerName?: string;
 }): Promise<AgentBuilderTurn> {
   const locale = opts.locale ?? "en";
-  const [{ toolOptions, promptSkillOptions }, partners, knowledge] = await Promise.all([
+
+  const [{ toolOptions, promptSkillOptions }, partnerCount, knowledgeCount, partners] = await Promise.all([
     resolveAgentSkills(),
+    db.partner.count({ where: { status: { not: "ARCHIVED" } } }),
+    db.knowledgeArticle.count({ where: { shared: true } }),
     db.partner.findMany({
       where: { status: { not: "ARCHIVED" } },
-      select: { id: true, name: true, status: true, tier: true, country: true },
+      select: { id: true, name: true },
       orderBy: { name: "asc" },
-      take: 80,
-    }),
-    db.knowledgeArticle.findMany({
-      where: { shared: true },
-      select: { title: true, category: true },
-      orderBy: { updatedAt: "desc" },
-      take: 30,
+      take: 200,
     }),
   ]);
 
@@ -259,105 +360,91 @@ export async function runAgentBuilderTurn(opts: {
   const promptSkillIds = new Set(promptSkillOptions.map((s) => s.id));
   const partnerIds = new Set(partners.map((p) => p.id));
 
-  const toolLines = toolOptions.map((t) => `TOOL name=${t.name} | ${t.label} | ${t.desc}`).join("\n");
-  const promptSkillLines = promptSkillOptions.map((s) => `SKILL id=${s.id} | ${s.label} | ${s.desc}`).join("\n") || "(no custom skills yet)";
-  const partnerLines = partners
-    .map((p) => `${p.id} | ${p.name} | ${p.status}${p.tier ? ` | Tier ${p.tier}` : ""}${p.country ? ` | ${p.country}` : ""}`)
-    .join("\n");
-  const knowledgeLines = knowledge.map((k) => `${k.category} | ${k.title}`).join("\n") || "(no shared knowledge yet)";
+  const ctxBlock = buildRuntimeContextBlock(locale, {
+    toolNames: toolOptions.map((t) => t.name),
+    skillIds: promptSkillOptions.map((s) => s.id),
+    partnerCount,
+    knowledgeCount,
+    boundPartnerName: opts.boundPartnerName,
+    boundPartnerId: opts.boundPartnerId,
+  });
 
-  const system = buildSystemPrompt(locale, toolLines, promptSkillLines, partnerLines, knowledgeLines);
+  const system = buildSystemPrompt(locale, ctxBlock);
   const conversation = opts.messages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
   const userPrompt =
     locale === "zh"
-      ? `【当前对话】\n${conversation || "用户尚未描述需求，请引导其说明想构建的 Agent。"}`
-      : `【Current conversation】\n${conversation || "User has not described a need yet. Guide them on what Agent they want to build."}`;
+      ? `对话历史：\n${conversation || "用户尚未描述需求，请引导其说明想构建的 Agent。"}\n\n请输出 JSON（含 intent 语义参数，勿填 partnerId）。`
+      : `Conversation:\n${conversation || "User has not described a need yet. Guide them on what Agent they want to build."}\n\nOutput JSON with intent params (no partnerId).`;
 
   const emit = opts.emit;
   const reasonId = nextTraceId("reason");
-  if (emit) {
-    emitPhase(
-      emit,
-      "research",
-      locale === "zh" ? "分析需求与匹配工具" : "Analyzing requirements"
-    );
-    emit({
-      event: "trace",
-      step: {
-        type: "reasoning",
-        id: reasonId,
-        content:
-          locale === "zh"
-            ? "加载工具目录、技能库、伙伴列表与知识库索引…"
-            : "Loading tools, skills, partner catalog, and knowledge index…",
-        status: "running",
-      },
-    });
-  }
+  emit?.({
+    event: "trace",
+    step: {
+      type: "reasoning",
+      id: reasonId,
+      content: locale === "zh" ? "理解 Agent 需求…" : "Planning Agent configuration…",
+      status: "running",
+    },
+  });
+  emitPhase(emit, "extract", locale === "zh" ? "生成 Agent 草案" : "Building Agent draft");
 
-  let raw: Partial<AgentBuilderTurn>;
   try {
-    if (emit) {
-      emit({
-        event: "trace_patch",
-        id: reasonId,
-        patch: {
-          status: "done",
-          content:
-            locale === "zh"
-              ? "已加载平台资源，开始设计 Agent 配置…"
-              : "Platform resources loaded — designing Agent configuration…",
-        },
-      });
-      emitPhase(emit, "extract", locale === "zh" ? "生成 Agent 草案" : "Building Agent draft");
-    }
-    const architectId = nextTraceId("tool");
-    if (emit) {
-      emit({
-        event: "trace",
-        step: {
-          type: "tool",
-          id: architectId,
-          name: "agent_architect",
-          label: locale === "zh" ? "Agent 架构师" : "Agent architect",
-          args: { turns: opts.messages.length },
-          argHint: locale === "zh" ? "匹配工具、触发器与交付方式" : "Matching tools, trigger, and delivery",
-          status: "running",
-        },
-      });
-    }
-    raw = await chatJson<Partial<AgentBuilderTurn>>(system, userPrompt, {
-      feature: locale === "zh" ? "企微 Agent Builder" : "Conversational Agent builder",
+    const { data: raw, streamed } = await chatJsonStream<{
+      reply?: string;
+      intent?: AgentBuilderAiIntent;
+      draft?: Partial<AgentBuilderDraft>;
+      clarifications?: unknown;
+      questions?: string[];
+      ready?: boolean;
+    }>(system, userPrompt, {
+      feature: "agent-builder",
       userId: opts.userId,
       temperature: 0.2,
+      taskTier: "fast",
+      maxTokens: 1200,
+      emit,
     });
-    if (emit) {
-      emit({
-        event: "trace_patch",
-        id: architectId,
-        patch: {
-          status: "done",
-          result:
-            locale === "zh"
-              ? `草案：${raw.draft?.name?.trim() || "未命名"} · 工具 ${(raw.draft?.skills ?? []).length} 个`
-              : `Draft: ${raw.draft?.name?.trim() || "Untitled"} · ${(raw.draft?.skills ?? []).length} tool(s)`,
-        },
-      });
+
+    let turn = normalizeTurn(raw as Partial<AgentBuilderTurn>, locale, builtinNames, promptSkillIds, partnerIds);
+    const baseDraft = { ...DEFAULT_DRAFT, ...(raw.draft ?? {}) } as AgentBuilderDraft;
+    const semanticDraft = applySemanticIntentFromAi(baseDraft, raw.intent, raw.draft ?? {}, {
+      partners,
+      boundPartnerId: opts.boundPartnerId,
+      builtinNames,
+      promptSkillIds,
+    });
+    const mergedRaw = { ...raw, draft: semanticDraft } as Partial<AgentBuilderTurn>;
+    const mergedDraft = normalizeTurn(mergedRaw, locale, builtinNames, promptSkillIds, partnerIds).draft;
+    turn = {
+      ...turn,
+      draft: mergedDraft,
+      ready: !!raw.ready && isDraftReady(mergedDraft) && !hasRequiredClarifications(turn.clarifications),
+    };
+
+    emit?.({
+      event: "trace_patch",
+      id: reasonId,
+      patch: {
+        status: "done",
+        content:
+          locale === "zh"
+            ? `草案：${turn.draft.name || "未命名"} · 工具 ${turn.draft.skills.length} 个`
+            : `Draft: ${turn.draft.name || "Untitled"} · ${turn.draft.skills.length} tool(s)`,
+      },
+    });
+    emitPhase(emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
+    const reply = raw.reply?.trim() || turn.reply;
+    if (reply) {
+      if (streamed && emit) emit({ event: "reply_reset" });
+      await emitReplyChunks(emit, reply);
     }
+    return { ...turn, reply };
   } catch (e) {
-    if (emit) {
-      emit({ event: "trace_patch", id: reasonId, patch: { status: "done" } });
-    }
+    emit?.({ event: "trace_patch", id: reasonId, patch: { status: "done" } });
     const detail = e instanceof AIError ? e.message : e instanceof Error ? e.message : String(e);
     return fallbackTurn(locale, detail);
   }
-
-  const turn = normalizeTurn(raw, locale, builtinNames, promptSkillIds, partnerIds);
-  if (emit) {
-    emitPhase(emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
-  }
-  await emitReplyChunks(opts.emit, turn.reply);
-  return turn;
 }
 
 export { isDraftReady, normalizeDeliveryMode };
