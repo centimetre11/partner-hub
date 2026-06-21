@@ -3,7 +3,7 @@ import { db } from "./db";
 import type { ChatMessage, ToolDef } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
 import type { TraceEmitter } from "./ai-trace";
-import { computeNextRunFromCron } from "./cron";
+import { computeNextRunFromCron, addLocalDays, getZonedParts, SCHEDULER_TIMEZONE, zonedLocalToUtc } from "./cron";
 import {
   newSkillContext,
   REPORT_AGENT_KEYWORDS,
@@ -29,25 +29,40 @@ export function computeNextRunAt(
     const fromCron = computeNextRunFromCron(agent.cronExpr, from);
     if (fromCron) return fromCron;
   }
-  const next = new Date(from);
+  const now = getZonedParts(from);
   if (agent.frequency === "HOURLY") {
-    next.setMinutes(0, 0, 0);
-    next.setHours(next.getHours() + 1);
-    return next;
+    let candidate = zonedLocalToUtc(
+      { year: now.year, month: now.month, day: now.day, hour: now.hour + 1, minute: 0 },
+      SCHEDULER_TIMEZONE
+    );
+    if (candidate <= from) {
+      candidate = zonedLocalToUtc(
+        { year: now.year, month: now.month, day: now.day, hour: now.hour + 2, minute: 0 },
+        SCHEDULER_TIMEZONE
+      );
+    }
+    return candidate;
   }
   if (agent.frequency === "WEEKLY") {
-    next.setHours(agent.runHour, 0, 0, 0);
-    // JS: 0=Sun…6=Sat; stored: 1=Mon…7=Sun
     const targetDow = agent.runWeekday % 7;
-    let delta = (targetDow - next.getDay() + 7) % 7;
-    if (delta === 0 && next <= from) delta = 7;
-    next.setDate(next.getDate() + delta);
-    return next;
+    for (let offset = 0; offset < 8; offset++) {
+      const { year, month, day } = addLocalDays(now.year, now.month, now.day, offset);
+      const wd = getZonedParts(zonedLocalToUtc({ year, month, day, hour: 12, minute: 0 })).weekday;
+      if (wd === targetDow) {
+        const candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 });
+        if (candidate > from) return candidate;
+      }
+    }
+    const fallback = addLocalDays(now.year, now.month, now.day, 7);
+    return zonedLocalToUtc({ ...fallback, hour: agent.runHour, minute: 0 });
   }
-  // DAILY default
-  next.setHours(agent.runHour, 0, 0, 0);
-  if (next <= from) next.setDate(next.getDate() + 1);
-  return next;
+  let { year, month, day } = now;
+  let candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 });
+  if (candidate <= from) {
+    ({ year, month, day } = addLocalDays(year, month, day, 1));
+    candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 });
+  }
+  return candidate;
 }
 
 // ============ Webhook push (Feishu / WeCom / Slack text format) ============

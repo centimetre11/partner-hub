@@ -8,11 +8,79 @@ export const CRON_PRESETS = [
   { id: "monthly1", expr: "0 9 1 * *", labelZh: "每月 1 号 9:00", labelEn: "1st of month 9:00" },
 ] as const;
 
+/** Cron 调度时区 — Docker 默认为 UTC，需显式指定业务时区 */
+export const SCHEDULER_TIMEZONE = process.env.SCHEDULER_TIMEZONE || "Asia/Shanghai";
+
 const DOW_ZH = ["日", "一", "二", "三", "四", "五", "六"];
 const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAY_SHORT: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
+}
+
+export type ZonedParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  weekday: number;
+};
+
+export function getZonedParts(date: Date, timeZone = SCHEDULER_TIMEZONE): ZonedParts {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    weekday: "short",
+    hour12: false,
+  });
+  const parts = dtf.formatToParts(date);
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "0";
+  return {
+    year: parseInt(pick("year"), 10),
+    month: parseInt(pick("month"), 10),
+    day: parseInt(pick("day"), 10),
+    hour: parseInt(pick("hour"), 10) % 24,
+    minute: parseInt(pick("minute"), 10),
+    weekday: WEEKDAY_SHORT[pick("weekday")] ?? 0,
+  };
+}
+
+/** 将业务时区的本地年月日时分转为 UTC Date */
+export function zonedLocalToUtc(
+  local: Pick<ZonedParts, "year" | "month" | "day" | "hour" | "minute">,
+  timeZone = SCHEDULER_TIMEZONE
+): Date {
+  let utcMs = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, 0);
+  for (let i = 0; i < 4; i++) {
+    const actual = getZonedParts(new Date(utcMs), timeZone);
+    const targetMs = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute, 0);
+    const actualMs = Date.UTC(actual.year, actual.month - 1, actual.day, actual.hour, actual.minute, 0);
+    utcMs += targetMs - actualMs;
+  }
+  return new Date(utcMs);
+}
+
+export function addLocalDays(
+  year: number,
+  month: number,
+  day: number,
+  days: number,
+  timeZone = SCHEDULER_TIMEZONE
+): Pick<ZonedParts, "year" | "month" | "day"> {
+  const anchor = zonedLocalToUtc({ year, month, day, hour: 12, minute: 0 }, timeZone);
+  anchor.setUTCDate(anchor.getUTCDate() + days);
+  const p = getZonedParts(anchor, timeZone);
+  return { year: p.year, month: p.month, day: p.day };
+}
+
+function cronWeekday(localWeekday: number): number {
+  return localWeekday === 0 ? 7 : localWeekday;
 }
 
 /** 将 Cron 表达式转为可读描述 */
@@ -46,10 +114,11 @@ export function describeCron(expr: string, locale: "zh" | "en" = "zh"): string {
   return expr;
 }
 
-/** 从 Cron 表达式计算下次运行时间（UTC 基准，按本地小时/星期解析） */
+/** 从 Cron 表达式计算下次运行时间（按 SCHEDULER_TIMEZONE 解析小时/星期） */
 export function computeNextRunFromCron(
   expr: string,
-  from = new Date()
+  from = new Date(),
+  timeZone = SCHEDULER_TIMEZONE
 ): Date | null {
   const parts = expr.trim().split(/\s+/);
   if (parts.length !== 5) return null;
@@ -57,67 +126,90 @@ export function computeNextRunFromCron(
   const [minStr, hourStr, domStr, , dowStr] = parts;
   const minute = minStr === "*" ? 0 : parseInt(minStr, 10);
   const hour = hourStr === "*" ? null : parseInt(hourStr, 10);
-
-  const next = new Date(from);
-  next.setSeconds(0, 0);
+  const now = getZonedParts(from, timeZone);
 
   // 每小时
   if (hourStr === "*" && domStr === "*" && dowStr === "*") {
-    next.setMinutes(minute, 0, 0);
-    if (next <= from) next.setHours(next.getHours() + 1);
-    return next;
+    let candidate = zonedLocalToUtc(
+      { year: now.year, month: now.month, day: now.day, hour: now.hour, minute },
+      timeZone
+    );
+    if (candidate <= from) {
+      const nextHour = zonedLocalToUtc(
+        { year: now.year, month: now.month, day: now.day, hour: now.hour + 1, minute },
+        timeZone
+      );
+      candidate = nextHour;
+    }
+    return candidate;
   }
 
   if (hour === null || Number.isNaN(hour)) return null;
-  next.setHours(hour, minute, 0, 0);
 
   // 每天
   if (domStr === "*" && dowStr === "*") {
-    if (next <= from) next.setDate(next.getDate() + 1);
-    return next;
+    let { year, month, day } = now;
+    let candidate = zonedLocalToUtc({ year, month, day, hour, minute }, timeZone);
+    if (candidate <= from) {
+      ({ year, month, day } = addLocalDays(year, month, day, 1, timeZone));
+      candidate = zonedLocalToUtc({ year, month, day, hour, minute }, timeZone);
+    }
+    return candidate;
   }
 
-  // 工作日 1-5 (Mon-Fri in cron, 1=Mon)
+  // 工作日 1-5 (Mon-Fri in cron)
   if (domStr === "*" && dowStr === "1-5") {
-    for (let i = 0; i < 8; i++) {
-      const dow = next.getDay(); // 0=Sun
-      const cronDow = dow === 0 ? 7 : dow; // 1=Mon..7=Sun
-      if (cronDow >= 1 && cronDow <= 5 && next > from) return next;
-      next.setDate(next.getDate() + 1);
-      next.setHours(hour, minute, 0, 0);
+    for (let offset = 0; offset < 8; offset++) {
+      const { year, month, day } = addLocalDays(now.year, now.month, now.day, offset, timeZone);
+      const wd = getZonedParts(zonedLocalToUtc({ year, month, day, hour: 12, minute: 0 }, timeZone), timeZone)
+        .weekday;
+      const cronDow = cronWeekday(wd);
+      if (cronDow >= 1 && cronDow <= 5) {
+        const candidate = zonedLocalToUtc({ year, month, day, hour, minute }, timeZone);
+        if (candidate > from) return candidate;
+      }
     }
-    return next;
+    return null;
   }
 
   // 每周特定日
   if (domStr === "*" && dowStr !== "*" && dowStr !== "1-5") {
-    const targetDow = parseInt(dowStr, 10) % 7; // cron: 0=Sun, 1=Mon
-    for (let i = 0; i < 8; i++) {
-      if (next.getDay() === targetDow && next > from) return next;
-      next.setDate(next.getDate() + 1);
-      next.setHours(hour, minute, 0, 0);
+    const targetDow = parseInt(dowStr, 10) % 7;
+    for (let offset = 0; offset < 8; offset++) {
+      const { year, month, day } = addLocalDays(now.year, now.month, now.day, offset, timeZone);
+      const wd = getZonedParts(zonedLocalToUtc({ year, month, day, hour: 12, minute: 0 }, timeZone), timeZone)
+        .weekday;
+      if (wd === targetDow) {
+        const candidate = zonedLocalToUtc({ year, month, day, hour, minute }, timeZone);
+        if (candidate > from) return candidate;
+      }
     }
-    return next;
+    return null;
   }
 
   // 每月特定日
   if (domStr !== "*" && dowStr === "*") {
     const targetDom = parseInt(domStr, 10);
-    next.setDate(targetDom);
-    if (next <= from) next.setMonth(next.getMonth() + 1);
-    next.setDate(targetDom);
-    next.setHours(hour, minute, 0, 0);
-    if (next <= from) {
-      next.setMonth(next.getMonth() + 1);
-      next.setDate(targetDom);
-      next.setHours(hour, minute, 0, 0);
+    for (let monthOffset = 0; monthOffset < 14; monthOffset++) {
+      const anchor = zonedLocalToUtc({ year: now.year, month: now.month, day: 1, hour: 12, minute: 0 }, timeZone);
+      anchor.setUTCMonth(anchor.getUTCMonth() + monthOffset);
+      const monthParts = getZonedParts(anchor, timeZone);
+      let candidate = zonedLocalToUtc(
+        { year: monthParts.year, month: monthParts.month, day: targetDom, hour, minute },
+        timeZone
+      );
+      if (candidate > from) return candidate;
     }
-    return next;
+    return null;
   }
 
-  // 兜底：若今天已过则明天
-  if (next <= from) next.setDate(next.getDate() + 1);
-  return next;
+  let { year, month, day } = now;
+  let candidate = zonedLocalToUtc({ year, month, day, hour, minute }, timeZone);
+  if (candidate <= from) {
+    ({ year, month, day } = addLocalDays(year, month, day, 1, timeZone));
+    candidate = zonedLocalToUtc({ year, month, day, hour, minute }, timeZone);
+  }
+  return candidate;
 }
 
 /** Cron 表达式映射到 Agent frequency/runHour/runWeekday（兼容旧调度） */
@@ -147,8 +239,16 @@ export function formatScheduleShort(expr: string | null | undefined, locale: "zh
 }
 
 export function formatTimeShort(d: Date, locale: "zh" | "en"): string {
+  const timeZone = locale === "zh" ? SCHEDULER_TIMEZONE : undefined;
   if (locale === "zh") {
-    return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const p = getZonedParts(d, timeZone);
+    return `${p.month}/${p.day} ${pad(p.hour)}:${pad(p.minute)}`;
   }
-  return d.toLocaleString("en-US", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("en-US", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  });
 }
