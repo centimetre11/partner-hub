@@ -211,7 +211,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             key={t.id}
             todo={t}
             customerId={customer.id}
-            contacts={contactOptions}
             bcp47={bcp47}
           />
         ))}

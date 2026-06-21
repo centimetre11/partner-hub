@@ -8,7 +8,6 @@ import { useMessages } from "@/lib/i18n/context";
 export function CustomerTodoRow({
   todo,
   customerId,
-  contacts,
   bcp47,
 }: {
   todo: {
@@ -19,7 +18,6 @@ export function CustomerTodoRow({
     assignee: { name: string } | null;
   };
   customerId: string;
-  contacts: { id: string; name: string }[];
   bcp47: string;
 }) {
   const m = useMessages();
@@ -32,7 +30,6 @@ export function CustomerTodoRow({
         title={todo.title}
         status={todo.status}
         customerId={customerId}
-        contacts={contacts}
       />
       <div className="min-w-0 flex-1">
         <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>{todo.title}</div>

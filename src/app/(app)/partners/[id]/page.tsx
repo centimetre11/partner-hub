@@ -304,7 +304,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm w-36 shrink-0" />
                   <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
                 </form>
-                <TodoList todos={p.todos} users={users} partnerId={p.id} contacts={contactOptions} m={m} L={L} bcp47={bcp47} />
+                <TodoList todos={p.todos} users={users} partnerId={p.id} m={m} L={L} bcp47={bcp47} />
               </Card>
               <div className="space-y-5">
                 <Card title={m.partnerDetail.profileGaps}>
@@ -496,7 +496,6 @@ function TodoList({
   todos,
   users,
   partnerId,
-  contacts,
   m,
   L,
   bcp47,
@@ -504,7 +503,6 @@ function TodoList({
   todos: (TodoItem & { assignee: User | null })[];
   users: User[];
   partnerId: string;
-  contacts: { id: string; name: string }[];
   m: Messages;
   L: ReturnType<typeof labelConstants>;
   bcp47: string;
@@ -518,7 +516,6 @@ function TodoList({
       todo={t}
       partnerId={partnerId}
       users={users}
-      contacts={contacts}
       priorityLabel={L.TODO_PRIORITY_LABELS[t.priority]}
       bcp47={bcp47}
       deleteAction={

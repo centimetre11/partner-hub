@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { completeTodoWithNoteAction, toggleTodoAction } from "@/lib/actions";
-import { useLabels, useMessages } from "@/lib/i18n/context";
+import { BusinessRecordDimensions, CrmBindingStatus } from "@/components/business-record-dimensions";
+import { useMessages } from "@/lib/i18n/context";
 import type { OwnerRef } from "@/lib/owner";
-
-const CATEGORIES = ["VISIT", "TRAINING", "NEGOTIATION", "DELIVERY", "RELATIONSHIP", "OTHER"] as const;
 
 const input =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
@@ -17,13 +16,18 @@ function resolveOwner(partnerId: string | null | undefined, customerId: string |
   return null;
 }
 
+type CrmMeta = {
+  crmCustomerBound: boolean;
+  crmCustomerName: string | null;
+  crmSalesmanBound: boolean;
+};
+
 export function TodoCompleteDialog({
   open,
   todoId,
   todoTitle,
   partnerId,
   customerId,
-  contacts = [],
   onClose,
 }: {
   open: boolean;
@@ -31,31 +35,47 @@ export function TodoCompleteDialog({
   todoTitle: string;
   partnerId?: string | null;
   customerId?: string | null;
-  contacts?: { id: string; name: string }[];
   onClose: () => void;
 }) {
   const t = useMessages().todos;
-  const pd = useMessages().partnerDetail;
+  const ip = useMessages().intakePanel;
   const common = useMessages().common;
-  const labels = useLabels();
   const router = useRouter();
   const owner = resolveOwner(partnerId, customerId);
   const canSync = !!owner;
 
   const [note, setNote] = useState("");
   const [sync, setSync] = useState(canSync);
-  const [category, setCategory] = useState<string>("OTHER");
-  const [contactId, setContactId] = useState("");
+  const [dims, setDims] = useState({
+    category: "OTHER",
+    traceNature: "",
+    traceAction: "",
+    contactName: "",
+  });
+  const [crmMeta, setCrmMeta] = useState<CrmMeta | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "info" | "err"; text: string } | null>(null);
+
+  const patchDims = useCallback((patch: Partial<typeof dims>) => {
+    setDims((prev) => ({ ...prev, ...patch }));
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     setNote("");
     setSync(canSync);
-    setCategory("OTHER");
-    setContactId("");
+    setDims({ category: "OTHER", traceNature: "", traceAction: "", contactName: "" });
+    setCrmMeta(null);
     setFeedback(null);
+
+    if (canSync) {
+      const qs = customerId ? `customerId=${customerId}` : `partnerId=${partnerId}`;
+      void fetch(`/api/business-record/meta?${qs}`)
+        .then((r) => r.json())
+        .then((data: CrmMeta) => setCrmMeta(data))
+        .catch(() => setCrmMeta(null));
+    }
+
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
@@ -66,7 +86,7 @@ export function TodoCompleteDialog({
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, canSync, submitting, onClose]);
+  }, [open, canSync, customerId, partnerId, submitting, onClose]);
 
   function appendQuick(text: string) {
     setNote((prev) => (prev ? `${prev}${prev.endsWith("，") || prev.endsWith(",") ? " " : "，"}${text}` : text));
@@ -78,6 +98,10 @@ export function TodoCompleteDialog({
       setFeedback({ tone: "err", text: t.noteRequired });
       return;
     }
+    if (sync && canSync && (!dims.traceNature || !dims.traceAction)) {
+      setFeedback({ tone: "err", text: ip.crmFieldsRequired });
+      return;
+    }
     setSubmitting(true);
     setFeedback(null);
     try {
@@ -85,8 +109,10 @@ export function TodoCompleteDialog({
       fd.set("todoId", todoId);
       fd.set("note", trimmed);
       fd.set("syncToBusinessRecord", sync && canSync ? "true" : "false");
-      fd.set("category", category);
-      if (contactId) fd.set("contactId", contactId);
+      fd.set("category", dims.category);
+      fd.set("traceNature", dims.traceNature);
+      fd.set("traceAction", dims.traceAction);
+      if (dims.contactName.trim()) fd.set("contactName", dims.contactName.trim());
       const res = await completeTodoWithNoteAction(fd);
       if (!res.ok) {
         setFeedback({ tone: "err", text: t.noteRequired });
@@ -110,7 +136,7 @@ export function TodoCompleteDialog({
         role="dialog"
         aria-modal
         aria-labelledby="todo-complete-title"
-        className="bg-white rounded-lg border border-slate-200 max-w-md w-full p-5 space-y-4"
+        className="bg-white rounded-lg border border-slate-200 max-w-md w-full p-5 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div>
@@ -147,7 +173,7 @@ export function TodoCompleteDialog({
         </div>
 
         {canSync && (
-          <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 space-y-2">
+          <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 space-y-3">
             <label className="flex items-start gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -161,31 +187,22 @@ export function TodoCompleteDialog({
               </span>
             </label>
             {sync && (
-              <div className="grid gap-2 sm:grid-cols-2 pt-1">
-                <label className="block space-y-1">
-                  <span className="text-xs text-slate-500">{pd.businessRecordCategory}</span>
-                  <select value={category} onChange={(e) => setCategory(e.target.value)} className={input}>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {labels.businessRecordCategoryLabels[c] ?? c}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {contacts.length > 0 && (
-                  <label className="block space-y-1">
-                    <span className="text-xs text-slate-500">{pd.businessRecordContact}</span>
-                    <select value={contactId} onChange={(e) => setContactId(e.target.value)} className={input}>
-                      <option value="">—</option>
-                      {contacts.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <>
+                {crmMeta && (
+                  <CrmBindingStatus
+                    crmCustomerBound={crmMeta.crmCustomerBound}
+                    crmSalesmanBound={crmMeta.crmSalesmanBound}
+                    crmCustomerName={crmMeta.crmCustomerName}
+                  />
                 )}
-              </div>
+                <BusinessRecordDimensions
+                  values={dims}
+                  onChange={patchDims}
+                  inferTitle={todoTitle}
+                  inferContent={note}
+                  compact
+                />
+              </>
             )}
           </div>
         )}
@@ -235,7 +252,6 @@ export function TodoCompleteButton({
   status,
   partnerId,
   customerId,
-  contacts = [],
   className,
   size = "md",
 }: {
@@ -244,7 +260,6 @@ export function TodoCompleteButton({
   status: string;
   partnerId?: string | null;
   customerId?: string | null;
-  contacts?: { id: string; name: string }[];
   className?: string;
   size?: "sm" | "md";
 }) {
@@ -293,7 +308,6 @@ export function TodoCompleteButton({
         todoTitle={title}
         partnerId={partnerId}
         customerId={customerId}
-        contacts={contacts}
         onClose={() => setOpen(false)}
       />
     </>

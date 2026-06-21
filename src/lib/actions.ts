@@ -13,6 +13,7 @@ import { getLocale } from "./i18n/locale-server";
 import { getMessages } from "./i18n/messages";
 import { normalizePartnerTier } from "./tier";
 import { persistBusinessRecord, normalizeBusinessRecordCategory } from "./business-record-core";
+import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
 import { recordSystemEvent } from "./activity-log";
 import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
@@ -542,7 +543,9 @@ export async function completeTodoWithNoteAction(formData: FormData) {
 
   const sync = formData.get("syncToBusinessRecord") === "true";
   const category = normalizeBusinessRecordCategory(String(formData.get("category") ?? "OTHER"));
-  const contactId = String(formData.get("contactId") ?? "").trim() || null;
+  const traceNature = String(formData.get("traceNature") ?? "").trim() || null;
+  const traceAction = String(formData.get("traceAction") ?? "").trim() || null;
+  const contactName = String(formData.get("contactName") ?? "").trim();
 
   const t = await db.todoItem.findUniqueOrThrow({ where: { id: todoId } });
   if (t.status === "DONE") return { ok: true as const };
@@ -556,16 +559,22 @@ export async function completeTodoWithNoteAction(formData: FormData) {
   let crmFeedback: { message?: string; warning?: string; info?: string } = {};
 
   if (sync && owner) {
+    if (!normalizeCrmTraceNature(traceNature) || !normalizeCrmTraceAction(traceAction)) {
+      return { ok: false as const, error: "crm_fields_required" };
+    }
+    const content = contactName ? `【联系人 ${contactName}】\n${note}` : note;
     const { crmSync } = await persistBusinessRecord({
       owner,
       userId: user.id,
       category,
       title: t.title,
-      content: note,
+      content,
       occurredAt: new Date(),
-      contactId,
+      contactId: null,
       source: "TODO",
       sourceTodoId: todoId,
+      traceNature,
+      traceAction,
     });
     if (crmSync.status === "synced") {
       crmFeedback = { message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };

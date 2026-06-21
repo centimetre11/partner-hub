@@ -12,7 +12,6 @@ export function TodoItemRow({
   partnerId,
   customerId,
   users,
-  contacts,
   priorityLabel,
   bcp47,
   deleteAction,
@@ -21,7 +20,6 @@ export function TodoItemRow({
   partnerId?: string | null;
   customerId?: string | null;
   users: User[];
-  contacts: { id: string; name: string }[];
   priorityLabel: string;
   bcp47: string;
   deleteAction: React.ReactNode;
@@ -38,7 +36,6 @@ export function TodoItemRow({
         status={todo.status}
         partnerId={partnerId ?? todo.partnerId}
         customerId={customerId ?? todo.customerId}
-        contacts={contacts}
       />
       <div className="min-w-0 flex-1">
         <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>
