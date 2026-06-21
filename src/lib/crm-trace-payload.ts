@@ -62,6 +62,7 @@ export function inferTraceAction(
   if (/whatsapp|wechat|微信|line|电话|通话/i.test(text)) return "WhatsApp or Line";
   if (/邮件|email|e-mail/i.test(text)) return "Email";
   if (/拜访|visit|到访|见面|吃饭|接待/i.test(text)) return "接待";
+  if (/确认|同步|进展|跟进|配合|迁移|测试|评估/i.test(text)) return "其它";
 
   if (category === "VISIT") return "接待";
   if (category === "TRAINING") return "培训";

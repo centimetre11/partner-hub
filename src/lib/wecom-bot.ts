@@ -50,7 +50,7 @@ import {
 import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
-import { formatProposeAppliedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
+import { formatProposeAppliedReply, formatProposeConfirmBlockedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { enrichBusinessRecordCompanyTarget } from "@/lib/business-record-intake";
 import {
   enrichProposalPartnerFromText,
@@ -982,7 +982,12 @@ async function handleTextMessage(frame: WsFrame) {
       if (!session.ready) {
         const reply = session.crmOnlyReady
           ? "Partner Hub 未建档。若只写入帆软 CRM，请回复 **仅CRM**；或回复「取消」放弃。"
-          : "草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。";
+          : formatProposeConfirmBlockedReply({
+              scope: session.scope,
+              proposal: session.proposal,
+              ready: session.ready,
+              crmOnlyReady: session.crmOnlyReady,
+            });
         appendHistory(key, "assistant", reply);
         await wsClient.replyStream(frame, streamId, reply, true);
         return;

@@ -135,12 +135,17 @@ export function buildOutputSchema(scope: IntakeScope, locale: Locale): string {
 }
 Rules:
 - Fill businessRecords only; fields/contacts/opportunities/todos/trainings/solutions MUST stay empty arrays.
+- businessRecords MUST contain at least one item — NEVER leave it empty. summary alone is NOT a saveable record.
+- title = concise headline (≤30 chars); content = full details. Do NOT put the only copy of the record in summary.
 - This is NOT partner onboarding — never emit profile fields (website, category, headcount, etc.).
 - When partner is pre-bound in [伙伴绑定], omit partnerName entirely.
 - One user message may yield multiple businessRecords if they describe several milestones.
-- traceNature and traceAction are mandatory for CRM KPI sync — infer from text; user will confirm in UI before save.
+- traceNature and traceAction are mandatory for CRM KPI sync — infer from text; user confirms before save (WeCom reply「确认」or Web).
+- Progress-sync / status-update notes (迁移进展、配合测试、待定事项): infer traceNature=非现场; traceAction=其它 or 远程会议 or WhatsApp or Line.
+- When user names a person listed in [Existing contacts], set contactName to that contact.
 - If traceNature or traceAction cannot be inferred confidently, set ready=false and add clarifications (direct apply) e.g. id "br-0-nature" with options 现场|非现场, or "br-0-action" with CRM action options.
-- category: VISIT=meetings/visits; TRAINING=training; NEGOTIATION=deals; DELIVERY=delivery; RELATIONSHIP=relationship; OTHER=rest.
+- category: VISIT=meetings/visits; TRAINING=training; NEGOTIATION=deals; DELIVERY=delivery/migration/testing; RELATIONSHIP=relationship; OTHER=rest.
+- reply MUST match ready: if ready=false, say what is missing (现场/非现场、商务行为、记录标题); NEVER say「可以确认」「已成功提取可保存」when ready=false.
 - Extract only from user text; do not invent. ready=true only when every record has title + traceNature + traceAction.
 ${clarificationFooter}`;
   }
@@ -352,16 +357,17 @@ Decide add (action=add) vs update (action=update with id) against the existing l
   business_record: {
     title: "Log business milestone",
     intro:
-      "The user wants to record key business progress for this partner (visits, training scheduled, negotiations, delivery, relationship events). Input is usually free-form notes or chat paste—extract structured milestone(s).",
-    guide: `From user text extract one or more businessRecords:
-- title (required): concise headline
-- traceNature (required): 现场 | 非现场 — 现场 for in-person; 非现场 for remote/chat/email
+      "The user wants to record key business progress for this partner (visits, training scheduled, negotiations, delivery, migration/testing updates, relationship events). Input is usually free-form notes or chat paste—extract structured milestone(s) into businessRecords (never summary-only).",
+    guide: `From user text extract one or more businessRecords (businessRecords.length >= 1 always):
+- title (required): concise headline; content: full details (summary is a one-line recap only)
+- traceNature (required): 现场 | 非现场 — 现场 for in-person; 非现场 for remote/chat/email/progress sync
 - traceAction (required): one of 接待|培训|服务|调研|方案|催款|客情|其它|远程会议|WhatsApp or Line|Email
-- content: optional details
 - category: VISIT / TRAINING / NEGOTIATION / DELIVERY / RELATIONSHIP / OTHER
 - occurredAt: YYYY-MM-DD if mentioned, else today
-- contactName: if a known contact from [Existing contacts] is involved
-No web research. ready=true only when title + traceNature + traceAction are set for each record.`,
+- contactName: match [Existing contacts] when user names someone (e.g. Mohammed)
+Progress-sync example — input: "跟 Mohammed 确认了沙特节点迁移进展，后续配合 FDL 性能测试，Doris 待定"
+→ businessRecords: [{ title: "确认沙特节点迁移进展，安排 FDL 性能测试", content: "...(full text)...", contactName: "Mohammed", traceNature: "非现场", traceAction: "其它", category: "DELIVERY", occurredAt: today }]
+No web research. ready=true only when title + traceNature + traceAction are set for each record; reply must not promise save when ready=false.`,
   },
   todo: {
     title: "Create todo",
@@ -434,7 +440,7 @@ ${schemaHintForScope(opts.scope, opts.locale)}
 
 ${buildOutputSchema(opts.scope, opts.locale)}
 
-Rules: one JSON object only; user-facing strings in ${lang}; ready=true when required items are clear; no web research; no profile/onboarding fields outside this task.`;
+Rules: one JSON object only; user-facing strings in ${lang}; ready=true when required items are clear; no web research; no profile/onboarding fields outside this task.${opts.scope === "business_record" ? " businessRecords MUST be non-empty (≥1 item); summary alone does not count." : ""}`;
 }
 
 export function buildExtractSystemPrompt(locale: Locale): string {

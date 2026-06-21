@@ -114,7 +114,7 @@ function inferOccurredAt(text: string, today: string): string {
 function inferBusinessCategory(text: string) {
   if (/认证|培训|training|fca|l2/i.test(text)) return "TRAINING" as const;
   if (/谈判|报价|合同|deal/i.test(text)) return "NEGOTIATION" as const;
-  if (/交付|上线|delivery/i.test(text)) return "DELIVERY" as const;
+  if (/交付|上线|delivery|迁移|进展|测试|评估/i.test(text)) return "DELIVERY" as const;
   if (/拜访|visit|见面|接待|吃饭|vp|ceo|客户/i.test(text)) return "VISIT" as const;
   return "OTHER" as const;
 }
@@ -213,7 +213,7 @@ export function heuristicBusinessRecordTurn(
 ): IntakeTurn | null {
   const text = sanitizeBusinessRecordText(userText);
   if (!text) return null;
-  if (!/拜访|visit|会议|认证|培训|商务|vp|ceo|客户|讨论|见面|meal|training|fca|l2|电话|联系|预约/i.test(text)) {
+  if (!/拜访|visit|会议|认证|培训|商务|vp|ceo|客户|讨论|见面|meal|training|fca|l2|电话|联系|预约|确认|进展|迁移|配合|测试|评估|待定|同步|跟进/i.test(text)) {
     return null;
   }
 

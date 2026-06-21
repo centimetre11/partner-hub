@@ -1,5 +1,6 @@
 import type { IntakeProposal, IntakeScope } from "./ai-intake";
 import { countProposalItems } from "./proposal-merge";
+import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
 
 const SCOPE_LABELS: Record<IntakeScope, string> = {
   new_partner: "添加伙伴",
@@ -27,7 +28,6 @@ function formatBusinessRecordChecklist(
   crmOnlyReady?: boolean
 ) {
   const r = proposal.businessRecords[0];
-  if (!r) return "";
 
   const hubName = proposal.hubPartnerId ? proposal.partnerName?.trim() : undefined;
   const companyName =
@@ -37,16 +37,16 @@ function formatBusinessRecordChecklist(
   const hasHub = !!proposal.hubPartnerId && proposal.saveMode !== "crm_only";
   const hasCrm = !!proposal.crmCustomerId;
   const crmLabel = proposal.crmCustomerName ?? proposal.crmCustomerId ?? companyName ?? "";
-  const hasNature = !!r.traceNature?.trim();
-  const hasAction = !!r.traceAction?.trim();
-  const hasDetail = !!r.title?.trim();
+  const hasNature = r ? !!normalizeCrmTraceNature(r.traceNature) : false;
+  const hasAction = r ? !!normalizeCrmTraceAction(r.traceAction) : false;
+  const hasDetail = !!r?.title?.trim();
 
   const lines = [
     checklistLine(hasHub, "Partner Hub 伙伴", hasHub ? hubName : "未建档"),
     checklistLine(hasCrm, "帆软 CRM 客户", hasCrm ? crmLabel : "未匹配"),
-    checklistLine(hasNature, "现场/非现场", r.traceNature),
-    checklistLine(hasAction, "CRM 商务行为", r.traceAction),
-    checklistLine(hasDetail, "记录详情", r.title?.slice(0, 60)),
+    checklistLine(hasNature, "现场/非现场", r?.traceNature),
+    checklistLine(hasAction, "CRM 商务行为", r?.traceAction),
+    checklistLine(hasDetail, "记录详情", r?.title?.slice(0, 60)),
   ];
 
   let status: string;
@@ -59,6 +59,20 @@ function formatBusinessRecordChecklist(
   }
 
   return `\n**【商务记录 · 填报清单】**\n${lines.join("\n")}\n_${status}_`;
+}
+
+/** WeCom reply when user confirms but draft is incomplete */
+export function formatProposeConfirmBlockedReply(opts: {
+  scope: IntakeScope;
+  proposal: IntakeProposal;
+  ready: boolean;
+  crmOnlyReady?: boolean;
+}): string {
+  if (opts.scope === "business_record") {
+    const checklist = formatBusinessRecordChecklist(opts.proposal, opts.ready, opts.crmOnlyReady);
+    return `草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。${checklist}`;
+  }
+  return "草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。";
 }
 
 /** Render propose draft as WeCom-friendly markdown */
@@ -94,7 +108,7 @@ export function formatProposeWecomReply(opts: {
   for (const t of opts.proposal.trainings) draftLines.push(`培训：${t.person}${t.targetCert ? ` → ${t.targetCert}` : ""}`);
   for (const s of opts.proposal.solutions) draftLines.push(`方案：${s.name}`);
 
-  if (opts.scope === "business_record" && opts.proposal.businessRecords.length) {
+  if (opts.scope === "business_record") {
     parts.push(formatBusinessRecordChecklist(opts.proposal, opts.ready, opts.crmOnlyReady));
   } else if (draftLines.length) {
     parts.push(`\n**【${SCOPE_LABELS[opts.scope]} · 草案预览】**\n${bullet(draftLines)}`);

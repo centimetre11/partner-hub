@@ -191,8 +191,8 @@ export function buildPartnerBindingPrompt(opts: {
     const { partnerName } = opts.binding;
     if (opts.scope === "business_record") {
       return opts.locale === "zh"
-        ? `[伙伴绑定 · 已锁定]\n当前录入会话已绑定伙伴「${partnerName}」。商务记录默认归属该伙伴；不要追问属于哪家公司。\nproposal.partnerName 必须设为「${partnerName}」。\n必须填写 traceNature（现场/非现场）与 traceAction（CRM 商务行为）；ready=true 仅当上述字段齐全。用户在 Web 端确认后才会保存并同步 CRM。`
-        : `[Partner binding · locked]\nBound to "${partnerName}". Set proposal.partnerName to "${partnerName}". traceNature and traceAction required; ready=true only when complete. User confirms on Web before CRM sync.`;
+        ? `[伙伴绑定 · 已锁定]\n当前录入会话已绑定伙伴「${partnerName}」。商务记录默认归属该伙伴；不要追问属于哪家公司。\nproposal.partnerName 必须设为「${partnerName}」。\nbusinessRecords 至少一条；必须填写 title、traceNature（现场/非现场）与 traceAction（CRM 商务行为）；ready=true 仅当上述字段齐全。\n用户回复「确认」（企微/Web 均可）后才会保存并同步 CRM。`
+        : `[Partner binding · locked]\nBound to "${partnerName}". Set proposal.partnerName to "${partnerName}". businessRecords must have ≥1 item with title, traceNature, traceAction; ready=true only when complete. User replies「确认」(WeCom or Web) before CRM sync.`;
     }
     return opts.locale === "zh"
       ? `[伙伴绑定 · 已锁定]\n当前录入会话已绑定伙伴「${partnerName}」。商务记录、商机、联系人、待办、培训、联合方案等默认全部归属该伙伴；不要追问属于哪家公司。\nproposal.partnerName 必须设为「${partnerName}」。信息足够时 ready=true（系统将自动保存，无需用户确认）。`

@@ -280,6 +280,18 @@ function asTrimmedString(v: unknown): string {
   return String(v).trim();
 }
 
+/** When LLM fills summary but omits businessRecords, derive one record for CRM sync. */
+function backfillBusinessRecordsFromSummary(proposal: Partial<IntakeProposal>): Partial<IntakeProposal> {
+  const records = proposal.businessRecords ?? [];
+  const summary = asTrimmedString(proposal.summary);
+  if (records.length > 0 || !summary) return proposal;
+  const title = summary.length > 60 ? `${summary.slice(0, 57)}…` : summary;
+  return {
+    ...proposal,
+    businessRecords: [{ title, content: summary, category: "OTHER" }],
+  };
+}
+
 function intakeParseErrorReply(locale: Locale, detail: string): string {
   const short = detail.slice(0, 160);
   return locale === "zh"
@@ -411,7 +423,8 @@ async function parseIntakeTurnFromContent(
 }
 
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: IntakeScope): IntakeTurn {
-  const p: Partial<IntakeProposal> = raw.proposal ?? {};
+  const p: Partial<IntakeProposal> =
+    scope === "business_record" ? backfillBusinessRecordsFromSummary(raw.proposal ?? {}) : (raw.proposal ?? {});
   const coerceField = (f: FieldUpdate): FieldUpdate => ({
     ...f,
     label: fieldLabel(locale, f.field) || f.label,

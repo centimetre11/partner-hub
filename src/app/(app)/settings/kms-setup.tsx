@@ -59,7 +59,7 @@ export function KmsSetup({ credential }: { credential: KmsCredentialForClient })
     <div className="space-y-4 text-sm">
       <p className="text-xs text-slate-500 leading-relaxed">
         Connect to FanRuan KMS (Confluence 7.x). Enter your{" "}
-        <a href="https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html" className="text-sky-600 hover:underline" target="_blank" rel="noreferrer">
+        <a href="https://kms.fineres.com/plugins/personalaccesstokens/usertokens.action" className="text-sky-600 hover:underline" target="_blank" rel="noreferrer">
           Personal Access Token
         </a>
         {" "}once; after saving, the Agent and AI assistant will use it automatically when calling{" "}
