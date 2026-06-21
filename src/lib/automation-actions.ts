@@ -6,7 +6,7 @@ import { db } from "./db";
 import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
 import { cronToAgentSchedule } from "./cron";
-import { createAutomationFromDraft, buildAutomationInstructions, resolveAutomationDraftContent } from "./automation-create";
+import { createAutomationFromDraft, buildAutomationInstructions, resolveAutomationDraftContent, ensureUniqueAutomationSlug } from "./automation-create";
 import { isAutomationDraftReady } from "./builder-context-prompt";
 import {
   defaultAutomationName,
@@ -37,12 +37,11 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
   const timezone = String(formData.get("timezone") ?? "Asia/Shanghai").trim();
   const wecomPushChatId = String(formData.get("wecomPushChatId") ?? "").trim() || null;
   const pushEmailTo = String(formData.get("pushEmailTo") ?? "").trim() || null;
-  const notifyOnSuccess = formData.get("notifyOnSuccess") === "on";
+  const notifyOnSuccess = formData.get("notifyOnSuccess") !== "off";
   const notifyOnFailure = formData.get("notifyOnFailure") === "on";
   const enabledInput = formData.get("enabled");
-  const activate = formData.get("activate") === "on";
   const enabled =
-    enabledInput === "on" || enabledInput === "off" ? enabledInput === "on" : activate;
+    enabledInput === "on" || enabledInput === "off" ? enabledInput === "on" : true;
   const description = String(formData.get("description") ?? "").trim();
   const nameInput = String(formData.get("name") ?? "").trim();
 
@@ -60,10 +59,12 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
   if (!slug) slug = defaultAutomationSlug(partner?.name || description.slice(0, 24));
   if (!name) name = defaultAutomationName(description, "zh");
 
-  const existingSlug = await db.agent.findFirst({
-    where: { slug, ...(id ? { id: { not: id } } : {}) },
-  });
-  if (existingSlug) return { ok: false, error: "slug_exists" };
+  if (id) {
+    const existingSlug = await db.agent.findFirst({ where: { slug, id: { not: id } } });
+    if (existingSlug) return { ok: false, error: "slug_exists" };
+  } else {
+    slug = await ensureUniqueAutomationSlug(slug);
+  }
 
   const draft: AutomationBuilderDraft = {
     slug,
@@ -117,7 +118,7 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     scopeType: partnerId ? ("PARTNER" as const) : ("ALL" as const),
     partnerId: partnerId || null,
     shared: true,
-    enabled: activate,
+    enabled,
     isAutomation: true,
     isTemplate: false,
   };
@@ -152,14 +153,18 @@ export async function saveAutomationAction(formData: FormData): Promise<PersistA
 export async function createAutomationFromBuilderAction(formData: FormData) {
   const user = await requireUser();
   const raw = String(formData.get("draft") ?? "");
-  if (!raw) return;
-  const draft = JSON.parse(raw) as AutomationBuilderDraft;
-  if (!isAutomationDraftReady(draft)) return;
-
-  const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
-  revalidatePath("/automations");
-  revalidatePath("/ai");
-  redirect(`/automations/${created.id}`);
+  if (!raw) redirect("/automations/new?error=empty_draft");
+  try {
+    const draft = JSON.parse(raw) as AutomationBuilderDraft;
+    if (!isAutomationDraftReady(draft)) redirect("/automations/new?error=not_ready");
+    const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
+    revalidatePath("/automations");
+    revalidatePath("/ai");
+    redirect(`/automations/${created.id}`);
+  } catch (e) {
+    console.error("[createAutomationFromBuilderAction]", e);
+    redirect("/automations/new?error=create_failed");
+  }
 }
 
 export async function upsertAutomationAction(formData: FormData) {

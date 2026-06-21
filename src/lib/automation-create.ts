@@ -22,6 +22,23 @@ function slugify(raw: string): string {
     .slice(0, 64);
 }
 
+/** Ensure slug is unique; appends -2, -3, … when base is taken */
+export async function ensureUniqueAutomationSlug(base: string, excludeId?: string): Promise<string> {
+  let slug = slugify(base) || "scheduled-push";
+  let candidate = slug;
+  let n = 2;
+  while (n < 100) {
+    const existing = await db.agent.findFirst({
+      where: { slug: candidate, ...(excludeId ? { id: { not: excludeId } } : {}) },
+    });
+    if (!existing) return candidate;
+    const suffix = `-${n}`;
+    candidate = `${slug.slice(0, Math.max(1, 64 - suffix.length))}${suffix}`;
+    n++;
+  }
+  return `${slug.slice(0, 48)}-${Date.now().toString(36).slice(-6)}`;
+}
+
 function injectVariables(taskMd: string, variables: AutomationVariable[]): string {
   let out = taskMd;
   for (const v of variables) {
@@ -116,19 +133,14 @@ export async function createAutomationFromDraft(
   const { taskMd, variables, partnerId, goal } = await resolveAutomationDraftContent(draft, opts);
   const locale = opts.locale ?? "zh";
 
-  const slug = slugify(
+  const slugBase =
     draft.slug?.trim() ||
-      defaultAutomationSlug(variables.find((v) => v.key === "partner_name")?.value || goal.slice(0, 24))
-  );
+    defaultAutomationSlug(variables.find((v) => v.key === "partner_name")?.value || goal.slice(0, 24));
+  const slug = await ensureUniqueAutomationSlug(slugBase);
   const name = draft.name?.trim() || defaultAutomationName(goal, locale);
 
   if (!slug || !name || !taskMd) {
     throw new Error("Automation slug, name, and taskMd are required");
-  }
-
-  const existing = await db.agent.findFirst({ where: { slug } });
-  if (existing) {
-    throw new Error(`Slug "${slug}" already exists`);
   }
 
   const cronExpr = (draft.cronExpr || "0 9 * * *").trim();

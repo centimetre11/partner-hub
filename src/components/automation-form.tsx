@@ -80,16 +80,34 @@ export function AutomationForm({
     return parts.length ? parts.join(" · ") : c.chatId.slice(0, 16);
   }
 
+  function buildFormData(): FormData {
+    const fd = new FormData();
+    if (initial.id) fd.set("id", initial.id);
+    fd.set("enabled", initial.enabled ? "on" : "off");
+    fd.set("notifyOnSuccess", initial.notifyOnSuccess ? "on" : "off");
+    fd.set("notifyOnFailure", initial.notifyOnFailure ? "on" : "off");
+    fd.set("description", description);
+    fd.set("cronExpr", cronExpr);
+    fd.set("timezone", timezone);
+    fd.set("partnerId", partnerId);
+    fd.set("wecomPushChatId", wecomPushChatId);
+    fd.set("pushEmailTo", pushEmailTo);
+    fd.set("slug", slug);
+    fd.set("name", name);
+    return fd;
+  }
+
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSaveError(null);
     setSaveOk(false);
-    const form = e.currentTarget;
-    if (!form.reportValidity()) return;
+    if (deliveryMissing) {
+      setSaveError(a.saveErrorDelivery);
+      return;
+    }
 
-    const fd = new FormData(form);
     startTransition(async () => {
-      const result = await saveAutomationAction(fd);
+      const result = await saveAutomationAction(buildFormData());
       if (!result.ok) {
         setSaveError(automationSaveErrorMessage(result.error, a));
         return;
@@ -108,7 +126,8 @@ export function AutomationForm({
     <form id="automation-edit-form" onSubmit={handleSubmit} className="min-h-[calc(100vh-8rem)] flex flex-col">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="enabled" value={initial.enabled ? "on" : "off"} />
-      <input type="hidden" name="notifyOnFailure" value="on" />
+      <input type="hidden" name="notifyOnSuccess" value={initial.notifyOnSuccess ? "on" : "off"} />
+      <input type="hidden" name="notifyOnFailure" value={initial.notifyOnFailure ? "on" : "off"} />
 
       <div className="flex items-center justify-between gap-4 px-8 py-4 border-b border-slate-200/80 bg-white sticky top-0 z-10">
         <div className="flex items-center gap-3 min-w-0">
