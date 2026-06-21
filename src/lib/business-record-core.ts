@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { syncBusinessRecordToCrm, type CrmBusinessRecordSyncResult } from "./crm-business-record";
+import { type OwnerRef, ownerData } from "./owner";
 
 export const BUSINESS_RECORD_CATEGORIES = [
   "VISIT",
@@ -46,7 +47,7 @@ export function resolveBusinessRecordCrmSync(record: {
 }
 
 export async function persistBusinessRecord(opts: {
-  partnerId: string;
+  owner: OwnerRef;
   userId: string;
   category: string;
   title: string;
@@ -59,9 +60,10 @@ export async function persistBusinessRecord(opts: {
   traceAction?: string | null;
 }) {
   const category = normalizeBusinessRecordCategory(opts.category);
+  const owner = ownerData(opts.owner);
   const event = await db.timelineEvent.create({
     data: {
-      partnerId: opts.partnerId,
+      ...owner,
       type: "MILESTONE",
       title: opts.title,
       content: opts.content,
@@ -73,7 +75,7 @@ export async function persistBusinessRecord(opts: {
 
   const record = await db.businessRecord.create({
     data: {
-      partnerId: opts.partnerId,
+      ...owner,
       category,
       title: opts.title,
       content: opts.content,
@@ -99,7 +101,7 @@ export async function persistBusinessRecord(opts: {
   try {
     crmSync = await syncBusinessRecordToCrm({
       recordId: record.id,
-      partnerId: opts.partnerId,
+      owner: opts.owner,
       userId: opts.userId,
       category,
       title: opts.title,

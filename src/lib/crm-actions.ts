@@ -167,6 +167,7 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
     select: {
       id: true,
       partnerId: true,
+      customerId: true,
       category: true,
       title: true,
       content: true,
@@ -181,11 +182,18 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
   if (!record) return { error: "商务记录不存在" };
   if (record.crmSyncStatus === "SYNCED" || record.crmSyncedAt) return { error: "该记录已同步到 CRM" };
 
+  const owner = record.customerId
+    ? ({ kind: "customer", id: record.customerId } as const)
+    : record.partnerId
+      ? ({ kind: "partner", id: record.partnerId } as const)
+      : null;
+  if (!owner) return { error: "商务记录缺少归属" };
+
   const { syncBusinessRecordToCrm } = await import("./crm-business-record");
   const { normalizeBusinessRecordCategory } = await import("./business-record-core");
   const crmSync = await syncBusinessRecordToCrm({
     recordId: record.id,
-    partnerId: record.partnerId,
+    owner,
     userId: user.id,
     category: normalizeBusinessRecordCategory(record.category),
     title: record.title,
@@ -196,7 +204,7 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
     traceAction: record.crmTraceAction,
   });
 
-  revalidatePath(`/partners/${record.partnerId}`);
+  revalidatePath(owner.kind === "customer" ? `/customers/${owner.id}` : `/partners/${owner.id}`);
   if (crmSync.status === "synced") {
     return { ok: true, message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };
   }

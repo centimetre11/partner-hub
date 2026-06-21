@@ -93,9 +93,44 @@ export async function bindWecomChatToPartner(chatId: string, partnerId: string |
   });
 }
 
+export async function bindWecomChatToCustomer(chatId: string, customerId: string | null, label?: string) {
+  if (customerId) {
+    await db.wecomChat.updateMany({
+      where: { customerId, chatId: { not: chatId } },
+      data: { customerId: null },
+    });
+  }
+  const chat = await db.wecomChat.findUnique({ where: { chatId } });
+  if (!chat) {
+    return db.wecomChat.create({
+      data: {
+        chatId,
+        chatType: "group",
+        customerId,
+        label: label?.trim() || null,
+      },
+      include: { customer: { select: { id: true, name: true } } },
+    });
+  }
+  return db.wecomChat.update({
+    where: { chatId },
+    data: {
+      customerId,
+      ...(label?.trim() ? { label: label.trim() } : {}),
+    },
+    include: { customer: { select: { id: true, name: true } } },
+  });
+}
+
 export async function getWecomChatForPartner(partnerId: string) {
   return db.wecomChat.findUnique({
     where: { partnerId },
+  });
+}
+
+export async function getWecomChatForCustomer(customerId: string) {
+  return db.wecomChat.findUnique({
+    where: { customerId },
   });
 }
 

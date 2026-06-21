@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLabels, useMessages } from "@/lib/i18n/context";
 import { createBusinessRecordAction } from "@/lib/actions";
+import type { OwnerRef } from "@/lib/owner";
 
 const CATEGORIES = ["VISIT", "TRAINING", "NEGOTIATION", "DELIVERY", "RELATIONSHIP", "OTHER"] as const;
 
 export function BusinessRecordForm({
-  partnerId,
+  owner,
   source = "MANUAL",
   defaultTitle = "",
   sourceTodoId,
@@ -16,7 +17,7 @@ export function BusinessRecordForm({
   onDone,
   compact = false,
 }: {
-  partnerId: string;
+  owner: OwnerRef;
   source?: "MANUAL" | "TODO" | "RELATIONSHIP_TAB";
   defaultTitle?: string;
   sourceTodoId?: string;
@@ -53,7 +54,7 @@ export function BusinessRecordForm({
       fd.set("source", source);
       if (contactId) fd.set("contactId", contactId);
       if (sourceTodoId) fd.set("sourceTodoId", sourceTodoId);
-      const res = await createBusinessRecordAction(partnerId, fd);
+      const res = await createBusinessRecordAction(owner, fd);
       if (res?.message) setFeedback({ tone: "ok", text: res.message });
       else if (res?.warning) setFeedback({ tone: "warn", text: res.warning });
       else if (res?.info) setFeedback({ tone: "info", text: res.info });

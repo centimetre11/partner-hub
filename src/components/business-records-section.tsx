@@ -9,6 +9,7 @@ import { AiAddButton } from "@/components/ai-add-button";
 import { deleteBusinessRecordAction } from "@/lib/actions";
 import { useLabels, useLocale, useMessages } from "@/lib/i18n/context";
 import { localeToBcp47 } from "@/lib/i18n/locale";
+import type { OwnerRef } from "@/lib/owner";
 
 type RecordRow = {
   id: string;
@@ -24,11 +25,11 @@ type RecordRow = {
 };
 
 export function BusinessRecordsSection({
-  partnerId,
+  owner,
   records,
   contacts = [],
 }: {
-  partnerId: string;
+  owner: OwnerRef;
   records: RecordRow[];
   contacts?: { id: string; name: string }[];
 }) {
@@ -41,7 +42,7 @@ export function BusinessRecordsSection({
 
   function removeRecord(recordId: string) {
     startTransition(async () => {
-      await deleteBusinessRecordAction(partnerId, recordId);
+      await deleteBusinessRecordAction(owner, recordId);
       router.refresh();
     });
   }
@@ -54,12 +55,14 @@ export function BusinessRecordsSection({
         </h3>
         {!showForm && (
           <div className="flex items-center gap-2">
-            <AiAddButton
-              scope="business_record"
-              partnerId={partnerId}
-              label={pd.aiBusinessRecord}
-              variant="soft"
-            />
+            {owner.kind === "partner" && (
+              <AiAddButton
+                scope="business_record"
+                partnerId={owner.id}
+                label={pd.aiBusinessRecord}
+                variant="soft"
+              />
+            )}
             <button
               type="button"
               onClick={() => setShowForm(true)}
@@ -74,7 +77,7 @@ export function BusinessRecordsSection({
         {showForm && (
           <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-3">
             <BusinessRecordForm
-              partnerId={partnerId}
+              owner={owner}
               source="MANUAL"
               contacts={contacts}
               onDone={() => setShowForm(false)}
@@ -122,11 +125,11 @@ export function BusinessRecordsSection({
 }
 
 export function BusinessRecordDialogButton({
-  partnerId,
+  owner,
   contacts = [],
   label,
 }: {
-  partnerId: string;
+  owner: OwnerRef;
   contacts?: { id: string; name: string }[];
   label?: string;
 }) {
@@ -136,7 +139,9 @@ export function BusinessRecordDialogButton({
   return (
     <>
       <div className="flex items-center gap-2">
-        <AiAddButton scope="business_record" partnerId={partnerId} label={pd.aiBusinessRecord} variant="soft" />
+        {owner.kind === "partner" && (
+          <AiAddButton scope="business_record" partnerId={owner.id} label={pd.aiBusinessRecord} variant="soft" />
+        )}
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -153,7 +158,7 @@ export function BusinessRecordDialogButton({
           >
             <h3 className="text-sm font-semibold text-slate-800">{pd.logBusinessRecord}</h3>
             <BusinessRecordForm
-              partnerId={partnerId}
+              owner={owner}
               source="RELATIONSHIP_TAB"
               contacts={contacts}
               onDone={() => setOpen(false)}

@@ -103,7 +103,7 @@ export function TodoItemRow({
           <div className="text-xs font-medium text-slate-800">{pd.recordAsMilestone}</div>
           <p className="text-xs text-slate-500">{pd.recordAsMilestoneHint}</p>
           <BusinessRecordForm
-            partnerId={partnerId}
+            owner={{ kind: "partner", id: partnerId }}
             source="TODO"
             sourceTodoId={todo.id}
             defaultTitle={todo.title}

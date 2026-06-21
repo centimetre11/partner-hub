@@ -14,6 +14,7 @@ import { getMessages } from "./i18n/messages";
 import { normalizePartnerTier } from "./tier";
 import { persistBusinessRecord, normalizeBusinessRecordCategory } from "./business-record-core";
 import { recordSystemEvent } from "./activity-log";
+import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
 
 // ============ 认证 ============
 
@@ -324,7 +325,7 @@ export async function setPipelineStageAction(partnerId: string, stage: number) {
 
 // ============ 联系人 ============
 
-export async function upsertContactAction(partnerId: string, formData: FormData) {
+export async function upsertContactAction(owner: OwnerRef, formData: FormData) {
   await requireUser();
   const id = String(formData.get("id") ?? "");
   const data = {
@@ -340,28 +341,28 @@ export async function upsertContactAction(partnerId: string, formData: FormData)
   };
   if (!data.name) return;
   if (id) await db.contact.update({ where: { id }, data });
-  else await db.contact.create({ data: { ...data, partnerId } });
-  revalidatePath(`/partners/${partnerId}`);
+  else await db.contact.create({ data: { ...data, ...ownerData(owner) } });
+  revalidatePath(ownerPath(owner));
 }
 
-export async function deleteContactAction(partnerId: string, contactId: string) {
+export async function deleteContactAction(owner: OwnerRef, contactId: string) {
   await requireUser();
   await db.contact.delete({ where: { id: contactId } });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
 // ============ 权力地图：拖拽 / 汇报关系 / 布局 ============
 
 // 防环：若把 subId 的上级设为 supId，沿实线（reportsToId + SOLID 附加线）向上遍历，
 // 若能从 supId 回到 subId，则说明会成环，应拒绝。
-async function wouldCreateCycle(partnerId: string, subId: string, supId: string): Promise<boolean> {
+async function wouldCreateCycle(owner: OwnerRef, subId: string, supId: string): Promise<boolean> {
   if (subId === supId) return true;
   const contacts = await db.contact.findMany({
-    where: { partnerId },
+    where: ownerWhere(owner),
     select: { id: true, reportsToId: true },
   });
   const solidLinks = await db.contactLink.findMany({
-    where: { partnerId, kind: "SOLID" },
+    where: { ...ownerWhere(owner), kind: "SOLID" },
     select: { subordinateId: true, superiorId: true },
   });
   // 邻接表：下级 -> 所有上级
@@ -385,15 +386,15 @@ async function wouldCreateCycle(partnerId: string, subId: string, supId: string)
   return false;
 }
 
-export async function moveContactAction(partnerId: string, contactId: string, x: number, y: number) {
+export async function moveContactAction(owner: OwnerRef, contactId: string, x: number, y: number) {
   await requireUser();
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
   await db.contact.update({ where: { id: contactId }, data: { x, y } });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
 export async function setReportsToAction(
-  partnerId: string,
+  owner: OwnerRef,
   subId: string,
   superiorId: string | null,
 ) {
@@ -401,14 +402,14 @@ export async function setReportsToAction(
   if (!subId) return;
   if (superiorId) {
     if (subId === superiorId) return;
-    if (await wouldCreateCycle(partnerId, subId, superiorId)) return;
+    if (await wouldCreateCycle(owner, subId, superiorId)) return;
   }
   await db.contact.update({ where: { id: subId }, data: { reportsToId: superiorId } });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
 export async function addContactLinkAction(
-  partnerId: string,
+  owner: OwnerRef,
   subId: string,
   supId: string,
   kind: string,
@@ -417,47 +418,47 @@ export async function addContactLinkAction(
   if (!subId || !supId || subId === supId) return;
   const linkKind = kind === "SOLID" ? "SOLID" : "DOTTED";
   // 仅实线参与防环约束；虚线允许跨级跨部门
-  if (linkKind === "SOLID" && (await wouldCreateCycle(partnerId, subId, supId))) return;
+  if (linkKind === "SOLID" && (await wouldCreateCycle(owner, subId, supId))) return;
   await db.contactLink.upsert({
     where: { subordinateId_superiorId: { subordinateId: subId, superiorId: supId } },
     update: { kind: linkKind },
-    create: { partnerId, subordinateId: subId, superiorId: supId, kind: linkKind },
+    create: { ...ownerData(owner), subordinateId: subId, superiorId: supId, kind: linkKind },
   });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
-export async function removeContactLinkAction(partnerId: string, linkId: string) {
+export async function removeContactLinkAction(owner: OwnerRef, linkId: string) {
   await requireUser();
   await db.contactLink.delete({ where: { id: linkId } });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
 // 按（下级, 上级）删除附加线，用于撤销「新增虚线」（此时拿不到 linkId）
 export async function removeContactLinkBetweenAction(
-  partnerId: string,
+  owner: OwnerRef,
   subId: string,
   supId: string,
 ) {
   await requireUser();
   await db.contactLink.deleteMany({
-    where: { partnerId, subordinateId: subId, superiorId: supId },
+    where: { ...ownerWhere(owner), subordinateId: subId, superiorId: supId },
   });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
-export async function resetPowerMapLayoutAction(partnerId: string) {
+export async function resetPowerMapLayoutAction(owner: OwnerRef) {
   await requireUser();
-  await db.contact.updateMany({ where: { partnerId }, data: { x: null, y: null } });
-  revalidatePath(`/partners/${partnerId}`);
+  await db.contact.updateMany({ where: ownerWhere(owner), data: { x: null, y: null } });
+  revalidatePath(ownerPath(owner));
 }
 
 // ============ 商机 ============
 
-export async function upsertOpportunityAction(partnerId: string, formData: FormData) {
+export async function upsertOpportunityAction(owner: OwnerRef, formData: FormData) {
   await requireUser();
   const id = String(formData.get("id") ?? "");
   const followUp = String(formData.get("followUpAt") ?? "");
-  const data = {
+  const data: Record<string, unknown> = {
     name: String(formData.get("name") ?? "").trim(),
     client: String(formData.get("client") ?? "") || null,
     amount: String(formData.get("amount") ?? "") || null,
@@ -468,15 +469,28 @@ export async function upsertOpportunityAction(partnerId: string, formData: FormD
     notes: String(formData.get("notes") ?? "") || null,
   };
   if (!data.name) return;
-  if (id) await db.opportunity.update({ where: { id }, data });
-  else await db.opportunity.create({ data: { ...data, partnerId } });
-  revalidatePath(`/partners/${partnerId}`);
+  // 商机以客户为主体，伙伴为可选关联（带单/交付方）；反之亦然
+  const crossPartnerId = formData.has("partnerId") ? String(formData.get("partnerId") ?? "").trim() || null : undefined;
+  const crossCustomerId = formData.has("customerId") ? String(formData.get("customerId") ?? "").trim() || null : undefined;
+  if (id) {
+    if (crossPartnerId !== undefined) data.partnerId = crossPartnerId;
+    if (crossCustomerId !== undefined) data.customerId = crossCustomerId;
+    const opp = await db.opportunity.update({ where: { id }, data });
+    if (opp.partnerId) revalidatePath(`/partners/${opp.partnerId}`);
+    if (opp.customerId) revalidatePath(`/customers/${opp.customerId}`);
+  } else {
+    const createData = { ...data, ...ownerData(owner) } as Record<string, unknown>;
+    if (owner.kind === "customer" && crossPartnerId !== undefined) createData.partnerId = crossPartnerId;
+    if (owner.kind === "partner" && crossCustomerId !== undefined) createData.customerId = crossCustomerId;
+    await db.opportunity.create({ data: createData as never });
+  }
+  revalidatePath(ownerPath(owner));
 }
 
-export async function deleteOpportunityAction(partnerId: string, oppId: string) {
+export async function deleteOpportunityAction(owner: OwnerRef, oppId: string) {
   await requireUser();
   await db.opportunity.delete({ where: { id: oppId } });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
 // ============ 待办 ============
@@ -487,11 +501,13 @@ export async function createTodoAction(formData: FormData) {
   if (!title) return;
   const due = String(formData.get("dueDate") ?? "");
   const partnerId = String(formData.get("partnerId") ?? "") || null;
+  const customerId = String(formData.get("customerId") ?? "") || null;
   await db.todoItem.create({
     data: {
       title,
       detail: String(formData.get("detail") ?? "") || null,
       partnerId,
+      customerId,
       assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
       dueDate: due ? new Date(due) : null,
       priority: String(formData.get("priority") ?? "MEDIUM"),
@@ -500,6 +516,7 @@ export async function createTodoAction(formData: FormData) {
   revalidatePath("/todos");
   revalidatePath("/");
   if (partnerId) revalidatePath(`/partners/${partnerId}`);
+  if (customerId) revalidatePath(`/customers/${customerId}`);
 }
 
 export async function toggleTodoAction(todoId: string) {
@@ -513,6 +530,7 @@ export async function toggleTodoAction(todoId: string) {
   revalidatePath("/todos");
   revalidatePath("/");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
+  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
 }
 
 export async function deleteTodoAction(todoId: string) {
@@ -521,6 +539,7 @@ export async function deleteTodoAction(todoId: string) {
   revalidatePath("/todos");
   revalidatePath("/");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
+  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
 }
 
 export async function updateTodoAction(todoId: string, formData: FormData) {
@@ -530,12 +549,14 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
   if (!title) return;
   const due = String(formData.get("dueDate") ?? "");
   const hasPartnerField = formData.has("partnerId");
+  const hasCustomerField = formData.has("customerId");
   const t = await db.todoItem.update({
     where: { id: todoId },
     data: {
       title,
       detail: String(formData.get("detail") ?? "") || null,
       ...(hasPartnerField ? { partnerId: String(formData.get("partnerId") ?? "") || null } : {}),
+      ...(hasCustomerField ? { customerId: String(formData.get("customerId") ?? "") || null } : {}),
       assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
       dueDate: due ? new Date(due) : null,
       priority: String(formData.get("priority") ?? "MEDIUM"),
@@ -544,8 +565,12 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
   revalidatePath("/todos");
   revalidatePath("/");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
+  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
   if (existing.partnerId && existing.partnerId !== t.partnerId) {
     revalidatePath(`/partners/${existing.partnerId}`);
+  }
+  if (existing.customerId && existing.customerId !== t.customerId) {
+    revalidatePath(`/customers/${existing.customerId}`);
   }
 }
 
@@ -577,20 +602,20 @@ export async function deleteTrainingAction(partnerId: string, trainingId: string
 
 // ============ 时间线 ============
 
-export async function addNoteAction(partnerId: string, formData: FormData) {
+export async function addNoteAction(owner: OwnerRef, formData: FormData) {
   const user = await requireUser();
   const content = String(formData.get("content") ?? "").trim();
   if (!content) return;
   await db.timelineEvent.create({
     data: {
-      partnerId,
+      ...ownerData(owner),
       type: String(formData.get("type") ?? "NOTE"),
       title: String(formData.get("title") ?? "").trim() || content.slice(0, 40),
       content,
       createdById: user.id,
     },
   });
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
 }
 
 // ============ 帆软集成配置 ============
@@ -608,7 +633,7 @@ export async function updatePartnerIntegrationsAction(partnerId: string, formDat
 
 // ============ 商务记录 ============
 
-export async function createBusinessRecordAction(partnerId: string, formData: FormData) {
+export async function createBusinessRecordAction(owner: OwnerRef, formData: FormData) {
   const user = await requireUser();
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
@@ -622,7 +647,7 @@ export async function createBusinessRecordAction(partnerId: string, formData: Fo
   const sourceTodoId = String(formData.get("sourceTodoId") ?? "").trim() || null;
 
   const { crmSync } = await persistBusinessRecord({
-    partnerId,
+    owner,
     userId: user.id,
     category,
     title,
@@ -633,7 +658,7 @@ export async function createBusinessRecordAction(partnerId: string, formData: Fo
     sourceTodoId,
   });
 
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
   revalidatePath("/todos");
   revalidatePath("/");
 
@@ -646,19 +671,21 @@ export async function createBusinessRecordAction(partnerId: string, formData: Fo
   return { ok: true, info: `本地已保存（CRM：${crmSync.reason}）` };
 }
 
-export async function deleteBusinessRecordAction(partnerId: string, recordId: string) {
+export async function deleteBusinessRecordAction(owner: OwnerRef, recordId: string) {
   await requireUser();
   const record = await db.businessRecord.findUnique({
     where: { id: recordId },
-    select: { partnerId: true, timelineEventId: true },
+    select: { partnerId: true, customerId: true, timelineEventId: true },
   });
-  if (!record || record.partnerId !== partnerId) return;
+  if (!record) return;
+  const ownerId = owner.kind === "customer" ? record.customerId : record.partnerId;
+  if (ownerId !== owner.id) return;
 
   await db.businessRecord.delete({ where: { id: recordId } });
   if (record.timelineEventId) {
     await db.timelineEvent.delete({ where: { id: record.timelineEventId } }).catch(() => {});
   }
 
-  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath(ownerPath(owner));
   revalidatePath("/");
 }

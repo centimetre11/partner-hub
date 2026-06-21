@@ -90,7 +90,7 @@ async function main() {
 
   const result = await syncBusinessRecordToCrm({
     recordId: record.id,
-    partnerId: partner.id,
+    owner: { kind: "partner", id: partner.id },
     userId: user.id,
     category,
     title: record.title,

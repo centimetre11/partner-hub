@@ -54,7 +54,7 @@ async function generateWeekly(uid: string, locale: Locale, emit?: Parameters<typ
     })
     .join("\n");
   const eventLines = recentEvents
-    .map((e) => `${new Date(e.createdAt).toLocaleDateString(bcp47)} ${e.partner.name}: ${e.title}`)
+    .map((e) => `${new Date(e.createdAt).toLocaleDateString(bcp47)} ${e.partner?.name ?? "-"}: ${e.title}`)
     .join("\n");
   const overdueLines = overdue.map((t) => `${t.title} (${t.partner?.name ?? "-"})`).join("\n");
 

@@ -4,6 +4,7 @@ import { submitCrmBusinessRecord } from "./crm";
 import { resolveCrmTraceFields } from "./crm-trace-payload";
 import type { CrmTraceAction, CrmTraceNature } from "./crm-trace-constants";
 import type { BusinessRecordCategory } from "./business-record-core";
+import type { OwnerRef } from "./owner";
 
 export type CrmBusinessRecordSyncResult =
   | { status: "synced"; traceId: string }
@@ -82,7 +83,7 @@ async function persistCrmSyncState(recordId: string, result: CrmBusinessRecordSy
 
 export async function syncBusinessRecordToCrm(opts: {
   recordId: string;
-  partnerId: string;
+  owner: OwnerRef;
   userId: string;
   category: BusinessRecordCategory;
   title: string;
@@ -98,19 +99,21 @@ export async function syncBusinessRecordToCrm(opts: {
     return result;
   }
 
-  const [partner, user] = await Promise.all([
-    db.partner.findUnique({
-      where: { id: opts.partnerId },
-      select: { crmCustomerId: true },
-    }),
+  const [crmCustomerId, user] = await Promise.all([
+    opts.owner.kind === "customer"
+      ? db.customer.findUnique({ where: { id: opts.owner.id }, select: { crmCustomerId: true } }).then((c) => c?.crmCustomerId ?? null)
+      : db.partner.findUnique({ where: { id: opts.owner.id }, select: { crmCustomerId: true } }).then((p) => p?.crmCustomerId ?? null),
     db.user.findUnique({
       where: { id: opts.userId },
       select: { crmSalesmanName: true },
     }),
   ]);
 
-  if (!partner?.crmCustomerId) {
-    const result = { status: "skipped" as const, reason: "伙伴未匹配 CRM 客户" };
+  if (!crmCustomerId) {
+    const result = {
+      status: "skipped" as const,
+      reason: opts.owner.kind === "customer" ? "客户未匹配 CRM 客户" : "伙伴未匹配 CRM 客户",
+    };
     await persistCrmSyncState(opts.recordId, result);
     return result;
   }
@@ -122,7 +125,7 @@ export async function syncBusinessRecordToCrm(opts: {
 
   const traceId = randomUUID();
   const now = new Date();
-  const traceContact = await resolveCrmContactId(partner.crmCustomerId, opts.contactId);
+  const traceContact = await resolveCrmContactId(crmCustomerId, opts.contactId);
   const crmFields = resolveCrmTraceFields({
     title: opts.title,
     content: opts.content,
@@ -135,7 +138,7 @@ export async function syncBusinessRecordToCrm(opts: {
     await submitCrmBusinessRecord({
       traceId,
       traceNature: crmFields.traceNature as CrmTraceNature,
-      traceCompany: partner.crmCustomerId,
+      traceCompany: crmCustomerId,
       traceContact,
       traceRecdate: formatCrmDate(opts.occurredAt),
       traceRectime: formatCrmTime(now),

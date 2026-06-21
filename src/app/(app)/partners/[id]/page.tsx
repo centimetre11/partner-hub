@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Opportunity, TimelineEvent, TodoItem, Training, User } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -19,13 +20,14 @@ import { searchGtmLibraryAction } from "@/lib/gtm-library-actions";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
 import {
   addNoteAction, archivePartnerAction, createTodoAction,
-  deleteOpportunityAction, deleteTodoAction, deleteTrainingAction, promotePartnerAction,
+  deleteTodoAction, deleteTrainingAction, promotePartnerAction,
   restorePartnerAction, setPipelineStageAction,
-  upsertOpportunityAction, upsertTrainingAction,
+  upsertTrainingAction,
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
 import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
+import { PartnerCustomersSection } from "@/components/partner-customers-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
@@ -81,10 +83,21 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           contact: { select: { name: true } },
         },
       },
+      customers: { orderBy: { name: "asc" } },
     },
   });
   if (!p) notFound();
   const users = await db.user.findMany();
+  const unboundCustomers = await db.customer.findMany({
+    where: { partnerId: null },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  const relatedOpportunities = await db.opportunity.findMany({
+    where: { OR: [{ partnerId: id }, { customer: { partnerId: id } }] },
+    include: { customer: { select: { id: true, name: true } } },
+    orderBy: { updatedAt: "desc" },
+  });
   const [partnerAgents, wecomChat, matchedCrmCustomer] = await Promise.all([
     db.agent.findMany({
       where: { partnerId: id, isTemplate: false },
@@ -259,7 +272,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               />
             )}
             <BusinessRecordsSection
-              partnerId={p.id}
+              owner={{ kind: "partner", id: p.id }}
               records={p.businessRecords}
               contacts={contactOptions}
             />
@@ -389,12 +402,26 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           </div>
         }
         pipeline={
-          <Card
-            title={m.partnerDetail.opportunitiesActive.replace("{count}", String(p.opportunities.filter((o) => o.status === "ACTIVE").length))}
-            actions={<AiAddButton scope="opportunity" partnerId={p.id} label={m.partnerDetail.aiAddOpportunity} variant="soft" />}
-          >
-            <OpportunityList partnerId={p.id} opportunities={p.opportunities} input={input} m={m} bcp47={bcp47} />
-          </Card>
+          <div className="space-y-5">
+            <PartnerCustomersSection
+              partnerId={p.id}
+              customers={p.customers.map((cust) => ({
+                id: cust.id, name: cust.name, status: cust.status,
+                industry: cust.industry, city: cust.city, country: cust.country,
+                partnerRelation: cust.partnerRelation,
+              }))}
+              unboundCustomers={unboundCustomers}
+              copy={m.partnerDetail.customersSection}
+              statusLabels={{
+                ACTIVE: m.customers.statusActive,
+                PROSPECT: m.customers.statusProspect,
+                INACTIVE: m.customers.statusInactive,
+              }}
+            />
+            <Card title={m.partnerDetail.relatedOpportunities.replace("{count}", String(relatedOpportunities.length))}>
+              <RelatedOpportunityList opportunities={relatedOpportunities} m={m} bcp47={bcp47} />
+            </Card>
+          </div>
         }
         capability={
           <div className="space-y-5">
@@ -417,7 +444,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               actions={<AiAddButton scope="powermap" partnerId={p.id} label={m.partnerDetail.aiAddContact} variant="soft" />}
             >
               <PowerMapSection
-                partnerId={p.id}
+                owner={{ kind: "partner", id: p.id }}
                 contacts={p.contacts.map((c) => ({
                   id: c.id, name: c.name, role: c.role, title: c.title,
                   department: c.department, attitude: c.attitude, reportsToId: c.reportsToId,
@@ -431,9 +458,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
             </Card>
             <Card
               title={m.partnerDetail.activityTimeline.replace("{count}", String(p.events.length))}
-              actions={<BusinessRecordDialogButton partnerId={p.id} contacts={contactOptions} />}
+              actions={<BusinessRecordDialogButton owner={{ kind: "partner", id: p.id }} contacts={contactOptions} />}
             >
-              <form action={addNoteAction.bind(null, p.id)} className="flex gap-2 mb-5">
+              <form action={addNoteAction.bind(null, { kind: "partner", id: p.id })} className="flex gap-2 mb-5">
                 <input name="content" required placeholder={m.partnerDetail.logActivityPlaceholder} className={input} />
                 <select name="type" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0">
                   <option value="NOTE">{m.common.note}</option>
@@ -501,77 +528,44 @@ function TodoList({
   );
 }
 
-function OpportunityList({
-  partnerId,
+function RelatedOpportunityList({
   opportunities,
-  input,
   m,
   bcp47,
 }: {
-  partnerId: string;
-  opportunities: Opportunity[];
-  input: string;
+  opportunities: (Opportunity & { customer: { id: string; name: string } | null })[];
   m: Messages;
   bcp47: string;
 }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
+      <p className="text-xs text-slate-400">{m.partnerDetail.relatedOpportunitiesHint}</p>
       {opportunities.map((o) => (
-        <details key={o.id} className="group rounded-lg border border-slate-100 hover:border-slate-200">
-          <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-slate-900">{o.name}</span>
-                <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
-                  {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
-                </Badge>
-                <Badge tone="blue">{o.stage}</Badge>
-              </div>
-              <div className="text-xs text-slate-400 mt-0.5">
-                {m.common.client}: {o.client ?? "—"} · {m.common.amount}: {o.amount ?? "—"}
-                {o.followUpAt && ` · ${m.partnerDetail.followUp}: ${fmtDate(o.followUpAt, bcp47)}`}
-              </div>
+        <div key={o.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-4 py-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-slate-900">{o.name}</span>
+              <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
+                {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
+              </Badge>
+              <Badge tone="blue">{o.stage}</Badge>
             </div>
-            <span className="text-slate-300 group-open:rotate-90">›</span>
-          </summary>
-          <div className="px-4 pb-4 pt-1 border-t border-slate-50">
-            <form action={upsertOpportunityAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-              <input type="hidden" name="id" value={o.id} />
-              <input name="name" defaultValue={o.name} className={input} />
-              <input name="client" defaultValue={o.client ?? ""} placeholder={m.common.client} className={input} />
-              <input name="amount" defaultValue={o.amount ?? ""} placeholder={m.common.amount} className={input} />
-              <input name="stage" defaultValue={o.stage} placeholder={m.common.stage} className={input} />
-              <input name="nextStep" defaultValue={o.nextStep ?? ""} placeholder={m.common.nextStep} className={input} />
-              <input name="followUpAt" type="date" defaultValue={o.followUpAt ? new Date(o.followUpAt).toISOString().slice(0, 10) : ""} className={input} />
-              <select name="status" defaultValue={o.status} className={input}>
-                <option value="ACTIVE">{m.common.active}</option>
-                <option value="WON">{m.common.won}</option>
-                <option value="LOST">{m.common.lost}</option>
-                <option value="PAUSED">{m.common.paused}</option>
-              </select>
-              <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
-                <button formAction={deleteOpportunityAction.bind(null, partnerId, o.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
-                <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
-              </div>
-            </form>
+            <div className="text-xs text-slate-400 mt-0.5">
+              {o.customer ? (
+                <Link href={`/customers/${o.customer.id}`} className="text-sky-600 hover:underline">{o.customer.name}</Link>
+              ) : (o.client ?? "—")}
+              {" · "}{m.common.amount}: {o.amount ?? "—"}
+              {o.followUpAt && ` · ${m.partnerDetail.followUp}: ${fmtDate(o.followUpAt, bcp47)}`}
+            </div>
           </div>
-        </details>
+          {o.customer && (
+            <Link href={`/customers/${o.customer.id}`} className="text-xs text-sky-600 hover:underline shrink-0">
+              {m.partnerDetail.customersSection.viewDetail}
+            </Link>
+          )}
+        </div>
       ))}
       {opportunities.length === 0 && <EmptyState text={m.partnerDetail.noOpportunities} />}
-      <details className="rounded-lg border border-dashed border-slate-200">
-        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{m.partnerDetail.addOpportunity}</summary>
-        <form action={upsertOpportunityAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-          <input name="name" required placeholder={m.partnerDetail.opportunityName} className={input} />
-          <input name="client" placeholder={m.common.client} className={input} />
-          <input name="amount" placeholder={m.common.amount} className={input} />
-          <input name="stage" placeholder={m.common.stage} className={input} />
-          <input name="nextStep" placeholder={m.common.nextStep} className={input} />
-          <input name="followUpAt" type="date" className={input} />
-          <div className="col-span-2 md:col-span-3 flex justify-end">
-            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
-          </div>
-        </form>
-      </details>
     </div>
   );
 }

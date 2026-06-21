@@ -1186,7 +1186,7 @@ export async function applyIntake(opts: {
       contactId = contact?.id ?? null;
     }
     await persistBusinessRecord({
-      partnerId: recordPartnerId,
+      owner: { kind: "partner", id: recordPartnerId },
       userId,
       category: r.category ?? "OTHER",
       title,

@@ -421,7 +421,7 @@ const listOpportunities: Skill = {
       ? rows
           .map(
             (o) =>
-              `[id:${o.id}] ${o.name} | Partner:${o.partner.name} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status}`
+              `[id:${o.id}] ${o.name} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status}`
           )
           .join("\n")
       : "No opportunities found";
@@ -512,7 +512,7 @@ const listBusinessRecords: Skill = {
       ? rows
           .map(
             (r) =>
-              `[id:${r.id}] ${r.title} | Partner:${r.partner.name} | ${r.category} | ${r.occurredAt.toISOString().slice(0, 10)}`
+              `[id:${r.id}] ${r.title} | Partner:${r.partner?.name ?? "-"} | ${r.category} | ${r.occurredAt.toISOString().slice(0, 10)}`
           )
           .join("\n")
       : "No business records found";

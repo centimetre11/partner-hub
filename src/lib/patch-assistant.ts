@@ -43,7 +43,7 @@ async function loadFocusContext(focus: FocusEntity, targetId: string): Promise<s
         `Target opportunity id=${o.id}`,
         `Name: ${o.name}`,
         `Client: ${o.client ?? "(none)"}`,
-        `Partner: ${o.partner.name}`,
+        `Partner: ${o.partner?.name ?? "(none)"}`,
         `Stage: ${o.stage}`,
         `Amount: ${o.amount ?? "(none)"}`,
         `Next step: ${o.nextStep ?? "(none)"}`,

@@ -39,6 +39,7 @@ import {
   upsertContactAction,
   deleteContactAction,
 } from "@/lib/actions";
+import type { OwnerRef } from "@/lib/owner";
 
 export type PowerMapNodeContact = PowerMapContact & {
   x: number | null;
@@ -227,12 +228,12 @@ const FLOW_CSS = `
 type UndoEntry = { label: string; run: () => void };
 
 function FlowInner({
-  partnerId,
+  owner,
   contacts,
   links,
   onSelectContact,
 }: {
-  partnerId: string;
+  owner: OwnerRef;
   contacts: PowerMapNodeContact[];
   links: PowerMapLink[];
   onSelectContact?: (id: string) => void;
@@ -289,15 +290,15 @@ function FlowInner({
             const py = prev.y;
             pushUndo({
               label: "Move",
-              run: () => startTransition(() => void moveContactAction(partnerId, id, px, py)),
+              run: () => startTransition(() => void moveContactAction(owner, id, px, py)),
             });
           }
           dragStart.current.delete(id);
-          startTransition(() => void moveContactAction(partnerId, id, x, y));
+          startTransition(() => void moveContactAction(owner, id, x, y));
         }
       }
     },
-    [onNodesChange, partnerId, pushUndo],
+    [onNodesChange, owner, pushUndo],
   );
 
   const onNodeDragStart = useCallback((_: unknown, node: Node) => {
@@ -328,9 +329,9 @@ function FlowInner({
         );
         pushUndo({
           label: "Change primary report",
-          run: () => startTransition(() => void setReportsToAction(partnerId, subId, oldSup)),
+          run: () => startTransition(() => void setReportsToAction(owner, subId, oldSup)),
         });
-        startTransition(() => void setReportsToAction(partnerId, subId, superiorId));
+        startTransition(() => void setReportsToAction(owner, subId, superiorId));
       } else {
         const tmpId = `tmp-${superiorId}-${subId}`;
         setEdges((es) =>
@@ -349,12 +350,12 @@ function FlowInner({
         pushUndo({
           label: "Add dotted line",
           run: () =>
-            startTransition(() => void removeContactLinkBetweenAction(partnerId, subId, superiorId)),
+            startTransition(() => void removeContactLinkBetweenAction(owner, subId, superiorId)),
         });
-        startTransition(() => void addContactLinkAction(partnerId, subId, superiorId, "DOTTED"));
+        startTransition(() => void addContactLinkAction(owner, subId, superiorId, "DOTTED"));
       }
     },
-    [partnerId, lineMode, reportsToMap, setEdges, pushUndo],
+    [owner, lineMode, reportsToMap, setEdges, pushUndo],
   );
 
   const onEdgesDelete = useCallback(
@@ -374,23 +375,23 @@ function FlowInner({
           const oldSup = d.superiorId ?? null;
           pushUndo({
             label: "Delete primary report",
-            run: () => startTransition(() => void setReportsToAction(partnerId, childId, oldSup)),
+            run: () => startTransition(() => void setReportsToAction(owner, childId, oldSup)),
           });
-          startTransition(() => void setReportsToAction(partnerId, childId, null));
+          startTransition(() => void setReportsToAction(owner, childId, null));
         } else if (d.origin === "link" && d.subId && d.supId) {
           const sub = d.subId;
           const sup = d.supId;
           const kind = d.kind ?? "DOTTED";
           pushUndo({
             label: "Delete auxiliary line",
-            run: () => startTransition(() => void addContactLinkAction(partnerId, sub, sup, kind)),
+            run: () => startTransition(() => void addContactLinkAction(owner, sub, sup, kind)),
           });
-          if (d.linkId) startTransition(() => void removeContactLinkAction(partnerId, d.linkId!));
-          else startTransition(() => void removeContactLinkBetweenAction(partnerId, sub, sup));
+          if (d.linkId) startTransition(() => void removeContactLinkAction(owner, d.linkId!));
+          else startTransition(() => void removeContactLinkBetweenAction(owner, sub, sup));
         }
       }
     },
-    [partnerId, pushUndo],
+    [owner, pushUndo],
   );
 
   const onSelectionChange = useCallback(
@@ -413,9 +414,9 @@ function FlowInner({
   }, []);
 
   const onResetLayout = useCallback(() => {
-    startTransition(() => void resetPowerMapLayoutAction(partnerId));
+    startTransition(() => void resetPowerMapLayoutAction(owner));
     setUndoStack([]);
-  }, [partnerId]);
+  }, [owner]);
 
   // 键盘：Cmd/Ctrl+Z 撤销
   useEffect(() => {
@@ -509,12 +510,12 @@ const DRAWER_INPUT =
   "w-full rounded-md border border-slate-200 px-2.5 py-1.5 text-sm focus:border-slate-500 focus:outline-none";
 
 function EditDrawer({
-  partnerId,
+  owner,
   contact,
   allContacts,
   onClose,
 }: {
-  partnerId: string;
+  owner: OwnerRef;
   contact: PowerMapNodeContact | null; // null = 新增模式
   allContacts: PowerMapNodeContact[];
   onClose: () => void;
@@ -532,18 +533,18 @@ function EditDrawer({
     const fd = new FormData(form);
     if (!String(fd.get("name") ?? "").trim()) return;
     start(async () => {
-      await upsertContactAction(partnerId, fd);
+      await upsertContactAction(owner, fd);
       onClose();
     });
-  }, [partnerId, onClose]);
+  }, [owner, onClose]);
 
   const remove = useCallback(() => {
     if (!contact) return;
     start(async () => {
-      await deleteContactAction(partnerId, contact.id);
+      await deleteContactAction(owner, contact.id);
       onClose();
     });
-  }, [partnerId, contact, onClose]);
+  }, [owner, contact, onClose]);
 
   return (
     <>
@@ -778,11 +779,11 @@ function ContactList({
 }
 
 export function PowerMapSection({
-  partnerId,
+  owner,
   contacts,
   links,
 }: {
-  partnerId: string;
+  owner: OwnerRef;
   contacts: PowerMapNodeContact[];
   links: PowerMapLink[];
 }) {
@@ -813,7 +814,7 @@ export function PowerMapSection({
       </div>
       {contacts.length > 0 ? (
         <ReactFlowProvider>
-          <FlowInner partnerId={partnerId} contacts={contacts} links={links} onSelectContact={selectContact} />
+          <FlowInner owner={owner} contacts={contacts} links={links} onSelectContact={selectContact} />
         </ReactFlowProvider>
       ) : (
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-400">
@@ -822,7 +823,7 @@ export function PowerMapSection({
       )}
       <ContactList contacts={contacts} selectedId={selectedId} onSelect={selectContact} onAdd={startAdd} />
       {drawerOpen && (
-        <EditDrawer partnerId={partnerId} contact={selected} allContacts={contacts} onClose={closeDrawer} />
+        <EditDrawer owner={owner} contact={selected} allContacts={contacts} onClose={closeDrawer} />
       )}
     </div>
   );

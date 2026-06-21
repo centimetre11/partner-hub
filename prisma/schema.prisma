@@ -34,6 +34,8 @@ model User {
   kmsCredential UserKmsCredential?
   businessRecords BusinessRecord[]
   feedbackSubmissions FeedbackSubmission[]
+  ownedCustomers   Customer[] @relation("CustomerOwner")
+  createdCustomers Customer[] @relation("CustomerCreatedBy")
   crmSalesmanName String? // 帆软 CRM 销售英文名，对应 com_salesman（如 Fay.Wen）
   wecomUserId     String? @unique // 企业微信成员 userid，用于识别发消息者与 @ 提醒
   wecomDisplayName String? @unique // 企微群聊显示名（如 saber-陈敏），userid 不可用时的兜底匹配
@@ -109,13 +111,61 @@ model Partner {
   wecomChat     WecomChat?
   businessRecords BusinessRecord[]
   aiConversationLogs AiConversationLog[]
+  customers     Customer[]
+}
+
+// 客户：伙伴服务的终端客户（手动维护，可归属到某个伙伴）
+model Customer {
+  id           String   @id @default(cuid())
+  name         String
+  // ACTIVE 合作中 / PROSPECT 潜在 / INACTIVE 已停止
+  status       String   @default("ACTIVE")
+  industry     String?  // 行业（自由文本）
+  city         String?
+  country      String?
+  website      String?
+  scale        String?  // 规模（人数/营收等，自由文本）
+  contactName  String?  // 主联系人
+  contactTitle String?  // 主联系人职务
+  contactPhone String?
+  contactEmail String?
+  notes        String?
+  // 归属伙伴（一对多：一个客户至多绑定一个伙伴）
+  partnerId    String?
+  partner      Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  // 与归属伙伴的关系类型：SERVED_BY 伙伴服务的终端客户 / SELF 该客户即伙伴本身（伙伴自用）
+  partnerRelation String? @default("SERVED_BY")
+  // 帆软集成三连接
+  kmsRootPath   String? // KMS 主目录
+  crmCustomerId String? // 帆软 CRM 客户 ID
+  // 负责人（销售/客户经理）
+  ownerId      String?
+  owner        User?    @relation("CustomerOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdById  String?
+  createdBy    User?    @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  contacts        Contact[]
+  contactLinks    ContactLink[]
+  opportunities   Opportunity[]
+  todos           TodoItem[]
+  events          TimelineEvent[]
+  businessRecords BusinessRecord[]
+  wecomChat       WecomChat?
+
+  @@index([partnerId])
+  @@index([name])
+  @@index([status])
 }
 
 // 商务记录：伙伴关键进展（双写活动线 MILESTONE）
 model BusinessRecord {
   id              String    @id @default(cuid())
-  partnerId       String
-  partner         Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId       String?
+  partner         Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   category        String    // VISIT / TRAINING / NEGOTIATION / DELIVERY / RELATIONSHIP / OTHER
   title           String
   content         String?
@@ -136,6 +186,7 @@ model BusinessRecord {
   createdAt       DateTime  @default(now())
 
   @@index([partnerId, occurredAt])
+  @@index([customerId, occurredAt])
 }
 
 // 企业微信会话（群聊/单聊），可与伙伴绑定用于主动推送
@@ -146,6 +197,8 @@ model WecomChat {
   label      String?
   partnerId  String?  @unique
   partner    Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  customerId String?  @unique
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   lastSeenAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -249,8 +302,10 @@ model MonitorItem {
 
 model Contact {
   id          String    @id @default(cuid())
-  partnerId   String
-  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId   String?
+  partner     Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   name        String
   // APPROVER(A审批者) / DECISION_MAKER(D决策者) / SUPPORTER(S支持者) / EVALUATOR(E评估者) / INFLUENCER(I影响者)
   role        String    @default("INFLUENCER")
@@ -270,13 +325,18 @@ model Contact {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   businessRecords BusinessRecord[]
+
+  @@index([partnerId])
+  @@index([customerId])
 }
 
 // 附加汇报线（虚线/双线汇报）。主汇报实线仍走 Contact.reportsToId
 model ContactLink {
   id            String   @id @default(cuid())
-  partnerId     String
-  partner       Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId     String?
+  partner       Partner? @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   subordinateId String // 下级
   superiorId    String // 上级
   // SOLID 附加实线 / DOTTED 虚线
@@ -287,12 +347,16 @@ model ContactLink {
 
   @@unique([subordinateId, superiorId])
   @@index([partnerId])
+  @@index([customerId])
 }
 
 model Opportunity {
   id         String    @id @default(cuid())
-  partnerId  String
-  partner    Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // 商机以客户为主体；伙伴为可选（带单/交付方）
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  partnerId  String?
+  partner    Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   name       String
   client     String?
   amount     String?
@@ -303,6 +367,9 @@ model Opportunity {
   notes      String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([partnerId])
 }
 
 model TodoItem {
@@ -311,6 +378,8 @@ model TodoItem {
   detail     String?
   partnerId  String?
   partner    Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   assigneeId String?
   assignee   User?     @relation(fields: [assigneeId], references: [id])
   dueDate    DateTime?
@@ -324,8 +393,10 @@ model TodoItem {
 
 model TimelineEvent {
   id          String   @id @default(cuid())
-  partnerId   String
-  partner     Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId   String?
+  partner     Partner? @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   // NOTE / MEETING / CHAT_IMPORT / AI_SUMMARY / NEWS / SYSTEM / CHANGE
   type        String   @default("NOTE")
   title       String
@@ -334,6 +405,9 @@ model TimelineEvent {
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
+
+  @@index([partnerId])
+  @@index([customerId])
 }
 
 model Training {
