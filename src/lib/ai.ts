@@ -7,6 +7,7 @@ import {
   DEFAULT_AI_CAPABILITIES,
   maxTokensForTaskTier,
   parseAiCapabilities,
+  resolveFastIntakeMaxTokens,
 } from "./ai-capabilities";
 import { normalizeMessagesForAi } from "./ai-images-server";
 
@@ -1057,10 +1058,52 @@ function jsonCandidates(text: string): string[] {
   return [...out];
 }
 
+function closeOpenBrackets(s: string): string {
+  let out = s.replace(/,\s*$/, "");
+  let braces = 0;
+  let brackets = 0;
+  for (const ch of out) {
+    if (ch === "{") braces++;
+    else if (ch === "}") braces--;
+    else if (ch === "[") brackets++;
+    else if (ch === "]") brackets--;
+  }
+  while (brackets > 0) {
+    out += "]";
+    brackets--;
+  }
+  while (braces > 0) {
+    out += "}";
+    braces--;
+  }
+  return out;
+}
+
+/** Salvage JSON truncated by max_tokens — drop the last incomplete field and close brackets */
+function salvageTruncatedJson(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let s = text.slice(start).trim();
+  for (let i = 0; i < 10; i++) {
+    for (const candidate of [s, repairJsonText(s), closeOpenBrackets(s), closeOpenBrackets(repairJsonText(s))]) {
+      if (tryParseJson(candidate)) return candidate;
+    }
+    const comma = s.lastIndexOf(",");
+    if (comma <= 0) break;
+    s = s.slice(0, comma);
+  }
+  return null;
+}
+
 /** Returns null instead of throwing when all repair attempts fail */
 export function safeParseJsonLoose<T>(text: string): T | null {
   for (const candidate of jsonCandidates(text)) {
     const parsed = tryParseJson<T>(candidate);
+    if (parsed !== null) return parsed;
+  }
+  const salvaged = salvageTruncatedJson(text);
+  if (salvaged) {
+    const parsed = tryParseJson<T>(salvaged);
     if (parsed !== null) return parsed;
   }
   return null;
@@ -1142,18 +1185,34 @@ export async function chatJsonStream<T>(
     streamed += d;
   };
 
-  const parseMerged = (content: string) => parseJsonLoose<T>((content ?? "").trim() || streamed.trim());
+  const mergedText = () => (streamed.trim());
+
+  const parseMerged = (content: string) =>
+    parseJsonLoose<T>((content ?? "").trim() || mergedText());
+
+  const run = async (maxTokens: number, jsonMode = true) => {
+    streamed = "";
+    return chatJsonOnce(system, user, { ...opts, onDelta, maxTokens, jsonMode });
+  };
+
+  const baseMax = opts.maxTokens ?? resolveFastIntakeMaxTokens();
+  const retryMax = Math.max(baseMax * 2, 640);
 
   try {
-    const content = await chatJsonOnce(system, user, { ...opts, onDelta });
+    const content = await run(baseMax);
     return { data: parseMerged(content) };
   } catch (e) {
+    const parseFail = e instanceof AIError && /could not be parsed as JSON/i.test(e.message);
+    if (parseFail && retryMax > baseMax) {
+      try {
+        const content = await run(retryMax);
+        return { data: parseMerged(content) };
+      } catch {
+        /* fall through */
+      }
+    }
     if (e instanceof AIError && /response_format|json_object|400/.test(e.message)) {
-      const content = await chatJsonOnce(
-        system + "\n\nOutput exactly one valid JSON object only. Do not output any other text.",
-        user,
-        { ...opts, onDelta, jsonMode: false }
-      );
+      const content = await run(retryMax, false);
       return { data: parseMerged(content) };
     }
     throw e;

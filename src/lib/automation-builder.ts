@@ -6,6 +6,9 @@ import {
   applyUserDeliveryIntent,
   inferPushEmailFromText,
   mentionsMyEmail,
+  mentionsEmailPush,
+  mentionsWecomPush,
+  mentionsAllPartnersScope,
 } from "./automation-clarifications";
 import type { BuilderDeliveryPrefs } from "./builder-context-prompt";
 import {
@@ -400,9 +403,22 @@ ${buildRuntimeContextBlock(locale, {
       feature: "automation-builder",
       userId: opts.userId,
       taskTier: "fast",
-      maxTokens: 400,
+      maxTokens: 512,
       emit: opts.emit,
     });
+
+    if (!raw.intent?.goal?.trim() && lastUserText.trim()) {
+      const t = lastUserText;
+      raw.intent = {
+        ...raw.intent,
+        goal: t.slice(0, 160),
+        dataType: /待办|todo/i.test(t) ? "todos" : /商机|opportunit/i.test(t) ? "opportunities" : "mixed",
+        partnerScope: mentionsAllPartnersScope(t) ? "all" : undefined,
+        deliveryChannel: mentionsEmailPush(t) ? "email" : mentionsWecomPush(t) ? "wecom" : raw.intent?.deliveryChannel,
+        emailRecipient: mentionsMyEmail(t) ? "mine" : "unset",
+        cronExpr: raw.intent?.cronExpr ?? "0 9 * * *",
+      };
+    }
 
     const partners = await db.partner.findMany({
       where: { status: { not: "ARCHIVED" } },
