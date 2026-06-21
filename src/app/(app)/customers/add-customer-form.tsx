@@ -1,10 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { createCustomerAction } from "@/lib/customer-actions";
 import { useMessages } from "@/lib/i18n/context";
 
 type Option = { id: string; name: string };
+
+function SubmitButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {label}
+    </button>
+  );
+}
 
 export function AddCustomerForm({
   partners,
@@ -78,7 +92,7 @@ export function AddCustomerForm({
                 <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                   {cancelLabel}
                 </button>
-                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">{c.add}</button>
+                <SubmitButton label={c.add} />
               </div>
             </form>
           </div>

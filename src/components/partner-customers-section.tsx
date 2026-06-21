@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge, Card, EmptyState } from "@/components/ui";
+import { PendingButton } from "@/components/pending-button";
 import {
   bindCustomerToPartnerAction,
   unbindCustomerFromPartnerAction,
@@ -119,7 +120,7 @@ export function PartnerCustomersSection({
               <input name="city" placeholder={copy.newCityPlaceholder} className={input} />
             </div>
             <div className="flex justify-end">
-              <button className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800">{copy.add}</button>
+              <PendingButton label={copy.add} className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800" />
             </div>
           </form>
         </details>
