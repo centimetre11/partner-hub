@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { db } from "./db";
 import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
@@ -154,14 +155,23 @@ export async function createAutomationFromBuilderAction(formData: FormData) {
   const user = await requireUser();
   const raw = String(formData.get("draft") ?? "");
   if (!raw) redirect("/automations/new?error=empty_draft");
+
+  let draft: AutomationBuilderDraft;
   try {
-    const draft = JSON.parse(raw) as AutomationBuilderDraft;
-    if (!isAutomationDraftReady(draft)) redirect("/automations/new?error=not_ready");
+    draft = JSON.parse(raw) as AutomationBuilderDraft;
+  } catch {
+    redirect("/automations/new?error=invalid_draft");
+  }
+
+  if (!isAutomationDraftReady(draft)) redirect("/automations/new?error=not_ready");
+
+  try {
     const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
     revalidatePath("/automations");
     revalidatePath("/ai");
     redirect(`/automations/${created.id}`);
   } catch (e) {
+    if (isRedirectError(e)) throw e;
     console.error("[createAutomationFromBuilderAction]", e);
     redirect("/automations/new?error=create_failed");
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { createAutomationFromBuilderAction } from "@/lib/automation-actions";
@@ -156,6 +156,7 @@ export function AutomationBuilder() {
   const [replyText, setReplyText] = useState("");
   const [phase, setPhase] = useState("");
   const [phaseLabel, setPhaseLabel] = useState("");
+  const [creating, startCreate] = useTransition();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const draft = turn?.draft ?? null;
@@ -166,7 +167,21 @@ export function AutomationBuilder() {
     return p?.name ?? draft.partnerId;
   }, [draft, partners, lang]);
 
-  const draftJson = useMemo(() => (draft ? JSON.stringify(draft) : "null"), [draft]);
+
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!draft || !createReady || creating) return;
+    setError(null);
+    startCreate(async () => {
+      try {
+        const fd = new FormData();
+        fd.set("draft", JSON.stringify(draft));
+        await createAutomationFromBuilderAction(fd);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
 
   const pendingClarifications = useMemo(() => {
     if (!turn?.clarifications?.length || !draft) return turn?.clarifications ?? [];
@@ -291,18 +306,17 @@ export function AutomationBuilder() {
         draft ? (
           <>
             <DraftPreview draft={draft} partnerLabel={partnerLabel} />
-            <form action={createAutomationFromBuilderAction} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-              <input type="hidden" name="draft" value={draftJson} />
+            <form onSubmit={handleCreate} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
               <p className="text-xs text-slate-500 leading-relaxed">{a.builderConfirmHint}</p>
               {!isAutomationDraftReady(draft) && (
                 <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{a.builderDeliveryRequired}</p>
               )}
               <button
                 type="submit"
-                disabled={!createReady}
+                disabled={!createReady || creating}
                 className="w-full rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-700 disabled:opacity-40"
               >
-                {createReady ? a.builderCreateReady : a.builderCreatePending}
+                {creating ? a.saving : createReady ? a.builderCreateReady : a.builderCreatePending}
               </button>
             </form>
           </>
