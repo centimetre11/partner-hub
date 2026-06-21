@@ -390,7 +390,7 @@ export async function runAgentBuilderTurn(opts: {
   emitPhase(emit, "extract", locale === "zh" ? "生成 Agent 草案" : "Building Agent draft");
 
   try {
-    const { data: raw, streamed } = await chatJsonStream<{
+    const { data: raw } = await chatJsonStream<{
       reply?: string;
       intent?: AgentBuilderAiIntent;
       draft?: Partial<AgentBuilderDraft>;
@@ -435,10 +435,7 @@ export async function runAgentBuilderTurn(opts: {
     });
     emitPhase(emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
     const reply = raw.reply?.trim() || turn.reply;
-    if (reply) {
-      if (streamed && emit) emit({ event: "reply_reset" });
-      await emitReplyChunks(emit, reply);
-    }
+    if (reply) await emitReplyChunks(emit, reply);
     return { ...turn, reply };
   } catch (e) {
     emit?.({ event: "trace_patch", id: reasonId, patch: { status: "done" } });

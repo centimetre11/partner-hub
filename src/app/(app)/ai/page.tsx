@@ -23,71 +23,11 @@ export default async function AiCenterPage() {
     }),
   ]);
 
-  const flowSteps = [
-    [m.ai.flow1Title, m.ai.flow1Desc],
-    [m.ai.flow2Title, m.ai.flow2Desc],
-    [m.ai.flow3Title, m.ai.flow3Desc],
-    [m.ai.flow4Title, m.ai.flow4Desc],
-  ] as const;
-
   return (
     <div className="pb-16">
-      <PageHeader
-        title={m.ai.title}
-        desc={m.ai.desc}
-        actions={
-          <Link href="/agents/new" className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800">
-            {m.ai.buildAgent}
-          </Link>
-        }
-      />
+      <PageHeader title={m.ai.title} desc={m.ai.desc} />
       <AiCenterNav />
       <div className="px-8 space-y-6 max-w-7xl">
-        <Link
-          href="/tools"
-          className="block rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50/80 via-white to-white p-5 hover:border-sky-200 hover:shadow-sm transition-shadow"
-        >
-          <div className="flex flex-col lg:flex-row lg:items-start gap-5">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white border border-sky-100 text-xl shadow-sm">
-                  🔧
-                </span>
-                <div>
-                  <div className="text-xs font-medium text-sky-700/80 uppercase tracking-wide">{m.ai.capabilityLayers}</div>
-                  <div className="text-lg font-semibold text-slate-900">{m.ai.tools}</div>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mt-3 leading-relaxed max-w-2xl">{m.ai.toolsLayerDesc}</p>
-              <div className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-sky-700">
-                {m.ai.toolsLayerBrowse}
-                <span aria-hidden>→</span>
-              </div>
-            </div>
-            <div className="lg:w-[420px] shrink-0 rounded-lg border border-slate-100 bg-white/80 p-4">
-              <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-3">
-                {m.ai.toolsLayerCategories}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {toolCategories.map((cat) => (
-                  <div
-                    key={cat.id}
-                    className="rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5"
-                  >
-                    <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
-                      <span>{cat.icon}</span>
-                      <span className="truncate">{cat.label}</span>
-                    </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      {cat.tools.length} {locale === "zh" ? "项" : "tools"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Link>
-
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Link href="/agents" className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300">
             <div className="text-2xl font-bold tabular-nums text-sky-600">{agents}</div>
@@ -133,38 +73,6 @@ export default async function AiCenterPage() {
             <div className="text-xs text-slate-400 mt-0.5">{m.ai.agentSearchable}</div>
           </Link>
         </div>
-
-        <Card title={m.ai.recommendedFlow}>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {flowSteps.map(([title, desc], i) => (
-              <div
-                key={title}
-                className="relative rounded-lg border border-slate-100 bg-slate-50/40 p-4 h-full"
-              >
-                {i < flowSteps.length - 1 && (
-                  <span className="hidden xl:block absolute top-1/2 -right-2.5 -translate-y-1/2 text-slate-300 text-sm z-10">
-                    →
-                  </span>
-                )}
-                <div className="flex items-center gap-2.5 mb-2">
-                  <div className="w-7 h-7 rounded-full bg-sky-600 text-white text-xs font-semibold flex items-center justify-center shrink-0">
-                    {i + 1}
-                  </div>
-                  <div className="font-medium text-slate-800">{title}</div>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed pl-9">{desc}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
-            <Link
-              href="/agents/new"
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800"
-            >
-              {m.ai.buildAgent}
-            </Link>
-          </div>
-        </Card>
 
         <Card title={m.ai.recentRuns}>
           {recentRuns.length ? (

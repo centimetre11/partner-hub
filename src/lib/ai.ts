@@ -215,6 +215,8 @@ async function listAiApiCandidates(opts?: {
     };
 
     const addConfigured = (api: ConfiguredApi) => add(toResolvedApi(api));
+    const isFastApi = (api: ConfiguredApi) => parseAiCapabilities(api.capabilities).includes("fast");
+    const matchingAvailable = available.filter(matchesCap);
 
     const matched = pickBest(available);
     if (matched) {
@@ -226,12 +228,17 @@ async function listAiApiCandidates(opts?: {
             : `daily token limit reached (${usedByBucket.get(`api:${naturalChoice.id}`) ?? 0}/${naturalChoice.dailyTokenLimit})`;
         console.warn(`[ai] ${naturalChoice.name} ${reason}, auto-switching to ${matched.name}`);
       }
-      addConfigured(matched);
     }
 
-    for (const api of available) {
-      if (matchesCap(api)) addConfigured(api);
+    if (opts?.taskTier === "fast") {
+      // Fast tier: exhaust all fast-tagged models before falling back to standard ones
+      for (const api of matchingAvailable.filter(isFastApi)) addConfigured(api);
+      for (const api of matchingAvailable.filter((api) => !isFastApi(api))) addConfigured(api);
+    } else {
+      if (matched) addConfigured(matched);
+      for (const api of matchingAvailable) addConfigured(api);
     }
+
     for (const api of available) addConfigured(api);
     for (const api of configured) {
       if (isOverDailyLimit(api) && matchesCap(api)) addConfigured(api);
@@ -1117,7 +1124,7 @@ export async function chatJson<T>(
   }
 }
 
-/** chatJson with SSE reply_delta streaming while the model generates JSON. */
+/** chatJson with internal streaming for parse fallback; UI gets clean reply via emitReplyChunks after parse. */
 export async function chatJsonStream<T>(
   system: string,
   user: string,
@@ -1129,22 +1136,17 @@ export async function chatJsonStream<T>(
     maxTokens?: number;
     emit?: import("./ai-trace").TraceEmitter;
   } = {}
-): Promise<{ data: T; streamed: boolean }> {
-  opts.emit?.({ event: "reply_reset" });
+): Promise<{ data: T }> {
   let streamed = "";
-  const onDelta = opts.emit
-    ? (d: string) => {
-        streamed += d;
-        opts.emit!({ event: "reply_delta", delta: d });
-      }
-    : undefined;
+  const onDelta = (d: string) => {
+    streamed += d;
+  };
 
   const parseMerged = (content: string) => parseJsonLoose<T>((content ?? "").trim() || streamed.trim());
 
   try {
     const content = await chatJsonOnce(system, user, { ...opts, onDelta });
-    if (opts.emit && streamed) opts.emit({ event: "reply_done" });
-    return { data: parseMerged(content), streamed: !!streamed };
+    return { data: parseMerged(content) };
   } catch (e) {
     if (e instanceof AIError && /response_format|json_object|400/.test(e.message)) {
       const content = await chatJsonOnce(
@@ -1152,8 +1154,7 @@ export async function chatJsonStream<T>(
         user,
         { ...opts, onDelta, jsonMode: false }
       );
-      if (opts.emit && streamed) opts.emit({ event: "reply_done" });
-      return { data: parseMerged(content), streamed: !!streamed };
+      return { data: parseMerged(content) };
     }
     throw e;
   }

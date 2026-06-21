@@ -95,10 +95,13 @@ export function AiProcessTrace({
   defaultCollapsed?: boolean;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
-  const toolCount = steps.filter((s) => s.type === "tool").length;
-  const running = steps.some((s) => s.status === "running");
-  const doneCount = steps.filter((s) => s.status === "done").length;
-  const latestToolId = [...steps].reverse().find((s) => s.type === "tool")?.id;
+  // Historical traces may still carry status:"running" — treat as done once the stream ended
+  const displaySteps =
+    loading ? steps : steps.map((s) => (s.status === "running" ? ({ ...s, status: "done" as const } as AiTraceStep) : s));
+  const toolCount = displaySteps.filter((s) => s.type === "tool").length;
+  const running = !!loading && displaySteps.some((s) => s.status === "running");
+  const doneCount = displaySteps.filter((s) => s.status === "done").length;
+  const latestToolId = [...displaySteps].reverse().find((s) => s.type === "tool")?.id;
   const waiting = !!loading && !running;
 
   useEffect(() => {
@@ -107,7 +110,7 @@ export function AiProcessTrace({
     }
   }, [steps, loading, running]);
 
-  if (!steps.length && !loading) return null;
+  if (!displaySteps.length && !loading) return null;
 
   const phaseText = phaseLabel || (phase ? PHASE_LABELS[phase] : "");
 
@@ -139,20 +142,20 @@ export function AiProcessTrace({
         </div>
       </div>
       <div className="space-y-2 max-h-[min(48vh,420px)] overflow-y-auto">
-        {steps.map((s) =>
+        {displaySteps.map((s) =>
           s.type === "tool" ? (
             <ToolStepRow key={s.id} step={s} active={s.id === latestToolId && (loading || running)} />
           ) : (
             <ReasoningRow key={s.id} step={s} />
           )
         )}
-        {loading && steps.length === 0 && (
+        {loading && displaySteps.length === 0 && (
           <div className="flex items-center gap-2 text-xs text-slate-400 px-1">
             <span className="inline-block w-3 h-3 border-2 border-slate-200 border-t-slate-600 rounded-full animate-spin" />
             Thinking…
           </div>
         )}
-        {waiting && steps.length > 0 && (
+        {waiting && displaySteps.length > 0 && (
           <div className="flex items-center gap-2 text-xs text-slate-500 px-2 py-1.5 rounded-md bg-slate-50 border border-slate-200">
             <span className="inline-block w-3 h-3 border-2 border-slate-200 border-t-slate-600 rounded-full animate-spin" />
             {phaseText ? `${phaseText}…` : "Waiting for next step…"}

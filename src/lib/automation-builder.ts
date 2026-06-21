@@ -1,7 +1,12 @@
 import { AIError, chatJsonStream } from "./ai";
 import { emitPhase, emitReplyChunks, nextTraceId, type TraceEmitter } from "./ai-trace";
 import { hasRequiredClarifications, normalizeAiClarifications } from "./ai-clarifications";
-import { enrichAutomationClarifications, applyUserDeliveryIntent } from "./automation-clarifications";
+import {
+  enrichAutomationClarifications,
+  applyUserDeliveryIntent,
+  inferPushEmailFromText,
+  mentionsMyEmail,
+} from "./automation-clarifications";
 import type { BuilderDeliveryPrefs } from "./builder-context-prompt";
 import {
   pickAutomationTaskMd,
@@ -54,37 +59,25 @@ const DEFAULT_DRAFT: AutomationBuilderDraft = {
 
 function outputSchema(locale: Locale) {
   const replyLang = locale === "zh" ? "Chinese" : "English";
-  return `Output exactly one JSON object. ALL user-visible text fields MUST be in ${replyLang}. draft.slug stays English kebab-case.
+  return `Output exactly one compact JSON object. User-visible: reply + intent.goal in ${replyLang}. No markdown fences.
 {
-  "reply": "${replyLang} concise reply (1-2 sentences)",
+  "reply": "one ${replyLang} sentence confirming what you understood",
   "clarifications": [],
   "ready": true/false,
   "intent": {
-    "goal": "${replyLang} one-line: what to query and push",
+    "goal": "one-line ${replyLang}",
     "dataType": "todos|opportunities|web_search|mixed",
     "partnerScope": "all|named|bound",
-    "partnerNameHint": "only when partnerScope=named — partner/customer name substring, NOT id",
+    "partnerNameHint": "only if named",
     "deliveryChannel": "email|wecom|both|unset",
-    "emailRecipient": "mine|unset — mine when user says 我的邮箱/发给我",
+    "emailRecipient": "mine|unset",
     "cronExpr": "0 9 * * *",
     "dueWithinDays": null
-  },
-  "draft": {
-    "slug": "english-kebab-case",
-    "name": "${replyLang} display name",
-    "description": "same as intent.goal",
-    "taskMd": "",
-    "cronExpr": "same as intent.cronExpr",
-    "timezone": "Asia/Shanghai",
-    "partnerId": "",
-    "wecomPushChatId": "",
-    "pushEmailTo": "",
-    "rationale": "${replyLang} brief"
   }
 }
-Do NOT fill partnerId/wecomPushChatId/pushEmailTo — server resolves from intent + DB.
-Do NOT emit clarifications for partner list, email, or WeCom group — server UI handles.
-Only clarifications[] when task goal itself is ambiguous (max 1).`;
+Server generates slug/name/TASK.md and shows email/partner/wecom pickers — do NOT output draft or IDs.
+emailRecipient=mine ONLY if user said 我的邮箱/发给我/to me; bare 「发邮箱」→ unset (UI picks recipients).
+clarifications always []. ready=true when goal + cronExpr + deliveryChannel are clear.`;
 }
 
 function buildRuntimeContextBlock(
@@ -120,18 +113,16 @@ Parse user intent → output JSON with intent.* semantic fields. Server fills ID
 Language: ${lang}. Keep reply and names in ${lang}; draft.slug in English kebab-case.
 
 Examples:
-- 「每天早上所有伙伴待办发到我邮箱」→ dataType=todos, partnerScope=all, deliveryChannel=email, emailRecipient=mine, cronExpr=0 9 * * *
-- 「每天把 Acme 3 天内过期待办推到群」→ dataType=todos, partnerScope=named, partnerNameHint=Acme, deliveryChannel=wecom, dueWithinDays=3
-- 「每周一汇总商机发邮件」→ dataType=opportunities, partnerScope=all, deliveryChannel=email
+- 「每天早上所有伙伴待办发到我邮箱」→ partnerScope=all, deliveryChannel=email, emailRecipient=mine, cronExpr=0 9 * * *
+- 「每天把所有客户待办发到邮箱」→ partnerScope=all, deliveryChannel=email, emailRecipient=unset
+- 「每天把 Acme 过期待办推到群」→ partnerScope=named, partnerNameHint=Acme, deliveryChannel=wecom
 
 Rules:
-1. triggerType is always SCHEDULE (implicit). Runtime: list_todos, list_opportunities, web_search, push_wecom, send_email.
-2. partnerScope: all=全部伙伴; named=用户点了具体名字(填 partnerNameHint); bound=「这个客户」且上下文有绑定伙伴.
-3. deliveryChannel + emailRecipient: 用户说清「发邮箱/我的邮箱」→ email + mine; 勿再问渠道.
-4. taskMd always "" — server generates TASK.md template.
-5. clarifications always [] unless the task goal is completely unclear.
-6. ready=true when intent.goal, intent.cronExpr, and deliveryChannel≠unset (or emailRecipient=mine for email).
-7. Do NOT build unrelated agents (gold price, generic coding).
+1. SCHEDULE-only. Runtime tools: list_todos, list_opportunities, web_search, push_wecom, send_email.
+2. partnerScope: all=全部; named=具体名字; bound=绑定伙伴.
+3. deliveryChannel=email when user mentions 邮箱/邮件; emailRecipient=mine only for 我的邮箱/发给我.
+4. clarifications always []. ready when goal+cronExpr+deliveryChannel set.
+5. Keep JSON minimal — no extra fields, no draft block.
 
 ${outputSchema(locale)}`;
 }
@@ -253,7 +244,12 @@ function applySemanticIntentFromAi(
   draft: AutomationBuilderDraft,
   intent: AutomationBuilderAiIntent | undefined,
   rawDraft: Partial<AutomationBuilderDraft>,
-  opts: { partners: { id: string; name: string }[]; boundPartnerId?: string; userEmail?: string }
+  opts: {
+    partners: { id: string; name: string }[];
+    boundPartnerId?: string;
+    userEmail?: string;
+    userText?: string;
+  }
 ): AutomationBuilderDraft {
   const goal = intent?.goal?.trim() || rawDraft.description?.trim() || draft.description;
   const cronExpr = intent?.cronExpr?.trim() || rawDraft.cronExpr?.trim() || draft.cronExpr;
@@ -277,8 +273,18 @@ function applySemanticIntentFromAi(
   }
 
   const channel = intent?.deliveryChannel;
+  const userText = opts.userText ?? "";
   if (channel === "email") {
-    if (intent?.emailRecipient === "mine" && opts.userEmail) pushEmailTo = opts.userEmail;
+    const explicit = inferPushEmailFromText(userText, opts.userEmail);
+    if (explicit) {
+      pushEmailTo = explicit;
+    } else if (
+      intent?.emailRecipient === "mine" &&
+      opts.userEmail &&
+      mentionsMyEmail(userText)
+    ) {
+      pushEmailTo = opts.userEmail;
+    }
     wecomPushChatId = "";
   } else if (channel === "wecom") {
     pushEmailTo = "";
@@ -363,10 +369,11 @@ ${buildRuntimeContextBlock(locale, {
   boundPartnerId: opts.boundPartnerId,
 })}`;
   const conversation = opts.messages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n\n");
+  const lastUserText = [...opts.messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const userPrompt =
     locale === "zh"
-      ? `对话历史：\n${conversation}\n\n请输出 JSON（含 intent 语义参数，勿填 partnerId/邮箱/chatId）。`
-      : `Conversation:\n${conversation}\n\nOutput JSON with intent params (no partnerId/email/chatId).`;
+      ? `对话历史：\n${conversation}\n\n请输出紧凑 JSON（仅 reply + intent，勿 draft/ID）。`
+      : `Conversation:\n${conversation}\n\nOutput compact JSON (reply + intent only, no draft/IDs).`;
 
   const reasonId = nextTraceId("reason");
   opts.emit?.({
@@ -381,7 +388,7 @@ ${buildRuntimeContextBlock(locale, {
   emitPhase(opts.emit, "extract", locale === "zh" ? "生成自动化草案" : "Building automation draft");
 
   try {
-    const { data: raw, streamed } = await chatJsonStream<{
+    const { data: raw } = await chatJsonStream<{
       reply?: string;
       intent?: AutomationBuilderAiIntent;
       draft?: Partial<AutomationBuilderDraft>;
@@ -393,7 +400,7 @@ ${buildRuntimeContextBlock(locale, {
       feature: "automation-builder",
       userId: opts.userId,
       taskTier: "fast",
-      maxTokens: 800,
+      maxTokens: 400,
       emit: opts.emit,
     });
 
@@ -405,11 +412,24 @@ ${buildRuntimeContextBlock(locale, {
     });
 
     let turn = normalizeTurn(raw as Partial<AutomationBuilderTurn>, locale, opts.boundPartnerName);
-    const baseDraft = normalizeDraft({ ...DEFAULT_DRAFT, ...(raw.draft ?? {}) }, opts.boundPartnerName, locale);
+    const aiDraft = raw.draft ?? {};
+    const baseDraft = normalizeDraft(
+      {
+        ...DEFAULT_DRAFT,
+        ...aiDraft,
+        partnerId: "",
+        wecomPushChatId: "",
+        pushEmailTo: "",
+        taskMd: "",
+      },
+      opts.boundPartnerName,
+      locale
+    );
     const semanticDraft = applySemanticIntentFromAi(baseDraft, raw.intent, raw.draft ?? {}, {
       partners,
       boundPartnerId: opts.boundPartnerId,
       userEmail,
+      userText: lastUserText,
     });
     const intentDraft = applyUserDeliveryIntent(semanticDraft, {
         messages: opts.messages,
@@ -491,10 +511,8 @@ ${buildRuntimeContextBlock(locale, {
       },
     });
     emitPhase(opts.emit, "reply", locale === "zh" ? "生成回复" : "Generating reply");
-    if (raw.reply) {
-      if (streamed && opts.emit) opts.emit({ event: "reply_reset" });
-      await emitReplyChunks(opts.emit, raw.reply);
-    }
+    if (raw.reply) await emitReplyChunks(opts.emit, raw.reply);
+    emitPhase(opts.emit, "idle");
     return turn;
   } catch (e) {
     const detail = e instanceof AIError ? e.message : String(e);

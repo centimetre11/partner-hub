@@ -324,9 +324,13 @@ export function enrichAutomationClarifications(opts: {
     });
   }
 
-  const needEmail =
-    !effectiveEmail && (userWantsEmail || aiAskedEmail) && (opts.emails.length > 0 || aiAskedEmail);
-  if (needEmail) {
+  const explicitEmailInText = /[\w.+-]+@[\w.-]+\.\w{2,}/.test(userText);
+  const needEmailPick =
+    userWantsEmail &&
+    !explicitEmailInText &&
+    (opts.emails.length > 0 || aiAskedEmail) &&
+    (!effectiveEmail || !mentionsMyEmail(userText));
+  if (needEmailPick) {
     out = stripTopicClarifications(out, isEmailTopicClarification);
     out.unshift({
       id: "email-pick",
