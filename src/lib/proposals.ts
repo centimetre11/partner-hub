@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { recordSystemEvent } from "./activity-log";
 import { chatJson } from "./ai";
-import { PARTNER_FIELD_LABELS } from "./constants";
+import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS } from "./constants";
 import { normalizeIndustriesInput } from "./taxonomy";
 import { partnerFieldValueFromText } from "./tier";
 import {
@@ -123,6 +123,61 @@ export async function partnerContext(partnerId: string, locale: Locale = "zh"): 
         .join("\n")
     : noneLabel(locale);
   return `${partnerContextHeader(locale, p.name)}\n${fields}\n${wecomLine}\n\n${partnerContextSection(locale, "contacts")}\n${contacts}\n\n${partnerContextSection(locale, "opportunities")}\n${opps}`;
+}
+
+/** End-customer profile for assistant tools (contacts, opportunities, open todos). */
+export async function customerContext(customerId: string, locale: Locale = "zh"): Promise<string> {
+  const c = await db.customer.findUnique({
+    where: { id: customerId },
+    include: {
+      contacts: { orderBy: { createdAt: "asc" } },
+      opportunities: { where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 20 },
+      todos: { where: { status: "OPEN" }, orderBy: { dueDate: "asc" }, take: 20 },
+      partner: { select: { name: true } },
+      wecomChat: true,
+    },
+  });
+  if (!c) return locale === "zh" ? "（未找到客户）" : "(Customer not found)";
+  const header = locale === "zh" ? `[客户档案：${c.name}]` : `[Customer profile: ${c.name}]`;
+  const fields = Object.keys(CUSTOMER_FIELD_LABELS)
+    .filter((field) => field !== "name")
+    .map((field) => {
+      const v = (c as unknown as Record<string, unknown>)[field];
+      return `- ${field}[${field}]: ${v ?? emptyLabel(locale)}`;
+    })
+    .join("\n");
+  const wecomLine = c.wecomChat
+    ? `- WeCom group[wecom]: chatId=${c.wecomChat.chatId}${c.wecomChat.label ? ` label=${c.wecomChat.label}` : ""}`
+    : locale === "zh"
+      ? "- WeCom group[wecom]: 未绑定"
+      : "- WeCom group[wecom]: not bound";
+  const partnerLine =
+    locale === "zh"
+      ? `- 归属伙伴[partner]: ${c.partner?.name ?? "（无）"}`
+      : `- Partner[partner]: ${c.partner?.name ?? "(none)"}`;
+  const contacts = c.contacts.length
+    ? c.contacts
+        .map(
+          (ct) =>
+            `- id=${ct.id} name:${ct.name} role:${ct.role} title:${ct.title ?? "?"} dept:${ct.department ?? "?"} contact:${ct.contactInfo ?? "?"}`
+        )
+        .join("\n")
+    : noneLabel(locale);
+  const opps = c.opportunities.length
+    ? c.opportunities
+        .map(
+          (o) =>
+            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status}`
+        )
+        .join("\n")
+    : noneLabel(locale);
+  const todos = c.todos.length
+    ? c.todos.map((t) => `- id=${t.id} ${t.title} | due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | ${t.priority}`).join("\n")
+    : noneLabel(locale);
+  const contactsSection = locale === "zh" ? "[权力地图 / 关键人物]" : "[Power map / key people]";
+  const oppsSection = locale === "zh" ? "[商机]" : "[Opportunities]";
+  const todosSection = locale === "zh" ? "[进行中待办]" : "[Open todos]";
+  return `${header}\n- name[name]: ${c.name}\n${fields}\n${partnerLine}\n${wecomLine}\n\n${contactsSection}\n${contacts}\n\n${oppsSection}\n${opps}\n\n${todosSection}\n${todos}`;
 }
 
 /** Business record intake: partner name + contacts only (fast attribute extraction) */

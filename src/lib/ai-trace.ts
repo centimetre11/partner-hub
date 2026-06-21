@@ -106,7 +106,7 @@ export async function yieldEventLoop() {
 export function formatToolArgs(name: string, args: Record<string, unknown>): string {
   const q = args.query ?? args.q ?? args.keyword;
   if (typeof q === "string" && q) return q.length > 60 ? `${q.slice(0, 57)}…` : q;
-  const partner = args.partnerName ?? args.name ?? args.partner;
+  const partner = args.partnerName ?? args.customerName ?? args.name ?? args.partner;
   if (typeof partner === "string" && partner) return partner;
   if (name === "read_kms" && args.pageId) return `pageId: ${args.pageId}`;
   if (name === "write_kms") {
@@ -115,6 +115,10 @@ export function formatToolArgs(name: string, args: Record<string, unknown>): str
     return `${mode} → ${String(target).slice(0, 50)}`;
   }
   if (name === "update_partner" && args.field) return `${String(args.field)} → ${String(args.value ?? "")}`;
+  if (name === "update_customer" && args.fields && typeof args.fields === "object") {
+    const entries = Object.entries(args.fields as Record<string, unknown>).slice(0, 2);
+    return entries.map(([k, v]) => `${k} → ${String(v)}`).join("; ");
+  }
   const compact = JSON.stringify(args);
   return compact.length > 60 ? `${compact.slice(0, 57)}…` : compact;
 }

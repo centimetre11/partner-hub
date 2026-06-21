@@ -257,7 +257,8 @@ function withPartnerHint(
   history: IntakeMessage[],
   boundPartnerId?: string | null,
   boundPartnerName?: string | null,
-  boundCustomerName?: string | null
+  boundCustomerName?: string | null,
+  boundCustomerId?: string | null
 ): IntakeMessage[] {
   if (boundPartnerId && boundPartnerName) {
     return appendUserHint(
@@ -268,7 +269,7 @@ function withPartnerHint(
   if (boundCustomerName) {
     return appendUserHint(
       history,
-      `系统提示：当前会话已绑定客户「${boundCustomerName}」。商务记录默认归属该客户；proposal.partnerName 请填「${boundCustomerName}」；「这个客户/该客户」均指该客户。`
+      `系统提示：当前会话已绑定客户「${boundCustomerName}」。商务记录、商机、联系人、待办默认归属该客户；「这个客户/该客户」均指该客户。查询与写入都必须用客户维度参数（禁止 partnerName）：list_todos / list_opportunities / list_business_records / create_todo / add_timeline_event 传 customerName="${boundCustomerName}"${boundCustomerId ? ` 或 customerId="${boundCustomerId}"` : ""}；更新客户档案用 update_customer(name="${boundCustomerName}", fields=…)；查联系人/档案用 get_customer("${boundCustomerName}")，不要用 get_partner。`
     );
   }
   return history;
@@ -888,13 +889,15 @@ async function handleTextMessage(frame: WsFrame) {
 
     if (intentSession && isIntentConfirmCommand(text)) {
       intentConfirmSessions.delete(key);
-      const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName);
+      const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName, boundCustomerId);
       const focus = intentSession.focus ?? focusSessions.get(key);
       const result = await runAssistantTurn({
         messages,
         userId: actorUserId,
         partnerId: boundPartnerId ?? session?.partnerId,
         partnerName: boundPartnerName,
+        customerId: boundCustomerId,
+        customerName: boundCustomerName,
         locale: "zh",
         feature: intentSession.route.mode === "patch" ? "WeCom Bot · Patch" : "WeCom Bot · Propose",
         confirmedActionId: intentSession.actionId,
@@ -925,12 +928,14 @@ async function handleTextMessage(frame: WsFrame) {
       const altActionId = parseIntentAlternativePick(text, intentSession);
       if (altActionId) {
         intentConfirmSessions.delete(key);
-        const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName);
+        const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName, boundCustomerId);
         const result = await runAssistantTurn({
           messages,
           userId: actorUserId,
           partnerId: boundPartnerId ?? session?.partnerId,
           partnerName: boundPartnerName,
+          customerId: boundCustomerId,
+          customerName: boundCustomerName,
           locale: "zh",
           feature: altActionId.startsWith("query.") ? "WeCom Bot" : "WeCom Bot · Propose",
           confirmedActionId: altActionId,
@@ -1053,7 +1058,7 @@ async function handleTextMessage(frame: WsFrame) {
     }
 
     agentBuilderSessions.delete(key);
-    const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName);
+    const messages = withPartnerHint(history, boundPartnerId, boundPartnerName, boundCustomerName, boundCustomerId);
     const continuingPropose = !isAgentBuilderIntent(text) && !!session;
     const focus = focusSessions.get(key);
 
@@ -1062,6 +1067,8 @@ async function handleTextMessage(frame: WsFrame) {
       userId: actorUserId,
       partnerId: boundPartnerId ?? session?.partnerId,
       partnerName: boundPartnerName,
+      customerId: boundCustomerId,
+      customerName: boundCustomerName,
       locale: "zh",
       feature: continuingPropose ? "WeCom Bot · Propose" : "WeCom Bot",
       forcePropose: continuingPropose,

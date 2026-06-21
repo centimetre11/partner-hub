@@ -41,8 +41,8 @@ function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean, know
 你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档、搜索团队知识库、或检索 Know-how 知识库。${kmsLine} ${knowhowLine} 规则：
 1. 用中文回复，简洁、可执行，直接给出查询结果。
 2. 查询类问题：必须先调用工具获取真实数据再回答，禁止编造；禁止只回复「已收到」「当前时间是…」「需要我帮你做什么吗」等空话。
-3. 问伙伴数量/列表：用 search_partners（status=ACTIVE 表示正式伙伴）；问待办：用 list_todos。
-4. 修改指令（推进阶段、更新字段、创建待办）：直接执行并说明变更内容；指令不明确时先查询确认目标。
+3. 问伙伴数量/列表：用 search_partners（status=ACTIVE 表示正式伙伴）；问客户/终端客户：用 search_customers；读客户档案/联系人/商机：用 get_customer（不是 get_partner）；问待办：用 list_todos（客户传 customerName/customerId，伙伴传 partnerName/partnerId）；问商机：用 list_opportunities（同上）；问商务记录：用 list_business_records（同上）。
+4. 修改指令（推进阶段、更新字段、创建待办、写时间线）：直接执行并说明变更内容；指令不明确时先查询确认目标。更新伙伴档案用 update_partner；更新客户档案用 update_customer；创建待办用 create_todo（客户传 customerName/customerId，伙伴传 partnerName/partnerId）；写时间线用 add_timeline_event（客户或伙伴二选一，客户传 customerName/customerId）。
 5. 跨伙伴对比：分别拉取档案后给出有依据的建议。
 6. 若用户粘贴 KMS 链接并要求建档/补全档案/提取伙伴信息，系统会自动切换到提案模式，此处无需处理。
 7. 背景：帆软产品 FineReport（复杂报表）/ FineBI（自助分析）/ FineDataLink（数据集成）；中东差异化是复杂报表 + 数据主权合规（私有化部署）；策略材料含 Tier A/B/C 打法、首三单补贴、首年超级折扣、Fast Track 等。`;
@@ -59,10 +59,11 @@ Today is ${today}.
 You can use tools to query and modify system data, search the public web, read KMS internal documents (read_kms), search the team knowledge base (search_knowledge), or search the Know-how knowledge base (search_knowhow). ${kmsLine} ${knowhowLine} Rules:
 1. Reply in English, concisely and action-oriented.
 2. For queries: use tools to fetch real data before answering — do not invent facts.
-3. For modification commands (advance stage, update fields, create todos): execute directly and clearly state what changed. If the instruction is ambiguous, query to confirm the target first.
-4. For cross-partner comparisons: fetch both profiles via tools and give evidence-based recommendations.
-5. If the user pastes a KMS link and asks to onboard / complete profile / extract partner info, the system switches to proposal mode automatically — you do not need to handle that here.
-6. Context: Fanruan products FineReport (complex reporting) / FineBI (self-service analytics) / FineDataLink (data integration); Middle East differentiation is complex reporting plus data-sovereignty compliance (on-prem deployment); strategy materials include Tier A/B/C playbooks, first-three-deal subsidy (first deal +20% discount + 2 weeks free onsite), first-year super discount (L2 40% / L3 50% / L4 60%), Fast Track (Tableau/Microsoft migration partners with ≥5 certified staff go straight to L2).`;
+3. Partner counts/lists: search_partners (status=ACTIVE = formal partners); end-customers: search_customers; customer profile/contacts/opportunities: get_customer (not get_partner); todos: list_todos (customerName/customerId for customers, partnerName/partnerId for partners); opportunities: list_opportunities (same); business records: list_business_records (same).
+4. For modification commands (advance stage, update fields, create todos, timeline events): execute directly and state what changed; query first if the target is ambiguous. update_partner for partners; update_customer for end-customers; create_todo with customerName/customerId or partnerName/partnerId; add_timeline_event with customer or partner (customerName/customerId or partnerName/partnerId).
+5. For cross-partner comparisons: fetch both profiles via tools and give evidence-based recommendations.
+6. If the user pastes a KMS link and asks to onboard / complete profile / extract partner info, the system switches to proposal mode automatically — you do not need to handle that here.
+7. Context: Fanruan products FineReport (complex reporting) / FineBI (self-service analytics) / FineDataLink (data integration); Middle East differentiation is complex reporting plus data-sovereignty compliance (on-prem deployment); strategy materials include Tier A/B/C playbooks, first-three-deal subsidy (first deal +20% discount + 2 weeks free onsite), first-year super discount (L2 40% / L3 50% / L4 60%), Fast Track (Tableau/Microsoft migration partners with ≥5 certified staff go straight to L2).`;
 }
 
 export async function runQueryAssistant(
@@ -73,6 +74,8 @@ export async function runQueryAssistant(
     feature?: string;
     emit?: Parameters<typeof runToolLoop>[0]["emit"];
     queryKind?: "list_todos" | "list_opportunities" | "list_business_records" | "general";
+    customerId?: string;
+    customerName?: string;
   }
 ) {
   const locale = options?.locale ?? "en";
@@ -83,16 +86,40 @@ export async function runQueryAssistant(
   const kindHint =
     options?.queryKind === "list_todos"
       ? locale === "zh"
-        ? "\n\n本轮用户要查待办：必须先调用 list_todos，回复中保留每条 [id:…] 前缀。"
-        : "\n\nUser wants todos: call list_todos first; keep [id:…] prefixes in the reply."
+        ? `\n\n本轮用户要查待办：必须先调用 list_todos，回复中保留每条 [id:…] 前缀。${
+            options?.customerId || options?.customerName
+              ? `当前会话绑定客户${options.customerName ? `「${options.customerName}」` : ""}${options.customerId ? `（customerId=${options.customerId}）` : ""}，list_todos 必须传 customerName 或 customerId，禁止用 partnerName。`
+              : "用户提到「客户」时传 customerName（可先 search_customers 查名）；提到「伙伴」时传 partnerName。客户与伙伴是不同实体。"
+          }`
+        : `\n\nUser wants todos: call list_todos first; keep [id:…] prefixes.${
+            options?.customerId || options?.customerName
+              ? ` Bound customer${options.customerName ? ` "${options.customerName}"` : ""}${options.customerId ? ` (customerId=${options.customerId})` : ""} — pass customerName or customerId to list_todos, not partnerName.`
+              : " Use customerName for customer/account todos and partnerName for partner todos."
+          }`
       : options?.queryKind === "list_opportunities"
         ? locale === "zh"
-          ? "\n\n本轮用户要查商机：必须先调用 list_opportunities。"
-          : "\n\nUser wants opportunities: call list_opportunities first."
+          ? `\n\n本轮用户要查商机：必须先调用 list_opportunities，回复中保留每条 [id:…] 前缀。${
+              options?.customerId || options?.customerName
+                ? `当前绑定客户${options.customerName ? `「${options.customerName}」` : ""}，必须传 customerName 或 customerId，禁止用 partnerName。`
+                : "用户提到「客户」时传 customerName；提到「伙伴」时传 partnerName。"
+            }`
+          : `\n\nUser wants opportunities: call list_opportunities first; keep [id:…] prefixes.${
+              options?.customerId || options?.customerName
+                ? ` Bound customer — pass customerName or customerId, not partnerName.`
+                : " Use customerName for customer opportunities and partnerName for partner opportunities."
+            }`
         : options?.queryKind === "list_business_records"
           ? locale === "zh"
-            ? "\n\n本轮用户要查商务记录：必须先调用 list_business_records。"
-            : "\n\nUser wants business records: call list_business_records first."
+            ? `\n\n本轮用户要查商务记录：必须先调用 list_business_records，回复中保留每条 [id:…] 前缀。${
+                options?.customerId || options?.customerName
+                  ? `当前绑定客户${options.customerName ? `「${options.customerName}」` : ""}，必须传 customerName 或 customerId，禁止用 partnerName。`
+                  : "用户提到「客户」时传 customerName；提到「伙伴」时传 partnerName。"
+              }`
+            : `\n\nUser wants business records: call list_business_records first; keep [id:…] prefixes.${
+                options?.customerId || options?.customerName
+                  ? ` Bound customer — pass customerName or customerId, not partnerName.`
+                  : " Use customerName for customer records and partnerName for partner records."
+              }`
           : "";
   systemContent += kindHint;
   const chat: ChatMessage[] = [

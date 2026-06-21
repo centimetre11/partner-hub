@@ -534,6 +534,66 @@ export async function toggleTodoAction(todoId: string) {
   if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
 }
 
+export async function completeTodoWithNoteAction(formData: FormData) {
+  const user = await requireUser();
+  const todoId = String(formData.get("todoId") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!todoId || !note) return { ok: false as const, error: "note_required" };
+
+  const sync = formData.get("syncToBusinessRecord") === "true";
+  const category = normalizeBusinessRecordCategory(String(formData.get("category") ?? "OTHER"));
+  const contactId = String(formData.get("contactId") ?? "").trim() || null;
+
+  const t = await db.todoItem.findUniqueOrThrow({ where: { id: todoId } });
+  if (t.status === "DONE") return { ok: true as const };
+
+  const owner: OwnerRef | null = t.customerId
+    ? { kind: "customer", id: t.customerId }
+    : t.partnerId
+      ? { kind: "partner", id: t.partnerId }
+      : null;
+
+  let crmFeedback: { message?: string; warning?: string; info?: string } = {};
+
+  if (sync && owner) {
+    const { crmSync } = await persistBusinessRecord({
+      owner,
+      userId: user.id,
+      category,
+      title: t.title,
+      content: note,
+      occurredAt: new Date(),
+      contactId,
+      source: "TODO",
+      sourceTodoId: todoId,
+    });
+    if (crmSync.status === "synced") {
+      crmFeedback = { message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };
+    } else if (crmSync.status === "failed") {
+      crmFeedback = { warning: `本地已保存，CRM 同步失败：${crmSync.error}` };
+    } else {
+      crmFeedback = { info: `本地已保存（CRM：${crmSync.reason}）` };
+    }
+  } else {
+    const completionNote = `[完成备注 ${new Date().toISOString().slice(0, 10)}] ${note}`;
+    await db.todoItem.update({
+      where: { id: todoId },
+      data: {
+        status: "DONE",
+        doneAt: new Date(),
+        detail: t.detail ? `${t.detail}\n\n${completionNote}` : completionNote,
+      },
+    });
+  }
+
+  revalidatePath("/todos");
+  revalidatePath("/");
+  if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
+  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
+
+  return { ok: true as const, ...crmFeedback };
+}
+
 export async function deleteTodoAction(todoId: string) {
   await requireUser();
   const t = await db.todoItem.delete({ where: { id: todoId } });

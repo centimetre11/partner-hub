@@ -1,7 +1,7 @@
 import { db } from "./db";
 import type { ToolDef } from "./ai";
-import { PARTNER_FIELD_LABELS, stageName } from "./constants";
-import { partnerContext, type FieldUpdate } from "./proposals";
+import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS, stageName } from "./constants";
+import { partnerContext, customerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
 import { generalWebSearch, linkedinSearch } from "./web-search";
 import { readKmsForUser, writeKmsForUser } from "./kms";
@@ -14,6 +14,7 @@ import {
 import { MONITOR_DIMENSIONS, MONITOR_SENTIMENT_LABELS } from "./constants";
 import { formatTierLabel, partnerFieldValueFromText } from "./tier";
 import { dueWithinDaysRange, overdueDueDateBefore } from "./todo-dates";
+import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { enqueueWecomPush } from "./wecom-push";
 import { getWecomChatByChatId, listWecomChats } from "./wecom-chats";
 
@@ -55,6 +56,71 @@ async function findPartnerByName(name: string) {
     (await db.partner.findFirst({ where: { name: { equals: name } } })) ??
     (await db.partner.findFirst({ where: { name: { contains: name } } }))
   );
+}
+
+async function findCustomerByName(name: string) {
+  const q = String(name).trim();
+  if (!q) return null;
+  return (
+    (await db.customer.findFirst({ where: { ...END_CUSTOMER_WHERE, name: { equals: q } } })) ??
+    (await db.customer.findFirst({ where: { ...END_CUSTOMER_WHERE, name: { contains: q } } }))
+  );
+}
+
+async function resolveOwnerFilter(args: {
+  partnerId?: unknown;
+  partnerName?: unknown;
+  customerId?: unknown;
+  customerName?: unknown;
+}) {
+  const partnerId = args.partnerId ? String(args.partnerId).trim() : "";
+  let customerId = args.customerId ? String(args.customerId).trim() : "";
+  if (!customerId && args.customerName) {
+    const c = await findCustomerByName(String(args.customerName));
+    customerId = c?.id ?? "";
+  }
+  return { partnerId, customerId };
+}
+
+/** Resolve partner/customer link for write tools (customer takes precedence when customerName/Id set). */
+async function resolveOwnerLink(args: {
+  partnerId?: unknown;
+  partnerName?: unknown;
+  customerId?: unknown;
+  customerName?: unknown;
+}): Promise<{ partnerId: string | null; customerId: string | null; ownerLabel: string | null }> {
+  let customerId = args.customerId ? String(args.customerId).trim() : "";
+  if (!customerId && args.customerName) {
+    const c = await findCustomerByName(String(args.customerName));
+    customerId = c?.id ?? "";
+  }
+  let partnerId = "";
+  if (!customerId) {
+    partnerId = args.partnerId ? String(args.partnerId).trim() : "";
+    if (!partnerId && args.partnerName) {
+      const p = await findPartnerByName(String(args.partnerName));
+      partnerId = p?.id ?? "";
+    }
+  }
+  let ownerLabel: string | null = null;
+  if (customerId) {
+    ownerLabel = (await db.customer.findUnique({ where: { id: customerId }, select: { name: true } }))?.name ?? null;
+  } else if (partnerId) {
+    ownerLabel = (await db.partner.findUnique({ where: { id: partnerId }, select: { name: true } }))?.name ?? null;
+  }
+  return { partnerId: partnerId || null, customerId: customerId || null, ownerLabel };
+}
+
+const CUSTOMER_STATUSES = ["ACTIVE", "PROSPECT", "INACTIVE"] as const;
+
+function customerFieldValueFromText(field: string, value: string): unknown {
+  const v = value.trim();
+  if (!v) return undefined;
+  if (field === "status") {
+    const s = v.toUpperCase();
+    return (CUSTOMER_STATUSES as readonly string[]).includes(s) ? s : undefined;
+  }
+  return v;
 }
 
 async function findUserByName(name: string) {
@@ -116,6 +182,49 @@ const searchPartners: Skill = {
   },
 };
 
+// ---- Search customers (end-customer accounts) ----
+const searchCustomers: Skill = {
+  name: "search_customers",
+  label: "Search customers",
+  desc: "Search end-customer (account) records by name, status, or country",
+  def: {
+    type: "function",
+    function: {
+      name: "search_customers",
+      description:
+        "Search/filter end-customer (account) list — NOT Fanruan partners. Use when the user asks about a 客户/customer/account.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Customer company name keyword (optional)" },
+          status: { type: "string", enum: ["ACTIVE", "PROSPECT", "INACTIVE"] },
+          country: { type: "string", description: "Country keyword, e.g. UAE, KSA" },
+        },
+      },
+    },
+  },
+  run: async (args) => {
+    const customers = await db.customer.findMany({
+      where: {
+        ...END_CUSTOMER_WHERE,
+        ...(args.query ? { name: { contains: String(args.query) } } : {}),
+        ...(args.status ? { status: String(args.status) } : {}),
+        ...(args.country ? { country: { contains: String(args.country) } } : {}),
+      },
+      include: { partner: { select: { name: true } }, owner: { select: { name: true } } },
+      take: 50,
+      orderBy: { name: "asc" },
+    });
+    if (!customers.length) return "No customers match the criteria";
+    return customers
+      .map(
+        (c) =>
+          `[id:${c.id}] ${c.name} | ${c.status} | ${c.country ?? "?"} | Industry:${c.industry ?? "-"} | Partner:${c.partner?.name ?? "-"} | Owner:${c.owner?.name ?? "-"}`
+      )
+      .join("\n");
+  },
+};
+
 // ---- Read profile ----
 const getPartner: Skill = {
   name: "get_partner",
@@ -137,6 +246,31 @@ const getPartner: Skill = {
     const p = await findPartnerByName(String(args.name));
     if (!p) return `No partner found matching "${args.name}"`;
     return await partnerContext(p.id);
+  },
+};
+
+// ---- Read customer profile ----
+const getCustomer: Skill = {
+  name: "get_customer",
+  label: "Read customer profile",
+  desc: "Get end-customer account profile (contacts, opportunities, open todos)",
+  def: {
+    type: "function",
+    function: {
+      name: "get_customer",
+      description:
+        "Get an end-customer (account) profile by name — includes contacts (power map), active opportunities, and open todos. NOT a Fanruan partner.",
+      parameters: {
+        type: "object",
+        properties: { name: { type: "string", description: "Customer company name (fuzzy match supported)" } },
+        required: ["name"],
+      },
+    },
+  },
+  run: async (args) => {
+    const c = await findCustomerByName(String(args.name));
+    if (!c) return `No customer found matching "${args.name}"`;
+    return await customerContext(c.id);
   },
 };
 
@@ -212,21 +346,85 @@ const updatePartner: Skill = {
   },
 };
 
+// ---- Update customer profile ----
+const updateCustomer: Skill = {
+  name: "update_customer",
+  label: "Update customer profile",
+  desc: "Edit end-customer account fields. Applied directly in assistant chat.",
+  def: {
+    type: "function",
+    function: {
+      name: "update_customer",
+      description: `Update end-customer (account) profile fields. Available fields: ${Object.entries(CUSTOMER_FIELD_LABELS)
+        .filter(([f]) => f !== "name")
+        .map(([f, l]) => `${f}(${l})`)
+        .join(", ")}.`,
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Customer company name" },
+          fields: { type: "object", description: 'Field key-value pairs, e.g. {"industry": "Banking", "status": "ACTIVE"}' },
+        },
+        required: ["name", "fields"],
+      },
+    },
+  },
+  run: async (args, ctx) => {
+    const c = await findCustomerByName(String(args.name));
+    if (!c) return `No customer found matching "${args.name}"`;
+    const fields = (args.fields ?? {}) as Record<string, unknown>;
+
+    const data: Record<string, unknown> = {};
+    const changes: string[] = [];
+    for (const [k, v] of Object.entries(fields)) {
+      if (!(k in CUSTOMER_FIELD_LABELS) || k === "name") continue;
+      const parsed = customerFieldValueFromText(k, String(v));
+      if (parsed === undefined) continue;
+      data[k] = parsed;
+      changes.push(`${CUSTOMER_FIELD_LABELS[k]} → ${parsed}`);
+    }
+    if (!changes.length) return "No valid fields to update";
+
+    if (ctx.mode === "agent") {
+      return `Customer profile updates (${changes.join("; ")}) require assistant mode — not applied in agent run.`;
+    }
+
+    await db.customer.update({ where: { id: c.id }, data });
+    await db.timelineEvent.create({
+      data: {
+        customerId: c.id,
+        type: "CHANGE",
+        title: "AI assistant customer profile update",
+        content: changes.join("; "),
+        createdById: ctx.userId,
+        meta: JSON.stringify({ via: "assistant", fields }),
+      },
+    });
+    const msg = `Updated customer ${c.name}: ${changes.join("; ")}`;
+    ctx.actions.push(msg);
+    return msg;
+  },
+};
+
 // ---- Create todo ----
 const createTodo: Skill = {
   name: "create_todo",
   label: "Create todo",
-  desc: "Create a todo item, optionally linked to a partner with a due date",
+  desc: "Create a todo item, optionally linked to a partner or end-customer with a due date",
   def: {
     type: "function",
     function: {
       name: "create_todo",
-      description: "Create a todo item. Try to link partnerName to an existing partner; if not found, still create without a partner.",
+      description:
+        "Create a todo item. Link to an end-customer via customerName/customerId, or to a partner via partnerName/partnerId. Customer and partner are different entities.",
       parameters: {
         type: "object",
         properties: {
           title: { type: "string" },
-          partnerName: { type: "string", description: "Linked partner company name (optional)" },
+          partnerName: { type: "string", description: "Linked Fanruan partner company name (optional)" },
+          partnerId: { type: "string", description: "Exact partner id (optional)" },
+          customerName: { type: "string", description: "Linked end-customer / account company name (optional)" },
+          customerId: { type: "string", description: "Exact customer id (optional)" },
           dueDate: { type: "string", description: "Due date YYYY-MM-DD (optional)" },
           priority: { type: "string", enum: ["HIGH", "MEDIUM", "LOW"] },
           detail: { type: "string" },
@@ -236,23 +434,21 @@ const createTodo: Skill = {
     },
   },
   run: async (args, ctx) => {
-    let partnerId: string | null = null;
-    if (args.partnerName) {
-      const p = await findPartnerByName(String(args.partnerName));
-      partnerId = p?.id ?? null;
-    }
+    const { partnerId, customerId, ownerLabel } = await resolveOwnerLink(args);
     const t = await db.todoItem.create({
       data: {
         title: String(args.title),
         detail: args.detail ? String(args.detail) : ctx.agentName ? `Created by Agent "${ctx.agentName}"` : null,
         partnerId,
+        customerId,
         assigneeId: ctx.userId,
         dueDate: args.dueDate ? new Date(String(args.dueDate)) : null,
         priority: ["HIGH", "MEDIUM", "LOW"].includes(String(args.priority)) ? String(args.priority) : "MEDIUM",
         source: "AI",
       },
     });
-    const msg = `Created todo: ${t.title}${t.dueDate ? ` (due ${t.dueDate.toISOString().slice(0, 10)})` : ""}`;
+    const owner = customerId ? `customer ${ownerLabel ?? customerId}` : partnerId ? `partner ${ownerLabel ?? partnerId}` : "unlinked";
+    const msg = `Created todo: ${t.title}${t.dueDate ? ` (due ${t.dueDate.toISOString().slice(0, 10)})` : ""} · ${owner}`;
     ctx.actions.push(msg);
     return msg;
   },
@@ -267,7 +463,8 @@ const listTodos: Skill = {
     type: "function",
     function: {
       name: "list_todos",
-      description: "List open todo items. Filter by partner, overdue only, or due within N days.",
+      description:
+        "List open todo items. Filter by partner OR end-customer (account), overdue only, or due within N days. Customers and partners are different — use customerName/customerId for 客户待办.",
       parameters: {
         type: "object",
         properties: {
@@ -276,26 +473,32 @@ const listTodos: Skill = {
             type: "number",
             description: "Include todos due from today through N calendar days ahead (e.g. 3 = today + next 2 days)",
           },
-          partnerName: { type: "string", description: "Filter by partner name (contains)" },
+          partnerName: { type: "string", description: "Filter by Fanruan partner company name (contains)" },
           partnerId: { type: "string", description: "Filter by exact partner id" },
+          customerName: { type: "string", description: "Filter by end-customer / account company name (contains)" },
+          customerId: { type: "string", description: "Filter by exact customer id" },
         },
       },
     },
   },
   run: async (args) => {
     const dueWindow = args.dueWithinDays != null ? dueWithinDaysRange(Number(args.dueWithinDays)) : null;
-    const partnerId = args.partnerId ? String(args.partnerId).trim() : "";
+    const { partnerId, customerId } = await resolveOwnerFilter(args);
     const todos = await db.todoItem.findMany({
       where: {
         status: "OPEN",
         ...(args.overdueOnly ? { dueDate: { lt: overdueDueDateBefore() } } : {}),
         ...(dueWindow && !args.overdueOnly ? { dueDate: dueWindow } : {}),
         ...(partnerId ? { partnerId } : {}),
-        ...(args.partnerName && !partnerId
+        ...(customerId ? { customerId } : {}),
+        ...(args.partnerName && !partnerId && !customerId
           ? { partner: { name: { contains: String(args.partnerName) } } }
           : {}),
+        ...(args.customerName && !customerId && !partnerId
+          ? { customer: { name: { contains: String(args.customerName) }, ...END_CUSTOMER_WHERE } }
+          : {}),
       },
-      include: { partner: true, assignee: true },
+      include: { partner: true, customer: true, assignee: true },
       orderBy: { dueDate: "asc" },
       take: 50,
     });
@@ -303,7 +506,7 @@ const listTodos: Skill = {
       ? todos
           .map(
             (t) =>
-              `[id:${t.id}] [${t.priority}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
+              `[id:${t.id}] [${t.priority}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Customer:${t.customer?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
           )
           .join("\n")
       : "No open todos";
@@ -339,7 +542,7 @@ const updateTodo: Skill = {
     const todoId = String(args.todoId ?? "");
     const existing = await db.todoItem.findUnique({
       where: { id: todoId },
-      include: { assignee: true, partner: true },
+      include: { assignee: true, partner: true, customer: true },
     });
     if (!existing) return `Todo not found: ${todoId}`;
 
@@ -391,29 +594,35 @@ const listOpportunities: Skill = {
     type: "function",
     function: {
       name: "list_opportunities",
-      description: "List opportunities, optionally filtered by partner name.",
+      description:
+        "List opportunities. Filter by end-customer (account) OR partner. Customers and partners are different entities.",
       parameters: {
         type: "object",
         properties: {
-          partnerName: { type: "string", description: "Filter by partner company name" },
+          partnerName: { type: "string", description: "Filter by Fanruan partner company name" },
+          partnerId: { type: "string", description: "Filter by exact partner id" },
+          customerName: { type: "string", description: "Filter by end-customer / account company name" },
+          customerId: { type: "string", description: "Filter by exact customer id" },
           status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
         },
       },
     },
   },
   run: async (args) => {
-    let partnerId: string | undefined;
-    if (args.partnerName) {
-      const p = await findPartnerByName(String(args.partnerName));
-      if (!p) return `No partner found matching "${args.partnerName}"`;
-      partnerId = p.id;
-    }
+    const { partnerId, customerId } = await resolveOwnerFilter(args);
     const rows = await db.opportunity.findMany({
       where: {
         ...(partnerId ? { partnerId } : {}),
+        ...(customerId ? { customerId } : {}),
+        ...(args.partnerName && !partnerId && !customerId
+          ? { partner: { name: { contains: String(args.partnerName) } } }
+          : {}),
+        ...(args.customerName && !customerId && !partnerId
+          ? { customer: { name: { contains: String(args.customerName) }, ...END_CUSTOMER_WHERE } }
+          : {}),
         ...(args.status ? { status: String(args.status) } : {}),
       },
-      include: { partner: true },
+      include: { partner: true, customer: true },
       orderBy: { updatedAt: "desc" },
       take: 30,
     });
@@ -421,7 +630,7 @@ const listOpportunities: Skill = {
       ? rows
           .map(
             (o) =>
-              `[id:${o.id}] ${o.name} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status}`
+              `[id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status}`
           )
           .join("\n")
       : "No opportunities found";
@@ -485,26 +694,34 @@ const listBusinessRecords: Skill = {
     type: "function",
     function: {
       name: "list_business_records",
-      description: "List business records (visits, meetings, follow-ups).",
+      description:
+        "List business records (visits, meetings, follow-ups). Filter by end-customer (account) OR partner.",
       parameters: {
         type: "object",
         properties: {
-          partnerName: { type: "string" },
+          partnerName: { type: "string", description: "Filter by Fanruan partner company name" },
+          partnerId: { type: "string", description: "Filter by exact partner id" },
+          customerName: { type: "string", description: "Filter by end-customer / account company name" },
+          customerId: { type: "string", description: "Filter by exact customer id" },
           limit: { type: "number" },
         },
       },
     },
   },
   run: async (args) => {
-    let partnerId: string | undefined;
-    if (args.partnerName) {
-      const p = await findPartnerByName(String(args.partnerName));
-      if (!p) return `No partner found matching "${args.partnerName}"`;
-      partnerId = p.id;
-    }
+    const { partnerId, customerId } = await resolveOwnerFilter(args);
     const rows = await db.businessRecord.findMany({
-      where: partnerId ? { partnerId } : {},
-      include: { partner: true },
+      where: {
+        ...(partnerId ? { partnerId } : {}),
+        ...(customerId ? { customerId } : {}),
+        ...(args.partnerName && !partnerId && !customerId
+          ? { partner: { name: { contains: String(args.partnerName) } } }
+          : {}),
+        ...(args.customerName && !customerId && !partnerId
+          ? { customer: { name: { contains: String(args.customerName) }, ...END_CUSTOMER_WHERE } }
+          : {}),
+      },
+      include: { partner: true, customer: true },
       orderBy: { occurredAt: "desc" },
       take: Math.min(Number(args.limit) || 20, 50),
     });
@@ -512,7 +729,7 @@ const listBusinessRecords: Skill = {
       ? rows
           .map(
             (r) =>
-              `[id:${r.id}] ${r.title} | Partner:${r.partner?.name ?? "-"} | ${r.category} | ${r.occurredAt.toISOString().slice(0, 10)}`
+              `[id:${r.id}] ${r.title} | Customer:${r.customer?.name ?? "-"} | Partner:${r.partner?.name ?? "-"} | ${r.category} | ${r.occurredAt.toISOString().slice(0, 10)}`
           )
           .join("\n")
       : "No business records found";
@@ -586,30 +803,37 @@ const webSearch: Skill = {
 // ---- Add timeline event ----
 const addTimelineEvent: Skill = {
   name: "add_timeline_event",
-  label: "Add partner timeline event",
-  desc: "Record external signals/news on a partner timeline (applied directly, audited)",
+  label: "Add timeline event",
+  desc: "Record external signals/news on a partner or customer timeline (applied directly, audited)",
   def: {
     type: "function",
     function: {
       name: "add_timeline_event",
-      description: "Add a discovered signal/news item to a partner's timeline.",
+      description:
+        "Add a discovered signal/news item to a partner or end-customer timeline. Provide partnerName OR customerName (not both unless intentional).",
       parameters: {
         type: "object",
         properties: {
-          partnerName: { type: "string", description: "Partner company name" },
+          partnerName: { type: "string", description: "Fanruan partner company name" },
+          partnerId: { type: "string", description: "Exact partner id" },
+          customerName: { type: "string", description: "End-customer / account company name" },
+          customerId: { type: "string", description: "Exact customer id" },
           title: { type: "string", description: "Event title (one line)" },
           content: { type: "string", description: "Details (include source URL)" },
         },
-        required: ["partnerName", "title"],
+        required: ["title"],
       },
     },
   },
   run: async (args, ctx) => {
-    const p = await findPartnerByName(String(args.partnerName));
-    if (!p) return `No partner found matching "${args.partnerName}"`;
+    const { partnerId, customerId, ownerLabel } = await resolveOwnerLink(args);
+    if (!partnerId && !customerId) {
+      return "Must specify partnerName/partnerId or customerName/customerId for timeline event";
+    }
     await db.timelineEvent.create({
       data: {
-        partnerId: p.id,
+        partnerId,
+        customerId,
         type: "NEWS",
         title: String(args.title),
         content: args.content ? String(args.content) : null,
@@ -617,7 +841,7 @@ const addTimelineEvent: Skill = {
         meta: JSON.stringify({ via: ctx.mode, agentId: ctx.agentId, agentName: ctx.agentName }),
       },
     });
-    const msg = `Added to ${p.name} timeline: ${args.title}`;
+    const msg = `Added to ${ownerLabel ?? "record"} timeline: ${args.title}`;
     ctx.actions.push(msg);
     return msg;
   },
@@ -937,8 +1161,11 @@ const sendEmailTool: Skill = {
 
 export const SKILLS: Skill[] = [
   searchPartners,
+  searchCustomers,
   getPartner,
+  getCustomer,
   updatePartner,
+  updateCustomer,
   createTodo,
   updateTodo,
   listTodos,
@@ -991,8 +1218,11 @@ export const REPORT_AGENT_KEYWORDS = [
 
 export const ASSISTANT_SKILLS = [
   "search_partners",
+  "search_customers",
   "get_partner",
+  "get_customer",
   "update_partner",
+  "update_customer",
   "create_todo",
   "update_todo",
   "list_todos",

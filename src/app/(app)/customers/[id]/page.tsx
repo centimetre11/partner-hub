@@ -16,12 +16,12 @@ import {
   deleteCustomerAction,
   setCustomerPartnerAction,
 } from "@/lib/customer-actions";
+import { CustomerTodoRow } from "@/components/customer-todo-row";
 import {
   upsertOpportunityAction,
   deleteOpportunityAction,
   addNoteAction,
   createTodoAction,
-  toggleTodoAction,
   deleteTodoAction,
 } from "@/lib/actions";
 
@@ -206,28 +206,15 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
       </form>
       <div className="divide-y divide-slate-50">
-        {customer.todos.map((t) => {
-          const isDone = t.status === "DONE";
-          return (
-            <div key={t.id} className="flex items-center gap-3 py-2.5">
-              <form action={toggleTodoAction.bind(null, t.id)}>
-                <button className={`w-4.5 h-4.5 rounded border flex items-center justify-center text-[10px] ${isDone ? "bg-slate-900 border-slate-900 text-white" : "border-slate-300 hover:border-slate-400"}`}>
-                  {isDone && "✓"}
-                </button>
-              </form>
-              <div className="min-w-0 flex-1">
-                <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>{t.title}</div>
-                <div className="text-xs text-slate-400">
-                  {t.dueDate && fmtDate(t.dueDate, bcp47)}
-                  {t.assignee && ` · ${t.assignee.name}`}
-                </div>
-              </div>
-              <form action={deleteTodoAction.bind(null, t.id)}>
-                <button className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
-              </form>
-            </div>
-          );
-        })}
+        {customer.todos.map((t) => (
+          <CustomerTodoRow
+            key={t.id}
+            todo={t}
+            customerId={customer.id}
+            contacts={contactOptions}
+            bcp47={bcp47}
+          />
+        ))}
         {customer.todos.length === 0 && <EmptyState text={c.noTodos} />}
       </div>
     </>

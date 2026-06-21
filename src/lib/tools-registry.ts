@@ -30,7 +30,9 @@ export type ToolCategory = {
 
 const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   search_partners: { implemented: true, priority: "core" },
+  search_customers: { implemented: true, priority: "core" },
   get_partner: { implemented: true, priority: "core" },
+  get_customer: { implemented: true, priority: "core" },
   add_timeline_event: { implemented: true, priority: "core" },
   create_todo: { implemented: true, priority: "core" },
   update_todo: { implemented: true, priority: "standard" },
@@ -46,6 +48,7 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   read_kms: { implemented: true, requiresKms: true, priority: "core" },
   write_kms: { implemented: true, requiresKms: true, priority: "standard" },
   update_partner: { implemented: true, priority: "assistant" },
+  update_customer: { implemented: true, priority: "assistant" },
   push_wecom: { implemented: true, priority: "standard" },
   list_wecom_chats: { implemented: true, priority: "standard" },
   send_email: { implemented: true, requiresEmail: true, priority: "standard" },
@@ -53,8 +56,11 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
 
 const CATEGORY_BY_TOOL: Record<string, string> = {
   search_partners: "partner",
+  search_customers: "partner",
   get_partner: "partner",
+  get_customer: "partner",
   update_partner: "partner",
+  update_customer: "partner",
   add_timeline_event: "partner",
   create_todo: "todo",
   update_todo: "todo",

@@ -115,6 +115,8 @@ async function buildFocusAfterQueryAsync(opts: {
   reply: string;
   partnerId?: string;
   partnerName?: string;
+  customerId?: string;
+  customerName?: string;
 }): Promise<FocusEntity | null> {
   const fromReply = buildFocusAfterQuery(opts);
   if (fromReply?.listItems?.length || fromReply?.id) return fromReply;
@@ -127,6 +129,7 @@ async function buildFocusAfterQueryAsync(opts: {
       where: {
         status: "OPEN",
         ...(opts.partnerId ? { partnerId: opts.partnerId } : {}),
+        ...(opts.customerId ? { customerId: opts.customerId } : {}),
       },
       orderBy: { dueDate: "asc" },
       take: 50,
@@ -138,9 +141,13 @@ async function buildFocusAfterQueryAsync(opts: {
       partnerName: opts.partnerName,
     });
   }
-  if (kind === "opportunity" && opts.partnerId) {
+  if (kind === "opportunity") {
     const rows = await db.opportunity.findMany({
-      where: { partnerId: opts.partnerId, status: "ACTIVE" },
+      where: {
+        status: "ACTIVE",
+        ...(opts.partnerId ? { partnerId: opts.partnerId } : {}),
+        ...(opts.customerId ? { customerId: opts.customerId } : {}),
+      },
       orderBy: { updatedAt: "desc" },
       take: 30,
     });
@@ -151,9 +158,12 @@ async function buildFocusAfterQueryAsync(opts: {
       partnerName: opts.partnerName,
     });
   }
-  if (kind === "business_record" && opts.partnerId) {
+  if (kind === "business_record" && (opts.partnerId || opts.customerId)) {
     const rows = await db.businessRecord.findMany({
-      where: { partnerId: opts.partnerId },
+      where: {
+        ...(opts.partnerId ? { partnerId: opts.partnerId } : {}),
+        ...(opts.customerId ? { customerId: opts.customerId } : {}),
+      },
       orderBy: { occurredAt: "desc" },
       take: 20,
     });
@@ -190,6 +200,8 @@ export async function runAssistantTurn(opts: {
   userId: string;
   partnerId?: string;
   partnerName?: string;
+  customerId?: string;
+  customerName?: string;
   locale: Locale | AssistantLocale;
   feature: string;
   emit?: TraceEmitter;
@@ -244,6 +256,8 @@ async function runAssistantTurnCore(opts: {
   userId: string;
   partnerId?: string;
   partnerName?: string;
+  customerId?: string;
+  customerName?: string;
   locale: Locale | AssistantLocale;
   feature: string;
   emit?: TraceEmitter;
@@ -350,12 +364,16 @@ async function runAssistantTurnCore(opts: {
       feature: queryFeature(route, opts.feature),
       emit: opts.emit,
       queryKind: route.route.queryKind,
+      customerId: opts.customerId,
+      customerName: opts.customerName,
     });
     const focus = await buildFocusAfterQueryAsync({
       actionId: route.actionId,
       reply: result.reply,
       partnerId: opts.partnerId,
       partnerName: opts.partnerName,
+      customerId: opts.customerId,
+      customerName: opts.customerName,
     });
     return {
       mode: "query",

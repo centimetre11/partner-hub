@@ -108,80 +108,86 @@ export function CustomerIntegrationsPanel({
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   return (
-    <div className="space-y-4 text-sm">
-      <div className="space-y-2">
-        <div className="text-xs font-medium text-slate-700">{intg.wecomChatId}</div>
-        <p className="text-xs text-slate-500">{intg.wecomChatIdHint}</p>
-        {boundChat ? (
-          <div className="rounded-lg bg-slate-50 p-2.5 text-xs font-mono break-all text-slate-700">
-            {boundChat.chatId}
-            {boundChat.label && <span className="text-slate-500 ml-2">({boundChat.label})</span>}
-          </div>
-        ) : (
-          <input
-            value={chatId}
-            onChange={(e) => setChatId(e.target.value)}
-            placeholder="wrBcKOBgAA…"
-            className={`${input} font-mono`}
-          />
-        )}
-        {!boundChat && (
-          <input
-            value={chatLabel}
-            onChange={(e) => setChatLabel(e.target.value)}
-            placeholder={customerName}
-            className={input}
-          />
-        )}
-        <div className="flex gap-2">
-          {!boundChat ? (
-            <button
-              type="button"
-              disabled={loading || !chatId.trim()}
-              onClick={() => void bindWecom()}
-              className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
-            >
-              {intg.save}
-            </button>
+    <details className="rounded-lg border border-slate-200 bg-white group">
+      <summary className="px-4 py-3 text-sm font-semibold text-slate-800 cursor-pointer list-none flex items-center justify-between">
+        {intg.title}
+        <span className="text-slate-400 text-xs font-normal group-open:rotate-180">▼</span>
+      </summary>
+      <div className="px-4 pb-4 space-y-4 border-t border-slate-100 pt-4 text-sm">
+        <div className="space-y-2">
+          <div className="text-xs font-medium text-slate-700">{intg.wecomChatId}</div>
+          <p className="text-xs text-slate-500">{intg.wecomChatIdHint}</p>
+          {boundChat ? (
+            <div className="rounded-lg bg-slate-50 p-2.5 text-xs font-mono break-all text-slate-700">
+              {boundChat.chatId}
+              {boundChat.label && <span className="text-slate-500 ml-2">({boundChat.label})</span>}
+            </div>
           ) : (
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => void unbindWecom()}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
-            >
-              {intg.unbind}
-            </button>
+            <input
+              value={chatId}
+              onChange={(e) => setChatId(e.target.value)}
+              placeholder="wrBcKOBgAA…"
+              className={`${input} font-mono`}
+            />
           )}
+          {!boundChat && (
+            <input
+              value={chatLabel}
+              onChange={(e) => setChatLabel(e.target.value)}
+              placeholder={customerName}
+              className={input}
+            />
+          )}
+          <div className="flex gap-2">
+            {!boundChat ? (
+              <button
+                type="button"
+                disabled={loading || !chatId.trim()}
+                onClick={() => void bindWecom()}
+                className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+              >
+                {intg.save}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void unbindWecom()}
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs text-slate-600"
+              >
+                {intg.unbind}
+              </button>
+            )}
+          </div>
         </div>
+
+        <form onSubmit={(e) => void saveIntegrations(e)} className="space-y-3">
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-slate-700">{intg.kmsRootPath}</span>
+            <p className="text-xs text-slate-500">{intg.kmsRootPathHint}</p>
+            <input
+              value={kms}
+              onChange={(e) => setKms(e.target.value)}
+              placeholder="https://kms.fineres.com/customers/acme/"
+              className={input}
+            />
+          </label>
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-slate-700">{intg.crmCustomerId}</span>
+            <p className="text-xs text-slate-500">{intg.crmCustomerIdHint}</p>
+            <CrmCustomerPicker value={crm} onChange={handleCrmChange} matchedCustomer={crmCustomer} />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+          >
+            {intg.save}
+          </button>
+        </form>
+
+        {msg && <p className="text-xs text-sky-600">{msg}</p>}
       </div>
-
-      <form onSubmit={(e) => void saveIntegrations(e)} className="space-y-3 border-t border-slate-100 pt-4">
-        <label className="block space-y-1">
-          <span className="text-xs font-medium text-slate-700">{intg.kmsRootPath}</span>
-          <p className="text-xs text-slate-500">{intg.kmsRootPathHint}</p>
-          <input
-            value={kms}
-            onChange={(e) => setKms(e.target.value)}
-            placeholder="https://kms.fineres.com/customers/acme/"
-            className={input}
-          />
-        </label>
-        <div className="space-y-1">
-          <span className="text-xs font-medium text-slate-700">{intg.crmCustomerId}</span>
-          <p className="text-xs text-slate-500">{intg.crmCustomerIdHint}</p>
-          <CrmCustomerPicker value={crm} onChange={handleCrmChange} matchedCustomer={crmCustomer} />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs text-white disabled:opacity-50"
-        >
-          {intg.save}
-        </button>
-      </form>
-
-      {msg && <p className="text-xs text-sky-600">{msg}</p>}
-    </div>
+    </details>
   );
 }

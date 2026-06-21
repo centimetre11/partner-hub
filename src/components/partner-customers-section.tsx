@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Badge, Card, EmptyState } from "@/components/ui";
+import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import {
   bindCustomerToPartnerAction,
   unbindCustomerFromPartnerAction,
@@ -47,6 +48,7 @@ export function PartnerCustomersSection({
     bind: string;
     noUnbound: string;
     addNew: string;
+    aiAdd: string;
     unbind: string;
     viewDetail: string;
     selfBadge: string;
@@ -115,6 +117,12 @@ export function PartnerCustomersSection({
               </button>
             </form>
           )}
+          <CustomerAiIntakeButton
+            partnerId={partnerId}
+            label={copy.aiAdd}
+            variant="section"
+            onDoneNavigate="refresh"
+          />
           <Link href={`/customers?partner=${partnerId}&add=1`} className={actionBtnPrimary}>
             {copy.addNew}
           </Link>

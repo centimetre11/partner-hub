@@ -3,9 +3,10 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Card, EmptyState, fmtDate, TierBadge } from "@/components/ui";
 import { staleDays } from "@/lib/completeness";
-import { toggleTodoAction } from "@/lib/actions";
+import { DashboardOverdueTodoRow } from "@/components/dashboard-todo-row";
 import { WeeklyReport } from "./weekly-report";
 import { AiAddButton } from "@/components/ai-add-button";
+import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { BoardOverview } from "./dashboard/board-overview";
 import { DashboardWorkbenchTodos } from "./dashboard-workbench-todos";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
@@ -158,26 +159,7 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
             <Card title={m.dashboard.overdueTodosTitle.replace("{count}", String(overdueTodos.length))} className="border-red-200">
               <div className="space-y-2.5">
                 {overdueTodos.map((t) => (
-                  <div key={t.id} className="flex items-start gap-2.5">
-                    <form action={toggleTodoAction.bind(null, t.id)}>
-                      <button className="w-4 h-4 mt-0.5 rounded border border-slate-300 hover:border-slate-400" />
-                    </form>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm text-slate-800">{t.title}</div>
-                      <div className="text-xs text-red-500">
-                        {fmtDate(t.dueDate, bcp47)} {m.common.overdue}
-                        {t.partner && (
-                          <>
-                            {" · "}
-                            <Link href={`/partners/${t.partner.id}`} className="text-sky-600 hover:underline">
-                              {t.partner.name}
-                            </Link>
-                          </>
-                        )}
-                        {t.assignee && ` · ${t.assignee.name}`}
-                      </div>
-                    </div>
-                  </div>
+                  <DashboardOverdueTodoRow key={t.id} todo={t} bcp47={bcp47} />
                 ))}
               </div>
             </Card>
@@ -247,13 +229,14 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
                 <div className="text-xs text-slate-400 mt-0.5 mb-2">{m.dashboard.aiOnboardingDesc}</div>
                 <AiAddButton scope="new_partner" label={m.dashboard.startOnboarding} variant="soft" />
               </div>
+              <div className="rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
+                <div className="font-medium text-slate-800">{m.dashboard.customerAiOnboarding}</div>
+                <div className="text-xs text-slate-400 mt-0.5 mb-2">{m.dashboard.customerAiOnboardingDesc}</div>
+                <CustomerAiIntakeButton label={m.dashboard.startCustomerOnboarding} variant="soft" />
+              </div>
               <Link href="/partners?tier=A" className="block rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
                 <div className="font-medium text-slate-800">{m.dashboard.tierAPartners}</div>
                 <div className="text-xs text-slate-400 mt-0.5">{m.dashboard.tierAPartnersDesc}</div>
-              </Link>
-              <Link href="/?tab=board" className="block rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
-                <div className="font-medium text-slate-800">{m.dashboard.businessDashboardLink}</div>
-                <div className="text-xs text-slate-400 mt-0.5">{m.dashboard.businessDashboardDesc}</div>
               </Link>
               <Link href="/pool" className="block rounded-lg border border-dashed border-slate-200 px-4 py-2.5 hover:border-slate-300">
                 <div className="text-xs text-slate-500">{m.dashboard.prospectPoolLink}</div>
