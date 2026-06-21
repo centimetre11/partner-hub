@@ -3,7 +3,7 @@ import { db } from "./db";
 import type { ChatMessage, ToolDef } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
 import type { TraceEmitter } from "./ai-trace";
-import { computeNextRunFromCron, addLocalDays, getZonedParts, SCHEDULER_TIMEZONE, zonedLocalToUtc } from "./cron";
+import { computeNextRunFromCron, addLocalDays, getZonedParts, resolveAgentTimezone, zonedLocalToUtc } from "./cron";
 import {
   newSkillContext,
   REPORT_AGENT_KEYWORDS,
@@ -22,45 +22,51 @@ function agentMaxSteps(agent: Pick<Agent, "maxIterations" | "isAutomation">): nu
 // ============ Schedule time calculation ============
 
 export function computeNextRunAt(
-  agent: Pick<Agent, "frequency" | "runHour" | "runWeekday" | "cronExpr">,
+  agent: Pick<Agent, "frequency" | "runHour" | "runWeekday" | "cronExpr" | "timezone">,
   from = new Date()
 ): Date {
+  const tz = resolveAgentTimezone(agent.timezone);
+
   if (agent.cronExpr) {
-    const fromCron = computeNextRunFromCron(agent.cronExpr, from);
+    const fromCron = computeNextRunFromCron(agent.cronExpr, from, tz);
     if (fromCron) return fromCron;
   }
-  const now = getZonedParts(from);
+
+  const now = getZonedParts(from, tz);
+
   if (agent.frequency === "HOURLY") {
     let candidate = zonedLocalToUtc(
       { year: now.year, month: now.month, day: now.day, hour: now.hour + 1, minute: 0 },
-      SCHEDULER_TIMEZONE
+      tz
     );
     if (candidate <= from) {
       candidate = zonedLocalToUtc(
         { year: now.year, month: now.month, day: now.day, hour: now.hour + 2, minute: 0 },
-        SCHEDULER_TIMEZONE
+        tz
       );
     }
     return candidate;
   }
+
   if (agent.frequency === "WEEKLY") {
     const targetDow = agent.runWeekday % 7;
     for (let offset = 0; offset < 8; offset++) {
-      const { year, month, day } = addLocalDays(now.year, now.month, now.day, offset);
-      const wd = getZonedParts(zonedLocalToUtc({ year, month, day, hour: 12, minute: 0 })).weekday;
+      const { year, month, day } = addLocalDays(now.year, now.month, now.day, offset, tz);
+      const wd = getZonedParts(zonedLocalToUtc({ year, month, day, hour: 12, minute: 0 }, tz), tz).weekday;
       if (wd === targetDow) {
-        const candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 });
+        const candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 }, tz);
         if (candidate > from) return candidate;
       }
     }
-    const fallback = addLocalDays(now.year, now.month, now.day, 7);
-    return zonedLocalToUtc({ ...fallback, hour: agent.runHour, minute: 0 });
+    const fallback = addLocalDays(now.year, now.month, now.day, 7, tz);
+    return zonedLocalToUtc({ ...fallback, hour: agent.runHour, minute: 0 }, tz);
   }
+
   let { year, month, day } = now;
-  let candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 });
+  let candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 }, tz);
   if (candidate <= from) {
-    ({ year, month, day } = addLocalDays(year, month, day, 1));
-    candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 });
+    ({ year, month, day } = addLocalDays(year, month, day, 1, tz));
+    candidate = zonedLocalToUtc({ year, month, day, hour: agent.runHour, minute: 0 }, tz);
   }
   return candidate;
 }

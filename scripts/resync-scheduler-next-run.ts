@@ -12,6 +12,7 @@ async function main() {
       runHour: true,
       runWeekday: true,
       cronExpr: true,
+      timezone: true,
       nextRunAt: true,
     },
   });

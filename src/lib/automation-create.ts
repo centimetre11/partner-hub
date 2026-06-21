@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { computeNextRunAt } from "./agent-runner";
-import { computeNextRunFromCron, cronToAgentSchedule } from "./cron";
+import { cronToAgentSchedule } from "./cron";
 import {
   buildAutomationVariables,
   pickAutomationTaskMd,
@@ -169,7 +169,7 @@ export async function createAutomationFromDraft(
     },
   });
 
-  const nextRunAt = created.cronExpr ? computeNextRunFromCron(created.cronExpr) : computeNextRunAt(created);
+  const nextRunAt = computeNextRunAt(created);
   if (nextRunAt) {
     await db.agent.update({ where: { id: created.id }, data: { nextRunAt } });
   }

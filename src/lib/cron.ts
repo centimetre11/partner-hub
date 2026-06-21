@@ -8,8 +8,25 @@ export const CRON_PRESETS = [
   { id: "monthly1", expr: "0 9 1 * *", labelZh: "每月 1 号 9:00", labelEn: "1st of month 9:00" },
 ] as const;
 
-/** Cron 调度时区 — Docker 默认为 UTC，需显式指定业务时区 */
-export const SCHEDULER_TIMEZONE = process.env.SCHEDULER_TIMEZONE || "Asia/Shanghai";
+/** Cron 调度默认时区（Agent 未设置 timezone 时的兜底；容器 TZ 建议与此一致） */
+export const SCHEDULER_TIMEZONE = process.env.SCHEDULER_TIMEZONE || "Asia/Riyadh";
+
+const VALID_TIMEZONES = new Set(Intl.supportedValuesOf("timeZone"));
+
+/** 解析 Agent/表单上的时区；无效值回退到 SCHEDULER_TIMEZONE */
+export function resolveAgentTimezone(timezone?: string | null): string {
+  const tz = timezone?.trim();
+  if (tz && VALID_TIMEZONES.has(tz)) return tz;
+  if (tz) {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: tz });
+      return tz;
+    } catch {
+      /* invalid */
+    }
+  }
+  return SCHEDULER_TIMEZONE;
+}
 
 const DOW_ZH = ["日", "一", "二", "三", "四", "五", "六"];
 const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "./db";
 import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
-import { computeNextRunFromCron, cronToAgentSchedule } from "./cron";
+import { cronToAgentSchedule } from "./cron";
 import { createAutomationFromDraft, buildAutomationInstructions, resolveAutomationDraftContent } from "./automation-create";
 import { isAutomationDraftReady } from "./builder-context-prompt";
 import {
@@ -132,11 +132,7 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
 
   const agent = await db.agent.findUniqueOrThrow({ where: { id: agentId } });
   const nextRunAt =
-    agent.trigger === "SCHEDULE" && agent.enabled
-      ? agent.cronExpr
-        ? computeNextRunFromCron(agent.cronExpr)
-        : computeNextRunAt(agent)
-      : null;
+    agent.trigger === "SCHEDULE" && agent.enabled ? computeNextRunAt(agent) : null;
   await db.agent.update({ where: { id: agentId }, data: { nextRunAt } });
 
   return { ok: true, agentId };
@@ -179,11 +175,7 @@ export async function toggleAutomationAction(agentId: string) {
   const a = await db.agent.findUniqueOrThrow({ where: { id: agentId, isAutomation: true } });
   const enabled = !a.enabled;
   const nextRunAt =
-    enabled && a.trigger === "SCHEDULE"
-      ? a.cronExpr
-        ? computeNextRunFromCron(a.cronExpr)
-        : computeNextRunAt(a)
-      : null;
+    enabled && a.trigger === "SCHEDULE" ? computeNextRunAt(a) : null;
   await db.agent.update({ where: { id: agentId }, data: { enabled, nextRunAt } });
   revalidatePath("/automations");
   revalidatePath(`/automations/${agentId}`);
