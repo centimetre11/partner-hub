@@ -38,7 +38,7 @@ export function stripIntakeCommandPrefix(text: string, scope: IntakeScope): stri
     case "business_record":
       s = s
         .replace(
-          /^(帮我|请|麻烦)?(记(录|个|一下)?|添加|加|创建|新增|写)?(一个|一下)?(商务记录|拜访记录|会议纪要|跟进记录|商务进展)[：:,，\s]*/i,
+          /^(帮我|请|麻烦)?\s*(记(录|个|一下)?|添加|加|创建|新增|写)?\s*(一个|一下)?\s*([^，,。\n]{0,24}?的)?\s*(商务记录|拜访记录|会议纪要|跟进记录|商务进展)[：:,，、\s]*/i,
           "",
         )
         .replace(/^(帮我|请|麻烦)?记录(一下)?(商务|拜访|会议)(记录|进展)?[：:,，\s]*/i, "")
@@ -430,6 +430,18 @@ export function heuristicFastIntakeTurn(
     default:
       return null;
   }
+}
+
+/**
+ * Explicit on-site/off-site correction stated in a follow-up message
+ * (e.g. "我们是现场聊的"). Returns null when the user didn't state it.
+ */
+export function detectTraceNatureOverride(raw: string): "现场" | "非现场" | null {
+  const t = stripWecomCommandPrefix(stripIntakeSystemHint(raw ?? "")).trim();
+  if (!t) return null;
+  if (/非现场|线上|远程|视频会议|电话沟通|微信沟通|whatsapp|邮件/i.test(t)) return "非现场";
+  if (/现场|到访|拜访|当面|面谈|见面|上门|出差|到客户/i.test(t)) return "现场";
+  return null;
 }
 
 export function buildBusinessRecordClarifications(

@@ -109,8 +109,27 @@ const FREE_TEXT_FIELD_KEYS = new Set([
   "notes",
 ]);
 
-export function localeOutputRules(locale: Locale): string {
+/** Scopes that don't touch partner-profile fields — they get a lean locale rule. */
+const PROFILE_HEAVY_SCOPES: ReadonlySet<IntakeScope> = new Set<IntakeScope>([
+  "profile",
+  "new_partner",
+  "new_customer",
+  "customer_profile",
+]);
+
+export function localeOutputRules(locale: Locale, scope?: IntakeScope): string {
   const lang = replyLanguage(locale);
+
+  // Lean variant for record-entry scopes (todo / business_record / opportunity / powermap /
+  // training / solution): they never emit profile fieldUpdates, so the big partner-profile
+  // rule block is pure noise. Keep only what these scopes actually need.
+  if (scope && !PROFILE_HEAVY_SCOPES.has(scope)) {
+    return `[User interface language: ${lang} (${locale})]
+- All user-facing text (reply, questions, clarifications, titles, details, notes, summaries) MUST be in ${lang}.
+- Keep enum codes / IDs canonical: priority HIGH/MEDIUM/LOW, role=DECISION_MAKER, status codes (PLANNED/DRAFT/…), pipelineStage as a number 1–10, traceNature/traceAction as their listed values.
+- Person and company names: keep exactly as in the source (English or local language).`;
+  }
+
   const fieldLabels = partnerFieldLabels(locale);
   const freeTextExamples = ["valuePartnerOffer", "valueFanruanOffer", "playbook", "coreBusiness", "notes"]
     .map((f) => `${f}(${fieldLabels[f]})`)
@@ -541,6 +560,22 @@ Identity: only emit a tier:"required" identity clarification when the company is
   },
 };
 
+/** A clean-input rule for record-entry scopes so titles never echo command words. */
+function cleanInputRule(scope: IntakeScope, locale: Locale): string {
+  if (PROFILE_HEAVY_SCOPES.has(scope)) return "";
+  return locale === "zh"
+    ? `- 标题/名称只写真正的事项本身，禁止包含「帮我/请/麻烦/记一下/记录/新建/待办/商务记录/商机/联系人」等命令词，禁止把用户整句原样当标题。`
+    : `- title/name = the actual item only; never include command words (help me / log / add / todo / record …) and never copy the user's whole sentence as the title.`;
+}
+
+/** Authoritative current-draft block so follow-up turns PATCH instead of re-extract. */
+function currentDraftBlock(currentDraft: string | undefined, locale: Locale): string {
+  if (!currentDraft) return "";
+  return locale === "zh"
+    ? `\n[当前草稿 · 权威状态]\n这是本次录入已生成的草稿。用户接下来的消息通常是补充或纠正其中的字段。请在此基础上输出完整 JSON：被用户改到的字段更新，其余字段原样保留，绝不要丢弃已有内容。\n${currentDraft}\n`
+    : `\n[Current draft · authoritative]\nThis is the draft already produced this session. The user's next message usually adds or corrects fields. Output the full JSON on top of it: update what the user changed, keep every other field as-is, never drop existing content.\n${currentDraft}\n`;
+}
+
 export function buildIntakeSystemPrompt(opts: {
   locale: Locale;
   scope: IntakeScope;
@@ -551,21 +586,23 @@ export function buildIntakeSystemPrompt(opts: {
   useResearch: boolean;
   kmsConfigured?: boolean;
   knowhowConfigured?: boolean;
+  currentDraft?: string;
 }): string {
   const cfg = SCOPE_CONFIG[opts.scope];
   const lang = replyLanguage(opts.locale);
   const ctx = opts.partnerContext ? `\n\n${opts.partnerContext}` : "";
   const kmsHint = opts.useResearch ? `\n${kmsStatusBlock(opts.locale, !!opts.kmsConfigured)}` : "";
   const knowhowHint = opts.useResearch ? `\n${knowhowStatusBlock(opts.locale, !!opts.knowhowConfigured)}` : "";
+  const cleanRule = cleanInputRule(opts.scope, opts.locale);
 
   return `You are the AI intake assistant for Fanruan Software (Fanruan, leading BI vendor in China; products FineReport/FineBI/FineDataLink) Middle East partner management.
 Today's date: ${opts.today}.
 Current task: ${cfg.title}. ${cfg.intro}
 
-${localeOutputRules(opts.locale)}
+${localeOutputRules(opts.locale, opts.scope)}
 
 [Guidance rules (important, not rigid)]
-${cfg.guide}
+${cfg.guide}${cleanRule ? `\n${cleanRule}` : ""}
 Follow-ups should feel like a colleague—natural and brief, not a form. When the user has given enough, produce the proposal and set ready=true; don't chase optional fields.
 ${opts.useResearch ? `\n${RESEARCH_GUIDE}${kmsHint}${knowhowHint}` : ""}
 
@@ -574,7 +611,7 @@ ${opts.partnerBinding ? `\n${opts.partnerBinding}\n` : ""}
 ${schemaHintForScope(opts.scope, opts.locale)}
 ${opts.taxonomyHint}
 ${ctx}
-
+${currentDraftBlock(opts.currentDraft, opts.locale)}
 ${buildOutputSchema(opts.scope, opts.locale)}`;
 }
 
@@ -585,20 +622,22 @@ export function buildFastIntakeSystemPrompt(opts: {
   today: string;
   partnerContext?: string;
   partnerBinding?: string;
+  currentDraft?: string;
 }): string {
   const cfg = SCOPE_CONFIG[opts.scope];
   const lang = replyLanguage(opts.locale);
   const ctx = opts.partnerContext ? `\n${opts.partnerContext}` : "";
   const bind = opts.partnerBinding ? `\n${opts.partnerBinding}` : "";
+  const cleanRule = cleanInputRule(opts.scope, opts.locale);
 
   return `Fast JSON extractor for Fanruan Middle East partner management. Today: ${opts.today}.
-Task: ${cfg.title}. ${cfg.guide}
+Task: ${cfg.title}. ${cfg.guide}${cleanRule ? `\n${cleanRule}` : ""}
 ${bind}${ctx}
 
-${localeOutputRules(opts.locale)}
+${localeOutputRules(opts.locale, opts.scope)}
 
 ${schemaHintForScope(opts.scope, opts.locale)}
-
+${currentDraftBlock(opts.currentDraft, opts.locale)}
 ${buildOutputSchema(opts.scope, opts.locale)}
 
 Rules: one JSON object only; user-facing strings in ${lang}; ready=true when required items are clear; no web research; no profile/onboarding fields outside this task.${opts.scope === "business_record" ? " businessRecords MUST be non-empty (≥1 item); summary alone does not count." : ""}`;

@@ -642,6 +642,8 @@ export async function runIntakeTurn(opts: {
   userId?: string;
   emit?: TraceEmitter;
   locale: Locale;
+  /** 已确认草稿（续聊时注入，让模型在草稿上打补丁而非重抽） */
+  draft?: IntakeProposal;
   /** 由 runProposeTurn / runAssistantTurn 调用时跳过，避免重复记录 */
   skipConversationLog?: boolean;
 }): Promise<IntakeTurn> {
@@ -683,6 +685,33 @@ export async function runIntakeTurn(opts: {
   }
 }
 
+/** Scope → the proposal array the model edits, for the draft-state block. */
+const DRAFT_ARRAY_KEY: Partial<Record<IntakeScope, keyof IntakeProposal>> = {
+  business_record: "businessRecords",
+  todo: "todos",
+  opportunity: "opportunities",
+  powermap: "contacts",
+  training: "trainings",
+  solution: "solutions",
+};
+
+/** Compact JSON of the current draft (scope-relevant fields only) for prompt injection. */
+function serializeDraftForPrompt(
+  proposal: IntakeProposal | undefined,
+  scope: IntakeScope,
+): string | undefined {
+  if (!proposal) return undefined;
+  const key = DRAFT_ARRAY_KEY[scope];
+  if (!key) return undefined;
+  const arr = proposal[key] as unknown[] | undefined;
+  if (!arr?.length) return undefined;
+  const pick: Record<string, unknown> = { [key]: arr };
+  if (proposal.partnerName) pick.partnerName = proposal.partnerName;
+  if (proposal.customerName) pick.customerName = proposal.customerName;
+  if (proposal.summary) pick.summary = proposal.summary;
+  return JSON.stringify(pick);
+}
+
 async function runIntakeTurnCore(opts: {
   scope: IntakeScope;
   partnerId?: string;
@@ -692,6 +721,7 @@ async function runIntakeTurnCore(opts: {
   userId?: string;
   emit?: TraceEmitter;
   locale: Locale;
+  draft?: IntakeProposal;
 }): Promise<IntakeTurn> {
   const locale = opts.locale;
   const customerScope = isCustomerScope(opts.scope);
@@ -754,6 +784,7 @@ async function runIntakeTurnCore(opts: {
   } else {
     bindingBlock = buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
   }
+  const currentDraft = serializeDraftForPrompt(opts.draft, opts.scope);
   const system = fast
     ? buildFastIntakeSystemPrompt({
         locale,
@@ -761,6 +792,7 @@ async function runIntakeTurnCore(opts: {
         today: opts.today,
         partnerContext: partnerCtx || undefined,
         partnerBinding: bindingBlock,
+        currentDraft,
       })
     : buildIntakeSystemPrompt({
         locale,
@@ -772,6 +804,7 @@ async function runIntakeTurnCore(opts: {
         useResearch,
         kmsConfigured,
         knowhowConfigured,
+        currentDraft,
       });
 
   const chat: ChatMessage[] = [{ role: "system", content: system }];
@@ -1013,6 +1046,8 @@ export async function runProposeTurn(opts: {
   /** Prior turn scope — hint for AI continuity, not a hard lock */
   previousScope?: IntakeScope;
   locale: Locale;
+  /** Confirmed draft so far — injected so follow-ups patch instead of re-extract */
+  draft?: IntakeProposal;
 }): Promise<ProposeTurn> {
   const scope = await resolveProposeScope({
     messages: opts.messages,
@@ -1032,6 +1067,7 @@ export async function runProposeTurn(opts: {
     userId: opts.userId,
     emit: opts.emit,
     locale: opts.locale,
+    draft: opts.draft,
     skipConversationLog: true,
   });
   return { ...turn, scope, mode: "propose" };

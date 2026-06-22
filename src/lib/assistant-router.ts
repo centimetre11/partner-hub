@@ -1,5 +1,5 @@
 import type { TraceEmitter } from "./ai-trace";
-import type { IntakeMessage, IntakeScope } from "./ai-intake";
+import type { IntakeMessage, IntakeProposal, IntakeScope } from "./ai-intake";
 import { runProposeTurn } from "./ai-intake";
 import { shouldUseAgentBuilderMode } from "./agent-builder-intent";
 import { shouldUseAutomationBuilderMode } from "./automation-builder-intent";
@@ -214,6 +214,8 @@ export async function runAssistantTurn(opts: {
   skipIntentConfirm?: boolean;
   /** Force a specific propose scope (e.g. user said "改成商务记录") — skips routing + intent confirm */
   forcedScope?: IntakeScope;
+  /** Confirmed draft so far — injected so follow-ups patch instead of re-extract */
+  draft?: IntakeProposal;
   /** Active focus from prior list/query in this chat */
   focus?: FocusEntity | null;
   /** Execute patch after user confirmed (from intent session) */
@@ -271,6 +273,7 @@ async function runAssistantTurnCore(opts: {
   confirmedActionId?: string;
   skipIntentConfirm?: boolean;
   forcedScope?: IntakeScope;
+  draft?: IntakeProposal;
   focus?: FocusEntity | null;
   patchTargetId?: string;
   patchTargetLabel?: string;
@@ -516,5 +519,6 @@ async function runAssistantTurnCore(opts: {
     locale,
     scope,
     previousScope: opts.previousScope,
+    draft: opts.draft,
   });
 }

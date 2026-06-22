@@ -50,6 +50,7 @@ import {
 import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
+import { detectTraceNatureOverride, finalizeBusinessRecordTurn } from "@/lib/fast-intake-heuristic";
 import { formatProposeAppliedReply, formatProposeConfirmBlockedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { enrichBusinessRecordCompanyTarget } from "@/lib/business-record-intake";
 import {
@@ -460,6 +461,7 @@ async function applyAssistantTurnResult(opts: {
   session: ProposeSession | undefined;
   boundPartnerId?: string;
   boundPartnerName?: string;
+  boundCustomerId?: string;
   chatType: "group" | "single";
   actorUserId: string;
   actor: Awaited<ReturnType<typeof resolveWecomActorUserId>>;
@@ -472,6 +474,7 @@ async function applyAssistantTurnResult(opts: {
     session,
     boundPartnerId,
     boundPartnerName,
+    boundCustomerId,
     chatType,
     actorUserId,
     actor,
@@ -505,7 +508,7 @@ async function applyAssistantTurnResult(opts: {
   }
 
   if (result.mode === "propose") {
-    const merged = mergeFinalProposal(session?.proposal ?? null, result.proposal, new Set());
+    let merged = mergeFinalProposal(session?.proposal ?? null, result.proposal, new Set());
     const sourceText = history
       .filter((m) => m.role === "user")
       .map((m) => m.content)
@@ -513,21 +516,58 @@ async function applyAssistantTurnResult(opts: {
     const scope = result.scope;
     const partnerId = boundPartnerId ?? session?.partnerId;
 
+    let ready = result.ready;
+    let crmOnlyReady = result.crmOnlyReady;
+    let replyText = result.reply;
+
+    // Business records: recompute readiness against the MERGED draft so a partial
+    // (or parse-failed) follow-up turn never leaves a complete draft stuck on ready=false,
+    // and apply an explicit on-site/off-site correction stated in this message.
+    if (scope === "business_record" && merged.businessRecords.length) {
+      const overrideNature = detectTraceNatureOverride(text);
+      if (overrideNature) {
+        merged = {
+          ...merged,
+          businessRecords: merged.businessRecords.map((r, i) =>
+            i === 0 ? { ...r, traceNature: overrideNature } : r,
+          ),
+        };
+      }
+      const refinal = await finalizeBusinessRecordTurn(
+        {
+          reply: result.reply,
+          questions: result.questions ?? [],
+          clarifications: [],
+          ready: result.ready,
+          proposal: merged,
+        },
+        "zh",
+        { boundPartnerId, boundCustomerId },
+      );
+      merged = refinal.proposal;
+      ready = refinal.ready;
+      crmOnlyReady = refinal.crmOnlyReady;
+      // Drop the scary "JSON parse failed" notice — the checklist already guides the user.
+      replyText = /格式有误|could not be parsed|format error/i.test(result.reply || "")
+        ? ""
+        : result.reply;
+    }
+
     proposeSessions.set(key, {
       scope,
       partnerId,
       proposal: merged,
-      ready: result.ready,
-      crmOnlyReady: result.crmOnlyReady,
+      ready,
+      crmOnlyReady,
       sourceText,
     });
-    console.log(`[wecom-bot] Propose(${result.scope}) ready=${result.ready}`);
+    console.log(`[wecom-bot] Propose(${result.scope}) ready=${ready}`);
     return formatProposeWecomReply({
       scope: result.scope,
-      reply: result.reply,
+      reply: replyText,
       proposal: merged,
-      ready: result.ready,
-      crmOnlyReady: result.crmOnlyReady,
+      ready,
+      crmOnlyReady,
       questions: result.questions,
       chatType,
     });
@@ -915,6 +955,7 @@ async function handleTextMessage(frame: WsFrame) {
         session,
         boundPartnerId,
         boundPartnerName,
+        boundCustomerId,
         chatType,
         actorUserId,
         actor,
@@ -950,6 +991,7 @@ async function handleTextMessage(frame: WsFrame) {
           session,
           boundPartnerId,
           boundPartnerName,
+          boundCustomerId,
           chatType,
           actorUserId,
           actor,
@@ -1083,6 +1125,7 @@ async function handleTextMessage(frame: WsFrame) {
       feature: continuingPropose || forcedScope ? "WeCom Bot · Propose" : "WeCom Bot",
       forcePropose: continuingPropose,
       forcedScope,
+      draft: continuingPropose ? session?.proposal : undefined,
       skipIntentConfirm: continuingPropose,
       previousScope: forcedScope ?? session?.scope,
       focus,
@@ -1095,6 +1138,7 @@ async function handleTextMessage(frame: WsFrame) {
       session,
       boundPartnerId,
       boundPartnerName,
+      boundCustomerId,
       chatType,
       actorUserId,
       actor,
