@@ -451,8 +451,6 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               partnerId={p.id}
               solutions={p.solutions}
               copy={m.partnerDetail.solutionsSection}
-              solutionStatusLabels={L.SOLUTION_STATUS_LABELS}
-              documentTypeLabels={L.DOCUMENT_TYPE_LABELS}
             />
           </div>
         }

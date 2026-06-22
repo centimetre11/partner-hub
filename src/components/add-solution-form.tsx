@@ -15,7 +15,7 @@ export function AddSolutionForm({
   partnerId: string;
   copy: Messages["partnerDetail"]["solutionsSection"];
 }) {
-  const [solutionPreview, setSolutionPreview] = useState<LinkPreviewState | null>(null);
+  const [linkPreview, setLinkPreview] = useState<LinkPreviewState | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,12 +23,12 @@ export function AddSolutionForm({
     e.preventDefault();
     setError(null);
     const fd = new FormData(e.currentTarget);
-    const solutionUrl = String(fd.get("solutionUrl") ?? "").trim();
-    if (!solutionUrl) {
-      setError(copy.solutionLinkRequired);
+    const linkUrl = String(fd.get("linkUrl") ?? "").trim();
+    if (!linkUrl) {
+      setError(copy.linkRequired);
       return;
     }
-    if (!solutionPreview) {
+    if (!linkPreview) {
       setError(copy.parseBeforeSubmit);
       return;
     }
@@ -68,27 +68,13 @@ export function AddSolutionForm({
       </div>
 
       <SolutionLinkField
-        label={copy.solutionDocLink}
+        label={copy.linkLabel}
         required
-        name="solutionUrl"
-        placeholder={copy.solutionDocLinkPlaceholder}
+        name="linkUrl"
+        placeholder={copy.linkPlaceholder}
         parseLabel={copy.parseLink}
         parsingLabel={copy.parsingLink}
-        onPreview={setSolutionPreview}
-      />
-      <SolutionLinkField
-        label={copy.targetCustomerLink}
-        name="targetCustomerUrl"
-        placeholder={copy.targetCustomerLinkPlaceholder}
-        parseLabel={copy.parseLink}
-        parsingLabel={copy.parsingLink}
-      />
-      <SolutionLinkField
-        label={copy.painPointLink}
-        name="painPointUrl"
-        placeholder={copy.painPointLinkPlaceholder}
-        parseLabel={copy.parseLink}
-        parsingLabel={copy.parsingLink}
+        onPreview={setLinkPreview}
       />
 
       {error && <p className="text-xs text-red-500">{error}</p>}

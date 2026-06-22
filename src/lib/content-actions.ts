@@ -105,46 +105,68 @@ export async function deleteKnowledgeAction(id: string) {
 
 export async function createSolutionFromLinksAction(partnerId: string, formData: FormData) {
   const user = await requireUser();
-  const solutionUrl = String(formData.get("solutionUrl") ?? "").trim();
-  const targetCustomerUrl = String(formData.get("targetCustomerUrl") ?? "").trim();
-  const painPointUrl = String(formData.get("painPointUrl") ?? "").trim();
-  if (!solutionUrl) return;
+  const linkUrl = String(formData.get("linkUrl") ?? "").trim();
+  if (!linkUrl) return;
 
-  const solutionPreview = await previewLinkUrl(solutionUrl, user.id);
-  const targetCustomerPreview = targetCustomerUrl
-    ? await previewLinkUrl(targetCustomerUrl, user.id)
-    : null;
-  const painPointPreview = painPointUrl ? await previewLinkUrl(painPointUrl, user.id) : null;
-
-  const name = solutionPreview.title || solutionUrl;
-  const targetCustomer =
-    targetCustomerPreview?.title ||
-    targetCustomerPreview?.description?.slice(0, 200) ||
-    null;
-  const painPoint =
-    painPointPreview?.description?.slice(0, 500) ||
-    painPointPreview?.title ||
-    null;
+  const preview = await previewLinkUrl(linkUrl, user.id);
+  const name = preview.title || linkUrl;
 
   const solution = await db.solution.create({
     data: {
       partnerId,
       name,
-      targetCustomer,
-      painPoint,
       status: "DRAFT",
     },
   });
 
-  for (const url of [solutionUrl, targetCustomerUrl, painPointUrl].filter(Boolean)) {
-    const { asset } = await saveLinkAsset(url, user.id);
-    await db.solutionAsset.upsert({
-      where: { solutionId_assetId: { solutionId: solution.id, assetId: asset.id } },
-      create: { solutionId: solution.id, assetId: asset.id },
-      update: {},
+  const { asset } = await saveLinkAsset(linkUrl, user.id);
+  await db.solutionAsset.create({
+    data: { solutionId: solution.id, assetId: asset.id },
+  });
+
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function updateSolutionLinkNotesAction(
+  partnerId: string,
+  solutionId: string,
+  formData: FormData,
+) {
+  const user = await requireUser();
+  const notes = String(formData.get("notes") ?? "") || null;
+  const linkUrl = String(formData.get("linkUrl") ?? "").trim();
+
+  const data: { notes: string | null; name?: string } = { notes };
+
+  if (linkUrl) {
+    const preview = await previewLinkUrl(linkUrl, user.id);
+    data.name = preview.title || linkUrl;
+
+    const existing = await db.solutionAsset.findMany({
+      where: { solutionId },
+      include: { asset: true },
     });
+    const sameUrl = existing.find(
+      (row) => row.asset.kind === "LINK" && row.asset.url === preview.url,
+    );
+
+    for (const row of existing) {
+      if (row.asset.kind === "LINK" && row.assetId !== sameUrl?.assetId) {
+        await db.solutionAsset.delete({
+          where: { solutionId_assetId: { solutionId, assetId: row.assetId } },
+        });
+      }
+    }
+
+    if (!sameUrl) {
+      const { asset } = await saveLinkAsset(linkUrl, user.id);
+      await db.solutionAsset.create({
+        data: { solutionId, assetId: asset.id },
+      });
+    }
   }
 
+  await db.solution.update({ where: { id: solutionId }, data });
   revalidatePath(`/partners/${partnerId}`);
 }
 

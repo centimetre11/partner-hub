@@ -18,6 +18,8 @@ export function SolutionLinkField({
   name,
   parseLabel,
   parsingLabel,
+  defaultUrl = "",
+  initialPreview = null,
   onPreview,
 }: {
   label: string;
@@ -26,10 +28,12 @@ export function SolutionLinkField({
   name: string;
   parseLabel: string;
   parsingLabel: string;
+  defaultUrl?: string;
+  initialPreview?: LinkPreviewState | null;
   onPreview?: (preview: LinkPreviewState | null) => void;
 }) {
-  const [url, setUrl] = useState("");
-  const [preview, setPreview] = useState<LinkPreviewState | null>(null);
+  const [url, setUrl] = useState(defaultUrl);
+  const [preview, setPreview] = useState<LinkPreviewState | null>(initialPreview);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
