@@ -287,6 +287,26 @@ export function scopeFromActionId(id: string): IntakeScope | undefined {
   return undefined;
 }
 
+const SCOPE_SWITCH_VERB_RE = /(改成|改为|换成|换为|其实是|应该是|纠正为|应改为|不是.*?是)/;
+const SCOPE_SWITCH_KEYWORDS: Array<[RegExp, IntakeScope]> = [
+  [/商务记录|拜访记录|会议纪要|商务进展|拜访|会议/, "business_record"],
+  [/商机/, "opportunity"],
+  [/联系人|权力地图|名片/, "powermap"],
+  [/培训/, "training"],
+  [/(联合)?方案/, "solution"],
+  [/待办|todo/i, "todo"],
+];
+
+/** Detect a "change the record type to X" instruction during a propose session. */
+export function parseProposeScopeSwitch(text: string): IntakeScope | null {
+  const t = normalizeActionText(text);
+  if (!t || !SCOPE_SWITCH_VERB_RE.test(t)) return null;
+  for (const [re, scope] of SCOPE_SWITCH_KEYWORDS) {
+    if (re.test(t)) return scope;
+  }
+  return null;
+}
+
 export function isListTodosAction(text: string): boolean {
   const top = topBuiltinAction(text);
   return top?.action.id === "query.list_todos";

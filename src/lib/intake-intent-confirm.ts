@@ -194,7 +194,12 @@ export function routeFromConfirmedActionId(actionId: string): ResolvedAssistantR
 }
 
 export function needsIntentConfirm(route: ResolvedAssistantRoute): boolean {
-  return route.route.mode === "propose" || route.route.mode === "patch";
+  // Patch mutates an existing record and has no draft-preview gate — keep its single confirm.
+  if (route.route.mode === "patch") return true;
+  // Propose shows a draft preview as the real confirmation gate; only stop for an extra
+  // intent confirm when the classifier is unsure (low confidence), to catch misrecognition.
+  if (route.route.mode === "propose") return route.confidence === "low";
+  return false;
 }
 
 /** Last user line for scoring — excludes intent-confirm command noise */

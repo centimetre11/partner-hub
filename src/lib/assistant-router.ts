@@ -212,6 +212,8 @@ export async function runAssistantTurn(opts: {
   agentBuilderContext?: string;
   confirmedActionId?: string;
   skipIntentConfirm?: boolean;
+  /** Force a specific propose scope (e.g. user said "改成商务记录") — skips routing + intent confirm */
+  forcedScope?: IntakeScope;
   /** Active focus from prior list/query in this chat */
   focus?: FocusEntity | null;
   /** Execute patch after user confirmed (from intent session) */
@@ -268,12 +270,28 @@ async function runAssistantTurnCore(opts: {
   agentBuilderContext?: string;
   confirmedActionId?: string;
   skipIntentConfirm?: boolean;
+  forcedScope?: IntakeScope;
   focus?: FocusEntity | null;
   patchTargetId?: string;
   patchTargetLabel?: string;
   patchInstruction?: string;
 }): Promise<AssistantTurnResult> {
   const locale = opts.locale as Locale;
+
+  if (opts.forcedScope) {
+    return runProposeTurn({
+      messages: opts.messages,
+      partnerId: opts.partnerId,
+      partnerName: opts.partnerName,
+      customerId: opts.customerId,
+      customerName: opts.customerName,
+      userId: opts.userId,
+      emit: opts.emit,
+      locale,
+      scope: opts.forcedScope,
+      previousScope: opts.previousScope,
+    });
+  }
 
   if (opts.forceAutomationBuilder || shouldUseAutomationBuilderMode(opts.messages)) {
     const turn = await runAutomationBuilderTurn({

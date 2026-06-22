@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -663,11 +663,13 @@ function ContactList({
   selectedId,
   onSelect,
   onAdd,
+  toolbarExtra,
 }: {
   contacts: PowerMapNodeContact[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAdd: () => void;
+  toolbarExtra?: ReactNode;
 }) {
   const [open, setOpen] = useState(contacts.length <= 8);
   const [q, setQ] = useState("");
@@ -718,10 +720,11 @@ function ContactList({
             className="w-44 rounded-md border border-slate-200 px-2.5 py-1 text-xs focus:border-slate-500 focus:outline-none"
           />
         )}
+        {toolbarExtra}
         <button
           type="button"
           onClick={onAdd}
-          className="rounded-md bg-slate-900 text-white px-2.5 py-1 text-xs hover:bg-slate-800"
+          className="rounded-md bg-slate-900 text-white px-2.5 py-1 text-xs hover:bg-slate-800 shrink-0"
         >
           {pm.addContactBtn}
         </button>
@@ -782,10 +785,12 @@ export function PowerMapSection({
   owner,
   contacts,
   links,
+  toolbarExtra,
 }: {
   owner: OwnerRef;
   contacts: PowerMapNodeContact[];
   links: PowerMapLink[];
+  toolbarExtra?: ReactNode;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -821,7 +826,13 @@ export function PowerMapSection({
           {pm.emptyCanvas}
         </div>
       )}
-      <ContactList contacts={contacts} selectedId={selectedId} onSelect={selectContact} onAdd={startAdd} />
+      <ContactList
+        contacts={contacts}
+        selectedId={selectedId}
+        onSelect={selectContact}
+        onAdd={startAdd}
+        toolbarExtra={toolbarExtra}
+      />
       {drawerOpen && (
         <EditDrawer owner={owner} contact={selected} allContacts={contacts} onClose={closeDrawer} />
       )}

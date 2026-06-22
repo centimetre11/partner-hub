@@ -10,6 +10,7 @@ import {
   resolveBusinessRecordCompanyTarget,
 } from "./business-record-intake";
 import { normalizeBusinessRecordCategory } from "./business-record-core";
+import { stripWecomCommandPrefix } from "./wecom-user-resolve";
 import {
   CRM_TRACE_ACTIONS,
   CRM_TRACE_NATURES,
@@ -141,13 +142,23 @@ function heuristicReply(locale: Locale, kind: string): string {
   return locale === "zh" ? zh[kind] ?? zh.todo : en[kind] ?? en.todo;
 }
 
+/** Pure control commands that must never be treated as intake content. */
+const CONTROL_COMMAND_RE =
+  /^(确认|确认保存|保存|提交|好的保存|可以保存|确认提交|确认意图|确认操作|取消|放弃|不要了|仅crm|只填crm|仅同步crm|只写crm|apply|confirm|ok save|save|cancel|discard|abort|crm only|crm-only)$/i;
+
+/** "改成商务记录" / "换成商机" 等改类型指令，也不应混入内容提取。 */
+const SCOPE_SWITCH_LINE_RE =
+  /^(改成|改为|换成|换为|其实是|应该是|纠正为|应改为)\s*[:：]?\s*(待办|商务记录|拜访记录|会议纪要|商务进展|拜访|会议|商机|联系人|权力地图|名片|培训|联合方案|方案)\s*$/;
+
 export function lastIntakeUserText(chat?: ChatMessage[], scope?: IntakeScope): string {
   if (!chat?.length) return "";
   for (let i = chat.length - 1; i >= 0; i--) {
     const m = chat[i];
     if (m.role !== "user") continue;
-    const t = stripIntakeSystemHint(m.content ?? "").trim();
-    const stripped = scope ? stripIntakeCommandPrefix(t, scope) : t;
+    const base = stripWecomCommandPrefix(stripIntakeSystemHint(m.content ?? "")).trim();
+    if (!base) continue;
+    if (CONTROL_COMMAND_RE.test(base) || SCOPE_SWITCH_LINE_RE.test(base)) continue;
+    const stripped = scope ? stripIntakeCommandPrefix(base, scope) : base;
     if (stripped) return stripped;
   }
   return "";

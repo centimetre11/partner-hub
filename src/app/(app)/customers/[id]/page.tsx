@@ -292,19 +292,17 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   // ============ 关系经营（权力地图 + 时间线） ============
   const relationshipPanel = (
     <div className="space-y-6">
-      <Card
-        title={pd.powerMap.replace("{count}", String(customer.contacts.length))}
-        actions={
-          <AiAddButton
-            scope="powermap"
-            customerId={customer.id}
-            label={pd.aiAddContact}
-            variant="soft"
-          />
-        }
-      >
+      <Card title={pd.powerMap.replace("{count}", String(customer.contacts.length))}>
         <PowerMapSection
           owner={owner}
+          toolbarExtra={
+            <AiAddButton
+              scope="powermap"
+              customerId={customer.id}
+              label={pd.aiAddContact}
+              variant="soft"
+            />
+          }
           contacts={customer.contacts.map((ct) => ({
             id: ct.id, name: ct.name, role: ct.role, title: ct.title,
             department: ct.department, attitude: ct.attitude, reportsToId: ct.reportsToId,

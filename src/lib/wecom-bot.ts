@@ -68,6 +68,7 @@ import {
   sourceTextForRouting,
   type IntentConfirmSession,
 } from "@/lib/intake-intent-confirm";
+import { parseProposeScopeSwitch } from "@/lib/intake-action-registry";
 import type { FocusEntity } from "@/lib/focus-entity";
 import { registerWecomChat } from "@/lib/wecom-chats";
 import {
@@ -1044,9 +1045,18 @@ async function handleTextMessage(frame: WsFrame) {
       return;
     }
 
+    let forcedScope: IntakeScope | undefined;
     if (session && !isProposeConfirm(text) && !isProposeCancel(text) && !isProposeCrmOnlyConfirm(text)) {
-      session = await applyPartnerPickToSession(session, text, boundPartnerId, boundCustomerId);
-      proposeSessions.set(key, session);
+      const switchScope = parseProposeScopeSwitch(text);
+      if (switchScope && switchScope !== session.scope) {
+        // User is correcting a mis-detected record type — restart the draft fresh in the new scope.
+        forcedScope = switchScope;
+        proposeSessions.delete(key);
+        session = undefined;
+      } else {
+        session = await applyPartnerPickToSession(session, text, boundPartnerId, boundCustomerId);
+        proposeSessions.set(key, session);
+      }
     }
 
     if (isTodoListQueryIntent(text)) {
@@ -1070,10 +1080,11 @@ async function handleTextMessage(frame: WsFrame) {
       customerId: boundCustomerId,
       customerName: boundCustomerName,
       locale: "zh",
-      feature: continuingPropose ? "WeCom Bot · Propose" : "WeCom Bot",
+      feature: continuingPropose || forcedScope ? "WeCom Bot · Propose" : "WeCom Bot",
       forcePropose: continuingPropose,
+      forcedScope,
       skipIntentConfirm: continuingPropose,
-      previousScope: session?.scope,
+      previousScope: forcedScope ?? session?.scope,
       focus,
     });
 

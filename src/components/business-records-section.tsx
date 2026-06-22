@@ -17,6 +17,8 @@ type RecordRow = {
   title: string;
   content: string | null;
   occurredAt: Date | string;
+  crmTraceNature?: string | null;
+  crmTraceAction?: string | null;
   crmSyncedAt?: Date | string | null;
   crmSyncStatus?: string | null;
   crmSyncError?: string | null;
@@ -103,7 +105,11 @@ export function BusinessRecordsSection({
                     </button>
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap gap-x-2 gap-y-1 items-center">
-                    <span>{labels.businessRecordCategoryLabels[r.category] ?? r.category}</span>
+                    {r.crmTraceNature && r.crmTraceAction ? (
+                      <span>{r.crmTraceNature} · {r.crmTraceAction}</span>
+                    ) : (
+                      <span>{labels.businessRecordCategoryLabels[r.category] ?? r.category}</span>
+                    )}
                     <span>· {fmtDate(r.occurredAt, bcp47)}</span>
                     {r.contact && <span>· {r.contact.name}</span>}
                     {r.createdBy && <span>· {r.createdBy.name}</span>}

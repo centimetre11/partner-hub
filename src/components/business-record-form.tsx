@@ -1,19 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useLabels, useMessages } from "@/lib/i18n/context";
+import { useMessages } from "@/lib/i18n/context";
 import { createBusinessRecordAction } from "@/lib/actions";
+import { BusinessRecordDimensions, CrmBindingStatus } from "@/components/business-record-dimensions";
 import type { OwnerRef } from "@/lib/owner";
 
-const CATEGORIES = ["VISIT", "TRAINING", "NEGOTIATION", "DELIVERY", "RELATIONSHIP", "OTHER"] as const;
+type CrmMeta = {
+  crmCustomerBound: boolean;
+  crmCustomerName: string | null;
+  crmSalesmanBound: boolean;
+};
 
 export function BusinessRecordForm({
   owner,
   source = "MANUAL",
   defaultTitle = "",
   sourceTodoId,
-  contacts = [],
   onDone,
   compact = false,
 }: {
@@ -26,15 +30,27 @@ export function BusinessRecordForm({
   compact?: boolean;
 }) {
   const pd = useMessages().partnerDetail;
-  const labels = useLabels();
+  const ip = useMessages().intakePanel;
   const router = useRouter();
   const [title, setTitle] = useState(defaultTitle);
   const [content, setContent] = useState("");
-  const [category, setCategory] = useState<string>("VISIT");
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
-  const [contactId, setContactId] = useState("");
+  const [dims, setDims] = useState({ traceNature: "", traceAction: "", contactName: "" });
+  const [crmMeta, setCrmMeta] = useState<CrmMeta | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "info"; text: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "info" | "err"; text: string } | null>(null);
+
+  const patchDims = useCallback((patch: Partial<typeof dims>) => {
+    setDims((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  useEffect(() => {
+    const qs = owner.kind === "customer" ? `customerId=${owner.id}` : `partnerId=${owner.id}`;
+    void fetch(`/api/business-record/meta?${qs}`)
+      .then((r) => r.json())
+      .then((data: CrmMeta) => setCrmMeta(data))
+      .catch(() => setCrmMeta(null));
+  }, [owner]);
 
   const input = compact
     ? "w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-slate-400"
@@ -43,18 +59,27 @@ export function BusinessRecordForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
+    if (!dims.traceNature || !dims.traceAction) {
+      setFeedback({ tone: "err", text: ip.crmFieldsRequired });
+      return;
+    }
     setSubmitting(true);
     setFeedback(null);
     try {
       const fd = new FormData();
       fd.set("title", title.trim());
       fd.set("content", content);
-      fd.set("category", category);
       fd.set("occurredAt", occurredAt);
       fd.set("source", source);
-      if (contactId) fd.set("contactId", contactId);
+      fd.set("traceNature", dims.traceNature);
+      fd.set("traceAction", dims.traceAction);
+      if (dims.contactName.trim()) fd.set("contactName", dims.contactName.trim());
       if (sourceTodoId) fd.set("sourceTodoId", sourceTodoId);
       const res = await createBusinessRecordAction(owner, fd);
+      if (res?.error === "crm_fields_required") {
+        setFeedback({ tone: "err", text: ip.crmFieldsRequired });
+        return;
+      }
       if (res?.message) setFeedback({ tone: "ok", text: res.message });
       else if (res?.warning) setFeedback({ tone: "warn", text: res.warning });
       else if (res?.info) setFeedback({ tone: "info", text: res.info });
@@ -79,30 +104,9 @@ export function BusinessRecordForm({
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-slate-500">{pd.businessRecordCategory}</span>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className={input}>
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {labels.businessRecordCategoryLabels[c] ?? c}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block space-y-1">
           <span className="text-xs text-slate-500">{pd.businessRecordOccurredAt}</span>
           <input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} className={input} />
         </label>
-        {contacts.length > 0 && (
-          <label className="block space-y-1 sm:col-span-2">
-            <span className="text-xs text-slate-500">{pd.businessRecordContact}</span>
-            <select value={contactId} onChange={(e) => setContactId(e.target.value)} className={input}>
-              <option value="">—</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </label>
-        )}
         <label className="block space-y-1 sm:col-span-2">
           <span className="text-xs text-slate-500">{pd.businessRecordContent}</span>
           <textarea
@@ -113,6 +117,25 @@ export function BusinessRecordForm({
           />
         </label>
       </div>
+
+      <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-3 space-y-3">
+        {crmMeta && (
+          <CrmBindingStatus
+            crmCustomerBound={crmMeta.crmCustomerBound}
+            crmSalesmanBound={crmMeta.crmSalesmanBound}
+            crmCustomerName={crmMeta.crmCustomerName}
+          />
+        )}
+        <BusinessRecordDimensions
+          values={dims}
+          onChange={patchDims}
+          inferTitle={title}
+          inferContent={content}
+          compact={compact}
+        />
+        <p className="text-[11px] text-slate-500">{ip.crmSyncHint}</p>
+      </div>
+
       {feedback && (
         <div
           className={`rounded-lg text-xs px-3 py-2 ${
@@ -120,7 +143,9 @@ export function BusinessRecordForm({
               ? "bg-emerald-50 text-emerald-800"
               : feedback.tone === "warn"
                 ? "bg-amber-50 text-amber-800"
-                : "bg-slate-50 text-slate-600"
+                : feedback.tone === "err"
+                  ? "bg-red-50 text-red-800"
+                  : "bg-slate-50 text-slate-600"
           }`}
         >
           {feedback.text}

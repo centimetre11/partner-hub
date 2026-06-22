@@ -712,8 +712,20 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
 
+  const traceNature = String(formData.get("traceNature") ?? "").trim() || null;
+  const traceAction = String(formData.get("traceAction") ?? "").trim() || null;
+  const contactName = String(formData.get("contactName") ?? "").trim();
+  if (!normalizeCrmTraceNature(traceNature) || !normalizeCrmTraceAction(traceAction)) {
+    return { ok: false as const, error: "crm_fields_required" as const };
+  }
+
   const category = normalizeBusinessRecordCategory(String(formData.get("category") ?? "OTHER"));
-  const content = String(formData.get("content") ?? "").trim() || null;
+  const rawContent = String(formData.get("content") ?? "").trim();
+  const content = contactName
+    ? rawContent
+      ? `【联系人 ${contactName}】\n${rawContent}`
+      : `【联系人 ${contactName}】`
+    : rawContent || null;
   const occurredAtRaw = String(formData.get("occurredAt") ?? "").trim();
   const occurredAt = occurredAtRaw ? new Date(occurredAtRaw) : new Date();
   const contactId = String(formData.get("contactId") ?? "").trim() || null;
@@ -730,6 +742,8 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
     contactId,
     source,
     sourceTodoId,
+    traceNature,
+    traceAction,
   });
 
   revalidatePath(ownerPath(owner));

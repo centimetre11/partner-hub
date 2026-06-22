@@ -19,6 +19,41 @@ function bullet(lines: string[]) {
   return lines.filter(Boolean).map((l) => `• ${l}`).join("\n");
 }
 
+/** Intake scopes the user can switch between when the bot guessed wrong. */
+const SWITCHABLE_SCOPES: IntakeScope[] = [
+  "todo",
+  "business_record",
+  "opportunity",
+  "powermap",
+  "training",
+  "solution",
+];
+
+/** Footer hint letting the user correct a mis-detected record type in one step. */
+function scopeSwitchHint(scope: IntakeScope, isGroup: boolean): string {
+  const others = SWITCHABLE_SCOPES.filter((s) => s !== scope)
+    .slice(0, 3)
+    .map((s) => SCOPE_LABELS[s]);
+  if (!others.length) return "";
+  const at = isGroup ? "@我 " : "";
+  return `\n🔀 类型不对？回复 ${at}**改成 ${others.join(" / ")}** 之一。`;
+}
+
+/** Scope-aware prompt asking the user for the actual content (no draft yet). */
+function scopeAskPrompt(scope: IntakeScope, isGroup: boolean): string {
+  const at = isGroup ? "@我 " : "";
+  const asks: Partial<Record<IntakeScope, string>> = {
+    todo: "好的，待办内容是什么？（可附截止日期、优先级）",
+    business_record: "好的，请描述这次商务进展：和谁、做了什么、现场还是非现场。",
+    opportunity: "好的，商机叫什么？（可附客户、金额、阶段）",
+    powermap: "好的，联系人是谁？（可附职位、决策角色）",
+    training: "好的，给谁安排什么培训？",
+    solution: "好的，方案名称与要点是什么？",
+  };
+  const ask = asks[scope] ?? "好的，请补充具体内容。";
+  return `${ask}\n（直接 ${at}发内容即可，或回复 ${at}**取消** 放弃）`;
+}
+
 function checklistLine(done: boolean, label: string, value?: string) {
   const mark = done ? "✅" : "⬜";
   return value ? `${mark} ${label}：${value}` : `${mark} ${label}`;
@@ -139,14 +174,16 @@ export function formatProposeWecomReply(opts: {
     ? "\n💡 Hub 未建档、CRM 已匹配：回复 **仅CRM** 只写入帆软 CRM。"
     : "";
 
+  const switchHint = hasItems ? scopeSwitchHint(opts.scope, isGroup) : "";
+
   if (opts.ready && hasItems) {
-    parts.push(`\n---\n✅ 信息已足够。${confirmHint}${crmOnlyHint}`);
+    parts.push(`\n---\n✅ 信息已足够。${confirmHint}${crmOnlyHint}${switchHint}`);
   } else if (opts.crmOnlyReady && hasItems) {
-    parts.push(`\n---\n📝 草案可仅写 CRM。${crmOnlyHint} 或 **取消** 放弃。`);
+    parts.push(`\n---\n📝 草案可仅写 CRM。${crmOnlyHint} 或 **取消** 放弃。${switchHint}`);
   } else if (hasItems) {
-    parts.push(`\n---\n📝 草案进行中。补全清单后 ${confirmHint}${crmOnlyHint}`);
+    parts.push(`\n---\n📝 草案进行中。补全清单后 ${confirmHint}${crmOnlyHint}${switchHint}`);
   } else {
-    parts.push("\n---\n请补充更多信息以生成可保存的草案。");
+    parts.push(`\n---\n${scopeAskPrompt(opts.scope, isGroup)}`);
   }
 
   return parts.join("\n").slice(0, 3800);

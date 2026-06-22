@@ -456,12 +456,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         }
         relationship={
           <div className="space-y-5">
-            <Card
-              title={m.partnerDetail.powerMap.replace("{count}", String(p.contacts.length))}
-              actions={<AiAddButton scope="powermap" partnerId={p.id} label={m.partnerDetail.aiAddContact} variant="soft" />}
-            >
+            <Card title={m.partnerDetail.powerMap.replace("{count}", String(p.contacts.length))}>
               <PowerMapSection
                 owner={{ kind: "partner", id: p.id }}
+                toolbarExtra={
+                  <AiAddButton scope="powermap" partnerId={p.id} label={m.partnerDetail.aiAddContact} variant="soft" />
+                }
                 contacts={p.contacts.map((c) => ({
                   id: c.id, name: c.name, role: c.role, title: c.title,
                   department: c.department, attitude: c.attitude, reportsToId: c.reportsToId,
