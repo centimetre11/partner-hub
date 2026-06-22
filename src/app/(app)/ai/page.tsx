@@ -10,18 +10,26 @@ export default async function AiCenterPage() {
   const user = await requireUser();
   const { locale, messages: m, bcp47 } = await getServerI18n();
   const toolCategories = getBuiltinToolCategories(locale);
-  const [agents, templates, promptSkills, knowledge, recentRuns] = await Promise.all([
-    db.agent.count({ where: { isTemplate: false, isAutomation: false } }),
-    db.agent.count({ where: { isTemplate: true } }),
-    db.skill.count({ where: { kind: "PROMPT", isBuiltin: false } }),
-    db.knowledgeArticle.count(),
-    db.agentRun.findMany({
-      where: { agent: { isAutomation: false } },
-      orderBy: { startedAt: "desc" },
-      take: 5,
-      include: { agent: true },
-    }),
-  ]);
+  const [agents, templates, promptSkills, automations, enabledAutomations, recentRuns, recentAutomationRuns] =
+    await Promise.all([
+      db.agent.count({ where: { isTemplate: false, isAutomation: false } }),
+      db.agent.count({ where: { isTemplate: true } }),
+      db.skill.count({ where: { kind: "PROMPT", isBuiltin: false } }),
+      db.agent.count({ where: { isAutomation: true, isTemplate: false } }),
+      db.agent.count({ where: { isAutomation: true, isTemplate: false, enabled: true } }),
+      db.agentRun.findMany({
+        where: { agent: { isAutomation: false } },
+        orderBy: { startedAt: "desc" },
+        take: 5,
+        include: { agent: true },
+      }),
+      db.agentRun.findMany({
+        where: { agent: { isAutomation: true } },
+        orderBy: { startedAt: "desc" },
+        take: 5,
+        include: { agent: true },
+      }),
+    ]);
 
   return (
     <div className="pb-16">
@@ -67,10 +75,13 @@ export default async function AiCenterPage() {
             <div className="text-xs text-slate-400 mt-0.5">{m.ai.methodologyFlows}</div>
           </Link>
 
-          <Link href="/knowledge" className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300">
-            <div className="text-2xl font-bold tabular-nums text-emerald-600">{knowledge}</div>
-            <div className="text-sm font-medium text-slate-800 mt-1">{m.ai.statsKnowledge}</div>
-            <div className="text-xs text-slate-400 mt-0.5">{m.ai.agentSearchable}</div>
+          <Link href="/automations" className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300">
+            <div className="text-2xl font-bold tabular-nums text-amber-600">{automations}</div>
+            <div className="text-sm font-medium text-slate-800 mt-1">{m.ai.statsAutomations}</div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              {enabledAutomations}
+              {m.ai.automationEnabled}
+            </div>
           </Link>
         </div>
 
@@ -97,6 +108,32 @@ export default async function AiCenterPage() {
             </div>
           ) : (
             <div className="text-sm text-slate-400 py-6 text-center">{m.ai.noRunsUser.replace("{name}", user.name)}</div>
+          )}
+        </Card>
+
+        <Card title={m.ai.recentAutomationRuns}>
+          {recentAutomationRuns.length ? (
+            <div className="space-y-2.5">
+              {recentAutomationRuns.map((run) => (
+                <Link
+                  key={run.id}
+                  href={`/automations/${run.agentId}`}
+                  className="flex items-center justify-between gap-4 rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-slate-800 truncate">
+                      {run.agent.icon} {run.agent.name}
+                    </div>
+                    <div className="text-xs text-slate-400">{fmtDateTime(run.startedAt, bcp47)}</div>
+                  </div>
+                  <Badge tone={run.status === "SUCCESS" ? "green" : run.status === "FAILED" ? "red" : "amber"}>
+                    {run.status === "SUCCESS" ? m.common.success : run.status === "FAILED" ? m.common.failed : m.common.running}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-slate-400 py-6 text-center">{m.ai.noAutomationRuns}</div>
           )}
         </Card>
       </div>

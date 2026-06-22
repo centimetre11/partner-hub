@@ -8,6 +8,7 @@ import {
 } from "@/lib/content-actions";
 import { SolutionAssetUpload } from "@/components/solution-asset-upload";
 import { AssetCard } from "@/components/asset-link";
+import { AddSolutionForm } from "@/components/add-solution-form";
 import type { Messages } from "@/lib/i18n/messages/en";
 
 type SolutionRow = {
@@ -133,14 +134,7 @@ export function PartnerSolutionsSection({
 
         <details className="rounded-lg border border-dashed border-slate-200">
           <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{copy.addSolution}</summary>
-          <form action={upsertSolutionAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-            <input name="name" required placeholder={copy.solutionName} className={input} />
-            <input name="targetCustomer" placeholder={copy.targetCustomer} className={input} />
-            <input name="painPoint" placeholder={copy.painPoint} className={input} />
-            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-800 md:col-span-3 justify-self-end">
-              {copy.add}
-            </button>
-          </form>
+          <AddSolutionForm partnerId={partnerId} copy={copy} />
         </details>
       </div>
     </Card>

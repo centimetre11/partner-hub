@@ -57,6 +57,34 @@ export function parseGdriveFolderId(url: string): string | null {
   return fromQuery ?? null;
 }
 
+export function parseGdriveFileId(url: string): string | null {
+  const trimmed = url.trim();
+  const fromFile = trimmed.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+  if (fromFile) return fromFile;
+  const fromOpen = trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+  if (fromOpen) return fromOpen;
+  const fromDocs = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+  return fromDocs ?? null;
+}
+
+export async function fetchGdriveFileById(
+  fileId: string,
+  serviceAccountJson: string,
+): Promise<GdriveFileItem | null> {
+  const token = await getAccessToken(serviceAccountJson);
+  const params = new URLSearchParams({
+    fields: "id,name,mimeType,thumbnailLink,webViewLink,modifiedTime,iconLink",
+    supportsAllDrives: "true",
+  });
+  const res = await fetch(`${DRIVE_API}/files/${fileId}?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = (await res.json()) as RawDriveItem & { error?: { message?: string } };
+  if (!res.ok) return null;
+  return mapFileItem(data);
+}
+
 function mimeKind(mimeType: string): string {
   if (mimeType.includes("folder")) return "folder";
   if (mimeType.includes("presentation")) return "slides";

@@ -10,7 +10,6 @@ const tabs = [
   { href: "/agents", label: "Agent", labelZh: "Agent", icon: "❖" },
   { href: "/tools", label: "Tools", labelZh: "工具", icon: "🔧" },
   { href: "/skills", label: "Skills", labelZh: "技能", icon: "📋" },
-  { href: "/knowledge", label: "Knowledge", labelZh: "知识", icon: "📚" },
 ];
 
 export function AiCenterNav() {

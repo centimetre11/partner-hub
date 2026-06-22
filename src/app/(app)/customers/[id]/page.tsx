@@ -10,7 +10,6 @@ import { PowerMapSection } from "@/components/power-map-flow";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { CustomerWorkspaceShell, type CustomerTab } from "@/components/customer-workspace-shell";
 import { CustomerIntegrationsPanel } from "@/components/customer-integrations-panel";
-import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { getWecomChatForCustomer } from "@/lib/wecom-chats";
 import {
   updateCustomerAction,
@@ -421,7 +420,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <CustomerAiIntakeButton customerId={customer.id} partnerId={customer.partnerId} />
             <form action={deleteCustomerAction.bind(null, customer.id)}>
               <button className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-400 hover:text-red-600">
                 {m.common.delete}

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 import { requireUser } from "./session";
+import { previewLinkUrl, saveLinkAsset } from "./assets";
 
 function slugify(s: string) {
   const base = s.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^\w\u4e00-\u9fff-]/g, "");
@@ -101,6 +102,51 @@ export async function deleteKnowledgeAction(id: string) {
 }
 
 // ============ Solution ============
+
+export async function createSolutionFromLinksAction(partnerId: string, formData: FormData) {
+  const user = await requireUser();
+  const solutionUrl = String(formData.get("solutionUrl") ?? "").trim();
+  const targetCustomerUrl = String(formData.get("targetCustomerUrl") ?? "").trim();
+  const painPointUrl = String(formData.get("painPointUrl") ?? "").trim();
+  if (!solutionUrl) return;
+
+  const solutionPreview = await previewLinkUrl(solutionUrl, user.id);
+  const targetCustomerPreview = targetCustomerUrl
+    ? await previewLinkUrl(targetCustomerUrl, user.id)
+    : null;
+  const painPointPreview = painPointUrl ? await previewLinkUrl(painPointUrl, user.id) : null;
+
+  const name = solutionPreview.title || solutionUrl;
+  const targetCustomer =
+    targetCustomerPreview?.title ||
+    targetCustomerPreview?.description?.slice(0, 200) ||
+    null;
+  const painPoint =
+    painPointPreview?.description?.slice(0, 500) ||
+    painPointPreview?.title ||
+    null;
+
+  const solution = await db.solution.create({
+    data: {
+      partnerId,
+      name,
+      targetCustomer,
+      painPoint,
+      status: "DRAFT",
+    },
+  });
+
+  for (const url of [solutionUrl, targetCustomerUrl, painPointUrl].filter(Boolean)) {
+    const { asset } = await saveLinkAsset(url, user.id);
+    await db.solutionAsset.upsert({
+      where: { solutionId_assetId: { solutionId: solution.id, assetId: asset.id } },
+      create: { solutionId: solution.id, assetId: asset.id },
+      update: {},
+    });
+  }
+
+  revalidatePath(`/partners/${partnerId}`);
+}
 
 export async function upsertSolutionAction(partnerId: string, formData: FormData) {
   await requireUser();
