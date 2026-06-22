@@ -1,4 +1,5 @@
 import type { IntakeProposal } from "./ai-intake";
+import type { BusinessRecordProposal } from "./ai-intake";
 import type { ContactProposal, FieldUpdate, OpportunityProposal, TodoProposal } from "./proposals";
 import type { ProposalPatchOp } from "./ai-trace";
 
@@ -138,6 +139,22 @@ export function mergeProposalPatch(
         changes.updated.push(k);
         next.todos[idx] = { ...next.todos[idx], ...op.todo };
       }
+    } else if (op.op === "upsert_business_record") {
+      const k = op.key || businessRecordKey(op.record.title);
+      if (excluded.has(k)) {
+        changes.aiReupdates.push(k);
+        continue;
+      }
+      const idx = next.businessRecords.findIndex(
+        (r) => r.title.toLowerCase() === op.record.title.toLowerCase(),
+      );
+      if (idx < 0) {
+        changes.added.push(k);
+        next.businessRecords.push(op.record);
+      } else {
+        changes.updated.push(k);
+        next.businessRecords[idx] = { ...next.businessRecords[idx], ...op.record };
+      }
     } else if (op.op === "remove") {
       if (op.key === "partner") next.partnerName = undefined;
       else if (op.key.startsWith("field:")) {
@@ -183,10 +200,12 @@ export function mergeFinalProposal(
   for (const t of final.todos) {
     ops.push({ op: "upsert_todo", key: todoKey(t.title), todo: t });
   }
+  for (const r of final.businessRecords) {
+    ops.push({ op: "upsert_business_record", key: businessRecordKey(r.title), record: r });
+  }
   const { draft: merged } = mergeProposalPatch(draft ?? emptyDraft(), ops, excluded);
-  merged.trainings = final.trainings;
-  merged.solutions = final.solutions;
-  merged.businessRecords = final.businessRecords;
+  merged.trainings = final.trainings.length ? final.trainings : merged.trainings;
+  merged.solutions = final.solutions.length ? final.solutions : merged.solutions;
   merged.hubPartnerId = final.hubPartnerId ?? draft?.hubPartnerId;
   merged.customerId = final.customerId ?? draft?.customerId;
   merged.customerName = final.customerName ?? draft?.customerName;

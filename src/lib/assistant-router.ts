@@ -491,6 +491,8 @@ async function runAssistantTurnCore(opts: {
     messages: opts.messages,
     partnerId: opts.partnerId,
     partnerName: opts.partnerName,
+    customerId: opts.customerId,
+    customerName: opts.customerName,
     userId: opts.userId,
     emit: opts.emit,
     locale,

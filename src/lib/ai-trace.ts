@@ -1,5 +1,6 @@
 import { getToolLabel } from "./tool-labels";
 import type { IntakeProposal, IntakeClarification } from "./ai-intake";
+import type { BusinessRecordProposal } from "./ai-intake";
 import type { ContactProposal, OpportunityProposal, TodoProposal } from "./proposals";
 import type { ProposalChanges } from "./proposal-merge";
 
@@ -48,6 +49,7 @@ export type ProposalPatchOp =
   | { op: "upsert_contact"; key: string; contact: ContactProposal; reason?: string }
   | { op: "upsert_opportunity"; key: string; opportunity: OpportunityProposal }
   | { op: "upsert_todo"; key: string; todo: TodoProposal }
+  | { op: "upsert_business_record"; key: string; record: BusinessRecordProposal }
   | { op: "remove"; key: string };
 
 export type AiPhase = "idle" | "research" | "extract" | "reply";

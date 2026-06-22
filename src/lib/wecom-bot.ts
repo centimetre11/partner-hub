@@ -994,7 +994,7 @@ async function handleTextMessage(frame: WsFrame) {
         locale: "zh",
       });
       proposeSessions.delete(key);
-      let reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope);
+      let reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope, applied.customerId);
       if (!actor.hubUser?.crmSalesmanName) {
         reply += "\n\n⚠️ 你尚未绑定 CRM 销售账号，无法写入帆软 CRM。";
       }
@@ -1029,7 +1029,7 @@ async function handleTextMessage(frame: WsFrame) {
         locale: "zh",
       });
       proposeSessions.delete(key);
-      let reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope);
+      let reply = formatProposeAppliedReply(applied.applied, applied.partnerId, session.scope, applied.customerId);
       if (actor.matchedBy === "fallback") {
         reply +=
           "\n\n⚠️ 未识别到你的 Partner Hub 账号（请在 Web 个人中心绑定企微 userid）。CRM 可能无法以你的销售账号归档。";

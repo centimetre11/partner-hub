@@ -78,11 +78,13 @@ import {
 import { persistBusinessRecord, normalizeBusinessRecordCategory, type BusinessRecordCategory } from "./business-record-core";
 import { countProposalItems } from "./proposal-merge";
 import {
+  buildCustomerBindingPrompt,
   buildPartnerBindingPrompt,
   enrichProposalPartnerFromText,
   intakeScopeRequiresPartner,
   loadIntakePartnerBinding,
   resolveIntakePartner,
+  resolveIntakeTodoOwner,
 } from "./intake-partner-binding";
 import { enrichBusinessRecordCompanyTarget, resolveBusinessRecordCompanyTarget, lookupSingleCustomerByName } from "./business-record-intake";
 import { submitBusinessRecordToCrmOnly } from "./crm-business-record";
@@ -375,12 +377,17 @@ async function finalizeIntakeTurn(
   turn: IntakeTurn,
   scope: IntakeScope,
   locale: Locale,
-  opts?: { partnerId?: string; userText?: string }
+  opts?: { partnerId?: string; customerId?: string; userText?: string }
 ): Promise<IntakeTurn> {
   let proposal = turn.proposal;
   if (scope === "business_record") {
-    proposal = await enrichBusinessRecordCompanyTarget(proposal, opts?.userText ?? "", opts?.partnerId);
-  } else if (!opts?.partnerId && opts?.userText) {
+    proposal = await enrichBusinessRecordCompanyTarget(
+      proposal,
+      opts?.userText ?? "",
+      opts?.partnerId,
+      opts?.customerId,
+    );
+  } else if (!opts?.partnerId && !opts?.customerId && opts?.userText) {
     const { enrichProposalPartnerFromText } = await import("./intake-partner-binding");
     proposal = await enrichProposalPartnerFromText(proposal, opts.userText, opts?.partnerId);
   }
@@ -392,6 +399,7 @@ async function finalizeIntakeTurn(
   return isFastIntakeScope(scope)
     ? await finalizeFastIntakeTurn(scope, next, locale, {
         boundPartnerId: opts?.partnerId,
+        boundCustomerId: opts?.customerId,
         userText: opts?.userText,
       })
     : next;
@@ -408,10 +416,11 @@ async function parseIntakeTurnFromContent(
     taskTier?: AiTaskTier;
     today?: string;
     partnerId?: string;
+    customerId?: string;
   }
 ): Promise<IntakeTurn> {
   const userText = lastIntakeUserText(opts?.chat, scope);
-  const finalizeOpts = { partnerId: opts?.partnerId, userText };
+  const finalizeOpts = { partnerId: opts?.partnerId, customerId: opts?.customerId, userText };
 
   const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
   if (direct) {
@@ -561,6 +570,7 @@ async function extractIntakeJson(
   userId?: string,
   emit?: TraceEmitter,
   partnerId?: string,
+  customerId?: string,
 ): Promise<IntakeTurn> {
   const extractId = nextTraceId("extract");
   emitPhase(emit, "extract", "Building proposal");
@@ -595,6 +605,7 @@ async function extractIntakeJson(
     feature,
     userId,
     partnerId,
+    customerId,
   });
   emit?.({
     event: "trace_patch",
@@ -699,7 +710,10 @@ async function runIntakeTurnCore(opts: {
   const binding = await loadIntakePartnerBinding(customerScope ? undefined : opts.partnerId);
   if (customerScope) {
     if (opts.customerId) partnerCtx = await customerContextForIntake(opts.customerId, locale);
-  } else if (opts.scope === "powermap" && opts.customerId) {
+  } else if (
+    opts.customerId &&
+    (opts.scope === "powermap" || opts.scope === "todo" || opts.scope === "business_record")
+  ) {
     partnerCtx = await customerContextForIntake(opts.customerId, locale);
   } else if (opts.partnerId) {
     partnerCtx = await partnerContextForScope(opts.scope, opts.partnerId, locale);
@@ -720,6 +734,22 @@ async function runIntakeTurnCore(opts: {
         locale === "zh"
           ? `[客户绑定 · 已锁定]\n当前录入会话已绑定客户「${cust.name}」。联系人将添加到该客户的权力地图；不要追问属于哪家公司。\n信息足够时 ready=true（系统将自动保存，无需用户确认）。`
           : `[Customer binding · locked]\nThis session is bound to customer "${cust.name}". Contacts will be added to this customer's power map.\nSet ready=true when extraction is complete (system auto-saves).`;
+    }
+  } else if (
+    opts.customerId &&
+    (opts.scope === "todo" || opts.scope === "business_record")
+  ) {
+    const cust = await db.customer.findUnique({
+      where: { id: opts.customerId },
+      select: { id: true, name: true },
+    });
+    if (cust) {
+      bindingBlock = buildCustomerBindingPrompt({
+        locale,
+        scope: opts.scope,
+        customerName: cust.name,
+        customerId: cust.id,
+      });
     }
   } else {
     bindingBlock = buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
@@ -860,6 +890,7 @@ async function runIntakeTurnCore(opts: {
         feature,
         userId: opts.userId,
         partnerId: opts.partnerId,
+        customerId: opts.customerId,
       });
       if (turn.proposal.summary || turn.proposal.partnerName || countProposalItems(turn.proposal) > 0) {
         emitProposalUpdate(opts.emit, turn);
@@ -867,7 +898,7 @@ async function runIntakeTurnCore(opts: {
         return turn;
       }
     }
-    return extractIntakeJson(chat, feature, locale, opts.scope, opts.userId, opts.emit, opts.partnerId);
+    return extractIntakeJson(chat, feature, locale, opts.scope, opts.userId, opts.emit, opts.partnerId, opts.customerId);
   }
 
   emitPhase(opts.emit, "extract", "Building proposal");
@@ -886,6 +917,7 @@ async function runIntakeTurnCore(opts: {
     taskTier,
     today: opts.today,
     partnerId: opts.partnerId,
+    customerId: opts.customerId,
   });
   emitProposalUpdate(opts.emit, turn);
   if (opts.emit) {
@@ -972,6 +1004,8 @@ export async function runProposeTurn(opts: {
   messages: IntakeMessage[];
   partnerId?: string;
   partnerName?: string;
+  customerId?: string;
+  customerName?: string;
   userId?: string;
   emit?: TraceEmitter;
   /** Explicit scope from UI — skips AI classification */
@@ -992,6 +1026,7 @@ export async function runProposeTurn(opts: {
   const turn = await runIntakeTurn({
     scope,
     partnerId: opts.partnerId,
+    customerId: opts.customerId,
     messages: opts.messages,
     today: new Date().toISOString().slice(0, 10),
     userId: opts.userId,
@@ -1307,6 +1342,7 @@ export async function applyIntake(opts: {
 
   const applied: string[] = [];
   let partnerId = opts.partnerId ?? "";
+  let customerId = opts.customerId ?? "";
   /** 商务记录归属对象：伙伴或客户实体（CRM-only 模式下为 null） */
   let businessRecordOwner: OwnerRef | null = null;
 
@@ -1372,7 +1408,17 @@ export async function applyIntake(opts: {
         businessRecordOwner = { kind: "customer", id: resolvedCustomerId };
       }
     }
-  } else if (scope === "todo" || intakeScopeRequiresPartner(scope)) {
+  } else if (scope === "todo") {
+    const resolved = await resolveIntakeTodoOwner({
+      boundPartnerId: opts.partnerId,
+      boundCustomerId: opts.customerId,
+      proposal,
+      locale,
+    });
+    if (!resolved.ok) throw new Error(resolved.error);
+    partnerId = resolved.partnerId;
+    customerId = resolved.customerId || customerId;
+  } else if (intakeScopeRequiresPartner(scope)) {
     const resolved = await resolveIntakePartner({
       scope,
       boundPartnerId: opts.partnerId,
@@ -1611,6 +1657,7 @@ export async function applyIntake(opts: {
         title: t.title,
         detail: t.detail,
         partnerId: partnerId || null,
+        customerId: customerId || null,
         assigneeId: userId,
         dueDate: parseOptionalDate(t.dueDate),
         priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
@@ -1649,7 +1696,7 @@ export async function applyIntake(opts: {
     meta: { scope, applied },
   });
 
-  return { applied, partnerId };
+  return { applied, partnerId, customerId: customerId || undefined };
 }
 
 export { PROPOSE_INTENT_RE } from "./propose-intent";

@@ -491,7 +491,7 @@ function buildTodoClarifications(
 export async function finalizeBusinessRecordTurn(
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string },
+  opts?: { boundPartnerId?: string; boundCustomerId?: string },
 ): Promise<IntakeTurn> {
   const records = (turn.proposal.businessRecords ?? []).map((r) => {
     const title = sanitizeBusinessRecordText(r.title ?? "");
@@ -503,9 +503,10 @@ export async function finalizeBusinessRecordTurn(
   const target = await resolveBusinessRecordCompanyTarget({
     proposal: turn.proposal,
     boundPartnerId: opts?.boundPartnerId,
+    boundCustomerId: opts?.boundCustomerId,
     saveMode: turn.proposal.saveMode,
   });
-  const openIntake = !opts?.boundPartnerId;
+  const openIntake = !opts?.boundPartnerId && !opts?.boundCustomerId;
   const hubReady = businessRecordHubReady(target);
   const crmOnlyReady = businessRecordCrmOnlyReady(target);
 
@@ -554,15 +555,26 @@ export async function finalizeBusinessRecordTurn(
 async function finalizeTodoTurn(
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string; userText?: string },
+  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string },
 ): Promise<IntakeTurn> {
-  const todos = turn.proposal.todos.filter((t) => t.title?.trim());
+  let todos = turn.proposal.todos.filter((t) => t.title?.trim());
+  if (!todos.length && opts?.userText?.trim()) {
+    const stripped = stripIntakeCommandPrefix(opts.userText.trim(), "todo");
+    if (stripped && !/^(确认|取消|仅crm)/i.test(stripped)) {
+      const title = extractTodoTitle(stripped);
+      if (title.trim()) {
+        todos = [{ title, detail: stripped }];
+        turn = { ...turn, proposal: { ...turn.proposal, todos } };
+      }
+    }
+  }
   if (!todos.length) return turn;
 
   const { proposal, clarifications: partnerClarifications } = await enrichTodoPartnerBinding({
     proposal: turn.proposal,
     userText: opts?.userText,
     boundPartnerId: opts?.boundPartnerId,
+    boundCustomerId: opts?.boundCustomerId,
     locale,
     existingClarifications: turn.clarifications,
   });
@@ -600,7 +612,7 @@ export async function finalizeFastIntakeTurn(
   scope: IntakeScope,
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string; userText?: string },
+  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string },
 ): Promise<IntakeTurn> {
   if (!isFastIntakeScope(scope)) return turn;
   switch (scope) {

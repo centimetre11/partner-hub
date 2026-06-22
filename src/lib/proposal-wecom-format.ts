@@ -99,6 +99,9 @@ export function formatProposeWecomReply(opts: {
 
   const draftLines: string[] = [];
   if (opts.proposal.partnerName) draftLines.push(`归属伙伴：${opts.proposal.partnerName}`);
+  if (opts.proposal.customerName && !opts.proposal.partnerName) {
+    draftLines.push(`归属客户：${opts.proposal.customerName}`);
+  }
   if (opts.proposal.crmCustomerName) draftLines.push(`CRM 客户：${opts.proposal.crmCustomerName}`);
   if (opts.proposal.summary) draftLines.push(`摘要：${opts.proposal.summary}`);
   for (const f of opts.proposal.fields) {
@@ -149,9 +152,17 @@ export function formatProposeWecomReply(opts: {
   return parts.join("\n").slice(0, 3800);
 }
 
-export function formatProposeAppliedReply(applied: string[], partnerId: string, scope: IntakeScope): string {
+export function formatProposeAppliedReply(
+  applied: string[],
+  partnerId: string,
+  scope: IntakeScope,
+  customerId?: string,
+): string {
   const scopeLabel = SCOPE_LABELS[scope];
   const lines = applied.length ? applied.map((a) => `• ${a}`).join("\n") : "• 已保存";
+  if (customerId) {
+    return `✅ **${scopeLabel}已保存**\n${lines}\n\n客户 ID：\`${customerId.slice(0, 12)}…\``;
+  }
   if (!partnerId) {
     return `✅ **${scopeLabel}已保存**\n${lines}`;
   }

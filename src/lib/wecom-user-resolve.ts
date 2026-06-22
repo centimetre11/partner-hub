@@ -34,9 +34,11 @@ export function isWecomIdentityQuery(text: string): boolean {
   return /^[\w.\s-]{1,40}$/.test(m[1].trim());
 }
 
-/** 去掉 @机器人 前缀，保留业务正文 */
+/** 去掉 @机器人 前缀，保留业务正文（支持多词 bot 名，如 @MENA Beard Gang …） */
 export function stripWecomCommandPrefix(text: string): string {
   let t = text.trim();
+  const multiWord = t.match(/^@([\w.\s-]{1,40})\s+([\s\S]+)$/);
+  if (multiWord) return multiWord[2].trim();
   t = t.replace(/^(?:@[^\s]+\s*)+/, "").trim();
   return t;
 }
