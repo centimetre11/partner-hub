@@ -61,7 +61,7 @@ export function AiIntakePanel({
   const excludedRef = useRef(new Set<string>());
   const abortRef = useRef<AbortController | null>(null);
   const directRequiredAnswersRef = useRef<ClarificationAnswer[]>([]);
-  const autoApplyMode = !!(partnerId && isFastIntakeScope(scope) && scope !== "business_record");
+  const autoApplyMode = !!((partnerId || customerId) && isFastIntakeScope(scope) && scope !== "business_record");
   const [autoApplyFailed, setAutoApplyFailed] = useState(false);
   const [autoApplying, setAutoApplying] = useState(false);
 
@@ -160,7 +160,7 @@ export function AiIntakePanel({
       });
       const detail = result.applied.length ? result.applied.join("；") : ip.autoSaved;
       setMessages((m) => [...m, { role: "assistant", content: `${turn.reply}\n\n✅ ${detail}` }]);
-      handleApplied(result.customerId || result.partnerId || partnerId!);
+      handleApplied(result.customerId || result.partnerId || customerId || partnerId || "");
       return true;
     } catch (e) {
       setAutoApplyFailed(true);

@@ -29,7 +29,11 @@ export default async function CustomersPage({
       ...(sp.status ? { status: sp.status } : {}),
       ...(sp.unbound === "1" ? { partnerId: null } : sp.partner ? { partnerId: sp.partner } : {}),
     },
-    include: { partner: { select: { id: true, name: true } }, owner: { select: { name: true } } },
+    include: {
+      partner: { select: { id: true, name: true } },
+      owner: { select: { name: true } },
+      contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
+    },
     orderBy: { updatedAt: "desc" },
   });
 
@@ -115,10 +119,12 @@ export default async function CustomersPage({
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {cust.contactName ? (
+                        {cust.contacts[0] ? (
                           <span>
-                            {cust.contactName}
-                            {cust.contactPhone ? <span className="text-slate-400"> · {cust.contactPhone}</span> : null}
+                            {cust.contacts[0].name}
+                            {cust.contacts[0].title ? (
+                              <span className="text-slate-400"> · {cust.contacts[0].title}</span>
+                            ) : null}
                           </span>
                         ) : "—"}
                       </td>

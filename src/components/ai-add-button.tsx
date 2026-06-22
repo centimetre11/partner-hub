@@ -8,12 +8,14 @@ import { AiIntakePanel } from "./ai-intake-panel";
 export function AiAddButton({
   scope,
   partnerId,
+  customerId,
   label = "✦ AI Add",
   variant = "ghost",
   className,
 }: {
   scope: IntakeScope;
   partnerId?: string;
+  customerId?: string;
   label?: string;
   variant?: "ghost" | "solid" | "soft";
   className?: string;
@@ -41,6 +43,7 @@ export function AiAddButton({
         <AiIntakePanel
           scope={scope}
           partnerId={partnerId}
+          customerId={customerId}
           onClose={() => setOpen(false)}
           onDone={
             scope === "new_partner"
@@ -48,7 +51,12 @@ export function AiAddButton({
                   setOpen(false);
                   router.push(`/partners/${id}`);
                 }
-              : undefined
+              : customerId
+                ? () => {
+                    setOpen(false);
+                    router.refresh();
+                  }
+                : undefined
           }
         />
       )}

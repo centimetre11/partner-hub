@@ -73,14 +73,6 @@ export function AddCustomerForm({
               <input name="website" placeholder={c.websitePlaceholder} className={input} />
               <input name="scale" placeholder={c.scalePlaceholder} className={input} />
               <div className="flex gap-2">
-                <input name="contactName" placeholder={c.contactNamePlaceholder} className={input} />
-                <input name="contactTitle" placeholder={c.contactTitlePlaceholder} className={input} />
-              </div>
-              <div className="flex gap-2">
-                <input name="contactPhone" placeholder={c.contactPhonePlaceholder} className={input} />
-                <input name="contactEmail" placeholder={c.contactEmailPlaceholder} className={input} />
-              </div>
-              <div className="flex gap-2">
                 <select name="partnerId" defaultValue={defaultPartnerId ?? ""} className={input} aria-label={c.partnerLabel}>
                   <option value="">{c.noPartner}</option>
                   {partners.map((p) => (

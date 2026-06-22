@@ -9,6 +9,7 @@ import { buildCrmCustomerViewUrl } from "@/lib/crm";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { CustomerWorkspaceShell, type CustomerTab } from "@/components/customer-workspace-shell";
+import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerIntegrationsPanel } from "@/components/customer-integrations-panel";
 import { getWecomChatForCustomer } from "@/lib/wecom-chats";
 import {
@@ -35,6 +36,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const user = await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
   const c = m.customers;
+  const pd = m.partnerDetail;
   const { id } = await params;
 
   const customer = await db.customer.findUnique({
@@ -120,22 +122,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <label className="text-sm sm:col-span-2">
             <span className="text-xs text-slate-500">{c.websiteLabel}</span>
             <input name="website" defaultValue={customer.website ?? ""} className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.contactNamePlaceholder}</span>
-            <input name="contactName" defaultValue={customer.contactName ?? ""} className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.contactTitlePlaceholder}</span>
-            <input name="contactTitle" defaultValue={customer.contactTitle ?? ""} className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.contactPhonePlaceholder}</span>
-            <input name="contactPhone" defaultValue={customer.contactPhone ?? ""} className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.contactEmailPlaceholder}</span>
-            <input name="contactEmail" defaultValue={customer.contactEmail ?? ""} className={input} />
           </label>
           <label className="text-sm sm:col-span-2">
             <span className="text-xs text-slate-500">{c.notesPlaceholder}</span>
@@ -306,18 +292,30 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   // ============ 关系经营（权力地图 + 时间线） ============
   const relationshipPanel = (
     <div className="space-y-6">
-      <PowerMapSection
-        owner={owner}
-        contacts={customer.contacts.map((ct) => ({
-          id: ct.id, name: ct.name, role: ct.role, title: ct.title,
-          department: ct.department, attitude: ct.attitude, reportsToId: ct.reportsToId,
-          x: ct.x, y: ct.y,
-          contactInfo: ct.contactInfo, approach: ct.approach, notes: ct.notes,
-        }))}
-        links={customer.contactLinks.map((l) => ({
-          id: l.id, subordinateId: l.subordinateId, superiorId: l.superiorId, kind: l.kind,
-        }))}
-      />
+      <Card
+        title={pd.powerMap.replace("{count}", String(customer.contacts.length))}
+        actions={
+          <AiAddButton
+            scope="powermap"
+            customerId={customer.id}
+            label={pd.aiAddContact}
+            variant="soft"
+          />
+        }
+      >
+        <PowerMapSection
+          owner={owner}
+          contacts={customer.contacts.map((ct) => ({
+            id: ct.id, name: ct.name, role: ct.role, title: ct.title,
+            department: ct.department, attitude: ct.attitude, reportsToId: ct.reportsToId,
+            x: ct.x, y: ct.y,
+            contactInfo: ct.contactInfo, approach: ct.approach, notes: ct.notes,
+          }))}
+          links={customer.contactLinks.map((l) => ({
+            id: l.id, subordinateId: l.subordinateId, superiorId: l.superiorId, kind: l.kind,
+          }))}
+        />
+      </Card>
       <div className="border-t border-slate-100 pt-5">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h3 className="text-sm font-semibold text-slate-800">{c.timeline.replace("{count}", String(customer.events.length))}</h3>

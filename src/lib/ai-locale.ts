@@ -264,7 +264,7 @@ Customer field codes for the fields array (use ONLY these): ${cfl}.
 Rules:
 - This is END-CUSTOMER (account) profiling — NOT partner onboarding. Never emit partner-only codes (category, tier, industries, playbook, valuePattern, etc.). Use the customer field codes above only.
 - partnerName = the customer's company name (required for new_customer).
-- Put the main contact into the contactName/contactTitle/contactPhone/contactEmail fields; put additional people into the contacts array (power map).
+- Put all people into the contacts array (power map); do not use contactName/contactTitle/contactPhone/contactEmail fields.
 - Extract only supported content from user text or tool results; cite reason. Do not invent beyond tools.
 - ready: true when the customer name and at least one profile field are present, or when the user says save now.
 - proposal accumulates confirmed content each turn (do not clear prior extractions).
@@ -423,8 +423,8 @@ Before outputting the JSON proposal, combine tools as below (parallel OK, multip
   · "{Company} clients case study Middle East"
 - If the user pasted Chinese text, extract the English company name / country before searching.
 
-1. User gave KMS link/pageId → read_kms first (or use system pre-fetched KMS); if KMS clearly states company name + website, write them to proposal without blocking identity clarifications; then web_search + linkedin_search for fields not in KMS
-2. After identifying company name from user/KMS → search_partners dedupe; web_search background; linkedin_search executives/contacts
+1. User gave KMS link/pageId → read_kms first (or use system pre-fetched KMS); if KMS clearly states company name + website, write them to proposal without blocking identity clarifications. When company name is known, the system may already have run web_search + linkedin_search in parallel — use those injected results; do NOT call them again unless you need different keywords.
+2. After identifying company name from user/KMS → search_partners dedupe; if web/linkedin were not pre-fetched, call web_search AND linkedin_search in the SAME tool_calls round (they execute in parallel).
 3. Still missing category/playbook/Fanruan angle → search_knowledge team knowledge base; for cases/solutions/collateral → search_knowhow Know-how knowledge base
 4. After each tool round, check field checklist; keep researching until major fields are sourced or public channels truly have nothing
 5. If a tool fails, skip it and use others—do not block onboarding. Do NOT assume KMS is unconfigured without calling read_kms when [KMS token status] says configured. Do NOT assume Know-how is unconfigured without calling search_knowhow when [Know-how token status] says configured.

@@ -107,32 +107,37 @@ export async function runToolLoop(opts: ToolLoopOptions): Promise<string | null>
     }
 
     opts.chat.push({ role: "assistant", content: content ?? "", tool_calls: toolCalls, volcengineReplay });
-    for (const tc of toolCalls) {
-      const args = parseToolArgs(tc);
-      const step = toolTraceStep(tc.function.name, args);
-      opts.emit?.({ event: "trace", step });
 
-      try {
-        const result = await opts.executeTool(tc);
-        const summary = summarizeToolResult(tc.function.name, result);
-        await emitTraceResultChunks(opts.emit, step.id, summary);
-        opts.emit?.({
-          event: "trace_patch",
-          id: step.id,
-          patch: { status: "done" },
-        });
-        // Proposal extraction does not block next tool/stream output
-        void opts.onToolDone?.(tc, result);
-        opts.chat.push({ role: "tool", content: result, tool_call_id: tc.id });
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        opts.emit?.({
-          event: "trace_patch",
-          id: step.id,
-          patch: { status: "error", error: msg.slice(0, 120) },
-        });
-        opts.chat.push({ role: "tool", content: `Error: ${msg}`, tool_call_id: tc.id });
-      }
+    const toolResults = await Promise.all(
+      toolCalls.map(async (tc) => {
+        const args = parseToolArgs(tc);
+        const step = toolTraceStep(tc.function.name, args);
+        opts.emit?.({ event: "trace", step });
+        try {
+          const result = await opts.executeTool(tc);
+          const summary = summarizeToolResult(tc.function.name, result);
+          await emitTraceResultChunks(opts.emit, step.id, summary);
+          opts.emit?.({
+            event: "trace_patch",
+            id: step.id,
+            patch: { status: "done" },
+          });
+          void opts.onToolDone?.(tc, result);
+          return { tc, result, ok: true as const };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          opts.emit?.({
+            event: "trace_patch",
+            id: step.id,
+            patch: { status: "error", error: msg.slice(0, 120) },
+          });
+          return { tc, result: `Error: ${msg}`, ok: false as const };
+        }
+      })
+    );
+
+    for (const { tc, result } of toolResults) {
+      opts.chat.push({ role: "tool", content: result, tool_call_id: tc.id });
     }
   }
   return lastContent;

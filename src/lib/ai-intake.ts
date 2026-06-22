@@ -9,6 +9,7 @@ import {
 import { stripIntakeSystemHint } from "./intake-text";
 import { PROPOSE_INTENT_RE } from "./propose-intent";
 import { Prisma } from "@prisma/client";
+import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { recordAiConversation, recordSystemEvent } from "./activity-log";
 import { chatCompletion, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
@@ -87,6 +88,7 @@ import { enrichBusinessRecordCompanyTarget, resolveBusinessRecordCompanyTarget, 
 import { submitBusinessRecordToCrmOnly } from "./crm-business-record";
 import { ownerData, ownerWhere, type OwnerRef } from "./owner";
 import { isFastIntakeScope, sanitizeProposalForScope } from "./proposal-scope";
+import { prefetchParallelWebLinkedinResearch } from "./intake-public-research";
 
 export type IntakeScope = AiLocaleScope;
 
@@ -208,12 +210,8 @@ async function customerContextForIntake(customerId: string, locale: Locale): Pro
       city: true,
       country: true,
       website: true,
-      contactName: true,
-      contactTitle: true,
-      contactPhone: true,
-      contactEmail: true,
       notes: true,
-      contacts: { select: { name: true, title: true, department: true, role: true }, take: 30 },
+      contacts: { select: { id: true, name: true, title: true, department: true, role: true }, take: 30 },
     },
   });
   if (!c) return "";
@@ -228,9 +226,6 @@ async function customerContextForIntake(customerId: string, locale: Locale): Pro
   pushIf(locale === "zh" ? "城市" : "City", c.city);
   pushIf(locale === "zh" ? "国家" : "Country", c.country);
   pushIf(locale === "zh" ? "官网" : "Website", c.website);
-  pushIf(locale === "zh" ? "主联系人" : "Primary contact", [c.contactName, c.contactTitle].filter(Boolean).join(" / "));
-  pushIf(locale === "zh" ? "联系电话" : "Phone", c.contactPhone);
-  pushIf(locale === "zh" ? "联系邮箱" : "Email", c.contactEmail);
   pushIf(locale === "zh" ? "备注" : "Notes", c.notes);
   if (c.contacts.length) {
     const people = c.contacts
@@ -704,6 +699,8 @@ async function runIntakeTurnCore(opts: {
   const binding = await loadIntakePartnerBinding(customerScope ? undefined : opts.partnerId);
   if (customerScope) {
     if (opts.customerId) partnerCtx = await customerContextForIntake(opts.customerId, locale);
+  } else if (opts.scope === "powermap" && opts.customerId) {
+    partnerCtx = await customerContextForIntake(opts.customerId, locale);
   } else if (opts.partnerId) {
     partnerCtx = await partnerContextForScope(opts.scope, opts.partnerId, locale);
   }
@@ -713,7 +710,20 @@ async function runIntakeTurnCore(opts: {
   const kmsConfigured = useResearch ? await isKmsConfiguredForUser(opts.userId) : false;
   const knowhowConfigured = useResearch ? await isKnowhowConfigured() : false;
 
-  const bindingBlock = customerScope ? "" : buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
+  let bindingBlock = "";
+  if (customerScope) {
+    bindingBlock = "";
+  } else if (opts.scope === "powermap" && opts.customerId) {
+    const cust = await db.customer.findUnique({ where: { id: opts.customerId }, select: { name: true } });
+    if (cust) {
+      bindingBlock =
+        locale === "zh"
+          ? `[客户绑定 · 已锁定]\n当前录入会话已绑定客户「${cust.name}」。联系人将添加到该客户的权力地图；不要追问属于哪家公司。\n信息足够时 ready=true（系统将自动保存，无需用户确认）。`
+          : `[Customer binding · locked]\nThis session is bound to customer "${cust.name}". Contacts will be added to this customer's power map.\nSet ready=true when extraction is complete (system auto-saves).`;
+    }
+  } else {
+    bindingBlock = buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
+  }
   const system = fast
     ? buildFastIntakeSystemPrompt({
         locale,
@@ -777,6 +787,18 @@ async function runIntakeTurnCore(opts: {
       });
     }
 
+    const parallelPublic = await prefetchParallelWebLinkedinResearch({
+      scope: opts.scope,
+      userText,
+      kmsContent: kmsPrefetch?.ok ? kmsPrefetch.content : undefined,
+      locale,
+      userId: opts.userId,
+      emit: opts.emit,
+    });
+    if (parallelPublic) {
+      chat.push({ role: "user", content: parallelPublic.injectionMessage });
+    }
+
     const tools = await buildIntakeTools(enrichmentSkills);
     const planId = nextTraceId("plan");
     if (!kmsPrefetch?.ok) {
@@ -813,7 +835,17 @@ async function runIntakeTurnCore(opts: {
             })
         );
       },
-      executeTool: (tc) => runIntakeToolCall(tc, opts.userId),
+      executeTool: (tc) => {
+        const toolName = tc.function.name;
+        if (parallelPublic?.skipToolNames.has(toolName)) {
+          return Promise.resolve(
+            locale === "zh"
+              ? `[已跳过] ${toolName} 结果已在调研开始时并行预取，请使用上文注入的 web_search / linkedin_search 内容。`
+              : `[Skipped] ${toolName} was already pre-fetched in parallel at research start — use the injected results above.`
+          );
+        }
+        return runIntakeToolCall(tc, opts.userId);
+      },
     });
     // Wait for all incremental extracts so draft patches are not lost
     if (pendingPatches.length) await Promise.allSettled(pendingPatches);
@@ -974,6 +1006,64 @@ export async function runProposeTurn(opts: {
 
 const VALID_ROLES = ["APPROVER", "DECISION_MAKER", "SUPPORTER", "EVALUATOR", "INFLUENCER"];
 
+async function applyCustomerContacts(
+  customerId: string,
+  contacts: IntakeProposal["contacts"],
+  locale: Locale,
+): Promise<string[]> {
+  const applied: string[] = [];
+  const contactIdByName = new Map<string, string>();
+
+  for (const c of contacts) {
+    const name = asTrimmedString(c.name);
+    if (!name) continue;
+    const payload = {
+      name,
+      role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
+      title: c.title,
+      department: c.department,
+      attitude: typeof c.attitude === "number" && c.attitude >= -1 && c.attitude <= 3 ? c.attitude : undefined,
+      contactInfo: c.contactInfo,
+      approach: c.approach,
+      notes: c.notes,
+    };
+    const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null));
+    const existing =
+      (c.action === "update" && c.id && (await db.contact.findFirst({ where: { id: c.id, customerId } }))) ||
+      (await db.contact.findFirst({ where: { customerId, name } }));
+    let savedId: string;
+    if (existing) {
+      await db.contact.update({ where: { id: existing.id }, data: clean });
+      savedId = existing.id;
+      applied.push(applyContactUpdated(locale, name));
+    } else {
+      const created = await db.contact.create({ data: { customerId, ...clean, name } });
+      savedId = created.id;
+      applied.push(applyContactAdded(locale, name));
+    }
+    contactIdByName.set(name, savedId);
+  }
+
+  for (const c of contacts) {
+    if (!c.reportsToName) continue;
+    const subName = asTrimmedString(c.name);
+    const subId = subName ? contactIdByName.get(subName) : undefined;
+    if (!subId) continue;
+    let bossId = contactIdByName.get(c.reportsToName);
+    if (!bossId) {
+      const boss = await db.contact.findFirst({
+        where: { customerId, name: { contains: c.reportsToName }, NOT: { name: subName } },
+      });
+      bossId = boss?.id;
+    }
+    if (bossId && bossId !== subId) {
+      await db.contact.update({ where: { id: subId }, data: { reportsToId: bossId } });
+    }
+  }
+
+  return applied;
+}
+
 function parseOptionalDate(raw: unknown): Date | undefined {
   const s = asTrimmedString(raw);
   if (!s) return undefined;
@@ -1051,28 +1141,8 @@ async function applyCustomerIntake(opts: {
   }
 
   // Power-map contacts (attach to the customer)
-  for (const c of proposal.contacts) {
-    const name = asTrimmedString(c.name);
-    if (!name) continue;
-    const payload = {
-      name,
-      role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
-      title: c.title,
-      department: c.department,
-      attitude: typeof c.attitude === "number" && c.attitude >= -1 && c.attitude <= 3 ? c.attitude : undefined,
-      contactInfo: c.contactInfo,
-      approach: c.approach,
-      notes: c.notes,
-    };
-    const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null));
-    const existing = await db.contact.findFirst({ where: { customerId, name } });
-    if (existing) {
-      await db.contact.update({ where: { id: existing.id }, data: clean });
-      applied.push(applyContactUpdated(locale, name));
-    } else {
-      await db.contact.create({ data: { customerId, ...clean, name } });
-      applied.push(applyContactAdded(locale, name));
-    }
+  if (proposal.contacts.length) {
+    applied.push(...(await applyCustomerContacts(customerId, proposal.contacts, locale)));
   }
 
   // Todos (optional, e.g. follow-ups captured during onboarding)
@@ -1193,6 +1263,35 @@ export async function applyIntake(opts: {
 }): Promise<{ applied: string[]; partnerId: string; customerId?: string }> {
   const { scope, userId, locale } = opts;
   const proposal = sanitizeProposalForScope(scope, opts.proposal);
+
+  if (scope === "powermap" && opts.customerId) {
+    const customerId = opts.customerId;
+    const applied = await applyCustomerContacts(customerId, proposal.contacts, locale);
+    if (applied.length) {
+      await db.timelineEvent.create({
+        data: {
+          customerId,
+          type: "AI_SUMMARY",
+          title: locale === "zh" ? "AI 添加联系人" : "AI contact intake",
+          content: proposal.summary || applied.join(locale === "zh" ? "；" : "; "),
+          createdById: userId,
+          meta: JSON.stringify({ via: "ai-intake", scope, applied, sourceText: opts.sourceText?.slice(0, 8000) }),
+        },
+      });
+      void recordSystemEvent({
+        category: "CUSTOMER",
+        action: "customer.ai_update",
+        actorId: userId,
+        targetType: "Customer",
+        targetId: customerId,
+        summary: locale === "zh" ? "AI 添加客户联系人" : "AI customer contact intake",
+        detail: applied.join(locale === "zh" ? "；" : "; "),
+        meta: { scope, applied },
+      });
+    }
+    revalidatePath(`/customers/${customerId}`);
+    return { applied, partnerId: "", customerId };
+  }
 
   if (isCustomerScope(scope)) {
     return applyCustomerIntake({
