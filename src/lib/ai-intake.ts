@@ -1367,7 +1367,7 @@ export async function applyIntake(opts: {
   }
 
   // ---- Opportunities (商机以客户为主体；伙伴自营时挂其 SELF 客户) ----
-  if (proposal.opportunities.length) {
+  if (scope !== "new_partner" && proposal.opportunities.length) {
     const oppCustomerId = await resolveOpportunityCustomerId({
       boundCustomerId: opts.customerId,
       partnerId,

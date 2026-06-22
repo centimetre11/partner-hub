@@ -88,6 +88,17 @@ export function sanitizeProposalForScope(scope: IntakeScope, raw: IntakeProposal
         todos: raw.todos ?? [],
       };
     case "new_partner":
+      return {
+        ...EMPTY_PROPOSAL_ARRAYS,
+        partnerName: raw.partnerName,
+        summary,
+        fields: raw.fields ?? [],
+        contacts: raw.contacts ?? [],
+        todos: raw.todos ?? [],
+        trainings: raw.trainings ?? [],
+        solutions: raw.solutions ?? [],
+        businessRecords: raw.businessRecords ?? [],
+      };
     default:
       return {
         partnerName: raw.partnerName,
@@ -226,6 +237,17 @@ export function scopeDraftSections(scope?: IntakeScope): ScopeDraftSections {
         businessRecords: false,
       };
     case "new_partner":
+      return {
+        partnerName: true,
+        fields: true,
+        websiteHint: true,
+        contacts: true,
+        opportunities: false,
+        todos: true,
+        trainings: true,
+        solutions: true,
+        businessRecords: true,
+      };
     default:
       return {
         partnerName: true,

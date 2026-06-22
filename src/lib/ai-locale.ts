@@ -388,7 +388,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
 
   switch (scope) {
     case "new_partner":
-      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industries values: ${ind}; pipelineStage 1–10: ${st}); add contacts if people appear in text/research, opportunities if deals are mentioned. Leave trainings/solutions as empty arrays.`;
+      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industries values: ${ind}; pipelineStage 1–10: ${st}); add contacts if people appear in text/research. Do NOT extract opportunities/deals — leave opportunities as empty array. Leave trainings/solutions as empty arrays.`;
     case "powermap":
       return "Fill contacts only (action=add or update with id). Leave fields/opportunities/todos/trainings/solutions as empty arrays.";
     case "opportunity":
@@ -463,7 +463,7 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "New partner onboarding",
     intro:
       "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
-    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill profile fields via research (see tool notes). Ask 1–2 brief follow-ups only after research.
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill profile fields via research (see tool notes). Ask 1–2 brief follow-ups only after research. Do NOT extract sales opportunities/deals from meeting notes — those belong to end-customers and are added separately.
 
 Identity: only tier:"required" identity clarifications when genuinely ambiguous; KMS/user clear name+website → write directly. search_partners near-match → dedupe clarification. Profile fields use tier:"preference".`,
   },
