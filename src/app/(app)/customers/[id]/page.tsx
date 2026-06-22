@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, fmtDate } from "@/components/ui";
+import { BackButton } from "@/components/back-button";
 import { getServerI18n } from "@/lib/server-i18n";
 import { buildCrmCustomerViewUrl } from "@/lib/crm";
 import { PowerMapSection } from "@/components/power-map-flow";
@@ -378,9 +379,10 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   return (
     <div className="pb-4">
       <div className="px-8 pt-5 sm:pt-7 pb-4 border-b border-slate-200/60 bg-white">
-        <Link href="/customers" className="text-xs text-sky-600 hover:underline">{c.backToList}</Link>
-        <div className="flex items-start justify-between gap-4 mt-2">
-          <div className="min-w-0">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <BackButton fallbackHref="/customers" className="mt-1" />
+            <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{customer.name}</h1>
               <Badge tone={statusTone(customer.status)}>{statusLabel(customer.status)}</Badge>
@@ -415,6 +417,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                   </a>
                 </>
               )}
+            </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">

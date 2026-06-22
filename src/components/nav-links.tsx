@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMessages } from "@/lib/i18n/context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 
@@ -119,7 +119,13 @@ function NavGroup({
 }) {
   const hasActiveChild = group.children.some(leafActive);
   const [open, setOpen] = useState(true);
-  const expanded = open || hasActiveChild;
+  const prevActive = useRef(hasActiveChild);
+  // 当从外部导航进入某个子项时自动展开；但允许用户在子项页面手动折叠父级。
+  useEffect(() => {
+    if (hasActiveChild && !prevActive.current) setOpen(true);
+    prevActive.current = hasActiveChild;
+  }, [hasActiveChild]);
+  const expanded = open;
   const groupUnread = group.children.some((c) => c.badge === "unread") ? unread : 0;
 
   return (

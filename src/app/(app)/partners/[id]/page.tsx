@@ -4,6 +4,7 @@ import type { Opportunity, TimelineEvent, TodoItem, Training, User } from "@pris
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime, TierBadge } from "@/components/ui";
+import { BackButton } from "@/components/back-button";
 import { formatTierLabel, normalizePartnerTier } from "@/lib/tier";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
@@ -165,7 +166,9 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
       {/* Header: identity + pipeline */}
       <div className="px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-slate-200/60 bg-white">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="min-w-0">
+          <div className="flex items-start gap-3 min-w-0">
+            <BackButton fallbackHref={p.status === "PROSPECT" ? "/pool" : "/partners"} className="mt-1" />
+            <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{p.name}</h1>
               <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "ARCHIVED" ? "zinc" : "blue"}>
@@ -210,6 +213,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
                   </a>
                 </>
               )}
+            </div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
