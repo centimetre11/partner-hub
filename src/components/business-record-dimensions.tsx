@@ -1,17 +1,14 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useLabels, useMessages } from "@/lib/i18n/context";
-import { BUSINESS_RECORD_CATEGORIES } from "@/lib/business-record-core";
+import { useMessages } from "@/lib/i18n/context";
 import { CRM_TRACE_ACTIONS, CRM_TRACE_NATURES } from "@/lib/crm-trace-constants";
 import { inferTraceAction, inferTraceNature } from "@/lib/crm-trace-payload";
-import type { BusinessRecordCategory } from "@/lib/business-record-core";
 
 const input =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 export type BusinessRecordDimensionValues = {
-  category: string;
   traceNature: string;
   traceAction: string;
   contactName: string;
@@ -32,7 +29,6 @@ export function BusinessRecordDimensions({
 }) {
   const pd = useMessages().partnerDetail;
   const ip = useMessages().intakePanel;
-  const labels = useLabels();
   const cls = compact ? `${input} text-xs px-2.5 py-1.5` : input;
   const userEdited = useRef({ nature: false, action: false });
 
@@ -43,35 +39,20 @@ export function BusinessRecordDimensions({
   useEffect(() => {
     const text = inferContent.trim();
     if (!text) return;
-    const category = values.category as BusinessRecordCategory;
     const patch: Partial<BusinessRecordDimensionValues> = {};
     if (!userEdited.current.nature) {
-      const next = inferTraceNature(inferTitle, text, category);
+      const next = inferTraceNature(inferTitle, text, "OTHER");
       if (next !== values.traceNature) patch.traceNature = next;
     }
     if (!userEdited.current.action) {
-      const next = inferTraceAction(inferTitle, text, category);
+      const next = inferTraceAction(inferTitle, text, "OTHER");
       if (next !== values.traceAction) patch.traceAction = next;
     }
     if (Object.keys(patch).length > 0) onChange(patch);
-  }, [inferContent, inferTitle, values.category, values.traceNature, values.traceAction, onChange]);
+  }, [inferContent, inferTitle, values.traceNature, values.traceAction, onChange]);
 
   return (
     <div className={`grid gap-2 ${compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
-      <label className="block space-y-1">
-        <span className="text-xs text-slate-500">{pd.businessRecordCategory}</span>
-        <select
-          value={values.category}
-          onChange={(e) => onChange({ category: e.target.value })}
-          className={cls}
-        >
-          {BUSINESS_RECORD_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {labels.businessRecordCategoryLabels[c] ?? c}
-            </option>
-          ))}
-        </select>
-      </label>
       <label className="block space-y-1">
         <span className="text-xs text-slate-500">{ip.traceNatureLabel}</span>
         <select
@@ -90,7 +71,7 @@ export function BusinessRecordDimensions({
           ))}
         </select>
       </label>
-      <label className="block space-y-1 sm:col-span-2">
+      <label className="block space-y-1">
         <span className="text-xs text-slate-500">{ip.traceActionLabel}</span>
         <select
           value={values.traceAction}

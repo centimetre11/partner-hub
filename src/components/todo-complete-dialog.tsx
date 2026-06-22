@@ -47,7 +47,6 @@ export function TodoCompleteDialog({
   const [note, setNote] = useState("");
   const [sync, setSync] = useState(canSync);
   const [dims, setDims] = useState({
-    category: "OTHER",
     traceNature: "",
     traceAction: "",
     contactName: "",
@@ -64,7 +63,7 @@ export function TodoCompleteDialog({
     if (!open) return;
     setNote("");
     setSync(canSync);
-    setDims({ category: "OTHER", traceNature: "", traceAction: "", contactName: "" });
+    setDims({ traceNature: "", traceAction: "", contactName: "" });
     setCrmMeta(null);
     setFeedback(null);
 
@@ -109,7 +108,6 @@ export function TodoCompleteDialog({
       fd.set("todoId", todoId);
       fd.set("note", trimmed);
       fd.set("syncToBusinessRecord", sync && canSync ? "true" : "false");
-      fd.set("category", dims.category);
       fd.set("traceNature", dims.traceNature);
       fd.set("traceAction", dims.traceAction);
       if (dims.contactName.trim()) fd.set("contactName", dims.contactName.trim());
