@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 import { requireUser } from "./session";
-import { previewLinkUrl, saveLinkAsset } from "./assets";
+import { previewLinkUrl, saveLinkAsset } from "./link-assets";
 
 function slugify(s: string) {
   const base = s.trim().toLowerCase().replace(/\s+/g, "-").replace(/[^\w\u4e00-\u9fff-]/g, "");

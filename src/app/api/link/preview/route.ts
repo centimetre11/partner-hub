@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { previewLinkUrl } from "@/lib/assets";
+import { previewLinkUrl } from "@/lib/link-assets";
 import { getSessionUserId } from "@/lib/session";
 
 export async function POST(req: NextRequest) {

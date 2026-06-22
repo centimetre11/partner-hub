@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/session";
-import { saveLinkAsset } from "@/lib/assets";
+import { saveLinkAsset } from "@/lib/link-assets";
 
 export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();

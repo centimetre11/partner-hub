@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { createSolutionFromLinksAction } from "@/lib/content-actions";
-import { SOLUTION_GDRIVE_FOLDER_URL } from "@/lib/assets";
+import { SOLUTION_GDRIVE_FOLDER_URL } from "@/lib/solution-config";
 import { SolutionLinkField, type LinkPreviewState } from "@/components/solution-link-field";
 import type { Messages } from "@/lib/i18n/messages/en";
 
