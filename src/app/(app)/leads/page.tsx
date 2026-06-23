@@ -75,10 +75,6 @@ export default async function LeadsPage({
           </Link>
         </div>
 
-        <p className="text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 mb-4">
-          {l.viewHint}
-        </p>
-
         <form className="flex flex-wrap gap-2 mb-4" method="get">
           {view === "nurture" && <input type="hidden" name="view" value="nurture" />}
           <input
@@ -126,13 +122,11 @@ export default async function LeadsPage({
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">
                     <th className="px-4 py-2.5 font-medium">{l.colCompany}</th>
+                    <th className="px-4 py-2.5 font-medium">{l.colContName}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colRegion}</th>
-                    <th className="px-4 py-2.5 font-medium">{l.colProvince}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colRank}</th>
-                    <th className="px-4 py-2.5 font-medium">{l.colStatus}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colSource}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colSalesman}</th>
-                    <th className="px-4 py-2.5 font-medium">{l.colSdr}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colKpiStart}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colKpiDeadline}</th>
                   </tr>
@@ -147,21 +141,16 @@ export default async function LeadsPage({
                         >
                           {lead.name ?? "—"}
                         </Link>
-                        {lead.phone && (
-                          <div className="text-[11px] text-slate-400 mt-0.5">{lead.phone}</div>
-                        )}
                       </td>
+                      <td className="px-4 py-3 text-slate-600">{lead.contName ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {[lead.countryCn, lead.city].filter(Boolean).join(" · ") || "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{lead.province ?? "—"}</td>
                       <td className="px-4 py-3">
                         {lead.rank ? <Badge tone={rankTone(lead.rank)}>{lead.rank}</Badge> : "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{lead.status ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">{lead.source ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">{lead.salesman ?? "—"}</td>
-                      <td className="px-4 py-3 text-slate-600">{lead.sdrState ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
                         {lead.recdate ? fmtDate(lead.recdate, bcp47) : "—"}
                       </td>

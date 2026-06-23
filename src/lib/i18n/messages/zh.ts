@@ -327,6 +327,7 @@ export const messagesZh: Messages = {
     fieldDetail: "商务记录2",
     fieldTraceDetail: "商务记录1",
     colCompany: "公司名称",
+    colContName: "联系人",
     colRegion: "国家 / 城市",
     colProvince: "省份",
     colRank: "等级",

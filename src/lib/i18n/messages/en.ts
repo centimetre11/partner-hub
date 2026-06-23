@@ -327,6 +327,7 @@ export const messagesEn = {
     fieldDetail: "Business record 2",
     fieldTraceDetail: "Business record 1",
     colCompany: "Company",
+    colContName: "Contact",
     colRegion: "Country / City",
     colProvince: "Province",
     colRank: "Rank",
