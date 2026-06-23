@@ -60,6 +60,38 @@ AI_MODEL="kimi-k2-0711-preview"
 
 不配置数据库 API 且不配置 Key 时系统其他功能正常，AI 功能会提示未配置。
 
+## 企业微信自建应用登录
+
+系统支持通过企业微信自建应用网页授权直接登录，复用账号里的 `wecomUserId` 绑定关系。
+
+1. 在自建应用详情复制 CorpID（企业 ID）、Secret（应用密钥）和可选 AgentId。
+2. 在企微后台把后端服务器外网出口 IP 加入应用 API 白名单。
+3. 在服务端配置：
+
+```env
+APP_BASE_URL="https://partner.example.com"
+WECOM_CORP_ID="wwxxxxxxxxxxxxxxxx"
+WECOM_APP_SECRET="..."
+WECOM_AGENT_ID="1000002"
+```
+
+4. 把自建应用首页或菜单指向：
+
+```text
+https://partner.example.com/api/wecom/oauth/start?redirect=/
+```
+
+也可以由前端拿到企微 `code` 后调用：
+
+```http
+POST /api/wecom/oauth/login
+Content-Type: application/json
+
+{"code":"CODE_FROM_WECOM"}
+```
+
+登录链路：后端用 CorpID + Secret 获取 `access_token`，再用 `access_token + code` 换员工 `UserID`，最后按系统账号的 `wecomUserId` 自动创建登录会话。未绑定时会回到登录页并提示需要先绑定。
+
 ## Git 仓库（Mac / 手机 Cursor 共用）
 
 源码托管在 GitHub：**https://github.com/centimetre11/partner-hub**（私有仓库）

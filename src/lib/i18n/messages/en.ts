@@ -79,6 +79,15 @@ export const messagesEn = {
     pending: "Processing…",
     createAndSignIn: "Create account & sign in",
     signIn: "Sign in",
+    wecomOAuth: {
+      missingConfig: "WeCom auto-login is not configured. Please set WECOM_CORP_ID and WECOM_APP_SECRET on the server.",
+      missingCode: "WeCom did not return a login code. Please reopen the app from WeCom.",
+      badState: "WeCom login state expired. Please reopen the app from WeCom.",
+      notBound: "WeCom UserID {id} is not bound to a system account. Bind it in Account settings first.",
+      apiError: "WeCom login failed. Check the CorpID, Secret, and server IP allowlist.",
+      invalidUserId: "WeCom returned an invalid UserID.",
+      generic: "WeCom login failed. Please try again.",
+    },
   },
   common: {
     save: "Save",
