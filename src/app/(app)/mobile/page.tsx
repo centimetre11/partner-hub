@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import { requireUser } from "@/lib/session";
 import { isTodoOverdue, overdueDueDateBefore } from "@/lib/todo-dates";
+import type { Prisma } from "@prisma/client";
 
 type ActionTileProps = {
   eyebrow: string;
@@ -52,17 +53,16 @@ export default async function MobileDeskPage() {
   const now = new Date();
   const next7Days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
   const last7Days = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
-  const myTodoWhere = {
+  const myTodoWhere: Prisma.TodoItemWhereInput = {
     status: "OPEN",
     OR: [{ assigneeId: user.id }, { assigneeId: null }],
-  } as const;
+  };
 
   const [todos, openTodoCount, overdueTodoCount, records7dCount, recentRecords, partners, users, mobilePartners, mobileCustomers] =
     await Promise.all([
       db.todoItem.findMany({
         where: {
           ...myTodoWhere,
-          OR: myTodoWhere.OR,
           dueDate: { lte: next7Days },
         },
         include: {
