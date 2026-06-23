@@ -67,6 +67,75 @@ export function parseGdriveFileId(url: string): string | null {
   return fromDocs ?? null;
 }
 
+export type GdriveUploadResult = {
+  id: string;
+  name: string;
+  webViewLink: string;
+  thumbnailLink: string | null;
+  mimeType: string;
+};
+
+/**
+ * 用 OAuth access token 把文件直传到指定文件夹（multipart 上传，内存中转，不落本地磁盘）。
+ * 上传者/文件归属为授权的真人账号。
+ */
+export async function uploadFileToGdrive(
+  folderId: string,
+  file: File,
+  accessToken: string,
+): Promise<GdriveUploadResult> {
+  const metadata = {
+    name: file.name,
+    parents: [folderId],
+  };
+  const boundary = `partnerhub${crypto.randomUUID().replace(/-/g, "")}`;
+  const encoder = new TextEncoder();
+  const mime = file.type || "application/octet-stream";
+
+  const head = encoder.encode(
+    `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      `${JSON.stringify(metadata)}\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: ${mime}\r\n\r\n`,
+  );
+  const tail = encoder.encode(`\r\n--${boundary}--\r\n`);
+  const fileBytes = new Uint8Array(await file.arrayBuffer());
+
+  const body = new Uint8Array(head.length + fileBytes.length + tail.length);
+  body.set(head, 0);
+  body.set(fileBytes, head.length);
+  body.set(tail, head.length + fileBytes.length);
+
+  const params = new URLSearchParams({
+    uploadType: "multipart",
+    supportsAllDrives: "true",
+    fields: "id,name,mimeType,webViewLink,thumbnailLink",
+  });
+
+  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files?${params}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+    },
+    body,
+    signal: AbortSignal.timeout(120000),
+  });
+
+  const data = (await res.json()) as RawDriveItem & { error?: { message?: string } };
+  if (!res.ok) {
+    throw new Error(data.error?.message || `Drive upload failed (${res.status})`);
+  }
+  return {
+    id: data.id,
+    name: data.name,
+    webViewLink: data.webViewLink ?? `https://drive.google.com/file/d/${data.id}/view`,
+    thumbnailLink: data.thumbnailLink ?? null,
+    mimeType: data.mimeType,
+  };
+}
+
 export async function fetchGdriveFileById(
   fileId: string,
   serviceAccountJson: string,

@@ -8,6 +8,10 @@ export type AmmoConfigForClient = {
   gdriveFolderUrl: string;
   gdriveServiceAccountConfigured: boolean;
   gdriveServiceAccountEmail: string | null;
+  // OAuth 上传账号
+  gdriveOauthClientConfigured: boolean;
+  gdriveUploaderConnected: boolean;
+  gdriveUploaderEmail: string | null;
   updatedAt?: string;
 };
 
@@ -50,10 +54,17 @@ export async function resolveGdriveFolderId(): Promise<string | null> {
 export async function getAmmoConfigForClient(): Promise<AmmoConfigForClient> {
   const row = await getSystemAmmoConfigRow();
   const saJson = row?.gdriveServiceAccount?.trim() || process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || null;
+  const oauthClientId =
+    row?.gdriveOauthClientId?.trim() || process.env.GOOGLE_OAUTH_CLIENT_ID?.trim() || null;
+  const oauthClientSecret =
+    row?.gdriveOauthClientSecret?.trim() || process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() || null;
   return {
     gdriveFolderUrl: row?.gdriveFolderUrl?.trim() || process.env.GDRIVE_FOLDER_URL?.trim() || DEFAULT_GDRIVE_FOLDER_URL,
     gdriveServiceAccountConfigured: !!saJson,
     gdriveServiceAccountEmail: parseServiceAccountEmail(saJson),
+    gdriveOauthClientConfigured: !!(oauthClientId && oauthClientSecret),
+    gdriveUploaderConnected: !!row?.gdriveOauthRefreshToken?.trim(),
+    gdriveUploaderEmail: row?.gdriveUploaderEmail?.trim() || null,
     updatedAt: row?.updatedAt?.toISOString(),
   };
 }

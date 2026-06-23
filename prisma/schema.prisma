@@ -84,6 +84,7 @@ model Partner {
   manualChecked    Boolean  @default(false)
   monitorDims      String? // JSON 数组：舆情监控勾选的维度
   kmsRootPath      String? // KMS 主目录，手动填写
+  gdriveFolderUrl  String? // 该伙伴材料归档的 Google Drive 子目录链接
   crmCustomerId    String? // 帆软 CRM 客户 ID
   pipelineStage    Int      @default(1) // 1-10 十阶段
   ownerId          String?
@@ -112,6 +113,7 @@ model Partner {
   businessRecords BusinessRecord[]
   aiConversationLogs AiConversationLog[]
   customers     Customer[]
+  assets        Asset[]
 }
 
 // 客户：伙伴服务的终端客户（手动维护，可归属到某个伙伴）
@@ -137,6 +139,7 @@ model Customer {
   partnerRelation String? @default("SERVED_BY")
   // 帆软集成三连接
   kmsRootPath   String? // KMS 主目录
+  gdriveFolderUrl String? // 该客户材料归档的 Google Drive 子目录链接
   crmCustomerId String? // 帆软 CRM 客户 ID
   // 负责人（销售/客户经理）
   ownerId      String?
@@ -153,6 +156,7 @@ model Customer {
   events          TimelineEvent[]
   businessRecords BusinessRecord[]
   wecomChat       WecomChat?
+  assets          Asset[]
 
   @@index([partnerId])
   @@index([name])
@@ -570,11 +574,19 @@ model Asset {
   provider     String? // gdrive / dropbox / web 等
   uploadedById String?
   uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+  // 按客户/伙伴归档的材料（直传谷歌云后落库的 LINK Asset，至多归属其一）
+  partnerId    String?
+  partner      Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  customerId   String?
+  customer     Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
   materials    Material[]
   solutionLinks SolutionAsset[]
   documentLinks DocumentAsset[]
   feedbackLinks FeedbackAsset[]
+
+  @@index([partnerId])
+  @@index([customerId])
 }
 
 // 用户提交的需求与问题
@@ -756,6 +768,11 @@ model SystemAmmoConfig {
   gdriveFolderUrl      String?
   gdriveServiceAccount String?
   kmsPageUrls          String?
+  // Google OAuth 上传账号（真人账号授权一次，用于写入/上传到 Drive）
+  gdriveOauthClientId     String?
+  gdriveOauthClientSecret String?
+  gdriveOauthRefreshToken String?
+  gdriveUploaderEmail     String?
   updatedAt            DateTime @updatedAt
 }
 

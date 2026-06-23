@@ -28,6 +28,8 @@ import {
 import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
 import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
+import { MaterialsSection } from "@/components/materials-section";
+import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { PartnerCustomersSection } from "@/components/partner-customers-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
@@ -87,10 +89,12 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
         },
       },
       customers: { orderBy: { name: "asc" } },
+      assets: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!p) notFound();
   const users = await db.user.findMany();
+  const ammoConfig = await getAmmoConfigForClient();
   const unboundCustomers = await db.customer.findMany({
     where: { partnerId: null, ...END_CUSTOMER_WHERE },
     select: { id: true, name: true },
@@ -451,6 +455,19 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               partnerId={p.id}
               solutions={p.solutions}
               copy={m.partnerDetail.solutionsSection}
+            />
+            <MaterialsSection
+              partnerId={p.id}
+              folderUrl={p.gdriveFolderUrl}
+              uploaderConnected={ammoConfig.gdriveUploaderConnected}
+              assets={p.assets.map((a) => ({
+                id: a.id,
+                filename: a.filename,
+                url: a.url,
+                thumbnailUrl: a.thumbnailUrl,
+                provider: a.provider,
+              }))}
+              copy={m.gdriveMaterials}
             />
           </div>
         }

@@ -74,3 +74,42 @@ export async function clearSystemAmmoServiceAccountAction() {
   revalidatePath("/materials");
   return { ok: true, message: "Stored service account cleared." };
 }
+
+// ============ OAuth 上传账号 ============
+
+export async function saveGdriveOauthClientAction(formData: FormData) {
+  await requireSuperAdmin();
+  const clientId = clean(formData.get("gdriveOauthClientId"));
+  const clientSecret = clean(formData.get("gdriveOauthClientSecret"));
+  if (!clientId) return { error: "Enter the OAuth Client ID" };
+
+  await db.systemAmmoConfig.upsert({
+    where: { id: "singleton" },
+    create: {
+      id: "singleton",
+      gdriveOauthClientId: clientId,
+      gdriveOauthClientSecret: clientSecret,
+    },
+    update: {
+      gdriveOauthClientId: clientId,
+      // Secret 为空时保留原值（避免误清空）
+      ...(clientSecret ? { gdriveOauthClientSecret: clientSecret } : {}),
+    },
+  });
+
+  revalidatePath("/settings");
+  return { ok: true, message: "OAuth client saved. Now click Connect Google account." };
+}
+
+export async function disconnectGdriveUploaderAction() {
+  await requireSuperAdmin();
+  const row = await db.systemAmmoConfig.findUnique({ where: { id: "singleton" } });
+  if (row) {
+    await db.systemAmmoConfig.update({
+      where: { id: "singleton" },
+      data: { gdriveOauthRefreshToken: null, gdriveUploaderEmail: null },
+    });
+  }
+  revalidatePath("/settings");
+  return { ok: true, message: "Upload account disconnected." };
+}

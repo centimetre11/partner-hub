@@ -11,6 +11,8 @@ import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components
 import { CustomerWorkspaceShell, type CustomerTab } from "@/components/customer-workspace-shell";
 import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerIntegrationsPanel } from "@/components/customer-integrations-panel";
+import { MaterialsSection } from "@/components/materials-section";
+import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getWecomChatForCustomer } from "@/lib/wecom-chats";
 import {
   updateCustomerAction,
@@ -54,9 +56,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         orderBy: { occurredAt: "desc" },
         include: { createdBy: { select: { name: true } }, contact: { select: { name: true } } },
       },
+      assets: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!customer) notFound();
+  const ammoConfig = await getAmmoConfigForClient();
 
   const [partners, users, wecomChat, matchedCrmCustomer] = await Promise.all([
     db.partner.findMany({ where: { status: { not: "ARCHIVED" } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -212,6 +216,19 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos))}>
         {todosContent}
       </Card>
+      <MaterialsSection
+        customerId={customer.id}
+        folderUrl={customer.gdriveFolderUrl}
+        uploaderConnected={ammoConfig.gdriveUploaderConnected}
+        assets={customer.assets.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          url: a.url,
+          thumbnailUrl: a.thumbnailUrl,
+          provider: a.provider,
+        }))}
+        copy={m.gdriveMaterials}
+      />
       {integrationsPanel}
     </div>
   );
