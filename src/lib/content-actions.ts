@@ -101,6 +101,33 @@ export async function deleteKnowledgeAction(id: string) {
   redirect("/knowledge");
 }
 
+// ============ FAQ / 问答库 ============
+
+export async function upsertFaqAction(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const question = String(formData.get("question") ?? "").trim();
+  const data = {
+    question,
+    answer: String(formData.get("answer") ?? "").trim(),
+    category: String(formData.get("category") ?? "PRODUCT_ADVANTAGE"),
+    lastEditorName: user.name,
+  };
+  if (!data.question) return;
+  if (id) {
+    await db.faqEntry.update({ where: { id }, data });
+  } else {
+    await db.faqEntry.create({ data: { ...data, createdById: user.id } });
+  }
+  revalidatePath("/faq");
+}
+
+export async function deleteFaqAction(id: string) {
+  await requireUser();
+  await db.faqEntry.delete({ where: { id } });
+  revalidatePath("/faq");
+}
+
 // ============ Solution ============
 
 export async function createSolutionFromLinksAction(partnerId: string, formData: FormData) {

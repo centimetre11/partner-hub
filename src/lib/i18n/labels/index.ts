@@ -37,6 +37,7 @@ export function labelMapsFromBundle(labels: LabelsBundle) {
     DOCUMENT_TYPE_LABELS: labels.documentTypeLabels,
     MATERIAL_CATEGORY_LABELS: labels.materialCategoryLabels,
     KNOWLEDGE_CATEGORY_LABELS: labels.knowledgeCategoryLabels,
+    FAQ_CATEGORY_LABELS: labels.faqCategoryLabels,
     SOLUTION_STATUS_LABELS: labels.solutionStatusLabels,
     PARTNER_ARCHETYPE_LABELS: labels.partnerArchetypeLabels,
     VALUE_PATTERN_LABELS: labels.valuePatternLabels,

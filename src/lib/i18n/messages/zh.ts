@@ -23,7 +23,7 @@ export const messagesZh: Messages = {
     partnerPool: "伙伴库",
     reports: "报告中心",
     materials: "弹药库",
-    faq: "FAQ & Answers",
+    faq: "问答库",
     work: "工作中心",
     todos: "待办事项",
     inbox: "收件箱",
@@ -1228,104 +1228,29 @@ export const messagesZh: Messages = {
     noContent: "（暂无正文，请尝试在 Know-how 平台打开原文）",
   },
   faq: {
-    title: "FAQ & Answers",
-    desc: "Common operating questions with concise answers, owners, and next actions",
-    introTitle: "How to use this module",
-    introDesc:
-      "Use FAQ & Answers as the first stop for repeatable operating questions. Each answer points to the resource center area that should hold the deeper artifact.",
-    principlesTitle: "Maintenance principles",
-    principles: [
-      "Keep answers short enough to read during a partner conversation.",
-      "Link decisions back to the source module instead of duplicating full playbooks.",
-      "Review questions after weekly operations reviews and retire stale guidance.",
-    ],
-    ownerLabel: "Owner",
-    nextActionLabel: "Next action",
-    categoryLabel: "Category",
-    questionLabel: "Question",
-    answerLabel: "Answer",
-    categories: [
-      {
-        title: "Partner lifecycle",
-        desc: "Qualification, ownership, and stage movement questions.",
-        items: [
-          {
-            question: "When should a prospect move from Partner Pool to Active Partners?",
-            answer:
-              "Move the account after a named owner is assigned, the partner has a clear value hypothesis, and there is at least one qualified cooperation motion to pursue.",
-            owner: "Partner owner",
-            nextAction: "Update the partner profile and confirm the operating tier.",
-          },
-          {
-            question: "How do we decide whether a partner is Tier A, B, or C?",
-            answer:
-              "Use tiering to set resource intensity, not to change pipeline stage. Consider strategic value, reachable revenue, execution capability, and current collaboration quality.",
-            owner: "Regional lead",
-            nextAction: "Check the Operating Framework tier rules before updating the profile.",
-          },
-        ],
-      },
-      {
-        title: "Deal collaboration",
-        desc: "Lead assignment, partner involvement, and customer context.",
-        items: [
-          {
-            question: "When should a partner be attached to a lead?",
-            answer:
-              "Attach a partner when they can influence access, discovery, delivery confidence, or procurement path. Avoid attaching partners only for visibility.",
-            owner: "Deal owner",
-            nextAction: "Document the partner role in the lead notes and customer power map.",
-          },
-          {
-            question: "What should be captured after a partner meeting?",
-            answer:
-              "Capture the decision chain, active opportunities, competitor stance, customer resources, agreed next step, and any risks that need escalation.",
-            owner: "Meeting owner",
-            nextAction: "Update the partner activity notes before the next weekly review.",
-          },
-        ],
-      },
-      {
-        title: "Resources and enablement",
-        desc: "Where to find assets, proof points, and reusable guidance.",
-        items: [
-          {
-            question: "Where should I look for decks, case studies, and demo assets?",
-            answer:
-              "Start from Ammo Library for approved files, then use Know-how Library for deeper cases, solution notes, and industry context.",
-            owner: "Enablement owner",
-            nextAction: "Open the resource from Ammo Library and attach the source link to the deal or partner notes.",
-          },
-          {
-            question: "When should a repeated tactic become a Playbook Library entry?",
-            answer:
-              "Promote it when the tactic has a repeatable trigger, a clear target partner or industry pattern, and evidence from at least one real execution.",
-            owner: "GTM owner",
-            nextAction: "Add the playbook with source partner, pitch, and notes for future reuse.",
-          },
-        ],
-      },
-      {
-        title: "System operations",
-        desc: "Configuration, data quality, and escalation questions.",
-        items: [
-          {
-            question: "Who can change resource integrations or team-wide settings?",
-            answer:
-              "Only team admins should update shared settings such as Google Drive, Know-how API, CRM sync, and member permissions.",
-            owner: "Team admin",
-            nextAction: "Raise a settings request with the exact module, expected change, and validation step.",
-          },
-          {
-            question: "What should I do when search results look incomplete?",
-            answer:
-              "Try narrower keywords, verify filters, and check whether the source system is configured. If the issue persists, capture the query and expected source.",
-            owner: "Resource owner",
-            nextAction: "Send the query, filters, and missing example to the admin for configuration review.",
-          },
-        ],
-      },
-    ],
+    title: "问答库",
+    desc: "把伙伴和客户经常问我们的问题（如「你们产品的优势是什么」「你们和 XX 的区别是什么」）和团队的标准回答沉淀下来，大家可以一起补充、更新、学习。",
+    newQuestion: "新增问答",
+    searchPlaceholder: "搜索问题或答案…",
+    allCategories: "全部",
+    questionLabel: "问题",
+    answerLabel: "答案",
+    categoryLabel: "分类",
+    questionPlaceholder: "例如：你们产品的优势是什么？和 XX 相比有什么区别？",
+    answerPlaceholder: "写下团队统一口径的答案，支持 Markdown。之后任何人都可以继续补充完善。",
+    empty: "还没有问答，先把伙伴最常问的问题记录下来吧。",
+    emptyFiltered: "没有符合当前筛选条件的问答。",
+    answerEmpty: "还没有答案 —— 来补充第一条吧。",
+    updatedBy: "{name} 更新于 {time}",
+    updatedAt: "更新于 {time}",
+    count: "{n} 条问答",
+    edit: "编辑",
+    preview: "预览",
+    save: "保存",
+    cancel: "取消",
+    delete: "删除",
+    deleteConfirm: "确定删除这条问答吗？",
+    tip: "小贴士：答案尽量精简，需要更深入的材料时可链接到弹药库或 Know-how。",
   },
   materials: {
     title: "弹药库",

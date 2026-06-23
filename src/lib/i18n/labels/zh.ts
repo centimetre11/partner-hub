@@ -134,6 +134,15 @@ export const labelsZh: LabelsBundle = {
     GTM: "区域打法",
     COMPETITOR: "竞品情报",
   },
+  faqCategoryLabels: {
+    PRODUCT_ADVANTAGE: "产品优势",
+    COMPETITOR: "竞品对比",
+    PRICING: "报价与商务",
+    INTEGRATION: "集成与对接",
+    DELIVERY: "实施与交付",
+    SECURITY: "安全与合规",
+    OTHER: "其他常见问题",
+  },
   solutionStatusLabels: { DRAFT: "草稿", ACTIVE: "在用", ARCHIVED: "已归档" },
   partnerFieldLabels: {
     name: "公司全称",

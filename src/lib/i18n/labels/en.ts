@@ -134,6 +134,15 @@ export const labelsEn: LabelsBundle = {
     GTM: "Regional GTM Playbook",
     COMPETITOR: "Competitive Intelligence",
   },
+  faqCategoryLabels: {
+    PRODUCT_ADVANTAGE: "Product Advantages",
+    COMPETITOR: "Competitor Comparison",
+    PRICING: "Pricing & Commercial",
+    INTEGRATION: "Integration & APIs",
+    DELIVERY: "Implementation & Delivery",
+    SECURITY: "Security & Compliance",
+    OTHER: "Other Common Questions",
+  },
   solutionStatusLabels: { DRAFT: "Draft", ACTIVE: "Active", ARCHIVED: "Archived" },
   partnerFieldLabels: {
     name: "Company Name",

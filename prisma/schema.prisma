@@ -25,6 +25,7 @@ model User {
   documents    Document[]
   materials    Material[]
   knowledgeArticles KnowledgeArticle[]
+  faqEntries        FaqEntry[]
   gtmLibraryItems   GtmLibrary[]
   taxonomyOptions   TaxonomyOption[]
   skills       Skill[]
@@ -670,6 +671,22 @@ model KnowledgeArticle {
   createdBy   User?    @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model FaqEntry {
+  id             String   @id @default(cuid())
+  // 别人常问我们的问题，例如「你们产品的优势是什么」「你们和 XX 的区别是什么」
+  question       String
+  // 团队沉淀的标准答案（Markdown），所有人可一起补充更新
+  answer         String   @default("")
+  // 分类：PRODUCT_ADVANTAGE 产品优势 / COMPETITOR 竞品对比 / PRICING 报价商务 ...
+  category       String   @default("PRODUCT_ADVANTAGE")
+  createdById    String?
+  createdBy      User?    @relation(fields: [createdById], references: [id])
+  // 最近更新者姓名（去归一化，便于「大家一起更新」的署名展示）
+  lastEditorName String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model Solution {

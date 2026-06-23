@@ -32,6 +32,7 @@ export function labelConstants(ui: ServerI18n["labels"]) {
     DOCUMENT_TYPE_LABELS: ui.documentTypeLabels,
     MATERIAL_CATEGORY_LABELS: ui.materialCategoryLabels,
     KNOWLEDGE_CATEGORY_LABELS: ui.knowledgeCategoryLabels,
+    FAQ_CATEGORY_LABELS: ui.faqCategoryLabels,
     SOLUTION_STATUS_LABELS: ui.solutionStatusLabels,
     PIPELINE_STAGES: ui.pipelineStages,
     USER_ROLE_LABELS: ui.userRoleLabels,
