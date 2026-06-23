@@ -36,6 +36,7 @@ export function NavLinks({
 
   const nav: Entry[] = [
     { href: "/", label: m.nav.dashboard, icon: "◧" },
+    { href: "/leads", label: m.nav.leads, icon: "◔" },
     { href: "/partners", label: m.nav.activePartners, icon: "◮" },
     { href: "/customers", label: m.nav.customers, icon: "◍" },
     {

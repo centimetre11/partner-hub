@@ -851,3 +851,44 @@ model CrmSyncLog {
   error         String?
   createdAt     DateTime @default(now())
 }
+
+// 帆软 CRM 线索（clue_id 为主键），每晚全量拉取 2026 年线索 upsert
+model CrmLead {
+  id           String    @id // clue_id
+  name         String? // com_name
+  status       String? // com_status
+  province     String? // com_province，大区（如"中东"）
+  countryCn    String? // cou_CN_name，国家中文名
+  city         String? // com_city
+  region       String? // reg，区域（如"亚洲/西亚"）
+  zone         String? // zone，时区（如"东四区/-4"）
+  rank         String? // com_rank，A/B/C 评级
+  source       String? // com_source，来源（如 facebook_ads）
+  sourceDetail String? // source，渠道详情
+  tags         String? // tags，表单标签（HTML）
+  sdrState     String? // sdr_state，SDR 状态
+  phone        String? // actphone
+  salesman     String? // com_salesman
+  typeDetail   String? // typedetail（如"线索"）
+  overseaAgent String? // com_oversea_agent
+  detail       String? // detail，线索详情
+  traceDetail  String? // trace_detail，跟进详情（HTML）
+  recdate      DateTime? // com_recdate，创建时间（用于 2026 过滤）
+  contRecdate  DateTime? // cont_recdate
+  jzDate       DateTime? // jz_date
+  syncedAt     DateTime  @updatedAt
+
+  @@index([salesman])
+  @@index([rank])
+  @@index([recdate])
+}
+
+// CRM 线索同步日志
+model LeadsSyncLog {
+  id         String   @id @default(cuid())
+  status     String
+  leadCount  Int?
+  durationMs Int?
+  error      String?
+  createdAt  DateTime @default(now())
+}

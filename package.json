@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "wecom-bot": "tsx scripts/wecom-bot.ts",
-    "crm-sync": "tsx scripts/crm-sync.ts"
+    "crm-sync": "tsx scripts/crm-sync.ts",
+    "leads-sync": "tsx scripts/leads-sync.ts"
   },
   "dependencies": {
     "@blocknote/core": "^0.51.4",
