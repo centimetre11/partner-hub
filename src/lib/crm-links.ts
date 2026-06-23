@@ -2,7 +2,7 @@
 // 注意：viewlet 查询串里的 international%252Fclue%252F... 是 CRM 实际使用的双重编码
 //（%252F 解码后才是 %2F → /），请逐字保留，不要「修正」成 %2F，否则链接会失效。
 
-const CRM_WEB_BASE = "https://crm.finereporthelp.com/WebReport/decision/view/report";
+const CRM_WEB_BASE = "https://overseas.finereporthelp.com/WebReport/decision/view/report";
 const REF_C = "bf1af4e5-5bdc-4b27-b8d1-8694ad13d046";
 
 export type CrmLeadLinks = {
