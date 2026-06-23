@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
-import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { Badge, EmptyState, fmtDate } from "@/components/ui";
 import { db } from "@/lib/db";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import { requireUser } from "@/lib/session";
 import { isTodoOverdue, overdueDueDateBefore } from "@/lib/todo-dates";
 import type { Prisma } from "@prisma/client";
+import { MobileTodoCapture } from "./mobile-desk-actions";
 
 type ActionTileProps = {
   eyebrow: string;
@@ -134,7 +134,7 @@ export default async function MobileDeskPage() {
 
         <section className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <ActionTile eyebrow={scenario.todo.eyebrow} title={scenario.todo.title} desc={scenario.todo.desc}>
-            <CreateTodoDrawer userId={user.id} partners={partners} users={users} />
+            <MobileTodoCapture userId={user.id} partners={partners} users={users} labels={desk.todoDrawer} />
           </ActionTile>
           <ActionTile
             eyebrow={scenario.businessRecord.eyebrow}
