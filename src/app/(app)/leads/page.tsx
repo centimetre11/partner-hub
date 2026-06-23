@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, EmptyState, fmtDateTime } from "@/components/ui";
+import { Badge, PageHeader, EmptyState, fmtDate, fmtDateTime } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { getLeadsLastSyncAt } from "@/lib/leads-sync";
 import {
@@ -125,7 +125,7 @@ export default async function LeadsPage({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">
-                    <th className="px-4 py-2.5 font-medium">{l.colName}</th>
+                    <th className="px-4 py-2.5 font-medium">{l.colCompany}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colRegion}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colProvince}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colRank}</th>
@@ -133,7 +133,8 @@ export default async function LeadsPage({
                     <th className="px-4 py-2.5 font-medium">{l.colSource}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colSalesman}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colSdr}</th>
-                    <th className="px-4 py-2.5 font-medium">{l.colCreatedAt}</th>
+                    <th className="px-4 py-2.5 font-medium">{l.colKpiStart}</th>
+                    <th className="px-4 py-2.5 font-medium">{l.colKpiDeadline}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -162,7 +163,10 @@ export default async function LeadsPage({
                       <td className="px-4 py-3 text-slate-600">{lead.salesman ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">{lead.sdrState ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
-                        {fmtDateTime(lead.recdate, bcp47)}
+                        {lead.recdate ? fmtDate(lead.recdate, bcp47) : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                        {lead.jzDate ? fmtDate(lead.jzDate, bcp47) : "—"}
                       </td>
                     </tr>
                   ))}

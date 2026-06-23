@@ -855,32 +855,34 @@ model CrmSyncLog {
 // 帆软 CRM 线索（clue_id 为主键），每晚全量拉取 2026 年线索 upsert
 model CrmLead {
   id           String    @id // clue_id
-  name         String? // com_name
-  status       String? // com_status
-  province     String? // com_province，大区（如"中东"）
+  companyId    String? // com_id，公司 ID
+  name         String? // com_name，公司名称/线索公司名称
+  status       String? // com_status，线索状态
+  province     String? // com_province，省份/大区
   countryCn    String? // cou_CN_name，国家中文名
-  city         String? // com_city
-  region       String? // reg，区域（如"亚洲/西亚"）
-  zone         String? // zone，时区（如"东四区/-4"）
-  rank         String? // com_rank，A/B/C 评级
-  source       String? // com_source，来源（如 facebook_ads）
-  sourceDetail String? // source，渠道详情
-  tags         String? // tags，表单标签（HTML）
-  sdrState     String? // sdr_state，SDR 状态
-  phone        String? // actphone
-  salesman     String? // com_salesman
-  typeDetail   String? // typedetail（如"线索"）
-  overseaAgent String? // com_oversea_agent
-  detail       String? // detail，线索详情
-  traceDetail  String? // trace_detail，跟进详情（HTML）
-  recdate      DateTime? // com_recdate，创建时间（用于 2026 过滤）
-  contRecdate  DateTime? // cont_recdate
-  jzDate       DateTime? // jz_date
+  city         String? // com_city，国家/城市
+  region       String? // reg，地理区域
+  zone         String? // zone，当地时区
+  rank         String? // com_rank，线索等级 A/B/C/S
+  source       String? // com_source，来源
+  sourceDetail String? // source，来源详情
+  tags         String? // tags，标签
+  sdrState     String? // sdr_state，SDR
+  phone        String? // actphone，线索手机号
+  salesman     String? // com_salesman，责任销售
+  typeDetail   String? // typedetail，类型：线索/客户
+  overseaAgent String? // com_oversea_agent，代理
+  detail       String? // detail，商务记录2
+  traceDetail  String? // trace_detail，商务记录1
+  recdate      DateTime? // com_recdate，KPI 开始时间（亦用于 2026 过滤）
+  contRecdate  DateTime? // cont_recdate，联系人创建时间
+  jzDate       DateTime? // jz_date，KPI 截止时间
   syncedAt     DateTime  @updatedAt
 
   @@index([salesman])
   @@index([rank])
   @@index([recdate])
+  @@index([jzDate])
 }
 
 // CRM 线索同步日志

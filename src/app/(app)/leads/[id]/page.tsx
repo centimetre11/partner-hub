@@ -61,7 +61,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </div>
           <p className="text-sm text-slate-500 mt-1">
             {[lead.countryCn, lead.city, lead.province].filter(Boolean).join(" · ") || "—"}
-            {lead.recdate ? ` · ${fmtDateTime(lead.recdate, bcp47)}` : ""}
+            {lead.jzDate ? ` · ${l.fieldKpiDeadline} ${fmtDate(lead.jzDate, bcp47)}` : ""}
           </p>
         </div>
       </div>
@@ -69,6 +69,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       <div className="px-4 sm:px-6 lg:px-8 grid gap-4 lg:grid-cols-2">
         <Card title={l.sectionBasic}>
           <dl>
+            <DetailRow label={l.colCompany} value={lead.name} />
+            <DetailRow label={l.fieldClueId} value={lead.id} />
+            <DetailRow label={l.fieldCompanyId} value={lead.companyId} />
             <DetailRow label={l.fieldPhone} value={lead.phone} />
             <DetailRow label={l.colStatus} value={lead.status} />
             <DetailRow label={l.colSalesman} value={lead.salesman} />
@@ -98,9 +101,18 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
         <Card title={l.sectionDates}>
           <dl>
-            <DetailRow label={l.colCreatedAt} value={lead.recdate ? fmtDateTime(lead.recdate, bcp47) : null} />
-            <DetailRow label={l.fieldContRecdate} value={lead.contRecdate ? fmtDate(lead.contRecdate, bcp47) : null} />
-            <DetailRow label={l.fieldJzDate} value={lead.jzDate ? fmtDate(lead.jzDate, bcp47) : null} />
+            <DetailRow
+              label={l.fieldKpiStart}
+              value={lead.recdate ? fmtDateTime(lead.recdate, bcp47) : null}
+            />
+            <DetailRow
+              label={l.fieldKpiDeadline}
+              value={lead.jzDate ? fmtDate(lead.jzDate, bcp47) : null}
+            />
+            <DetailRow
+              label={l.fieldContRecdate}
+              value={lead.contRecdate ? fmtDate(lead.contRecdate, bcp47) : null}
+            />
             <DetailRow label={l.fieldSyncedAt} value={fmtDateTime(lead.syncedAt, bcp47)} />
           </dl>
         </Card>
@@ -109,8 +121,8 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <div className="lg:col-span-2">
             <Card title={l.sectionDetail}>
               <dl>
-                <DetailRow label={l.fieldDetail} value={detailText} />
                 <DetailRow label={l.fieldTraceDetail} value={traceText} />
+                <DetailRow label={l.fieldDetail} value={detailText} />
               </dl>
             </Card>
           </div>

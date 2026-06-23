@@ -70,6 +70,7 @@ export async function fetchLeadsData(url = getLeadsDataUrl()): Promise<CrmLeadRo
 
 export type CrmLeadUpsert = {
   id: string;
+  companyId: string | null;
   name: string | null;
   status: string | null;
   province: string | null;
@@ -106,6 +107,7 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
 
     leads.set(id, {
       id,
+      companyId: trimOrNull(row.com_id),
       name: trimOrNull(row.com_name),
       status: trimOrNull(row.com_status),
       province: trimOrNull(row.com_province),
