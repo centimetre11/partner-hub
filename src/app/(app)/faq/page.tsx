@@ -53,11 +53,11 @@ export default async function FaqPage() {
                   </div>
                 </div>
 
-                <div className="divide-y divide-slate-100">
+                <div>
                   {category.items.map((item, itemIndex) => (
                     <details
                       key={item.question}
-                      className="group px-5 py-4 open:bg-slate-50/60"
+                      className="group border-t border-slate-100 px-5 py-4 first:border-t-0 open:bg-slate-50/60 open:pb-5"
                       open={categoryIndex === 0 && itemIndex === 0}
                     >
                       <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
@@ -70,7 +70,7 @@ export default async function FaqPage() {
                         <span className="mt-1 text-slate-300 transition group-open:rotate-45">+</span>
                       </summary>
 
-                      <div className="mt-4 space-y-4">
+                      <div className="mt-4 space-y-4 rounded-lg border border-slate-100 bg-white p-4">
                         <div>
                           <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                             {faq.answerLabel}
