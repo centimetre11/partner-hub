@@ -5,7 +5,14 @@ export const LEADS_DEFAULT_DATA_URL =
 export const LEADS_TARGET_YEAR = 2026;
 
 /** com_status 为新线索时的取值（其余视为培育线索） */
-export const NEW_LEAD_STATUS = "销售尚未联络";
+export const NEW_LEAD_STATUSES = ["销售尚未联络", "尚未联络"] as const;
+export const NEW_LEAD_STATUS = NEW_LEAD_STATUSES[0];
+
+export function isNewLeadStatus(status: string | null | undefined) {
+  const s = status?.trim() ?? "";
+  if (!s) return true;
+  return (NEW_LEAD_STATUSES as readonly string[]).includes(s);
+}
 
 export type CrmLeadRow = {
   clue_id?: string;
@@ -58,6 +65,14 @@ function trimOrNull(raw: string | undefined | null) {
   return v ? v : null;
 }
 
+function resolveLeadId(row: CrmLeadRow): string | null {
+  const clueId = row.clue_id?.trim();
+  if (clueId) return clueId;
+  const comId = row.com_id?.trim();
+  if (comId) return `com:${comId}`;
+  return null;
+}
+
 export async function fetchLeadsData(url = getLeadsDataUrl()): Promise<CrmLeadRow[]> {
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -106,7 +121,7 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
   const leads = new Map<string, CrmLeadUpsert>();
 
   for (const row of rows) {
-    const id = row.clue_id?.trim();
+    const id = resolveLeadId(row);
     if (!id) continue;
 
     const recdate = parseLeadDate(row.com_recdate);
@@ -145,11 +160,11 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
   return { leads: [...leads.values()] };
 }
 
-/** 培育线索：com_status 不为空且不等于新线索初始状态 */
+/** 培育线索：com_status 不为空且不属于新线索状态 */
 export function isNurturingLead(status: string | null | undefined) {
   const s = status?.trim() ?? "";
   if (!s) return false;
-  return s !== NEW_LEAD_STATUS;
+  return !isNewLeadStatus(s);
 }
 
 export type LeadView = "new" | "nurture";
@@ -157,10 +172,18 @@ export type LeadView = "new" | "nurture";
 export function leadViewWhere(view: LeadView) {
   if (view === "new") {
     return {
-      OR: [{ status: null }, { status: "" }, { status: NEW_LEAD_STATUS }],
+      OR: [
+        { status: null },
+        { status: "" },
+        ...NEW_LEAD_STATUSES.map((status) => ({ status })),
+      ],
     };
   }
   return {
-    AND: [{ status: { not: null } }, { status: { not: "" } }, { status: { not: NEW_LEAD_STATUS } }],
+    AND: [
+      { status: { not: null } },
+      { status: { not: "" } },
+      ...NEW_LEAD_STATUSES.map((status) => ({ status: { not: status } })),
+    ],
   };
 }

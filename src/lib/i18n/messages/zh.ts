@@ -295,7 +295,7 @@ export const messagesZh: Messages = {
     tabNew: "全部新线索",
     tabNurture: "培育线索",
     viewHint:
-      "新线索与培育线索按 com_status 区分：「销售尚未联络」为新线索，其余状态为培育线索。",
+      "新线索与培育线索按 com_status 区分：「销售尚未联络 / 尚未联络」为新线索，其余为培育线索。",
     empty: "暂无线索。数据每晚自动同步。",
     emptyNurture: "当前筛选下暂无培育线索。",
     unnamed: "未命名公司",
