@@ -18,6 +18,7 @@ import {
   updateCustomerAction,
   deleteCustomerAction,
   setCustomerPartnerAction,
+  updateCustomerStockAction,
 } from "@/lib/customer-actions";
 import { CustomerTodoRow } from "@/components/customer-todo-row";
 import {
@@ -363,6 +364,53 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     </div>
   );
 
+  // ============ 跟单五问（STOCK） ============
+  const sq = c.stock;
+  const stockSteps = [
+    { letter: "S", word: "Situation", name: sq.situationLabel, desc: sq.situationDesc, placeholder: sq.situationPlaceholder, field: "q5Situation", value: customer.q5Situation },
+    { letter: "T", word: "Trouble", name: sq.troubleLabel, desc: sq.troubleDesc, placeholder: sq.troublePlaceholder, field: "q5Trouble", value: customer.q5Trouble },
+    { letter: "O", word: "Order", name: sq.orderLabel, desc: sq.orderDesc, placeholder: sq.orderPlaceholder, field: "q5Order", value: customer.q5Order },
+    { letter: "C", word: "Cost", name: sq.costLabel, desc: sq.costDesc, placeholder: sq.costPlaceholder, field: "q5Cost", value: customer.q5Cost },
+    { letter: "K", word: "Key", name: sq.keyLabel, desc: sq.keyDesc, placeholder: sq.keyPlaceholder, field: "q5Key", value: customer.q5Key },
+  ];
+  const stockFilled = stockSteps.filter((s) => s.value && s.value.trim()).length;
+  const stockPanel = (
+    <form action={updateCustomerStockAction.bind(null, customer.id)} className="space-y-5">
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3">
+        <h3 className="text-sm font-semibold text-indigo-900">{sq.title}</h3>
+        <p className="text-xs text-indigo-700/80 mt-1 leading-relaxed">{sq.intro}</p>
+      </div>
+      <div className="space-y-4">
+        {stockSteps.map((s) => (
+          <div key={s.field} className="rounded-xl border border-slate-200 overflow-hidden">
+            <div className="flex items-start gap-3 px-4 py-3 bg-slate-50/60 border-b border-slate-100">
+              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
+                {s.letter}
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-slate-900">
+                  {s.name}
+                  <span className="ml-2 text-[11px] font-normal text-slate-400">{s.word}</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{s.desc}</p>
+              </div>
+            </div>
+            <textarea
+              name={s.field}
+              defaultValue={s.value ?? ""}
+              rows={3}
+              placeholder={s.placeholder}
+              className="w-full border-0 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-300 resize-y"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">{sq.save}</button>
+      </div>
+    </form>
+  );
+
   const tabs: CustomerTab[] = [
     {
       id: "overview",
@@ -370,6 +418,13 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       desc: c.tabOverviewDesc,
       badge: openTodos ? String(openTodos) : null,
       content: overviewPanel,
+    },
+    {
+      id: "stock",
+      label: c.tabStock,
+      desc: c.tabStockDesc,
+      badge: stockFilled ? `${stockFilled}/5` : null,
+      content: stockPanel,
     },
     { id: "profile", label: c.tabProfile, desc: c.tabProfileDesc, content: profilePanel },
     {

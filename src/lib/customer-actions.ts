@@ -95,6 +95,25 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
   revalidateCustomerPaths(customerId, [existing.partnerId]);
 }
 
+// ============ 跟单五问（STOCK） ============
+
+export async function updateCustomerStockAction(customerId: string, formData: FormData) {
+  await requireUser();
+  const existing = await db.customer.findUnique({ where: { id: customerId }, select: { id: true } });
+  if (!existing) return;
+  await db.customer.update({
+    where: { id: customerId },
+    data: {
+      q5Situation: str(formData, "q5Situation"),
+      q5Trouble: str(formData, "q5Trouble"),
+      q5Order: str(formData, "q5Order"),
+      q5Cost: str(formData, "q5Cost"),
+      q5Key: str(formData, "q5Key"),
+    },
+  });
+  revalidateCustomerPaths(customerId);
+}
+
 // ============ 删除 ============
 
 export async function deleteCustomerAction(customerId: string) {

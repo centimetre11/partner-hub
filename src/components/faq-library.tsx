@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { Badge } from "@/components/ui";
 import { MarkdownPreview } from "@/components/markdown-editor";
-import { upsertFaqAction, deleteFaqAction } from "@/lib/content-actions";
+import { upsertFaqAction, deleteFaqAction, verifyFaqAction } from "@/lib/content-actions";
 
 export type FaqEntryView = {
   id: string;
@@ -11,6 +11,8 @@ export type FaqEntryView = {
   answer: string;
   category: string;
   editorLabel: string;
+  verified: boolean;
+  verifiedLabel: string;
 };
 
 type FaqMessages = {
@@ -33,6 +35,10 @@ type FaqMessages = {
   delete: string;
   deleteConfirm: string;
   tip: string;
+  official: string;
+  officialOnly: string;
+  verify: string;
+  unverify: string;
 };
 
 const tones = ["blue", "purple", "green", "amber", "indigo", "red", "zinc"] as const;
@@ -56,6 +62,7 @@ export function FaqLibrary({
 }) {
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("");
+  const [officialOnly, setOfficialOnly] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -64,13 +71,14 @@ export function FaqLibrary({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return entries.filter((e) => {
+      if (officialOnly && !e.verified) return false;
       if (activeCategory && e.category !== activeCategory) return false;
       if (!q) return true;
       return (
         e.question.toLowerCase().includes(q) || e.answer.toLowerCase().includes(q)
       );
     });
-  }, [entries, query, activeCategory]);
+  }, [entries, query, activeCategory, officialOnly]);
 
   const countLabel = m.count.replace("{n}", String(filtered.length));
 
@@ -86,6 +94,12 @@ export function FaqLibrary({
     if (!window.confirm(m.deleteConfirm)) return;
     startTransition(async () => {
       await deleteFaqAction(id);
+    });
+  }
+
+  function handleVerify(id: string, verified: boolean) {
+    startTransition(async () => {
+      await verifyFaqAction(id, verified);
     });
   }
 
@@ -124,6 +138,18 @@ export function FaqLibrary({
             onClick={() => setActiveCategory(c.value)}
           />
         ))}
+        <button
+          type="button"
+          onClick={() => setOfficialOnly((v) => !v)}
+          className={`rounded-full px-3 py-1 text-xs font-medium border transition inline-flex items-center gap-1 ${
+            officialOnly
+              ? "bg-emerald-600 text-white border-emerald-600"
+              : "bg-white text-emerald-700 border-emerald-200 hover:border-emerald-300"
+          }`}
+        >
+          <span>✓</span>
+          {m.officialOnly}
+        </button>
         <span className="ml-auto text-xs text-slate-400">{countLabel}</span>
       </div>
 
@@ -165,6 +191,12 @@ export function FaqLibrary({
                     <Badge tone={toneFor(e.category, categories)}>
                       {categories.find((c) => c.value === e.category)?.label ?? e.category}
                     </Badge>
+                    {e.verified && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] font-medium">
+                        <span>✓</span>
+                        {m.official}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-sm font-medium text-slate-900 break-words">{e.question}</h3>
                   <div className="mt-1 text-xs text-slate-400">{e.editorLabel}</div>
@@ -184,7 +216,22 @@ export function FaqLibrary({
                       <p className="text-sm text-slate-400 italic">{m.answerEmpty}</p>
                     )}
                   </div>
-                  <div className="flex gap-3">
+                  {e.verified && e.verifiedLabel && (
+                    <div className="text-xs text-emerald-600">{e.verifiedLabel}</div>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleVerify(e.id, !e.verified)}
+                      className={`text-xs font-medium ${
+                        e.verified
+                          ? "text-slate-400 hover:text-slate-600"
+                          : "text-emerald-600 hover:text-emerald-700"
+                      }`}
+                    >
+                      {e.verified ? `✕ ${m.unverify}` : `✓ ${m.verify}`}
+                    </button>
+                    <span className="text-slate-200">|</span>
                     <button
                       type="button"
                       onClick={() => {

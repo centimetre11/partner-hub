@@ -11,7 +11,7 @@ export default async function FaqPage() {
   const faq = m.faq;
 
   const rows = await db.faqEntry.findMany({
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ verified: "desc" }, { updatedAt: "desc" }],
     include: { createdBy: true },
   });
 
@@ -26,12 +26,20 @@ export default async function FaqPage() {
     const editorLabel = name
       ? faq.updatedBy.replace("{name}", name).replace("{time}", time)
       : faq.updatedAt.replace("{time}", time);
+    const verifiedLabel =
+      r.verified && r.verifiedByName && r.verifiedAt
+        ? faq.verifiedBy
+            .replace("{name}", r.verifiedByName)
+            .replace("{time}", fmtDateTime(r.verifiedAt, bcp47))
+        : "";
     return {
       id: r.id,
       question: r.question,
       answer: r.answer,
       category: r.category,
       editorLabel,
+      verified: r.verified,
+      verifiedLabel,
     };
   });
 

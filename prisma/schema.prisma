@@ -133,6 +133,12 @@ model Customer {
   contactPhone String?
   contactEmail String?
   notes        String?
+  // 跟单五问（STOCK）：S 现状 / T 痛点 / O 核心需求 / C 预算 / K 关键
+  q5Situation  String? // S = Situation 问现状（了解客户当前情况）
+  q5Trouble    String? // T = Trouble 问痛点（挖掘真实困扰难题）
+  q5Order      String? // O = Order 问核心需求（采购 / 合作需求）
+  q5Cost       String? // C = Cost 问预算（成本 & 价格预期）
+  q5Key        String? // K = Key 问关键（决策人、交期、合作条件）
   // 归属伙伴（一对多：一个客户至多绑定一个伙伴）
   partnerId    String?
   partner      Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
@@ -685,6 +691,10 @@ model FaqEntry {
   createdBy      User?    @relation(fields: [createdById], references: [id])
   // 最近更新者姓名（去归一化，便于「大家一起更新」的署名展示）
   lastEditorName String?
+  // 认证：管理员认证后该问答成为「官方」答案
+  verified       Boolean  @default(false)
+  verifiedByName String?
+  verifiedAt     DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 }

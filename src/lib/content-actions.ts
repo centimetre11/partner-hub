@@ -122,6 +122,17 @@ export async function upsertFaqAction(formData: FormData) {
   revalidatePath("/faq");
 }
 
+export async function verifyFaqAction(id: string, verified: boolean) {
+  const user = await requireUser();
+  await db.faqEntry.update({
+    where: { id },
+    data: verified
+      ? { verified: true, verifiedByName: user.name, verifiedAt: new Date() }
+      : { verified: false, verifiedByName: null, verifiedAt: null },
+  });
+  revalidatePath("/faq");
+}
+
 export async function deleteFaqAction(id: string) {
   await requireUser();
   await db.faqEntry.delete({ where: { id } });
