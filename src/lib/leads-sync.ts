@@ -22,24 +22,18 @@ export async function getLatestLeadsSyncLog() {
   return db.leadsSyncLog.findFirst({ orderBy: { createdAt: "desc" } });
 }
 
+/** 全量拉取后清空旧数据再写入（整表替换） */
 export async function syncLeadsData(): Promise<LeadsSyncResult> {
   const started = Date.now();
   try {
     const rows = await fetchLeadsData();
     const { leads } = normalizeLeadRows(rows);
 
+    await db.crmLead.deleteMany();
+
     for (let i = 0; i < leads.length; i += BATCH) {
       const chunk = leads.slice(i, i + BATCH);
-      await db.$transaction(
-        chunk.map((lead) => {
-          const { id, ...rest } = lead;
-          return db.crmLead.upsert({
-            where: { id },
-            create: lead,
-            update: rest,
-          });
-        }),
-      );
+      await db.crmLead.createMany({ data: chunk });
     }
 
     const durationMs = Date.now() - started;
@@ -60,7 +54,7 @@ export async function syncLeadsData(): Promise<LeadsSyncResult> {
       }),
     ]);
 
-    console.log(`[leads-sync] OK — ${leads.length} leads in ${durationMs}ms`);
+    console.log(`[leads-sync] OK — ${leads.length} leads (full replace) in ${durationMs}ms`);
 
     return { ok: true, leadCount: leads.length, durationMs };
   } catch (e) {

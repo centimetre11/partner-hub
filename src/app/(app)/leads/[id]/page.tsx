@@ -39,7 +39,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const lead = await db.crmLead.findUnique({ where: { id } });
   if (!lead) notFound();
 
-  const nurturing = isNurturingLead(lead);
+  const nurturing = isNurturingLead(lead.status);
   const tagsText = formatMultiline(lead.tags);
   const detailText = formatMultiline(lead.detail);
   const traceText = formatMultiline(lead.traceDetail);
@@ -67,12 +67,24 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       <div className="px-4 sm:px-6 lg:px-8 grid gap-4 lg:grid-cols-2">
+        <Card title={l.sectionContact}>
+          <dl>
+            <DetailRow label={l.fieldContName} value={lead.contName} />
+            <DetailRow label={l.fieldContEmail} value={lead.contEmail} />
+            <DetailRow label={l.fieldContDuty} value={lead.contDuty} />
+            <DetailRow label={l.fieldPhone} value={lead.phone} />
+            <DetailRow
+              label={l.fieldContRecdate}
+              value={lead.contRecdate ? fmtDate(lead.contRecdate, bcp47) : null}
+            />
+          </dl>
+        </Card>
+
         <Card title={l.sectionBasic}>
           <dl>
             <DetailRow label={l.colCompany} value={lead.name} />
             <DetailRow label={l.fieldClueId} value={lead.id} />
             <DetailRow label={l.fieldCompanyId} value={lead.companyId} />
-            <DetailRow label={l.fieldPhone} value={lead.phone} />
             <DetailRow label={l.colStatus} value={lead.status} />
             <DetailRow label={l.colSalesman} value={lead.salesman} />
             <DetailRow label={l.colSdr} value={lead.sdrState} />
@@ -108,10 +120,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             <DetailRow
               label={l.fieldKpiDeadline}
               value={lead.jzDate ? fmtDate(lead.jzDate, bcp47) : null}
-            />
-            <DetailRow
-              label={l.fieldContRecdate}
-              value={lead.contRecdate ? fmtDate(lead.contRecdate, bcp47) : null}
             />
             <DetailRow label={l.fieldSyncedAt} value={fmtDateTime(lead.syncedAt, bcp47)} />
           </dl>

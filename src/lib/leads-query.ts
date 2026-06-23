@@ -37,6 +37,8 @@ export function buildLeadsWhere(
       OR: [
         { name: { contains: sp.q } },
         { phone: { contains: sp.q } },
+        { contName: { contains: sp.q } },
+        { contEmail: { contains: sp.q } },
         { salesman: { contains: sp.q } },
       ],
     });

@@ -1,8 +1,11 @@
 export const LEADS_DEFAULT_DATA_URL =
   "https://crm.fineres.com/crm/api/pub/data?id=79a8c7c489314494ba78eed58d269c8a&secret=crm123";
 
-// 仅保留该年份的线索（按 com_recdate 创建时间过滤）
+// 仅保留该年份的线索（按 com_recdate KPI 开始时间过滤）
 export const LEADS_TARGET_YEAR = 2026;
+
+/** com_status 为新线索时的取值（其余视为培育线索） */
+export const NEW_LEAD_STATUS = "销售尚未联络";
 
 export type CrmLeadRow = {
   clue_id?: string;
@@ -20,6 +23,9 @@ export type CrmLeadRow = {
   tags?: string;
   sdr_state?: string;
   actphone?: string;
+  cont_name?: string;
+  cont_email?: string;
+  cont_duty?: string;
   com_salesman?: string;
   typedetail?: string;
   com_oversea_agent?: string;
@@ -62,7 +68,6 @@ export async function fetchLeadsData(url = getLeadsDataUrl()): Promise<CrmLeadRo
   }
   const json = (await res.json()) as CrmLeadsResponse;
   if (!json.success || !Array.isArray(json.data)) {
-    // 接口在 IP 未加白或失败时返回 { success:true, error:"IP限制..." } 且无 data
     throw new Error(json.error || "Leads data API returned invalid payload");
   }
   return json.data;
@@ -84,6 +89,9 @@ export type CrmLeadUpsert = {
   tags: string | null;
   sdrState: string | null;
   phone: string | null;
+  contName: string | null;
+  contEmail: string | null;
+  contDuty: string | null;
   salesman: string | null;
   typeDetail: string | null;
   overseaAgent: string | null;
@@ -102,7 +110,6 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
     if (!id) continue;
 
     const recdate = parseLeadDate(row.com_recdate);
-    // 仅保留目标年份（按创建时间）；无法解析创建时间的线索跳过
     if (!recdate || recdate.getFullYear() !== LEADS_TARGET_YEAR) continue;
 
     leads.set(id, {
@@ -121,6 +128,9 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
       tags: trimOrNull(row.tags),
       sdrState: trimOrNull(row.sdr_state),
       phone: trimOrNull(row.actphone),
+      contName: trimOrNull(row.cont_name),
+      contEmail: trimOrNull(row.cont_email),
+      contDuty: trimOrNull(row.cont_duty),
       salesman: trimOrNull(row.com_salesman),
       typeDetail: trimOrNull(row.typedetail),
       overseaAgent: trimOrNull(row.com_oversea_agent),
@@ -135,33 +145,22 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
   return { leads: [...leads.values()] };
 }
 
-/** 培育线索：SDR 已离开「未联系」，或销售状态已离开「销售尚未联络」 */
-export function isNurturingLead(lead: { sdrState?: string | null; status?: string | null }) {
-  const sdr = lead.sdrState?.trim() ?? "";
-  const status = lead.status?.trim() ?? "";
-  if (sdr && !sdr.startsWith("未联系")) return true;
-  if (status && status !== "销售尚未联络") return true;
-  return false;
+/** 培育线索：com_status 不为空且不等于新线索初始状态 */
+export function isNurturingLead(status: string | null | undefined) {
+  const s = status?.trim() ?? "";
+  if (!s) return false;
+  return s !== NEW_LEAD_STATUS;
 }
 
 export type LeadView = "new" | "nurture";
 
 export function leadViewWhere(view: LeadView) {
-  const newLead = {
-    AND: [
-      {
-        OR: [{ sdrState: null }, { sdrState: "" }, { sdrState: { startsWith: "未联系" } }],
-      },
-      {
-        OR: [{ status: null }, { status: "" }, { status: "销售尚未联络" }],
-      },
-    ],
-  };
-  if (view === "new") return newLead;
+  if (view === "new") {
+    return {
+      OR: [{ status: null }, { status: "" }, { status: NEW_LEAD_STATUS }],
+    };
+  }
   return {
-    OR: [
-      { AND: [{ sdrState: { not: null } }, { NOT: { sdrState: { startsWith: "未联系" } } }] },
-      { AND: [{ status: { not: null } }, { status: { not: "销售尚未联络" } }] },
-    ],
+    AND: [{ status: { not: null } }, { status: { not: "" } }, { status: { not: NEW_LEAD_STATUS } }],
   };
 }
