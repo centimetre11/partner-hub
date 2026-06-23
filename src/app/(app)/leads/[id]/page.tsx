@@ -5,7 +5,8 @@ import { requireUser } from "@/lib/session";
 import { Badge, Card, fmtDate, fmtDateTime } from "@/components/ui";
 import { BackButton } from "@/components/back-button";
 import { getServerI18n } from "@/lib/server-i18n";
-import { isNurturingLead } from "@/lib/leads";
+import { getClueId, isNurturingLead } from "@/lib/leads";
+import { LeadActions } from "@/components/leads/lead-actions";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -64,6 +65,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             {lead.jzDate ? ` · ${l.fieldKpiDeadline} ${fmtDate(lead.jzDate, bcp47)}` : ""}
           </p>
         </div>
+      </div>
+
+      <div className="px-4 sm:px-6 lg:px-8 pb-4">
+        <LeadActions leadId={lead.id} clueId={getClueId(lead.id)} />
       </div>
 
       <div className="px-4 sm:px-6 lg:px-8 grid gap-4 lg:grid-cols-2">

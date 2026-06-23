@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { fetchLeadsData, normalizeLeadRows } from "./leads";
+import { fetchLeadsData, getClueId, normalizeLeadRows } from "./leads";
 
 const LAST_SYNC_KEY = "leads_last_sync";
 const BATCH = 100;
@@ -66,6 +66,44 @@ export async function syncLeadsData(): Promise<LeadsSyncResult> {
     console.error("[leads-sync] failed:", error);
     return { ok: false, leadCount: 0, durationMs, error };
   }
+}
+
+export type RefreshLeadResult =
+  | { ok: true; status: "updated" | "removed" }
+  | { ok: false; reason: "no_clue_id" | "fetch_failed"; error?: string };
+
+/**
+ * 针对单条线索做精准 API 校准（不全表重拉）：
+ * - 以 CRM pub API 为准，找到该 clue_id 则 upsert 这一条；
+ * - API 中已不存在（如转客户/转 channel 后离开 2026 线索集）则删除这一条。
+ */
+export async function refreshLeadById(leadId: string): Promise<RefreshLeadResult> {
+  const clueId = getClueId(leadId);
+  if (!clueId) return { ok: false, reason: "no_clue_id" };
+
+  let leads;
+  try {
+    const rows = await fetchLeadsData();
+    ({ leads } = normalizeLeadRows(rows));
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    return { ok: false, reason: "fetch_failed", error };
+  }
+
+  const match = leads.find((l) => l.id === clueId);
+
+  if (!match) {
+    await db.crmLead.deleteMany({ where: { id: leadId } });
+    return { ok: true, status: "removed" };
+  }
+
+  const { id: _id, ...data } = match;
+  await db.crmLead.upsert({
+    where: { id: match.id },
+    create: match,
+    update: data,
+  });
+  return { ok: true, status: "updated" };
 }
 
 export async function getLeadsSyncStats() {

@@ -65,12 +65,20 @@ function trimOrNull(raw: string | undefined | null) {
   return v ? v : null;
 }
 
+/** 无 clue_id 时用 com:<com_id> 兜底为主键，这类线索没有真实 CRM clue_id。 */
+export const CRM_LEAD_COM_PREFIX = "com:";
+
 function resolveLeadId(row: CrmLeadRow): string | null {
   const clueId = row.clue_id?.trim();
   if (clueId) return clueId;
   const comId = row.com_id?.trim();
-  if (comId) return `com:${comId}`;
+  if (comId) return `${CRM_LEAD_COM_PREFIX}${comId}`;
   return null;
+}
+
+/** 返回真实 CRM clue_id：兜底（com: 前缀）线索没有 clue_id，返回 null。 */
+export function getClueId(leadId: string): string | null {
+  return leadId.startsWith(CRM_LEAD_COM_PREFIX) ? null : leadId;
 }
 
 export async function fetchLeadsData(url = getLeadsDataUrl()): Promise<CrmLeadRow[]> {
