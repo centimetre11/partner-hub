@@ -132,3 +132,34 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
 
   return { leads: [...leads.values()] };
 }
+
+/** 培育线索：SDR 已离开「未联系」，或销售状态已离开「销售尚未联络」 */
+export function isNurturingLead(lead: { sdrState?: string | null; status?: string | null }) {
+  const sdr = lead.sdrState?.trim() ?? "";
+  const status = lead.status?.trim() ?? "";
+  if (sdr && !sdr.startsWith("未联系")) return true;
+  if (status && status !== "销售尚未联络") return true;
+  return false;
+}
+
+export type LeadView = "new" | "nurture";
+
+export function leadViewWhere(view: LeadView) {
+  const newLead = {
+    AND: [
+      {
+        OR: [{ sdrState: null }, { sdrState: "" }, { sdrState: { startsWith: "未联系" } }],
+      },
+      {
+        OR: [{ status: null }, { status: "" }, { status: "销售尚未联络" }],
+      },
+    ],
+  };
+  if (view === "new") return newLead;
+  return {
+    OR: [
+      { AND: [{ sdrState: { not: null } }, { NOT: { sdrState: { startsWith: "未联系" } } }] },
+      { AND: [{ status: { not: null } }, { status: { not: "销售尚未联络" } }] },
+    ],
+  };
+}
