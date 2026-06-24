@@ -181,20 +181,10 @@ export function MobileTodoCapture({
             </select>
           </label>
 
-          <div className="flex flex-col gap-3">
-            <label className="block min-w-0">
-              <span className="mb-1 block text-xs font-medium text-slate-500">{labels.dueDate}</span>
-              <input name="dueDate" type="date" className={input} />
-            </label>
-            <label className="block min-w-0">
-              <span className="mb-1 block text-xs font-medium text-slate-500">{labels.priority}</span>
-              <select name="priority" defaultValue="MEDIUM" className={input}>
-                <option value="HIGH">{labels.high}</option>
-                <option value="MEDIUM">{labels.medium}</option>
-                <option value="LOW">{labels.low}</option>
-              </select>
-            </label>
-          </div>
+          <label className="block min-w-0">
+            <span className="mb-1 block text-xs font-medium text-slate-500">{labels.dueDate}</span>
+            <input name="dueDate" type="date" className={input} />
+          </label>
 
           <label className="block min-w-0">
             <span className="mb-1 block text-xs font-medium text-slate-500">{labels.notes}</span>

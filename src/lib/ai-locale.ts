@@ -139,7 +139,7 @@ export function localeOutputRules(locale: Locale, scope?: IntakeScope): string {
 - User-facing text MUST be in ${lang}: reply, questions, clarifications.question, clarifications.options, proposal.summary, todos (title/detail), contact approach/notes/reason, solution descriptions (name/targetCustomer/painPoint/fanruanOffer/partnerOffer/pricingModel/notes/reason), fieldUpdates.reason.
 - Free-text profile fields (${freeTextExamples}, etc.) → write newValue in ${lang}.
 - fieldUpdates.label → use the ${lang} display name from the field list (e.g. valuePartnerOffer → "${fieldLabels.valuePartnerOffer}").
-- JSON property names and stored enum codes stay English: field keys (country, category, …), category=POWER_BI, industries JSON array of BANKING/GOVERNMENT codes, role=DECISION_MAKER, pipelineStage as number 1–10, tier as A/B/C only (never numbers, "Tier 1", P0/P1, or fitScore), training/solution status codes (PLANNED/DRAFT/…), priority HIGH/MEDIUM/LOW for todos only.
+- JSON property names and stored enum codes stay English: field keys (country, category, …), category=POWER_BI, industries JSON array of BANKING/GOVERNMENT codes, role=DECISION_MAKER, pipelineStage as number 1–10, tier as A/B/C only (never numbers, "Tier 1", P0/P1, or fitScore), training/solution status codes (PLANNED/DRAFT/…).
 - Person names and company names: keep as found in source material (may be English or local language).`;
 }
 
@@ -211,7 +211,7 @@ ${clarificationFooter}`;
     "fields": [],
     "contacts": [],
     "opportunities": [],
-    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","assigneeName":"...","detail":"..."}],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","assigneeName":"...","detail":"..."}],
     "trainings": [],
     "solutions": [],
     "businessRecords": []
@@ -272,7 +272,7 @@ ${clarificationFooter}`;
     "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
     "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
     "opportunities": [],
-    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","assigneeName":"...","detail":"..."}],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","assigneeName":"...","detail":"..."}],
     "trainings": [],
     "solutions": [],
     "businessRecords": []
@@ -383,7 +383,7 @@ ${clarificationFooter}`;
     "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
     "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"...","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
     "opportunities": [{"action":"add|update","id":"...","name":"...","client":"...","amount":"...","stage":"...","nextStep":"...","status":"...","reason":"..."}],
-    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","assigneeName":"...","detail":"..."}],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","assigneeName":"...","detail":"..."}],
     "trainings": [{"person":"...","currentSkill":"...","targetCert":"...","deadline":"YYYY-MM-DD","status":"PLANNED|IN_PROGRESS|DONE","reason":"..."}],
     "solutions": [{"name":"...","targetCustomer":"...","painPoint":"...","fanruanOffer":"...","partnerOffer":"...","pricingModel":"...","status":"...","reason":"..."}],
     "businessRecords": []
@@ -538,7 +538,7 @@ No web research. ready=true only when title + traceNature + traceAction are set 
   todo: {
     title: "Create todo",
     intro: "The user wants to create one or more follow-up todos. Prefer linking to a partner/customer when mentioned.",
-    guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), priority (HIGH/MEDIUM/LOW), assigneeName (负责人/owner name), detail.
+    guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), assigneeName (负责人/owner name), detail.
 Title = the actual task only — strip command words like「增加待办/创建todo」and metadata like「负责人是 xxx」(put name in assigneeName, not in title).
 「给 X，…」/「for X, …」→ assigneeName=X; the rest is title. Hub team member names are assigneeName, never partnerName.
 If user names a company/partner, set proposal.partnerName — the system will auto-link on a single match.
@@ -666,7 +666,7 @@ Rules:
    - attitude: 3=champion/2=supportive exclusive/1=supportive non-exclusive/0=neutral/-1=opposed
    - department; reportsToName when reporting line is clear
 4. Opportunities: action=add for new; action=update with id for amount/stage/progress changes.
-5. todos: commitments and next steps from text (${lang} titles; dueDate YYYY-MM-DD if known; priority HIGH/MEDIUM/LOW).
+5. todos: commitments and next steps from text (${lang} titles; dueDate YYYY-MM-DD if known).
 6. summary: 3-6 sentences on key info (${lang}); summaryTitle one-line ${lang} title.
 7. signals: notable positive or risk signals (${lang} short phrases; empty array if none).
 Output JSON only:

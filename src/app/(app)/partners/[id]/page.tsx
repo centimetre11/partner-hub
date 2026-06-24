@@ -536,7 +536,6 @@ function TodoList({
       todo={t}
       partnerId={partnerId}
       users={users}
-      priorityLabel={L.TODO_PRIORITY_LABELS[t.priority]}
       bcp47={bcp47}
       deleteAction={
         <form action={deleteTodoAction.bind(null, t.id)}>

@@ -27,7 +27,6 @@ export function DashboardTodoRow({
   todo,
   partners,
   users,
-  priorityLabel,
   bcp47,
   showAssignee,
   now,
@@ -35,7 +34,6 @@ export function DashboardTodoRow({
   todo: TodoRow;
   partners: { id: string; name: string }[];
   users: { id: string; name: string }[];
-  priorityLabel: string;
   bcp47: string;
   showAssignee?: boolean;
   now?: Date;
@@ -73,9 +71,12 @@ export function DashboardTodoRow({
               </Link>
             </>
           )}
-          {(todo.dueDate || todo.partner) && " · "}
-          {priorityLabel}
-          {showAssignee && todo.assignee && ` · ${todo.assignee.name}`}
+          {showAssignee && todo.assignee && (
+            <>
+              {(todo.dueDate || todo.partner) && " · "}
+              {todo.assignee.name}
+            </>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 shrink-0">
@@ -85,7 +86,6 @@ export function DashboardTodoRow({
             title: todo.title,
             detail: todo.detail,
             dueDate: todo.dueDate,
-            priority: todo.priority,
             partnerId: todo.partnerId,
             assigneeId: todo.assigneeId,
           }}

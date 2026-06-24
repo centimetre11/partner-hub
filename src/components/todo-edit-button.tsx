@@ -8,7 +8,6 @@ type TodoData = {
   title: string;
   detail?: string | null;
   dueDate?: Date | string | null;
-  priority: string;
   partnerId?: string | null;
   assigneeId?: string | null;
 };
@@ -109,25 +108,15 @@ export function TodoEditButton({
                 </div>
               )}
 
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-slate-500">Assignee</label>
-                  <select name="assigneeId" defaultValue={todo.assigneeId ?? ""} className={input}>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="w-32">
-                  <label className="mb-1 block text-xs text-slate-500">Priority</label>
-                  <select name="priority" defaultValue={todo.priority} className={input}>
-                    <option value="HIGH">High</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="LOW">Low</option>
-                  </select>
-                </div>
+              <div>
+                <label className="mb-1 block text-xs text-slate-500">Assignee</label>
+                <select name="assigneeId" defaultValue={todo.assigneeId ?? ""} className={input}>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

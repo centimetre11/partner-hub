@@ -130,20 +130,10 @@ export function CreateTodoDrawer({
                   </select>
                 </label>
 
-                <div className="flex gap-3">
-                  <label className="block flex-1 min-w-0">
-                    <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldDueDate}</span>
-                    <input name="dueDate" type="date" className={input} />
-                  </label>
-                  <label className="block w-28 shrink-0">
-                    <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldPriority}</span>
-                    <select name="priority" className={input} defaultValue="MEDIUM">
-                      <option value="HIGH">{m.common.high}</option>
-                      <option value="MEDIUM">{m.common.medium}</option>
-                      <option value="LOW">{m.common.low}</option>
-                    </select>
-                  </label>
-                </div>
+                <label className="block">
+                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldDueDate}</span>
+                  <input name="dueDate" type="date" className={input} />
+                </label>
 
                 <label className="block">
                   <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldNotes}</span>

@@ -6,7 +6,7 @@ import {
   isProposeBuiltinAction,
   normalizeActionText,
 } from "./intake-action-registry";
-import { stripIntakeSystemHint } from "./intake-text";
+import { stripIntakeSystemHint, isIntakeParseErrorReply } from "./intake-text";
 import { PROPOSE_INTENT_RE } from "./propose-intent";
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
@@ -476,7 +476,16 @@ async function parseIntakeTurnFromContent(
   }
   const partial = direct ?? undefined;
   const fallback = fallbackIntakeTurn(locale, detail, partial, scope);
-  return finalizeIntakeTurn(fallback, scope, locale, finalizeOpts);
+  const finalized = await finalizeIntakeTurn(fallback, scope, locale, finalizeOpts);
+  if (
+    isFastIntakeScope(scope) &&
+    countProposalItems(finalized.proposal) > 0 &&
+    isIntakeParseErrorReply(finalized.reply)
+  ) {
+    const { heuristicReply } = await import("./fast-intake-heuristic");
+    return { ...finalized, reply: heuristicReply(locale, scope) };
+  }
+  return finalized;
 }
 
 function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: IntakeScope): IntakeTurn {

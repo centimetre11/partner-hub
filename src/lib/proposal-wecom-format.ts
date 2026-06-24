@@ -43,7 +43,7 @@ function scopeSwitchHint(scope: IntakeScope, isGroup: boolean): string {
 function scopeAskPrompt(scope: IntakeScope, isGroup: boolean): string {
   const at = isGroup ? "@我 " : "";
   const asks: Partial<Record<IntakeScope, string>> = {
-    todo: "好的，待办内容是什么？（可附截止日期、优先级）",
+    todo: "好的，待办内容是什么？（可附截止日期）",
     business_record: "好的，请描述这次商务进展：和谁、做了什么、现场还是非现场。",
     opportunity: "好的，商机叫什么？（可附客户、金额、阶段）",
     powermap: "好的，联系人是谁？（可附职位、决策角色）",

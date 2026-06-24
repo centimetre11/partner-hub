@@ -174,7 +174,7 @@ export function ProposalView({ proposal, onConfirm, onCancel, confirmLabel = "Co
             <Row key={`t${i}`} k={`t${i}`} tone="todo">
               <span className="font-medium text-slate-800">Todo: {t.title}</span>
               <span className="text-slate-500 ml-1.5 text-xs">
-                {[t.dueDate && `Due ${t.dueDate}`, t.priority].filter(Boolean).join(" · ")}
+                {[t.dueDate && `Due ${t.dueDate}`].filter(Boolean).join(" · ")}
               </span>
             </Row>
           ))}

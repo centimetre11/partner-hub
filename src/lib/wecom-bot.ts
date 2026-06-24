@@ -51,6 +51,7 @@ import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
 import { detectTraceNatureOverride, refinalProposeIntakeTurn } from "@/lib/fast-intake-heuristic";
+import { isIntakeParseErrorReply } from "@/lib/intake-text";
 import { formatProposeAppliedReply, formatProposeConfirmBlockedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { enrichBusinessRecordCompanyTarget } from "@/lib/business-record-intake";
 import {
@@ -553,10 +554,11 @@ async function applyAssistantTurnResult(opts: {
       merged = refinal.proposal;
       ready = refinal.ready;
       crmOnlyReady = refinal.crmOnlyReady;
-      if (scope === "business_record") {
-        replyText = /格式有误|could not be parsed|format error/i.test(result.reply || "")
-          ? ""
-          : result.reply;
+      if (
+        (scope === "business_record" || scope === "todo") &&
+        isIntakeParseErrorReply(replyText)
+      ) {
+        replyText = "";
       }
     }
 

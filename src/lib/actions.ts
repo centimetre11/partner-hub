@@ -630,7 +630,9 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
       ...(hasCustomerField ? { customerId: String(formData.get("customerId") ?? "") || null } : {}),
       assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
       dueDate: due ? new Date(due) : null,
-      priority: String(formData.get("priority") ?? "MEDIUM"),
+      ...(formData.has("priority")
+        ? { priority: String(formData.get("priority") ?? "MEDIUM") }
+        : {}),
     },
   });
   revalidatePath("/todos");

@@ -198,7 +198,6 @@ export default async function MobileDeskPage({
                             {overdue ? ` ${m.common.overdue}` : ""}
                           </span>
                         )}
-                        <span>{L.TODO_PRIORITY_LABELS[todo.priority]}</span>
                         {todo.assignee && <span>{todo.assignee.name}</span>}
                       </div>
                       {owner && ownerHref && (

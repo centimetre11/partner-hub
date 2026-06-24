@@ -12,7 +12,6 @@ export function TodoItemRow({
   partnerId,
   customerId,
   users,
-  priorityLabel,
   bcp47,
   deleteAction,
 }: {
@@ -20,7 +19,6 @@ export function TodoItemRow({
   partnerId?: string | null;
   customerId?: string | null;
   users: User[];
-  priorityLabel: string;
   bcp47: string;
   deleteAction: React.ReactNode;
 }) {
@@ -50,7 +48,6 @@ export function TodoItemRow({
             </span>
           )}
           {todo.assignee && ` · ${todo.assignee.name}`}
-          {` · ${priorityLabel}`}
         </div>
       </div>
       <div className="flex items-center gap-1.5">
@@ -60,7 +57,6 @@ export function TodoItemRow({
             title: todo.title,
             detail: todo.detail,
             dueDate: todo.dueDate,
-            priority: todo.priority,
             partnerId: todo.partnerId,
             assigneeId: todo.assigneeId,
           }}

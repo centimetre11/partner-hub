@@ -32,12 +32,6 @@ function inferDueDate(text: string, today: string): string | undefined {
   return undefined;
 }
 
-function inferPriority(text: string): "HIGH" | "MEDIUM" | "LOW" | undefined {
-  if (/高优先级|紧急|urgent|high priority/i.test(text)) return "HIGH";
-  if (/低优先级|low priority/i.test(text)) return "LOW";
-  return undefined;
-}
-
 function extractAssignee(text: string): { rest: string; assigneeName?: string } {
   let s = text.trim();
   const forPerson = s.match(
@@ -72,7 +66,6 @@ export function parseTodoFromText(text: string, today?: string): TodoProposal {
     title,
     assigneeName,
     dueDate: today ? inferDueDate(text, today) : inferDueDate(text, new Date().toISOString().slice(0, 10)),
-    priority: inferPriority(text),
   };
 }
 
@@ -85,7 +78,6 @@ export function normalizeTodoItem(t: TodoProposal, today?: string): TodoProposal
     title,
     assigneeName: t.assigneeName?.trim() || parsed.assigneeName,
     dueDate: t.dueDate || parsed.dueDate,
-    priority: t.priority || parsed.priority,
   };
 }
 

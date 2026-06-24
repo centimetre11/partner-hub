@@ -517,7 +517,7 @@ const listTodos: Skill = {
       ? todos
           .map(
             (t) =>
-              `[id:${t.id}] [${t.priority}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Customer:${t.customer?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
+              `[id:${t.id}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Customer:${t.customer?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
           )
           .join("\n")
       : "No open todos";

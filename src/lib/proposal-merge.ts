@@ -263,7 +263,7 @@ export function proposalToRows(p: IntakeProposal): NormalizedRow[] {
       key: todoKey(t.title) || `t${i}`,
       tone: "todo",
       label: `Todo: ${t.title}`,
-      detail: [t.dueDate, t.priority].filter(Boolean).join(" · "),
+      detail: [t.dueDate, t.assigneeName].filter(Boolean).join(" · "),
     });
   });
   return rows;

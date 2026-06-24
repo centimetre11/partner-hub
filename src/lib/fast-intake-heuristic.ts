@@ -11,6 +11,7 @@ import {
 } from "./business-record-intake";
 import { normalizeBusinessRecordCategory } from "./business-record-core";
 import { stripWecomCommandPrefix } from "./wecom-user-resolve";
+import { isIntakeParseErrorReply } from "./intake-text";
 import {
   CRM_TRACE_ACTIONS,
   CRM_TRACE_NATURES,
@@ -98,13 +99,6 @@ function inferDueDate(text: string, today: string): string | undefined {
   return undefined;
 }
 
-function inferPriority(text: string): "HIGH" | "MEDIUM" | "LOW" | undefined {
-  if (/紧急|urgent|asap|高优先级|high/i.test(text)) return "HIGH";
-  if (/低优先级|low/i.test(text)) return "LOW";
-  if (/中优先级|medium/i.test(text)) return "MEDIUM";
-  return undefined;
-}
-
 function inferOccurredAt(text: string, today: string): string {
   if (/昨天|yesterday/i.test(text)) return addDays(today, -1);
   if (/前天/i.test(text)) return addDays(today, -2);
@@ -119,7 +113,7 @@ function inferBusinessCategory(text: string) {
   return "OTHER" as const;
 }
 
-function heuristicReply(locale: Locale, kind: string): string {
+export function heuristicReply(locale: Locale, kind: string): string {
   const zh: Record<string, string> = {
     business_record:
       "已从你的描述提取商务记录草案。请核对右侧字段；CRM 需选现场/非现场与商务行为。",
@@ -248,15 +242,20 @@ export function heuristicBusinessRecordTurn(
 function heuristicTodoTurn(userText: string, locale: Locale, today: string): IntakeTurn | null {
   const text = userText.trim();
   if (!text) return null;
-  if (!/待办|todo|记得|提醒|跟进|follow[- ]?up|deadline|截止/i.test(text)) return null;
 
   const parsed = parseTodoFromText(text, today);
   if (!parsed.title?.trim()) return null;
+
+  const hasTodoIntent =
+    /待办|todo|记得|提醒|跟进|follow[- ]?up|deadline|截止/i.test(text) ||
+    !!parsed.assigneeName ||
+    /^(?:给|for)\s+/i.test(text);
+  if (!hasTodoIntent) return null;
+
   const todos = [
     {
       title: parsed.title,
       dueDate: parsed.dueDate ?? inferDueDate(text, today),
-      priority: parsed.priority ?? inferPriority(text),
       assigneeName: parsed.assigneeName,
       detail: text,
     },
@@ -608,7 +607,9 @@ async function finalizeTodoTurn(
     proposal,
     clarifications,
     ready: todos.length > 0 && !clarifications.some((c) => c.blocking),
-    reply: turn.reply || heuristicReply(locale, "todo"),
+    reply: isIntakeParseErrorReply(turn.reply)
+      ? heuristicReply(locale, "todo")
+      : turn.reply || heuristicReply(locale, "todo"),
   };
 }
 

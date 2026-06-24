@@ -6,3 +6,8 @@ export function stripIntakeSystemHint(content: string): string {
   if (en >= 0) return content.slice(0, en).trim();
   return content.trim();
 }
+
+/** User-facing reply from JSON parse failure (LLM/heuristic may still recover the draft). */
+export function isIntakeParseErrorReply(reply: string | undefined): boolean {
+  return /格式有误|could not be parsed|format error|没能完整解析/i.test(reply ?? "");
+}

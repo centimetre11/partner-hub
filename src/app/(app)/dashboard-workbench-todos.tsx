@@ -93,7 +93,6 @@ export async function DashboardWorkbenchTodos({
             todo={t}
             partners={partners}
             users={users}
-            priorityLabel={L.TODO_PRIORITY_LABELS[t.priority]}
             bcp47={bcp47}
             showAssignee={isAll}
             now={now}
