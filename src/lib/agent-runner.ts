@@ -136,7 +136,7 @@ export async function runAgent(
               ? `WeCom group push chatId=${agent.wecomPushChatId} — after querying, call push_wecom with the FULL formatted body (include every todo line).`
               : "",
             agent.pushWecomAppTo
-              ? `WeCom app message recipients: ${agent.pushWecomAppTo} — call send_wecom_app (useTextcard=true, guideToBot=true). Value @assignees = push per todo assignee via hubUserName.`
+              ? `WeCom app message enabled — call send_wecom_app (useTextcard=true, guideToBot=true). For todos push per assignee via hubUserName; otherwise pick recipients from task context.`
               : "",
             agent.pushEmailTo
               ? `Default email for send_email: ${agent.pushEmailTo}`

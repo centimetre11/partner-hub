@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CRON_PRESETS } from "@/lib/cron";
-import { PUSH_WECOM_APP_ASSIGNEES } from "@/lib/automation-delivery";
+import { PUSH_WECOM_APP_ENABLED, isWecomAppPushEnabled } from "@/lib/automation-delivery";
 import type { BuilderDeliveryPrefs } from "@/lib/builder-context-prompt";
 import type { AutomationBuilderDraft } from "@/lib/automation-builder-types";
 import { useLocale, useMessages } from "@/lib/i18n";
@@ -229,24 +229,20 @@ export function BuilderDeliveryBar({
         </select>
       </div>
       {showWecomApp && onWecomAppChange && (
-        <div>
-          <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.wecomAppLabel}</label>
-          <select
-            className={selectCls}
-            value={prefs.wecomAppTo}
-            disabled={disabled}
-            onChange={(e) => onWecomAppChange(e.target.value)}
-          >
-            <option value="">{b.wecomAppNone}</option>
-            <option value={PUSH_WECOM_APP_ASSIGNEES}>
-              {isZh ? "待办负责人 (@assignees)" : "Todo assignees (@assignees)"}
-            </option>
-            {emails.map((u) => (
-              <option key={u.id} value={u.email}>
-                {u.name ? `${u.name} · ${u.email}` : u.email}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-end">
+          <label className="flex items-start gap-2 rounded-lg border border-slate-100 px-2.5 py-2 w-full cursor-pointer hover:border-slate-200">
+            <input
+              type="checkbox"
+              checked={isWecomAppPushEnabled(prefs.wecomAppTo)}
+              disabled={disabled}
+              onChange={(e) => onWecomAppChange(e.target.checked ? PUSH_WECOM_APP_ENABLED : "")}
+              className="mt-0.5 rounded"
+            />
+            <span className="min-w-0">
+              <span className="block text-[10px] font-medium text-slate-700">{b.wecomAppLabel}</span>
+              <span className="block text-[10px] text-slate-400 leading-snug">{b.wecomAppCheckboxHint}</span>
+            </span>
+          </label>
         </div>
       )}
       <div>

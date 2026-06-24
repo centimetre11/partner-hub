@@ -19,9 +19,8 @@ import {
   defaultAutomationName,
   defaultAutomationSlug,
   partnerScopeLabel,
-  isTodoDueGoal,
 } from "./automation-push";
-import { hasAutomationDeliveryChannel, PUSH_WECOM_APP_ASSIGNEES } from "./automation-delivery";
+import { hasAutomationDeliveryChannel, PUSH_WECOM_APP_ENABLED } from "./automation-delivery";
 import { describeCron } from "./cron";
 import { db } from "./db";
 import { listWecomChats } from "./wecom-chats";
@@ -304,13 +303,7 @@ function applySemanticIntentFromAi(
   } else if (channel === "wecom_app") {
     wecomPushChatId = "";
     pushEmailTo = "";
-    if (!pushWecomAppTo.trim()) {
-      if (isTodoDueGoal(goal) || /待办|todo/i.test(goal)) {
-        pushWecomAppTo = PUSH_WECOM_APP_ASSIGNEES;
-      } else if (opts.userEmail && mentionsMyEmail(userText)) {
-        pushWecomAppTo = opts.userEmail;
-      }
-    }
+    pushWecomAppTo = PUSH_WECOM_APP_ENABLED;
   }
 
   return {

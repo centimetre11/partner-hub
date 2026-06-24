@@ -1,6 +1,5 @@
 import type { AutomationVariable } from "./automation-builder-types";
 import type { Locale } from "./i18n/locale";
-import { PUSH_WECOM_APP_ASSIGNEES } from "./automation-delivery";
 
 /** Skills for scheduled query → push automations */
 export const DEFAULT_AUTOMATION_SKILLS = [
@@ -113,13 +112,13 @@ export function buildAutomationVariables(params: ScheduledPushParams): Automatio
 
 function buildWecomAppPushStep(isZh: boolean): string {
   if (isZh) {
-    return `若 \`{{push_wecom_app_to}}\` 非空：调用 \`send_wecom_app\`
-  - 值为 \`${PUSH_WECOM_APP_ASSIGNEES}\`：向 list_todos 中每位负责人分别推送（hubUserName=负责人，useTextcard=true，guideToBot=true）
-  - 否则：按逗号分隔 Hub 用户邮箱为每位用户发送（useTextcard=true，guideToBot=true）`;
+    return `若 \`{{push_wecom_app_to}}\` 非空：调用 \`send_wecom_app\`（useTextcard=true，guideToBot=true）
+  - 待办类：按 list_todos 中每位负责人分别推送（hubUserName=负责人）
+  - 其他：按任务上下文选择已绑定企微的合适收件人`;
   }
-  return `If \`{{push_wecom_app_to}}\` is set: call \`send_wecom_app\`
-  - Value \`${PUSH_WECOM_APP_ASSIGNEES}\`: push per todo assignee (hubUserName=assignee, useTextcard=true, guideToBot=true)
-  - Otherwise: comma-separated Hub user emails (useTextcard=true, guideToBot=true)`;
+  return `If \`{{push_wecom_app_to}}\` is set: call \`send_wecom_app\` (useTextcard=true, guideToBot=true)
+  - Todo tasks: push per assignee via hubUserName
+  - Otherwise: pick bound WeCom users from task context`;
 }
 
 /** Explicit due-todos pipeline — list_todos(dueWithinDays) → push */

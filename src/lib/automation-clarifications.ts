@@ -1,7 +1,7 @@
 import type { AutomationBuilderClarification, AutomationBuilderDraft, AutomationBuilderMessage } from "./automation-builder-types";
 import { getClarificationTier, normalizeAiClarifications } from "./ai-clarifications";
 import type { BuilderDeliveryPrefs } from "./builder-context-prompt";
-import { PUSH_WECOM_APP_ASSIGNEES } from "./automation-delivery";
+import { PUSH_WECOM_APP_ENABLED } from "./automation-delivery";
 import type { Locale } from "./i18n/locale";
 
 export function extractLastUserPlainText(messages: AutomationBuilderMessage[]): string {
@@ -81,7 +81,7 @@ function hasClarificationAbout(clarifications: AutomationBuilderClarification[],
 }
 
 function isBuiltinClarificationId(id: string): boolean {
-  return id === "partner-pick" || id === "wecom-pick" || id === "email-pick" || id === "wecom-app-pick" || id === "delivery-pick";
+  return id === "partner-pick" || id === "wecom-pick" || id === "email-pick" || id === "delivery-pick";
 }
 
 function clarificationBlob(c: AutomationBuilderClarification): string {
@@ -107,7 +107,6 @@ function isWecomTopicClarification(c: AutomationBuilderClarification): boolean {
 }
 
 function isWecomAppTopicClarification(c: AutomationBuilderClarification): boolean {
-  if (c.id === "wecom-app-pick") return true;
   if (isBuiltinClarificationId(c.id)) return false;
   return /企微应用|应用消息|wecom app|app message|私信/i.test(clarificationBlob(c));
 }
@@ -188,16 +187,6 @@ export function resolveEmailPickValue(value: string, emails: EmailOption[]): str
   return [...new Set(resolved)].join(", ");
 }
 
-function wecomAppAssigneesOptionLabel(locale: Locale): string {
-  return locale === "zh" ? `待办负责人 (${PUSH_WECOM_APP_ASSIGNEES})` : `Todo assignees (${PUSH_WECOM_APP_ASSIGNEES})`;
-}
-
-function wecomAppPickOptions(emails: EmailOption[], locale: Locale): string[] {
-  const options = [wecomAppAssigneesOptionLabel(locale)];
-  for (const e of emails) options.push(emailOptionLabel(e));
-  return options;
-}
-
 export function followUpClarificationsAfterDeliveryPick(
   deliveryAnswer: string,
   draft: AutomationBuilderDraft,
@@ -216,19 +205,6 @@ export function followUpClarificationsAfterDeliveryPick(
       control: "select",
       allowOther: true,
       placeholder: locale === "zh" ? "选择企微群…" : "Select WeCom group…",
-      tier: "required",
-    });
-  }
-  if (wantsWecomApp && !draft.pushWecomAppTo.trim() && (opts.emails.length > 0 || /待办|todo/i.test(draft.description))) {
-    out.push({
-      id: "wecom-app-pick",
-      question:
-        locale === "zh" ? "企微应用私信发给谁？（可多选）" : "Who should receive WeCom app messages?",
-      options: wecomAppPickOptions(opts.emails, locale),
-      control: "select",
-      multi: true,
-      allowOther: true,
-      placeholder: locale === "zh" ? "选择收件人…" : "Select recipient(s)…",
       tier: "required",
     });
   }
@@ -266,19 +242,14 @@ export function applyClarificationAnswersToDraft(
       const chat = resolveWecomChatByLabel(ans.value, opts.wecomChats);
       if (chat) next = { ...next, wecomPushChatId: chat.chatId };
     }
+    if (ans.id === "delivery-pick") {
+      if (/企微应用|WeCom app|应用消息/i.test(ans.value)) {
+        next = { ...next, pushWecomAppTo: PUSH_WECOM_APP_ENABLED };
+      }
+    }
     if (ans.id === "email-pick") {
       const resolved = resolveEmailPickValue(ans.value, opts.emails);
       if (resolved) next = { ...next, pushEmailTo: resolved };
-    }
-    if (ans.id === "wecom-app-pick") {
-      const assigneesLabel = wecomAppAssigneesOptionLabel("zh");
-      const assigneesLabelEn = wecomAppAssigneesOptionLabel("en");
-      if (ans.value.includes(PUSH_WECOM_APP_ASSIGNEES) || ans.value.includes(assigneesLabel) || ans.value.includes(assigneesLabelEn)) {
-        next = { ...next, pushWecomAppTo: PUSH_WECOM_APP_ASSIGNEES };
-      } else {
-        const resolved = resolveEmailPickValue(ans.value, opts.emails);
-        if (resolved) next = { ...next, pushWecomAppTo: resolved };
-      }
     }
   }
   return next;
@@ -292,7 +263,6 @@ export function filterSatisfiedClarifications(
     if (c.id === "partner-pick" && draft.partnerId.trim()) return false;
     if (c.id === "wecom-pick" && draft.wecomPushChatId.trim()) return false;
     if (c.id === "email-pick" && draft.pushEmailTo.trim()) return false;
-    if (c.id === "wecom-app-pick" && draft.pushWecomAppTo.trim()) return false;
     if (
       c.id === "delivery-pick" &&
       (draft.wecomPushChatId.trim() || draft.pushEmailTo.trim() || draft.pushWecomAppTo.trim())
@@ -388,23 +358,9 @@ export function enrichAutomationClarifications(opts: {
     });
   }
 
-  const needWecomApp =
-    !effectiveWecomApp &&
-    opts.emails.length > 0 &&
-    (userWantsWecomApp || aiAskedWecomApp);
+  const needWecomApp = !effectiveWecomApp && (userWantsWecomApp || aiAskedWecomApp);
   if (needWecomApp) {
     out = stripTopicClarifications(out, isWecomAppTopicClarification);
-    out.unshift({
-      id: "wecom-app-pick",
-      question:
-        opts.locale === "zh" ? "企微应用私信发给谁？（可多选）" : "Who should receive WeCom app messages?",
-      options: wecomAppPickOptions(opts.emails, opts.locale),
-      control: "select",
-      multi: true,
-      allowOther: true,
-      placeholder: opts.locale === "zh" ? "选择收件人…" : "Select recipient(s)…",
-      tier: "required",
-    });
   }
 
   const explicitEmailInText = /[\w.+-]+@[\w.-]+\.\w{2,}/.test(userText);
@@ -435,7 +391,7 @@ export function enrichAutomationClarifications(opts: {
     !userWantsEmail &&
     !userWantsWecom &&
     !userWantsWecomApp &&
-    !out.some((c) => c.id === "email-pick" || c.id === "wecom-pick" || c.id === "wecom-app-pick") &&
+    !out.some((c) => c.id === "email-pick" || c.id === "wecom-pick") &&
     !hasClarificationAbout(out, /推送|delivery|渠道/i);
   if (needDelivery) {
     out.unshift({
@@ -464,7 +420,7 @@ function normalizeAutomationClarifications(items: AutomationBuilderClarification
         ...raw,
         tier: raw.tier ?? "required",
         allowOther: raw.allowOther !== false,
-        multi: raw.multi ?? (raw.id === "email-pick" || raw.id === "wecom-app-pick"),
+        multi: raw.multi ?? raw.id === "email-pick",
       });
       continue;
     }
@@ -537,6 +493,10 @@ export function applyUserDeliveryIntent(
   if (wantsWecomApp && !wantsWecom && !wantsEmail && !prefWecom && !prefEmail) {
     wecomPushChatId = "";
     pushEmailTo = "";
+  }
+
+  if (wantsWecomApp && !pushWecomAppTo) {
+    pushWecomAppTo = PUSH_WECOM_APP_ENABLED;
   }
 
   return { ...draft, partnerId, wecomPushChatId, pushEmailTo, pushWecomAppTo };

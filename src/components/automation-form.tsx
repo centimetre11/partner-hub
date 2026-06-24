@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
 import { automationSaveErrorMessage } from "@/lib/automation-save-errors";
 import { saveAutomationAction, type PersistAutomationResult } from "@/lib/automation-actions";
-import { PUSH_WECOM_APP_ASSIGNEES } from "@/lib/automation-delivery";
+import { isWecomAppPushEnabled, PUSH_WECOM_APP_ENABLED } from "@/lib/automation-delivery";
 import { getToolLabel } from "@/lib/tool-labels";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 
@@ -56,7 +56,7 @@ export function AutomationForm({
   const [partnerId, setPartnerId] = useState(initial.partnerId || "");
   const [wecomPushChatId, setWecomPushChatId] = useState(initial.wecomPushChatId);
   const [pushEmailTo, setPushEmailTo] = useState(initial.pushEmailTo);
-  const [pushWecomAppTo, setPushWecomAppTo] = useState(initial.pushWecomAppTo);
+  const [pushWecomAppEnabled, setPushWecomAppEnabled] = useState(isWecomAppPushEnabled(initial.pushWecomAppTo));
   const [wecomChats, setWecomChats] = useState<WecomOption[]>([]);
   const [emails, setEmails] = useState<EmailOption[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -73,7 +73,7 @@ export function AutomationForm({
 
   const cronDesc = useMemo(() => describeCron(cronExpr, locale === "zh" ? "zh" : "en"), [cronExpr, locale]);
   const deliveryMissing =
-    !wecomPushChatId.trim() && !pushEmailTo.trim() && !pushWecomAppTo.trim();
+    !wecomPushChatId.trim() && !pushEmailTo.trim() && !pushWecomAppEnabled;
 
   const inputCls =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400";
@@ -96,7 +96,7 @@ export function AutomationForm({
     fd.set("partnerId", partnerId);
     fd.set("wecomPushChatId", wecomPushChatId);
     fd.set("pushEmailTo", pushEmailTo);
-    fd.set("pushWecomAppTo", pushWecomAppTo);
+    fd.set("pushWecomAppTo", pushWecomAppEnabled ? PUSH_WECOM_APP_ENABLED : "");
     fd.set("slug", slug);
     fd.set("name", name);
     return fd;
@@ -312,26 +312,19 @@ export function AutomationForm({
             <p className="text-xs text-slate-400 mt-1">{a.emailInputHint}</p>
           </div>
           <div>
-            <label className={labelCls}>{bc.wecomAppLabel}</label>
-            <input
-              name="pushWecomAppTo"
-              list="automation-wecom-app-options"
-              className={inputCls}
-              value={pushWecomAppTo}
-              onChange={(e) => setPushWecomAppTo(e.target.value)}
-              placeholder={a.wecomAppInputPlaceholder}
-            />
-            <datalist id="automation-wecom-app-options">
-              <option value={PUSH_WECOM_APP_ASSIGNEES}>
-                {locale === "zh" ? "待办负责人 (@assignees)" : "Todo assignees (@assignees)"}
-              </option>
-              {emails.map((u) => (
-                <option key={u.id} value={u.email}>
-                  {u.name ? `${u.name} · ${u.email}` : u.email}
-                </option>
-              ))}
-            </datalist>
-            <p className="text-xs text-slate-400 mt-1">{a.wecomAppInputHint}</p>
+            <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-200">
+              <input
+                type="checkbox"
+                checked={pushWecomAppEnabled}
+                onChange={(e) => setPushWecomAppEnabled(e.target.checked)}
+                className="mt-0.5 rounded"
+              />
+              <span className="min-w-0">
+                <span className="text-sm font-medium text-slate-800 block">{bc.wecomAppLabel}</span>
+                <span className="text-xs text-slate-400 font-mono">send_wecom_app</span>
+                <span className="text-xs text-slate-400 block mt-0.5">{a.wecomAppCheckboxHint}</span>
+              </span>
+            </label>
           </div>
         </section>
 

@@ -39,7 +39,7 @@ export function formatBuilderContextPrefix(prefs: BuilderDeliveryPrefs, locale: 
       lines.push(`企微群推送：${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
     }
     if (prefs.wecomAppTo?.trim()) {
-      lines.push(`企微应用私信：${prefs.wecomAppTo}`);
+      lines.push(locale === "zh" ? "企微应用私信：已启用" : "WeCom app message: enabled");
     }
     if (prefs.email?.trim()) {
       lines.push(`邮件推送：${prefs.email}`);
@@ -59,7 +59,7 @@ export function formatBuilderContextPrefix(prefs: BuilderDeliveryPrefs, locale: 
       lines.push(`WeCom group push: ${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
     }
     if (prefs.wecomAppTo?.trim()) {
-      lines.push(`WeCom app message: ${prefs.wecomAppTo}`);
+      lines.push("WeCom app message: enabled");
     }
     if (prefs.email?.trim()) {
       lines.push(`Email push: ${prefs.email}`);
