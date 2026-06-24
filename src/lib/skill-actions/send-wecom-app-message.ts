@@ -1,5 +1,11 @@
 import "server-only";
 import {
+  appendWecomBotGuideText,
+  buildBotGuideTextcardDescription,
+  DEFAULT_BOT_GUIDE_BTNTXT,
+  wecomBotGuidePageUrl,
+} from "../wecom-bot-guide";
+import {
   isWecomAppMessageConfigured,
   parseWecomUserIds,
   resolveHubUserIdsToWecomUserIds,
@@ -13,6 +19,11 @@ function splitList(raw: string): string[] {
     .split(/[,;|]/)
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function parseGuideToBot(raw: unknown): boolean {
+  if (raw === false || raw === "false" || raw === "0") return false;
+  return true;
 }
 
 function formatSendResult(
@@ -37,11 +48,44 @@ export async function runSendWecomAppMessageTool(
     return "WeCom app message is not configured. Set WECOM_CORP_ID, WECOM_APP_SECRET, and WECOM_AGENT_ID on the server.";
   }
 
-  const content = String(args.content ?? "").trim();
-  if (!content) return "Please provide content";
+  const guideToBot = parseGuideToBot(args.guideToBot);
+  const msgtypeRaw = String(args.msgtype ?? "").trim().toLowerCase();
+  const titleArg = String(args.title ?? "").trim();
+  const useTextcard =
+    msgtypeRaw === "textcard" ||
+    args.useTextcard === true ||
+    args.useTextcard === "true" ||
+    titleArg.length > 0;
 
-  const msgtypeRaw = String(args.msgtype ?? "text").trim().toLowerCase();
-  const msgtype: WecomAppMessageType = msgtypeRaw === "markdown" ? "markdown" : "text";
+  let content = String(args.content ?? "").trim();
+  if (!content && !titleArg) return "Please provide content";
+
+  let title = titleArg;
+  let url = String(args.url ?? "").trim();
+  let btntxt = String(args.btntxt ?? "").trim();
+
+  if (useTextcard) {
+    if (!title && content.includes("\n")) {
+      const [first, ...rest] = content.split("\n");
+      title = first.trim();
+      content = rest.join("\n").trim();
+    }
+    if (!title) title = "Partner Hub 通知";
+    if (guideToBot) {
+      content = buildBotGuideTextcardDescription(content);
+      if (!url) url = wecomBotGuidePageUrl();
+      if (!btntxt) btntxt = DEFAULT_BOT_GUIDE_BTNTXT;
+    }
+    if (!url) return "textcard requires url (set url or guideToBot=true for default guide page)";
+  } else if (guideToBot && content) {
+    content = appendWecomBotGuideText(content);
+  }
+
+  const msgtype: WecomAppMessageType = useTextcard
+    ? "textcard"
+    : msgtypeRaw === "markdown"
+      ? "markdown"
+      : "text";
 
   const wecomUserIds: string[] = [];
   const warnings: string[] = [];
@@ -85,7 +129,15 @@ export async function runSendWecomAppMessageTool(
     return warnings.length ? `${warnings.join("; ")}. ${hint}` : hint;
   }
 
-  const result = await sendWecomAppMessage({ touser: recipients, content, msgtype });
+  const result = await sendWecomAppMessage({
+    touser: recipients,
+    content: useTextcard ? content || buildBotGuideTextcardDescription("") : content,
+    msgtype,
+    title: useTextcard ? title : undefined,
+    url: useTextcard ? url : undefined,
+    btntxt: useTextcard ? btntxt : undefined,
+  });
+
   const msg = formatSendResult(recipients, result);
   if (!result.ok) {
     return warnings.length ? `${msg}; ${warnings.join("; ")}` : msg;

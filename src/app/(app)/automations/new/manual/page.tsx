@@ -40,6 +40,7 @@ export default async function ManualNewAutomationPage() {
           partnerId: "",
           wecomPushChatId: "",
           pushEmailTo: "",
+          pushWecomAppTo: "",
           notifyOnSuccess: true,
           notifyOnFailure: true,
           enabled: true,

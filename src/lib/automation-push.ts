@@ -1,5 +1,6 @@
 import type { AutomationVariable } from "./automation-builder-types";
 import type { Locale } from "./i18n/locale";
+import { PUSH_WECOM_APP_ASSIGNEES } from "./automation-delivery";
 
 /** Skills for scheduled query → push automations */
 export const DEFAULT_AUTOMATION_SKILLS = [
@@ -24,6 +25,7 @@ export type ScheduledPushParams = {
   partnerName?: string;
   wecomPushChatId?: string;
   pushEmailTo?: string;
+  pushWecomAppTo?: string;
   dueWithinDays?: number;
   locale?: Locale;
 };
@@ -59,6 +61,7 @@ export function inferAutomationSkills(input: {
   taskMd?: string;
   wecomPushChatId?: string;
   pushEmailTo?: string;
+  pushWecomAppTo?: string;
   partnerId?: string;
 }): string[] {
   const text = `${input.description ?? ""}\n${input.taskMd ?? ""}`;
@@ -71,7 +74,11 @@ export function inferAutomationSkills(input: {
   else if (/search_partners|哪个伙伴|哪位伙伴|which partner/i.test(text)) picked.add("search_partners");
 
   if (input.wecomPushChatId?.trim() || /push_wecom|企微群|发到群|推到.*群/i.test(text)) picked.add("push_wecom");
-  if (/send_wecom_app|应用消息|私信|推送给.*人|推给.*本人/i.test(text)) picked.add("send_wecom_app");
+  if (
+    input.pushWecomAppTo?.trim() ||
+    /send_wecom_app|应用消息|企微应用|私信|推送给.*人|推给.*本人/i.test(text)
+  )
+    picked.add("send_wecom_app");
   if (input.pushEmailTo?.trim() || /send_email|发邮件|发邮箱|邮件给我|email/i.test(text)) picked.add("send_email");
 
   if (picked.size === 0) {
@@ -92,11 +99,27 @@ export function buildAutomationVariables(params: ScheduledPushParams): Automatio
     },
     { key: "wecom_chat_id", value: params.wecomPushChatId?.trim() ?? "", label: "WeCom chatId" },
     { key: "push_email_to", value: params.pushEmailTo?.trim() ?? "", label: "Email recipient" },
+    {
+      key: "push_wecom_app_to",
+      value: params.pushWecomAppTo?.trim() ?? "",
+      label: "WeCom app recipients",
+    },
   ];
   if (params.dueWithinDays != null && params.dueWithinDays > 0) {
     vars.push({ key: "due_within_days", value: String(params.dueWithinDays), label: "Due within days" });
   }
   return vars;
+}
+
+function buildWecomAppPushStep(isZh: boolean): string {
+  if (isZh) {
+    return `若 \`{{push_wecom_app_to}}\` 非空：调用 \`send_wecom_app\`
+  - 值为 \`${PUSH_WECOM_APP_ASSIGNEES}\`：向 list_todos 中每位负责人分别推送（hubUserName=负责人，useTextcard=true，guideToBot=true）
+  - 否则：按逗号分隔 Hub 用户邮箱为每位用户发送（useTextcard=true，guideToBot=true）`;
+  }
+  return `If \`{{push_wecom_app_to}}\` is set: call \`send_wecom_app\`
+  - Value \`${PUSH_WECOM_APP_ASSIGNEES}\`: push per todo assignee (hubUserName=assignee, useTextcard=true, guideToBot=true)
+  - Otherwise: comma-separated Hub user emails (useTextcard=true, guideToBot=true)`;
 }
 
 /** Explicit due-todos pipeline — list_todos(dueWithinDays) → push */
@@ -133,6 +156,7 @@ ${partnerLine}
 3. 若有待办：格式化为 Markdown 列表（标题、截止日期、优先级、负责人）
 4. 若 \`{{wecom_chat_id}}\` 非空：\`push_wecom\`（chatId=\`{{wecom_chat_id}}\`）
 5. 若 \`{{push_email_to}}\` 非空：\`send_email\`（相同正文）
+6. ${buildWecomAppPushStep(true)}
 
 ## 输出
 - 简体中文；摘要含条数与是否已推送`;
@@ -191,7 +215,8 @@ ${partnerLine}
 3. 若无 OPEN 待办：正文写「✅ 当前无 OPEN 待办」
 4. 若 \`{{wecom_chat_id}}\` 非空：\`push_wecom\`（chatId=\`{{wecom_chat_id}}\`，正文含完整列表）
 5. 若 \`{{push_email_to}}\` 非空：\`send_email\`（相同正文）
-6. **禁止**只写摘要而不列出具体待办条目
+6. ${buildWecomAppPushStep(true)}
+7. **禁止**只写摘要而不列出具体待办条目
 
 ## 输出
 - 简体中文；含条数 + 完整列表 + 是否已推送`;
@@ -243,12 +268,13 @@ ${scope}
 - \`list_opportunities\` — 商机（partnerId）
 - \`web_search\` — 外部资讯（新闻、招标等；可无 partner_id）
 - \`get_partner\` / \`search_partners\`
-- \`push_wecom\` / \`send_email\`
+- \`push_wecom\` / \`send_wecom_app\` / \`send_email\`
 
 ## 执行步骤
 1. 按任务目标选工具；无 partner_id 时可直接 web_search
 2. 无有效结果时简短说明，避免空推送
-3. 整理 Markdown 后按配置推送
+3. 整理 Markdown 后按配置推送（群 / 应用私信 / 邮件可同时使用）
+4. ${buildWecomAppPushStep(true).replace(/\n/g, " ")}
 
 ## 输出
 - 简体中文；含结论、条数、是否已推送`;
@@ -266,10 +292,10 @@ description: ${goal.slice(0, 120)}
 ${scope}
 
 ## Tools
-list_todos, list_opportunities, web_search, push_wecom, send_email
+list_todos, list_opportunities, web_search, push_wecom, send_wecom_app, send_email
 
 ## Steps
-Query per goal; format; push if configured`;
+Query per goal; format; push via configured channels (group / app / email)`;
 }
 
 export function isAuthoritativeTaskMd(taskMd: string): boolean {

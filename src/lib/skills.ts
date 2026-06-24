@@ -1138,7 +1138,7 @@ const sendWecomAppTool: Skill = {
     function: {
       name: "send_wecom_app",
       description:
-        "Send a WeCom self-built application message to one or more users. Messages appear in the user's WeCom app feed (not group chat). Provide wecomUserId and/or hubUserId/hubUserName (must have wecomUserId bound in Account settings). Requires WECOM_CORP_ID, WECOM_APP_SECRET, WECOM_AGENT_ID.",
+        "Send a WeCom self-built application message to one or more users. Use title + useTextcard for a clickable card (recommended for reminders). guideToBot=true (default) appends a button linking to AI / bot guide. Requires WECOM_CORP_ID, WECOM_APP_SECRET, WECOM_AGENT_ID.",
       parameters: {
         type: "object",
         properties: {
@@ -1154,11 +1154,31 @@ const sendWecomAppTool: Skill = {
             type: "string",
             description: "Partner Hub display name(s), comma-separated exact match. Resolves to bound wecomUserId.",
           },
-          content: { type: "string", description: "Message body (max 2048 bytes)" },
+          title: {
+            type: "string",
+            description: "textcard title (also enables card mode). Example: 你有 2 条待办已逾期",
+          },
+          content: { type: "string", description: "Body text, or textcard description when title is set" },
+          useTextcard: {
+            type: "boolean",
+            description: "Send as clickable textcard (recommended for notifications with a button)",
+          },
+          url: {
+            type: "string",
+            description: "textcard jump URL (https). Default guide page when guideToBot=true",
+          },
+          btntxt: {
+            type: "string",
+            description: "textcard button label (max 4 Chinese chars). Default: 和 AI 对话",
+          },
+          guideToBot: {
+            type: "boolean",
+            description: "Append bot / mobile AI guide and default click URL (default true)",
+          },
           msgtype: {
             type: "string",
-            enum: ["text", "markdown"],
-            description: "Message type; default text",
+            enum: ["text", "markdown", "textcard"],
+            description: "Message type; textcard or title enables clickable card",
           },
         },
         required: ["content"],

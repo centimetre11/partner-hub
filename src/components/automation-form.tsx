@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
 import { automationSaveErrorMessage } from "@/lib/automation-save-errors";
 import { saveAutomationAction, type PersistAutomationResult } from "@/lib/automation-actions";
+import { PUSH_WECOM_APP_ASSIGNEES } from "@/lib/automation-delivery";
 import { getToolLabel } from "@/lib/tool-labels";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 
@@ -21,6 +22,7 @@ export type AutomationFormData = {
   partnerId: string;
   wecomPushChatId: string;
   pushEmailTo: string;
+  pushWecomAppTo: string;
   notifyOnSuccess: boolean;
   notifyOnFailure: boolean;
   enabled: boolean;
@@ -54,6 +56,7 @@ export function AutomationForm({
   const [partnerId, setPartnerId] = useState(initial.partnerId || "");
   const [wecomPushChatId, setWecomPushChatId] = useState(initial.wecomPushChatId);
   const [pushEmailTo, setPushEmailTo] = useState(initial.pushEmailTo);
+  const [pushWecomAppTo, setPushWecomAppTo] = useState(initial.pushWecomAppTo);
   const [wecomChats, setWecomChats] = useState<WecomOption[]>([]);
   const [emails, setEmails] = useState<EmailOption[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -69,7 +72,8 @@ export function AutomationForm({
   }, []);
 
   const cronDesc = useMemo(() => describeCron(cronExpr, locale === "zh" ? "zh" : "en"), [cronExpr, locale]);
-  const deliveryMissing = !wecomPushChatId.trim() && !pushEmailTo.trim();
+  const deliveryMissing =
+    !wecomPushChatId.trim() && !pushEmailTo.trim() && !pushWecomAppTo.trim();
 
   const inputCls =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400";
@@ -92,6 +96,7 @@ export function AutomationForm({
     fd.set("partnerId", partnerId);
     fd.set("wecomPushChatId", wecomPushChatId);
     fd.set("pushEmailTo", pushEmailTo);
+    fd.set("pushWecomAppTo", pushWecomAppTo);
     fd.set("slug", slug);
     fd.set("name", name);
     return fd;
@@ -305,6 +310,28 @@ export function AutomationForm({
               ))}
             </datalist>
             <p className="text-xs text-slate-400 mt-1">{a.emailInputHint}</p>
+          </div>
+          <div>
+            <label className={labelCls}>{bc.wecomAppLabel}</label>
+            <input
+              name="pushWecomAppTo"
+              list="automation-wecom-app-options"
+              className={inputCls}
+              value={pushWecomAppTo}
+              onChange={(e) => setPushWecomAppTo(e.target.value)}
+              placeholder={a.wecomAppInputPlaceholder}
+            />
+            <datalist id="automation-wecom-app-options">
+              <option value={PUSH_WECOM_APP_ASSIGNEES}>
+                {locale === "zh" ? "待办负责人 (@assignees)" : "Todo assignees (@assignees)"}
+              </option>
+              {emails.map((u) => (
+                <option key={u.id} value={u.email}>
+                  {u.name ? `${u.name} · ${u.email}` : u.email}
+                </option>
+              ))}
+            </datalist>
+            <p className="text-xs text-slate-400 mt-1">{a.wecomAppInputHint}</p>
           </div>
         </section>
 

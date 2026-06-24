@@ -42,6 +42,7 @@ export default async function AutomationDetailPage({ params }: { params: Promise
     taskMd: agent.instructions ?? "",
     wecomPushChatId: agent.wecomPushChatId ?? "",
     pushEmailTo: agent.pushEmailTo ?? "",
+    pushWecomAppTo: agent.pushWecomAppTo ?? "",
     partnerId: agent.partnerId ?? "",
   });
   const displayTools = [...new Set([...runtimeTools, ...persistedSkills])].filter((t) =>
@@ -63,6 +64,7 @@ export default async function AutomationDetailPage({ params }: { params: Promise
           partnerId: agent.partnerId ?? "",
           wecomPushChatId: agent.wecomPushChatId ?? "",
           pushEmailTo: agent.pushEmailTo ?? "",
+          pushWecomAppTo: agent.pushWecomAppTo ?? "",
           notifyOnSuccess: agent.notifyOnSuccess,
           notifyOnFailure: agent.notifyOnFailure,
           enabled: agent.enabled,

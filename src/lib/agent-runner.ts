@@ -129,16 +129,20 @@ export async function runAgent(
     const replyLang = isZhAutomation ? "Simplified Chinese (简体中文)" : "English";
 
     const automationPushRules =
-      agent.isAutomation && (agent.wecomPushChatId || agent.pushEmailTo)
+      agent.isAutomation &&
+      (agent.wecomPushChatId || agent.pushEmailTo || agent.pushWecomAppTo)
         ? [
             agent.wecomPushChatId
-              ? `WeCom push chatId=${agent.wecomPushChatId} — after querying, call push_wecom with the FULL formatted body (include every todo line).`
+              ? `WeCom group push chatId=${agent.wecomPushChatId} — after querying, call push_wecom with the FULL formatted body (include every todo line).`
+              : "",
+            agent.pushWecomAppTo
+              ? `WeCom app message recipients: ${agent.pushWecomAppTo} — call send_wecom_app (useTextcard=true, guideToBot=true). Value @assignees = push per todo assignee via hubUserName.`
               : "",
             agent.pushEmailTo
               ? `Default email for send_email: ${agent.pushEmailTo}`
               : "Do NOT call send_email unless task instructions explicitly require email.",
-            !agent.pushEmailTo && agent.wecomPushChatId
-              ? "User asked for group push only — do NOT send email."
+            !agent.pushEmailTo && agent.wecomPushChatId && !agent.pushWecomAppTo
+              ? "User asked for group push only — do NOT send email or app message."
               : "",
           ]
             .filter(Boolean)

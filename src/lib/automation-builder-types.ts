@@ -23,6 +23,7 @@ export type AutomationBuilderDraft = {
   wecomPushChatId: string;
   webhookUrl: string;
   pushEmailTo: string;
+  pushWecomAppTo: string;
   partnerId: string;
   dueWithinDays?: number;
   rationale: string;

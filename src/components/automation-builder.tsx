@@ -48,6 +48,7 @@ function DraftPreview({
     taskMd: draft.taskMd,
     wecomPushChatId: draft.wecomPushChatId,
     pushEmailTo: draft.pushEmailTo,
+    pushWecomAppTo: draft.pushWecomAppTo,
     partnerId: draft.partnerId,
   });
 

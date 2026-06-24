@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CRON_PRESETS } from "@/lib/cron";
+import { PUSH_WECOM_APP_ASSIGNEES } from "@/lib/automation-delivery";
 import type { BuilderDeliveryPrefs } from "@/lib/builder-context-prompt";
 import type { AutomationBuilderDraft } from "@/lib/automation-builder-types";
 import { useLocale, useMessages } from "@/lib/i18n";
@@ -49,6 +50,7 @@ export function useBuilderDeliveryPrefs() {
     wecomChatId: "",
     wecomChatLabel: "",
     email: "",
+    wecomAppTo: "",
     partnerId: "",
     partnerName: "",
   });
@@ -99,6 +101,7 @@ export function useBuilderDeliveryPrefs() {
       });
     },
     setEmail: (email: string) => setPrefs((p) => ({ ...p, email })),
+    setWecomAppTo: (wecomAppTo: string) => setPrefs((p) => ({ ...p, wecomAppTo })),
     setPartnerId: (partnerId: string) => {
       const partner = partners.find((x) => x.id === partnerId);
       setPrefs((p) => ({
@@ -108,7 +111,12 @@ export function useBuilderDeliveryPrefs() {
       }));
     },
     /** AI 解析后回填底部栏（用户未手动改过时才调用） */
-    applyFromDraft: (draft: Pick<AutomationBuilderDraft, "cronExpr" | "partnerId" | "wecomPushChatId" | "pushEmailTo">) => {
+    applyFromDraft: (
+      draft: Pick<
+        AutomationBuilderDraft,
+        "cronExpr" | "partnerId" | "wecomPushChatId" | "pushEmailTo" | "pushWecomAppTo"
+      >
+    ) => {
       setPrefs((p) => {
         const partnerId = draft.partnerId?.trim() ?? "";
         const partner = partners.find((x) => x.id === partnerId);
@@ -121,6 +129,7 @@ export function useBuilderDeliveryPrefs() {
           wecomChatId,
           wecomChatLabel: chat ? formatWecomLabel(chat) : "",
           email: draft.pushEmailTo?.trim() ?? "",
+          wecomAppTo: draft.pushWecomAppTo?.trim() ?? "",
         };
       });
     },
@@ -140,33 +149,45 @@ export function BuilderDeliveryBar({
   onCronChange,
   onWecomChange,
   onEmailChange,
+  onWecomAppChange,
   onPartnerChange,
   wecomChats,
   emails,
   partners,
   disabled,
+  showWecomApp,
 }: {
   prefs: BuilderDeliveryPrefs;
   onCronChange: (cron: string) => void;
   onWecomChange: (chatId: string) => void;
   onEmailChange: (email: string) => void;
+  onWecomAppChange?: (value: string) => void;
   onPartnerChange?: (partnerId: string) => void;
   wecomChats: WecomOption[];
   emails: EmailOption[];
   partners?: PartnerOption[];
   disabled?: boolean;
+  showWecomApp?: boolean;
 }) {
   const b = useMessages().builderCommon;
   const a = useMessages().automations;
   const locale = useLocale();
   const isZh = locale === "zh";
   const showPartner = !!onPartnerChange;
+  const colCount = (showPartner ? 1 : 0) + (showWecomApp ? 1 : 0) + 3;
 
   const selectCls =
     "w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400 disabled:opacity-50";
 
+  const gridCls =
+    colCount >= 5
+      ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2"
+      : colCount >= 4
+        ? "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2"
+        : "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2";
+
   return (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 ${showPartner ? "xl:grid-cols-4" : "xl:grid-cols-3"} gap-2`}>
+    <div className={gridCls}>
       <div>
         <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.scheduleLabel}</label>
         <select className={selectCls} value={prefs.cronExpr} disabled={disabled} onChange={(e) => onCronChange(e.target.value)}>
@@ -207,6 +228,27 @@ export function BuilderDeliveryBar({
           ))}
         </select>
       </div>
+      {showWecomApp && onWecomAppChange && (
+        <div>
+          <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.wecomAppLabel}</label>
+          <select
+            className={selectCls}
+            value={prefs.wecomAppTo}
+            disabled={disabled}
+            onChange={(e) => onWecomAppChange(e.target.value)}
+          >
+            <option value="">{b.wecomAppNone}</option>
+            <option value={PUSH_WECOM_APP_ASSIGNEES}>
+              {isZh ? "待办负责人 (@assignees)" : "Todo assignees (@assignees)"}
+            </option>
+            {emails.map((u) => (
+              <option key={u.id} value={u.email}>
+                {u.name ? `${u.name} · ${u.email}` : u.email}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div>
         <label className="block text-[10px] font-medium text-slate-500 mb-1">{b.emailLabel}</label>
         <select className={selectCls} value={prefs.email} disabled={disabled} onChange={(e) => onEmailChange(e.target.value)}>

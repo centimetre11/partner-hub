@@ -149,6 +149,7 @@ const EMPTY_AUTOMATION_DRAFT: AutomationBuilderDraft = {
   wecomPushChatId: "",
   webhookUrl: "",
   pushEmailTo: "",
+  pushWecomAppTo: "",
   partnerId: "",
   rationale: "",
   questionnaire: [],

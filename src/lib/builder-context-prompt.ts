@@ -1,12 +1,14 @@
 import { describeCron } from "./cron";
 import { partnerScopeLabel, inferDueWithinDays } from "./automation-push";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
+import { hasAutomationDeliveryChannel } from "./automation-delivery";
 
 export type BuilderDeliveryPrefs = {
   cronExpr: string;
   wecomChatId: string;
   wecomChatLabel?: string;
   email: string;
+  wecomAppTo: string;
   partnerId: string;
   partnerName?: string;
 };
@@ -16,7 +18,8 @@ export function hasExplicitPrefs(prefs: BuilderDeliveryPrefs): boolean {
     prefs.cronExpr?.trim() ||
     prefs.partnerId?.trim() ||
     prefs.wecomChatId?.trim() ||
-    prefs.email?.trim()
+    prefs.email?.trim() ||
+    prefs.wecomAppTo?.trim()
   );
 }
 
@@ -33,7 +36,10 @@ export function formatBuilderContextPrefix(prefs: BuilderDeliveryPrefs, locale: 
     }
     if (prefs.wecomChatId?.trim()) {
       const label = prefs.wecomChatLabel?.trim();
-      lines.push(`企微推送：${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
+      lines.push(`企微群推送：${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
+    }
+    if (prefs.wecomAppTo?.trim()) {
+      lines.push(`企微应用私信：${prefs.wecomAppTo}`);
     }
     if (prefs.email?.trim()) {
       lines.push(`邮件推送：${prefs.email}`);
@@ -50,7 +56,10 @@ export function formatBuilderContextPrefix(prefs: BuilderDeliveryPrefs, locale: 
     }
     if (prefs.wecomChatId?.trim()) {
       const label = prefs.wecomChatLabel?.trim();
-      lines.push(`WeCom push: ${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
+      lines.push(`WeCom group push: ${label ? `${label} · ` : ""}chatId=${prefs.wecomChatId}`);
+    }
+    if (prefs.wecomAppTo?.trim()) {
+      lines.push(`WeCom app message: ${prefs.wecomAppTo}`);
     }
     if (prefs.email?.trim()) {
       lines.push(`Email push: ${prefs.email}`);
@@ -77,6 +86,7 @@ export function prefsToAutomationDraftFields(prefs: BuilderDeliveryPrefs) {
     partnerId: prefs.partnerId,
     wecomPushChatId: prefs.wecomChatId,
     pushEmailTo: prefs.email,
+    pushWecomAppTo: prefs.wecomAppTo,
   };
 }
 
@@ -90,6 +100,7 @@ export function mergeAutomationDraftWithPrefs(
     partnerId: prefs.partnerId || draft.partnerId,
     wecomPushChatId: prefs.wecomChatId || draft.wecomPushChatId,
     pushEmailTo: prefs.email || draft.pushEmailTo,
+    pushWecomAppTo: prefs.wecomAppTo || draft.pushWecomAppTo,
   };
   // 从描述推断待办到期天数（若 AI 未写入 draft.dueWithinDays）
   if (!merged.dueWithinDays && merged.description) {
@@ -101,11 +112,14 @@ export function mergeAutomationDraftWithPrefs(
 
 /** Required: cron + task goal + at least one push channel. Partner optional. */
 export function isAutomationDraftReady(
-  draft: Pick<AutomationBuilderDraft, "cronExpr" | "description" | "taskMd" | "wecomPushChatId" | "pushEmailTo">
+  draft: Pick<
+    AutomationBuilderDraft,
+    "cronExpr" | "description" | "taskMd" | "wecomPushChatId" | "pushEmailTo" | "pushWecomAppTo"
+  >
 ): boolean {
   if (!draft.cronExpr?.trim()) return false;
   if (!draft.description?.trim() && !draft.taskMd?.trim()) return false;
-  if (!draft.wecomPushChatId?.trim() && !draft.pushEmailTo?.trim()) return false;
+  if (!hasAutomationDeliveryChannel(draft)) return false;
   return true;
 }
 
@@ -115,11 +129,12 @@ export function partnerLabelFromPrefs(prefs: BuilderDeliveryPrefs, locale: "zh" 
 }
 
 export function pushChannelsLabel(
-  draft: Pick<AutomationBuilderDraft, "wecomPushChatId" | "pushEmailTo">,
+  draft: Pick<AutomationBuilderDraft, "wecomPushChatId" | "pushEmailTo" | "pushWecomAppTo">,
   locale: "zh" | "en"
 ): string {
   const parts: string[] = [];
-  if (draft.wecomPushChatId?.trim()) parts.push(locale === "zh" ? "企微" : "WeCom");
+  if (draft.wecomPushChatId?.trim()) parts.push(locale === "zh" ? "企微群" : "WeCom group");
+  if (draft.pushWecomAppTo?.trim()) parts.push(locale === "zh" ? "企微应用" : "WeCom app");
   if (draft.pushEmailTo?.trim()) parts.push(locale === "zh" ? "邮件" : "Email");
   return parts.length ? parts.join(locale === "zh" ? " + " : " + ") : "—";
 }

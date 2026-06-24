@@ -520,6 +520,7 @@ model Agent {
   enabled      Boolean   @default(true)
   webhookUrl       String?
   pushEmailTo      String? // 默认邮件推送收件人（send_email）
+  pushWecomAppTo   String? // 企微应用私信收件人（Hub 邮箱逗号分隔，或 @assignees）
   wecomPushChatId  String? // 运行完成后推送到指定企微 chatId
   isTemplate       Boolean   @default(false) // 模板库条目，克隆使用
   isAutomation     Boolean   @default(false) // 自动化管道（区别于交互式 Agent）

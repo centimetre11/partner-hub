@@ -8,6 +8,7 @@ import {
   mentionsMyEmail,
   mentionsEmailPush,
   mentionsWecomPush,
+  mentionsWecomAppPush,
   mentionsAllPartnersScope,
 } from "./automation-clarifications";
 import type { BuilderDeliveryPrefs } from "./builder-context-prompt";
@@ -18,7 +19,9 @@ import {
   defaultAutomationName,
   defaultAutomationSlug,
   partnerScopeLabel,
+  isTodoDueGoal,
 } from "./automation-push";
+import { hasAutomationDeliveryChannel, PUSH_WECOM_APP_ASSIGNEES } from "./automation-delivery";
 import { describeCron } from "./cron";
 import { db } from "./db";
 import { listWecomChats } from "./wecom-chats";
@@ -54,6 +57,7 @@ const DEFAULT_DRAFT: AutomationBuilderDraft = {
   wecomPushChatId: "",
   webhookUrl: "",
   pushEmailTo: "",
+  pushWecomAppTo: "",
   partnerId: "",
   rationale: "",
   questionnaire: [],
@@ -72,7 +76,7 @@ function outputSchema(locale: Locale) {
     "dataType": "todos|opportunities|web_search|mixed",
     "partnerScope": "all|named|bound",
     "partnerNameHint": "only if named",
-    "deliveryChannel": "email|wecom|both|unset",
+    "deliveryChannel": "email|wecom_group|wecom_app|unset",
     "emailRecipient": "mine|unset",
     "cronExpr": "0 9 * * *",
     "dueWithinDays": null
@@ -121,9 +125,9 @@ Examples:
 - 「每天把 Acme 过期待办推到群」→ partnerScope=named, partnerNameHint=Acme, deliveryChannel=wecom
 
 Rules:
-1. SCHEDULE-only. Runtime tools: list_todos, list_opportunities, web_search, push_wecom, send_email.
+1. SCHEDULE-only. Runtime tools: list_todos, list_opportunities, web_search, push_wecom, send_wecom_app, send_email.
 2. partnerScope: all=全部; named=具体名字; bound=绑定伙伴.
-3. deliveryChannel=email when user mentions 邮箱/邮件; emailRecipient=mine only for 我的邮箱/发给我.
+3. deliveryChannel: email=邮件; wecom_group=企微群; wecom_app=企微应用私信; unset=未说明（由 UI 澄清）.
 4. clarifications always []. ready when goal+cronExpr+deliveryChannel set.
 5. Keep JSON minimal — no extra fields, no draft block.
 
@@ -133,7 +137,7 @@ ${outputSchema(locale)}`;
 function isDraftReady(draft: AutomationBuilderDraft): boolean {
   if (!draft.cronExpr.trim()) return false;
   if (!draft.description.trim() && !draft.taskMd.trim()) return false;
-  if (!draft.wecomPushChatId.trim() && !draft.pushEmailTo.trim()) return false;
+  if (!hasAutomationDeliveryChannel(draft)) return false;
   return true;
 }
 
@@ -161,6 +165,7 @@ function normalizeDraft(raw: Partial<AutomationBuilderDraft>, partnerNameHint?: 
   const partnerId = String(raw.partnerId ?? "").trim();
   const wecomPushChatId = String(raw.wecomPushChatId ?? "").trim();
   const pushEmailTo = String(raw.pushEmailTo ?? "").trim();
+  const pushWecomAppTo = String(raw.pushWecomAppTo ?? "").trim();
   const description = String(raw.description ?? "").trim();
   const scopeName = partnerNameHint || (partnerId ? "" : partnerScopeLabel(undefined, locale));
 
@@ -186,6 +191,7 @@ function normalizeDraft(raw: Partial<AutomationBuilderDraft>, partnerNameHint?: 
       dueWithinDays,
       wecomPushChatId,
       pushEmailTo,
+      pushWecomAppTo,
       locale,
     },
     taskMdRaw
@@ -208,6 +214,7 @@ function normalizeDraft(raw: Partial<AutomationBuilderDraft>, partnerNameHint?: 
     wecomPushChatId,
     webhookUrl: "",
     pushEmailTo,
+    pushWecomAppTo,
     partnerId,
     dueWithinDays,
     rationale: String(raw.rationale ?? ""),
@@ -236,7 +243,7 @@ type AutomationBuilderAiIntent = {
   dataType?: string;
   partnerScope?: "all" | "named" | "bound";
   partnerNameHint?: string;
-  deliveryChannel?: "email" | "wecom" | "both" | "unset";
+  deliveryChannel?: "email" | "wecom_group" | "wecom_app" | "unset";
   emailRecipient?: "mine" | "unset";
   cronExpr?: string;
   dueWithinDays?: number | null;
@@ -259,6 +266,7 @@ function applySemanticIntentFromAi(
   let partnerId = draft.partnerId;
   let pushEmailTo = draft.pushEmailTo;
   let wecomPushChatId = draft.wecomPushChatId;
+  let pushWecomAppTo = draft.pushWecomAppTo;
   const dueWithinDays =
     intent?.dueWithinDays != null && Number.isFinite(intent.dueWithinDays)
       ? Number(intent.dueWithinDays)
@@ -289,8 +297,20 @@ function applySemanticIntentFromAi(
       pushEmailTo = opts.userEmail;
     }
     wecomPushChatId = "";
-  } else if (channel === "wecom") {
+    pushWecomAppTo = "";
+  } else if (channel === "wecom_group") {
     pushEmailTo = "";
+    pushWecomAppTo = "";
+  } else if (channel === "wecom_app") {
+    wecomPushChatId = "";
+    pushEmailTo = "";
+    if (!pushWecomAppTo.trim()) {
+      if (isTodoDueGoal(goal) || /待办|todo/i.test(goal)) {
+        pushWecomAppTo = PUSH_WECOM_APP_ASSIGNEES;
+      } else if (opts.userEmail && mentionsMyEmail(userText)) {
+        pushWecomAppTo = opts.userEmail;
+      }
+    }
   }
 
   return {
@@ -300,6 +320,7 @@ function applySemanticIntentFromAi(
     partnerId,
     pushEmailTo,
     wecomPushChatId,
+    pushWecomAppTo,
     dueWithinDays,
     taskMd: "",
   };
@@ -414,7 +435,7 @@ ${buildRuntimeContextBlock(locale, {
         goal: t.slice(0, 160),
         dataType: /待办|todo/i.test(t) ? "todos" : /商机|opportunit/i.test(t) ? "opportunities" : "mixed",
         partnerScope: mentionsAllPartnersScope(t) ? "all" : undefined,
-        deliveryChannel: mentionsEmailPush(t) ? "email" : mentionsWecomPush(t) ? "wecom" : raw.intent?.deliveryChannel,
+        deliveryChannel: mentionsEmailPush(t) ? "email" : mentionsWecomAppPush(t) ? "wecom_app" : mentionsWecomPush(t) ? "wecom_group" : raw.intent?.deliveryChannel,
         emailRecipient: mentionsMyEmail(t) ? "mine" : "unset",
         cronExpr: raw.intent?.cronExpr ?? "0 9 * * *",
       };
@@ -436,6 +457,7 @@ ${buildRuntimeContextBlock(locale, {
         partnerId: "",
         wecomPushChatId: "",
         pushEmailTo: "",
+        pushWecomAppTo: "",
         taskMd: "",
       },
       opts.boundPartnerName,
@@ -475,6 +497,8 @@ ${buildRuntimeContextBlock(locale, {
       opts.sourceChatId?.trim() ||
       "";
     const effectiveEmail = turn.draft.pushEmailTo.trim() || opts.deliveryPrefs?.email?.trim() || "";
+    const effectiveWecomApp =
+      turn.draft.pushWecomAppTo.trim() || opts.deliveryPrefs?.wecomAppTo?.trim() || "";
 
     const wecomChats = (await listWecomChats())
       .filter((c) => c.chatType === "group")
@@ -496,6 +520,7 @@ ${buildRuntimeContextBlock(locale, {
       partnerId: effectivePartnerId,
       wecomPushChatId: effectiveWecom,
       pushEmailTo: effectiveEmail,
+      pushWecomAppTo: effectiveWecomApp,
       partners,
       wecomChats,
       emails,
@@ -512,6 +537,7 @@ ${buildRuntimeContextBlock(locale, {
         partnerId: effectivePartnerId,
         wecomPushChatId: effectiveWecom,
         pushEmailTo: effectiveEmail,
+        pushWecomAppTo: effectiveWecomApp,
       }) && !hasRequiredClarifications(clarifications),
     };
 

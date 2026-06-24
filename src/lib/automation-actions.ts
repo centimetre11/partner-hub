@@ -15,6 +15,7 @@ import {
   DEFAULT_AUTOMATION_SKILLS,
   partnerScopeLabel,
 } from "./automation-push";
+import { hasAutomationDeliveryChannel } from "./automation-delivery";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
 
 function slugify(raw: string): string {
@@ -38,6 +39,7 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
   const timezone = String(formData.get("timezone") ?? "Asia/Shanghai").trim();
   const wecomPushChatId = String(formData.get("wecomPushChatId") ?? "").trim() || null;
   const pushEmailTo = String(formData.get("pushEmailTo") ?? "").trim() || null;
+  const pushWecomAppTo = String(formData.get("pushWecomAppTo") ?? "").trim() || null;
   const notifyOnSuccess = formData.get("notifyOnSuccess") !== "off";
   const notifyOnFailure = formData.get("notifyOnFailure") === "on";
   const enabledInput = formData.get("enabled");
@@ -47,7 +49,8 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
   const nameInput = String(formData.get("name") ?? "").trim();
 
   if (!description) return { ok: false, error: "description_required" };
-  if (!wecomPushChatId && !pushEmailTo) return { ok: false, error: "delivery_required" };
+  if (!hasAutomationDeliveryChannel({ wecomPushChatId, pushEmailTo, pushWecomAppTo }))
+    return { ok: false, error: "delivery_required" };
 
   let slug = slugify(String(formData.get("slug") ?? ""));
   let name = nameInput;
@@ -84,6 +87,7 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     wecomPushChatId: wecomPushChatId ?? "",
     webhookUrl: "",
     pushEmailTo: pushEmailTo ?? "",
+    pushWecomAppTo: pushWecomAppTo ?? "",
     partnerId,
     rationale: "",
     questionnaire: [],
@@ -115,6 +119,7 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     notifyOnFailure,
     wecomPushChatId,
     pushEmailTo,
+    pushWecomAppTo,
     webhookUrl: null,
     scopeType: partnerId ? ("PARTNER" as const) : ("ALL" as const),
     partnerId: partnerId || null,

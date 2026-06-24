@@ -53,7 +53,7 @@ export function buildAutomationInstructions(taskMd: string, variables: Automatio
 
 ---
 【自动化执行说明】
-- 定时管道：按 TASK.md 步骤执行，按需使用 list_todos / list_opportunities / web_search / push_wecom / send_email
+- 定时管道：按 TASK.md 步骤执行，按需使用 list_todos / list_opportunities / web_search / push_wecom / send_wecom_app / send_email
 - 变量已注入；完成后输出 Markdown 摘要（结论、条数、是否已推送）
 `;
 }
@@ -96,6 +96,7 @@ export async function resolveAutomationDraftContent(
 
   const wecomPushChatId = draft.wecomPushChatId?.trim() || opts.wecomPushChatId?.trim() || "";
   const pushEmailTo = draft.pushEmailTo?.trim() || "";
+  const pushWecomAppTo = draft.pushWecomAppTo?.trim() || "";
 
   const dueWithinDays = inferDueWithinDays(goal, draft.dueWithinDays);
 
@@ -106,6 +107,7 @@ export async function resolveAutomationDraftContent(
     dueWithinDays,
     wecomPushChatId,
     pushEmailTo,
+    pushWecomAppTo,
     locale,
   });
 
@@ -117,6 +119,7 @@ export async function resolveAutomationDraftContent(
       dueWithinDays,
       wecomPushChatId,
       pushEmailTo,
+      pushWecomAppTo,
       locale,
     },
     draft.taskMd
@@ -147,6 +150,7 @@ export async function createAutomationFromDraft(
   const schedule = cronToAgentSchedule(cronExpr);
   const wecomPushChatId = draft.wecomPushChatId?.trim() || opts.wecomPushChatId?.trim() || null;
   const pushEmailTo = draft.pushEmailTo?.trim() || null;
+  const pushWecomAppTo = draft.pushWecomAppTo?.trim() || null;
 
   const created = await db.agent.create({
     data: {
@@ -170,6 +174,7 @@ export async function createAutomationFromDraft(
       notifyOnFailure: draft.notifyOnFailure !== false,
       wecomPushChatId,
       pushEmailTo,
+      pushWecomAppTo,
       webhookUrl: null,
       scopeType: partnerId ? "PARTNER" : "ALL",
       partnerId,
