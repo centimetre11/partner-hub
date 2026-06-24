@@ -146,6 +146,10 @@ export function MobileTodoCapture({
               await createTodoAction(formData);
               setOpen(false);
               router.refresh();
+            } catch (err) {
+              if (typeof window !== "undefined") {
+                window.alert(err instanceof Error ? err.message : String(err));
+              }
             } finally {
               setSaving(false);
             }

@@ -189,12 +189,26 @@ export async function submitCrmBusinessRecord(
   payload: CrmTraceInsertPayload,
   submitUrl = process.env.CRM_TRACE_SUBMIT_URL?.trim() || CRM_TRACE_SUBMIT_URL,
 ) {
-  const res = await fetch(submitUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildCrmTraceWireBody(payload)),
-    cache: "no-store",
-  });
+  const timeoutMs = Number(process.env.CRM_TRACE_TIMEOUT_MS || "12000");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(submitUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildCrmTraceWireBody(payload)),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`CRM trace submit timed out after ${timeoutMs}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   const raw = await res.text();
   const data = tryParseCrmJson(raw);
 

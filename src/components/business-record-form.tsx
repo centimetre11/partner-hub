@@ -84,7 +84,12 @@ export function BusinessRecordForm({
       else if (res?.warning) setFeedback({ tone: "warn", text: res.warning });
       else if (res?.info) setFeedback({ tone: "info", text: res.info });
       router.refresh();
-      if (res?.message || !res?.warning) onDone?.();
+      if (onDone) {
+        if (res?.warning && typeof window !== "undefined") window.alert(res.warning);
+        onDone();
+      }
+    } catch (err) {
+      setFeedback({ tone: "err", text: err instanceof Error ? err.message : String(err) });
     } finally {
       setSubmitting(false);
     }
