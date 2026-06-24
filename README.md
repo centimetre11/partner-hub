@@ -36,6 +36,8 @@ AI 原生的中东区合作伙伴管理系统，为帆软软件 MEA BD 团队打
 
 ## 本地启动
 
+> 维护 AI 建档、企微录入等逻辑前，请先查阅 [`docs/变更对照备忘.md`](docs/变更对照备忘.md)（问题 · 方案 · 回归注意）。
+
 ```bash
 npm install
 npx prisma db push          # 初始化数据库

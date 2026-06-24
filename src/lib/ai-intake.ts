@@ -91,6 +91,7 @@ import { submitBusinessRecordToCrmOnly } from "./crm-business-record";
 import { ownerData, ownerWhere, type OwnerRef } from "./owner";
 import { isFastIntakeScope, sanitizeProposalForScope } from "./proposal-scope";
 import { prefetchParallelWebLinkedinResearch } from "./intake-public-research";
+import { normalizeTodoItem, resolveTodoAssigneeId } from "./todo-intake-parse";
 
 export type IntakeScope = AiLocaleScope;
 
@@ -511,7 +512,19 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
           ),
       contacts: p.contacts ?? [],
       opportunities: p.opportunities ?? [],
-      todos: p.todos ?? [],
+      todos: (p.todos ?? []).map((t) => {
+        const row = normalizeTodoItem(
+          {
+            title: asTrimmedString(t.title),
+            detail: t.detail == null ? undefined : asTrimmedString(t.detail),
+            dueDate: t.dueDate == null ? undefined : asTrimmedString(t.dueDate),
+            priority: t.priority == null ? undefined : asTrimmedString(t.priority),
+            assigneeName: t.assigneeName == null ? undefined : asTrimmedString(t.assigneeName),
+          },
+          new Date().toISOString().slice(0, 10),
+        );
+        return row;
+      }).filter((t) => t.title),
       trainings: p.trainings ?? [],
       solutions: p.solutions ?? [],
       businessRecords: (p.businessRecords ?? []).map((r) => {
@@ -544,6 +557,14 @@ function normalizeIntakeTurn(raw: Partial<IntakeTurn>, locale: Locale, scope: In
     },
   };
   turn.proposal = sanitizeProposalForScope(scope, turn.proposal);
+  if (scope === "todo") {
+    const first = turn.proposal.todos[0];
+    if (first?.title && /待办|todo|负责人|assignee/i.test(turn.proposal.summary)) {
+      turn.proposal.summary = first.title;
+    } else if (first?.title && !turn.proposal.summary.trim()) {
+      turn.proposal.summary = first.title;
+    }
+  }
   if (scope === "business_record") {
     turn.ready =
       turn.proposal.businessRecords.length > 0 &&
@@ -1220,12 +1241,13 @@ async function applyCustomerIntake(opts: {
   for (const t of proposal.todos) {
     const title = asTrimmedString(t.title);
     if (!title) continue;
+    const assigneeId = await resolveTodoAssigneeId(t.assigneeName, userId);
     await db.todoItem.create({
       data: {
         title,
         detail: t.detail,
         customerId,
-        assigneeId: userId,
+        assigneeId,
         dueDate: parseOptionalDate(t.dueDate),
         priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
         source: "AI",
@@ -1688,19 +1710,22 @@ export async function applyIntake(opts: {
 
   // ---- Todos ----
   for (const t of proposal.todos) {
+    const title = asTrimmedString(t.title);
+    if (!title) continue;
+    const assigneeId = await resolveTodoAssigneeId(t.assigneeName, userId);
     await db.todoItem.create({
       data: {
-        title: t.title,
+        title,
         detail: t.detail,
         partnerId: partnerId || null,
         customerId: customerId || null,
-        assigneeId: userId,
+        assigneeId,
         dueDate: parseOptionalDate(t.dueDate),
         priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
         source: "AI",
       },
     });
-    applied.push(applyTodoAdded(locale, t.title));
+    applied.push(applyTodoAdded(locale, title));
   }
 
   // ---- Timeline audit (non-onboarding; onboarding already logged) ----

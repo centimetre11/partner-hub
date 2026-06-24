@@ -38,7 +38,7 @@ export default async function CustomersPage({
   });
 
   const [partners, users] = await Promise.all([
-    db.partner.findMany({ where: { status: { not: "ARCHIVED" } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true } }),
   ]);
 

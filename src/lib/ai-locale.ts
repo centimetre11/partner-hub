@@ -211,7 +211,7 @@ ${clarificationFooter}`;
     "fields": [],
     "contacts": [],
     "opportunities": [],
-    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","detail":"..."}],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","assigneeName":"...","detail":"..."}],
     "trainings": [],
     "solutions": [],
     "businessRecords": []
@@ -272,7 +272,7 @@ ${clarificationFooter}`;
     "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
     "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
     "opportunities": [],
-    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","detail":"..."}],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","assigneeName":"...","detail":"..."}],
     "trainings": [],
     "solutions": [],
     "businessRecords": []
@@ -383,7 +383,7 @@ ${clarificationFooter}`;
     "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
     "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"...","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
     "opportunities": [{"action":"add|update","id":"...","name":"...","client":"...","amount":"...","stage":"...","nextStep":"...","status":"...","reason":"..."}],
-    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","detail":"..."}],
+    "todos": [{"title":"...","dueDate":"YYYY-MM-DD","priority":"HIGH|MEDIUM|LOW","assigneeName":"...","detail":"..."}],
     "trainings": [{"person":"...","currentSkill":"...","targetCert":"...","deadline":"YYYY-MM-DD","status":"PLANNED|IN_PROGRESS|DONE","reason":"..."}],
     "solutions": [{"name":"...","targetCustomer":"...","painPoint":"...","fanruanOffer":"...","partnerOffer":"...","pricingModel":"...","status":"...","reason":"..."}],
     "businessRecords": []
@@ -421,7 +421,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
     case "business_record":
       return "Fill businessRecords only (title, traceNature, traceAction required). Leave other arrays empty.";
     case "todo":
-      return "Fill todos only. Leave fields/contacts/opportunities/trainings/solutions/businessRecords as empty arrays.";
+      return "Fill todos only (title=task content only; assigneeName for 负责人/owner; strip command words from title). Leave fields/contacts/opportunities/trainings/solutions/businessRecords as empty arrays.";
     case "new_customer":
       return `Set partnerName to the END-CUSTOMER company name; fill customer profile fields in fields (codes only: ${fieldListForScope(locale, scope)}; status: ACTIVE/PROSPECT/INACTIVE). Add people to contacts. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
     case "customer_profile":
@@ -538,7 +538,8 @@ No web research. ready=true only when title + traceNature + traceAction are set 
   todo: {
     title: "Create todo",
     intro: "The user wants to create one or more follow-up todos. Prefer linking to a partner/customer when mentioned.",
-    guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), priority (HIGH/MEDIUM/LOW), detail.
+    guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), priority (HIGH/MEDIUM/LOW), assigneeName (负责人/owner name), detail.
+Title = the actual task only — strip command words like「增加待办/创建todo」and metadata like「负责人是 xxx」(put name in assigneeName, not in title).
 If user names a company/partner, set proposal.partnerName — the system will auto-link on a single match.
 Multiple matches require blocking partnerName clarification. If the company is named but not found in Partner Hub, the system will ask the user to confirm an unlinked todo (do not set ready=true yourself in that case).
 If no company is mentioned, omit partnerName for a global/personal todo.

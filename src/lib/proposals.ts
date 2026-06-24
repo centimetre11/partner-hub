@@ -69,6 +69,8 @@ export type TodoProposal = {
   detail?: string;
   dueDate?: string; // YYYY-MM-DD
   priority?: string;
+  /** Hub user name for assignee (fuzzy-matched on save) */
+  assigneeName?: string;
 };
 
 export type ExtractionProposal = {

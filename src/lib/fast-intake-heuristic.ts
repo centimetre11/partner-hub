@@ -20,6 +20,7 @@ import {
   normalizeCrmTraceAction,
   normalizeCrmTraceNature,
 } from "./crm-trace-payload";
+import { parseTodoFromText, stripTodoCommandPrefix, normalizeTodoItem } from "./todo-intake-parse";
 
 function stripIntakeSystemHint(content: string): string {
   const zh = content.indexOf("\n\n（系统提示：");
@@ -48,9 +49,7 @@ export function stripIntakeCommandPrefix(text: string, scope: IntakeScope): stri
         );
       break;
     case "todo":
-      s = s
-        .replace(/^(帮我|请|麻烦)?(记(录|个)?|加|创建|新增)?(一个)?待办[：:,，\s]*/i, "")
-        .replace(/^(todo|add todo|create todo)[：:\s]*/i, "");
+      s = stripTodoCommandPrefix(s);
       break;
     case "opportunity":
       s = s.replace(/^(帮我|请|麻烦)?(添加|新建|加|创建)?(一个)?商机[：:,，\s]*/i, "");
@@ -164,14 +163,6 @@ export function lastIntakeUserText(chat?: ChatMessage[], scope?: IntakeScope): s
   return "";
 }
 
-function extractTodoTitle(text: string): string {
-  const stripped = text
-    .replace(/^(帮我|请|麻烦)?(记(录|个)?|加|创建|新增)?(一个)?待办[：:,，\s]*/i, "")
-    .replace(/^(todo|add todo|create todo)[：:\s]*/i, "")
-    .trim();
-  return buildTitle(stripped || text);
-}
-
 function extractContactName(text: string): string | null {
   const patterns = [
     /(?:联系人|contact)[：:\s]+([^\n,，]{2,40})/i,
@@ -259,15 +250,18 @@ function heuristicTodoTurn(userText: string, locale: Locale, today: string): Int
   if (!text) return null;
   if (!/待办|todo|记得|提醒|跟进|follow[- ]?up|deadline|截止/i.test(text)) return null;
 
-  const title = extractTodoTitle(text);
+  const parsed = parseTodoFromText(text, today);
+  if (!parsed.title?.trim()) return null;
   const todos = [
     {
-      title,
-      dueDate: inferDueDate(text, today),
-      priority: inferPriority(text),
+      title: parsed.title,
+      dueDate: parsed.dueDate ?? inferDueDate(text, today),
+      priority: parsed.priority ?? inferPriority(text),
+      assigneeName: parsed.assigneeName,
       detail: text,
     },
   ];
+  const title = parsed.title;
 
   const partnerName = extractPartnerNameFromIntakeText(text) ?? undefined;
 
@@ -580,13 +574,15 @@ async function finalizeTodoTurn(
   locale: Locale,
   opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string },
 ): Promise<IntakeTurn> {
-  let todos = turn.proposal.todos.filter((t) => t.title?.trim());
+  let todos = turn.proposal.todos.filter((t) => t.title?.trim()).map((t) =>
+    normalizeTodoItem(t, new Date().toISOString().slice(0, 10)),
+  );
   if (!todos.length && opts?.userText?.trim()) {
     const stripped = stripIntakeCommandPrefix(opts.userText.trim(), "todo");
     if (stripped && !/^(确认|取消|仅crm)/i.test(stripped)) {
-      const title = extractTodoTitle(stripped);
-      if (title.trim()) {
-        todos = [{ title, detail: stripped }];
+      const parsed = parseTodoFromText(stripped, new Date().toISOString().slice(0, 10));
+      if (parsed.title?.trim()) {
+        todos = [{ ...parsed, detail: stripped }];
         turn = { ...turn, proposal: { ...turn.proposal, todos } };
       }
     }

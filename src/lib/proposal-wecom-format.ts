@@ -151,7 +151,15 @@ export function formatProposeWecomReply(opts: {
   for (const r of opts.proposal.businessRecords) {
     draftLines.push(`商务记录：${r.title}${r.category ? ` [${r.category}]` : ""}`);
   }
-  for (const t of opts.proposal.todos) draftLines.push(`待办：${t.title}`);
+  for (const t of opts.proposal.todos) {
+    const extra = [
+      t.assigneeName ? `负责人 ${t.assigneeName}` : "",
+      t.dueDate ? `截止 ${t.dueDate}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    draftLines.push(`待办：${t.title}${extra ? ` · ${extra}` : ""}`);
+  }
   for (const t of opts.proposal.trainings) draftLines.push(`培训：${t.person}${t.targetCert ? ` → ${t.targetCert}` : ""}`);
   for (const s of opts.proposal.solutions) draftLines.push(`方案：${s.name}`);
 

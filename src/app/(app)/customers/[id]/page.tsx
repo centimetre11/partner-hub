@@ -14,11 +14,10 @@ import { CustomerIntegrationsPanel } from "@/components/customer-integrations-pa
 import { MaterialsSection } from "@/components/materials-section";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getWecomChatForCustomer } from "@/lib/wecom-chats";
+import { CustomerProfilePanel } from "@/components/customer-profile-panel";
+import { CustomerStockPanel } from "@/components/customer-stock-panel";
 import {
-  updateCustomerAction,
   deleteCustomerAction,
-  setCustomerPartnerAction,
-  updateCustomerStockAction,
 } from "@/lib/customer-actions";
 import { CustomerTodoRow } from "@/components/customer-todo-row";
 import {
@@ -64,7 +63,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const ammoConfig = await getAmmoConfigForClient();
 
   const [partners, users, wecomChat, matchedCrmCustomer] = await Promise.all([
-    db.partner.findMany({ where: { status: { not: "ARCHIVED" } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true } }),
     getWecomChatForCustomer(id),
     customer.crmCustomerId
@@ -84,90 +83,25 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   // ============ 资料 ============
   const profilePanel = (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-      <div className="xl:col-span-2">
-        <form action={updateCustomerAction.bind(null, customer.id)} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="text-sm sm:col-span-2">
-            <span className="text-xs text-slate-500">{c.colName}</span>
-            <input name="name" defaultValue={customer.name} required className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.statusLabel}</span>
-            <select name="status" defaultValue={customer.status} className={input}>
-              <option value="ACTIVE">{c.statusActive}</option>
-              <option value="PROSPECT">{c.statusProspect}</option>
-              <option value="INACTIVE">{c.statusInactive}</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.ownerLabel}</span>
-            <select name="ownerId" defaultValue={customer.ownerId ?? ""} className={input}>
-              <option value="">—</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.industryLabel}</span>
-            <input name="industry" defaultValue={customer.industry ?? ""} className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.scaleLabel}</span>
-            <input name="scale" defaultValue={customer.scale ?? ""} className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.cityPlaceholder}</span>
-            <input name="city" defaultValue={customer.city ?? ""} className={input} />
-          </label>
-          <label className="text-sm">
-            <span className="text-xs text-slate-500">{c.countryPlaceholder}</span>
-            <input name="country" defaultValue={customer.country ?? ""} className={input} />
-          </label>
-          <label className="text-sm sm:col-span-2">
-            <span className="text-xs text-slate-500">{c.websiteLabel}</span>
-            <input name="website" defaultValue={customer.website ?? ""} className={input} />
-          </label>
-          <label className="text-sm sm:col-span-2">
-            <span className="text-xs text-slate-500">{c.notesPlaceholder}</span>
-            <textarea name="notes" defaultValue={customer.notes ?? ""} rows={3} className={input} />
-          </label>
-          <div className="sm:col-span-2 flex justify-end">
-            <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">{c.save}</button>
-          </div>
-        </form>
-      </div>
-
-      <div className="space-y-5">
-        <Card title={c.boundPartner}>
-          {customer.partner ? (
-            <div className="space-y-3">
-              <Link href={`/partners/${customer.partner.id}`} className="block rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2.5 text-sm font-medium text-emerald-900 hover:bg-emerald-50">
-                {customer.partner.name}
-                {customer.partnerRelation === "SELF" && (
-                  <span className="ml-2 text-[10px] rounded-full bg-emerald-100 px-1.5 py-0.5 text-emerald-700">{c.selfBadge}</span>
-                )}
-              </Link>
-              <form action={setCustomerPartnerAction.bind(null, customer.id)}>
-                <input type="hidden" name="partnerId" value="" />
-                <button className="text-xs text-slate-400 hover:text-red-600">{c.unbind}</button>
-              </form>
-            </div>
-          ) : (
-            <form action={setCustomerPartnerAction.bind(null, customer.id)} className="space-y-2">
-              <p className="text-sm text-slate-400">{c.notBound}</p>
-              <select name="partnerId" defaultValue="" className={input}>
-                <option value="">{c.selectPartner}</option>
-                {partners.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <button className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800">{c.bindPartner}</button>
-            </form>
-          )}
-        </Card>
-      </div>
-    </div>
+    <CustomerProfilePanel
+      customer={{
+        id: customer.id,
+        name: customer.name,
+        status: customer.status,
+        industry: customer.industry,
+        scale: customer.scale,
+        city: customer.city,
+        country: customer.country,
+        website: customer.website,
+        notes: customer.notes,
+        ownerId: customer.ownerId,
+        owner: customer.owner,
+        partner: customer.partner,
+        partnerRelation: customer.partnerRelation,
+      }}
+      users={users}
+      partners={partners}
+    />
   );
 
   // ============ 三连接 ============
@@ -375,36 +309,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   ];
   const stockFilled = stockSteps.filter((s) => s.value && s.value.trim()).length;
   const stockPanel = (
-    <form action={updateCustomerStockAction.bind(null, customer.id)} className="space-y-5">
-      <div className="space-y-4">
-        {stockSteps.map((s) => (
-          <div key={s.field} className="rounded-xl border border-slate-200 overflow-hidden">
-            <div className="flex items-start gap-3 px-4 py-3 bg-slate-50/60 border-b border-slate-100">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">
-                {s.letter}
-              </span>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-slate-900">
-                  {s.name}
-                  <span className="ml-2 text-[11px] font-normal text-slate-400">{s.word}</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{s.desc}</p>
-              </div>
-            </div>
-            <textarea
-              name={s.field}
-              defaultValue={s.value ?? ""}
-              rows={3}
-              placeholder={s.placeholder}
-              className="w-full border-0 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-300 resize-y"
-            />
-          </div>
-        ))}
-      </div>
-      <div className="flex justify-end">
-        <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">{sq.save}</button>
-      </div>
-    </form>
+    <CustomerStockPanel customerId={customer.id} customerName={customer.name} steps={stockSteps} />
   );
 
   const tabs: CustomerTab[] = [

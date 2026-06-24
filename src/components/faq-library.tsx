@@ -39,6 +39,10 @@ type FaqMessages = {
   officialOnly: string;
   verify: string;
   unverify: string;
+  officialSection: string;
+  officialSectionDesc: string;
+  communitySection: string;
+  communitySectionDesc: string;
 };
 
 const tones = ["blue", "purple", "green", "amber", "indigo", "red", "zinc"] as const;
@@ -103,6 +107,108 @@ export function FaqLibrary({
     });
   }
 
+  const officialEntries = filtered.filter((e) => e.verified);
+  const communityEntries = filtered.filter((e) => !e.verified);
+
+  function renderEntry(e: FaqEntryView, emphasis: boolean) {
+    const isEditing = editingId === e.id;
+    const isOpen = expanded[e.id] ?? false;
+    if (isEditing) {
+      return (
+        <FaqForm
+          key={e.id}
+          m={m}
+          categories={categories}
+          entry={e}
+          onSubmit={handleUpsert}
+          onCancel={() => setEditingId(null)}
+        />
+      );
+    }
+    return (
+      <div
+        key={e.id}
+        className={`rounded-xl border shadow-sm ${
+          emphasis
+            ? "border-emerald-200 bg-emerald-50/40 ring-1 ring-emerald-100"
+            : "border-slate-200 bg-white"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => setExpanded((s) => ({ ...s, [e.id]: !isOpen }))}
+          className="w-full text-left px-5 py-4 flex items-start justify-between gap-3"
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {e.verified && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 text-white px-2 py-0.5 text-[11px] font-semibold">
+                  <span>✓</span>
+                  {m.official}
+                </span>
+              )}
+              <Badge tone={toneFor(e.category, categories)}>
+                {categories.find((c) => c.value === e.category)?.label ?? e.category}
+              </Badge>
+            </div>
+            <h3 className="text-sm font-medium text-slate-900 break-words">{e.question}</h3>
+            <div className="mt-1 text-xs text-slate-400">{e.editorLabel}</div>
+          </div>
+          <span className={`mt-1 text-slate-300 transition ${isOpen ? "rotate-45" : ""}`}>+</span>
+        </button>
+
+        {isOpen && (
+          <div className="px-5 pb-5 space-y-3">
+            <div className="rounded-lg border border-slate-100 bg-white/70 p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+                {m.answerLabel}
+              </div>
+              {e.answer.trim() ? (
+                <MarkdownPreview content={e.answer} />
+              ) : (
+                <p className="text-sm text-slate-400 italic">{m.answerEmpty}</p>
+              )}
+            </div>
+            {e.verified && e.verifiedLabel && (
+              <div className="text-xs text-emerald-600">{e.verifiedLabel}</div>
+            )}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleVerify(e.id, !e.verified)}
+                className={`text-xs font-medium ${
+                  e.verified
+                    ? "text-slate-400 hover:text-slate-600"
+                    : "text-emerald-600 hover:text-emerald-700"
+                }`}
+              >
+                {e.verified ? `✕ ${m.unverify}` : `✓ ${m.verify}`}
+              </button>
+              <span className="text-slate-200">|</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingId(e.id);
+                  setShowNew(false);
+                }}
+                className="text-xs font-medium text-sky-600 hover:text-sky-700"
+              >
+                {m.edit}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(e.id)}
+                className="text-xs font-medium text-slate-400 hover:text-red-600"
+              >
+                {m.delete}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -163,105 +269,49 @@ export function FaqLibrary({
         />
       )}
 
-      <div className="space-y-3">
-        {filtered.map((e) => {
-          const isEditing = editingId === e.id;
-          const isOpen = expanded[e.id] ?? false;
-          if (isEditing) {
-            return (
-              <FaqForm
-                key={e.id}
-                m={m}
-                categories={categories}
-                entry={e}
-                onSubmit={handleUpsert}
-                onCancel={() => setEditingId(null)}
-              />
-            );
-          }
-          return (
-            <div key={e.id} className="rounded-xl border border-slate-200 bg-white shadow-sm">
-              <button
-                type="button"
-                onClick={() => setExpanded((s) => ({ ...s, [e.id]: !isOpen }))}
-                className="w-full text-left px-5 py-4 flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge tone={toneFor(e.category, categories)}>
-                      {categories.find((c) => c.value === e.category)?.label ?? e.category}
-                    </Badge>
-                    {e.verified && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] font-medium">
-                        <span>✓</span>
-                        {m.official}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="text-sm font-medium text-slate-900 break-words">{e.question}</h3>
-                  <div className="mt-1 text-xs text-slate-400">{e.editorLabel}</div>
+      {filtered.length === 0 ? (
+        <div className="text-center text-sm text-slate-400 py-12">
+          {entries.length === 0 ? m.empty : m.emptyFiltered}
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {officialEntries.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-3 border-b border-emerald-100 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-white text-xs font-bold">
+                  ✓
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-emerald-800">{m.officialSection}</h2>
+                  <p className="text-xs text-emerald-700/70">{m.officialSectionDesc}</p>
                 </div>
-                <span className={`mt-1 text-slate-300 transition ${isOpen ? "rotate-45" : ""}`}>+</span>
-              </button>
+                <span className="ml-auto text-xs font-medium text-emerald-700">
+                  {officialEntries.length}
+                </span>
+              </div>
+              <div className="space-y-3">{officialEntries.map((e) => renderEntry(e, true))}</div>
+            </section>
+          )}
 
-              {isOpen && (
-                <div className="px-5 pb-5 space-y-3">
-                  <div className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-                      {m.answerLabel}
-                    </div>
-                    {e.answer.trim() ? (
-                      <MarkdownPreview content={e.answer} />
-                    ) : (
-                      <p className="text-sm text-slate-400 italic">{m.answerEmpty}</p>
-                    )}
-                  </div>
-                  {e.verified && e.verifiedLabel && (
-                    <div className="text-xs text-emerald-600">{e.verifiedLabel}</div>
-                  )}
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleVerify(e.id, !e.verified)}
-                      className={`text-xs font-medium ${
-                        e.verified
-                          ? "text-slate-400 hover:text-slate-600"
-                          : "text-emerald-600 hover:text-emerald-700"
-                      }`}
-                    >
-                      {e.verified ? `✕ ${m.unverify}` : `✓ ${m.verify}`}
-                    </button>
-                    <span className="text-slate-200">|</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingId(e.id);
-                        setShowNew(false);
-                      }}
-                      className="text-xs font-medium text-sky-600 hover:text-sky-700"
-                    >
-                      {m.edit}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(e.id)}
-                      className="text-xs font-medium text-slate-400 hover:text-red-600"
-                    >
-                      {m.delete}
-                    </button>
-                  </div>
+          {communityEntries.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-3 border-b border-slate-100 pb-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-slate-500 text-xs font-bold">
+                  ◌
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-700">{m.communitySection}</h2>
+                  <p className="text-xs text-slate-400">{m.communitySectionDesc}</p>
                 </div>
-              )}
-            </div>
-          );
-        })}
-
-        {filtered.length === 0 && (
-          <div className="text-center text-sm text-slate-400 py-12">
-            {entries.length === 0 ? m.empty : m.emptyFiltered}
-          </div>
-        )}
-      </div>
+                <span className="ml-auto text-xs font-medium text-slate-400">
+                  {communityEntries.length}
+                </span>
+              </div>
+              <div className="space-y-3">{communityEntries.map((e) => renderEntry(e, false))}</div>
+            </section>
+          )}
+        </div>
+      )}
 
       <p className="text-xs text-slate-400">{m.tip}</p>
     </div>
