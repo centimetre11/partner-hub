@@ -26,7 +26,7 @@ export async function DashboardWorkbenchTodos({
   const isAll = scope === "all";
   const in7days = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
 
-  const [todos, partners, users] = await Promise.all([
+  const [todos, partners, customers, users] = await Promise.all([
     db.todoItem.findMany({
       where: {
         status: "OPEN",
@@ -42,7 +42,12 @@ export async function DashboardWorkbenchTodos({
       take: isAll ? 80 : 20,
     }),
     db.partner.findMany({
-      where: { status: { not: "ARCHIVED" } },
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.customer.findMany({
+      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -51,7 +56,7 @@ export async function DashboardWorkbenchTodos({
 
   const toggle = (
     <div className="flex items-center gap-2 shrink-0">
-      <CreateTodoDrawer userId={userId} partners={partners} users={users} />
+      <CreateTodoDrawer userId={userId} partners={partners} customers={customers} users={users} />
       <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
       <Link
         href="/?todos=mine"

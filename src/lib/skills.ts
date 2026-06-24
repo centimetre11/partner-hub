@@ -1128,6 +1128,49 @@ const listWecomChatsTool: Skill = {
   },
 };
 
+// ---- Send WeCom app message (self-built application → individual users) ----
+const sendWecomAppTool: Skill = {
+  name: "send_wecom_app",
+  label: "Send WeCom app message",
+  desc: "Send a self-built WeCom application message to individual user(s) via userid",
+  def: {
+    type: "function",
+    function: {
+      name: "send_wecom_app",
+      description:
+        "Send a WeCom self-built application message to one or more users. Messages appear in the user's WeCom app feed (not group chat). Provide wecomUserId and/or hubUserId/hubUserName (must have wecomUserId bound in Account settings). Requires WECOM_CORP_ID, WECOM_APP_SECRET, WECOM_AGENT_ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          wecomUserId: {
+            type: "string",
+            description: "WeCom userid(s), comma-separated. Copy from Account → Identity bindings.",
+          },
+          hubUserId: {
+            type: "string",
+            description: "Partner Hub user id(s), comma-separated. Resolves to bound wecomUserId.",
+          },
+          hubUserName: {
+            type: "string",
+            description: "Partner Hub display name(s), comma-separated exact match. Resolves to bound wecomUserId.",
+          },
+          content: { type: "string", description: "Message body (max 2048 bytes)" },
+          msgtype: {
+            type: "string",
+            enum: ["text", "markdown"],
+            description: "Message type; default text",
+          },
+        },
+        required: ["content"],
+      },
+    },
+  },
+  run: async (args, ctx) => {
+    const { runSendWecomAppMessageTool } = await import("./skill-actions/send-wecom-app-message");
+    return runSendWecomAppMessageTool(args, ctx);
+  },
+};
+
 // ---- Send email ----
 const sendEmailTool: Skill = {
   name: "send_email",
@@ -1182,6 +1225,7 @@ export const SKILLS: Skill[] = [
   writeKms,
   pushWecom,
   listWecomChatsTool,
+  sendWecomAppTool,
   sendEmailTool,
 ];
 

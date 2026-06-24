@@ -16,6 +16,8 @@ export type ToolMeta = {
   requiresKnowhow?: boolean;
   /** Requires team SMTP email service */
   requiresEmail?: boolean;
+  /** Requires WeCom self-built app (corp id, secret, agent id) */
+  requiresWecomApp?: boolean;
   /** Core scenario priority */
   priority: "core" | "standard" | "assistant";
 };
@@ -51,6 +53,7 @@ const TOOL_META: Record<string, Omit<ToolMeta, "name" | "label" | "desc">> = {
   update_customer: { implemented: true, priority: "assistant" },
   push_wecom: { implemented: true, priority: "standard" },
   list_wecom_chats: { implemented: true, priority: "standard" },
+  send_wecom_app: { implemented: true, requiresWecomApp: true, priority: "standard" },
   send_email: { implemented: true, requiresEmail: true, priority: "standard" },
 };
 
@@ -77,6 +80,7 @@ const CATEGORY_BY_TOOL: Record<string, string> = {
   write_kms: "kms",
   push_wecom: "integration",
   list_wecom_chats: "integration",
+  send_wecom_app: "integration",
   send_email: "integration",
 };
 
@@ -131,14 +135,21 @@ export function isToolAvailable(name: string, opts?: { webSearchReady?: boolean 
 
 export function getToolAvailability(
   name: string,
-  opts?: { kmsConfigured?: boolean; knowhowConfigured?: boolean; webSearchReady?: boolean; emailConfigured?: boolean },
-): "ready" | "needs_web_search" | "needs_kms" | "needs_knowhow" | "needs_email" | "unknown" {
+  opts?: {
+    kmsConfigured?: boolean;
+    knowhowConfigured?: boolean;
+    webSearchReady?: boolean;
+    emailConfigured?: boolean;
+    wecomAppConfigured?: boolean;
+  },
+): "ready" | "needs_web_search" | "needs_kms" | "needs_knowhow" | "needs_email" | "needs_wecom_app" | "unknown" {
   if (!SKILLS.some((t) => t.name === name)) return "unknown";
   const meta = TOOL_META[name];
   if (meta?.requiresWebSearch && !opts?.webSearchReady) return "needs_web_search";
   if (meta?.requiresKms && !opts?.kmsConfigured) return "needs_kms";
   if (meta?.requiresKnowhow && !opts?.knowhowConfigured) return "needs_knowhow";
   if (meta?.requiresEmail && !opts?.emailConfigured) return "needs_email";
+  if (meta?.requiresWecomApp && !opts?.wecomAppConfigured) return "needs_wecom_app";
   return "ready";
 }
 

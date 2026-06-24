@@ -112,8 +112,8 @@ export default async function MobileDeskPage() {
   const customerOptions = activeCustomers.map((c) => ({ id: c.id, name: c.name }));
 
   return (
-    <div className="min-h-full bg-slate-50 pb-24">
-      <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6 lg:px-8">
+    <div className="min-h-full min-w-0 max-w-full overflow-x-hidden bg-slate-50 pb-24">
+      <div className="mx-auto box-border w-full max-w-5xl min-w-0 px-4 py-5 sm:px-6 lg:px-8">
         <section className="overflow-hidden rounded-[1.75rem] bg-slate-950 shadow-sm">
           <div className="relative p-5 sm:p-8">
             <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-sky-400/20 blur-3xl" />

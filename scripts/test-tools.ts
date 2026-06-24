@@ -123,6 +123,29 @@ async function main() {
     });
   }
 
+  const wecomAppConfigured = await import("../src/lib/wecom-app-message").then((m) => m.isWecomAppMessageConfigured());
+  const wecomTestUserId = process.env.WECOM_APP_TEST_USERID?.trim();
+  if (wecomAppConfigured && wecomTestUserId) {
+    const appOut = await runSkill(
+      "send_wecom_app",
+      { wecomUserId: wecomTestUserId, content: "[tool-test] send_wecom_app" },
+      ctx,
+    );
+    results.push({
+      tool: "send_wecom_app",
+      status: appOut.includes("WeCom app message sent") ? "pass" : "fail",
+      preview: appOut,
+    });
+  } else {
+    results.push({
+      tool: "send_wecom_app",
+      status: "skip",
+      preview: wecomAppConfigured
+        ? "Set WECOM_APP_TEST_USERID to run live send"
+        : "WeCom app message not configured — skip",
+    });
+  }
+
   const summary = {
     webSearchConfigured: webSearchReady,
     registeredTools: SKILLS.map((s) => s.name),

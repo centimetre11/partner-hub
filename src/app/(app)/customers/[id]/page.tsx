@@ -376,10 +376,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const stockFilled = stockSteps.filter((s) => s.value && s.value.trim()).length;
   const stockPanel = (
     <form action={updateCustomerStockAction.bind(null, customer.id)} className="space-y-5">
-      <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 px-4 py-3">
-        <h3 className="text-sm font-semibold text-indigo-900">{sq.title}</h3>
-        <p className="text-xs text-indigo-700/80 mt-1 leading-relaxed">{sq.intro}</p>
-      </div>
       <div className="space-y-4">
         {stockSteps.map((s) => (
           <div key={s.field} className="rounded-xl border border-slate-200 overflow-hidden">
@@ -419,6 +415,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       badge: openTodos ? String(openTodos) : null,
       content: overviewPanel,
     },
+    { id: "profile", label: c.tabProfile, desc: c.tabProfileDesc, content: profilePanel },
     {
       id: "stock",
       label: c.tabStock,
@@ -426,7 +423,6 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       badge: stockFilled ? `${stockFilled}/5` : null,
       content: stockPanel,
     },
-    { id: "profile", label: c.tabProfile, desc: c.tabProfileDesc, content: profilePanel },
     {
       id: "opportunities",
       label: c.tabOpportunities,

@@ -32,6 +32,7 @@ const TOOL_LABELS: Record<string, string> = {
   write_kms: "Write KMS documents",
   push_wecom: "Push to WeCom group",
   list_wecom_chats: "List WeCom chats",
+  send_wecom_app: "Send WeCom app message",
   send_email: "Send email",
   $web_search: "News search",
 };
@@ -59,6 +60,7 @@ const TOOL_LABELS_ZH: Record<string, string> = {
   write_kms: "写入 KMS 文档",
   push_wecom: "推送到企微群",
   list_wecom_chats: "列出企微群",
+  send_wecom_app: "发送企微应用消息",
   send_email: "发送邮件",
   $web_search: "新闻搜索",
 };
@@ -86,6 +88,8 @@ const TOOL_DESCS: Record<string, string> = {
   write_kms: "Append, prepend, replace content on a KMS page, or create a child page (requires write permission)",
   push_wecom: "Enqueue a Markdown message to a WeCom group chatId (chat must be registered by the bot)",
   list_wecom_chats: "List registered WeCom group/single chats and partner bindings",
+  send_wecom_app:
+    "Send a self-built WeCom application message to individual user(s) by userid — appears in the app message feed",
   send_email: "Send an email via team SMTP (QQ mailbox). Agent supplies recipient, subject, and body.",
 };
 
@@ -112,6 +116,7 @@ const TOOL_DESCS_ZH: Record<string, string> = {
   write_kms: "在 KMS 页面追加、前置、替换内容或创建子页面（需写权限）",
   push_wecom: "向企微群 chatId 排队发送 Markdown 消息（群需已被机器人注册）",
   list_wecom_chats: "列出已注册的企微群/单聊及伙伴绑定关系",
+  send_wecom_app: "通过自建应用向成员 userid 发送应用消息（出现在应用消息列表，非群聊）",
   send_email: "通过团队 SMTP（QQ 邮箱）发送邮件，由 Agent 提供收件人、主题与正文",
 };
 

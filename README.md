@@ -92,6 +92,8 @@ Content-Type: application/json
 
 登录链路：后端用 CorpID + Secret 获取 `access_token`，再用 `access_token + code` 换员工 `UserID`，最后按系统账号的 `wecomUserId` 自动创建登录会话。未绑定时会回到登录页并提示需要先绑定。
 
+同一套自建应用凭证还可用于 **应用消息推送**（`send_wecom_app` 工具）：向已绑定 `wecomUserId` 的成员主动发送通知，消息出现在企微应用消息列表。需配置 `WECOM_AGENT_ID`（应用 AgentId）。
+
 ## Git 仓库（Mac / 手机 Cursor 共用）
 
 源码托管在 GitHub：**https://github.com/centimetre11/partner-hub**（私有仓库）

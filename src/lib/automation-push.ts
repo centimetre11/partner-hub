@@ -9,6 +9,7 @@ export const DEFAULT_AUTOMATION_SKILLS = [
   "search_partners",
   "web_search",
   "push_wecom",
+  "send_wecom_app",
   "send_email",
 ] as const;
 
@@ -48,6 +49,7 @@ const AUTOMATION_SKILL_ORDER = [
   "get_partner",
   "search_partners",
   "push_wecom",
+  "send_wecom_app",
   "send_email",
 ] as const;
 
@@ -68,7 +70,8 @@ export function inferAutomationSkills(input: {
   if (input.partnerId?.trim()) picked.add("get_partner");
   else if (/search_partners|哪个伙伴|哪位伙伴|which partner/i.test(text)) picked.add("search_partners");
 
-  if (input.wecomPushChatId?.trim() || /push_wecom|企微|发到群|推到.*群/i.test(text)) picked.add("push_wecom");
+  if (input.wecomPushChatId?.trim() || /push_wecom|企微群|发到群|推到.*群/i.test(text)) picked.add("push_wecom");
+  if (/send_wecom_app|应用消息|私信|推送给.*人|推给.*本人/i.test(text)) picked.add("send_wecom_app");
   if (input.pushEmailTo?.trim() || /send_email|发邮件|发邮箱|邮件给我|email/i.test(text)) picked.add("send_email");
 
   if (picked.size === 0) {

@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { TodoOwnerSelectField } from "@/components/todo-owner-select-field";
 import { createTodoAction } from "@/lib/actions";
 import { useMessages } from "@/lib/i18n/context";
+import { appendTodoOwnerToFormData } from "@/lib/todo-owner-select";
 
 type Option = { id: string; name: string };
 
@@ -13,10 +15,12 @@ const input =
 export function CreateTodoDrawer({
   userId,
   partners,
+  customers,
   users,
 }: {
   userId: string;
   partners: Option[];
+  customers: Option[];
   users: Option[];
 }) {
   const m = useMessages();
@@ -80,6 +84,7 @@ export function CreateTodoDrawer({
               action={async (formData) => {
                 setSaving(true);
                 try {
+                  appendTodoOwnerToFormData(formData);
                   await createTodoAction(formData);
                   setOpen(false);
                   router.refresh();
@@ -100,17 +105,15 @@ export function CreateTodoDrawer({
                   />
                 </label>
 
-                <label className="block">
-                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldPartner}</span>
-                  <select name="partnerId" className={input} defaultValue="">
-                    <option value="">{m.todos.noPartner}</option>
-                    {partners.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <TodoOwnerSelectField
+                  partners={partners}
+                  customers={customers}
+                  label={m.todos.fieldRelated}
+                  noneLabel={m.todos.noRelated}
+                  partnersGroupLabel={m.todos.partnersGroup}
+                  customersGroupLabel={m.todos.customersGroup}
+                  className={input}
+                />
 
                 <label className="block">
                   <span className="mb-1 block text-xs text-slate-500">{m.common.owner}</span>
@@ -124,11 +127,11 @@ export function CreateTodoDrawer({
                 </label>
 
                 <div className="flex gap-3">
-                  <label className="block flex-1">
+                  <label className="block flex-1 min-w-0">
                     <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldDueDate}</span>
                     <input name="dueDate" type="date" className={input} />
                   </label>
-                  <label className="block w-28">
+                  <label className="block w-28 shrink-0">
                     <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldPriority}</span>
                     <select name="priority" className={input} defaultValue="MEDIUM">
                       <option value="HIGH">{m.common.high}</option>

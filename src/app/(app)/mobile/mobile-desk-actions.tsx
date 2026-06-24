@@ -3,16 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BusinessRecordForm } from "@/components/business-record-form";
+import { TodoOwnerSelectField } from "@/components/todo-owner-select-field";
 import { createTodoAction } from "@/lib/actions";
 import type { OwnerRef } from "@/lib/owner";
+import { appendTodoOwnerToFormData, parseOwnerRef } from "@/lib/todo-owner-select";
 
 type Option = { id: string; name: string };
 
-type LinkKind = "" | "partner" | "customer";
-type TargetKind = "partner" | "customer";
-
 const input =
-  "w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
+  "box-border w-full min-w-0 max-w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
 function MobileDrawer({
   open,
@@ -54,23 +53,24 @@ function MobileDrawer({
         role="dialog"
         aria-modal
         aria-labelledby={titleId}
-        className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-y-auto rounded-t-[1.75rem] border border-slate-200 bg-white p-4 shadow-2xl sm:left-auto sm:right-4 sm:top-4 sm:h-auto sm:max-h-[88dvh] sm:w-[26rem] sm:rounded-[1.75rem]"
+        className="fixed inset-x-0 bottom-0 z-50 box-border flex max-h-[96dvh] w-full max-w-[100vw] flex-col overflow-hidden rounded-t-[1.75rem] border border-slate-200 bg-white shadow-2xl"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 id={titleId} className="text-base font-semibold text-slate-900">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <h2 id={titleId} className="min-w-0 text-base font-semibold text-slate-900">
             {title}
           </h2>
           <button
             type="button"
             disabled={saving}
             onClick={onClose}
-            className="rounded-full px-2 text-2xl leading-none text-slate-400 hover:text-slate-700 disabled:opacity-50"
+            className="shrink-0 rounded-full px-2 text-2xl leading-none text-slate-400 hover:text-slate-700 disabled:opacity-50"
             aria-label={cancelLabel}
           >
-            x
+            ×
           </button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>
       </div>
     </>
   );
@@ -92,14 +92,10 @@ export function MobileTodoCapture({
     title: string;
     todoTitle: string;
     titlePlaceholder: string;
-    linkKind: string;
-    linkNone: string;
-    linkPartner: string;
-    linkCustomer: string;
-    partner: string;
-    customer: string;
-    noPartner: string;
-    noCustomer: string;
+    relatedTo: string;
+    none: string;
+    partnersGroup: string;
+    customersGroup: string;
     owner: string;
     dueDate: string;
     priority: string;
@@ -116,7 +112,6 @@ export function MobileTodoCapture({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [linkKind, setLinkKind] = useState<LinkKind>("");
 
   return (
     <>
@@ -137,66 +132,35 @@ export function MobileTodoCapture({
         cancelLabel={labels.cancel}
       >
         <form
-          className="space-y-3"
+          className="min-w-0 space-y-3"
           action={async (formData) => {
             setSaving(true);
             try {
+              appendTodoOwnerToFormData(formData);
               await createTodoAction(formData);
               setOpen(false);
-              setLinkKind("");
               router.refresh();
             } finally {
               setSaving(false);
             }
           }}
         >
-          <label className="block">
+          <label className="block min-w-0">
             <span className="mb-1 block text-xs font-medium text-slate-500">{labels.todoTitle}</span>
             <input name="title" required autoFocus placeholder={labels.titlePlaceholder} className={input} />
           </label>
 
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">{labels.linkKind}</span>
-            <select
-              value={linkKind}
-              onChange={(e) => setLinkKind(e.target.value as LinkKind)}
-              className={input}
-            >
-              <option value="">{labels.linkNone}</option>
-              <option value="partner">{labels.linkPartner}</option>
-              <option value="customer">{labels.linkCustomer}</option>
-            </select>
-          </label>
+          <TodoOwnerSelectField
+            partners={partners}
+            customers={customers}
+            label={labels.relatedTo}
+            noneLabel={labels.none}
+            partnersGroupLabel={labels.partnersGroup}
+            customersGroupLabel={labels.customersGroup}
+            className={input}
+          />
 
-          {linkKind === "partner" && (
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-500">{labels.partner}</span>
-              <select name="partnerId" required defaultValue="" className={input}>
-                <option value="">{labels.noPartner}</option>
-                {partners.map((partner) => (
-                  <option key={partner.id} value={partner.id}>
-                    {partner.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          {linkKind === "customer" && (
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-500">{labels.customer}</span>
-              <select name="customerId" required defaultValue="" className={input}>
-                <option value="">{labels.noCustomer}</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          <label className="block">
+          <label className="block min-w-0">
             <span className="mb-1 block text-xs font-medium text-slate-500">{labels.owner}</span>
             <select name="assigneeId" defaultValue={userId} className={input}>
               {users.map((user) => (
@@ -207,12 +171,12 @@ export function MobileTodoCapture({
             </select>
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
+          <div className="flex flex-col gap-3">
+            <label className="block min-w-0">
               <span className="mb-1 block text-xs font-medium text-slate-500">{labels.dueDate}</span>
               <input name="dueDate" type="date" className={input} />
             </label>
-            <label className="block">
+            <label className="block min-w-0">
               <span className="mb-1 block text-xs font-medium text-slate-500">{labels.priority}</span>
               <select name="priority" defaultValue="MEDIUM" className={input}>
                 <option value="HIGH">{labels.high}</option>
@@ -222,24 +186,24 @@ export function MobileTodoCapture({
             </label>
           </div>
 
-          <label className="block">
+          <label className="block min-w-0">
             <span className="mb-1 block text-xs font-medium text-slate-500">{labels.notes}</span>
             <input name="detail" placeholder={labels.optional} className={input} />
           </label>
 
-          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+          <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-4">
             <button
               type="button"
               disabled={saving}
               onClick={() => setOpen(false)}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >
               {labels.cancel}
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+              className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
             >
               {saving ? labels.saving : labels.submit}
             </button>
@@ -260,24 +224,23 @@ export function MobileBusinessRecordCapture({
   labels: {
     button: string;
     title: string;
-    targetKind: string;
-    partner: string;
-    customer: string;
-    selectPartner: string;
-    selectCustomer: string;
+    selectTarget: string;
+    none: string;
+    partnersGroup: string;
+    customersGroup: string;
     pickTarget: string;
     cancel: string;
   };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [targetKind, setTargetKind] = useState<TargetKind>("partner");
-  const [targetId, setTargetId] = useState("");
+  const [ownerRef, setOwnerRef] = useState("");
 
-  const owner: OwnerRef | null = targetId
-    ? targetKind === "partner"
-      ? { kind: "partner", id: targetId }
-      : { kind: "customer", id: targetId }
+  const parsed = parseOwnerRef(ownerRef);
+  const owner: OwnerRef | null = parsed
+    ? parsed.kind === "partner"
+      ? { kind: "partner", id: parsed.id }
+      : { kind: "customer", id: parsed.id }
     : null;
 
   return (
@@ -294,64 +257,35 @@ export function MobileBusinessRecordCapture({
         open={open}
         onClose={() => {
           setOpen(false);
-          setTargetId("");
+          setOwnerRef("");
         }}
         title={labels.title}
         titleId="mobile-record-capture-title"
         cancelLabel={labels.cancel}
       >
-        <div className="space-y-3">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">{labels.targetKind}</span>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setTargetKind("partner");
-                  setTargetId("");
-                }}
-                className={`rounded-xl border px-3 py-2 text-sm ${
-                  targetKind === "partner"
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 text-slate-600"
-                }`}
-              >
-                {labels.partner}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setTargetKind("customer");
-                  setTargetId("");
-                }}
-                className={`rounded-xl border px-3 py-2 text-sm ${
-                  targetKind === "customer"
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 text-slate-600"
-                }`}
-              >
-                {labels.customer}
-              </button>
-            </div>
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-slate-500">
-              {targetKind === "partner" ? labels.selectPartner : labels.selectCustomer}
-            </span>
-            <select
-              value={targetId}
-              onChange={(e) => setTargetId(e.target.value)}
-              className={input}
-            >
-              <option value="">
-                {targetKind === "partner" ? labels.selectPartner : labels.selectCustomer}
-              </option>
-              {(targetKind === "partner" ? partners : customers).map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
+        <div className="min-w-0 space-y-3">
+          <label className="block min-w-0">
+            <span className="mb-1 block text-xs font-medium text-slate-500">{labels.selectTarget}</span>
+            <select value={ownerRef} onChange={(e) => setOwnerRef(e.target.value)} className={input}>
+              <option value="">{labels.none}</option>
+              {partners.length > 0 && (
+                <optgroup label={labels.partnersGroup}>
+                  {partners.map((item) => (
+                    <option key={item.id} value={`partner:${item.id}`}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {customers.length > 0 && (
+                <optgroup label={labels.customersGroup}>
+                  {customers.map((item) => (
+                    <option key={item.id} value={`customer:${item.id}`}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </label>
 
@@ -362,7 +296,7 @@ export function MobileBusinessRecordCapture({
               compact
               onDone={() => {
                 setOpen(false);
-                setTargetId("");
+                setOwnerRef("");
                 router.refresh();
               }}
             />

@@ -6,7 +6,7 @@ import type { PromptSkillOption, ToolOption } from "@/lib/skill-resolver";
 import { useMessages, useLocale } from "@/lib/i18n/context";
 import { getToolDesc, getToolLabel } from "@/lib/tool-labels";
 
-const AGENT_PUSH_SKILLS = ["push_wecom", "send_email"] as const;
+const AGENT_PUSH_SKILLS = ["push_wecom", "send_wecom_app", "send_email"] as const;
 
 type PartnerOption = { id: string; name: string };
 
@@ -51,6 +51,7 @@ export function AgentForm({
 
   const toolkitOptions = toolOptions.filter((t) => !AGENT_PUSH_SKILLS.includes(t.name as (typeof AGENT_PUSH_SKILLS)[number]));
   const pushWecomOption = toolOptions.find((t) => t.name === "push_wecom");
+  const pushWecomAppOption = toolOptions.find((t) => t.name === "send_wecom_app");
   const pushEmailOption = toolOptions.find((t) => t.name === "send_email");
 
   return (
@@ -219,6 +220,22 @@ export function AgentForm({
                   <span className="text-sm font-medium text-slate-800 block">{a.pushWecom}</span>
                   <span className="text-xs text-slate-400 font-mono">push_wecom</span>
                   <span className="text-xs text-slate-400 block mt-0.5">{a.pushWecomDesc}</span>
+                </span>
+              </label>
+            )}
+            {pushWecomAppOption && (
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-300">
+                <input
+                  type="checkbox"
+                  name="skills"
+                  value="send_wecom_app"
+                  defaultChecked={agent.skills.includes("send_wecom_app")}
+                  className="mt-0.5 rounded"
+                />
+                <span className="min-w-0">
+                  <span className="text-sm font-medium text-slate-800 block">{a.pushWecomApp}</span>
+                  <span className="text-xs text-slate-400 font-mono">send_wecom_app</span>
+                  <span className="text-xs text-slate-400 block mt-0.5">{a.pushWecomAppDesc}</span>
                 </span>
               </label>
             )}

@@ -6,6 +6,7 @@ import { getBuiltinToolCategories, getToolAvailability } from "@/lib/tools-regis
 import { getKmsConfigStatus } from "@/lib/kms";
 import { isKnowhowConfigured } from "@/lib/knowhow";
 import { isEmailServiceConfigured } from "@/lib/email-config";
+import { isWecomAppMessageConfigured } from "@/lib/wecom-app-message";
 import { isWebSearchAvailable, webSearchBackendLabel } from "@/lib/web-search";
 import { isSuperAdmin } from "@/lib/user-roles";
 import { getServerI18n } from "@/lib/server-i18n";
@@ -21,6 +22,7 @@ export default async function ToolsPage() {
   const kmsConfigured = kmsStatus.configured;
   const knowhowConfigured = await isKnowhowConfigured();
   const emailConfigured = await isEmailServiceConfigured();
+  const wecomAppConfigured = isWecomAppMessageConfigured();
   const usedToolNames = new Set<string>();
   for (const a of equippedAgents) {
     for (const name of JSON.parse(a.skills || "[]") as string[]) {
@@ -33,7 +35,7 @@ export default async function ToolsPage() {
   const admin = isSuperAdmin(user);
   const toolCategories = getBuiltinToolCategories(locale);
   const readyCount = toolCategories.flatMap((c) => c.tools).filter(
-    (t) => getToolAvailability(t.name, { kmsConfigured, knowhowConfigured, webSearchReady, emailConfigured }) === "ready"
+    (t) => getToolAvailability(t.name, { kmsConfigured, knowhowConfigured, webSearchReady, emailConfigured, wecomAppConfigured }) === "ready"
   ).length;
   const totalCount = toolCategories.flatMap((c) => c.tools).length;
 
@@ -88,6 +90,13 @@ export default async function ToolsPage() {
           </div>
         )}
 
+        {!wecomAppConfigured && (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900">
+            <span className="font-medium">{m.tools.wecomAppBanner}</span>{" "}
+            {admin ? m.tools.wecomAppBannerAdmin : m.tools.wecomAppBannerNonAdmin}
+          </div>
+        )}
+
         <div className="rounded-lg border border-slate-200 bg-slate-50/40 px-4 py-3 text-sm text-slate-900/80">
           <span className="font-medium">{m.tools.scenarioPriority}</span> {m.tools.scenarioBody}
         </div>
@@ -104,7 +113,7 @@ export default async function ToolsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {cat.tools.map((tool) => {
-                const status = getToolAvailability(tool.name, { kmsConfigured, knowhowConfigured, webSearchReady, emailConfigured });
+                const status = getToolAvailability(tool.name, { kmsConfigured, knowhowConfigured, webSearchReady, emailConfigured, wecomAppConfigured });
                 return (
                   <div
                     key={tool.name}
@@ -122,7 +131,7 @@ export default async function ToolsPage() {
                         <p className="text-xs text-slate-500 mt-2 leading-relaxed">{tool.desc}</p>
                       </div>
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" || status === "needs_knowhow" || status === "needs_email" ? "amber" : "zinc"}>
+                        <Badge tone={status === "ready" ? "green" : status === "needs_web_search" || status === "needs_kms" || status === "needs_knowhow" || status === "needs_email" || status === "needs_wecom_app" ? "amber" : "zinc"}>
                           {status === "ready"
                             ? m.tools.verified
                             : status === "needs_web_search"
@@ -133,6 +142,8 @@ export default async function ToolsPage() {
                                   ? m.tools.needsKnowhow
                                   : status === "needs_email"
                                     ? m.tools.needsEmail
+                                    : status === "needs_wecom_app"
+                                      ? m.tools.needsWecomApp
                                     : m.tools.unknown}
                         </Badge>
                         {usedToolNames.has(tool.name) && <Badge tone="blue">{m.tools.equipped}</Badge>}
