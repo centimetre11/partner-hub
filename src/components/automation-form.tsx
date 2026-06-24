@@ -312,6 +312,11 @@ export function AutomationForm({
             <p className="text-xs text-slate-400 mt-1">{a.emailInputHint}</p>
           </div>
           <div>
+            <input
+              type="hidden"
+              name="pushWecomAppTo"
+              value={pushWecomAppEnabled ? PUSH_WECOM_APP_ENABLED : ""}
+            />
             <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-200">
               <input
                 type="checkbox"
