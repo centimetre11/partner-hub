@@ -1,45 +1,74 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: partner-hub-db-1
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=partnerhub
+      - POSTGRES_PASSWORD=ph_pg_3Qx9Lm2Wv7Kc
+      - POSTGRES_DB=partnerhub
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U partnerhub -d partnerhub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
   partner-hub:
     build: .
+    container_name: partner-hub-partner-hub-1
+    restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
-      - SESSION_SECRET=${SESSION_SECRET:-please-change-this-secret}
-      - SCHEDULER_TIMEZONE=Asia/Riyadh
-      - TZ=Asia/Riyadh
-      - AI_BASE_URL=${AI_BASE_URL:-https://api.moonshot.cn/v1}
-      - AI_API_KEY=${AI_API_KEY:-}
-      - AI_MODEL=${AI_MODEL:-kimi-k2-0711-preview}
-      - UPLOAD_DIR=/data/uploads
-      - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-20}
-      - NINJAPEARL_API_KEY=${NINJAPEARL_API_KEY:-}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
-      - WECOM_CORP_ID=${WECOM_CORP_ID:-}
-      - WECOM_APP_SECRET=${WECOM_APP_SECRET:-}
-      - WECOM_AGENT_ID=${WECOM_AGENT_ID:-}
-      - WECOM_API_BASE_URL=${WECOM_API_BASE_URL:-}
-      - DATABASE_URL=file:/data/partner-hub.db
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://partnerhub:ph_pg_3Qx9Lm2Wv7Kc@db:5432/partnerhub
+      - WECOM_BOT_ENABLED=false
+      - HOSTNAME=0.0.0.0
     volumes:
       - partner-data:/data
       - partner-uploads:/data/uploads
-    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - default
 
   wecom-bot:
     build: .
-    command: ["npx", "tsx", "scripts/wecom-bot.ts"]
+    container_name: partner-hub-wecom-bot-1
+    restart: unless-stopped
+    command: ["npm", "run", "wecom-bot"]
+    env_file:
+      - .env
     environment:
-      - SESSION_SECRET=${SESSION_SECRET:-please-change-this-secret}
-      - DATABASE_URL=file:/data/partner-hub.db
-      - WECOM_BOT_ID=${WECOM_BOT_ID:-}
-      - WECOM_BOT_SECRET=${WECOM_BOT_SECRET:-}
-      - WECOM_BOT_WS_URL=${WECOM_BOT_WS_URL:-}
-      - WECOM_BOT_USER_ID=${WECOM_BOT_USER_ID:-}
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://partnerhub:ph_pg_3Qx9Lm2Wv7Kc@db:5432/partnerhub
+      - WECOM_BOT_ENABLED=true
+      - HOSTNAME=0.0.0.0
     volumes:
       - partner-data:/data
+      - partner-uploads:/data/uploads
     depends_on:
-      - partner-hub
-    restart: unless-stopped
+      db:
+        condition: service_healthy
+    networks:
+      - default
+
+networks:
+  default:
 
 volumes:
   partner-data:
   partner-uploads:
+  pg-data:

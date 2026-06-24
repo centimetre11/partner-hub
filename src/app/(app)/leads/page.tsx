@@ -11,6 +11,7 @@ import {
   resolveLeadView,
   resolveSalesmanFilter,
 } from "@/lib/leads-query";
+import { compareKpiDeadline, isKpiDeadlineUrgent } from "@/lib/leads";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -33,14 +34,14 @@ export default async function LeadsPage({
   const effectiveSalesman = resolveSalesmanFilter(sp.salesman, user.crmSalesmanName);
   const salesmanSelectValue = sp.salesman ?? (effectiveSalesman || "all");
 
-  const [leads, lastSyncAt, salesmen] = await Promise.all([
+  const [rawLeads, lastSyncAt, salesmen] = await Promise.all([
     db.crmLead.findMany({
       where: buildLeadsWhere(sp, user.crmSalesmanName),
-      orderBy: { recdate: "desc" },
     }),
     getLeadsLastSyncAt(),
     getLeadSalesmen(),
   ]);
+  const leads = [...rawLeads].sort(compareKpiDeadline);
 
   const syncedLabel = lastSyncAt
     ? `${l.syncedAt} ${fmtDateTime(lastSyncAt, bcp47)}`
@@ -132,7 +133,9 @@ export default async function LeadsPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {leads.map((lead) => (
+                  {leads.map((lead) => {
+                    const urgent = isKpiDeadlineUrgent(lead.jzDate);
+                    return (
                     <tr key={lead.id} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3">
                         <Link
@@ -154,11 +157,16 @@ export default async function LeadsPage({
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
                         {lead.recdate ? fmtDate(lead.recdate, bcp47) : "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                      <td
+                        className={`px-4 py-3 whitespace-nowrap ${
+                          urgent ? "text-red-600 font-semibold" : "text-slate-500"
+                        }`}
+                      >
                         {lead.jzDate ? fmtDate(lead.jzDate, bcp47) : "—"}
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

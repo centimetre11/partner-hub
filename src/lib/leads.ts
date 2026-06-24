@@ -260,6 +260,37 @@ export function findNormalizedLeadByClueId(rows: CrmLeadRow[], clueId: string) {
 
 export type CrmLeadAction = "toNurture" | "toChannel" | "toCustomer" | "edit" | "shift" | "view";
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/** KPI 截止距今天数（按本地日历日；无截止日返回 null） */
+export function getKpiDaysRemaining(jzDate: Date | null | undefined, now = new Date()) {
+  if (!jzDate) return null;
+  const today = startOfLocalDay(now).getTime();
+  const deadline = startOfLocalDay(jzDate).getTime();
+  return Math.round((deadline - today) / MS_PER_DAY);
+}
+
+/** 截止日在 3 天内（含已过期）标为紧急 */
+export function isKpiDeadlineUrgent(jzDate: Date | null | undefined, now = new Date()) {
+  const days = getKpiDaysRemaining(jzDate, now);
+  return days !== null && days <= 3;
+}
+
+/** KPI 截止时间由近到远；无截止日的排最后 */
+export function compareKpiDeadline(
+  a: { jzDate: Date | null },
+  b: { jzDate: Date | null },
+) {
+  if (!a.jzDate && !b.jzDate) return 0;
+  if (!a.jzDate) return 1;
+  if (!b.jzDate) return -1;
+  return a.jzDate.getTime() - b.jzDate.getTime();
+}
+
 /** 培育线索：com_status 不为空且不属于新线索状态 */
 export function isNurturingLead(status: string | null | undefined) {
   const s = status?.trim() ?? "";

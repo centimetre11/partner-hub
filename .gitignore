@@ -39,6 +39,9 @@ dev.db
 prisma/dev.db
 prisma/*.db-journal
 
+# data dump used for the sqlite -> postgres migration
+prisma/_dump/
+
 # uploaded files
 /uploads
 
