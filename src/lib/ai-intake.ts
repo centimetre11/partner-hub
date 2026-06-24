@@ -1214,7 +1214,6 @@ async function applyCustomerIntake(opts: {
       data: {
         name: proposedName,
         status: (data.status as string) ?? "PROSPECT",
-        partnerId: opts.partnerId ?? null,
         createdById: userId,
         industry: (data.industry as string) ?? null,
         scale: (data.scale as string) ?? null,
@@ -1226,6 +1225,9 @@ async function applyCustomerIntake(opts: {
         contactPhone: (data.contactPhone as string) ?? null,
         contactEmail: (data.contactEmail as string) ?? null,
         notes: (data.notes as string) ?? null,
+        ...(opts.partnerId
+          ? { partnerLinks: { create: { partnerId: opts.partnerId, relation: "SERVED_BY" } } }
+          : {}),
       },
     });
     customerId = created.id;
@@ -1298,7 +1300,7 @@ async function applyCustomerIntake(opts: {
  */
 async function findOrCreateSelfCustomerId(partnerId: string, userId: string): Promise<string> {
   const existing = await db.customer.findFirst({
-    where: { partnerId, partnerRelation: "SELF" },
+    where: { partnerRelation: "SELF", partnerLinks: { some: { partnerId } } },
     select: { id: true },
   });
   if (existing) return existing.id;
@@ -1311,7 +1313,6 @@ async function findOrCreateSelfCustomerId(partnerId: string, userId: string): Pr
     data: {
       name: partner.name,
       status: "ACTIVE",
-      partnerId,
       partnerRelation: "SELF",
       city: partner.city,
       country: partner.country,
@@ -1319,6 +1320,7 @@ async function findOrCreateSelfCustomerId(partnerId: string, userId: string): Pr
       crmCustomerId: partner.crmCustomerId,
       kmsRootPath: partner.kmsRootPath,
       createdById: userId,
+      partnerLinks: { create: { partnerId, relation: "SELF" } },
     },
     select: { id: true },
   });

@@ -88,20 +88,21 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           contact: { select: { name: true } },
         },
       },
-      customers: { orderBy: { name: "asc" } },
+      customerLinks: { include: { customer: true }, orderBy: { customer: { name: "asc" } } },
       assets: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!p) notFound();
   const users = await db.user.findMany();
   const ammoConfig = await getAmmoConfigForClient();
+  const partnerCustomers = p.customerLinks.map((link) => link.customer);
   const unboundCustomers = await db.customer.findMany({
-    where: { partnerId: null, ...END_CUSTOMER_WHERE },
+    where: { ...END_CUSTOMER_WHERE, partnerLinks: { none: { partnerId: id } } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
   const relatedOpportunities = await db.opportunity.findMany({
-    where: { OR: [{ partnerId: id }, { customer: { partnerId: id } }] },
+    where: { OR: [{ partnerId: id }, { customer: { partnerLinks: { some: { partnerId: id } } } }] },
     include: { customer: { select: { id: true, name: true } } },
     orderBy: { updatedAt: "desc" },
   });
@@ -428,7 +429,7 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           <div className="space-y-5">
             <PartnerCustomersSection
               partnerId={p.id}
-              customers={p.customers.map((cust) => ({
+              customers={partnerCustomers.map((cust) => ({
                 id: cust.id, name: cust.name, status: cust.status,
                 industry: cust.industry, city: cust.city, country: cust.country,
                 partnerRelation: cust.partnerRelation,

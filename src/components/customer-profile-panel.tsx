@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Card } from "@/components/ui";
-import { updateCustomerAction, setCustomerPartnerAction } from "@/lib/customer-actions";
+import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
 import { useMessages } from "@/lib/i18n/context";
 
 type Option = { id: string; name: string };
+
+type BoundPartner = { id: string; name: string; relation: string };
 
 type CustomerProfile = {
   id: string;
@@ -20,7 +22,7 @@ type CustomerProfile = {
   notes: string | null;
   ownerId: string | null;
   owner: { name: string } | null;
-  partner: { id: string; name: string } | null;
+  boundPartners: BoundPartner[];
   partnerRelation: string | null;
 };
 
@@ -38,6 +40,9 @@ export function CustomerProfilePanel({
   const m = useMessages();
   const c = m.customers;
   const [open, setOpen] = useState(false);
+
+  const boundIds = new Set(customer.boundPartners.map((bp) => bp.id));
+  const availablePartners = partners.filter((p) => !boundIds.has(p.id));
 
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? c.statusActive : s === "PROSPECT" ? c.statusProspect : c.statusInactive;
@@ -75,40 +80,62 @@ export function CustomerProfilePanel({
       </div>
 
       <div className="space-y-5">
-        <Card title={c.boundPartner}>
-          {customer.partner ? (
-            <div className="space-y-3">
-              <Link
-                href={`/partners/${customer.partner.id}`}
-                className="block rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2.5 text-sm font-medium text-emerald-900 hover:bg-emerald-50"
-              >
-                {customer.partner.name}
-                {customer.partnerRelation === "SELF" && (
-                  <span className="ml-2 text-[10px] rounded-full bg-emerald-100 px-1.5 py-0.5 text-emerald-700">
+        <Card title={c.boundPartners}>
+          {customer.partnerRelation === "SELF" ? (
+            <div className="space-y-2">
+              {customer.boundPartners.map((bp) => (
+                <Link
+                  key={bp.id}
+                  href={`/partners/${bp.id}`}
+                  className="block rounded-lg border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-sm font-medium text-indigo-900 hover:bg-indigo-50"
+                >
+                  {bp.name}
+                  <span className="ml-2 text-[10px] rounded-full bg-indigo-100 px-1.5 py-0.5 text-indigo-700">
                     {c.selfBadge}
                   </span>
-                )}
-              </Link>
-              <form action={setCustomerPartnerAction.bind(null, customer.id)}>
-                <input type="hidden" name="partnerId" value="" />
-                <button className="text-xs text-slate-400 hover:text-red-600">{c.unbind}</button>
-              </form>
+                </Link>
+              ))}
             </div>
           ) : (
-            <form action={setCustomerPartnerAction.bind(null, customer.id)} className="space-y-2">
-              <p className="text-sm text-slate-400">{c.notBound}</p>
-              <select name="partnerId" defaultValue="" className={input}>
-                <option value="">{c.selectPartner}</option>
-                {partners.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <button className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800">
-                {c.bindPartner}
-              </button>
-            </form>
+            <div className="space-y-3">
+              {customer.boundPartners.length > 0 ? (
+                <div className="space-y-2">
+                  {customer.boundPartners.map((bp) => (
+                    <div
+                      key={bp.id}
+                      className="flex items-center justify-between gap-2 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2.5"
+                    >
+                      <Link
+                        href={`/partners/${bp.id}`}
+                        className="text-sm font-medium text-emerald-900 hover:underline min-w-0 truncate"
+                      >
+                        {bp.name}
+                      </Link>
+                      <form action={removeCustomerPartnerAction.bind(null, customer.id, bp.id)}>
+                        <button className="text-xs text-slate-400 hover:text-red-600 shrink-0">{c.unbind}</button>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">{c.notBound}</p>
+              )}
+              {availablePartners.length > 0 && (
+                <form action={addCustomerPartnerAction.bind(null, customer.id)} className="space-y-2">
+                  <select name="partnerId" defaultValue="" className={input} required>
+                    <option value="" disabled>{c.selectPartner}</option>
+                    {availablePartners.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800">
+                    {c.bindPartner}
+                  </button>
+                </form>
+              )}
+            </div>
           )}
         </Card>
       </div>

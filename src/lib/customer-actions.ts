@@ -55,11 +55,16 @@ export async function createCustomerAction(formData: FormData) {
     data: {
       name,
       status: normalizeStatus(formData.get("status") as string | null),
-      partnerId,
       createdById: user.id,
       ...readCustomerFields(formData),
     },
   });
+
+  if (partnerId) {
+    await db.customerPartner.create({
+      data: { customerId: customer.id, partnerId, relation: "SERVED_BY" },
+    });
+  }
 
   void recordSystemEvent({
     category: "CUSTOMER",
@@ -82,7 +87,10 @@ export async function createCustomerAction(formData: FormData) {
 
 export async function updateCustomerAction(customerId: string, formData: FormData) {
   await requireUser();
-  const existing = await db.customer.findUnique({ where: { id: customerId }, select: { partnerId: true } });
+  const existing = await db.customer.findUnique({
+    where: { id: customerId },
+    select: { partnerLinks: { select: { partnerId: true } } },
+  });
   if (!existing) return;
   const name = String(formData.get("name") ?? "").trim();
   const data: Record<string, unknown> = {
@@ -92,7 +100,7 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
   if (name) data.name = name;
 
   await db.customer.update({ where: { id: customerId }, data });
-  revalidateCustomerPaths(customerId, [existing.partnerId]);
+  revalidateCustomerPaths(customerId, existing.partnerLinks.map((l) => l.partnerId));
 }
 
 // ============ 跟单五问（STOCK） ============
@@ -118,7 +126,10 @@ export async function updateCustomerStockAction(customerId: string, formData: Fo
 
 export async function deleteCustomerAction(customerId: string) {
   const user = await requireUser();
-  const customer = await db.customer.findUnique({ where: { id: customerId } });
+  const customer = await db.customer.findUnique({
+    where: { id: customerId },
+    include: { partnerLinks: { select: { partnerId: true } } },
+  });
   if (!customer) return;
   await db.customer.delete({ where: { id: customerId } });
   void recordSystemEvent({
@@ -131,19 +142,32 @@ export async function deleteCustomerAction(customerId: string) {
     targetLabel: customer.name,
     summary: `删除客户：${customer.name}`,
   });
-  revalidateCustomerPaths(undefined, [customer.partnerId]);
+  revalidateCustomerPaths(undefined, customer.partnerLinks.map((l) => l.partnerId));
   redirect("/customers");
 }
 
-// ============ 绑定 / 解绑（客户详情页：选择伙伴） ============
+// ============ 绑定 / 解绑（客户详情页：可绑定多个伙伴） ============
 
-export async function setCustomerPartnerAction(customerId: string, formData: FormData) {
+// 为客户新增一个伙伴绑定（多对多，可重复调用绑定多个伙伴）
+export async function addCustomerPartnerAction(customerId: string, formData: FormData) {
   await requireUser();
   const partnerId = str(formData, "partnerId");
-  const existing = await db.customer.findUnique({ where: { id: customerId }, select: { partnerId: true } });
+  if (!partnerId) return;
+  const existing = await db.customer.findUnique({ where: { id: customerId }, select: { id: true } });
   if (!existing) return;
-  await db.customer.update({ where: { id: customerId }, data: { partnerId } });
-  revalidateCustomerPaths(customerId, [existing.partnerId, partnerId]);
+  await db.customerPartner.upsert({
+    where: { customerId_partnerId: { customerId, partnerId } },
+    create: { customerId, partnerId, relation: "SERVED_BY" },
+    update: {},
+  });
+  revalidateCustomerPaths(customerId, [partnerId]);
+}
+
+// 移除客户的某个伙伴绑定
+export async function removeCustomerPartnerAction(customerId: string, partnerId: string) {
+  await requireUser();
+  await db.customerPartner.deleteMany({ where: { customerId, partnerId } });
+  revalidateCustomerPaths(customerId, [partnerId]);
 }
 
 // ============ 伙伴详情页：绑定已有客户 / 新建并绑定 / 解绑 ============
@@ -152,13 +176,17 @@ export async function bindCustomerToPartnerAction(partnerId: string, formData: F
   await requireUser();
   const customerId = str(formData, "customerId");
   if (!customerId) return;
-  await db.customer.update({ where: { id: customerId }, data: { partnerId } });
+  await db.customerPartner.upsert({
+    where: { customerId_partnerId: { customerId, partnerId } },
+    create: { customerId, partnerId, relation: "SERVED_BY" },
+    update: {},
+  });
   revalidateCustomerPaths(customerId, [partnerId]);
 }
 
 export async function unbindCustomerFromPartnerAction(partnerId: string, customerId: string) {
   await requireUser();
-  await db.customer.update({ where: { id: customerId }, data: { partnerId: null } });
+  await db.customerPartner.deleteMany({ where: { customerId, partnerId } });
   revalidateCustomerPaths(customerId, [partnerId]);
 }
 
@@ -170,11 +198,11 @@ export async function createCustomerForPartnerAction(partnerId: string, formData
     data: {
       name,
       status: "ACTIVE",
-      partnerId,
       partnerRelation: "SERVED_BY",
       createdById: user.id,
       industry: str(formData, "industry"),
       city: str(formData, "city"),
+      partnerLinks: { create: { partnerId, relation: "SERVED_BY" } },
     },
   });
   void recordSystemEvent({
@@ -196,7 +224,9 @@ export async function createSelfCustomerForPartnerAction(partnerId: string) {
   const user = await requireUser();
   const partner = await db.partner.findUnique({ where: { id: partnerId }, select: { name: true, city: true, country: true, website: true, crmCustomerId: true, kmsRootPath: true } });
   if (!partner) return;
-  const existing = await db.customer.findFirst({ where: { partnerId, partnerRelation: "SELF" } });
+  const existing = await db.customer.findFirst({
+    where: { partnerRelation: "SELF", partnerLinks: { some: { partnerId } } },
+  });
   if (existing) {
     revalidateCustomerPaths(existing.id, [partnerId]);
     return;
@@ -205,7 +235,6 @@ export async function createSelfCustomerForPartnerAction(partnerId: string) {
     data: {
       name: partner.name,
       status: "ACTIVE",
-      partnerId,
       partnerRelation: "SELF",
       city: partner.city,
       country: partner.country,
@@ -213,6 +242,7 @@ export async function createSelfCustomerForPartnerAction(partnerId: string) {
       crmCustomerId: partner.crmCustomerId,
       kmsRootPath: partner.kmsRootPath,
       createdById: user.id,
+      partnerLinks: { create: { partnerId, relation: "SELF" } },
     },
   });
   void recordSystemEvent({

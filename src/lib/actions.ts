@@ -700,7 +700,7 @@ export async function updatePartnerIntegrationsAction(partnerId: string, formDat
     data: { kmsRootPath, crmCustomerId },
   });
   await db.customer.updateMany({
-    where: { partnerId, partnerRelation: "SELF" },
+    where: { partnerRelation: "SELF", partnerLinks: { some: { partnerId } } },
     data: { kmsRootPath, crmCustomerId },
   });
   revalidatePath(`/partners/${partnerId}`);

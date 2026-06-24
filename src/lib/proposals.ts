@@ -135,7 +135,7 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
       contacts: { orderBy: { createdAt: "asc" } },
       opportunities: { where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 20 },
       todos: { where: { status: "OPEN" }, orderBy: { dueDate: "asc" }, take: 20 },
-      partner: { select: { name: true } },
+      partnerLinks: { include: { partner: { select: { name: true } } } },
       wecomChat: true,
     },
   });
@@ -153,10 +153,11 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
     : locale === "zh"
       ? "- WeCom group[wecom]: 未绑定"
       : "- WeCom group[wecom]: not bound";
+  const partnerNames = c.partnerLinks.map((l) => l.partner.name).join("、");
   const partnerLine =
     locale === "zh"
-      ? `- 归属伙伴[partner]: ${c.partner?.name ?? "（无）"}`
-      : `- Partner[partner]: ${c.partner?.name ?? "(none)"}`;
+      ? `- 归属伙伴[partner]: ${partnerNames || "（无）"}`
+      : `- Partner[partner]: ${partnerNames || "(none)"}`;
   const contacts = c.contacts.length
     ? c.contacts
         .map(

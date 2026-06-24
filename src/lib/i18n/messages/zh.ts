@@ -485,6 +485,7 @@ export const messagesZh: Messages = {
     profile: "客户资料",
     contactInfo: "联系人",
     boundPartner: "归属伙伴",
+    boundPartners: "归属伙伴（可多个）",
     bindPartner: "绑定伙伴",
     selectPartner: "选择伙伴…",
     unbind: "解绑",

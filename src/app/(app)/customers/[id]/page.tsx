@@ -44,7 +44,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const customer = await db.customer.findUnique({
     where: { id },
     include: {
-      partner: { select: { id: true, name: true } },
+      partnerLinks: { include: { partner: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
       owner: { select: { id: true, name: true } },
       createdBy: { select: { name: true } },
       contacts: true,
@@ -96,7 +96,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         notes: customer.notes,
         ownerId: customer.ownerId,
         owner: customer.owner,
-        partner: customer.partner,
+        boundPartners: customer.partnerLinks.map((l) => ({ id: l.partner.id, name: l.partner.name, relation: l.relation })),
         partnerRelation: customer.partnerRelation,
       }}
       users={users}
@@ -227,7 +227,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <input name="stage" placeholder={m.common.stage} className={input} />
           <input name="nextStep" placeholder={m.common.nextStep} className={input} />
           <input name="followUpAt" type="date" className={input} />
-          <select name="partnerId" defaultValue={customer.partnerId ?? ""} className={input}>
+          <select name="partnerId" defaultValue={customer.partnerLinks[0]?.partner.id ?? ""} className={input}>
             <option value="">{c.viaPartnerNone}</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -354,10 +354,12 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{customer.name}</h1>
               <Badge tone={statusTone(customer.status)}>{statusLabel(customer.status)}</Badge>
-              {customer.partner && (
-                <Badge tone={customer.partnerRelation === "SELF" ? "indigo" : "zinc"}>
-                  {customer.partnerRelation === "SELF" ? c.selfBadge : customer.partner.name}
-                </Badge>
+              {customer.partnerRelation === "SELF" ? (
+                <Badge tone="indigo">{c.selfBadge}</Badge>
+              ) : (
+                customer.partnerLinks.map((l) => (
+                  <Badge key={l.partner.id} tone="zinc">{l.partner.name}</Badge>
+                ))
               )}
             </div>
             <div className="text-sm text-slate-500 mt-1.5">

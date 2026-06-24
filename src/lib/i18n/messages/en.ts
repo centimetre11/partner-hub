@@ -485,6 +485,7 @@ export const messagesEn = {
     profile: "Customer profile",
     contactInfo: "Contact",
     boundPartner: "Bound partner",
+    boundPartners: "Bound partners",
     bindPartner: "Bind partner",
     selectPartner: "Select a partner…",
     unbind: "Unbind",

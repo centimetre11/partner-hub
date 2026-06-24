@@ -27,10 +27,14 @@ export default async function CustomersPage({
       ...END_CUSTOMER_WHERE,
       ...(sp.q ? { name: { contains: sp.q } } : {}),
       ...(sp.status ? { status: sp.status } : {}),
-      ...(sp.unbound === "1" ? { partnerId: null } : sp.partner ? { partnerId: sp.partner } : {}),
+      ...(sp.unbound === "1"
+        ? { partnerLinks: { none: {} } }
+        : sp.partner
+          ? { partnerLinks: { some: { partnerId: sp.partner } } }
+          : {}),
     },
     include: {
-      partner: { select: { id: true, name: true } },
+      partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
       owner: { select: { name: true } },
       contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
     },
@@ -112,8 +116,15 @@ export default async function CustomersPage({
                       <td className="px-4 py-3 text-slate-600">{cust.industry ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">{[cust.city, cust.country].filter(Boolean).join(" · ") || "—"}</td>
                       <td className="px-4 py-3">
-                        {cust.partner ? (
-                          <Link href={`/partners/${cust.partner.id}`} className="text-sky-600 hover:underline">{cust.partner.name}</Link>
+                        {cust.partnerLinks.length > 0 ? (
+                          <span className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                            {cust.partnerLinks.map((link, i) => (
+                              <span key={link.partner.id}>
+                                <Link href={`/partners/${link.partner.id}`} className="text-sky-600 hover:underline">{link.partner.name}</Link>
+                                {i < cust.partnerLinks.length - 1 && <span className="text-slate-300">,</span>}
+                              </span>
+                            ))}
+                          </span>
                         ) : (
                           <span className="text-slate-300">{c.noPartner}</span>
                         )}

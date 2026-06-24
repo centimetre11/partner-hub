@@ -113,7 +113,8 @@ model Partner {
   wecomChat     WecomChat?
   businessRecords BusinessRecord[]
   aiConversationLogs AiConversationLog[]
-  customers     Customer[]
+  customers     Customer[] // 遗留：旧的一对多绑定，迁移后改用 customerLinks
+  customerLinks CustomerPartner[]
   assets        Asset[]
 }
 
@@ -139,10 +140,12 @@ model Customer {
   q5Order      String? // O = Order 问核心需求（采购 / 合作需求）
   q5Cost       String? // C = Cost 问预算（成本 & 价格预期）
   q5Key        String? // K = Key 问关键（决策人、交期、合作条件）
-  // 归属伙伴（一对多：一个客户至多绑定一个伙伴）
+  // 遗留字段：旧的一对多绑定（一个客户至多一个伙伴），迁移后改用 partnerLinks，仅保留供一次性回填
   partnerId    String?
   partner      Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
-  // 与归属伙伴的关系类型：SERVED_BY 伙伴服务的终端客户 / SELF 该客户即伙伴本身（伙伴自用）
+  // 多对多绑定：一个客户可绑定多个伙伴
+  partnerLinks CustomerPartner[]
+  // 记录性质：SERVED_BY 伙伴服务的终端客户 / SELF 该客户即伙伴本身（伙伴自营影子档案，与单一伙伴一一对应）
   partnerRelation String? @default("SERVED_BY")
   // 帆软集成三连接
   kmsRootPath   String? // KMS 主目录
@@ -168,6 +171,21 @@ model Customer {
   @@index([partnerId])
   @@index([name])
   @@index([status])
+}
+
+// 客户↔伙伴 多对多绑定。relation：SERVED_BY 伙伴服务的终端客户 / SELF 该客户即伙伴本身
+model CustomerPartner {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  partnerId  String
+  partner    Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  relation   String   @default("SERVED_BY") // SERVED_BY / SELF
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, partnerId])
+  @@index([partnerId])
+  @@index([customerId])
 }
 
 // 商务记录：伙伴关键进展（双写活动线 MILESTONE）
