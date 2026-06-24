@@ -116,6 +116,17 @@ export function formatProposeConfirmBlockedReply(opts: {
     const checklist = formatBusinessRecordChecklist(opts.proposal, opts.ready, opts.crmOnlyReady);
     return `草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。${checklist}`;
   }
+  if (opts.scope === "todo") {
+    const t = opts.proposal.todos[0];
+    const hasTitle = !!t?.title?.trim();
+    const hasPartner = !!opts.proposal.partnerName?.trim() || !!opts.proposal.customerName?.trim();
+    const lines = [
+      checklistLine(hasTitle, "待办内容", t?.title?.slice(0, 60)),
+      checklistLine(!!t?.assigneeName?.trim(), "负责人", t?.assigneeName),
+      checklistLine(hasPartner, "归属伙伴/客户", opts.proposal.partnerName ?? opts.proposal.customerName),
+    ];
+    return `草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。\n**【待办 · 填报清单】**\n${lines.join("\n")}`;
+  }
   return "草案信息还不够完整，请按清单补全 ⬜ 项后再回复「确认」，或回复「取消」放弃。";
 }
 

@@ -8,6 +8,10 @@ export function stripTodoCommandPrefix(text: string): string {
       /^(帮我|请|麻烦)?\s*(增加|新增|添加|加|创建|记(录|个|一下)?)\s*(一个|一下)?\s*待办[：:,，、\s]*/i,
       "",
     )
+    .replace(
+      /^(帮我|请|麻烦)?\s*(增加|新增|添加|加|创建|记(录|个|一下)?)\s*(一个|一下)?\s*待办\s+/i,
+      "",
+    )
     .replace(/^(please )?(help me )?(to )?(add|create|log)?\s*(a )?todo[：:\s,]*/i, "")
     .trim();
 }
@@ -36,6 +40,15 @@ function inferPriority(text: string): "HIGH" | "MEDIUM" | "LOW" | undefined {
 
 function extractAssignee(text: string): { rest: string; assigneeName?: string } {
   let s = text.trim();
+  const forPerson = s.match(
+    /^(?:给|for)\s+([A-Za-z\u4e00-\u9fa5][A-Za-z0-9\u4e00-\u9fa5.\s'-]{0,30}?)\s*[，,：:\s]+/i,
+  );
+  if (forPerson?.[1]?.trim()) {
+    return {
+      rest: s.slice(forPerson[0].length).trim(),
+      assigneeName: forPerson[1].trim(),
+    };
+  }
   const patterns = [
     /[,，、]\s*(?:负责人|责任人|指派给|分配给|owner|assignee)\s*(?:是|:|：|=)\s*([^,，。；;\n]+)\s*$/i,
     /\s+(?:负责人|责任人|owner|assignee)\s*(?:是|:|：|=)\s*([^,，。；;\n]+)\s*$/i,

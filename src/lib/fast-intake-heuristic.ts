@@ -671,3 +671,19 @@ export async function finalizeFastIntakeTurn(
       return turn;
   }
 }
+
+/** Recompute ready/proposal after merge or before WeCom confirm (mirrors business_record refinal in wecom-bot). */
+export async function refinalProposeIntakeTurn(
+  scope: IntakeScope,
+  turn: IntakeTurn,
+  locale: Locale,
+  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string },
+): Promise<IntakeTurn> {
+  if (scope === "business_record" && turn.proposal.businessRecords.length) {
+    return finalizeBusinessRecordTurn(turn, locale, opts);
+  }
+  if (scope === "todo" && turn.proposal.todos.some((t) => t.title?.trim())) {
+    return finalizeTodoTurn(turn, locale, opts);
+  }
+  return turn;
+}

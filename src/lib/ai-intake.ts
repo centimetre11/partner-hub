@@ -806,6 +806,12 @@ async function runIntakeTurnCore(opts: {
     bindingBlock = buildPartnerBindingPrompt({ locale, scope: opts.scope, binding });
   }
   const currentDraft = serializeDraftForPrompt(opts.draft, opts.scope);
+  let assigneeHint = "";
+  if (fast && opts.scope === "todo") {
+    const { formatHubAssigneeHint, listHubAssigneeNames } = await import("./hub-assignee-names");
+    const names = await listHubAssigneeNames();
+    assigneeHint = formatHubAssigneeHint(locale, names);
+  }
   const system = fast
     ? buildFastIntakeSystemPrompt({
         locale,
@@ -813,6 +819,7 @@ async function runIntakeTurnCore(opts: {
         today: opts.today,
         partnerContext: partnerCtx || undefined,
         partnerBinding: bindingBlock,
+        assigneeHint: assigneeHint || undefined,
         currentDraft,
       })
     : buildIntakeSystemPrompt({

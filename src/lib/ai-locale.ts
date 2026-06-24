@@ -540,6 +540,7 @@ No web research. ready=true only when title + traceNature + traceAction are set 
     intro: "The user wants to create one or more follow-up todos. Prefer linking to a partner/customer when mentioned.",
     guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), priority (HIGH/MEDIUM/LOW), assigneeName (负责人/owner name), detail.
 Title = the actual task only — strip command words like「增加待办/创建todo」and metadata like「负责人是 xxx」(put name in assigneeName, not in title).
+「给 X，…」/「for X, …」→ assigneeName=X; the rest is title. Hub team member names are assigneeName, never partnerName.
 If user names a company/partner, set proposal.partnerName — the system will auto-link on a single match.
 Multiple matches require blocking partnerName clarification. If the company is named but not found in Partner Hub, the system will ask the user to confirm an unlinked todo (do not set ready=true yourself in that case).
 If no company is mentioned, omit partnerName for a global/personal todo.
@@ -623,17 +624,19 @@ export function buildFastIntakeSystemPrompt(opts: {
   today: string;
   partnerContext?: string;
   partnerBinding?: string;
+  assigneeHint?: string;
   currentDraft?: string;
 }): string {
   const cfg = SCOPE_CONFIG[opts.scope];
   const lang = replyLanguage(opts.locale);
   const ctx = opts.partnerContext ? `\n${opts.partnerContext}` : "";
   const bind = opts.partnerBinding ? `\n${opts.partnerBinding}` : "";
+  const assignees = opts.assigneeHint ?? "";
   const cleanRule = cleanInputRule(opts.scope, opts.locale);
 
   return `Fast JSON extractor for Fanruan Middle East partner management. Today: ${opts.today}.
 Task: ${cfg.title}. ${cfg.guide}${cleanRule ? `\n${cleanRule}` : ""}
-${bind}${ctx}
+${bind}${assignees}${ctx}
 
 ${localeOutputRules(opts.locale, opts.scope)}
 

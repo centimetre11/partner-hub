@@ -50,7 +50,7 @@ import {
 import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
-import { detectTraceNatureOverride, finalizeBusinessRecordTurn } from "@/lib/fast-intake-heuristic";
+import { detectTraceNatureOverride, refinalProposeIntakeTurn } from "@/lib/fast-intake-heuristic";
 import { formatProposeAppliedReply, formatProposeConfirmBlockedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { enrichBusinessRecordCompanyTarget } from "@/lib/business-record-intake";
 import {
@@ -509,6 +509,7 @@ async function applyAssistantTurnResult(opts: {
   }
 
   if (result.mode === "propose") {
+    intentConfirmSessions.delete(key);
     let merged = mergeFinalProposal(session?.proposal ?? null, result.proposal, new Set());
     const sourceText = history
       .filter((m) => m.role === "user")
@@ -521,9 +522,6 @@ async function applyAssistantTurnResult(opts: {
     let crmOnlyReady = result.crmOnlyReady;
     let replyText = result.reply;
 
-    // Business records: recompute readiness against the MERGED draft so a partial
-    // (or parse-failed) follow-up turn never leaves a complete draft stuck on ready=false,
-    // and apply an explicit on-site/off-site correction stated in this message.
     if (scope === "business_record" && merged.businessRecords.length) {
       const overrideNature = detectTraceNatureOverride(text);
       if (overrideNature) {
@@ -534,7 +532,14 @@ async function applyAssistantTurnResult(opts: {
           ),
         };
       }
-      const refinal = await finalizeBusinessRecordTurn(
+    }
+
+    if (
+      (scope === "business_record" && merged.businessRecords.length) ||
+      (scope === "todo" && merged.todos.some((t) => t.title?.trim()))
+    ) {
+      const refinal = await refinalProposeIntakeTurn(
+        scope,
         {
           reply: result.reply,
           questions: result.questions ?? [],
@@ -543,15 +548,16 @@ async function applyAssistantTurnResult(opts: {
           proposal: merged,
         },
         "zh",
-        { boundPartnerId, boundCustomerId },
+        { boundPartnerId, boundCustomerId, userText: sourceText },
       );
       merged = refinal.proposal;
       ready = refinal.ready;
       crmOnlyReady = refinal.crmOnlyReady;
-      // Drop the scary "JSON parse failed" notice — the checklist already guides the user.
-      replyText = /格式有误|could not be parsed|format error/i.test(result.reply || "")
-        ? ""
-        : result.reply;
+      if (scope === "business_record") {
+        replyText = /格式有误|could not be parsed|format error/i.test(result.reply || "")
+          ? ""
+          : result.reply;
+      }
     }
 
     proposeSessions.set(key, {
@@ -1048,6 +1054,27 @@ async function handleTextMessage(frame: WsFrame) {
     }
 
     if (session && isProposeConfirm(text)) {
+      if (session.scope === "todo" || session.scope === "business_record") {
+        const refinal = await refinalProposeIntakeTurn(
+          session.scope,
+          {
+            reply: "",
+            questions: [],
+            clarifications: [],
+            ready: session.ready,
+            proposal: session.proposal,
+          },
+          "zh",
+          { boundPartnerId, boundCustomerId, userText: session.sourceText },
+        );
+        session = {
+          ...session,
+          proposal: refinal.proposal,
+          ready: refinal.ready,
+          crmOnlyReady: refinal.crmOnlyReady,
+        };
+        proposeSessions.set(key, session);
+      }
       if (!session.ready) {
         const reply = session.crmOnlyReady
           ? "Partner Hub 未建档。若只写入帆软 CRM，请回复 **仅CRM**；或回复「取消」放弃。"
