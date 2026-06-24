@@ -2,16 +2,33 @@ import type { AutomationVariable } from "./automation-builder-types";
 import type { Locale } from "./i18n/locale";
 
 /** Skills for scheduled query → push automations */
-export const DEFAULT_AUTOMATION_SKILLS = [
+export const AUTOMATION_BASE_SKILLS = [
   "list_todos",
   "list_opportunities",
   "get_partner",
   "search_partners",
   "web_search",
+] as const;
+
+export const DEFAULT_AUTOMATION_SKILLS = [
+  ...AUTOMATION_BASE_SKILLS,
   "push_wecom",
   "send_wecom_app",
   "send_email",
 ] as const;
+
+/** 按用户勾选的推送渠道决定运行时工具（不含未配置的 push_wecom 等） */
+export function resolveAutomationRuntimeSkills(config: {
+  wecomPushChatId?: string | null;
+  pushEmailTo?: string | null;
+  pushWecomAppTo?: string | null;
+}): string[] {
+  const skills: string[] = [...AUTOMATION_BASE_SKILLS];
+  if (config.wecomPushChatId?.trim()) skills.push("push_wecom");
+  if (config.pushWecomAppTo?.trim()) skills.push("send_wecom_app");
+  if (config.pushEmailTo?.trim()) skills.push("send_email");
+  return skills;
+}
 
 export function partnerScopeLabel(partnerName: string | undefined, locale: Locale): string {
   if (partnerName?.trim()) return partnerName.trim();
@@ -72,16 +89,15 @@ export function inferAutomationSkills(input: {
   if (input.partnerId?.trim()) picked.add("get_partner");
   else if (/search_partners|哪个伙伴|哪位伙伴|which partner/i.test(text)) picked.add("search_partners");
 
-  if (input.wecomPushChatId?.trim() || /push_wecom|企微群|发到群|推到.*群/i.test(text)) picked.add("push_wecom");
-  if (
-    input.pushWecomAppTo?.trim() ||
-    /send_wecom_app|应用消息|企微应用|私信|推送给.*人|推给.*本人/i.test(text)
-  )
-    picked.add("send_wecom_app");
-  if (input.pushEmailTo?.trim() || /send_email|发邮件|发邮箱|邮件给我|email/i.test(text)) picked.add("send_email");
+  if (input.wecomPushChatId?.trim()) picked.add("push_wecom");
+  if (input.pushWecomAppTo?.trim()) picked.add("send_wecom_app");
+  if (input.pushEmailTo?.trim()) picked.add("send_email");
 
   if (picked.size === 0) {
-    for (const s of DEFAULT_AUTOMATION_SKILLS) picked.add(s);
+    for (const s of AUTOMATION_BASE_SKILLS) picked.add(s);
+    if (input.wecomPushChatId?.trim()) picked.add("push_wecom");
+    if (input.pushWecomAppTo?.trim()) picked.add("send_wecom_app");
+    if (input.pushEmailTo?.trim()) picked.add("send_email");
   }
 
   return AUTOMATION_SKILL_ORDER.filter((s) => picked.has(s));

@@ -11,6 +11,7 @@ import {
 } from "./skills";
 import { partnerContext } from "./proposals";
 import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
+import { resolveAutomationRuntimeSkills } from "./automation-push";
 
 const MAX_STEPS = 12;
 
@@ -115,7 +116,20 @@ export async function runAgent(
 
   try {
     const resolved = await resolveAgentSkills(agent.id, agent.skills);
-    const skillNames = resolved.skillNames;
+    let skillNames = resolved.skillNames;
+    if (agent.isAutomation) {
+      const allowed = new Set(
+        resolveAutomationRuntimeSkills({
+          wecomPushChatId: agent.wecomPushChatId,
+          pushEmailTo: agent.pushEmailTo,
+          pushWecomAppTo: agent.pushWecomAppTo,
+        })
+      );
+      skillNames = skillNames.filter((n) => {
+        if (n === "push_wecom" || n === "send_wecom_app" || n === "send_email") return allowed.has(n);
+        return true;
+      });
+    }
     const tools: (ToolDef | Record<string, unknown>)[] = buildToolsForAgent(skillNames);
 
     // Scope context
@@ -143,6 +157,9 @@ export async function runAgent(
               : "Do NOT call send_email unless task instructions explicitly require email.",
             !agent.pushEmailTo && agent.wecomPushChatId && !agent.pushWecomAppTo
               ? "User asked for group push only — do NOT send email or app message."
+              : "",
+            !agent.wecomPushChatId && (agent.pushWecomAppTo || agent.pushEmailTo)
+              ? "WeCom group push is NOT configured — do NOT call push_wecom or push to partner-bound groups."
               : "",
           ]
             .filter(Boolean)
@@ -283,15 +300,15 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
 
     const pushedWecomInRun = toolLog.some((t) => t.tool === "push_wecom");
 
-    // 运行中已 push_wecom 时不再 post-run 重复推送；同一 chatId 也只推一次
-    if (!pushedWecomInRun) {
+    // 仅配置了企微群推送时才 post-run 推群；自动化不因 partnerId 兜底推伙伴群
+    if (!pushedWecomInRun && agent.wecomPushChatId?.trim()) {
       try {
         const { enqueueWecomPush } = await import("@/lib/wecom-push");
-        const { getWecomChatForPartner } = await import("@/lib/wecom-chats");
         const text = `【${agent.icon} ${agent.name}】\n${output.slice(0, 3500)}`;
         const chatIds = new Set<string>();
-        if (agent.wecomPushChatId?.trim()) chatIds.add(agent.wecomPushChatId.trim());
-        if (agent.partnerId) {
+        chatIds.add(agent.wecomPushChatId.trim());
+        if (!agent.isAutomation && agent.partnerId) {
+          const { getWecomChatForPartner } = await import("@/lib/wecom-chats");
           const partnerChat = await getWecomChatForPartner(agent.partnerId);
           if (partnerChat?.chatId) chatIds.add(partnerChat.chatId);
         }

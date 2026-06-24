@@ -12,8 +12,8 @@ import { isAutomationDraftReady } from "./builder-context-prompt";
 import {
   defaultAutomationName,
   defaultAutomationSlug,
-  DEFAULT_AUTOMATION_SKILLS,
   partnerScopeLabel,
+  resolveAutomationRuntimeSkills,
 } from "./automation-push";
 import { hasAutomationDeliveryChannel } from "./automation-delivery";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
@@ -104,7 +104,9 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     icon: "⚡",
     description,
     instructions,
-    skills: JSON.stringify([...DEFAULT_AUTOMATION_SKILLS]),
+    skills: JSON.stringify(
+      resolveAutomationRuntimeSkills({ wecomPushChatId, pushEmailTo, pushWecomAppTo })
+    ),
     trigger: "SCHEDULE" as const,
     frequency: schedule.frequency,
     runHour: schedule.runHour,

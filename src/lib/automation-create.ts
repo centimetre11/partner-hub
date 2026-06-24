@@ -7,8 +7,8 @@ import {
   inferDueWithinDays,
   defaultAutomationName,
   defaultAutomationSlug,
-  DEFAULT_AUTOMATION_SKILLS,
   partnerScopeLabel,
+  resolveAutomationRuntimeSkills,
 } from "./automation-push";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
 import type { AutomationVariable } from "./automation-builder-types";
@@ -159,7 +159,13 @@ export async function createAutomationFromDraft(
       icon: "⚡",
       description: draft.description?.trim() || goal,
       instructions: buildAutomationInstructions(taskMd, variables),
-      skills: JSON.stringify([...DEFAULT_AUTOMATION_SKILLS]),
+      skills: JSON.stringify(
+        resolveAutomationRuntimeSkills({
+          wecomPushChatId,
+          pushEmailTo,
+          pushWecomAppTo,
+        })
+      ),
       trigger: "SCHEDULE",
       frequency: schedule.frequency,
       runHour: schedule.runHour,
