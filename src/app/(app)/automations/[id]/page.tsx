@@ -5,7 +5,6 @@ import { AutomationForm } from "@/components/automation-form";
 import { Badge, fmtDateTime } from "@/components/ui";
 import { deleteAutomationAction, toggleAutomationAction } from "@/lib/automation-actions";
 import { describeCron } from "@/lib/cron";
-import { DEFAULT_AUTOMATION_SKILLS, inferAutomationSkills } from "@/lib/automation-push";
 import { getServerI18n } from "@/lib/server-i18n";
 import { RunButton } from "@/app/(app)/agents/[id]/run-button";
 
@@ -30,30 +29,10 @@ export default async function AutomationDetailPage({ params }: { params: Promise
   ]);
   if (!agent) notFound();
 
-  let persistedSkills: string[] = [...DEFAULT_AUTOMATION_SKILLS];
-  try {
-    const parsed = JSON.parse(agent.skills ?? "[]") as unknown;
-    if (Array.isArray(parsed) && parsed.every((s) => typeof s === "string")) persistedSkills = parsed;
-  } catch {
-    /* keep default */
-  }
-  const runtimeTools = inferAutomationSkills({
-    description: agent.description ?? "",
-    taskMd: agent.instructions ?? "",
-    wecomPushChatId: agent.wecomPushChatId ?? "",
-    pushEmailTo: agent.pushEmailTo ?? "",
-    pushWecomAppTo: agent.pushWecomAppTo ?? "",
-    partnerId: agent.partnerId ?? "",
-  });
-  const displayTools = [...new Set([...runtimeTools, ...persistedSkills])].filter((t) =>
-    (DEFAULT_AUTOMATION_SKILLS as readonly string[]).includes(t)
-  );
-
   return (
     <div className="pb-16">
       <AutomationForm
         partners={partners}
-        runtimeTools={displayTools}
         initial={{
           id: agent.id,
           slug: agent.slug ?? "",
