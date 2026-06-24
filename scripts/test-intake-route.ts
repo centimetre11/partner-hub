@@ -67,7 +67,18 @@ function main() {
 
   // ---- 意图确认 ----
   const proposeRoute = routeFromConfirmedActionId("intake.todo");
-  cases.push(assert("needsIntentConfirm(propose)", proposeRoute ? needsIntentConfirm(proposeRoute) : false));
+  cases.push(
+    assert(
+      "needsIntentConfirm(propose) high→false",
+      proposeRoute ? !needsIntentConfirm(proposeRoute) : false,
+    ),
+  );
+  cases.push(
+    assert(
+      "needsIntentConfirm(propose) low→true",
+      proposeRoute ? needsIntentConfirm({ ...proposeRoute, confidence: "low" }) : false,
+    ),
+  );
   const queryRoute = routeFromConfirmedActionId("query.list_todos");
   cases.push(assert("needsIntentConfirm(query) 为 false", queryRoute ? !needsIntentConfirm(queryRoute) : false));
 
@@ -138,7 +149,7 @@ function main() {
   cases.push(assert("needsIntentConfirm(patch)", patchRoute ? needsIntentConfirm(patchRoute) : false));
 
   const listReply =
-    "[id:todo1] [HIGH] 与 MENA 确认会议 | Partner:AkLogiks | Due:- | Assignee:Saber";
+    "[id:todo1] 与 MENA 确认会议 | Partner:AkLogiks | Due:- | Assignee:Saber";
   const items = extractListItemsFromFormattedReply(listReply);
   cases.push(assert("解析 list 回复中的 id", items.length === 1 && items[0].id === "todo1"));
   const focus = buildFocusFromListItems({
