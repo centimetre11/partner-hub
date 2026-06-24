@@ -464,10 +464,14 @@ const listTodos: Skill = {
     function: {
       name: "list_todos",
       description:
-        "List open todo items. Filter by partner OR end-customer (account), overdue only, or due within N days. Customers and partners are different — use customerName/customerId for 客户待办.",
+        "List open todo items. Filter by assignee (Hub user name), partner OR end-customer (account), overdue only, or due within N days. Customers and partners are different — use customerName/customerId for 客户待办. When user asks for someone's todos (e.g. jackie的待办), use assigneeName — NOT partnerName.",
       parameters: {
         type: "object",
         properties: {
+          assigneeName: {
+            type: "string",
+            description: "Filter by assignee / 负责人 Hub user name (fuzzy match, e.g. Jackie, areeb)",
+          },
           overdueOnly: { type: "boolean", description: "Overdue only (due before today)" },
           dueWithinDays: {
             type: "number",
@@ -484,11 +488,18 @@ const listTodos: Skill = {
   run: async (args) => {
     const dueWindow = args.dueWithinDays != null ? dueWithinDaysRange(Number(args.dueWithinDays)) : null;
     const { partnerId, customerId } = await resolveOwnerFilter(args);
+    let assigneeId: string | undefined;
+    if (args.assigneeName != null && String(args.assigneeName).trim()) {
+      const u = await findUserByName(String(args.assigneeName));
+      if (!u) return `No user found matching assignee "${String(args.assigneeName).trim()}"`;
+      assigneeId = u.id;
+    }
     const todos = await db.todoItem.findMany({
       where: {
         status: "OPEN",
         ...(args.overdueOnly ? { dueDate: { lt: overdueDueDateBefore() } } : {}),
         ...(dueWindow && !args.overdueOnly ? { dueDate: dueWindow } : {}),
+        ...(assigneeId ? { assigneeId } : {}),
         ...(partnerId ? { partnerId } : {}),
         ...(customerId ? { customerId } : {}),
         ...(args.partnerName && !partnerId && !customerId

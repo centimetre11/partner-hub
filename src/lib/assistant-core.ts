@@ -41,7 +41,7 @@ function buildSystemPrompt(locale: AssistantLocale, kmsConfigured: boolean, know
 你可以使用工具查询和修改系统数据、搜索公开网页、读取 KMS 内部文档、搜索团队知识库、或检索 Know-how 知识库。${kmsLine} ${knowhowLine} 规则：
 1. 用中文回复，简洁、可执行，直接给出查询结果。
 2. 查询类问题：必须先调用工具获取真实数据再回答，禁止编造；禁止只回复「已收到」「当前时间是…」「需要我帮你做什么吗」等空话。
-3. 问伙伴数量/列表：用 search_partners（status=ACTIVE 表示正式伙伴）；问客户/终端客户：用 search_customers；读客户档案/联系人/商机：用 get_customer（不是 get_partner）；问待办：用 list_todos（客户传 customerName/customerId，伙伴传 partnerName/partnerId）；问商机：用 list_opportunities（同上）；问商务记录：用 list_business_records（同上）。
+3. 问伙伴数量/列表：用 search_partners（status=ACTIVE 表示正式伙伴）；问客户/终端客户：用 search_customers；读客户档案/联系人/商机：用 get_customer（不是 get_partner）；问待办：用 list_todos（客户传 customerName/customerId，伙伴传 partnerName/partnerId，某人待办传 assigneeName）；问商机：用 list_opportunities（同上）；问商务记录：用 list_business_records（同上）。
 4. 修改指令（推进阶段、更新字段、创建待办、写时间线）：直接执行并说明变更内容；指令不明确时先查询确认目标。更新伙伴档案用 update_partner；更新客户档案用 update_customer；创建待办用 create_todo（客户传 customerName/customerId，伙伴传 partnerName/partnerId）；写时间线用 add_timeline_event（客户或伙伴二选一，客户传 customerName/customerId）。
 5. 跨伙伴对比：分别拉取档案后给出有依据的建议。
 6. 若用户粘贴 KMS 链接并要求建档/补全档案/提取伙伴信息，系统会自动切换到提案模式，此处无需处理。
@@ -59,7 +59,7 @@ Today is ${today}.
 You can use tools to query and modify system data, search the public web, read KMS internal documents (read_kms), search the team knowledge base (search_knowledge), or search the Know-how knowledge base (search_knowhow). ${kmsLine} ${knowhowLine} Rules:
 1. Reply in English, concisely and action-oriented.
 2. For queries: use tools to fetch real data before answering — do not invent facts.
-3. Partner counts/lists: search_partners (status=ACTIVE = formal partners); end-customers: search_customers; customer profile/contacts/opportunities: get_customer (not get_partner); todos: list_todos (customerName/customerId for customers, partnerName/partnerId for partners); opportunities: list_opportunities (same); business records: list_business_records (same).
+3. Partner counts/lists: search_partners (status=ACTIVE = formal partners); end-customers: search_customers; customer profile/contacts/opportunities: get_customer (not get_partner); todos: list_todos (customerName/customerId for customers, partnerName/partnerId for partners, assigneeName for a person's todos); opportunities: list_opportunities (same); business records: list_business_records (same).
 4. For modification commands (advance stage, update fields, create todos, timeline events): execute directly and state what changed; query first if the target is ambiguous. update_partner for partners; update_customer for end-customers; create_todo with customerName/customerId or partnerName/partnerId; add_timeline_event with customer or partner (customerName/customerId or partnerName/partnerId).
 5. For cross-partner comparisons: fetch both profiles via tools and give evidence-based recommendations.
 6. If the user pastes a KMS link and asks to onboard / complete profile / extract partner info, the system switches to proposal mode automatically — you do not need to handle that here.
@@ -89,12 +89,12 @@ export async function runQueryAssistant(
         ? `\n\n本轮用户要查待办：必须先调用 list_todos，回复中保留每条 [id:…] 前缀。${
             options?.customerId || options?.customerName
               ? `当前会话绑定客户${options.customerName ? `「${options.customerName}」` : ""}${options.customerId ? `（customerId=${options.customerId}）` : ""}，list_todos 必须传 customerName 或 customerId，禁止用 partnerName。`
-              : "用户提到「客户」时传 customerName（可先 search_customers 查名）；提到「伙伴」时传 partnerName。客户与伙伴是不同实体。"
+              : "用户提到「客户」时传 customerName（可先 search_customers 查名）；提到「伙伴」时传 partnerName。问某人的待办（如 jackie的待办）传 assigneeName，禁止把人名当 partnerName。"
           }`
         : `\n\nUser wants todos: call list_todos first; keep [id:…] prefixes.${
             options?.customerId || options?.customerName
               ? ` Bound customer${options.customerName ? ` "${options.customerName}"` : ""}${options.customerId ? ` (customerId=${options.customerId})` : ""} — pass customerName or customerId to list_todos, not partnerName.`
-              : " Use customerName for customer/account todos and partnerName for partner todos."
+              : " Use customerName for customer/account todos and partnerName for partner todos. For a person's todos (e.g. jackie's todos), pass assigneeName — never partnerName for a person."
           }`
       : options?.queryKind === "list_opportunities"
         ? locale === "zh"
