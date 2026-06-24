@@ -23,7 +23,9 @@ type WecomTokenResponse = WecomApiError & {
 
 type WecomUserInfoResponse = WecomApiError & {
   UserId?: string;
+  userid?: string;
   OpenId?: string;
+  openid?: string;
   user_ticket?: string;
 };
 
@@ -97,11 +99,14 @@ export async function getWecomUserIdByCode(code: string, cfg: WecomOauthConfig):
   if (!res.ok) throw new Error(`WeCom userinfo request failed: HTTP ${res.status}`);
   const data = (await res.json()) as WecomUserInfoResponse;
   if (data.errcode && data.errcode !== 0) throw apiError("WeCom userinfo request failed", data);
-  if (!data.UserId) {
-    throw new Error(data.OpenId ? "WeCom userinfo returned OpenId but no UserId" : "WeCom userinfo missing UserId");
+
+  const rawUserId = data.UserId ?? data.userid;
+  const rawOpenId = data.OpenId ?? data.openid;
+  if (!rawUserId) {
+    throw new Error(rawOpenId ? "WeCom userinfo returned OpenId but no UserId" : "WeCom userinfo missing UserId");
   }
 
-  const wecomUserId = sanitizeWecomUserId(data.UserId);
+  const wecomUserId = sanitizeWecomUserId(rawUserId);
   if (!isValidWecomUserId(wecomUserId)) throw new Error("WeCom userinfo returned invalid UserId");
   return wecomUserId;
 }
