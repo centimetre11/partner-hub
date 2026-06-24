@@ -11,7 +11,8 @@ function safeRedirectPath(value: string | null): string {
 export async function GET(req: NextRequest) {
   const cfg = resolveWecomOauthConfig();
   if (!cfg) {
-    return NextResponse.redirect(new URL("/login?wecom_oauth=missing_config", req.url));
+    const fallback = (process.env.APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+    return NextResponse.redirect(new URL("/login?wecom_oauth=missing_config", fallback));
   }
 
   const url = new URL(req.url);
