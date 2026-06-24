@@ -121,8 +121,10 @@ export default async function MobileDeskPage({
       <div className="mx-auto box-border w-full max-w-5xl min-w-0 px-4 py-5 sm:px-6 lg:px-8">
         <section className="overflow-hidden rounded-[1.75rem] bg-slate-950 shadow-sm">
           <div className="relative p-5 sm:p-8">
-            <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-sky-400/20 blur-3xl" />
-            <div className="absolute -bottom-20 left-12 h-44 w-44 rounded-full bg-purple-400/20 blur-3xl" />
+            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[1.75rem]">
+              <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-sky-400/20 blur-3xl" />
+              <div className="absolute bottom-0 left-12 h-44 w-44 rounded-full bg-purple-400/20 blur-3xl" />
+            </div>
             <div className="relative">
               <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-200">{desk.heroEyebrow}</div>
               <h1 className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl">{desk.title}</h1>

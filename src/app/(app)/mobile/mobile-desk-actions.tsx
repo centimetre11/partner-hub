@@ -53,7 +53,7 @@ function MobileDrawer({
         role="dialog"
         aria-modal
         aria-labelledby={titleId}
-        className="fixed inset-x-0 bottom-0 z-50 box-border flex max-h-[96dvh] w-full max-w-[100vw] flex-col overflow-hidden rounded-t-[1.75rem] border border-slate-200 bg-white shadow-2xl"
+        className="fixed inset-x-0 bottom-0 z-50 box-border flex max-h-[96dvh] w-full max-w-full flex-col overflow-hidden rounded-t-[1.75rem] border border-slate-200 bg-white shadow-2xl"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">

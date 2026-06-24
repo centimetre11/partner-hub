@@ -30,6 +30,8 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  overflow-x: clip;
+  max-width: 100%;
 }
 
 body {
@@ -38,7 +40,8 @@ body {
   font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   letter-spacing: -0.011em;
-  overflow-x: hidden;
+  overflow-x: clip;
+  max-width: 100%;
 }
 
 h1,
