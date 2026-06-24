@@ -1,8 +1,16 @@
 import { db } from "./db";
-import { fetchLeadsData, getClueId, normalizeLeadRows } from "./leads";
+import {
+  fetchLeadsDataCached,
+  findNormalizedLeadByClueId,
+  getClueId,
+  invalidateLeadsDataCache,
+  normalizeLeadRows,
+  type CrmLeadAction,
+} from "./leads";
 
 const LAST_SYNC_KEY = "leads_last_sync";
 const BATCH = 100;
+const NURTURE_STATUS = "销售培育中";
 
 export type LeadsSyncResult = {
   ok: boolean;
@@ -26,7 +34,8 @@ export async function getLatestLeadsSyncLog() {
 export async function syncLeadsData(): Promise<LeadsSyncResult> {
   const started = Date.now();
   try {
-    const rows = await fetchLeadsData();
+    invalidateLeadsDataCache();
+    const rows = await fetchLeadsDataCached({ force: true });
     const { leads } = normalizeLeadRows(rows);
 
     await db.crmLead.deleteMany();
@@ -69,32 +78,16 @@ export async function syncLeadsData(): Promise<LeadsSyncResult> {
 }
 
 export type RefreshLeadResult =
-  | { ok: true; status: "updated" | "removed" }
-  | { ok: false; reason: "no_clue_id" | "fetch_failed"; error?: string };
+  | { ok: true; status: "updated" | "removed"; durationMs: number; reconciled?: boolean }
+  | { ok: false; reason: "no_clue_id" | "fetch_failed"; error?: string; durationMs?: number };
 
-/**
- * 针对单条线索做精准 API 校准（不全表重拉）：
- * - 以 CRM pub API 为准，找到该 clue_id 则 upsert 这一条；
- * - API 中已不存在（如转客户/转 channel 后离开 2026 线索集）则删除这一条。
- */
-export async function refreshLeadById(leadId: string): Promise<RefreshLeadResult> {
-  const clueId = getClueId(leadId);
-  if (!clueId) return { ok: false, reason: "no_clue_id" };
-
-  let leads;
-  try {
-    const rows = await fetchLeadsData();
-    ({ leads } = normalizeLeadRows(rows));
-  } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
-    return { ok: false, reason: "fetch_failed", error };
-  }
-
-  const match = leads.find((l) => l.id === clueId);
+async function reconcileLeadFromCrm(leadId: string, clueId: string) {
+  const rows = await fetchLeadsDataCached({ force: true });
+  const match = findNormalizedLeadByClueId(rows, clueId);
 
   if (!match) {
     await db.crmLead.deleteMany({ where: { id: leadId } });
-    return { ok: true, status: "removed" };
+    return { ok: true as const, status: "removed" as const };
   }
 
   const { id: _id, ...data } = match;
@@ -103,7 +96,48 @@ export async function refreshLeadById(leadId: string): Promise<RefreshLeadResult
     create: match,
     update: data,
   });
-  return { ok: true, status: "updated" };
+  return { ok: true as const, status: "updated" as const };
+}
+
+/**
+ * 单条线索校准：
+ * - 转培育/转 channel/转客户：先即时更新本地，后台再拉 CRM 校准；
+ * - 编辑/责任转移：必须拉 CRM 全量 API 查找该条（pub API 无单条接口，约 1 分钟）。
+ */
+export async function refreshLeadById(
+  leadId: string,
+  action?: CrmLeadAction,
+): Promise<RefreshLeadResult> {
+  const started = Date.now();
+  const clueId = getClueId(leadId);
+  if (!clueId) return { ok: false, reason: "no_clue_id" };
+
+  try {
+    if (action === "toNurture") {
+      await db.crmLead.update({
+        where: { id: leadId },
+        data: { status: NURTURE_STATUS },
+      });
+      void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
+        console.error("[leads-refresh] reconcile failed:", e),
+      );
+      return { ok: true, status: "updated", durationMs: Date.now() - started, reconciled: false };
+    }
+
+    if (action === "toChannel" || action === "toCustomer") {
+      await db.crmLead.deleteMany({ where: { id: leadId } });
+      void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
+        console.error("[leads-refresh] reconcile failed:", e),
+      );
+      return { ok: true, status: "removed", durationMs: Date.now() - started, reconciled: false };
+    }
+
+    const result = await reconcileLeadFromCrm(leadId, clueId);
+    return { ...result, durationMs: Date.now() - started, reconciled: true };
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    return { ok: false, reason: "fetch_failed", error, durationMs: Date.now() - started };
+  }
 }
 
 export async function getLeadsSyncStats() {

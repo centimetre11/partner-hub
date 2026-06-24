@@ -53,6 +53,65 @@ export function getLeadsDataUrl() {
   return process.env.LEADS_DATA_URL?.trim() || LEADS_DEFAULT_DATA_URL;
 }
 
+const LEADS_FETCH_TIMEOUT_MS = Number(process.env.LEADS_FETCH_TIMEOUT_MS ?? "90000");
+
+let inflightFetch: Promise<CrmLeadRow[]> | null = null;
+let cachedRows: CrmLeadRow[] | null = null;
+let cachedAt = 0;
+
+/** 并发去重 + 可选复用近期缓存，避免多次刷新重复拉全量。 */
+export async function fetchLeadsDataCached(options?: { force?: boolean; maxAgeMs?: number }) {
+  const maxAgeMs = options?.maxAgeMs ?? 0;
+  if (!options?.force && cachedRows && Date.now() - cachedAt <= maxAgeMs) {
+    return cachedRows;
+  }
+  if (inflightFetch) return inflightFetch;
+
+  inflightFetch = fetchLeadsData()
+    .then((rows) => {
+      cachedRows = rows;
+      cachedAt = Date.now();
+      return rows;
+    })
+    .finally(() => {
+      inflightFetch = null;
+    });
+
+  return inflightFetch;
+}
+
+export function invalidateLeadsDataCache() {
+  cachedRows = null;
+  cachedAt = 0;
+}
+
+export async function fetchLeadsData(url = getLeadsDataUrl()): Promise<CrmLeadRow[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LEADS_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Leads data API HTTP ${res.status}`);
+    }
+    const json = (await res.json()) as CrmLeadsResponse;
+    if (!json.success || !Array.isArray(json.data)) {
+      throw new Error(json.error || "Leads data API returned invalid payload");
+    }
+    return json.data;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`Leads data API timeout after ${LEADS_FETCH_TIMEOUT_MS}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function parseLeadDate(raw: string | undefined | null) {
   if (!raw?.trim()) return null;
   const normalized = raw.trim().replace(" ", "T");
@@ -79,21 +138,6 @@ function resolveLeadId(row: CrmLeadRow): string | null {
 /** 返回真实 CRM clue_id：兜底（com: 前缀）线索没有 clue_id，返回 null。 */
 export function getClueId(leadId: string): string | null {
   return leadId.startsWith(CRM_LEAD_COM_PREFIX) ? null : leadId;
-}
-
-export async function fetchLeadsData(url = getLeadsDataUrl()): Promise<CrmLeadRow[]> {
-  const res = await fetch(url, {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`Leads data API HTTP ${res.status}`);
-  }
-  const json = (await res.json()) as CrmLeadsResponse;
-  if (!json.success || !Array.isArray(json.data)) {
-    throw new Error(json.error || "Leads data API returned invalid payload");
-  }
-  return json.data;
 }
 
 export type CrmLeadUpsert = {
@@ -167,6 +211,54 @@ export function normalizeLeadRows(rows: CrmLeadRow[]) {
 
   return { leads: [...leads.values()] };
 }
+
+function normalizeLeadRow(row: CrmLeadRow): CrmLeadUpsert | null {
+  const id = resolveLeadId(row);
+  if (!id) return null;
+
+  const recdate = parseLeadDate(row.com_recdate);
+  if (!recdate || recdate.getFullYear() !== LEADS_TARGET_YEAR) return null;
+
+  return {
+    id,
+    companyId: trimOrNull(row.com_id),
+    name: trimOrNull(row.com_name),
+    status: trimOrNull(row.com_status),
+    province: trimOrNull(row.com_province),
+    countryCn: trimOrNull(row.cou_CN_name),
+    city: trimOrNull(row.com_city),
+    region: trimOrNull(row.reg),
+    zone: trimOrNull(row.zone),
+    rank: trimOrNull(row.com_rank),
+    source: trimOrNull(row.com_source),
+    sourceDetail: trimOrNull(row.source),
+    tags: trimOrNull(row.tags),
+    sdrState: trimOrNull(row.sdr_state),
+    phone: trimOrNull(row.actphone),
+    contName: trimOrNull(row.cont_name),
+    contEmail: trimOrNull(row.cont_email),
+    contDuty: trimOrNull(row.cont_duty),
+    salesman: trimOrNull(row.com_salesman),
+    typeDetail: trimOrNull(row.typedetail),
+    overseaAgent: trimOrNull(row.com_oversea_agent),
+    detail: trimOrNull(row.detail),
+    traceDetail: trimOrNull(row.trace_detail),
+    recdate,
+    contRecdate: parseLeadDate(row.cont_recdate),
+    jzDate: parseLeadDate(row.jz_date),
+  };
+}
+
+/** 在全量 API 数据中只查找并归一化一条线索，避免 normalize 全部记录。 */
+export function findNormalizedLeadByClueId(rows: CrmLeadRow[], clueId: string) {
+  for (const row of rows) {
+    if (row.clue_id?.trim() !== clueId) continue;
+    return normalizeLeadRow(row);
+  }
+  return null;
+}
+
+export type CrmLeadAction = "toNurture" | "toChannel" | "toCustomer" | "edit" | "shift" | "view";
 
 /** 培育线索：com_status 不为空且不属于新线索状态 */
 export function isNurturingLead(status: string | null | undefined) {

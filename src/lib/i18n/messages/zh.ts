@@ -441,8 +441,10 @@ export const messagesZh: Messages = {
     refreshLead: "完成后刷新此线索",
     refreshing: "刷新中…",
     refreshedUpdated: "已按 CRM 更新此线索。",
+    refreshedUpdatedPending: "已更新本地数据，后台正在与 CRM 校准。",
     refreshedRemoved: "该线索在 CRM 已不在 2026 线索集，已从列表移除。",
     refreshFailed: "刷新失败，请稍后重试。",
+    refreshSlowHint: "编辑/责任转移需从 CRM 拉取全量数据校验，约需 1 分钟，请稍候…",
     noClueIdHint: "该线索无 CRM clue_id，无法跳转 CRM 操作。",
   },
   customers: {
