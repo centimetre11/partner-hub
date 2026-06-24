@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { useMessages } from "@/lib/i18n/context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 
-type Leaf = { href: string; label: string; icon: string; aliases?: string[]; badge?: "unread" };
+type Leaf = { href: string; label: string; icon: string; aliases?: string[]; badge?: "unread"; mobileOnly?: boolean };
 type Group = { id: string; label: string; icon: string; children: Leaf[] };
 type Entry = Leaf | Group;
 
@@ -36,7 +36,7 @@ export function NavLinks({
 
   const nav: Entry[] = [
     { href: "/", label: m.nav.dashboard, icon: "◧" },
-    { href: "/mobile", label: m.nav.mobileDesk, icon: "▣" },
+    { href: "/mobile", label: m.nav.mobileDesk, icon: "▣", mobileOnly: true },
     { href: "/leads", label: m.nav.leads, icon: "◔" },
     { href: "/partners", label: m.nav.activePartners, icon: "◮" },
     { href: "/customers", label: m.nav.customers, icon: "◍" },
@@ -98,7 +98,7 @@ function NavLeaf({
     <Link
       href={leaf.href}
       onClick={onNavigate}
-      className={`flex items-center gap-3 ${nested ? "pl-9 pr-3" : "px-3"} py-2 rounded-md text-sm ${
+      className={`${leaf.mobileOnly ? "lg:hidden " : ""}flex items-center gap-3 ${nested ? "pl-9 pr-3" : "px-3"} py-2 rounded-md text-sm ${
         active ? "bg-slate-100 text-slate-900 font-medium" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       }`}
     >

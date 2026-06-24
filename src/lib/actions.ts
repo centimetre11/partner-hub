@@ -517,6 +517,7 @@ export async function createTodoAction(formData: FormData) {
   });
   revalidatePath("/todos");
   revalidatePath("/");
+  revalidatePath("/mobile");
   if (partnerId) revalidatePath(`/partners/${partnerId}`);
   if (customerId) revalidatePath(`/customers/${customerId}`);
 }
@@ -749,6 +750,7 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
   revalidatePath(ownerPath(owner));
   revalidatePath("/todos");
   revalidatePath("/");
+  revalidatePath("/mobile");
 
   if (crmSync.status === "synced") {
     return { ok: true, message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };
