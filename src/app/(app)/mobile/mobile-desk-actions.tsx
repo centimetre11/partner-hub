@@ -82,11 +82,13 @@ export function MobileTodoCapture({
   customers,
   users,
   labels,
+  autoOpen = false,
 }: {
   userId: string;
   partners: Option[];
   customers: Option[];
   users: Option[];
+  autoOpen?: boolean;
   labels: {
     button: string;
     title: string;
@@ -110,8 +112,12 @@ export function MobileTodoCapture({
   };
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (autoOpen) setOpen(true);
+  }, [autoOpen]);
 
   return (
     <>
@@ -218,9 +224,11 @@ export function MobileBusinessRecordCapture({
   partners,
   customers,
   labels,
+  autoOpen = false,
 }: {
   partners: Option[];
   customers: Option[];
+  autoOpen?: boolean;
   labels: {
     button: string;
     title: string;
@@ -233,8 +241,12 @@ export function MobileBusinessRecordCapture({
   };
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoOpen);
   const [ownerRef, setOwnerRef] = useState("");
+
+  useEffect(() => {
+    if (autoOpen) setOpen(true);
+  }, [autoOpen]);
 
   const parsed = parseOwnerRef(ownerRef);
   const owner: OwnerRef | null = parsed

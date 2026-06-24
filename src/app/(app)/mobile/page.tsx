@@ -44,7 +44,12 @@ function StatCard({ label, value, tone = "text-white" }: { label: string; value:
   );
 }
 
-export default async function MobileDeskPage() {
+export default async function MobileDeskPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ open?: string }>;
+}) {
+  const { open: openAction } = await searchParams;
   const user = await requireUser();
   const { messages: m, labels, bcp47 } = await getServerI18n();
   const L = labelConstants(labels);
@@ -147,6 +152,7 @@ export default async function MobileDeskPage() {
               customers={customerOptions}
               users={users}
               labels={desk.todoDrawer}
+              autoOpen={openAction === "todo"}
             />
           </ActionTile>
           <ActionTile eyebrow={scenario.businessRecord.eyebrow} title={scenario.businessRecord.title} desc={scenario.businessRecord.desc}>
@@ -154,6 +160,7 @@ export default async function MobileDeskPage() {
               partners={partnerOptions}
               customers={customerOptions}
               labels={desk.recordDrawer}
+              autoOpen={openAction === "record"}
             />
           </ActionTile>
           <ActionTile
