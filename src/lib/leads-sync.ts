@@ -11,6 +11,120 @@ import {
 const LAST_SYNC_KEY = "leads_last_sync";
 const BATCH = 100;
 const NURTURE_STATUS = "销售培育中";
+const CRM_ACTION_ALIASES: Record<string, CrmLeadAction | "fullSync"> = {
+  toNurture: "toNurture",
+  to_nurture: "toNurture",
+  nurture: "toNurture",
+  培育: "toNurture",
+  转培育: "toNurture",
+  toChannel: "toChannel",
+  to_channel: "toChannel",
+  channel: "toChannel",
+  转channel: "toChannel",
+  toCustomer: "toCustomer",
+  to_customer: "toCustomer",
+  customer: "toCustomer",
+  转客户: "toCustomer",
+  edit: "edit",
+  编辑: "edit",
+  基础信息编辑: "edit",
+  shift: "shift",
+  责任转移: "shift",
+  view: "view",
+  fullSync: "fullSync",
+  full_sync: "fullSync",
+  全量同步: "fullSync",
+};
+
+export function normalizeCrmCallbackAction(
+  raw: string | undefined | null,
+): CrmLeadAction | "fullSync" | null {
+  if (!raw?.trim()) return null;
+  const key = raw.trim();
+  return CRM_ACTION_ALIASES[key] ?? CRM_ACTION_ALIASES[key.toLowerCase()] ?? null;
+}
+
+export type CrmCallbackPayload = {
+  clueId?: string;
+  action?: string;
+  fullSync?: boolean;
+  /** 仅校验密钥与连通性，不写库 */
+  ping?: boolean;
+  /** 预览将执行的操作，不写库 */
+  dryRun?: boolean;
+};
+
+export type CrmCallbackResult =
+  | {
+      ok: true;
+      mode:
+        | "full_sync_started"
+        | "updated"
+        | "removed"
+        | "reconcile_started"
+        | "ignored"
+        | "ping"
+        | "dry_run";
+      dryRunDetail?: string;
+    }
+  | { ok: false; reason: "invalid_payload" | "unknown_action" | "no_clue_id" | "fetch_failed"; error?: string };
+
+const SUPPORTED_ACTIONS = [
+  "toNurture",
+  "toChannel",
+  "toCustomer",
+  "edit",
+  "shift",
+  "fullSync",
+] as const;
+
+export function getCrmCallbackPublicInfo(baseUrl: string) {
+  const testClueId = process.env.CRM_CALLBACK_TEST_CLUE_ID?.trim() || null;
+  return {
+    ok: true as const,
+    service: "partner-hub-leads-crm-callback",
+    secretConfigured: Boolean(process.env.CRM_CALLBACK_SECRET?.trim()),
+    callbackUrl: `${baseUrl}/api/leads/crm-callback`,
+    supportedActions: SUPPORTED_ACTIONS,
+    authHeader: "X-CRM-Callback-Secret",
+    note: "所有填报场景共用一个密钥 CRM_CALLBACK_SECRET，不是每个 action 单独一把密钥。",
+    test: {
+      browserGet: `${baseUrl}/api/leads/crm-callback`,
+      pingPost: {
+        url: `${baseUrl}/api/leads/crm-callback`,
+        body: { ping: true },
+        header: "X-CRM-Callback-Secret: <密钥>",
+      },
+      dryRunPost: {
+        url: `${baseUrl}/api/leads/crm-callback`,
+        body: {
+          dryRun: true,
+          clueId: testClueId ?? "<线索UUID>",
+          action: "toNurture",
+        },
+        header: "X-CRM-Callback-Secret: <密钥>",
+      },
+      sampleClueId: testClueId,
+    },
+  };
+}
+
+function describeDryRun(actionNorm: CrmLeadAction | "fullSync" | null): string {
+  switch (actionNorm) {
+    case "toNurture":
+      return "将把该线索状态更新为「销售培育中」，并后台 CRM 校准";
+    case "toChannel":
+    case "toCustomer":
+      return "将从 Partner Hub 线索列表删除该条，并后台 CRM 校准";
+    case "edit":
+    case "shift":
+      return "将后台拉 CRM 数据校准该条（约 1 分钟）";
+    case "fullSync":
+      return "将触发全量线索同步（约 1 分钟）";
+    default:
+      return "未知 action";
+  }
+}
 
 export type LeadsSyncResult = {
   ok: boolean;
@@ -137,6 +251,85 @@ export async function refreshLeadById(
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     return { ok: false, reason: "fetch_failed", error, durationMs: Date.now() - started };
+  }
+}
+
+/**
+ * CRM 填报成功回调（Java 自定义提交 / JS 回调均可调用）。
+ * 快速返回；全量同步、编辑/转移校准在后台执行。
+ */
+export async function handleCrmLeadCallback(payload: CrmCallbackPayload): Promise<CrmCallbackResult> {
+  if (payload.ping) {
+    return { ok: true, mode: "ping" };
+  }
+
+  if (payload.fullSync) {
+    if (payload.dryRun) {
+      return { ok: true, mode: "dry_run", dryRunDetail: describeDryRun("fullSync") };
+    }
+    void syncLeadsData().catch((e) => console.error("[crm-callback] full sync failed:", e));
+    return { ok: true, mode: "full_sync_started" };
+  }
+
+  const clueId = payload.clueId?.trim();
+  if (!clueId) return { ok: false, reason: "invalid_payload", error: "clueId required" };
+
+  const actionNorm = normalizeCrmCallbackAction(payload.action);
+
+  if (actionNorm === "fullSync") {
+    if (payload.dryRun) {
+      return { ok: true, mode: "dry_run", dryRunDetail: describeDryRun("fullSync") };
+    }
+    void syncLeadsData().catch((e) => console.error("[crm-callback] full sync failed:", e));
+    return { ok: true, mode: "full_sync_started" };
+  }
+
+  if (payload.dryRun) {
+    if (actionNorm === "view" || !actionNorm) {
+      return { ok: true, mode: "dry_run", dryRunDetail: "view 或无 action：忽略，不写库" };
+    }
+    return { ok: true, mode: "dry_run", dryRunDetail: describeDryRun(actionNorm) };
+  }
+
+  if (actionNorm === "view" || !actionNorm) {
+    return { ok: true, mode: "ignored" };
+  }
+
+  const leadId = clueId;
+
+  try {
+    switch (actionNorm) {
+      case "toNurture":
+        await db.crmLead.updateMany({
+          where: { id: leadId },
+          data: { status: NURTURE_STATUS },
+        });
+        void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
+          console.error("[crm-callback] reconcile failed:", e),
+        );
+        return { ok: true, mode: "updated" };
+
+      case "toChannel":
+      case "toCustomer":
+        await db.crmLead.deleteMany({ where: { id: leadId } });
+        void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
+          console.error("[crm-callback] reconcile failed:", e),
+        );
+        return { ok: true, mode: "removed" };
+
+      case "edit":
+      case "shift":
+        void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
+          console.error("[crm-callback] reconcile failed:", e),
+        );
+        return { ok: true, mode: "reconcile_started" };
+
+      default:
+        return { ok: false, reason: "unknown_action", error: String(payload.action) };
+    }
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    return { ok: false, reason: "fetch_failed", error };
   }
 }
 

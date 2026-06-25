@@ -1,0 +1,25 @@
+/**
+ * 提交入库成功回调 — 转培育 (cclue_to_public.cpt, type=培育)
+ * 参考: https://help.fanruan.com/finereport/doc-view-1219.html
+ *
+ * 在「提交入库」事件 → 「设置回调函数」中粘贴。
+ * 将 CLUE_ID 改为模板中 clueid 参数/单元格；SECRET 与 Partner Hub CRM_CALLBACK_SECRET 一致。
+ */
+var CLUE_ID = "${clueid}"; // 或改为单元格，如 =$clueid
+var CALLBACK_URL = "https://camelusai.com/api/leads/crm-callback";
+var SECRET = "请填写与 Partner Hub 一致的密钥";
+
+if (fr_submitinfo.success) {
+  FR.ajax({
+    url: CALLBACK_URL,
+    type: "POST",
+    contentType: "application/json",
+    headers: { "X-CRM-Callback-Secret": SECRET },
+    data: JSON.stringify({ clueId: CLUE_ID, action: "toNurture" }),
+    complete: function () {
+      FR.Msg.toast("提交成功，Partner Hub 已同步");
+    },
+  });
+} else {
+  FR.Msg.toast("提交失败：" + fr_submitinfo.failinfo);
+}
