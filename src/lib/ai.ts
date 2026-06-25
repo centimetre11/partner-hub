@@ -1116,7 +1116,7 @@ export function parseJsonLoose<T>(text: string): T {
   throw new AIError(`AI response could not be parsed as JSON: ${preview}`);
 }
 
-async function chatJsonOnce<T>(
+async function chatJsonOnce(
   system: string,
   user: string,
   opts: {
@@ -1124,6 +1124,7 @@ async function chatJsonOnce<T>(
     userId?: string;
     temperature?: number;
     taskTier?: import("./ai-capabilities").AiTaskTier;
+    capability?: AiCapability;
     maxTokens?: number;
     onDelta?: (delta: string) => void;
     jsonMode?: boolean;
@@ -1140,6 +1141,7 @@ async function chatJsonOnce<T>(
       userId: opts.userId,
       temperature: opts.temperature,
       taskTier: opts.taskTier,
+      capability: opts.capability,
       maxTokens: opts.maxTokens,
       onDelta: opts.onDelta,
     }
@@ -1150,7 +1152,14 @@ async function chatJsonOnce<T>(
 export async function chatJson<T>(
   system: string,
   user: string,
-  opts: { feature?: string; userId?: string; temperature?: number; taskTier?: import("./ai-capabilities").AiTaskTier; maxTokens?: number } = {}
+  opts: {
+    feature?: string;
+    userId?: string;
+    temperature?: number;
+    taskTier?: import("./ai-capabilities").AiTaskTier;
+    capability?: AiCapability;
+    maxTokens?: number;
+  } = {}
 ): Promise<T> {
   try {
     return parseJsonLoose<T>(await chatJsonOnce(system, user, opts));

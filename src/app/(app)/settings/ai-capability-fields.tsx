@@ -18,6 +18,7 @@ export function AiCapabilityBadges({ capabilities }: { capabilities: AiCapabilit
     json: "bg-amber-50 text-amber-700",
     reasoning: "bg-violet-50 text-violet-700",
     fast: "bg-teal-50 text-teal-700",
+    lead_research: "bg-indigo-50 text-indigo-700",
   };
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">
@@ -58,6 +59,7 @@ export function AiCapabilityFields({ defaultCapabilities }: { defaultCapabilitie
       <p className="text-[11px] text-slate-400">
         Example: check Vision for DeepSeek V4; text-only models only need General chat / Tools / JSON. When images are sent, a vision-capable model is chosen automatically.
         Lightweight models (e.g. mini/flash) should check Lightweight & fast — simple extraction like AI add-contact is preferred on those.
+        For lead web research synthesis, tag a cheap model with Lead research (+ JSON recommended).
       </p>
     </fieldset>
   );

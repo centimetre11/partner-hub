@@ -7,6 +7,10 @@ export const AI_CAPABILITY_META = {
   json: { label: "JSON output", hint: "Profile proposals and structured extraction" },
   reasoning: { label: "Deep reasoning", hint: "Complex analysis and multi-step planning (optional)" },
   fast: { label: "Lightweight & fast", hint: "Preferred for short tasks like attribute extraction and simple JSON" },
+  lead_research: {
+    label: "Lead research",
+    hint: "Lightweight model for lead web research synthesis (JSON from search snippets)",
+  },
 } as const;
 
 export type AiCapability = keyof typeof AI_CAPABILITY_META;
@@ -31,6 +35,9 @@ export const ALL_AI_CAPABILITIES = Object.keys(AI_CAPABILITY_META) as AiCapabili
 
 /** Default capabilities for new/unlabeled models */
 export const DEFAULT_AI_CAPABILITIES: AiCapability[] = ["chat", "tools", "json"];
+
+/** Recommended tags for lead research synthesis (cheap model; search uses Kimi/Volcengine separately) */
+export const LEAD_RESEARCH_PRESET_CAPABILITIES: AiCapability[] = ["lead_research", "fast", "json"];
 
 export function parseAiCapabilities(raw: string | null | undefined): AiCapability[] {
   if (!raw?.trim()) return [...DEFAULT_AI_CAPABILITIES];

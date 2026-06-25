@@ -952,6 +952,24 @@ model CrmLead {
   @@index([jzDate])
 }
 
+// 线索联网研究结果（按 clue_id 持久化，不受 nightly 整表替换影响）
+model CrmLeadResearch {
+  id            String   @id @default(cuid())
+  leadId        String   @unique // clue_id
+  summary       String // Markdown summary for display
+  resultJson    String // Structured JSON
+  searchQuery   String?
+  searchBackend String?
+  modelUsed     String?
+  rawChars      Int?
+  status        String   @default("done") // done | error
+  error         String?
+  researchedAt  DateTime @default(now())
+  researchedBy  String?
+
+  @@index([researchedAt])
+}
+
 // CRM 线索同步日志
 model LeadsSyncLog {
   id         String   @id @default(cuid())
