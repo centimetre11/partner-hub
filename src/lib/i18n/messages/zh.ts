@@ -448,13 +448,14 @@ export const messagesZh: Messages = {
     noClueIdHint: "该线索无 CRM clue_id，无法跳转 CRM 操作。",
     whatsapp: {
       title: "WhatsApp 联系",
-      open: "打开 WhatsApp",
+      openApp: "用 App 打开",
+      openBrowser: "用浏览器打开",
       manage: "管理常用语",
       save: "保存",
       reset: "恢复默认",
       messagePlaceholder: "点击上方常用语填充，或直接编辑要发送的内容…",
-      editHint: "每行一条常用语，支持占位符：{name} 联系人名 / {company} 公司 / {city} 城市 / {country} 国家。",
-      editPlaceholder: "你好 {name}，我是帆软顾问…",
+      editHint: "每行一条常用语（建议用英文），支持占位符：{name} 联系人名 / {company} 公司 / {city} 城市 / {country} 国家。",
+      editPlaceholder: "Hi {name}, I'm a consultant from FineReport…",
       phoneLabel: "号码",
     },
     research: {

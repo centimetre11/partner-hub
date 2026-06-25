@@ -448,7 +448,8 @@ export const messagesEn = {
     noClueIdHint: "This lead has no CRM clue_id, CRM actions are unavailable.",
     whatsapp: {
       title: "WhatsApp",
-      open: "Open WhatsApp",
+      openApp: "Open in app",
+      openBrowser: "Open in browser",
       manage: "Manage phrases",
       save: "Save",
       reset: "Reset to default",

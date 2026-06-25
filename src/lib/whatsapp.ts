@@ -35,21 +35,31 @@ export function applyWhatsAppTemplate(template: string, vars: WhatsAppTemplateVa
     .trim();
 }
 
-/** 构造 https://wa.me/<digits>?text=<encoded> 链接。 */
+/** 构造 https://wa.me/<digits>?text=<encoded> 通用链接（系统自动选择 App/网页）。 */
 export function buildWhatsAppLink(phone: string, message: string): string {
   const base = `https://wa.me/${phone}`;
   const text = message.trim();
   return text ? `${base}?text=${encodeURIComponent(text)}` : base;
 }
 
-/** 默认常用语模板（用户可在界面自定义覆盖）。 */
-export const DEFAULT_WHATSAPP_TEMPLATES_ZH = [
-  "你好 {name}，我是帆软（FineReport / FanRuan）的顾问，看到贵司 {company} 在数据分析方面的需求，想和您简单交流一下。",
-  "Hi {name}，方便的话我给您发一份适合 {company} 的产品资料和案例，您看可以吗？",
-  "你好 {name}，想确认下我们之前提到的方案，您这边什么时间方便沟通？",
-];
+/** 浏览器打开：WhatsApp Web（web.whatsapp.com），带入文本。 */
+export function buildWhatsAppWebLink(phone: string, message: string): string {
+  const params = new URLSearchParams({ phone });
+  const text = message.trim();
+  if (text) params.set("text", text);
+  return `https://web.whatsapp.com/send?${params.toString()}`;
+}
 
-export const DEFAULT_WHATSAPP_TEMPLATES_EN = [
+/** App 打开：whatsapp:// 协议直接唤起桌面 / 手机客户端，带入文本。 */
+export function buildWhatsAppAppLink(phone: string, message: string): string {
+  const params = new URLSearchParams({ phone });
+  const text = message.trim();
+  if (text) params.set("text", text);
+  return `whatsapp://send?${params.toString()}`;
+}
+
+/** 默认常用语模板（固定英文，不随界面语言切换；用户可在界面自定义覆盖）。 */
+export const DEFAULT_WHATSAPP_TEMPLATES = [
   "Hi {name}, I'm a consultant from FineReport (FanRuan). I noticed {company}'s interest in data analytics and would love to have a quick chat.",
   "Hi {name}, may I send over some materials and case studies tailored for {company}?",
   "Hi {name}, just following up on the solution we discussed — when would be a good time to talk?",
