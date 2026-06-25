@@ -541,6 +541,7 @@ No web research. ready=true only when title + traceNature + traceAction are set 
     guide: `Extract todos with title (required), optional dueDate (YYYY-MM-DD), assigneeName (负责人/owner name), detail.
 Title = the actual task only — strip command words like「增加待办/创建todo」and metadata like「负责人是 xxx」(put name in assigneeName, not in title).
 「给 X，…」/「for X, …」→ assigneeName=X; the rest is title. Hub team member names are assigneeName, never partnerName.
+「给我/帮我加个待办，…」→ assigneeName=「我」（当前操作人），title 只留任务内容（如「摸清…权力地图」）。
 If user names a company/partner, set proposal.partnerName — the system will auto-link on a single match.
 Multiple matches require blocking partnerName clarification. If the company is named but not found in Partner Hub, the system will ask the user to confirm an unlinked todo (do not set ready=true yourself in that case).
 If no company is mentioned, omit partnerName for a global/personal todo.

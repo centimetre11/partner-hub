@@ -327,7 +327,7 @@ export function buildPartnerBindingPrompt(opts: {
         : `[Partner binding · locked]\nBound to "${partnerName}". Set proposal.partnerName to "${partnerName}". businessRecords must have ≥1 item with title, traceNature, traceAction; ready=true only when complete. User replies「确认」(WeCom or Web) before CRM sync.`;
     }
     return opts.locale === "zh"
-      ? `[伙伴绑定 · 已锁定]\n当前录入会话已绑定伙伴「${partnerName}」。商务记录、商机、联系人、待办、培训、联合方案等默认全部归属该伙伴；不要追问属于哪家公司。\nproposal.partnerName 必须设为「${partnerName}」。\n「给 X / 负责人 X」中的 X 是 Hub 团队成员 assigneeName，不是 partnerName。\n信息足够时 ready=true；企微群需用户 @机器人 回复「确认」后才会保存。`
+      ? `[伙伴绑定 · 已锁定]\n当前录入会话已绑定伙伴「${partnerName}」。商务记录、商机、联系人、待办、培训、联合方案等默认全部归属该伙伴；不要追问属于哪家公司。\nproposal.partnerName 必须设为「${partnerName}」。\n「给 X / 负责人 X」中的 X 是 Hub 团队成员 assigneeName；「给我/帮我加个待办」表示负责人为当前操作人（assigneeName=「我」），不是 partnerName。\n任务内容里提到的客户/公司名（如华为云金融）不要写入 partnerName。\n信息足够时 ready=true；企微群需用户 @机器人 回复「确认」后才会保存。`
       : `[Partner binding · locked]\nThis session is bound to "${partnerName}". All records belong to this partner.\nSet proposal.partnerName to "${partnerName}". Names after「给/for」or「负责人/owner」go in assigneeName, not partnerName.\nSet ready=true when extraction is complete; WeCom groups require @bot confirm before save.`;
   }
 

@@ -51,6 +51,7 @@ import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
 import { detectTraceNatureOverride, refinalProposeIntakeTurn } from "@/lib/fast-intake-heuristic";
+import { resolveSelfAssigneeNames } from "@/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "@/lib/intake-text";
 import { formatProposeAppliedReply, formatProposeConfirmBlockedReply, formatProposeWecomReply } from "@/lib/proposal-wecom-format";
 import { enrichBusinessRecordCompanyTarget } from "@/lib/business-record-intake";
@@ -554,6 +555,9 @@ async function applyAssistantTurnResult(opts: {
       merged = refinal.proposal;
       ready = refinal.ready;
       crmOnlyReady = refinal.crmOnlyReady;
+      if (scope === "todo") {
+        merged = resolveSelfAssigneeNames(merged, actor.hubUser?.name ?? undefined);
+      }
       if (
         (scope === "business_record" || scope === "todo") &&
         isIntakeParseErrorReply(replyText)

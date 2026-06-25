@@ -1,19 +1,43 @@
 import { db } from "./db";
+import type { IntakeProposal } from "./ai-intake";
 import type { TodoProposal } from "./proposals";
 
+/** Parsed assignee marker meaning “current operator” (resolved at apply time). */
+export const TODO_SELF_ASSIGNEE = "我";
+
+export function isTodoSelfAssignee(name: string | undefined): boolean {
+  const q = name?.trim().toLowerCase();
+  if (!q) return false;
+  return (
+    q === "我" ||
+    q === "我自己" ||
+    q === "本人" ||
+    q === "me" ||
+    q === "myself" ||
+    q === TODO_SELF_ASSIGNEE.toLowerCase()
+  );
+}
+
+export function mentionsSelfTodoAssignee(text: string): boolean {
+  return /^(?:帮我|请|麻烦|给我)\s*(?:加|添|创|增加|新增|添加|创建|记(?:录|个|一下)?)\s*(?:一个|一下|个)?\s*待办/i.test(
+    text.trim(),
+  );
+}
+
 export function stripTodoCommandPrefix(text: string): string {
-  return text
-    .trim()
-    .replace(
-      /^(帮我|请|麻烦)?\s*(增加|新增|添加|加|创建|记(录|个|一下)?)\s*(一个|一下)?\s*待办[：:,，、\s]*/i,
-      "",
-    )
-    .replace(
-      /^(帮我|请|麻烦)?\s*(增加|新增|添加|加|创建|记(录|个|一下)?)\s*(一个|一下)?\s*待办\s+/i,
-      "",
-    )
-    .replace(/^(please )?(help me )?(to )?(add|create|log)?\s*(a )?todo[：:\s,]*/i, "")
-    .trim();
+  const todoTail = String.raw`(?:一个|一下|个)?\s*待办`;
+  const addVerb = String.raw`(?:增加|新增|添加|加|创(?:建|个)?|记(?:录|个|一下)?)`;
+  const prefixes = [
+    String.raw`^(?:帮我|请|麻烦|给我)\s*${addVerb}\s*${todoTail}[：:,，、\s]*`,
+    String.raw`^(?:帮我|请|麻烦|给我)\s*${addVerb}\s*${todoTail}\s+`,
+    String.raw`^${addVerb}\s*${todoTail}[：:,，、\s]*`,
+    String.raw`^${addVerb}\s*${todoTail}\s+`,
+  ];
+  let s = text.trim();
+  for (const p of prefixes) {
+    s = s.replace(new RegExp(p, "i"), "");
+  }
+  return s.replace(/^(please )?(help me )?(to )?(add|create|log)?\s*(a )?todo[：:\s,]*/i, "").trim();
 }
 
 function addDays(today: string, offsetDays: number): string {
@@ -58,13 +82,15 @@ function extractAssignee(text: string): { rest: string; assigneeName?: string } 
 
 /** Parse todo title / assignee / dates from free-form user text (WeCom or web). */
 export function parseTodoFromText(text: string, today?: string): TodoProposal {
-  let s = stripTodoCommandPrefix(text);
+  const raw = text.trim();
+  let s = stripTodoCommandPrefix(raw);
   const { rest, assigneeName } = extractAssignee(s);
   s = rest.replace(/^[，,、]\s*/, "").trim();
   const title = s.length <= 120 ? s : `${s.slice(0, 117)}…`;
+  const selfAssignee = mentionsSelfTodoAssignee(raw) && !assigneeName;
   return {
     title,
-    assigneeName,
+    assigneeName: assigneeName ?? (selfAssignee ? TODO_SELF_ASSIGNEE : undefined),
     dueDate: today ? inferDueDate(text, today) : inferDueDate(text, new Date().toISOString().slice(0, 10)),
   };
 }
@@ -76,8 +102,22 @@ export function normalizeTodoItem(t: TodoProposal, today?: string): TodoProposal
   return {
     ...t,
     title,
-    assigneeName: t.assigneeName?.trim() || parsed.assigneeName,
+    assigneeName: parsed.assigneeName || t.assigneeName?.trim(),
     dueDate: t.dueDate || parsed.dueDate,
+  };
+}
+
+export function resolveSelfAssigneeNames(
+  proposal: IntakeProposal,
+  displayName?: string,
+): IntakeProposal {
+  if (!displayName?.trim()) return proposal;
+  return {
+    ...proposal,
+    todos: proposal.todos.map((t) => ({
+      ...t,
+      assigneeName: isTodoSelfAssignee(t.assigneeName) ? displayName.trim() : t.assigneeName,
+    })),
   };
 }
 
@@ -86,7 +126,7 @@ export async function resolveTodoAssigneeId(
   fallbackUserId: string,
 ): Promise<string> {
   const q = assigneeName?.trim();
-  if (!q) return fallbackUserId;
+  if (!q || isTodoSelfAssignee(q)) return fallbackUserId;
   const users = await db.user.findMany({ take: 50 });
   const lower = q.toLowerCase();
   const match =

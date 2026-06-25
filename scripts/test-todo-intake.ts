@@ -13,7 +13,7 @@ import {
   lastIntakeUserText,
   stripIntakeCommandPrefix,
 } from "../src/lib/fast-intake-heuristic";
-import { parseTodoFromText } from "../src/lib/todo-intake-parse";
+import { parseTodoFromText, resolveSelfAssigneeNames } from "../src/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "../src/lib/intake-text";
 import { extractPartnerNameFromIntakeText } from "../src/lib/intake-partner-binding";
 
@@ -39,6 +39,31 @@ function main() {
   const zayne = parseTodoFromText("记个待办给 Zayne，smc 做出历史最佳标杆", TODAY);
   cases.push(assert("Zayne：标题", zayne.title === "smc 做出历史最佳标杆", zayne.title));
   cases.push(assert("Zayne：负责人", zayne.assigneeName === "Zayne", zayne.assigneeName));
+
+  const selfTodo = parseTodoFromText("给我加个待办，摸清华为云金融的权力地图", TODAY);
+  cases.push(assert("给我：标题", selfTodo.title === "摸清华为云金融的权力地图", selfTodo.title));
+  cases.push(assert("给我：负责人=我", selfTodo.assigneeName === "我", selfTodo.assigneeName));
+
+  const hSelf = heuristicFastIntakeTurn("todo", "给我加个待办，摸清华为云金融的权力地图", "zh", TODAY);
+  cases.push(assert("heuristic 给我 ready", hSelf?.ready === true));
+  cases.push(assert("heuristic 给我 标题", hSelf?.proposal.todos[0]?.title === "摸清华为云金融的权力地图"));
+  cases.push(assert("heuristic 给我 负责人", hSelf?.proposal.todos[0]?.assigneeName === "我"));
+  cases.push(
+    assert(
+      "heuristic 给我 summary 不含命令词",
+      hSelf?.proposal.summary === "摸清华为云金融的权力地图",
+      hSelf?.proposal.summary,
+    ),
+  );
+
+  const resolved = resolveSelfAssigneeNames(hSelf!.proposal, "陈敏");
+  cases.push(
+    assert(
+      "resolveSelfAssigneeNames 我→操作人",
+      resolved.todos[0]?.assigneeName === "陈敏",
+      resolved.todos[0]?.assigneeName,
+    ),
+  );
 
   const enTodo = parseTodoFromText("add todo: follow up contract, assignee: areeb", TODAY);
   cases.push(assert("英文 add todo", enTodo.title?.includes("follow up contract") ?? false, enTodo.title));

@@ -21,7 +21,7 @@ import {
   normalizeCrmTraceAction,
   normalizeCrmTraceNature,
 } from "./crm-trace-payload";
-import { parseTodoFromText, stripTodoCommandPrefix, normalizeTodoItem } from "./todo-intake-parse";
+import { parseTodoFromText, stripTodoCommandPrefix, normalizeTodoItem, mentionsSelfTodoAssignee } from "./todo-intake-parse";
 
 function stripIntakeSystemHint(content: string): string {
   const zh = content.indexOf("\n\n（系统提示：");
@@ -249,7 +249,8 @@ function heuristicTodoTurn(userText: string, locale: Locale, today: string): Int
   const hasTodoIntent =
     /待办|todo|记得|提醒|跟进|follow[- ]?up|deadline|截止/i.test(text) ||
     !!parsed.assigneeName ||
-    /^(?:给|for)\s+/i.test(text);
+    /^(?:给|for)\s+/i.test(text) ||
+    mentionsSelfTodoAssignee(text);
   if (!hasTodoIntent) return null;
 
   const todos = [
@@ -602,9 +603,14 @@ async function finalizeTodoTurn(
     ...partnerClarifications,
     ...buildTodoClarifications(todos, locale).filter((c) => !turn.clarifications.some((x) => x.id === c.id)),
   ];
+  const primaryTitle = todos[0]?.title?.trim();
+  const cleanedProposal =
+    primaryTitle && (!proposal.summary?.trim() || /(?:待办|todo)/i.test(proposal.summary))
+      ? { ...proposal, summary: primaryTitle, todos }
+      : { ...proposal, todos };
   return {
     ...turn,
-    proposal,
+    proposal: cleanedProposal,
     clarifications,
     ready: todos.length > 0 && !clarifications.some((c) => c.blocking),
     reply: isIntakeParseErrorReply(turn.reply)
