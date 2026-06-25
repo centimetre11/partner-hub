@@ -446,6 +446,17 @@ export const messagesEn = {
     refreshFailed: "Refresh failed, please try again later.",
     refreshSlowHint: "Edit/transfer requires a full CRM fetch to verify (~1 min), please wait…",
     noClueIdHint: "This lead has no CRM clue_id, CRM actions are unavailable.",
+    whatsapp: {
+      title: "WhatsApp",
+      open: "Open WhatsApp",
+      manage: "Manage phrases",
+      save: "Save",
+      reset: "Reset to default",
+      messagePlaceholder: "Click a phrase above to fill, or edit the message to send…",
+      editHint: "One phrase per line. Placeholders: {name} contact / {company} company / {city} city / {country} country.",
+      editPlaceholder: "Hi {name}, I'm a consultant from FineReport…",
+      phoneLabel: "Phone",
+    },
     research: {
       title: "Web research",
       desc: "Search public info by company, country, contact, and title; a lightweight model summarizes results (~1–2 searches, token-efficient).",

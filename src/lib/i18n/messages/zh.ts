@@ -446,6 +446,17 @@ export const messagesZh: Messages = {
     refreshFailed: "刷新失败，请稍后重试。",
     refreshSlowHint: "编辑/责任转移需从 CRM 拉取全量数据校验，约需 1 分钟，请稍候…",
     noClueIdHint: "该线索无 CRM clue_id，无法跳转 CRM 操作。",
+    whatsapp: {
+      title: "WhatsApp 联系",
+      open: "打开 WhatsApp",
+      manage: "管理常用语",
+      save: "保存",
+      reset: "恢复默认",
+      messagePlaceholder: "点击上方常用语填充，或直接编辑要发送的内容…",
+      editHint: "每行一条常用语，支持占位符：{name} 联系人名 / {company} 公司 / {city} 城市 / {country} 国家。",
+      editPlaceholder: "你好 {name}，我是帆软顾问…",
+      phoneLabel: "号码",
+    },
     research: {
       title: "联网研究",
       desc: "基于公司名称、国家、联系人、职务做公开信息检索，并用轻量模型整理摘要（约 1–2 次搜索，省 Token）。",
