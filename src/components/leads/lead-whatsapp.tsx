@@ -12,7 +12,7 @@ import {
   type WhatsAppTemplateVars,
 } from "@/lib/whatsapp";
 
-const STORAGE_KEY = "leads.whatsapp.templates.v1";
+const STORAGE_KEY = "leads.whatsapp.templates.v2";
 
 const chipClass =
   "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-100 active:scale-95";
