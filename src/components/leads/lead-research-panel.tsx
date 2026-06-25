@@ -36,11 +36,6 @@ function confidenceLabel(c: string | undefined, labels: { high: string; medium: 
   return labels.low;
 }
 
-function MatchBadge({ ok, yes, no }: { ok?: boolean; yes: string; no: string }) {
-  if (ok === undefined) return null;
-  return <Badge tone={ok ? "green" : "amber"}>{ok ? yes : no}</Badge>;
-}
-
 export function LeadResearchPanel({ leadId }: { leadId: string }) {
   const m = useMessages();
   const r = m.leads.research;
@@ -248,21 +243,6 @@ export function LeadResearchPanel({ leadId }: { leadId: string }) {
                       <p className="text-xs text-slate-400">{r.noContactData}</p>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-
-            {structured?.crmComparison && (
-              <div className="rounded-lg border border-slate-100 p-3">
-                <h3 className="text-xs font-semibold text-slate-700 mb-2">{r.crmCompare}</h3>
-                <div className="flex flex-wrap gap-2">
-                  <MatchBadge ok={structured.crmComparison.companyNameMatch} yes={r.matchCompany} no={r.mismatchCompany} />
-                  <MatchBadge ok={structured.crmComparison.countryMatch} yes={r.matchCountry} no={r.mismatchCountry} />
-                  <MatchBadge ok={structured.crmComparison.contactNameMatch} yes={r.matchContact} no={r.mismatchContact} />
-                  <MatchBadge ok={structured.crmComparison.contactTitleMatch} yes={r.matchTitle} no={r.mismatchTitle} />
-                </div>
-                {structured.crmComparison.notes && (
-                  <p className="text-xs text-slate-500 mt-2">{structured.crmComparison.notes}</p>
                 )}
               </div>
             )}

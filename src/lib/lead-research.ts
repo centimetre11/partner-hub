@@ -3,6 +3,7 @@
 import type { CrmLead, CrmLeadResearch } from "@prisma/client";
 import { db } from "./db";
 import { chatJson } from "./ai";
+import { buildEnglishSearchQueries } from "./lead-research-query";
 import { generalWebSearch, isWebSearchAvailable, linkedinSearch, webSearchBackendLabel } from "./web-search";
 
 const MAX_RAW_CHARS = 12_000;
@@ -28,13 +29,6 @@ export type LeadResearchStructured = {
     confidence: "high" | "medium" | "low";
     sources: LeadResearchSource[];
   };
-  crmComparison?: {
-    companyNameMatch?: boolean;
-    countryMatch?: boolean;
-    contactNameMatch?: boolean;
-    contactTitleMatch?: boolean;
-    notes?: string;
-  };
   summary: string;
   notes?: string;
 };
@@ -43,48 +37,20 @@ export type LeadResearchRunResult =
   | { ok: true; research: CrmLeadResearch; structured: LeadResearchStructured }
   | { ok: false; error: string; needsWebSearch?: boolean };
 
-function quoteName(name: string): string {
-  const n = name.trim();
-  return /\s/.test(n) ? `"${n}"` : n;
-}
-
-function buildSearchBlocks(lead: Pick<CrmLead, "name" | "countryCn" | "city" | "contName" | "contDuty">) {
-  const company = lead.name?.trim();
-  if (!company) return null;
-
-  const region = [lead.countryCn, lead.city].filter(Boolean).join(" ");
-  const companyQuery = `${quoteName(company)} ${region} company official website`.replace(/\s+/g, " ").trim();
-
-  const blocks: { label: string; query: string; kind: "web" | "linkedin" }[] = [
-    { label: "Company", query: companyQuery, kind: "web" },
-  ];
-
-  if (lead.contName?.trim()) {
-    const contactQuery = [lead.contName, lead.contDuty, company, region]
-      .filter(Boolean)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    blocks.push({ label: "Contact", query: contactQuery, kind: "linkedin" });
-  }
-
-  return { company, region, blocks };
-}
-
-function crmContext(lead: CrmLead): string {
+function leadHints(lead: CrmLead): string {
   return [
-    `Company (CRM): ${lead.name ?? "—"}`,
-    `Country (CRM): ${lead.countryCn ?? "—"}`,
-    `City (CRM): ${lead.city ?? "—"}`,
-    `Contact (CRM): ${lead.contName ?? "—"}`,
-    `Title (CRM): ${lead.contDuty ?? "—"}`,
+    `Company: ${lead.name ?? "—"}`,
+    `Country: ${lead.countryCn ?? "—"}`,
+    `City: ${lead.city ?? "—"}`,
+    `Contact: ${lead.contName ?? "—"}`,
+    `Title: ${lead.contDuty ?? "—"}`,
   ].join("\n");
 }
 
 async function gatherSearchSnippets(
   lead: CrmLead,
 ): Promise<{ ok: true; raw: string; queries: string[] } | { ok: false; error: string; needsWebSearch?: boolean }> {
-  const plan = buildSearchBlocks(lead);
+  const plan = buildEnglishSearchQueries(lead);
   if (!plan) return { ok: false, error: "Lead has no company name; cannot research." };
 
   const canSearch = await isWebSearchAvailable();
@@ -97,7 +63,7 @@ async function gatherSearchSnippets(
     };
   }
 
-  const parts: string[] = [`## CRM fields\n${crmContext(lead)}`];
+  const parts: string[] = [`## Lead hints (for context only, not for strict matching)\n${leadHints(lead)}`];
   const queries: string[] = [];
 
   for (const block of plan.blocks) {
@@ -119,18 +85,19 @@ async function gatherSearchSnippets(
 function buildFallbackSummary(structured: LeadResearchStructured): string {
   const lines: string[] = [];
   const c = structured.company;
-  lines.push(`- **公司**：${c.name}${c.verified ? "（已核实）" : "（未核实，置信度：" + c.confidence + "）"}`);
+  lines.push(`- **公司**：${c.name}${c.verified ? "" : "（公开信息有限，置信度：" + c.confidence + "）"}`);
   if (c.country) lines.push(`- **国家/地区**：${c.country}`);
   if (c.website) lines.push(`- **官网**：${c.website}`);
+  if (c.industry) lines.push(`- **行业**：${c.industry}`);
+  if (c.description) lines.push(`- **简介**：${c.description}`);
   if (structured.contact?.name) {
     lines.push(
-      `- **联系人**：${structured.contact.name}${structured.contact.title ? " · " + structured.contact.title : ""}${structured.contact.verified ? "" : "（未核实）"}`,
+      `- **联系人**：${structured.contact.name}${structured.contact.title ? " · " + structured.contact.title : ""}`,
     );
   }
-  if (structured.crmComparison?.notes) lines.push(`- **CRM 对比**：${structured.crmComparison.notes}`);
   if (structured.notes) lines.push(`- **备注**：${structured.notes}`);
   if (lines.length === 1 && c.sources?.length) {
-    lines.push(`- 检索到 ${c.sources.length} 条公开来源，但未找到与 CRM 公司名完全匹配的主体。`);
+    lines.push(`- 检索到 ${c.sources.length} 条公开来源。`);
   }
   return lines.join("\n");
 }
@@ -143,25 +110,24 @@ function normalizeStructured(structured: LeadResearchStructured): LeadResearchSt
 }
 
 async function synthesizeFromSnippets(lead: CrmLead, raw: string, userId?: string): Promise<LeadResearchStructured> {
-  const system = `You are a B2B lead research assistant. You receive CRM lead fields and raw web search snippets (titles, links, summaries only).
-Verify and enrich the company and contact using ONLY the snippets. Do not invent facts.
+  const system = `You are a B2B lead research assistant. You receive lead hints and raw web search snippets (titles, links, summaries only).
+Summarize what public sources say about the company and contact. Do not invent facts. Do NOT compare or judge against CRM/lead input fields.
 Rules:
+- Extract the best public profile from snippets even if the company name spelling differs slightly from the lead hint.
 - If evidence is missing, set verified=false and confidence=low; leave optional fields empty.
-- company.verified = true only when snippets clearly refer to the same company as CRM.
-- contact.verified = true only when snippets clearly refer to the same person at that company.
-- crmComparison: compare public findings vs CRM fields (company name, country, contact name, title).
+- company.verified = true when snippets clearly describe a real company with useful public info.
+- contact.verified = true when snippets clearly describe the named person (or a likely match at that company).
 - summary: concise Markdown in Simplified Chinese (2–6 bullet points) for sales; mention confidence and gaps.
 - sources: cite snippet titles/urls used; max 5 per section.
 Output JSON only:
 {
   "company": {"name","verified","country","website","industry","description","confidence","sources":[{"title","url","note"}]},
   "contact": {"name","title","verified","confidence","sources":[{"title","url","note"}]},
-  "crmComparison": {"companyNameMatch","countryMatch","contactNameMatch","contactTitleMatch","notes"},
   "summary": "markdown string",
   "notes": "optional string"
 }`;
 
-  const user = `${crmContext(lead)}\n\n---\n\nSearch snippets:\n${raw}`;
+  const user = `${leadHints(lead)}\n\n---\n\nSearch snippets:\n${raw}`;
 
   const baseOpts = {
     feature: "Lead research synthesis",
@@ -189,8 +155,11 @@ export async function getLeadResearch(leadId: string): Promise<CrmLeadResearch |
 
 export function parseLeadResearchJson(raw: string): LeadResearchStructured | null {
   try {
-    const parsed = JSON.parse(raw) as LeadResearchStructured;
-    if (parsed?.company) return normalizeStructured(parsed);
+    const parsed = JSON.parse(raw) as LeadResearchStructured & { crmComparison?: unknown };
+    if (parsed?.company) {
+      delete parsed.crmComparison;
+      return normalizeStructured(parsed);
+    }
     return parsed;
   } catch {
     return null;
@@ -212,7 +181,7 @@ export async function runLeadResearch(leadId: string, userId?: string): Promise<
     structured = await synthesizeFromSnippets(lead, gathered.raw, userId);
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
-    const failed = await db.crmLeadResearch.upsert({
+    await db.crmLeadResearch.upsert({
       where: { leadId },
       create: {
         leadId,
