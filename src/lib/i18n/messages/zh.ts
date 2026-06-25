@@ -464,6 +464,7 @@ export const messagesZh: Messages = {
       rerun: "重新研究",
       refresh: "刷新结果",
       running: "研究中…",
+      runningHint: "联网搜索约需 1–3 分钟（火山 web_search 较慢），请勿关闭页面；完成后会自动刷新结果。",
       loading: "加载研究结果…",
       empty: "尚未研究。点击「开始研究」检索公开信息。",
       loadFailed: "加载研究结果失败。",

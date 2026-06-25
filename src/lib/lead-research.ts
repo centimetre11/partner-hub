@@ -116,6 +116,32 @@ async function gatherSearchSnippets(
   return { ok: true, raw: parts.join("\n\n").slice(0, MAX_RAW_CHARS), queries };
 }
 
+function buildFallbackSummary(structured: LeadResearchStructured): string {
+  const lines: string[] = [];
+  const c = structured.company;
+  lines.push(`- **公司**：${c.name}${c.verified ? "（已核实）" : "（未核实，置信度：" + c.confidence + "）"}`);
+  if (c.country) lines.push(`- **国家/地区**：${c.country}`);
+  if (c.website) lines.push(`- **官网**：${c.website}`);
+  if (structured.contact?.name) {
+    lines.push(
+      `- **联系人**：${structured.contact.name}${structured.contact.title ? " · " + structured.contact.title : ""}${structured.contact.verified ? "" : "（未核实）"}`,
+    );
+  }
+  if (structured.crmComparison?.notes) lines.push(`- **CRM 对比**：${structured.crmComparison.notes}`);
+  if (structured.notes) lines.push(`- **备注**：${structured.notes}`);
+  if (lines.length === 1 && c.sources?.length) {
+    lines.push(`- 检索到 ${c.sources.length} 条公开来源，但未找到与 CRM 公司名完全匹配的主体。`);
+  }
+  return lines.join("\n");
+}
+
+function normalizeStructured(structured: LeadResearchStructured): LeadResearchStructured {
+  if (!structured.summary?.trim()) {
+    structured.summary = buildFallbackSummary(structured);
+  }
+  return structured;
+}
+
 async function synthesizeFromSnippets(lead: CrmLead, raw: string, userId?: string): Promise<LeadResearchStructured> {
   const system = `You are a B2B lead research assistant. You receive CRM lead fields and raw web search snippets (titles, links, summaries only).
 Verify and enrich the company and contact using ONLY the snippets. Do not invent facts.
@@ -146,12 +172,14 @@ Output JSON only:
   };
 
   try {
-    return await chatJson<LeadResearchStructured>(system, user, {
-      ...baseOpts,
-      capability: "lead_research",
-    });
+    return normalizeStructured(
+      await chatJson<LeadResearchStructured>(system, user, {
+        ...baseOpts,
+        capability: "lead_research",
+      }),
+    );
   } catch {
-    return chatJson<LeadResearchStructured>(system, user, baseOpts);
+    return normalizeStructured(await chatJson<LeadResearchStructured>(system, user, baseOpts));
   }
 }
 
@@ -161,7 +189,9 @@ export async function getLeadResearch(leadId: string): Promise<CrmLeadResearch |
 
 export function parseLeadResearchJson(raw: string): LeadResearchStructured | null {
   try {
-    return JSON.parse(raw) as LeadResearchStructured;
+    const parsed = JSON.parse(raw) as LeadResearchStructured;
+    if (parsed?.company) return normalizeStructured(parsed);
+    return parsed;
   } catch {
     return null;
   }

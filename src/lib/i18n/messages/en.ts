@@ -464,6 +464,7 @@ export const messagesEn = {
       rerun: "Research again",
       refresh: "Refresh",
       running: "Researching…",
+      runningHint: "Web search may take 1–3 minutes (Volcengine is slow). Please keep this page open; results refresh automatically.",
       loading: "Loading research…",
       empty: "No research yet. Click Start research to search public sources.",
       loadFailed: "Failed to load research.",

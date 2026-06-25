@@ -67,6 +67,7 @@ import {
   finalizeFastIntakeTurn,
   heuristicFastIntakeTurn,
   lastIntakeUserText,
+  primaryIntakeUserText,
   stripIntakeCommandPrefix,
 } from "./fast-intake-heuristic";
 import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
@@ -378,13 +379,13 @@ async function finalizeIntakeTurn(
   turn: IntakeTurn,
   scope: IntakeScope,
   locale: Locale,
-  opts?: { partnerId?: string; customerId?: string; userText?: string }
+  opts?: { partnerId?: string; customerId?: string; userText?: string; primaryUserText?: string },
 ): Promise<IntakeTurn> {
   let proposal = turn.proposal;
   if (scope === "business_record") {
     proposal = await enrichBusinessRecordCompanyTarget(
       proposal,
-      opts?.userText ?? "",
+      opts?.primaryUserText?.trim() || opts?.userText || "",
       opts?.partnerId,
       opts?.customerId,
     );
@@ -402,6 +403,7 @@ async function finalizeIntakeTurn(
         boundPartnerId: opts?.partnerId,
         boundCustomerId: opts?.customerId,
         userText: opts?.userText,
+        primaryUserText: opts?.primaryUserText,
       })
     : next;
 }
@@ -421,7 +423,8 @@ async function parseIntakeTurnFromContent(
   }
 ): Promise<IntakeTurn> {
   const userText = lastIntakeUserText(opts?.chat, scope);
-  const finalizeOpts = { partnerId: opts?.partnerId, customerId: opts?.customerId, userText };
+  const primaryUserText = scope === "business_record" ? primaryIntakeUserText(opts?.chat, scope) : userText;
+  const finalizeOpts = { partnerId: opts?.partnerId, customerId: opts?.customerId, userText, primaryUserText };
 
   const direct = safeParseJsonLoose<Partial<IntakeTurn>>(content);
   if (direct) {

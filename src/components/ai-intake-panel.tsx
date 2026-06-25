@@ -7,6 +7,7 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { countProposalItems, mergeFinalProposal } from "@/lib/proposal-merge";
+import { mergeBusinessRecordIntakeProposal } from "@/lib/business-record-intake";
 import { intakeProposalReplacesDraft, isFastIntakeScope, shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { applyIntakeProposalClient } from "@/lib/apply-intake-client";
 import { consumeAiSse } from "@/lib/ai-trace";
@@ -173,6 +174,9 @@ export function AiIntakePanel({
 
   function mergeTurnProposal(turnProposal: IntakeProposal, prev: IntakeProposal | null): IntakeProposal | null {
     if (!turnProposal || countProposalItems(turnProposal) <= 0) return prev;
+    if (scope === "business_record" && prev) {
+      return mergeBusinessRecordIntakeProposal(prev, turnProposal);
+    }
     return intakeProposalReplacesDraft(scope)
       ? turnProposal
       : mergeFinalProposal(prev, turnProposal, excludedRef.current);

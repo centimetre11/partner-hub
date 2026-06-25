@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/session";
 import { getLeadResearch, parseLeadResearchJson, runLeadResearch } from "@/lib/lead-research";
 
+export const maxDuration = 300;
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });

@@ -88,13 +88,23 @@ export function LeadResearchPanel({ leadId }: { leadId: string }) {
 
       if (!res.ok || !data?.ok) {
         setError(data?.needsWebSearch ? r.noWebSearch : (data?.error ?? r.runFailed));
-        return;
+      } else if (data.research) {
+        setResearch(data.research);
       }
-      if (data.research) setResearch(data.research);
     } catch {
       setError(r.runFailed);
     } finally {
       setRunning(false);
+      try {
+        const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/research`);
+        const data = (await res.json().catch(() => null)) as { research?: ResearchRow | null } | null;
+        if (res.ok && data?.research) {
+          setResearch(data.research);
+          setError(null);
+        }
+      } catch {
+        /* keep existing error if sync fails */
+      }
     }
   };
 
@@ -119,7 +129,13 @@ export function LeadResearchPanel({ leadId }: { leadId: string }) {
 
         {error && <p className="text-xs text-red-600">{error}</p>}
 
-        {loading && !research && <p className="text-xs text-slate-400">{r.loading}</p>}
+        {loading && !research && !running && <p className="text-xs text-slate-400">{r.loading}</p>}
+
+        {running && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+            {r.runningHint}
+          </p>
+        )}
 
         {research?.status === "error" && (
           <p className="text-xs text-red-600">{research.error ?? r.runFailed}</p>
@@ -259,7 +275,7 @@ export function LeadResearchPanel({ leadId }: { leadId: string }) {
           </div>
         )}
 
-        {!loading && !research && !error && (
+        {!loading && !running && !research && !error && (
           <p className="text-xs text-slate-400">{r.empty}</p>
         )}
       </div>

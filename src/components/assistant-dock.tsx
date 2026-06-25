@@ -8,6 +8,7 @@ import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { countProposalItems, mergeFinalProposal } from "@/lib/proposal-merge";
+import { mergeBusinessRecordIntakeProposal } from "@/lib/business-record-intake";
 import { intakeProposalReplacesDraft } from "@/lib/proposal-scope";
 import { consumeAiSse } from "@/lib/ai-trace";
 import {
@@ -241,6 +242,9 @@ export function AssistantDock() {
         setProposeMode(true);
         setProposal((prev) => {
           if (!p.proposal || countProposalItems(p.proposal) <= 0) return prev ?? p.proposal;
+          if (p.scope === "business_record" && prev) {
+            return mergeBusinessRecordIntakeProposal(prev, p.proposal);
+          }
           return intakeProposalReplacesDraft(p.scope)
             ? p.proposal
             : mergeFinalProposal(prev, p.proposal, excludedRef.current);

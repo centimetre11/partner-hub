@@ -1,6 +1,7 @@
 import { db } from "./db";
-import type { IntakeProposal } from "./ai-intake";
+import type { IntakeProposal, BusinessRecordProposal } from "./ai-intake";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
+import { CRM_TRACE_ACTIONS, CRM_TRACE_NATURES } from "./crm-trace-constants";
 import {
   enrichProposalPartnerFromText,
   extractPartnerNameFromIntakeText,
@@ -239,4 +240,108 @@ export function businessRecordHubReady(target: BusinessRecordCompanyTarget): boo
 
 export function businessRecordCrmOnlyReady(target: BusinessRecordCompanyTarget): boolean {
   return target.syncPlan === "crm_only_pending";
+}
+
+const CLARIFICATION_FOLLOWUP_RE =
+  /^(?:【确认选择】|\[Confirmations\]|【偏好调整】|\[Preference\])/i;
+
+const WEAK_BUSINESS_RECORD_TITLE_RE =
+  /^(?:现场|非现场)?\s*(?:商务(?:记录|行为|活动)?|拜访|会议|跟进|接待)?\s*$/;
+
+/** Follow-up that only confirms CRM dimensions / clarification cards — not new record content. */
+export function isIntakeClarificationFollowUp(text: string): boolean {
+  const t = text.trim();
+  if (!t) return false;
+  if (CLARIFICATION_FOLLOWUP_RE.test(t)) return true;
+  if (/^(?:这次是现场还是非现场|CRM 商务行为)/i.test(t)) return true;
+  if ((CRM_TRACE_NATURES as readonly string[]).includes(t)) return true;
+  if ((CRM_TRACE_ACTIONS as readonly string[]).includes(t)) return true;
+  return isWeakBusinessRecordSourceText(t);
+}
+
+/** Too short to be a standalone business record (e.g. user confirming「现场商务」). */
+export function isWeakBusinessRecordSourceText(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (t.length <= 16 && WEAK_BUSINESS_RECORD_TITLE_RE.test(t)) return true;
+  if (t.length <= 6 && (CRM_TRACE_NATURES as readonly string[]).includes(t)) return true;
+  if (t.length <= 12 && (CRM_TRACE_ACTIONS as readonly string[]).includes(t)) return true;
+  return false;
+}
+
+export function isWeakBusinessRecordTitle(title: string | undefined, content?: string): boolean {
+  const t = title?.trim() ?? "";
+  if (!t) return true;
+  if (isWeakBusinessRecordSourceText(t)) return true;
+  const c = content?.trim();
+  if (c && t === c && t.length <= 20) return true;
+  return false;
+}
+
+function buildBusinessRecordTitle(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= 80) return trimmed;
+  return `${trimmed.slice(0, 77)}…`;
+}
+
+/** Restore title/content from the first substantive user message when LLM/heuristic only kept a confirmation phrase. */
+export function enrichWeakBusinessRecordsFromPrimaryText(
+  records: BusinessRecordProposal[],
+  primaryText: string,
+): BusinessRecordProposal[] {
+  const source = primaryText.trim();
+  if (!source || !records.length || isWeakBusinessRecordSourceText(source)) return records;
+
+  return records.map((r, i) => {
+    if (i > 0) return r;
+    if (!isWeakBusinessRecordTitle(r.title, r.content)) return r;
+    const title = buildBusinessRecordTitle(source);
+    return { ...r, title, content: source };
+  });
+}
+
+/** Merge a follow-up turn into an existing business-record draft without dropping the original body. */
+export function mergeBusinessRecordIntakeProposal(
+  prev: IntakeProposal | null,
+  next: IntakeProposal,
+): IntakeProposal {
+  if (!prev?.businessRecords?.length) return next;
+
+  const prevRec = prev.businessRecords[0]!;
+  const nextRec = next.businessRecords[0];
+  if (!nextRec) {
+    return {
+      ...next,
+      summary: prev.summary?.trim() || next.summary,
+      businessRecords: prev.businessRecords,
+    };
+  }
+
+  const prevTitle = prevRec.title?.trim() ?? "";
+  const nextTitle = nextRec.title?.trim() ?? "";
+  const prevContent = (prevRec.content ?? prevRec.title ?? "").trim();
+  const nextContent = (nextRec.content ?? nextRec.title ?? "").trim();
+  const nextIsWeak = isWeakBusinessRecordTitle(nextTitle, nextContent);
+  const prevIsRicher =
+    prevTitle.length > nextTitle.length + 8 ||
+    prevContent.length > nextContent.length + 16 ||
+    (!isWeakBusinessRecordTitle(prevTitle, prevContent) && nextIsWeak);
+
+  if (nextIsWeak && prevIsRicher) {
+    const merged: BusinessRecordProposal = {
+      ...prevRec,
+      traceNature: nextRec.traceNature ?? prevRec.traceNature,
+      traceAction: nextRec.traceAction ?? prevRec.traceAction,
+      category: nextRec.category && nextRec.category !== "OTHER" ? nextRec.category : prevRec.category,
+      occurredAt: nextRec.occurredAt ?? prevRec.occurredAt,
+      contactName: nextRec.contactName ?? prevRec.contactName,
+    };
+    return {
+      ...next,
+      summary: prev.summary?.trim() || prevTitle || next.summary,
+      businessRecords: [merged],
+    };
+  }
+
+  return next;
 }

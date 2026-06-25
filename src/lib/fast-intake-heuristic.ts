@@ -5,6 +5,12 @@ import type { IntakeClarification, IntakeTurn } from "./ai-intake";
 import { isFastIntakeScope } from "./proposal-scope";
 import { extractPartnerNameFromIntakeText, enrichTodoPartnerBinding } from "./intake-partner-binding";
 import {
+  enrichWeakBusinessRecordsFromPrimaryText,
+  isIntakeClarificationFollowUp,
+  isWeakBusinessRecordSourceText,
+  isWeakBusinessRecordTitle,
+} from "./business-record-intake";
+import {
   businessRecordCrmOnlyReady,
   businessRecordHubReady,
   resolveBusinessRecordCompanyTarget,
@@ -157,6 +163,22 @@ export function lastIntakeUserText(chat?: ChatMessage[], scope?: IntakeScope): s
   return "";
 }
 
+/** First substantive user message — used when the latest turn is only a CRM/clarification confirmation. */
+export function primaryIntakeUserText(chat?: ChatMessage[], scope?: IntakeScope): string {
+  if (!chat?.length) return lastIntakeUserText(chat, scope);
+  const parts: string[] = [];
+  for (const m of chat) {
+    if (m.role !== "user") continue;
+    const base = stripWecomCommandPrefix(stripIntakeSystemHint(m.content ?? "")).trim();
+    if (!base || CONTROL_COMMAND_RE.test(base) || SCOPE_SWITCH_LINE_RE.test(base)) continue;
+    const stripped = scope ? stripIntakeCommandPrefix(base, scope) : base;
+    if (!stripped || isIntakeClarificationFollowUp(stripped)) continue;
+    parts.push(stripped);
+  }
+  if (parts.length) return parts.join("\n");
+  return lastIntakeUserText(chat, scope);
+}
+
 function extractContactName(text: string): string | null {
   const patterns = [
     /(?:联系人|contact)[：:\s]+([^\n,，]{2,40})/i,
@@ -209,7 +231,8 @@ export function heuristicBusinessRecordTurn(
 ): IntakeTurn | null {
   const text = sanitizeBusinessRecordText(userText);
   if (!text) return null;
-  if (!/拜访|visit|会议|认证|培训|商务|vp|ceo|客户|讨论|见面|meal|training|fca|l2|电话|联系|预约|确认|进展|迁移|配合|测试|评估|待定|同步|跟进/i.test(text)) {
+  if (isIntakeClarificationFollowUp(text) || isWeakBusinessRecordSourceText(text)) return null;
+  if (!/拜访|visit|会议|认证|培训|商务|举办|活动|标杆|vp|ceo|客户|讨论|见面|meal|training|fca|l2|电话|联系|预约|确认|进展|迁移|配合|测试|评估|待定|同步|跟进/i.test(text)) {
     return null;
   }
 
@@ -508,13 +531,18 @@ function buildTodoClarifications(
 export async function finalizeBusinessRecordTurn(
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string; boundCustomerId?: string },
+  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string; primaryUserText?: string },
 ): Promise<IntakeTurn> {
-  const records = (turn.proposal.businessRecords ?? []).map((r) => {
+  const primaryText = opts?.primaryUserText?.trim() || opts?.userText?.trim() || "";
+  let records = (turn.proposal.businessRecords ?? []).map((r) => {
     const title = sanitizeBusinessRecordText(r.title ?? "");
     const content = r.content ? sanitizeBusinessRecordText(r.content) : title;
     return { ...r, title, content: content || title };
   });
+  records = enrichWeakBusinessRecordsFromPrimaryText(records, primaryText).map((r) => ({
+    ...r,
+    content: r.content ?? r.title,
+  }));
   if (!records.length) return turn;
 
   const target = await resolveBusinessRecordCompanyTarget({
@@ -541,10 +569,18 @@ export async function finalizeBusinessRecordTurn(
     target.syncPlan === "unresolved" ||
     (target.syncPlan === "crm_only_pending" && !hubReady);
 
+  const primaryTitle = records[0]?.title?.trim();
+  const summary =
+    primaryTitle &&
+    (!turn.proposal.summary?.trim() || isWeakBusinessRecordTitle(turn.proposal.summary, turn.proposal.summary))
+      ? primaryTitle
+      : turn.proposal.summary;
+
   return {
     ...turn,
     proposal: {
       ...turn.proposal,
+      summary,
       businessRecords: records,
       hubPartnerId: target.hubPartnerId ?? turn.proposal.hubPartnerId,
       customerId: target.customerId ?? turn.proposal.customerId,
@@ -572,7 +608,7 @@ export async function finalizeBusinessRecordTurn(
 async function finalizeTodoTurn(
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string },
+  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string; primaryUserText?: string },
 ): Promise<IntakeTurn> {
   let todos = turn.proposal.todos.filter((t) => t.title?.trim()).map((t) =>
     normalizeTodoItem(t, new Date().toISOString().slice(0, 10)),
@@ -638,7 +674,7 @@ export async function finalizeFastIntakeTurn(
   scope: IntakeScope,
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string },
+  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string; primaryUserText?: string },
 ): Promise<IntakeTurn> {
   if (!isFastIntakeScope(scope)) return turn;
   switch (scope) {
@@ -684,7 +720,7 @@ export async function refinalProposeIntakeTurn(
   scope: IntakeScope,
   turn: IntakeTurn,
   locale: Locale,
-  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string },
+  opts?: { boundPartnerId?: string; boundCustomerId?: string; userText?: string; primaryUserText?: string },
 ): Promise<IntakeTurn> {
   if (scope === "business_record" && turn.proposal.businessRecords.length) {
     return finalizeBusinessRecordTurn(turn, locale, opts);
