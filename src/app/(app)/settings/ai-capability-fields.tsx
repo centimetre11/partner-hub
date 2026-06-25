@@ -59,7 +59,7 @@ export function AiCapabilityFields({ defaultCapabilities }: { defaultCapabilitie
       <p className="text-[11px] text-slate-400">
         Example: check Vision for DeepSeek V4; text-only models only need General chat / Tools / JSON. When images are sent, a vision-capable model is chosen automatically.
         Lightweight models (e.g. mini/flash) should check Lightweight & fast — simple extraction like AI add-contact is preferred on those.
-        For lead web research synthesis, tag a cheap model with Lead research (+ JSON recommended).
+        For lead web research synthesis on Volcengine, tag a lightweight endpoint with Lead research (+ JSON recommended).
       </p>
     </fieldset>
   );

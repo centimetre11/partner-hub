@@ -203,11 +203,7 @@ export default async function SettingsPage() {
           </Card>
 
           <Card title={m.settings.llmCenter} className="lg:col-span-2">
-            <AiApiManager
-              apis={apiConfigs}
-              volcengineApis={volcengineConfigs}
-              leadResearchPresetName={m.settings.leadResearch.presetName}
-            />
+            <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
           </Card>
 
           <Card title={m.settings.dailyTokens14} className="lg:col-span-2">

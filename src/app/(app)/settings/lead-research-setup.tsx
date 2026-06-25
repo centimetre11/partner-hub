@@ -4,37 +4,50 @@ import { Badge } from "@/components/ui";
 import { useMessages } from "@/lib/i18n/context";
 import type { AiApiConfigForClient } from "./ai-api-manager";
 import type { VolcengineApiForClient } from "./volcengine-api-setup";
-import { LEAD_RESEARCH_PRESET_CAPABILITIES } from "@/lib/ai-capabilities";
 
 type Props = {
   apis: AiApiConfigForClient[];
   volcengineApis: VolcengineApiForClient[];
-  onAddPreset: () => void;
   showPresetForm: boolean;
+  onAddVolcenginePreset: () => void;
+  onEditVolcengine: (id: string) => void;
 };
 
+function volcHasWebSearch(cfg: VolcengineApiForClient): boolean {
+  const tools = cfg.extraConfig?.tools;
+  return Array.isArray(tools) && tools.some((t) => t && typeof t === "object" && (t as { type?: string }).type === "web_search");
+}
+
 function hasWebSearch(apis: AiApiConfigForClient[], volcengineApis: VolcengineApiForClient[]): boolean {
-  const kimi = apis.some((a) => a.enabled && a.baseUrl.toLowerCase().includes("moonshot"));
-  const volc = volcengineApis.some((a) => {
-    if (!a.enabled) return false;
-    const tools = a.extraConfig?.tools;
-    return Array.isArray(tools) && tools.some((t) => t && typeof t === "object" && (t as { type?: string }).type === "web_search");
-  });
-  return kimi || volc;
+  if (volcengineApis.some((a) => a.enabled && volcHasWebSearch(a))) return true;
+  return apis.some((a) => a.enabled && a.baseUrl.toLowerCase().includes("moonshot"));
 }
 
-function synthesisModels(apis: AiApiConfigForClient[]): AiApiConfigForClient[] {
-  return apis.filter((a) => a.enabled && a.capabilities.includes("lead_research"));
+function synthesisVolcModels(volcengineApis: VolcengineApiForClient[]): VolcengineApiForClient[] {
+  return volcengineApis.filter((a) => a.enabled && a.capabilities.includes("lead_research"));
 }
 
-export function LeadResearchSetup({ apis, volcengineApis, onAddPreset, showPresetForm }: Props) {
+/** Existing enabled Volcengine config without lead_research — user can add the tag instead of a new entry */
+function volcMissingLeadResearchTag(volcengineApis: VolcengineApiForClient[]): VolcengineApiForClient | null {
+  if (synthesisVolcModels(volcengineApis).length) return null;
+  return volcengineApis.find((a) => a.enabled) ?? null;
+}
+
+export function LeadResearchSetup({
+  apis,
+  volcengineApis,
+  showPresetForm,
+  onAddVolcenginePreset,
+  onEditVolcengine,
+}: Props) {
   const s = useMessages().settings.leadResearch;
   const webOk = hasWebSearch(apis, volcengineApis);
-  const synthModels = synthesisModels(apis);
+  const synthModels = synthesisVolcModels(volcengineApis);
   const ready = webOk && synthModels.length > 0;
+  const tagCandidate = volcMissingLeadResearchTag(volcengineApis);
 
   return (
-    <section className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-3">
+    <section className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -43,15 +56,26 @@ export function LeadResearchSetup({ apis, volcengineApis, onAddPreset, showPrese
           </div>
           <p className="text-xs text-slate-500 mt-1">{s.desc}</p>
         </div>
-        {!showPresetForm && synthModels.length === 0 && (
-          <button
-            type="button"
-            onClick={onAddPreset}
-            className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700"
-          >
-            {s.addModel}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2 shrink-0">
+          {!showPresetForm && synthModels.length === 0 && tagCandidate && (
+            <button
+              type="button"
+              onClick={() => onEditVolcengine(tagCandidate.id)}
+              className="rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs text-orange-800 hover:bg-orange-50"
+            >
+              {s.tagExistingVolc}
+            </button>
+          )}
+          {!showPresetForm && synthModels.length === 0 && (
+            <button
+              type="button"
+              onClick={onAddVolcenginePreset}
+              className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs text-white hover:bg-orange-500"
+            >
+              {s.addVolcModel}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 text-xs">
@@ -84,11 +108,3 @@ export function LeadResearchSetup({ apis, volcengineApis, onAddPreset, showPrese
     </section>
   );
 }
-
-export const LEAD_RESEARCH_FORM_DEFAULTS = {
-  nameKey: "presetName" as const,
-  model: "moonshot-v1-8k",
-  baseUrl: "https://api.moonshot.cn/v1",
-  priority: 10,
-  capabilities: LEAD_RESEARCH_PRESET_CAPABILITIES,
-};

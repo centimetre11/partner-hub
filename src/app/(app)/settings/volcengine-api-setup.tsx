@@ -19,6 +19,7 @@ import {
 } from "@/lib/volcengine-config";
 import { AiCapabilityBadges, AiCapabilityFields } from "./ai-capability-fields";
 import type { AiCapability } from "@/lib/ai-capabilities";
+import { LEAD_RESEARCH_PRESET_CAPABILITIES } from "@/lib/ai-capabilities";
 
 const monoInput =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono";
@@ -203,14 +204,24 @@ function VolcengineEditForm({
   existing,
   onCancel,
   submitText,
+  formTitle,
+  defaultName,
+  defaultPriority,
+  defaultCapabilities,
+  initialSnippetOverride,
 }: {
   existing?: VolcengineApiForClient;
   onCancel: () => void;
   submitText: string;
+  formTitle?: string;
+  defaultName?: string;
+  defaultPriority?: number;
+  defaultCapabilities?: AiCapability[];
+  initialSnippetOverride?: string;
 }) {
   const initialSnippet = existing
     ? buildVolcengineSnippetFromConfig(existing.model, existing.extraConfig, existing.baseUrl)
-    : "";
+    : (initialSnippetOverride ?? "");
   const [snippet, setSnippet] = useState(initialSnippet);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [state, action, pending] = useActionState(upsertVolcengineApiAction, null);
@@ -219,7 +230,9 @@ function VolcengineEditForm({
   return (
     <div className="rounded-lg border border-orange-200 bg-orange-50/50 p-4 space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-slate-900">{existing ? "Edit Volcengine configuration" : "Add Volcengine configuration"}</div>
+        <div className="text-sm font-semibold text-slate-900">
+          {formTitle ?? (existing ? "Edit Volcengine configuration" : "Add Volcengine configuration")}
+        </div>
         <button
           type="button"
           onClick={onCancel}
@@ -237,7 +250,7 @@ function VolcengineEditForm({
             <input
               name="name"
               required
-              defaultValue={existing?.name ?? "Volcengine Ark Doubao"}
+              defaultValue={existing?.name ?? defaultName ?? "Volcengine Ark Doubao"}
               placeholder="Volcengine Ark Doubao"
               className={textInput}
             />
@@ -278,7 +291,7 @@ function VolcengineEditForm({
 
         <ParsePreview snippet={snippet} />
 
-        <AiCapabilityFields defaultCapabilities={existing?.capabilities} />
+        <AiCapabilityFields defaultCapabilities={existing?.capabilities ?? defaultCapabilities} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1 block">
@@ -286,7 +299,7 @@ function VolcengineEditForm({
             <input
               name="priority"
               type="number"
-              defaultValue={existing?.priority ?? 0}
+              defaultValue={existing?.priority ?? defaultPriority ?? 0}
               placeholder="Use a higher value for free-tier quotas to use them first"
               className={textInput}
             />
@@ -352,8 +365,31 @@ function VolcengineEditForm({
   );
 }
 
-export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClient[] }) {
-  const [panel, setPanel] = useState<"list" | "add" | string>("list");
+export function VolcengineApiSetup({
+  configs,
+  panel: controlledPanel,
+  onPanelChange,
+  leadResearchPreset,
+  leadResearchEditId,
+}: {
+  configs: VolcengineApiForClient[];
+  panel?: string;
+  onPanelChange?: (panel: string) => void;
+  leadResearchEditId?: string | null;
+  leadResearchPreset?: {
+    name: string;
+    formTitle: string;
+    submitText: string;
+    priority: number;
+    snippet: string;
+    capabilities: AiCapability[];
+  };
+}) {
+  const [internalPanel, setInternalPanel] = useState<"list" | "add" | string>("list");
+  const panel = controlledPanel ?? internalPanel;
+  const setPanel = onPanelChange ?? setInternalPanel;
+
+  const isLeadResearchAdd = panel === "lead-research-add";
 
   return (
     <div className="space-y-4">
@@ -369,7 +405,7 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
             </div>
           </div>
         </div>
-        {panel === "list" && (
+        {panel === "list" && !isLeadResearchAdd && (
           <button
             type="button"
             onClick={() => setPanel("add")}
@@ -380,11 +416,23 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
         )}
       </div>
 
-      {panel === "add" && (
+      {isLeadResearchAdd && leadResearchPreset && (
+        <VolcengineEditForm
+          onCancel={() => setPanel("list")}
+          submitText={leadResearchPreset.submitText}
+          formTitle={leadResearchPreset.formTitle}
+          defaultName={leadResearchPreset.name}
+          defaultPriority={leadResearchPreset.priority}
+          defaultCapabilities={leadResearchPreset.capabilities}
+          initialSnippetOverride={leadResearchPreset.snippet}
+        />
+      )}
+
+      {panel === "add" && !isLeadResearchAdd && (
         <VolcengineEditForm onCancel={() => setPanel("list")} submitText="Save Volcengine configuration" />
       )}
 
-      {panel !== "add" && configs.length === 0 && (
+      {panel !== "add" && !isLeadResearchAdd && configs.length === 0 && (
         <div className="rounded-lg border border-dashed border-orange-200 bg-orange-50/30 p-6 text-center text-sm text-slate-500">
           Volcengine is not configured yet. Click &quot;Add configuration&quot; in the top right, enter your API key, and paste the curl.
         </div>
@@ -397,6 +445,11 @@ export function VolcengineApiSetup({ configs }: { configs: VolcengineApiForClien
               existing={cfg}
               onCancel={() => setPanel("list")}
               submitText="Save changes"
+              defaultCapabilities={
+                leadResearchEditId === cfg.id
+                  ? ([...new Set([...cfg.capabilities, ...LEAD_RESEARCH_PRESET_CAPABILITIES])] as AiCapability[])
+                  : cfg.capabilities
+              }
             />
           ) : (
             <VolcengineConfigCard cfg={cfg} onEdit={() => setPanel(cfg.id)} />

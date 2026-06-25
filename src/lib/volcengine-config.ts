@@ -170,3 +170,11 @@ export const VOLCENGINE_SNIPPET_PLACEHOLDER = `curl --location 'https://ark.cn-b
   "tools": [{ "type": "web_search", "max_keyword": 3 }],
   "input": [{ "role": "user", "content": [{ "type": "input_text", "text": "What are today's trending news?" }] }]
 }'`;
+
+/** Preset curl for lead research synthesis (lightweight endpoint, no web_search — search uses another Volcengine entry) */
+export function buildLeadResearchVolcengineSnippet(model = "ep-your-light-endpoint-id"): string {
+  return buildVolcengineSnippetFromConfig(model, {
+    max_output_tokens: 1200,
+    stream: false,
+  });
+}

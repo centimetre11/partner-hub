@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useActionState } from "react";
 import {
   deleteAiApiAction,
@@ -11,8 +11,11 @@ import {
 } from "@/lib/ai-settings-actions";
 import { VolcengineApiSetup, type VolcengineApiForClient } from "./volcengine-api-setup";
 import { AiCapabilityBadges, AiCapabilityFields } from "./ai-capability-fields";
-import { LeadResearchSetup, LEAD_RESEARCH_FORM_DEFAULTS } from "./lead-research-setup";
+import { LeadResearchSetup } from "./lead-research-setup";
+import { LEAD_RESEARCH_PRESET_CAPABILITIES } from "@/lib/ai-capabilities";
+import { buildLeadResearchVolcengineSnippet } from "@/lib/volcengine-config";
 import type { AiCapability } from "@/lib/ai-capabilities";
+import { useMessages } from "@/lib/i18n/context";
 
 export type AiApiConfigForClient = {
   id: string;
@@ -47,23 +50,17 @@ function ApiEditForm({
   api,
   onCancel,
   submitText,
-  formTitle,
-  defaults,
-  defaultCapabilities,
 }: {
   api?: AiApiConfigForClient;
   onCancel: () => void;
   submitText: string;
-  formTitle?: string;
-  defaults?: { name?: string; model?: string; baseUrl?: string; priority?: number };
-  defaultCapabilities?: AiCapability[];
 }) {
   const [state, action, pending] = useActionState(upsertAiApiAction, null);
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-900">{formTitle ?? (api ? "Edit API" : "Add API")}</div>
+        <div className="text-sm font-semibold text-slate-900">{api ? "Edit API" : "Add API"}</div>
         <button type="button" onClick={onCancel} className="text-xs text-slate-500 hover:text-slate-800">
           Cancel
         </button>
@@ -73,29 +70,29 @@ function ApiEditForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1">
             <span className={label}>Name</span>
-            <input name="name" required defaultValue={api?.name ?? defaults?.name ?? ""} placeholder="Kimi production API" className={input} />
+            <input name="name" required defaultValue={api?.name ?? ""} placeholder="Kimi production API" className={input} />
           </label>
           <label className="space-y-1">
             <span className={label}>Model</span>
-            <input name="model" required defaultValue={api?.model ?? defaults?.model ?? ""} placeholder="kimi-k2-0711-preview" className={input} />
+            <input name="model" required defaultValue={api?.model ?? ""} placeholder="kimi-k2-0711-preview" className={input} />
           </label>
         </div>
         <label className="space-y-1 block">
           <span className={label}>Base URL</span>
-          <input name="baseUrl" required defaultValue={api?.baseUrl ?? defaults?.baseUrl ?? ""} placeholder="https://api.moonshot.cn/v1" className={input} />
+          <input name="baseUrl" required defaultValue={api?.baseUrl ?? ""} placeholder="https://api.moonshot.cn/v1" className={input} />
         </label>
         <label className="space-y-1 block">
           <span className={label}>API Key{api ? ` (current tail ${api.keyTail}; leave blank to keep)` : ""}</span>
           <input name="apiKey" type="password" required={!api} placeholder={api ? "Leave blank to keep existing key" : "sk-..."} className={input} autoComplete="off" />
         </label>
-        <AiCapabilityFields defaultCapabilities={api?.capabilities ?? defaultCapabilities} />
+        <AiCapabilityFields defaultCapabilities={api?.capabilities} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1 block">
             <span className={label}>Priority (higher numbers are tried first; default 0)</span>
             <input
               name="priority"
               type="number"
-              defaultValue={api?.priority ?? defaults?.priority ?? 0}
+              defaultValue={api?.priority ?? 0}
               placeholder="Use a higher value for free-tier quotas to use them first"
               className={input}
             />
@@ -198,20 +195,31 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
 export function AiApiManager({
   apis,
   volcengineApis,
-  leadResearchPresetName,
 }: {
   apis: AiApiConfigForClient[];
   volcengineApis: VolcengineApiForClient[];
-  leadResearchPresetName?: string;
 }) {
+  const lr = useMessages().settings.leadResearch;
   const genericApis = apis.filter((api) => api.provider !== "volcengine");
-  const [genericPanel, setGenericPanel] = useState<"list" | "add" | "lead-research" | string>("list");
+  const [genericPanel, setGenericPanel] = useState<"list" | "add" | string>("list");
+  const [volcPanel, setVolcPanel] = useState<string>("list");
+  const [volcLeadResearchEditId, setVolcLeadResearchEditId] = useState<string | null>(null);
 
-  const presetDefaults = {
-    name: leadResearchPresetName ?? "Lead research (lightweight)",
-    model: LEAD_RESEARCH_FORM_DEFAULTS.model,
-    baseUrl: LEAD_RESEARCH_FORM_DEFAULTS.baseUrl,
-    priority: LEAD_RESEARCH_FORM_DEFAULTS.priority,
+  const leadResearchPreset = useMemo(
+    () => ({
+      name: lr.presetName,
+      formTitle: lr.addVolcFormTitle,
+      submitText: lr.addVolcSubmit,
+      priority: 10,
+      snippet: buildLeadResearchVolcengineSnippet(),
+      capabilities: LEAD_RESEARCH_PRESET_CAPABILITIES,
+    }),
+    [lr.addVolcFormTitle, lr.addVolcSubmit, lr.presetName],
+  );
+
+  const closeVolcPanel = () => {
+    setVolcPanel("list");
+    setVolcLeadResearchEditId(null);
   };
 
   return (
@@ -219,21 +227,27 @@ export function AiApiManager({
       <LeadResearchSetup
         apis={apis}
         volcengineApis={volcengineApis}
-        showPresetForm={genericPanel === "lead-research"}
-        onAddPreset={() => setGenericPanel("lead-research")}
+        showPresetForm={volcPanel === "lead-research-add"}
+        onAddVolcenginePreset={() => {
+          setVolcLeadResearchEditId(null);
+          setVolcPanel("lead-research-add");
+        }}
+        onEditVolcengine={(id) => {
+          setVolcLeadResearchEditId(id);
+          setVolcPanel(id);
+        }}
       />
 
-      {genericPanel === "lead-research" && (
-        <ApiEditForm
-          onCancel={() => setGenericPanel("list")}
-          submitText="Add API"
-          formTitle={leadResearchPresetName ?? "Add lead research model"}
-          defaults={presetDefaults}
-          defaultCapabilities={LEAD_RESEARCH_FORM_DEFAULTS.capabilities}
-        />
-      )}
-
-      <VolcengineApiSetup configs={volcengineApis} />
+      <VolcengineApiSetup
+        configs={volcengineApis}
+        panel={volcPanel}
+        onPanelChange={(p) => {
+          if (p === "list") closeVolcPanel();
+          else setVolcPanel(p);
+        }}
+        leadResearchEditId={volcLeadResearchEditId}
+        leadResearchPreset={leadResearchPreset}
+      />
 
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
@@ -241,7 +255,7 @@ export function AiApiManager({
             <div className="text-sm font-semibold text-slate-800">Other OpenAI-compatible APIs</div>
             <div className="text-xs text-slate-400 mt-1">Kimi, DeepSeek, Tongyi, and other Chat Completions endpoints</div>
           </div>
-          {genericPanel === "list" && (
+          {genericPanel === "list" && volcPanel === "list" && (
             <button
               type="button"
               onClick={() => setGenericPanel("add")}

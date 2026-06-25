@@ -93,7 +93,7 @@ async function gatherSearchSnippets(
       ok: false,
       needsWebSearch: true,
       error:
-        "No enabled model with web search found. Add Kimi (moonshot) or Volcengine (tools include web_search) in Settings and enable it.",
+        "No enabled model with web search found. Add a Volcengine configuration with web_search in Settings → AI API manager and enable it.",
     };
   }
 
