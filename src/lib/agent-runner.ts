@@ -117,6 +117,40 @@ export async function runAgent(
 
   try {
     if (agent.isAutomation) {
+      // 周报自动化：专用管道（逐人聚合 → LLM 写建议 → 发个人邮件 + 管理者汇总）
+      const { isWeeklyReportAgent } = await import("./weekly-report-config");
+      if (isWeeklyReportAgent(agent)) {
+        const { runWeeklyReportPipeline } = await import("./weekly-report");
+        const wr = await runWeeklyReportPipeline(agent);
+        await db.agentRun.update({
+          where: { id: run.id },
+          data: {
+            status: wr.runStatus,
+            output: wr.output,
+            toolLog: JSON.stringify(wr.toolLog),
+            finishedAt: new Date(),
+          },
+        });
+        if (agent.notifyOnSuccess !== false) {
+          await db.notification.create({
+            data: {
+              title:
+                wr.runStatus === "PARTIAL_SUCCESS"
+                  ? `${agent.icon} ${agent.name} 完成（部分推送失败）`
+                  : `${agent.icon} ${agent.name} run completed`,
+              content: wr.output,
+              agentRunId: run.id,
+              partnerId: agent.partnerId,
+            },
+          });
+        }
+        if (agent.webhookUrl) {
+          await pushWebhook(agent.webhookUrl, `${agent.name}`, wr.output);
+        }
+        await db.agent.update({ where: { id: agent.id }, data: { lastRunAt: new Date() } });
+        return wr.output;
+      }
+
       // 动态 import：automation-pipeline 依赖 server-only，避免被 CLI 脚本（如 resync-scheduler）在 tsx 下加载时崩溃
       const { runDeterministicQueryPipeline } = await import("./automation-pipeline");
       const pipeline = await runDeterministicQueryPipeline(agent);

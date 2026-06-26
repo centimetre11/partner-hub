@@ -1,0 +1,143 @@
+import { db } from "./db";
+import {
+  addLocalDays,
+  getZonedParts,
+  resolveAgentTimezone,
+  zonedLocalToUtc,
+} from "./cron";
+
+/** 周报自动化在 Agent 表里的固定 slug */
+export const WEEKLY_REPORT_SLUG = "weekly-personal-report";
+
+export const DEFAULT_WEEKLY_REPORT_ROLES = ["SALES", "PRESALES"];
+export const DEFAULT_WEEKLY_REPORT_MANAGERS = ["saber", "zayne", "sean.song"];
+export const DEFAULT_WEEKLY_REPORT_CRON = "0 0 * * 5"; // 利雅得周四晚 12 点 = 周五 00:00
+export const DEFAULT_WEEKLY_REPORT_TZ = "Asia/Riyadh";
+
+/** 周报自动化配置，存在 agent.queryConfig（JSON 字符串）里 */
+export type WeeklyReportConfig = {
+  source: "weekly_review";
+  /** 收周报的人按角色筛选（默认 SALES + PRESALES） */
+  roles: string[];
+  /** 管理者汇总收件人：用户名 / 显示名 / 邮箱前缀 / 邮箱，运行时解析为邮箱 */
+  managers: string[];
+  /** 没有任何活动的人是否也发（默认 false：静默的人不打扰，但仍计入管理者汇总） */
+  includeInactive?: boolean;
+};
+
+export function parseWeeklyReportConfig(raw: unknown): WeeklyReportConfig | null {
+  if (!raw) return null;
+  let obj: Record<string, unknown>;
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return null;
+    try {
+      obj = JSON.parse(t) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  } else if (typeof raw === "object") {
+    obj = raw as Record<string, unknown>;
+  } else {
+    return null;
+  }
+  if (obj.source !== "weekly_review") return null;
+  const roles = Array.isArray(obj.roles)
+    ? (obj.roles as unknown[]).map((r) => String(r).trim().toUpperCase()).filter(Boolean)
+    : [];
+  const managers = Array.isArray(obj.managers)
+    ? (obj.managers as unknown[]).map((m) => String(m).trim()).filter(Boolean)
+    : [];
+  return {
+    source: "weekly_review",
+    roles: roles.length ? roles : [...DEFAULT_WEEKLY_REPORT_ROLES],
+    managers,
+    includeInactive: obj.includeInactive === true,
+  };
+}
+
+export function serializeWeeklyReportConfig(config: WeeklyReportConfig): string {
+  return JSON.stringify({
+    source: "weekly_review",
+    roles: config.roles,
+    managers: config.managers,
+    includeInactive: !!config.includeInactive,
+  });
+}
+
+export function isWeeklyReportAgent(agent: { queryConfig: string | null }): boolean {
+  return parseWeeklyReportConfig(agent.queryConfig) !== null;
+}
+
+// ============ 时间窗（中东工作周：周日 00:00 → 运行时刻） ============
+
+export type WeekWindow = { start: Date; end: Date; label: string };
+
+/** 从「现在」回溯到本工作周的周日 00:00（业务时区），窗口结束为现在 */
+export function computeWorkWeekWindow(now: Date, timeZone: string): WeekWindow {
+  const tz = resolveAgentTimezone(timeZone);
+  const p = getZonedParts(now, tz);
+  let { year, month, day } = p;
+  let wd = p.weekday; // 0=周日
+  let guard = 0;
+  while (wd !== 0 && guard < 8) {
+    ({ year, month, day } = addLocalDays(year, month, day, -1, tz));
+    wd = getZonedParts(zonedLocalToUtc({ year, month, day, hour: 12, minute: 0 }, tz), tz).weekday;
+    guard++;
+  }
+  const start = zonedLocalToUtc({ year, month, day, hour: 0, minute: 0 }, tz);
+  const fmt = (d: Date) => {
+    const z = getZonedParts(d, tz);
+    return `${z.year}-${String(z.month).padStart(2, "0")}-${String(z.day).padStart(2, "0")}`;
+  };
+  return { start, end: now, label: `${fmt(start)} ~ ${fmt(now)}` };
+}
+
+// ============ 收件人解析 ============
+
+export type ResolvedTargetUser = { id: string; name: string; email: string | null; role: string };
+
+export async function resolveTargetUsers(roles: string[]): Promise<ResolvedTargetUser[]> {
+  return db.user.findMany({
+    where: { role: { in: roles } },
+    select: { id: true, name: true, email: true, role: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+/** 把「saber / zayne / sean.song」等标识解析成用户邮箱 */
+export async function resolveManagerEmails(
+  tokens: string[]
+): Promise<{ emails: string[]; resolved: { token: string; email: string | null; name: string | null }[] }> {
+  const resolved: { token: string; email: string | null; name: string | null }[] = [];
+  if (!tokens.length) return { emails: [], resolved };
+  const users = await db.user.findMany({
+    select: { name: true, email: true, wecomDisplayName: true, crmSalesmanName: true },
+  });
+  const emails = new Set<string>();
+  for (const tokenRaw of tokens) {
+    const token = tokenRaw.trim();
+    if (!token) continue;
+    if (token.includes("@")) {
+      emails.add(token);
+      resolved.push({ token, email: token, name: null });
+      continue;
+    }
+    const lower = token.toLowerCase();
+    const match =
+      users.find((u) => u.name?.toLowerCase() === lower) ??
+      users.find((u) => u.email?.toLowerCase().split("@")[0] === lower) ??
+      users.find((u) => u.wecomDisplayName?.toLowerCase() === lower) ??
+      users.find((u) => u.crmSalesmanName?.toLowerCase() === lower) ??
+      users.find((u) => u.name?.toLowerCase().includes(lower)) ??
+      users.find((u) => u.wecomDisplayName?.toLowerCase().includes(lower)) ??
+      users.find((u) => u.email?.toLowerCase().includes(lower));
+    if (match?.email) {
+      emails.add(match.email);
+      resolved.push({ token, email: match.email, name: match.name });
+    } else {
+      resolved.push({ token, email: null, name: match?.name ?? null });
+    }
+  }
+  return { emails: [...emails], resolved };
+}
