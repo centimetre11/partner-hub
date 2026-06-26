@@ -11,14 +11,25 @@ function getCallbackSecret() {
   return process.env.CRM_CALLBACK_SECRET?.trim() || "";
 }
 
-function isAuthorized(req: NextRequest) {
-  const secret = getCallbackSecret();
-  if (!secret) return false;
+function extractProvidedSecret(
+  req: NextRequest,
+  body?: Record<string, unknown>,
+): string | null {
   const header = req.headers.get(CALLBACK_HEADER)?.trim();
+  if (header) return header;
   const auth = req.headers.get("authorization")?.trim();
-  if (header === secret) return true;
-  if (auth === `Bearer ${secret}`) return true;
-  return false;
+  if (auth?.startsWith("Bearer ")) return auth.slice("Bearer ".length).trim();
+  const query = req.nextUrl.searchParams.get("secret")?.trim();
+  if (query) return query;
+  const bodySecret = body?.callbackSecret;
+  if (typeof bodySecret === "string" && bodySecret.trim()) return bodySecret.trim();
+  return null;
+}
+
+function isAuthorized(provided: string | null) {
+  const secret = getCallbackSecret();
+  if (!secret || !provided) return false;
+  return provided === secret;
 }
 
 function corsHeaders(origin: string | null): Record<string, string> {
@@ -68,18 +79,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: cors });
-  }
-
-  let body: CrmCallbackPayload;
+  let body: CrmCallbackPayload & { callbackSecret?: string };
   try {
-    body = (await req.json()) as CrmCallbackPayload;
+    body = (await req.json()) as CrmCallbackPayload & { callbackSecret?: string };
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400, headers: cors });
   }
 
-  const result = await handleCrmLeadCallback(body);
+  if (!isAuthorized(extractProvidedSecret(req, body))) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: cors });
+  }
+
+  const { callbackSecret: _secret, ...payload } = body;
+  const result = await handleCrmLeadCallback(payload);
   if (!result.ok) {
     const status = result.reason === "unknown_action" ? 400 : 502;
     return NextResponse.json(result, { status, headers: cors });

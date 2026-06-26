@@ -32,11 +32,25 @@ Content-Type: application/json
 X-CRM-Callback-Secret: <与 CRM_CALLBACK_SECRET 一致>
 ```
 
-也支持：`Authorization: Bearer <secret>`
+也支持（任选其一）：
+
+- `Authorization: Bearer <secret>`
+- JSON body 字段 `"callbackSecret": "<secret>"`（**Postman / 内网调试推荐**，避免自定义 Header 被代理拦截）
+- Query：`?secret=<secret>`
 
 ### 2.2 请求体
 
 **单条操作（常见）**
+
+```json
+{
+  "callbackSecret": "4e93d1a55901db5af6b7364d25d08219d3219caf9a0afdba",
+  "clueId": "7120c4b1-83f1-4acd-9f21-d661e316f5e9",
+  "action": "toNurture"
+}
+```
+
+若 Header 方式可用，可省略 `callbackSecret`，仅保留 `clueId` / `action`：
 
 ```json
 {
@@ -94,13 +108,12 @@ GET https://camelusai.com/api/leads/crm-callback
 
 返回 JSON：服务是否就绪、`secretConfigured`、支持的 action、ping/dryRun 示例。
 
-**Step 1 — 验证密钥（不写库）**
+**Step 1 — 验证密钥（不写库，推荐 body 传密钥）**
 
 ```bash
 curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
   -H "Content-Type: application/json" \
-  -H "X-CRM-Callback-Secret: <密钥>" \
-  -d '{"ping":true}'
+  -d '{"ping":true,"callbackSecret":"<密钥>"}'
 ```
 
 期望：`{"ok":true,"mode":"ping"}`
@@ -110,8 +123,7 @@ curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
 ```bash
 curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
   -H "Content-Type: application/json" \
-  -H "X-CRM-Callback-Secret: <密钥>" \
-  -d '{"dryRun":true,"clueId":"<线索UUID>","action":"toNurture"}'
+  -d '{"callbackSecret":"<密钥>","dryRun":true,"clueId":"<线索UUID>","action":"toNurture"}'
 ```
 
 期望：`{"ok":true,"mode":"dry_run","dryRunDetail":"..."}`
@@ -121,9 +133,17 @@ curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
 ```bash
 curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
   -H "Content-Type: application/json" \
-  -H "X-CRM-Callback-Secret: <密钥>" \
-  -d '{"clueId":"<线索UUID>","action":"toNurture"}'
+  -d '{"callbackSecret":"<密钥>","clueId":"<线索UUID>","action":"toNurture"}'
 ```
+
+### 2.6 常见问题
+
+| 现象 | 原因 | 处理 |
+|------|------|------|
+| 返回 **HTML** `400 Bad Request` + `nginx/1.24.0` | 请求在 nginx 层被拒，**未进入 Partner Hub**；常见于公司网络拦截自定义 Header | **去掉** `X-CRM-Callback-Secret` Header，改在 JSON body 里加 `"callbackSecret":"..."` |
+| 返回 JSON `401 Unauthorized` | 密钥错误或缺失 | 核对 48 位密钥，不要带引号/空格 |
+| 返回 JSON `400 Invalid JSON` | Body 为空或不是合法 JSON | Postman Body 选 raw → JSON，并填写内容 |
+| GET 测试页 200，POST Header 方式 400 HTML | 同上，Header 被拦 | 改用 body `callbackSecret` |
 
 各 action 与 CPT 对应见第 1 节场景表。
 

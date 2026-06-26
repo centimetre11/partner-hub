@@ -52,6 +52,8 @@ export type CrmCallbackPayload = {
   ping?: boolean;
   /** 预览将执行的操作，不写库 */
   dryRun?: boolean;
+  /** 可选：密钥放在 body（部分网络会拦截自定义 Header） */
+  callbackSecret?: string;
 };
 
 export type CrmCallbackResult =
@@ -87,22 +89,28 @@ export function getCrmCallbackPublicInfo(baseUrl: string) {
     callbackUrl: `${baseUrl}/api/leads/crm-callback`,
     supportedActions: SUPPORTED_ACTIONS,
     authHeader: "X-CRM-Callback-Secret",
-    note: "所有填报场景共用一个密钥 CRM_CALLBACK_SECRET，不是每个 action 单独一把密钥。",
+    authAlternatives: [
+      "Authorization: Bearer <密钥>",
+      "JSON body 字段 callbackSecret（推荐 Postman / 内网调试）",
+      "Query 参数 ?secret=<密钥>",
+    ],
+    note: "所有填报场景共用一个密钥 CRM_CALLBACK_SECRET，不是每个 action 单独一把密钥。若 Header 方式返回 nginx 400 HTML，请改用 body.callbackSecret。",
     test: {
       browserGet: `${baseUrl}/api/leads/crm-callback`,
       pingPost: {
         url: `${baseUrl}/api/leads/crm-callback`,
-        body: { ping: true },
-        header: "X-CRM-Callback-Secret: <密钥>",
+        body: { ping: true, callbackSecret: "<密钥>" },
+        header: "X-CRM-Callback-Secret: <密钥>（可选，与 body 二选一）",
       },
       dryRunPost: {
         url: `${baseUrl}/api/leads/crm-callback`,
         body: {
+          callbackSecret: "<密钥>",
           dryRun: true,
           clueId: testClueId ?? "<线索UUID>",
           action: "toNurture",
         },
-        header: "X-CRM-Callback-Secret: <密钥>",
+        header: "X-CRM-Callback-Secret: <密钥>（可选）",
       },
       sampleClueId: testClueId,
     },
