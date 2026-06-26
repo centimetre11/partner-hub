@@ -333,16 +333,6 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       badge: openTodos ? String(openTodos) : null,
       content: overviewPanel,
     },
-    {
-      id: "capability",
-      label: c.tabCapability,
-      desc: c.tabCapabilityDesc,
-      badge:
-        customer.trainings.length + linkAssets.length + linkedSolutions.length > 0
-          ? String(customer.trainings.length + linkAssets.length + linkedSolutions.length)
-          : null,
-      content: capabilityPanel,
-    },
     { id: "profile", label: c.tabProfile, desc: c.tabProfileDesc, content: profilePanel },
     {
       id: "stock",
@@ -357,6 +347,16 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       desc: c.tabOpportunitiesDesc,
       badge: customer.opportunities.length ? String(customer.opportunities.length) : null,
       content: opportunitiesPanel,
+    },
+    {
+      id: "capability",
+      label: c.tabCapability,
+      desc: c.tabCapabilityDesc,
+      badge:
+        customer.trainings.length + linkAssets.length + linkedSolutions.length > 0
+          ? String(customer.trainings.length + linkAssets.length + linkedSolutions.length)
+          : null,
+      content: capabilityPanel,
     },
     {
       id: "relationship",
