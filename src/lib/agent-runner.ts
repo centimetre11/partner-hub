@@ -11,7 +11,6 @@ import {
 } from "./skills";
 import { partnerContext } from "./proposals";
 import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
-import { runDeterministicQueryPipeline } from "./automation-pipeline";
 import { resolveAutomationRuntimeSkills } from "./automation-push";
 
 const MAX_STEPS = 12;
@@ -117,6 +116,8 @@ export async function runAgent(
 
   try {
     if (agent.isAutomation) {
+      // 动态 import：automation-pipeline 依赖 server-only，避免被 CLI 脚本（如 resync-scheduler）在 tsx 下加载时崩溃
+      const { runDeterministicQueryPipeline } = await import("./automation-pipeline");
       const pipeline = await runDeterministicQueryPipeline(agent);
       if (pipeline) {
         const output = pipeline.output;
