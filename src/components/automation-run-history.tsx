@@ -3,6 +3,11 @@
 import { Badge } from "@/components/ui";
 import { AiProcessTrace } from "@/components/ai-process-trace";
 import { parseToolLog, toolLogToTrace } from "@/lib/ai-trace";
+import {
+  automationRunBadge,
+  isPushResultFailure,
+  splitAutomationOutput,
+} from "@/lib/automation-run-status";
 import { useMessages } from "@/lib/i18n/context";
 
 export type AutomationRunItem = {
@@ -26,16 +31,35 @@ export function AutomationRunHistory({ runs }: { runs: AutomationRunItem[] }) {
     <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
       {runs.map((run) => {
         const toolLog = parseToolLog(run.toolLog);
+        const badge = automationRunBadge(run.status, run.output, toolLog, {
+          success: m.common.success,
+          failed: m.common.failed,
+          running: m.common.running,
+          partialSuccess: m.common.partialSuccess,
+        });
+        const { preview, pushResult } = splitAutomationOutput(run.output);
+        const pushFailed = pushResult ? isPushResultFailure(pushResult) : false;
+
         return (
           <div key={run.id} className="rounded-lg border border-slate-200/80 bg-white p-3">
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <span className="text-[11px] text-slate-400">{run.startedAtLabel}</span>
-              <Badge tone={run.status === "SUCCESS" ? "green" : run.status === "FAILED" ? "red" : "amber"}>
-                {run.status === "SUCCESS" ? m.common.success : run.status === "FAILED" ? m.common.failed : m.common.running}
-              </Badge>
+              <Badge tone={badge.tone}>{badge.label}</Badge>
             </div>
-            {run.output && (
-              <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans line-clamp-4">{run.output}</pre>
+            {pushResult && (
+              <div
+                className={`mb-2 rounded-md border px-2.5 py-1.5 text-xs ${
+                  pushFailed
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                }`}
+              >
+                <span className="font-semibold">{a.pushResultLabel}: </span>
+                {pushResult}
+              </div>
+            )}
+            {preview && (
+              <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans line-clamp-4">{preview}</pre>
             )}
             {run.error && <p className="text-xs text-red-600 mt-1">{run.error}</p>}
             {toolLog.length > 0 && (

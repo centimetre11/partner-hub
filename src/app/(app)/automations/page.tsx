@@ -6,6 +6,13 @@ import { AiCenterNav } from "@/components/ai-center-nav";
 import { toggleAutomationAction } from "@/lib/automation-actions";
 import { describeCron, formatScheduleShort } from "@/lib/cron";
 import { getServerI18n } from "@/lib/server-i18n";
+import { parseToolLog } from "@/lib/ai-trace";
+import {
+  automationRunBadge,
+  extractPushResultLine,
+  isPushResultFailure,
+  splitAutomationOutput,
+} from "@/lib/automation-run-status";
 
 export default async function AutomationsPage() {
   await requireUser();
@@ -158,6 +165,16 @@ export default async function AutomationsPage() {
                     run.agent.trigger === "SCHEDULE" && run.agent.cronExpr
                       ? describeCron(run.agent.cronExpr, locale)
                       : m.automations.manualTrigger;
+                  const toolLog = parseToolLog(run.toolLog);
+                  const badge = automationRunBadge(run.status, run.output, toolLog, {
+                    success: m.common.success,
+                    failed: m.common.failed,
+                    running: m.common.running,
+                    partialSuccess: m.common.partialSuccess,
+                  });
+                  const { preview } = splitAutomationOutput(run.output);
+                  const pushResult = extractPushResultLine(run.output);
+                  const pushFailed = pushResult ? isPushResultFailure(pushResult) : false;
                   return (
                     <Link
                       key={run.id}
@@ -165,17 +182,7 @@ export default async function AutomationsPage() {
                       className="block bg-white rounded-lg border border-slate-200/80 shadow-sm p-4 hover:border-slate-300 transition-colors"
                     >
                       <div className="flex items-center gap-2 mb-1.5">
-                        <Badge
-                          tone={
-                            run.status === "SUCCESS" ? "green" : run.status === "FAILED" ? "red" : "amber"
-                          }
-                        >
-                          {run.status === "SUCCESS"
-                            ? m.common.success
-                            : run.status === "FAILED"
-                              ? m.common.failed
-                              : m.common.running}
-                        </Badge>
+                        <Badge tone={badge.tone}>{badge.label}</Badge>
                         <span className="text-xs text-slate-400">
                           {fmtDateTime(run.startedAt, bcp47)}
                         </span>
@@ -184,9 +191,18 @@ export default async function AutomationsPage() {
                         {run.agent.name}
                       </div>
                       <div className="text-xs text-slate-400 mt-0.5">{schedule}</div>
-                      {run.output && (
+                      {pushResult && (
+                        <p
+                          className={`text-xs mt-2 line-clamp-2 ${
+                            pushFailed ? "text-red-600 font-medium" : "text-emerald-700"
+                          }`}
+                        >
+                          {m.automations.pushResultLabel}: {pushResult}
+                        </p>
+                      )}
+                      {preview && (
                         <p className="text-xs text-slate-600 mt-2 line-clamp-2 whitespace-pre-wrap">
-                          {run.output.slice(0, 200)}
+                          {preview.slice(0, 200)}
                         </p>
                       )}
                       {run.status === "FAILED" && run.error && (

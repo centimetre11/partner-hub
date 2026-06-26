@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { isAllowedFile, maxUploadBytes } from "@/lib/assets";
 import { parseGdriveFolderId, uploadFileToGdrive } from "@/lib/google-drive";
 import { getUploaderAccessToken } from "@/lib/google-oauth";
+import { resolveEntityGdriveFolder } from "@/lib/gdrive-entity-folder";
 
 export const runtime = "nodejs";
 
@@ -30,29 +31,65 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 解析目标目录：优先用传入的 folderUrl，否则取绑定的伙伴/客户目录
+  let entityName: string | null = null;
   let folderUrl = folderUrlOverride;
   if (!folderUrl && partnerId) {
-    const p = await db.partner.findUnique({ where: { id: partnerId }, select: { gdriveFolderUrl: true } });
+    const p = await db.partner.findUnique({
+      where: { id: partnerId },
+      select: { gdriveFolderUrl: true, name: true },
+    });
     folderUrl = p?.gdriveFolderUrl?.trim() || null;
+    entityName = p?.name ?? null;
   }
   if (!folderUrl && customerId) {
-    const c = await db.customer.findUnique({ where: { id: customerId }, select: { gdriveFolderUrl: true } });
+    const c = await db.customer.findUnique({
+      where: { id: customerId },
+      select: { gdriveFolderUrl: true, name: true },
+    });
     folderUrl = c?.gdriveFolderUrl?.trim() || null;
+    entityName = c?.name ?? null;
   }
-  if (!folderUrl) {
-    return NextResponse.json(
-      { error: "No Google Drive folder bound for this record — bind one first" },
-      { status: 400 },
-    );
-  }
-  const folderId = parseGdriveFolderId(folderUrl);
-  if (!folderId) {
-    return NextResponse.json({ error: "Invalid Google Drive folder URL" }, { status: 400 });
-  }
+
+  let autoResolvedFolderUrl: string | null = null;
 
   try {
     const accessToken = await getUploaderAccessToken();
+
+    if (!folderUrl && entityName) {
+      const resolved = await resolveEntityGdriveFolder(entityName, accessToken);
+      if (resolved) {
+        folderUrl = resolved.folderUrl;
+        autoResolvedFolderUrl = resolved.folderUrl;
+        if (partnerId) {
+          await db.partner.update({
+            where: { id: partnerId },
+            data: { gdriveFolderUrl: resolved.folderUrl },
+          });
+        } else if (customerId) {
+          await db.customer.update({
+            where: { id: customerId },
+            data: { gdriveFolderUrl: resolved.folderUrl },
+          });
+        }
+      }
+    }
+
+    if (!folderUrl) {
+      return NextResponse.json(
+        {
+          error: entityName
+            ? `未找到与「${entityName}」同名的 Drive 子目录，请粘贴目录链接后保存，或先在 07_Client Information 下创建该文件夹`
+            : "No Google Drive folder bound for this record — bind one first",
+        },
+        { status: 400 },
+      );
+    }
+
+    const folderId = parseGdriveFolderId(folderUrl);
+    if (!folderId) {
+      return NextResponse.json({ error: "Invalid Google Drive folder URL" }, { status: 400 });
+    }
+
     const uploaded = await uploadFileToGdrive(folderId, file, accessToken);
 
     const asset = await db.asset.create({
@@ -80,6 +117,7 @@ export async function POST(req: NextRequest) {
         thumbnailUrl: asset.thumbnailUrl,
         provider: asset.provider,
       },
+      folderUrl: autoResolvedFolderUrl,
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });

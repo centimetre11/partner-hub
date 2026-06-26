@@ -17,16 +17,19 @@ export function GdriveUploadField({
   customerId,
   folderUrl,
   disabled,
+  disabledReason,
+  buttonLabel,
   uploadingLabel,
   onUploaded,
 }: {
   partnerId?: string | null;
   customerId?: string | null;
-  /** 直接指定上传目录（覆盖伙伴/客户绑定目录） */
   folderUrl?: string | null;
   disabled?: boolean;
+  disabledReason?: string | null;
+  buttonLabel: string;
   uploadingLabel: string;
-  onUploaded: (asset: UploadedAsset) => void;
+  onUploaded: (asset: UploadedAsset, meta?: { folderUrl?: string | null }) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
@@ -46,7 +49,7 @@ export function GdriveUploadField({
       const res = await fetch("/api/upload/gdrive", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
-      onUploaded(data.asset as UploadedAsset);
+      onUploaded(data.asset as UploadedAsset, { folderUrl: data.folderUrl ?? null });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -56,16 +59,27 @@ export function GdriveUploadField({
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       <input
         ref={inputRef}
         type="file"
+        accept=".pdf,.ppt,.pptx,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.md,.txt,image/*"
         onChange={handleChange}
         disabled={disabled || loading}
-        className="block text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:text-white hover:file:bg-slate-800 disabled:opacity-50"
+        className="hidden"
       />
-      {loading && <span className="block text-xs text-slate-400">{uploadingLabel}</span>}
-      {error && <span className="block text-xs text-red-500">{error}</span>}
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={disabled || loading}
+        className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {loading ? uploadingLabel : buttonLabel}
+      </button>
+      {disabled && disabledReason && (
+        <p className="text-xs text-slate-400">{disabledReason}</p>
+      )}
+      {error && <p className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Opportunity, TimelineEvent, TodoItem, Training, User } from "@prisma/client";
@@ -16,8 +17,7 @@ import {
   loadTaxonomyLabelMaps,
   parseIndustries,
 } from "@/lib/taxonomy";
-import { PartnerGtmPanel } from "@/components/partner-gtm-panel";
-import { searchGtmLibraryAction } from "@/lib/gtm-library-actions";
+import { PartnerGtmPanelLoader } from "@/components/partner-gtm-panel-loader";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
 import {
   addNoteAction, archivePartnerAction, createTodoAction,
@@ -93,20 +93,40 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
     },
   });
   if (!p) notFound();
-  const users = await db.user.findMany();
-  const ammoConfig = await getAmmoConfigForClient();
+
   const partnerCustomers = p.customerLinks.map((link) => link.customer);
-  const unboundCustomers = await db.customer.findMany({
-    where: { ...END_CUSTOMER_WHERE, partnerLinks: { none: { partnerId: id } } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
-  const relatedOpportunities = await db.opportunity.findMany({
-    where: { OR: [{ partnerId: id }, { customer: { partnerLinks: { some: { partnerId: id } } } }] },
-    include: { customer: { select: { id: true, name: true } } },
-    orderBy: { updatedAt: "desc" },
-  });
-  const [partnerAgents, wecomChat, matchedCrmCustomer] = await Promise.all([
+  const contactOptions = p.contacts.map((c) => ({ id: c.id, name: c.name }));
+  const completeness = computeCompleteness(p, labels);
+  const stale = staleDays(p);
+  const industryCodes = parseIndustries(p);
+
+  const [
+    users,
+    ammoConfig,
+    unboundCustomers,
+    relatedOpportunities,
+    partnerAgents,
+    wecomChat,
+    matchedCrmCustomer,
+    agentTemplates,
+    labelMaps,
+    taxonomyArchetype,
+    taxonomyIndustry,
+    taxonomyValuePattern,
+    taxonomyCategory,
+  ] = await Promise.all([
+    db.user.findMany(),
+    getAmmoConfigForClient(),
+    db.customer.findMany({
+      where: { ...END_CUSTOMER_WHERE, partnerLinks: { none: { partnerId: id } } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.opportunity.findMany({
+      where: { OR: [{ partnerId: id }, { customer: { partnerLinks: { some: { partnerId: id } } } }] },
+      include: { customer: { select: { id: true, name: true } } },
+      orderBy: { updatedAt: "desc" },
+    }),
     db.agent.findMany({
       where: { partnerId: id, isTemplate: false },
       orderBy: { updatedAt: "desc" },
@@ -119,38 +139,37 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
           select: { id: true, name: true, city: true, status: true, salesman: true },
         })
       : Promise.resolve(null),
+    db.agent.findMany({
+      where: {
+        isTemplate: true,
+        OR: [
+          { name: { contains: "Pre-meeting" } },
+          { name: { contains: "Joint Solution" } },
+          { name: { contains: "Sentiment" } },
+          { name: { contains: "Monitor" } },
+          { name: { contains: "会前" } },
+          { name: { contains: "联合" } },
+          { name: { contains: "舆情" } },
+        ],
+      },
+      select: { id: true, name: true, icon: true, description: true },
+      orderBy: { name: "asc" },
+    }),
+    loadTaxonomyLabelMaps(),
+    getTaxonomyOptions("ARCHETYPE"),
+    getTaxonomyOptions("INDUSTRY"),
+    getTaxonomyOptions("VALUE_PATTERN"),
+    getTaxonomyOptions("CATEGORY"),
   ]);
-  const agentTemplates = await db.agent.findMany({
-    where: {
-      isTemplate: true,
-      OR: [
-        { name: { contains: "Pre-meeting" } },
-        { name: { contains: "Joint Solution" } },
-        { name: { contains: "Sentiment" } },
-        { name: { contains: "Monitor" } },
-        // legacy Chinese names (pre-migration)
-        { name: { contains: "会前" } },
-        { name: { contains: "联合" } },
-        { name: { contains: "舆情" } },
-      ],
-    },
-    select: { id: true, name: true, icon: true, description: true },
-    orderBy: { name: "asc" },
-  });
-  const completeness = computeCompleteness(p, labels);
-  const stale = staleDays(p);
-  const labelMaps = await loadTaxonomyLabelMaps();
+
   const taxonomy = {
-    ARCHETYPE: await getTaxonomyOptions("ARCHETYPE"),
-    INDUSTRY: await getTaxonomyOptions("INDUSTRY"),
-    VALUE_PATTERN: await getTaxonomyOptions("VALUE_PATTERN"),
-    CATEGORY: await getTaxonomyOptions("CATEGORY"),
+    ARCHETYPE: taxonomyArchetype,
+    INDUSTRY: taxonomyIndustry,
+    VALUE_PATTERN: taxonomyValuePattern,
+    CATEGORY: taxonomyCategory,
   };
-  const industryCodes = parseIndustries(p);
   const instanceMap = buildPartnerInstanceMap(p, labelMaps, labels);
   const stageGuidance = getStageGuidance(p, labels);
-  const contactOptions = p.contacts.map((c) => ({ id: c.id, name: c.name }));
-  const gtmLibraryItems = await searchGtmLibraryAction("");
   let selectedDims: string[] = [];
   if (SENTIMENT_MONITOR_ENABLED && p.monitorDims) {
     try {
@@ -422,7 +441,16 @@ export default async function PartnerDetailPage({ params }: { params: Promise<{ 
               </Card>
             </div>
 
-            <PartnerGtmPanel partner={p} libraryItems={gtmLibraryItems} labelMaps={labelMaps} />
+            <Suspense
+              fallback={
+                <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-5 space-y-3 animate-pulse">
+                  <div className="h-4 w-32 bg-slate-200/80 rounded" />
+                  <div className="h-24 bg-slate-200/80 rounded" />
+                </div>
+              }
+            >
+              <PartnerGtmPanelLoader partner={p} labelMaps={labelMaps} />
+            </Suspense>
           </div>
         }
         pipeline={

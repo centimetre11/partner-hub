@@ -22,26 +22,25 @@ export default async function CustomersPage({
   const c = m.customers;
   const sp = await searchParams;
 
-  const customers = await db.customer.findMany({
-    where: {
-      ...END_CUSTOMER_WHERE,
-      ...(sp.q ? { name: { contains: sp.q } } : {}),
-      ...(sp.status ? { status: sp.status } : {}),
-      ...(sp.unbound === "1"
-        ? { partnerLinks: { none: {} } }
-        : sp.partner
-          ? { partnerLinks: { some: { partnerId: sp.partner } } }
-          : {}),
-    },
-    include: {
-      partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
-      owner: { select: { name: true } },
-      contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
-
-  const [partners, users] = await Promise.all([
+  const [customers, partners, users] = await Promise.all([
+    db.customer.findMany({
+      where: {
+        ...END_CUSTOMER_WHERE,
+        ...(sp.q ? { name: { contains: sp.q } } : {}),
+        ...(sp.status ? { status: sp.status } : {}),
+        ...(sp.unbound === "1"
+          ? { partnerLinks: { none: {} } }
+          : sp.partner
+            ? { partnerLinks: { some: { partnerId: sp.partner } } }
+            : {}),
+      },
+      include: {
+        partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
+        owner: { select: { name: true } },
+        contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true } }),
   ]);

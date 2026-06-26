@@ -47,7 +47,7 @@ export function computeCompleteness(p: PartnerWithRelations, ui: LabelsBundle = 
   return { score: Math.round((got / total) * 100), missing };
 }
 
-export function staleDays(p: { events: TimelineEvent[]; updatedAt: Date }): number {
+export function staleDays(p: { events: { createdAt: Date }[]; updatedAt: Date }): number {
   const last = p.events.length
     ? Math.max(...p.events.map((e) => new Date(e.createdAt).getTime()))
     : new Date(p.updatedAt).getTime();

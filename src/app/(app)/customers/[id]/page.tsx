@@ -36,10 +36,9 @@ function statusTone(status: string): "green" | "blue" | "zinc" {
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
-  const { messages: m, bcp47 } = await getServerI18n();
+  const [{ messages: m, bcp47 }, { id }] = await Promise.all([getServerI18n(), params]);
   const c = m.customers;
   const pd = m.partnerDetail;
-  const { id } = await params;
 
   const customer = await db.customer.findUnique({
     where: { id },
@@ -60,9 +59,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     },
   });
   if (!customer) notFound();
-  const ammoConfig = await getAmmoConfigForClient();
 
-  const [partners, users, wecomChat, matchedCrmCustomer] = await Promise.all([
+  const [partners, users, wecomChat, matchedCrmCustomer, ammoConfig] = await Promise.all([
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true } }),
     getWecomChatForCustomer(id),
@@ -72,6 +70,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           select: { id: true, name: true, city: true, status: true, salesman: true },
         })
       : Promise.resolve(null),
+    getAmmoConfigForClient(),
   ]);
 
   const owner = { kind: "customer" as const, id: customer.id };

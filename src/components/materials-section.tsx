@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GdriveUploadField } from "@/components/gdrive-upload-field";
+import { GdriveUploadField, type UploadedAsset } from "@/components/gdrive-upload-field";
 import {
   setPartnerGdriveFolderAction,
   setCustomerGdriveFolderAction,
@@ -24,7 +24,7 @@ export function MaterialsSection({
   customerId,
   folderUrl,
   uploaderConnected,
-  assets,
+  assets: initialAssets,
   copy,
 }: {
   partnerId?: string | null;
@@ -35,15 +35,21 @@ export function MaterialsSection({
   copy: Messages["gdriveMaterials"];
 }) {
   const router = useRouter();
-  const [folder, setFolder] = useState(folderUrl ?? "");
+  const [folderDraft, setFolderDraft] = useState<string | null>(null);
+  const [localBoundUrl, setLocalBoundUrl] = useState<string | null>(null);
+  const [extraAssets, setExtraAssets] = useState<MaterialAsset[]>([]);
+  const folder = folderDraft ?? folderUrl ?? "";
+  const boundUrl = localBoundUrl ?? (folderUrl?.trim() || null);
+  const assets = [
+    ...extraAssets,
+    ...initialAssets.filter((a) => !extraAssets.some((e) => e.id === a.id)),
+  ];
   const [mode, setMode] = useState<"file" | "link">("file");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLoading, setLinkLoading] = useState(false);
+  const [showFolderBind, setShowFolderBind] = useState(!folderUrl?.trim());
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-
-  const boundUrl = folderUrl?.trim() || null;
-  const canUpload = !!boundUrl && uploaderConnected;
 
   function saveFolder() {
     startTransition(async () => {
@@ -55,8 +61,32 @@ export function MaterialsSection({
         : setCustomerGdriveFolderAction.bind(null, customerId!);
       const res = await action(fd);
       if (res && "error" in res && res.error) setError(copy.invalidFolder);
-      else router.refresh();
+      else {
+        setLocalBoundUrl(folder.trim() || null);
+        setFolderDraft(folder.trim() || null);
+        setShowFolderBind(false);
+        router.refresh();
+      }
     });
+  }
+
+  function handleUploaded(asset: UploadedAsset, meta?: { folderUrl?: string | null }) {
+    setExtraAssets((prev) => [
+      {
+        id: asset.id,
+        filename: asset.filename,
+        url: asset.url,
+        thumbnailUrl: asset.thumbnailUrl,
+        provider: asset.provider,
+      },
+      ...prev,
+    ]);
+    if (meta?.folderUrl) {
+      setLocalBoundUrl(meta.folderUrl);
+      setFolderDraft(meta.folderUrl);
+      setShowFolderBind(false);
+    }
+    router.refresh();
   }
 
   async function submitLink() {
@@ -85,6 +115,7 @@ export function MaterialsSection({
     if (!window.confirm(copy.removeConfirm)) return;
     startTransition(async () => {
       await deleteMaterialAssetAction(id);
+      setExtraAssets((prev) => prev.filter((a) => a.id !== id));
       router.refresh();
     });
   }
@@ -101,51 +132,13 @@ export function MaterialsSection({
       </div>
 
       <div className="px-4 sm:px-5 py-4 space-y-4 text-sm">
-        {/* 目录绑定 */}
-        <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-700">{copy.bindLabel}</label>
-          <div className="flex gap-2">
-            <input
-              value={folder}
-              onChange={(e) => setFolder(e.target.value)}
-              placeholder={copy.bindPlaceholder}
-              className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-            <button
-              type="button"
-              onClick={saveFolder}
-              disabled={pending}
-              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-800 disabled:opacity-50 shrink-0"
-            >
-              {copy.bindSave}
-            </button>
-          </div>
-          <div className="flex items-center gap-3 text-xs">
-            {boundUrl ? (
-              <>
-                <span className="text-emerald-700">{copy.bound}</span>
-                <a
-                  href={boundUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sky-700 hover:underline"
-                >
-                  📁 {copy.openFolder}
-                </a>
-              </>
-            ) : (
-              <span className="text-slate-400">{copy.notBound}</span>
-            )}
-          </div>
-        </div>
-
         {!uploaderConnected && (
           <p className="rounded-md bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
             {copy.needConnect}
           </p>
         )}
 
-        {/* 上传 / 贴链接 */}
+        {/* 上传 / 贴链接 — 主操作 */}
         <div className="space-y-2">
           <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
             <button
@@ -165,25 +158,25 @@ export function MaterialsSection({
           </div>
 
           {mode === "file" ? (
-            canUpload ? (
-              <>
-                <GdriveUploadField
-                  partnerId={partnerId}
-                  customerId={customerId}
-                  uploadingLabel={copy.uploading}
-                  onUploaded={() => router.refresh()}
-                />
-                <p className="text-xs text-slate-400">{copy.uploadHint}</p>
-              </>
-            ) : (
-              <p className="text-xs text-slate-400">{!boundUrl ? copy.needBind : copy.needConnect}</p>
-            )
+            <>
+              <GdriveUploadField
+                partnerId={partnerId}
+                customerId={customerId}
+                folderUrl={boundUrl}
+                disabled={!uploaderConnected}
+                disabledReason={!uploaderConnected ? copy.needConnect : null}
+                buttonLabel={copy.chooseAndUpload}
+                uploadingLabel={copy.uploading}
+                onUploaded={handleUploaded}
+              />
+              <p className="text-xs text-slate-400">{copy.uploadHintAuto}</p>
+            </>
           ) : (
             <div className="flex gap-2">
               <input
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                placeholder={copy.bindPlaceholder}
+                placeholder={copy.linkPlaceholder}
                 className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
               <button
@@ -192,7 +185,7 @@ export function MaterialsSection({
                 disabled={linkLoading || !linkUrl.trim()}
                 className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-800 disabled:opacity-40 shrink-0"
               >
-                {linkLoading ? copy.parsing : copy.linkTab}
+                {linkLoading ? copy.parsing : copy.parseLink}
               </button>
             </div>
           )}
@@ -241,6 +234,55 @@ export function MaterialsSection({
             ))}
           </ul>
         )}
+
+        {/* 目录绑定 — 可选 / 高级 */}
+        <div className="border-t border-slate-100 pt-3 space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowFolderBind((v) => !v)}
+            className="text-xs text-slate-500 hover:text-slate-800"
+          >
+            {showFolderBind ? copy.hideFolderBind : copy.showFolderBind}
+          </button>
+          {(showFolderBind || boundUrl) && (
+            <div className="space-y-1.5">
+              <label className="block text-xs font-medium text-slate-700">{copy.bindLabel}</label>
+              <div className="flex gap-2">
+                <input
+                  value={folder}
+                  onChange={(e) => setFolderDraft(e.target.value)}
+                  placeholder={copy.bindPlaceholder}
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                />
+                <button
+                  type="button"
+                  onClick={saveFolder}
+                  disabled={pending}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50 disabled:opacity-50 shrink-0"
+                >
+                  {copy.bindSave}
+                </button>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                {boundUrl ? (
+                  <>
+                    <span className="text-emerald-700">{copy.bound}</span>
+                    <a
+                      href={boundUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sky-700 hover:underline"
+                    >
+                      📁 {copy.openFolder}
+                    </a>
+                  </>
+                ) : (
+                  <span className="text-slate-400">{copy.autoFolderHint}</span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -233,11 +233,10 @@ function mapFileItem(f: RawDriveItem): GdriveFileItem {
   };
 }
 
-export async function listGdriveFolderContents(
+async function fetchDriveFolderChildren(
   folderId: string,
-  serviceAccountJson: string,
-): Promise<{ folderName: string; folders: GdriveFolderItem[]; files: GdriveFileItem[] }> {
-  const token = await getAccessToken(serviceAccountJson);
+  token: string,
+): Promise<RawDriveItem[]> {
   const params = new URLSearchParams({
     q: `'${folderId}' in parents and trashed=false`,
     fields: "files(id,name,mimeType,thumbnailLink,webViewLink,modifiedTime,iconLink)",
@@ -252,16 +251,44 @@ export async function listGdriveFolderContents(
     signal: AbortSignal.timeout(20000),
   });
   const data = (await res.json()) as { files?: RawDriveItem[]; error?: { message?: string } };
-
   if (!res.ok) {
-    const msg = data.error?.message || `Drive API failed (${res.status})`;
-    if (res.status === 404) {
+    throw new Error(data.error?.message || `Drive API failed (${res.status})`);
+  }
+  return data.files ?? [];
+}
+
+/** OAuth access token 下列出子文件夹（上传时自动匹配目录用） */
+export async function listGdriveSubfoldersOauth(
+  folderId: string,
+  accessToken: string,
+): Promise<GdriveFolderItem[]> {
+  const items = await fetchDriveFolderChildren(folderId, accessToken);
+  return items
+    .filter((f) => f.mimeType === FOLDER_MIME)
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+    .map((f) => ({
+      id: f.id,
+      name: f.name,
+      modifiedTime: f.modifiedTime ?? null,
+    }));
+}
+
+export async function listGdriveFolderContents(
+  folderId: string,
+  serviceAccountJson: string,
+): Promise<{ folderName: string; folders: GdriveFolderItem[]; files: GdriveFileItem[] }> {
+  const token = await getAccessToken(serviceAccountJson);
+  let items: RawDriveItem[];
+  try {
+    items = await fetchDriveFolderChildren(folderId, token);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes("404")) {
       throw new Error(`${msg} — check folder ID and that the folder is shared with the service account email`);
     }
-    throw new Error(msg);
+    throw e;
   }
 
-  const items = data.files ?? [];
   const folders = items
     .filter((f) => f.mimeType === FOLDER_MIME)
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))

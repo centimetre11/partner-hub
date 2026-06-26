@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { NavLinks } from "@/components/nav-links";
+import { NavigationProgress } from "@/components/navigation-progress";
 import { SidebarFooter } from "@/components/sidebar-footer";
 import { isSuperAdmin } from "@/lib/user-roles";
 import { useMessages } from "@/lib/i18n/context";
@@ -105,6 +106,7 @@ export function AppShell({
         <SidebarFooter user={user} locale={locale} onNavigate={() => setNavOpen(false)} />
       </aside>
 
+      <NavigationProgress />
       <main className="app-main flex-1 lg:ml-56 min-w-0 max-w-full overflow-x-hidden pt-14 lg:pt-0 pb-safe">
         {children}
       </main>

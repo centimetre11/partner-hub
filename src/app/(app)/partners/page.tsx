@@ -1,9 +1,9 @@
 import Link from "next/link";
-import type { Opportunity, TodoItem, TimelineEvent } from "@prisma/client";
+import type { Opportunity, TodoItem, Training } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState, fmtDate } from "@/components/ui";
-import { computeCompleteness, staleDays } from "@/lib/completeness";
+import { computeCompleteness, staleDays, type PartnerWithRelations } from "@/lib/completeness";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
 import { getServerI18n, stageName } from "@/lib/server-i18n";
@@ -13,15 +13,14 @@ function truncate(text: string, max = 22) {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-function lastActivityAt(p: { events: TimelineEvent[]; updatedAt: Date }) {
+function lastActivityAt(p: { events: { createdAt: Date }[]; updatedAt: Date }) {
   return p.events.length ? new Date(p.events[0].createdAt) : new Date(p.updatedAt);
 }
 
-function pickNextTodo(todos: TodoItem[]) {
-  const open = todos.filter((t) => t.status === "OPEN");
-  if (!open.length) return null;
+function pickNextTodo(todos: Pick<TodoItem, "title" | "dueDate" | "priority" | "status">[]) {
+  if (!todos.length) return null;
   const priorityRank = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-  return [...open].sort((a, b) => {
+  return [...todos].sort((a, b) => {
     const aOverdue = a.dueDate && isTodoOverdue(a.dueDate) ? 0 : 1;
     const bOverdue = b.dueDate && isTodoOverdue(b.dueDate) ? 0 : 1;
     if (aOverdue !== bOverdue) return aOverdue - bOverdue;
@@ -35,59 +34,62 @@ function pickNextTodo(todos: TodoItem[]) {
   })[0];
 }
 
-function pickActiveOpportunity(opportunities: Opportunity[]) {
-  const active = opportunities.filter((o) => o.status === "ACTIVE");
-  if (!active.length) return null;
-  return [...active].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
-}
-
 export default async function PartnersPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; stage?: string; owner?: string; tier?: string; industry?: string }>;
 }) {
   await requireUser();
-  const { labels, messages: m, bcp47 } = await getServerI18n();
-  const sp = await searchParams;
-  const labelMaps = await loadTaxonomyLabelMaps();
-  const industryOptions = await getTaxonomyOptions("INDUSTRY");
-  const categoryOptions = await getTaxonomyOptions("CATEGORY");
+  const [{ labels, messages: m, bcp47 }, sp] = await Promise.all([getServerI18n(), searchParams]);
 
-  const partners = await db.partner.findMany({
-    where: {
-      status: "ACTIVE",
-      ...(sp.q ? { name: { contains: sp.q } } : {}),
-      ...(sp.stage ? { pipelineStage: parseInt(sp.stage, 10) } : {}),
-      ...(sp.owner
-        ? {
-            OR: [
-              { salesUserId: sp.owner },
-              { ownerId: sp.owner },
-              { presalesUserId: sp.owner },
-            ],
-          }
-        : {}),
-      ...(sp.tier ? { tier: sp.tier } : {}),
-      ...(sp.industry
-        ? {
-            OR: [{ industries: { contains: `"${sp.industry}"` } }],
-          }
-        : {}),
-    },
-    include: {
-      contacts: true,
-      opportunities: true,
-      todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }] },
-      events: { orderBy: { createdAt: "desc" }, take: 1 },
-      trainings: true,
-      owner: true,
-      salesUser: true,
-      presalesUser: true,
-    },
-    orderBy: { pipelineStage: "desc" },
-  });
-
-  const users = await db.user.findMany();
+  const [labelMaps, industryOptions, categoryOptions, users, partners] = await Promise.all([
+    loadTaxonomyLabelMaps(),
+    getTaxonomyOptions("INDUSTRY"),
+    getTaxonomyOptions("CATEGORY"),
+    db.user.findMany({ select: { id: true, name: true } }),
+    db.partner.findMany({
+      where: {
+        status: "ACTIVE",
+        ...(sp.q ? { name: { contains: sp.q } } : {}),
+        ...(sp.stage ? { pipelineStage: parseInt(sp.stage, 10) } : {}),
+        ...(sp.owner
+          ? {
+              OR: [
+                { salesUserId: sp.owner },
+                { ownerId: sp.owner },
+                { presalesUserId: sp.owner },
+              ],
+            }
+          : {}),
+        ...(sp.tier ? { tier: sp.tier } : {}),
+        ...(sp.industry
+          ? {
+              OR: [{ industries: { contains: `"${sp.industry}"` } }],
+            }
+          : {}),
+      },
+      include: {
+        contacts: { select: { role: true, contactInfo: true } },
+        opportunities: {
+          where: { status: "ACTIVE" },
+          select: { name: true, amount: true, updatedAt: true },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+        },
+        todos: {
+          where: { status: "OPEN" },
+          select: { title: true, dueDate: true, priority: true, status: true },
+          orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
+        },
+        events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+        owner: { select: { name: true } },
+        salesUser: { select: { name: true } },
+        presalesUser: { select: { name: true } },
+        _count: { select: { contacts: true, opportunities: true, events: true, trainings: true } },
+      },
+      orderBy: { pipelineStage: "desc" },
+    }),
+  ]);
 
   return (
     <div className="pb-16">
@@ -136,12 +138,19 @@ export default async function PartnersPage({
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {partners.map((p) => {
-              const c = computeCompleteness(p, labels);
+              const c = computeCompleteness(
+                {
+                  ...p,
+                  opportunities: Array.from({ length: p._count.opportunities }, () => ({ id: "_" })) as Opportunity[],
+                  trainings: Array.from({ length: p._count.trainings }, () => ({ id: "_" })) as Training[],
+                } as unknown as PartnerWithRelations,
+                labels,
+              );
               const stale = staleDays(p);
               const activityAt = lastActivityAt(p);
-              const openTodos = p.todos.filter((t) => t.status === "OPEN");
+              const openTodos = p.todos;
               const nextTodo = pickNextTodo(p.todos);
-              const activeOpp = pickActiveOpportunity(p.opportunities);
+              const activeOpp = p.opportunities[0] ?? null;
               const activityTone = stale > 30 ? "text-red-600" : stale > 14 ? "text-amber-600" : "text-slate-700";
               return (
                 <Link
@@ -203,7 +212,7 @@ export default async function PartnersPage({
                   </div>
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
                     <span>
-                      {m.partners.contactsCount.replace("{n}", String(p.contacts.length))} · {m.partners.opportunitiesCount.replace("{n}", String(p.opportunities.length))} · {m.partners.activitiesCount.replace("{n}", String(p.events.length))}
+                      {m.partners.contactsCount.replace("{n}", String(p._count.contacts))} · {m.partners.opportunitiesCount.replace("{n}", String(p._count.opportunities))} · {m.partners.activitiesCount.replace("{n}", String(p._count.events))}
                     </span>
                     <div className="w-32">
                       <ScoreBar score={c.score} />

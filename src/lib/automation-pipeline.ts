@@ -11,6 +11,7 @@ import {
   parseWecomAppRecipient,
   PUSH_WECOM_APP_ASSIGNEES,
 } from "./automation-delivery";
+import { resolveDeliveryRunStatus } from "./automation-run-status";
 import { inferDueWithinDays, isTodoDueGoal } from "./automation-push";
 import {
   type AutomationQuery,
@@ -315,7 +316,7 @@ async function resolveQueryNames(query: AutomationQuery): Promise<{
  */
 export async function runDeterministicQueryPipeline(
   agent: AgentForPipeline
-): Promise<{ output: string; toolLog: ToolLogEntry[] } | null> {
+): Promise<{ output: string; toolLog: ToolLogEntry[]; runStatus: "SUCCESS" | "PARTIAL_SUCCESS" } | null> {
   const query = resolveAutomationQuery(agent);
   if (!isDeterministicQuery(query)) return null;
   if (!hasAutomationDeliveryChannel(agent)) return null;
@@ -395,5 +396,6 @@ export async function runDeterministicQueryPipeline(
         : "\n\n**Delivery:** no channel configured";
 
   const output = `### ${heading}\n\n${intro ? `${intro}\n\n` : ""}${listBody}${pushLine}`;
-  return { output, toolLog };
+  const runStatus = resolveDeliveryRunStatus(pushNotes, toolLog);
+  return { output, toolLog, runStatus };
 }

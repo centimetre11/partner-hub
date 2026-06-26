@@ -12,6 +12,7 @@ import {
 import { partnerContext } from "./proposals";
 import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
 import { resolveAutomationRuntimeSkills } from "./automation-push";
+import { resolveDeliveryRunStatus } from "./automation-run-status";
 
 const MAX_STEPS = 12;
 
@@ -121,10 +122,11 @@ export async function runAgent(
       const pipeline = await runDeterministicQueryPipeline(agent);
       if (pipeline) {
         const output = pipeline.output;
+        const runStatus = pipeline.runStatus;
         await db.agentRun.update({
           where: { id: run.id },
           data: {
-            status: "SUCCESS",
+            status: runStatus,
             output,
             toolLog: JSON.stringify(pipeline.toolLog),
             finishedAt: new Date(),
@@ -133,7 +135,10 @@ export async function runAgent(
         if (agent.notifyOnSuccess !== false) {
           await db.notification.create({
             data: {
-              title: `${agent.icon} ${agent.name} run completed`,
+              title:
+                runStatus === "PARTIAL_SUCCESS"
+                  ? `${agent.icon} ${agent.name} 查询成功，推送失败`
+                  : `${agent.icon} ${agent.name} run completed`,
               content: output,
               agentRunId: run.id,
               partnerId: agent.partnerId,
@@ -280,9 +285,12 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
       }
     }
 
+    const runStatus =
+      agent.isAutomation && toolLog.length > 0 ? resolveDeliveryRunStatus([], toolLog) : "SUCCESS";
+
     await db.agentRun.update({
       where: { id: run.id },
-      data: { status: "SUCCESS", output, toolLog: JSON.stringify(toolLog), finishedAt: new Date() },
+      data: { status: runStatus, output, toolLog: JSON.stringify(toolLog), finishedAt: new Date() },
     });
 
     // Auto-save report agent output to the report center
@@ -306,7 +314,10 @@ ${resolved.promptFragments.length ? `\n【Additional skill hints】\n${resolved.
     if (!agent.isAutomation || agent.notifyOnSuccess !== false) {
       await db.notification.create({
         data: {
-          title: `${agent.icon} ${agent.name} run completed`,
+          title:
+            runStatus === "PARTIAL_SUCCESS"
+              ? `${agent.icon} ${agent.name} 查询成功，推送失败`
+              : `${agent.icon} ${agent.name} run completed`,
           content: output,
           agentRunId: run.id,
           partnerId: agent.partnerId,

@@ -172,3 +172,12 @@ h4 {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@keyframes nav-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}

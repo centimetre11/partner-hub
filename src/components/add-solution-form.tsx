@@ -76,6 +76,7 @@ export function AddSolutionForm({
         <label className="block text-xs font-medium text-slate-600">{gm.uploadTab}</label>
         <GdriveUploadField
           partnerId={partnerId}
+          buttonLabel={gm.chooseAndUpload}
           uploadingLabel={gm.uploading}
           onUploaded={(asset) => {
             const url = asset.url ?? "";
@@ -91,7 +92,7 @@ export function AddSolutionForm({
             setLinkPreview(preview);
           }}
         />
-        <p className="text-xs text-slate-400">{gm.uploadHint}</p>
+        <p className="text-xs text-slate-400">{gm.uploadHintAuto}</p>
       </div>
 
       <SolutionLinkField
