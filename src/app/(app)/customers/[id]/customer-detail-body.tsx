@@ -141,6 +141,25 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4">
         <input type="hidden" name="customerId" value={customer.id} />
         <input name="title" required placeholder={c.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
+        {(customer.opportunities.length > 0 || customer.projects.length > 0) && (
+          <select name="link" defaultValue="" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[160px]">
+            <option value="">{c.linkNone}</option>
+            {customer.opportunities.length > 0 && (
+              <optgroup label={c.belongsToOpportunity}>
+                {customer.opportunities.map((o) => (
+                  <option key={o.id} value={`opp:${o.id}`}>{o.name}</option>
+                ))}
+              </optgroup>
+            )}
+            {customer.projects.length > 0 && (
+              <optgroup label={c.belongsToProject}>
+                {customer.projects.map((p) => (
+                  <option key={p.id} value={`proj:${p.id}`}>{p.name}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        )}
         <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" />
         <select name="assigneeId" defaultValue={customer.ownerId ?? user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[140px]">
           {users.map((u) => (
@@ -500,6 +519,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     <CustomerStockPanel customerId={customer.id} customerName={customer.name} steps={stockSteps} />
   );
 
+  const profileAndStockPanel = (
+    <div className="space-y-8">
+      {profilePanel}
+      <div className="border-t border-slate-100 pt-8">{stockPanel}</div>
+    </div>
+  );
+
   const tabs: CustomerTab[] = [
     {
       id: "overview",
@@ -508,13 +534,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       badge: openTodos ? String(openTodos) : null,
       content: overviewPanel,
     },
-    { id: "profile", label: c.tabProfile, desc: c.tabProfileDesc, content: profilePanel },
     {
-      id: "stock",
-      label: c.tabStock,
-      desc: c.tabStockDesc,
+      id: "profile",
+      label: c.tabProfile,
+      desc: c.tabProfileDesc,
       badge: stockFilled ? `${stockFilled}/5` : null,
-      content: stockPanel,
+      content: profileAndStockPanel,
     },
     {
       id: "opportunities",

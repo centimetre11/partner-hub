@@ -584,8 +584,12 @@ export async function createTodoAction(formData: FormData) {
   const due = String(formData.get("dueDate") ?? "");
   let partnerId = String(formData.get("partnerId") ?? "") || null;
   let customerId = String(formData.get("customerId") ?? "") || null;
-  const opportunityId = String(formData.get("opportunityId") ?? "") || null;
-  const projectId = String(formData.get("projectId") ?? "") || null;
+  let opportunityId = String(formData.get("opportunityId") ?? "") || null;
+  let projectId = String(formData.get("projectId") ?? "") || null;
+  // 组合关联字段（来自主待办表单的下拉）：opp:<id> / proj:<id>
+  const link = String(formData.get("link") ?? "");
+  if (link.startsWith("opp:")) opportunityId = link.slice(4) || null;
+  else if (link.startsWith("proj:")) projectId = link.slice(5) || null;
   // 挂到机会/项目时回填其所属客户/伙伴，便于客户层与伙伴层汇总
   if (projectId && !customerId) {
     const proj = await db.project.findUnique({ where: { id: projectId }, select: { customerId: true, partnerId: true } });
