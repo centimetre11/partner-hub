@@ -1,6 +1,7 @@
 import { describeCron } from "./cron";
 import { partnerScopeLabel, inferDueWithinDays } from "./automation-push";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
+import { wecomAppRecipientLabel } from "./automation-delivery";
 import { hasAutomationDeliveryChannel } from "./automation-delivery";
 
 export type BuilderDeliveryPrefs = {
@@ -130,11 +131,23 @@ export function partnerLabelFromPrefs(prefs: BuilderDeliveryPrefs, locale: "zh" 
 
 export function pushChannelsLabel(
   draft: Pick<AutomationBuilderDraft, "wecomPushChatId" | "pushEmailTo" | "pushWecomAppTo">,
-  locale: "zh" | "en"
+  locale: "zh" | "en",
+  ctx?: { userName?: string }
 ): string {
   const parts: string[] = [];
   if (draft.wecomPushChatId?.trim()) parts.push(locale === "zh" ? "企微群" : "WeCom group");
-  if (draft.pushWecomAppTo?.trim()) parts.push(locale === "zh" ? "企微应用" : "WeCom app");
+  if (draft.pushWecomAppTo?.trim()) {
+    const who = wecomAppRecipientLabel(draft.pushWecomAppTo, { locale, userName: ctx?.userName });
+    parts.push(
+      locale === "zh"
+        ? who
+          ? `企微应用（${who}）`
+          : "企微应用"
+        : who
+          ? `WeCom app (${who})`
+          : "WeCom app"
+    );
+  }
   if (draft.pushEmailTo?.trim()) parts.push(locale === "zh" ? "邮件" : "Email");
   return parts.length ? parts.join(locale === "zh" ? " + " : " + ") : "—";
 }

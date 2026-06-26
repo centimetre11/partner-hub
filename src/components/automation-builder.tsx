@@ -30,6 +30,7 @@ import {
   resolveQueryRuntimeSkills,
   type AutomationQuery,
 } from "@/lib/automation-query";
+import { parseWecomAppRecipient } from "@/lib/automation-delivery";
 import { getToolLabel } from "@/lib/tool-labels";
 import { describeCron } from "@/lib/cron";
 import { AiClarificationFlow } from "@/components/ai-clarification-flow";
@@ -199,6 +200,12 @@ function DraftPreview({
     });
   }, [draft]);
 
+  const wecomAppUserName = useMemo(() => {
+    const parsed = parseWecomAppRecipient(draft.pushWecomAppTo);
+    if (parsed.mode !== "user" || !parsed.hubUserId) return undefined;
+    return assignees.find((u) => u.id === parsed.hubUserId)?.name;
+  }, [draft.pushWecomAppTo, assignees]);
+
   const showRationale = draft.rationale?.trim() && !draft.queryConfig?.trim();
 
   return (
@@ -233,7 +240,9 @@ function DraftPreview({
         </div>
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.pushResults}</div>
-          <div className="font-medium text-slate-800 truncate">{pushChannelsLabel(draft, locale === "zh" ? "zh" : "en")}</div>
+          <div className="font-medium text-slate-800 truncate">
+            {pushChannelsLabel(draft, lang, { userName: wecomAppUserName })}
+          </div>
         </div>
       </div>
       {runtimeTools.length > 0 && (

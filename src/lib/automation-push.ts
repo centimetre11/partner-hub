@@ -129,14 +129,14 @@ export function buildAutomationVariables(params: ScheduledPushParams): Automatio
 function buildWecomAppPushStep(isZh: boolean): string {
   if (isZh) {
     return `若 \`{{push_wecom_app_to}}\` 非空：调用 \`send_wecom_app\`（useTextcard=true，guideToBot=true）
-  - 任务含「推给我/推给本人」：推送给自动化创建者（hubUserId=创建者）
-  - 待办类且 push_wecom_app_to=@assignees：按 list_todos 中每位负责人分别推送（hubUserName=负责人）
-  - 其他：推送给创建者或任务上下文中的合适收件人`;
+  - push_wecom_app_to=1：推送给自动化创建者（hubUserId=创建者）
+  - push_wecom_app_to=@assignees：待办类按 list_todos 中每位负责人分别推送（hubUserName=负责人）
+  - push_wecom_app_to=<Hub用户ID>：推送给指定 Hub 用户（hubUserId）`;
   }
   return `If \`{{push_wecom_app_to}}\` is set: call \`send_wecom_app\` (useTextcard=true, guideToBot=true)
-  - If goal says push to me: send to automation creator (hubUserId)
-  - Todo + push_wecom_app_to=@assignees: push per assignee via hubUserName
-  - Otherwise: creator or recipients from task context`;
+  - push_wecom_app_to=1: automation creator (hubUserId)
+  - push_wecom_app_to=@assignees: todos → push per assignee via hubUserName
+  - push_wecom_app_to=<hubUserId>: specific Hub user`;
 }
 
 /** Explicit due-todos pipeline — list_todos(dueWithinDays) → push */

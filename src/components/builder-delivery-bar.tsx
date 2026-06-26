@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { CRON_PRESETS } from "@/lib/cron";
-import { PUSH_WECOM_APP_ENABLED, isWecomAppPushEnabled } from "@/lib/automation-delivery";
+import {
+  parseWecomAppRecipient,
+  serializeWecomAppRecipient,
+  type WecomAppRecipientMode,
+} from "@/lib/automation-delivery";
 import type { BuilderDeliveryPrefs } from "@/lib/builder-context-prompt";
 import type { AutomationBuilderDraft } from "@/lib/automation-builder-types";
 import { useLocale, useMessages } from "@/lib/i18n";
@@ -10,8 +14,8 @@ import { useLocale, useMessages } from "@/lib/i18n";
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
 type EmailOption = { id: string; name: string; email: string };
 type PartnerOption = { id: string; name: string };
-type CustomerOption = { id: string; name: string };
 type AssigneeOption = { id: string; name: string };
+type CustomerOption = { id: string; name: string };
 
 /** 仅加载系统内可选的伙伴 / 客户 / 负责人 / 企微群 / 邮箱（供对话澄清与草案预览使用） */
 export function useBuilderOptions() {
@@ -162,6 +166,8 @@ export function BuilderDeliveryBar({
   wecomChats,
   emails,
   partners,
+  assignees = [],
+  querySource = "todos",
   disabled,
   showWecomApp,
 }: {
@@ -173,7 +179,9 @@ export function BuilderDeliveryBar({
   onPartnerChange?: (partnerId: string) => void;
   wecomChats: WecomOption[];
   emails: EmailOption[];
+  assignees?: AssigneeOption[];
   partners?: PartnerOption[];
+  querySource?: "todos" | "opportunities" | "ai";
   disabled?: boolean;
   showWecomApp?: boolean;
 }) {
@@ -182,6 +190,7 @@ export function BuilderDeliveryBar({
   const locale = useLocale();
   const isZh = locale === "zh";
   const showPartner = !!onPartnerChange;
+  const wecomApp = parseWecomAppRecipient(prefs.wecomAppTo);
   const colCount = (showPartner ? 1 : 0) + (showWecomApp ? 1 : 0) + 3;
 
   const selectCls =
@@ -237,20 +246,71 @@ export function BuilderDeliveryBar({
         </select>
       </div>
       {showWecomApp && onWecomAppChange && (
-        <div className="flex items-end">
+        <div className="space-y-1.5">
           <label className="flex items-start gap-2 rounded-lg border border-slate-100 px-2.5 py-2 w-full cursor-pointer hover:border-slate-200">
             <input
               type="checkbox"
-              checked={isWecomAppPushEnabled(prefs.wecomAppTo)}
+              checked={wecomApp.enabled}
               disabled={disabled}
-              onChange={(e) => onWecomAppChange(e.target.checked ? PUSH_WECOM_APP_ENABLED : "")}
+              onChange={(e) =>
+                onWecomAppChange(
+                  e.target.checked
+                    ? serializeWecomAppRecipient({ enabled: true, mode: "creator" })
+                    : ""
+                )
+              }
               className="mt-0.5 rounded"
             />
             <span className="min-w-0">
               <span className="block text-[10px] font-medium text-slate-700">{b.wecomAppLabel}</span>
-              <span className="block text-[10px] text-slate-400 leading-snug">{b.wecomAppCheckboxHint}</span>
             </span>
           </label>
+          {wecomApp.enabled && (
+            <select
+              className={selectCls}
+              disabled={disabled}
+              value={wecomApp.mode}
+              onChange={(e) => {
+                const mode = e.target.value as WecomAppRecipientMode;
+                onWecomAppChange(
+                  serializeWecomAppRecipient({
+                    enabled: true,
+                    mode,
+                    hubUserId: mode === "user" ? wecomApp.hubUserId : "",
+                  })
+                );
+              }}
+            >
+              <option value="creator">{a.wecomAppRecipientCreator}</option>
+              {querySource === "todos" && (
+                <option value="assignees">{a.wecomAppRecipientAssignees}</option>
+              )}
+              <option value="user">{a.wecomAppRecipientUser}</option>
+            </select>
+          )}
+          {wecomApp.enabled && wecomApp.mode === "user" && (
+            <select
+              className={selectCls}
+              disabled={disabled}
+              value={wecomApp.hubUserId}
+              onChange={(e) =>
+                onWecomAppChange(
+                  serializeWecomAppRecipient({
+                    enabled: true,
+                    mode: "user",
+                    hubUserId: e.target.value,
+                  })
+                )
+              }
+            >
+              <option value="">{a.wecomAppRecipientUserPlaceholder}</option>
+              {assignees.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       )}
       <div>

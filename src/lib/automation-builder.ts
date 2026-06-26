@@ -20,7 +20,13 @@ import {
   defaultAutomationSlug,
   partnerScopeLabel,
 } from "./automation-push";
-import { hasAutomationDeliveryChannel, PUSH_WECOM_APP_ENABLED } from "./automation-delivery";
+import {
+  hasAutomationDeliveryChannel,
+  mentionsPushToAssignees,
+  mentionsPushToSelf,
+  PUSH_WECOM_APP_ASSIGNEES,
+  PUSH_WECOM_APP_ENABLED,
+} from "./automation-delivery";
 import { describeCron } from "./cron";
 import { db } from "./db";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
@@ -364,6 +370,24 @@ async function buildBuilderQueryConfig(
   return { query, assigneeName, customerName };
 }
 
+/** 从自然语言推断企微应用收件人（创建者 / 按负责人 / 指定人） */
+async function resolveWecomAppRecipientFromIntent(
+  intent: AutomationBuilderAiIntent | undefined,
+  userText: string
+): Promise<string> {
+  if (intent?.deliveryChannel !== "wecom_app") return "";
+  const blob = [userText, intent.goal].filter(Boolean);
+  if (mentionsPushToAssignees(...blob)) return PUSH_WECOM_APP_ASSIGNEES;
+  if (mentionsPushToSelf(...blob) || (intent.emailRecipient === "mine" && mentionsMyEmail(userText))) {
+    return PUSH_WECOM_APP_ENABLED;
+  }
+  if (intent?.assigneeNameHint?.trim()) {
+    const u = await resolveAssigneeIdByName(intent.assigneeNameHint);
+    if (u) return u.id;
+  }
+  return PUSH_WECOM_APP_ENABLED;
+}
+
 /** 将 AI 输出的语义 intent 解析为 draft 字段（伙伴/邮箱由服务端查库） */
 function applySemanticIntentFromAi(
   draft: AutomationBuilderDraft,
@@ -594,6 +618,11 @@ ${buildRuntimeContextBlock(locale, {
         sourceChatId: opts.sourceChatId,
       }),
     };
+
+    const wecomAppTo = await resolveWecomAppRecipientFromIntent(raw.intent, lastUserText);
+    if (wecomAppTo) {
+      turn = { ...turn, draft: { ...turn.draft, pushWecomAppTo: wecomAppTo } };
+    }
 
     // 解析负责人/客户名 → 结构化 queryConfig（驱动确定性管道；source=ai 时回退 LLM）
     try {

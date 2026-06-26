@@ -10,6 +10,8 @@ export function automationSaveErrorMessage(
     saveErrorScopePartner?: string;
     saveErrorScopeCustomer?: string;
     saveErrorAiGoal?: string;
+    saveErrorWecomAppUser?: string;
+    saveErrorWecomAppAssignees?: string;
   }
 ): string {
   switch (code) {
@@ -26,6 +28,10 @@ export function automationSaveErrorMessage(
       return messages.saveErrorPartner;
     case "customer_not_found":
       return messages.saveErrorCustomer ?? messages.saveErrorGeneric;
+    case "wecom_app_user_required":
+      return messages.saveErrorWecomAppUser ?? messages.saveErrorDelivery;
+    case "wecom_app_assignees_requires_todos":
+      return messages.saveErrorWecomAppAssignees ?? messages.saveErrorDelivery;
     case "slug_exists":
       return messages.saveErrorSlug;
     default:

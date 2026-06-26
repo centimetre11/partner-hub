@@ -6,7 +6,12 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
 import { automationSaveErrorMessage } from "@/lib/automation-save-errors";
 import { saveAutomationAction } from "@/lib/automation-actions";
-import { isWecomAppPushEnabled, PUSH_WECOM_APP_ENABLED } from "@/lib/automation-delivery";
+import {
+  isWecomAppPushEnabled,
+  parseWecomAppRecipient,
+  serializeWecomAppRecipient,
+  type WecomAppRecipientMode,
+} from "@/lib/automation-delivery";
 import {
   type AutomationQuery,
   type AutomationQuerySource,
@@ -62,7 +67,10 @@ export function AutomationForm({
   const [timezone, setTimezone] = useState(initial.timezone);
   const [wecomPushChatId, setWecomPushChatId] = useState(initial.wecomPushChatId);
   const [pushEmailTo, setPushEmailTo] = useState(initial.pushEmailTo);
-  const [pushWecomAppEnabled, setPushWecomAppEnabled] = useState(isWecomAppPushEnabled(initial.pushWecomAppTo));
+  const initialWecomApp = parseWecomAppRecipient(initial.pushWecomAppTo);
+  const [pushWecomAppEnabled, setPushWecomAppEnabled] = useState(initialWecomApp.enabled);
+  const [wecomAppMode, setWecomAppMode] = useState<WecomAppRecipientMode>(initialWecomApp.mode);
+  const [wecomAppUserId, setWecomAppUserId] = useState(initialWecomApp.hubUserId);
 
   // Structured query state
   const [source, setSource] = useState<AutomationQuerySource>(initial.query.source);
@@ -105,8 +113,25 @@ export function AutomationForm({
       );
   }, []);
 
+  useEffect(() => {
+    if (source !== "todos" && wecomAppMode === "assignees") {
+      setWecomAppMode("creator");
+    }
+  }, [source, wecomAppMode]);
+
+  const pushWecomAppTo = useMemo(
+    () =>
+      serializeWecomAppRecipient({
+        enabled: pushWecomAppEnabled,
+        mode: wecomAppMode,
+        hubUserId: wecomAppUserId,
+      }),
+    [pushWecomAppEnabled, wecomAppMode, wecomAppUserId]
+  );
+
   const cronDesc = useMemo(() => describeCron(cronExpr, lang), [cronExpr, lang]);
-  const deliveryMissing = !wecomPushChatId.trim() && !pushEmailTo.trim() && !pushWecomAppEnabled;
+  const deliveryMissing =
+    !wecomPushChatId.trim() && !pushEmailTo.trim() && !isWecomAppPushEnabled(pushWecomAppTo);
 
   const currentQuery: AutomationQuery = useMemo(
     () => ({
@@ -151,6 +176,14 @@ export function AutomationForm({
     setSaveOk(false);
     if (deliveryMissing) {
       setSaveError(a.saveErrorDelivery);
+      return;
+    }
+    if (pushWecomAppEnabled && wecomAppMode === "user" && !wecomAppUserId.trim()) {
+      setSaveError(a.saveErrorWecomAppUser);
+      return;
+    }
+    if (pushWecomAppEnabled && wecomAppMode === "assignees" && source !== "todos") {
+      setSaveError(a.saveErrorWecomAppAssignees);
       return;
     }
     const fd = new FormData(e.currentTarget);
@@ -458,21 +491,70 @@ export function AutomationForm({
             </datalist>
             <p className="text-xs text-slate-400 mt-1">{a.emailInputHint}</p>
           </div>
-          <div>
-            <input type="hidden" name="pushWecomAppTo" value={pushWecomAppEnabled ? PUSH_WECOM_APP_ENABLED : ""} />
+          <div className="space-y-2">
             <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-200">
               <input
                 type="checkbox"
                 checked={pushWecomAppEnabled}
-                onChange={(e) => setPushWecomAppEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setPushWecomAppEnabled(e.target.checked);
+                  if (!e.target.checked) {
+                    setWecomAppMode("creator");
+                    setWecomAppUserId("");
+                  }
+                }}
                 className="mt-0.5 rounded"
               />
               <span className="min-w-0">
                 <span className="text-sm font-medium text-slate-800 block">{bc.wecomAppLabel}</span>
                 <span className="text-xs text-slate-400 font-mono">send_wecom_app</span>
-                <span className="text-xs text-slate-400 block mt-0.5">{a.wecomAppCheckboxHint}</span>
               </span>
             </label>
+            {pushWecomAppEnabled && (
+              <div className="ml-7 space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+                <div>
+                  <label className={labelCls}>{a.wecomAppRecipientLabel}</label>
+                  <select
+                    className={inputCls}
+                    value={wecomAppMode}
+                    onChange={(e) => {
+                      const mode = e.target.value as WecomAppRecipientMode;
+                      setWecomAppMode(mode);
+                      if (mode !== "user") setWecomAppUserId("");
+                    }}
+                  >
+                    <option value="creator">{a.wecomAppRecipientCreator}</option>
+                    {source === "todos" && (
+                      <option value="assignees">{a.wecomAppRecipientAssignees}</option>
+                    )}
+                    <option value="user">{a.wecomAppRecipientUser}</option>
+                  </select>
+                </div>
+                {wecomAppMode === "user" && (
+                  <div>
+                    <label className={labelCls}>{a.wecomAppRecipientUserPick}</label>
+                    <select
+                      className={inputCls}
+                      value={wecomAppUserId}
+                      onChange={(e) => setWecomAppUserId(e.target.value)}
+                    >
+                      <option value="">{a.wecomAppRecipientUserPlaceholder}</option>
+                      {assignees.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {wecomAppMode === "creator" && a.wecomAppRecipientCreatorHint}
+                  {wecomAppMode === "assignees" && a.wecomAppRecipientAssigneesHint}
+                  {wecomAppMode === "user" && a.wecomAppRecipientUserHint}
+                </p>
+              </div>
+            )}
+            <input type="hidden" name="pushWecomAppTo" value={pushWecomAppTo} />
           </div>
         </section>
 

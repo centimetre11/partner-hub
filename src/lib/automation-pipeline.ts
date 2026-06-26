@@ -7,6 +7,8 @@ import { db } from "./db";
 import {
   hasAutomationDeliveryChannel,
   isWecomAppPushEnabled,
+  mentionsPushToSelf,
+  parseWecomAppRecipient,
   PUSH_WECOM_APP_ASSIGNEES,
 } from "./automation-delivery";
 import { inferDueWithinDays, isTodoDueGoal } from "./automation-push";
@@ -23,12 +25,6 @@ import { runSendEmailTool } from "./skill-actions/send-email";
 export type ToolLogEntry = { tool: string; args: unknown; result: string };
 
 export type AgentForPipeline = Agent & { partner?: Partner | null; createdBy?: User | null };
-
-/** 「推给我 / 推给本人」——比 mentionsMyEmail 更宽 */
-export function mentionsPushToSelf(...texts: (string | null | undefined)[]): boolean {
-  const blob = texts.filter(Boolean).join("\n");
-  return /推给我|推给.*本人|推送到.*我|发给我|推送?给.*我\b|to me\b/i.test(blob);
-}
 
 /** 旧自动化（无 queryConfig）从 instructions/description 推断结构化待办查询，保持零 Token */
 function detectLegacyTodoQuery(agent: AgentForPipeline): AutomationQuery | null {
@@ -155,7 +151,7 @@ async function sendWecomApp(
   return result;
 }
 
-/** 企微应用私信：推给我 / 按负责人 / 默认创建者 */
+/** 企微应用私信：指定人 / 按负责人 / 创建者 */
 async function deliverWecomApp(
   agent: AgentForPipeline,
   query: AutomationQuery,
@@ -166,8 +162,9 @@ async function deliverWecomApp(
   pushNotes: string[],
   locale: "zh" | "en"
 ): Promise<void> {
+  const recipient = parseWecomAppRecipient(agent.pushWecomAppTo);
   const perAssignee =
-    query.source === "todos" && agent.pushWecomAppTo === PUSH_WECOM_APP_ASSIGNEES && todos.length > 0;
+    recipient.mode === "assignees" && query.source === "todos" && todos.length > 0;
 
   if (perAssignee) {
     const byAssignee = new Map<string, TodoRow[]>();
@@ -198,6 +195,30 @@ async function deliverWecomApp(
       ok
         ? locale === "zh" ? `已按负责人发送企微应用消息（${byAssignee.size} 人）` : `WeCom app sent per assignee (${byAssignee.size})`
         : locale === "zh" ? `企微应用消息未发出：${results[0]?.slice(0, 80) ?? ""}` : `WeCom app failed: ${results[0]?.slice(0, 80) ?? ""}`
+    );
+    return;
+  }
+
+  if (recipient.mode === "user" && recipient.hubUserId) {
+    const r = await sendWecomApp(
+      {
+        hubUserId: recipient.hubUserId,
+        title: cardTitle,
+        content: fullBody,
+        useTextcard: true,
+        guideToBot: true,
+      },
+      toolLog
+    );
+    const ok = /sent to/i.test(r);
+    pushNotes.push(
+      ok
+        ? locale === "zh"
+          ? "已发送企微应用消息（指定收件人）"
+          : "WeCom app message sent (specific recipient)"
+        : locale === "zh"
+          ? `企微应用消息未发出：${r.slice(0, 120)}`
+          : `WeCom app failed: ${r.slice(0, 120)}`
     );
     return;
   }

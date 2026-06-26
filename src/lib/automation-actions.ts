@@ -25,7 +25,7 @@ import {
   resolveQueryRuntimeSkills,
   DEFAULT_AUTOMATION_QUERY,
 } from "./automation-query";
-import { hasAutomationDeliveryChannel } from "./automation-delivery";
+import { hasAutomationDeliveryChannel, parseWecomAppRecipient } from "./automation-delivery";
 import type { AutomationBuilderDraft, AutomationVariable } from "./automation-builder-types";
 
 function slugify(raw: string): string {
@@ -71,6 +71,26 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
 
   if (!hasAutomationDeliveryChannel({ wecomPushChatId, pushEmailTo, pushWecomAppTo }))
     return { ok: false, error: "delivery_required" };
+
+  const wecomAppRecipient = parseWecomAppRecipient(pushWecomAppTo);
+  if (wecomAppRecipient.enabled && wecomAppRecipient.mode === "user" && !wecomAppRecipient.hubUserId) {
+    return { ok: false, error: "wecom_app_user_required" };
+  }
+  if (
+    wecomAppRecipient.enabled &&
+    wecomAppRecipient.mode === "assignees" &&
+    query.source !== "todos"
+  ) {
+    return { ok: false, error: "wecom_app_assignees_requires_todos" };
+  }
+  if (wecomAppRecipient.enabled && wecomAppRecipient.mode === "user" && wecomAppRecipient.hubUserId) {
+    const u = await db.user.findUnique({
+      where: { id: wecomAppRecipient.hubUserId },
+      select: { id: true },
+    });
+    if (!u) return { ok: false, error: "wecom_app_user_required" };
+  }
+
   if (query.scope === "partner" && !query.partnerId) return { ok: false, error: "partner_required" };
   if (query.scope === "customer" && !query.customerId) return { ok: false, error: "customer_required" };
   if (query.source === "ai" && !query.aiGoal) return { ok: false, error: "goal_required" };

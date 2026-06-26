@@ -46,12 +46,12 @@ function buildPushStepLines(
   const lines: string[] = [];
   if (locale === "zh") {
     if (channels.wecomGroup) lines.push("推送到企微群（push_wecom）");
-    if (channels.wecomApp) lines.push("发送企微应用消息（send_wecom_app，收件人由任务自动判断）");
+    if (channels.wecomApp) lines.push("发送企微应用消息（send_wecom_app，收件人由 push_wecom_app_to 配置）");
     if (channels.email) lines.push("发送邮件（send_email）");
     if (!lines.length) lines.push("未配置推送渠道（保存前请至少选一种）");
   } else {
     if (channels.wecomGroup) lines.push("Push to WeCom group (push_wecom)");
-    if (channels.wecomApp) lines.push("WeCom app message (send_wecom_app; recipients inferred at runtime)");
+    if (channels.wecomApp) lines.push("WeCom app message (send_wecom_app; recipient from push_wecom_app_to)");
     if (channels.email) lines.push("Send email (send_email)");
     if (!lines.length) lines.push("No delivery channel selected yet");
   }
