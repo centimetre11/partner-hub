@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui";
 import { GdriveUploadField, type UploadedAsset } from "@/components/gdrive-upload-field";
 import { GdriveFolderPicker } from "@/components/gdrive-folder-picker";
+import { BoundFolderContents } from "@/components/bound-folder-contents";
 import { AddSolutionForm } from "@/components/add-solution-form";
 import { EditSolutionForm } from "@/components/edit-solution-form";
 import type { LinkPreviewState } from "@/components/solution-link-field";
@@ -100,6 +101,7 @@ export function MaterialsSection({
   const [linkLoading, setLinkLoading] = useState(false);
   const [showFolderBind, setShowFolderBind] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [folderContentsKey, setFolderContentsKey] = useState(0);
   const [pending, startTransition] = useTransition();
 
   function saveFolder() {
@@ -116,6 +118,7 @@ export function MaterialsSection({
         setLocalBoundUrl(folder.trim() || null);
         setFolderDraft(folder.trim() || null);
         setShowFolderBind(false);
+        setFolderContentsKey((k) => k + 1);
         router.refresh();
       }
     });
@@ -137,6 +140,7 @@ export function MaterialsSection({
       setFolderDraft(meta.folderUrl);
       setShowFolderBind(false);
     }
+    setFolderContentsKey((k) => k + 1);
     router.refresh();
   }
 
@@ -209,9 +213,14 @@ export function MaterialsSection({
               setLocalBoundUrl(url);
               setFolderDraft(url);
               setError(null);
+              setFolderContentsKey((k) => k + 1);
               router.refresh();
             }}
           />
+        )}
+
+        {boundUrl && browseReady && (
+          <BoundFolderContents folderUrl={boundUrl} copy={copy} refreshKey={folderContentsKey} />
         )}
 
         {/* 上传 / 贴链接 — 主操作 */}

@@ -145,6 +145,61 @@ export async function createMaterialFolderAction(target: EntityTarget, name: str
   }
 }
 
+/** 列出已绑定目录内的文件与子文件夹（服务账号只读） */
+export async function listBoundMaterialFolderAction(folderUrl: string): Promise<
+  | {
+      ok: true;
+      folderName: string;
+      folders: { id: string; name: string; modifiedTime: string | null; url: string }[];
+      files: {
+        id: string;
+        name: string;
+        mimeType: string;
+        webViewLink: string | null;
+        thumbnailLink: string | null;
+        modifiedTime: string | null;
+      }[];
+    }
+  | { ok: false; error: string }
+> {
+  await requireUser();
+  const folderId = parseGdriveFolderId(folderUrl.trim());
+  if (!folderId) return { ok: false, error: "Invalid Google Drive folder URL" };
+
+  const saJson = await resolveGdriveServiceAccountJson();
+  if (!saJson) {
+    return {
+      ok: false,
+      error:
+        "Google 服务账号未配置，无法浏览目录内容。请在设置 → 弹药库配置中配置服务账号。",
+    };
+  }
+
+  try {
+    const { folderName, folders, files } = await listGdriveFolderContents(folderId, saJson);
+    return {
+      ok: true,
+      folderName,
+      folders: folders.map((f) => ({
+        id: f.id,
+        name: f.name,
+        modifiedTime: f.modifiedTime,
+        url: folderUrlFromId(f.id),
+      })),
+      files: files.map((f) => ({
+        id: f.id,
+        name: f.name,
+        mimeType: f.mimeType,
+        webViewLink: f.webViewLink,
+        thumbnailLink: f.thumbnailLink,
+        modifiedTime: f.modifiedTime,
+      })),
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** 粘贴外链作为材料（解析后落库并归档到伙伴/客户） */
 export async function addMaterialLinkAction(
   target: { partnerId?: string | null; customerId?: string | null },
