@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { getWecomMemberProfile, resolveWecomOauthConfig } from "./wecom-oauth";
 
 export type WecomActorMatch = "wecomUserId" | "wecomDisplayName" | "fallback";
 
@@ -65,6 +66,44 @@ export async function resolveWecomActorUserId(input: {
     });
     if (byUserId) {
       return { userId: byUserId.id, matchedBy: "wecomUserId", hubUser: byUserId };
+    }
+
+    const cfg = resolveWecomOauthConfig();
+    if (cfg) {
+      const profile = await getWecomMemberProfile(fromUserId, cfg);
+      if (profile && profile.userid !== fromUserId) {
+        const byCanonical = await db.user.findFirst({
+          where: { wecomUserId: profile.userid },
+          select: {
+            id: true,
+            name: true,
+            wecomUserId: true,
+            wecomDisplayName: true,
+            crmSalesmanName: true,
+          },
+        });
+        if (byCanonical) {
+          return { userId: byCanonical.id, matchedBy: "wecomUserId", hubUser: byCanonical };
+        }
+
+        const byEmail = profile.emails.length
+          ? await db.user.findFirst({
+              where: {
+                OR: profile.emails.map((email) => ({ email: { equals: email, mode: "insensitive" } })),
+              },
+              select: {
+                id: true,
+                name: true,
+                wecomUserId: true,
+                wecomDisplayName: true,
+                crmSalesmanName: true,
+              },
+            })
+          : null;
+        if (byEmail) {
+          return { userId: byEmail.id, matchedBy: "wecomUserId", hubUser: byEmail };
+        }
+      }
     }
   }
 

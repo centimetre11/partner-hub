@@ -51,6 +51,19 @@ type WecomUserInfoResponse = WecomApiError & {
   user_ticket?: string;
 };
 
+type WecomMemberGetResponse = WecomApiError & {
+  userid?: string;
+  name?: string;
+  email?: string;
+  biz_mail?: string;
+};
+
+export type WecomMemberProfile = {
+  userid: string;
+  name?: string;
+  emails: string[];
+};
+
 let tokenCache: TokenCache | null = null;
 
 export type WecomOauthConfig = {
@@ -144,7 +157,128 @@ export function buildWecomAuthorizeUrl(cfg: WecomOauthConfig, redirectUri: strin
   return `${url.toString()}#wechat_redirect`;
 }
 
-export async function loginByWecomUserId(wecomUserId: string): Promise<WecomLoginResult> {
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** 从企微通讯录读取成员邮箱（用于 OAuth userid 与机器人 userid 不一致时按邮箱匹配 Hub 账号） */
+export async function getWecomMemberProfile(
+  userid: string,
+  cfg: WecomOauthConfig,
+): Promise<WecomMemberProfile | null> {
+  const cleanUserId = sanitizeWecomUserId(userid);
+  if (!isValidWecomUserId(cleanUserId)) return null;
+
+  const accessToken = await getWecomAccessToken(cfg);
+  const url = new URL("/cgi-bin/user/get", cfg.apiBaseUrl);
+  url.searchParams.set("access_token", accessToken);
+  url.searchParams.set("userid", cleanUserId);
+
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const data = (await res.json()) as WecomMemberGetResponse;
+  if (data.errcode && data.errcode !== 0) return null;
+
+  const canonicalUserId = sanitizeWecomUserId(data.userid ?? cleanUserId);
+  if (!isValidWecomUserId(canonicalUserId)) return null;
+
+  const emails = [...new Set(
+    [data.email, data.biz_mail]
+      .filter((v): v is string => typeof v === "string" && v.includes("@"))
+      .map(normalizeEmail),
+  )];
+
+  return {
+    userid: canonicalUserId,
+    name: data.name?.trim() || undefined,
+    emails,
+  };
+}
+
+async function findHubUserByEmails(emails: string[]) {
+  const normalized = [...new Set(emails.map(normalizeEmail).filter(Boolean))];
+  if (!normalized.length) return null;
+
+  return db.user.findFirst({
+    where: {
+      OR: normalized.map((email) => ({ email: { equals: email, mode: "insensitive" } })),
+    },
+    select: { id: true, name: true, email: true, wecomUserId: true },
+  });
+}
+
+async function tryAutoBindAndLoginByWecomProfile(
+  wecomUserId: string,
+  cfg: WecomOauthConfig,
+): Promise<WecomLoginResult | null> {
+  const profile = await getWecomMemberProfile(wecomUserId, cfg);
+  if (!profile) return null;
+
+  const canonicalUserId = profile.userid;
+  const hubUser = profile.emails.length ? await findHubUserByEmails(profile.emails) : null;
+  if (!hubUser) return null;
+
+  const taken = await db.user.findFirst({
+    where: { wecomUserId: canonicalUserId, NOT: { id: hubUser.id } },
+    select: { name: true },
+  });
+  if (taken) {
+    void recordSystemEvent({
+      category: "AUTH",
+      action: "auth.wecom_login_conflict",
+      targetType: "WeComUser",
+      targetId: canonicalUserId,
+      targetLabel: canonicalUserId,
+      summary: `WeCom auto-bind blocked: userid already bound to ${taken.name}`,
+      status: "FAILED",
+      meta: { hubUserId: hubUser.id, hubEmail: hubUser.email },
+    });
+    return {
+      ok: false,
+      status: 403,
+      code: "userid_conflict",
+      message: "This WeCom UserID is already bound to another account.",
+      wecomUserId: canonicalUserId,
+    };
+  }
+
+  const previousWecomUserId = hubUser.wecomUserId;
+  if (previousWecomUserId !== canonicalUserId) {
+    await db.user.update({
+      where: { id: hubUser.id },
+      data: { wecomUserId: canonicalUserId },
+    });
+  }
+
+  await createSession(hubUser.id);
+  void recordSystemEvent({
+    category: "AUTH",
+    action: previousWecomUserId === canonicalUserId ? "auth.wecom_login" : "auth.wecom_auto_bind",
+    actorId: hubUser.id,
+    actorLabel: hubUser.name,
+    summary:
+      previousWecomUserId === canonicalUserId
+        ? `${hubUser.name} signed in with WeCom`
+        : `${hubUser.name} auto-bound WeCom userid on SSO (${previousWecomUserId ?? "none"} → ${canonicalUserId})`,
+    meta: {
+      wecomUserId: canonicalUserId,
+      oauthUserId: wecomUserId,
+      previousWecomUserId,
+      email: hubUser.email,
+      matchedEmails: profile.emails,
+    },
+  });
+
+  return {
+    ok: true,
+    user: { ...hubUser, wecomUserId: canonicalUserId },
+  };
+}
+
+export async function loginByWecomUserId(
+  wecomUserId: string,
+  cfg?: WecomOauthConfig,
+): Promise<WecomLoginResult> {
   const cleanUserId = sanitizeWecomUserId(wecomUserId);
   if (!isValidWecomUserId(cleanUserId)) {
     return {
@@ -160,7 +294,34 @@ export async function loginByWecomUserId(wecomUserId: string): Promise<WecomLogi
     select: { id: true, name: true, email: true, wecomUserId: true },
   });
 
+  if (!user?.wecomUserId && cfg) {
+    const profile = await getWecomMemberProfile(cleanUserId, cfg);
+    if (profile && profile.userid !== cleanUserId) {
+      const byCanonical = await db.user.findUnique({
+        where: { wecomUserId: profile.userid },
+        select: { id: true, name: true, email: true, wecomUserId: true },
+      });
+      if (byCanonical?.wecomUserId) {
+        await createSession(byCanonical.id);
+        void recordSystemEvent({
+          category: "AUTH",
+          action: "auth.wecom_login",
+          actorId: byCanonical.id,
+          actorLabel: byCanonical.name,
+          summary: `${byCanonical.name} signed in with WeCom (alias userid ${cleanUserId})`,
+          meta: { wecomUserId: byCanonical.wecomUserId, oauthUserId: cleanUserId, email: byCanonical.email },
+        });
+        return { ok: true, user: { ...byCanonical, wecomUserId: byCanonical.wecomUserId } };
+      }
+    }
+  }
+
   if (!user?.wecomUserId) {
+    if (cfg) {
+      const auto = await tryAutoBindAndLoginByWecomProfile(cleanUserId, cfg);
+      if (auto) return auto;
+    }
+
     void recordSystemEvent({
       category: "AUTH",
       action: "auth.wecom_login_unbound",
@@ -205,7 +366,7 @@ export async function loginByWecomCode(code: string): Promise<WecomLoginResult> 
 
   try {
     const wecomUserId = await getWecomUserIdByCode(code, cfg);
-    return loginByWecomUserId(wecomUserId);
+    return await loginByWecomUserId(wecomUserId, cfg);
   } catch (e) {
     return {
       ok: false,

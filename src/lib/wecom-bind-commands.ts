@@ -5,7 +5,20 @@ import {
   sanitizeWecomDisplayName,
   sanitizeWecomUserId,
 } from "./wecom-identity-validation";
+import {
+  getWecomMemberProfile,
+  resolveWecomOauthConfig,
+} from "./wecom-oauth";
 import { stripWecomCommandPrefix } from "./wecom-user-resolve";
+
+async function resolveCanonicalWecomUserId(fromUserId: string): Promise<string | null> {
+  const raw = sanitizeWecomUserId(fromUserId);
+  if (!isValidWecomUserId(raw)) return null;
+  const cfg = resolveWecomOauthConfig();
+  if (!cfg) return raw;
+  const profile = await getWecomMemberProfile(raw, cfg);
+  return profile?.userid ?? raw;
+}
 
 export type WecomBindCommand =
   | { type: "help" }
@@ -98,8 +111,8 @@ async function findHubUserByWecomUserId(fromUserId: string) {
 }
 
 export async function redeemWecomBindCode(fromUserId: string, code: string) {
-  const wecomUserId = sanitizeWecomUserId(fromUserId);
-  if (!isValidWecomUserId(wecomUserId)) {
+  const wecomUserId = await resolveCanonicalWecomUserId(fromUserId);
+  if (!wecomUserId) {
     return { error: "无法识别你的企微 userid，请稍后重试或联系管理员" };
   }
 

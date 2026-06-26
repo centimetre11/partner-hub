@@ -70,6 +70,7 @@ function wecomOauthMessage(
     missingCode: string;
     badState: string;
     notBound: string;
+    useridConflict: string;
     apiError: string;
     invalidUserId: string;
     generic: string;
@@ -81,6 +82,7 @@ function wecomOauthMessage(
   if (status === "missing_code") return messages.missingCode;
   if (status === "bad_state") return messages.badState;
   if (status === "not_bound") return messages.notBound.replace("{id}", wecomUserId || "unknown");
+  if (status === "userid_conflict") return messages.useridConflict;
   if (status === "wecom_api_error") return messages.apiError;
   if (status === "invalid_userid") return messages.invalidUserId;
   return messages.generic;
