@@ -1,4 +1,4 @@
-/** Lead web research: 多组并行联网检索（官网/概况/LinkedIn/新闻/联系人）→ 轻量 JSON 整理。 */
+/** Lead web research: 多组并行联网检索（官网/业务/行业/背景/LinkedIn/新闻）→ 轻量 JSON 整理，重点在公司。 */
 
 import type { CrmLead, CrmLeadResearch } from "@prisma/client";
 import { db } from "./db";
@@ -6,8 +6,8 @@ import { chatJson } from "./ai";
 import { buildEnglishSearchQueries } from "./lead-research-query";
 import { generalWebSearch, isWebSearchAvailable, linkedinSearch, webSearchBackendLabel } from "./web-search";
 
-const MAX_RAW_CHARS = 20_000;
-const SYNTHESIS_MAX_TOKENS = 2600;
+const MAX_RAW_CHARS = 28_000;
+const SYNTHESIS_MAX_TOKENS = 3400;
 
 export type LeadResearchSource = { title: string; url?: string; note?: string };
 
@@ -18,10 +18,18 @@ export type LeadResearchStructured = {
     country?: string;
     website?: string;
     industry?: string;
+    /** 一句话定位 */
     description?: string;
+    /** 公司做什么、业务背景（重点字段，尽量详实） */
+    background?: string;
+    /** 主要产品 / 服务 / 客户群 */
+    products?: string;
+    /** 规模、员工、营收等公开信息 */
+    scale?: string;
     confidence: "high" | "medium" | "low";
     sources: LeadResearchSource[];
   };
+  /** 仅当公司检索结果中顺带出现时才填；勿单独花精力搜人 */
   contact?: {
     name?: string;
     title?: string;
@@ -38,13 +46,15 @@ export type LeadResearchRunResult =
   | { ok: false; error: string; needsWebSearch?: boolean };
 
 function leadHints(lead: CrmLead): string {
-  return [
-    `Company: ${lead.name ?? "—"}`,
+  const lines = [
+    `Company (PRIMARY research target): ${lead.name ?? "—"}`,
     `Country: ${lead.countryCn ?? "—"}`,
     `City: ${lead.city ?? "—"}`,
-    `Contact: ${lead.contName ?? "—"}`,
-    `Title: ${lead.contDuty ?? "—"}`,
-  ].join("\n");
+  ];
+  if (lead.contName?.trim()) {
+    lines.push(`CRM contact (secondary, do NOT prioritize): ${lead.contName}${lead.contDuty ? ` · ${lead.contDuty}` : ""}`);
+  }
+  return lines.join("\n");
 }
 
 async function gatherSearchSnippets(
@@ -92,12 +102,10 @@ function buildFallbackSummary(structured: LeadResearchStructured): string {
   if (c.country) lines.push(`- **国家/地区**：${c.country}`);
   if (c.website) lines.push(`- **官网**：${c.website}`);
   if (c.industry) lines.push(`- **行业**：${c.industry}`);
-  if (c.description) lines.push(`- **简介**：${c.description}`);
-  if (structured.contact?.name) {
-    lines.push(
-      `- **联系人**：${structured.contact.name}${structured.contact.title ? " · " + structured.contact.title : ""}`,
-    );
-  }
+  if (c.description) lines.push(`- **定位**：${c.description}`);
+  if (c.background) lines.push(`- **业务与背景**：${c.background}`);
+  if (c.products) lines.push(`- **产品/服务**：${c.products}`);
+  if (c.scale) lines.push(`- **规模**：${c.scale}`);
   if (structured.notes) lines.push(`- **备注**：${structured.notes}`);
   if (lines.length === 1 && c.sources?.length) {
     lines.push(`- 检索到 ${c.sources.length} 条公开来源。`);
@@ -113,21 +121,32 @@ function normalizeStructured(structured: LeadResearchStructured): LeadResearchSt
 }
 
 async function synthesizeFromSnippets(lead: CrmLead, raw: string, userId?: string): Promise<LeadResearchStructured> {
-  const system = `You are a B2B lead research assistant. You receive lead hints and raw web search snippets (titles, links, summaries only).
-Summarize what public sources say about the company and contact. Do not invent facts. Do NOT compare or judge against CRM/lead input fields.
+  const system = `You are a B2B lead research assistant focused on COMPANY intelligence for sales prep.
+You receive lead hints and raw web search snippets (titles, links, summaries only).
+
+PRIMARY GOAL: explain what the company does, its industry, business model, products/services, scale, and background/history from public sources.
+The CRM contact person is NOT important — omit the "contact" object entirely unless snippets clearly mention them on a company page.
+
+Do not invent facts. Do NOT compare or judge against CRM/lead input fields.
+
 Rules:
-- Extract the best public profile from snippets even if the company name spelling differs slightly from the lead hint.
+- Spend ~90% of your effort on company fields; contact is optional and usually omitted.
+- Extract the best public company profile even if spelling differs slightly from the lead hint.
 - If evidence is missing, set verified=false and confidence=low; leave optional fields empty.
 - company.verified = true when snippets clearly describe a real company with useful public info.
-- contact.verified = true when snippets clearly describe the named person (or a likely match at that company).
-- description: <= 280 Simplified Chinese characters.
-- summary: concise Markdown in Simplified Chinese (2–5 short bullet points) for sales.
-- sources: at most 2 per section; keep title short; omit note unless essential.
-- Keep the whole JSON compact so it is not truncated.
+- description: one-line positioning, <= 80 Simplified Chinese characters.
+- background: main field — what the company does, history, markets, notable facts; <= 500 Simplified Chinese characters; be substantive.
+- products: key products, services, or customer segments; <= 200 characters.
+- scale: employees, revenue, branches, market position if publicly stated; <= 120 characters.
+- summary: concise Markdown in Simplified Chinese (4–7 bullets) for sales — focus on company business, not the contact person.
+- sources: up to 4 for company; keep title short; omit note unless essential.
+- Omit "contact" unless unavoidable.
+- Keep JSON compact but prioritize filling background/products.
+
 Output JSON only:
 {
-  "company": {"name","verified","country","website","industry","description","confidence","sources":[{"title","url"}]},
-  "contact": {"name","title","verified","confidence","sources":[{"title","url"}]},
+  "company": {"name","verified","country","website","industry","description","background","products","scale","confidence","sources":[{"title","url"}]},
+  "contact": optional {"name","title","verified","confidence","sources":[{"title","url"}]},
   "summary": "markdown string",
   "notes": "optional short string"
 }`;

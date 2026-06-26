@@ -152,97 +152,65 @@ export function LeadResearchPanel({ leadId }: { leadId: string }) {
             )}
 
             {structured && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-lg border border-slate-100 p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-xs font-semibold text-slate-700">{r.companySection}</h3>
-                    <Badge tone={confidenceTone(structured.company.confidence)}>
-                      {confidenceLabel(structured.company.confidence, r.confidence)}
-                    </Badge>
-                  </div>
-                  <dl className="text-xs space-y-1.5">
-                    {structured.company.website && (
-                      <div>
-                        <dt className="text-slate-400">{r.website}</dt>
-                        <dd className="text-slate-800 break-all">{structured.company.website}</dd>
-                      </div>
-                    )}
-                    {structured.company.industry && (
-                      <div>
-                        <dt className="text-slate-400">{r.industry}</dt>
-                        <dd className="text-slate-800">{structured.company.industry}</dd>
-                      </div>
-                    )}
-                    {structured.company.description && (
-                      <div>
-                        <dt className="text-slate-400">{r.description}</dt>
-                        <dd className="text-slate-800">{structured.company.description}</dd>
-                      </div>
-                    )}
-                  </dl>
-                  {structured.company.sources?.length > 0 && (
-                    <ul className="text-[11px] text-slate-500 space-y-1 pt-1 border-t border-slate-50">
-                      {structured.company.sources.slice(0, 5).map((s, i) => (
-                        <li key={i}>
-                          {s.url ? (
-                            <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">
-                              {s.title}
-                            </a>
-                          ) : (
-                            s.title
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+              <div className="rounded-lg border border-slate-100 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold text-slate-700">{r.companySection}</h3>
+                  <Badge tone={confidenceTone(structured.company.confidence)}>
+                    {confidenceLabel(structured.company.confidence, r.confidence)}
+                  </Badge>
                 </div>
-
-                {(structured.contact || research.searchQuery?.includes("Contact")) && (
-                  <div className="rounded-lg border border-slate-100 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-xs font-semibold text-slate-700">{r.contactSection}</h3>
-                      {structured.contact && (
-                        <Badge tone={confidenceTone(structured.contact.confidence)}>
-                          {confidenceLabel(structured.contact.confidence, r.confidence)}
-                        </Badge>
-                      )}
+                <dl className="text-xs space-y-1.5">
+                  {structured.company.website && (
+                    <div>
+                      <dt className="text-slate-400">{r.website}</dt>
+                      <dd className="text-slate-800 break-all">{structured.company.website}</dd>
                     </div>
-                    {structured.contact ? (
-                      <>
-                        <dl className="text-xs space-y-1.5">
-                          {structured.contact.name && (
-                            <div>
-                              <dt className="text-slate-400">{r.contactName}</dt>
-                              <dd className="text-slate-800">{structured.contact.name}</dd>
-                            </div>
-                          )}
-                          {structured.contact.title && (
-                            <div>
-                              <dt className="text-slate-400">{r.contactTitle}</dt>
-                              <dd className="text-slate-800">{structured.contact.title}</dd>
-                            </div>
-                          )}
-                        </dl>
-                        {structured.contact.sources?.length > 0 && (
-                          <ul className="text-[11px] text-slate-500 space-y-1 pt-1 border-t border-slate-50">
-                            {structured.contact.sources.slice(0, 5).map((s, i) => (
-                              <li key={i}>
-                                {s.url ? (
-                                  <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">
-                                    {s.title}
-                                  </a>
-                                ) : (
-                                  s.title
-                                )}
-                              </li>
-                            ))}
-                          </ul>
+                  )}
+                  {structured.company.industry && (
+                    <div>
+                      <dt className="text-slate-400">{r.industry}</dt>
+                      <dd className="text-slate-800">{structured.company.industry}</dd>
+                    </div>
+                  )}
+                  {structured.company.description && (
+                    <div>
+                      <dt className="text-slate-400">{r.description}</dt>
+                      <dd className="text-slate-800">{structured.company.description}</dd>
+                    </div>
+                  )}
+                  {structured.company.background && (
+                    <div>
+                      <dt className="text-slate-400">{r.background}</dt>
+                      <dd className="text-slate-800 whitespace-pre-wrap">{structured.company.background}</dd>
+                    </div>
+                  )}
+                  {structured.company.products && (
+                    <div>
+                      <dt className="text-slate-400">{r.products}</dt>
+                      <dd className="text-slate-800">{structured.company.products}</dd>
+                    </div>
+                  )}
+                  {structured.company.scale && (
+                    <div>
+                      <dt className="text-slate-400">{r.scale}</dt>
+                      <dd className="text-slate-800">{structured.company.scale}</dd>
+                    </div>
+                  )}
+                </dl>
+                {structured.company.sources?.length > 0 && (
+                  <ul className="text-[11px] text-slate-500 space-y-1 pt-1 border-t border-slate-50">
+                    {structured.company.sources.slice(0, 6).map((s, i) => (
+                      <li key={i}>
+                        {s.url ? (
+                          <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">
+                            {s.title}
+                          </a>
+                        ) : (
+                          s.title
                         )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-slate-400">{r.noContactData}</p>
-                    )}
-                  </div>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             )}

@@ -26,18 +26,18 @@ export type ModelSearchMode = "general" | "news" | "linkedin";
 function systemPrompt(mode: ModelSearchMode): string {
   const lang = `CRITICAL: Write the entire response in English only. Do not use Chinese or any non-English language.`;
   if (mode === "linkedin") {
-    return `You are a LinkedIn public information search assistant for Middle East / international B2B partner research. Use web search to find company/executive LinkedIn pages, career info, and recent activity.
+    return `You are a LinkedIn public information search assistant for Middle East / international B2B sales research. Use web search to find the COMPANY's LinkedIn page, company description, industry, size, and recent company posts.
 ${lang}
-Requirements: only results directly related to the search target; each item with title, link, summary, date (if any); bullet or numbered list; do not analyze or fabricate.`;
+Requirements: prioritize company pages over individual profiles; only results directly related to the target company; each item with title, link, summary, date (if any); bullet or numbered list; do not analyze or fabricate.`;
   }
   if (mode === "news") {
-    return `You are a news and public information search assistant for Middle East / international B2B partner research. Use web search for latest news, announcements, and public coverage.
+    return `You are a news search assistant for B2B sales research. Use web search for latest news, announcements, partnerships, and public coverage about the TARGET COMPANY.
 ${lang}
-Requirements: only directly related results; each item with title, link, summary, date; bullet or numbered list; do not analyze or fabricate.`;
+Requirements: only directly related company results; each item with title, link, summary, date; bullet or numbered list; do not analyze or fabricate.`;
   }
-  return `You are a public web information search assistant for Middle East / international B2B partner research. Use web search for company websites, products, clients, and public pages.
+  return `You are a public web information search assistant for B2B sales research. Use web search to find the target company's website, what it does, products/services, industry, business model, clients, and company background.
 ${lang}
-Requirements: only directly related results; each item with title, link, summary, date (if any); bullet or numbered list; do not analyze or fabricate.`;
+Requirements: focus on COMPANY facts (business, products, industry, scale, history); only directly related results; each item with title, link, summary, date (if any); bullet or numbered list; do not analyze or fabricate.`;
 }
 
 /** Run one search via a web-capable model; returns formatted text */

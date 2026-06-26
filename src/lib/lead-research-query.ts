@@ -135,8 +135,8 @@ function shouldQuoteExact(company: string): boolean {
 export type LeadSearchBlock = { label: string; query: string; kind: "web" | "linkedin" | "news" };
 
 /**
- * 从线索字段构造多组英文检索词（扩大召回）：公司官网/概况/LinkedIn/新闻 + 联系人 LinkedIn/网页。
- * 公司名过长时不再整串加引号，并额外补一条不加引号的宽召回查询。
+ * 从线索字段构造多组英文检索词：全部围绕公司（业务、行业、背景、LinkedIn、新闻）。
+ * 不再单独检索联系人 LinkedIn/个人页。
  */
 export function buildEnglishSearchQueries(lead: {
   name?: string | null;
@@ -155,24 +155,15 @@ export function buildEnglishSearchQueries(lead: {
   const companyTerm = exact ? quoteSearchTerm(company) : company;
 
   const blocks: LeadSearchBlock[] = [
-    // 1) 官网（精确名优先）
     { label: "Company site", query: join(companyTerm, extraRegion, "official website"), kind: "web" },
-    // 2) 宽召回（始终不加引号，提升找到真实主体的概率）
     { label: "Company profile", query: join(company, extraRegion, "company profile about"), kind: "web" },
-    // 3) 公司 LinkedIn
-    { label: "Company LinkedIn", query: join(company, extraRegion), kind: "linkedin" },
-    // 4) 新闻/公开报道
+    { label: "Company business", query: join(company, extraRegion, "what does company do business products services"), kind: "web" },
+    { label: "Company industry", query: join(company, extraRegion, "industry sector market"), kind: "web" },
+    { label: "Company background", query: join(company, extraRegion, "company history background overview"), kind: "web" },
+    { label: "Company LinkedIn", query: join(company, extraRegion, "company LinkedIn page"), kind: "linkedin" },
     { label: "Company news", query: join(company, extraRegion), kind: "news" },
   ];
 
-  const person = latinSearchText(lead.contName) || lead.contName?.trim();
-  if (person) {
-    const title = dutyToEnglish(lead.contDuty);
-    blocks.push({ label: "Contact LinkedIn", query: join(person, title, company), kind: "linkedin" });
-    blocks.push({ label: "Contact", query: join(person, title, company, extraRegion), kind: "web" });
-  }
-
-  // 去掉 query 完全相同且 kind 相同的重复项
   const seen = new Set<string>();
   const deduped = blocks.filter((b) => {
     const k = `${b.kind}::${b.query}`;
