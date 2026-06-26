@@ -77,8 +77,9 @@ export async function POST(req: NextRequest) {
     if (!folderUrl) {
       return NextResponse.json(
         {
+          code: "FOLDER_NOT_FOUND",
           error: entityName
-            ? `未找到与「${entityName}」同名的 Drive 子目录，请粘贴目录链接后保存，或先在 07_Client Information 下创建该文件夹`
+            ? `未找到与「${entityName}」同名的 Drive 子目录。请在下方粘贴目录链接并保存，或在 07_Client Information 下创建同名文件夹后重试。`
             : "No Google Drive folder bound for this record — bind one first",
         },
         { status: 400 },

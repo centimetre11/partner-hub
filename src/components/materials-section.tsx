@@ -166,8 +166,14 @@ export function MaterialsSection({
                 disabled={!uploaderConnected}
                 disabledReason={!uploaderConnected ? copy.needConnect : null}
                 buttonLabel={copy.chooseAndUpload}
-                uploadingLabel={copy.uploading}
+                matchingLabel={copy.uploadMatching}
+                uploadingLabel={copy.uploadUploading}
+                successLabel={copy.uploadSuccess}
                 onUploaded={handleUploaded}
+                onError={(msg, code) => {
+                  setError(msg);
+                  if (code === "FOLDER_NOT_FOUND") setShowFolderBind(true);
+                }}
               />
               <p className="text-xs text-slate-400">{copy.uploadHintAuto}</p>
             </>

@@ -77,7 +77,9 @@ export function AddSolutionForm({
         <GdriveUploadField
           partnerId={partnerId}
           buttonLabel={gm.chooseAndUpload}
-          uploadingLabel={gm.uploading}
+          matchingLabel={gm.uploadMatching}
+          uploadingLabel={gm.uploadUploading}
+          successLabel={gm.uploadSuccess}
           onUploaded={(asset) => {
             const url = asset.url ?? "";
             setUploadedUrl(url);
