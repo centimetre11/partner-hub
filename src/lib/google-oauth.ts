@@ -4,9 +4,9 @@ const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 
-// drive.file：非敏感 scope，足以在已知文件夹里创建文件；openid/email 用于回显授权账号
+// drive：向用户有编辑权限的共享目录上传/新建（drive.file 无法写入「与我共享」下的已有文件夹）
 export const GOOGLE_UPLOAD_SCOPES = [
-  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/drive",
   "openid",
   "email",
 ].join(" ");

@@ -25,7 +25,6 @@ import {
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
-import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
 import { MaterialsSection } from "@/components/materials-section";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { PartnerCustomersSection } from "@/components/partner-customers-section";
@@ -373,17 +372,14 @@ export async function PartnerDetailBody({ id }: { id: string }) {
             <Card title={m.partnerDetail.trainingCert.replace("{count}", String(p.trainings.length))}>
               <TrainingList partnerId={p.id} trainings={p.trainings} input={input} m={m} />
             </Card>
-            <PartnerSolutionsSection
-              partnerId={p.id}
-              solutions={p.solutions}
-              copy={m.partnerDetail.solutionsSection}
-            />
             <MaterialsSection
               partnerId={p.id}
               entityName={p.name}
               folderUrl={p.gdriveFolderUrl}
               browseReady={ammoConfig.gdriveServiceAccountConfigured}
               uploaderConnected={ammoConfig.gdriveUploaderConnected}
+              solutions={p.solutions}
+              solutionCopy={m.partnerDetail.solutionsSection}
               assets={p.assets.map((a) => ({
                 id: a.id,
                 filename: a.filename,

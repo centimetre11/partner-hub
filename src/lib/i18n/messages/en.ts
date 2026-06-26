@@ -735,7 +735,7 @@ export const messagesEn = {
       adding: "Adding…",
       uploadGuideTitle: "Docs live outside — links only here",
       uploadGuideBody:
-        "Write the solution in Google Drive or KMS first, then paste the share link. Preview supports Google Drive and KMS (access token required).",
+        "Write the solution in KMS first, then paste the share link. Upload PPT/PDF files via «Upload file» above.",
       openGdriveFolder: "Open Google Drive folder",
       openKms: "Open KMS",
       linkLabel: "Link",
@@ -1462,7 +1462,7 @@ export const messagesEn = {
     testGdriveStored: "Test Drive with saved key",
     oauthTitle: "Upload account (OAuth)",
     oauthDesc:
-      "Service accounts cannot upload into a personal Google Drive. Connect one real Google account that has edit access to the client folders; all uploads will go through it.",
+      "Service accounts cannot upload into a personal Google Drive. Connect one real Google account with edit access to client folders; all uploads use it. After a scope update, click Reconnect.",
     oauthClientId: "OAuth Client ID",
     oauthClientSecret: "OAuth Client Secret",
     oauthClientSecretPlaceholder: "Paste client secret (kept hidden after save)",
@@ -1482,7 +1482,7 @@ export const messagesEn = {
   },
   gdriveMaterials: {
     title: "Materials ({count})",
-    desc: "Pick a file to upload to Google Drive; the link and preview appear here.",
+    desc: "Upload files to Google Drive or paste KMS / Drive links; joint solution links are managed here too.",
     bindLabel: "Google Drive folder (optional)",
     bindPlaceholder: "Paste the Drive subfolder link for this record",
     bindSave: "Save folder",
@@ -1522,6 +1522,8 @@ export const messagesEn = {
     parsing: "Parsing…",
     needConnect: "No upload account connected. Ask an admin to connect one in Settings.",
     needServiceAccount: "Google service account is not configured — cannot list folders. Set it up in Settings → Ammo (same as ammo library browse).",
+    needReconnectScopes: "Upload account lacks permission. Reconnect Google under Settings → Ammo → Upload account, then retry.",
+    solutionsHint: "Joint solutions store KMS/Drive links only; upload files using the section above.",
     needBind: "Bind a Google Drive folder first, then upload.",
     empty: "No materials yet.",
     view: "Open",

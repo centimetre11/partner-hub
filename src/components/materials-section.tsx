@@ -2,8 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/ui";
 import { GdriveUploadField, type UploadedAsset } from "@/components/gdrive-upload-field";
 import { GdriveFolderPicker } from "@/components/gdrive-folder-picker";
+import { AddSolutionForm } from "@/components/add-solution-form";
+import { EditSolutionForm } from "@/components/edit-solution-form";
+import type { LinkPreviewState } from "@/components/solution-link-field";
 import {
   setPartnerGdriveFolderAction,
   setCustomerGdriveFolderAction,
@@ -20,6 +24,43 @@ export type MaterialAsset = {
   provider: string | null;
 };
 
+type SolutionRow = {
+  id: string;
+  name: string;
+  notes: string | null;
+  assets: {
+    assetId: string;
+    label: string | null;
+    asset: {
+      id: string;
+      kind: string | null;
+      filename: string;
+      url: string | null;
+      thumbnailUrl: string | null;
+      provider: string | null;
+    };
+  }[];
+};
+
+function primarySolutionLink(sol: SolutionRow) {
+  return sol.assets.find((a) => a.asset.kind === "LINK" && a.asset.url)?.asset ?? null;
+}
+
+function toLinkPreview(asset: NonNullable<ReturnType<typeof primarySolutionLink>>): LinkPreviewState {
+  return {
+    url: asset.url!,
+    title: asset.filename,
+    description: null,
+    thumbnailUrl: asset.thumbnailUrl,
+    provider: asset.provider ?? "web",
+  };
+}
+
+function formatUploadError(message: string, copy: Messages["gdriveMaterials"]): string {
+  if (/insufficient authentication scopes/i.test(message)) return copy.needReconnectScopes;
+  return message;
+}
+
 export function MaterialsSection({
   partnerId,
   customerId,
@@ -29,6 +70,8 @@ export function MaterialsSection({
   uploaderConnected,
   assets: initialAssets,
   copy,
+  solutions = [],
+  solutionCopy,
 }: {
   partnerId?: string | null;
   customerId?: string | null;
@@ -39,6 +82,8 @@ export function MaterialsSection({
   uploaderConnected: boolean;
   assets: MaterialAsset[];
   copy: Messages["gdriveMaterials"];
+  solutions?: SolutionRow[];
+  solutionCopy?: Messages["partnerDetail"]["solutionsSection"];
 }) {
   const router = useRouter();
   const [folderDraft, setFolderDraft] = useState<string | null>(null);
@@ -127,12 +172,13 @@ export function MaterialsSection({
   }
 
   const tabBase = "px-3 py-1 text-xs rounded-md";
+  const totalCount = assets.length + solutions.length;
 
   return (
     <div className="ui-card">
       <div className="px-4 sm:px-5 py-3 border-b border-slate-100">
         <h3 className="text-sm font-medium text-slate-800">
-          {copy.title.replace("{count}", String(assets.length))}
+          {copy.title.replace("{count}", String(totalCount))}
         </h3>
         <p className="text-xs text-slate-500 mt-0.5">{copy.desc}</p>
       </div>
@@ -207,7 +253,7 @@ export function MaterialsSection({
                 successLabel={copy.uploadSuccess}
                 onUploaded={handleUploaded}
                 onError={(msg, code) => {
-                  setError(msg);
+                  setError(formatUploadError(msg, copy));
                   if (code === "FOLDER_NOT_FOUND") setShowFolderBind(true);
                 }}
               />
@@ -277,6 +323,53 @@ export function MaterialsSection({
               </li>
             ))}
           </ul>
+        )}
+
+        {partnerId && solutionCopy && (
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <div>
+              <h4 className="text-xs font-medium text-slate-800">
+                {solutionCopy.title.replace("{count}", String(solutions.length))}
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">{copy.solutionsHint}</p>
+            </div>
+
+            {solutions.map((sol) => {
+              const link = primarySolutionLink(sol);
+              return (
+                <details key={sol.id} className="group rounded-lg border border-slate-100 hover:border-slate-200">
+                  <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-slate-900 truncate">{sol.name}</div>
+                      {link?.url && (
+                        <div className="text-xs text-slate-400 mt-0.5 truncate">{link.url}</div>
+                      )}
+                    </div>
+                    <span className="text-slate-300 group-open:rotate-90">›</span>
+                  </summary>
+                  <div className="px-4 pb-4 pt-1 border-t border-slate-50">
+                    <EditSolutionForm
+                      partnerId={partnerId}
+                      solutionId={sol.id}
+                      defaultLinkUrl={link?.url ?? ""}
+                      initialPreview={link ? toLinkPreview(link) : null}
+                      defaultNotes={sol.notes ?? ""}
+                      copy={solutionCopy}
+                    />
+                  </div>
+                </details>
+              );
+            })}
+
+            {solutions.length === 0 && <EmptyState text={solutionCopy.empty} />}
+
+            <details className="rounded-lg border border-dashed border-slate-200">
+              <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">
+                {solutionCopy.addSolution}
+              </summary>
+              <AddSolutionForm partnerId={partnerId} copy={solutionCopy} />
+            </details>
+          </div>
         )}
 
         {/* 手动粘贴目录链接（备用） */}

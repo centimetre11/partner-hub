@@ -735,7 +735,7 @@ export const messagesZh: Messages = {
       adding: "添加中…",
       uploadGuideTitle: "方案写在外部，这里只存链接",
       uploadGuideBody:
-        "请先在 Google Drive 或 KMS 编写方案，再粘贴分享链接。支持 Google Drive 与 KMS（需已配置访问令牌）的解析预览。",
+        "请先在 KMS 编写方案，再粘贴分享链接。PPT/PDF 等文件请用上方「上传文件」传到 Drive。",
       openGdriveFolder: "打开 Google Drive 文件夹",
       openKms: "打开 KMS",
       linkLabel: "链接",
@@ -1460,7 +1460,7 @@ export const messagesZh: Messages = {
     testGdriveStored: "用已保存密钥测试云盘",
     oauthTitle: "上传账号（OAuth）",
     oauthDesc:
-      "服务账号无法往个人 Google 云盘上传文件。请连接一个对客户/伙伴目录有编辑权限的真人 Google 账号，之后全员上传都以它的身份进行。",
+      "服务账号无法往个人 Google 云盘上传文件。请连接一个对客户/伙伴目录有编辑权限的真人 Google 账号；全员上传都以它的身份进行。权限范围变更后需点击「重新连接」。",
     oauthClientId: "OAuth Client ID",
     oauthClientSecret: "OAuth Client Secret",
     oauthClientSecretPlaceholder: "粘贴 client secret（保存后不回显）",
@@ -1480,7 +1480,7 @@ export const messagesZh: Messages = {
   },
   gdriveMaterials: {
     title: "材料（{count}）",
-    desc: "选择文件即可上传到 Google Drive，并在此显示链接与预览。",
+    desc: "上传文件到 Google Drive，或粘贴 KMS / Drive 外链；联合方案链接也在此管理。",
     bindLabel: "Google Drive 目录（可选）",
     bindPlaceholder: "粘贴该记录对应的 Drive 子目录链接",
     bindSave: "保存目录",
@@ -1520,6 +1520,8 @@ export const messagesZh: Messages = {
     parsing: "解析中…",
     needConnect: "尚未连接上传账号，请联系管理员在「设置」中连接。",
     needServiceAccount: "尚未配置 Google 服务账号，无法列出目录。请在设置 → 弹药库配置中配置（与弹药库浏览相同）。",
+    needReconnectScopes: "上传账号权限不足。请在设置 → 弹药库配置 → 上传账号点击「重新连接 Google」后再试。",
+    solutionsHint: "方案文档写在 KMS 或 Drive，此处只保存链接；文件请用上方上传。",
     needBind: "请先绑定 Google Drive 目录，再上传。",
     empty: "暂无材料。",
     view: "打开",
