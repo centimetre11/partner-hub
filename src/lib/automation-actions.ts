@@ -228,16 +228,16 @@ export async function saveAutomationAction(formData: FormData): Promise<PersistA
 export async function createAutomationFromBuilderAction(formData: FormData) {
   const user = await requireUser();
   const raw = String(formData.get("draft") ?? "");
-  if (!raw) redirect("/automations/new?error=empty_draft");
+  if (!raw) redirect("/automations/new/ai?error=empty_draft");
 
   let draft: AutomationBuilderDraft;
   try {
     draft = JSON.parse(raw) as AutomationBuilderDraft;
   } catch {
-    redirect("/automations/new?error=invalid_draft");
+    redirect("/automations/new/ai?error=invalid_draft");
   }
 
-  if (!isAutomationDraftReady(draft)) redirect("/automations/new?error=not_ready");
+  if (!isAutomationDraftReady(draft)) redirect("/automations/new/ai?error=not_ready");
 
   try {
     const created = await createAutomationFromDraft(draft, user.id, { locale: "zh" });
@@ -247,7 +247,7 @@ export async function createAutomationFromBuilderAction(formData: FormData) {
   } catch (e) {
     if (isRedirectError(e)) throw e;
     console.error("[createAutomationFromBuilderAction]", e);
-    redirect("/automations/new?error=create_failed");
+    redirect("/automations/new/ai?error=create_failed");
   }
 }
 

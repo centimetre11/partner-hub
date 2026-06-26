@@ -1,32 +1,37 @@
-import Link from "next/link";
+import { db } from "@/lib/db";
+import { AutomationForm } from "@/components/automation-form";
 import { requireUser } from "@/lib/session";
-import { PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
-import { BuilderModeToggle } from "@/components/builder-mode-toggle";
-import { AutomationBuilder } from "@/components/automation-builder";
-import { getServerI18n } from "@/lib/server-i18n";
+import { DEFAULT_AUTOMATION_QUERY } from "@/lib/automation-query";
 
 export default async function NewAutomationPage() {
   await requireUser();
-  const { messages: m } = await getServerI18n();
+  const partners = await db.partner.findMany({
+    where: { status: { not: "ARCHIVED" } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 
   return (
     <div className="pb-8">
-      <PageHeader
-        title={m.automations.createTitle}
-        desc={m.automations.createDesc}
-        actions={
-          <BuilderModeToggle
-            active="auto"
-            autoHref="/automations/new"
-            manualHref="/automations/new/manual"
-          />
-        }
-      />
       <AiCenterNav />
-      <div className="px-8">
-        <AutomationBuilder />
-      </div>
+      <AutomationForm
+        partners={partners}
+        builderMode="manual"
+        initial={{
+          slug: "",
+          name: "",
+          cronExpr: "0 9 * * *",
+          timezone: "Asia/Shanghai",
+          wecomPushChatId: "",
+          pushEmailTo: "",
+          pushWecomAppTo: "",
+          notifyOnSuccess: true,
+          notifyOnFailure: true,
+          enabled: true,
+          query: { ...DEFAULT_AUTOMATION_QUERY },
+        }}
+      />
     </div>
   );
 }

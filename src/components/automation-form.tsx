@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
 import { automationSaveErrorMessage } from "@/lib/automation-save-errors";
-import { saveAutomationAction } from "@/lib/automation-actions";
+import { saveAutomationAction, toggleAutomationAction, deleteAutomationAction } from "@/lib/automation-actions";
 import {
   isWecomAppPushEnabled,
   parseWecomAppRecipient,
@@ -21,6 +21,9 @@ import {
   describeAutomationQuery,
 } from "@/lib/automation-query";
 import { useLocale, useMessages } from "@/lib/i18n/context";
+import { BuilderModeToggleClient } from "@/components/builder-mode-toggle-client";
+import { AutomationRunHistory, type AutomationRunItem } from "@/components/automation-run-history";
+import { RunButton } from "@/app/(app)/agents/[id]/run-button";
 
 const TIMEZONES = ["Asia/Shanghai", "Asia/Dubai", "Asia/Riyadh", "Europe/London", "America/New_York", "UTC"];
 
@@ -45,12 +48,28 @@ type AssigneeOption = { id: string; name: string };
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
 type EmailOption = { id: string; name: string; email: string };
 
+function SectionCard({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
+  return (
+    <section className={`rounded-xl border border-slate-200/80 bg-white p-4 ${className}`}>
+      <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
 export function AutomationForm({
   initial,
   partners,
+  builderMode,
+  runs,
+  scheduleHint,
 }: {
   initial: AutomationFormData;
   partners: PartnerOption[];
+  /** 新建页：手动 / AI 模式切换 */
+  builderMode?: "manual" | "auto";
+  runs?: AutomationRunItem[];
+  scheduleHint?: string;
 }) {
   const m = useMessages();
   const locale = useLocale();
@@ -60,6 +79,7 @@ export function AutomationForm({
   const lang = locale === "zh" ? "zh" : "en";
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const isEdit = !!initial.id;
 
   const [slug, setSlug] = useState(initial.slug);
   const [name, setName] = useState(initial.name);
@@ -72,7 +92,6 @@ export function AutomationForm({
   const [wecomAppMode, setWecomAppMode] = useState<WecomAppRecipientMode>(initialWecomApp.mode);
   const [wecomAppUserId, setWecomAppUserId] = useState(initialWecomApp.hubUserId);
 
-  // Structured query state
   const [source, setSource] = useState<AutomationQuerySource>(initial.query.source);
   const [scope, setScope] = useState<AutomationQueryScope>(initial.query.scope);
   const [partnerId, setPartnerId] = useState(initial.query.partnerId ?? "");
@@ -159,10 +178,10 @@ export function AutomationForm({
 
   const inputCls =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400";
-  const labelCls = "block text-xs font-medium text-slate-600 mb-1.5";
+  const labelCls = "block text-xs font-medium text-slate-600 mb-1";
   const segBtn = (active: boolean) =>
-    `rounded-lg px-3 py-1.5 text-sm border ${
-      active ? "border-sky-400 bg-sky-50 text-sky-700 font-medium" : "border-slate-200 bg-white text-slate-600"
+    `rounded-md px-2.5 py-1 text-xs border ${
+      active ? "border-sky-400 bg-sky-50 text-sky-700 font-medium" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
     }`;
 
   function wecomLabel(c: WecomOption) {
@@ -204,12 +223,11 @@ export function AutomationForm({
   }
 
   return (
-    <form id="automation-edit-form" onSubmit={handleSubmit} className="min-h-[calc(100vh-8rem)] flex flex-col">
+    <form id="automation-edit-form" onSubmit={handleSubmit} className="min-h-[calc(100vh-7rem)] flex flex-col">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
       <input type="hidden" name="enabled" value={initial.enabled ? "on" : "off"} />
       <input type="hidden" name="notifyOnSuccess" value={initial.notifyOnSuccess ? "on" : "off"} />
       <input type="hidden" name="notifyOnFailure" value={initial.notifyOnFailure ? "on" : "off"} />
-      {/* structured query hidden fields (always submitted; server ignores irrelevant) */}
       <input type="hidden" name="source" value={source} />
       <input type="hidden" name="scope" value={scope} />
       <input type="hidden" name="partnerId" value={scope === "partner" ? partnerId : ""} />
@@ -219,357 +237,353 @@ export function AutomationForm({
       <input type="hidden" name="dueWithinDays" value={String(dueWithinDays)} />
       <input type="hidden" name="opportunityStatus" value={source === "opportunities" ? opportunityStatus : "ALL"} />
       <input type="hidden" name="aiGoal" value={source === "ai" ? aiGoal : ""} />
+      <input type="hidden" name="pushWecomAppTo" value={pushWecomAppTo} />
 
-      <div className="flex items-center justify-between gap-4 px-8 py-4 border-b border-slate-200/80 bg-white sticky top-0 z-10">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/automations" className="text-slate-400 hover:text-slate-700 text-lg">
-            ←
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-slate-900 truncate">
-              {initial.id ? a.editTitle : a.createTitle}
-            </h1>
-            <p className="text-xs text-slate-400 truncate">{a.monitorFormDesc}</p>
+      {/* ===== Sticky header ===== */}
+      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/automations" className="text-slate-400 hover:text-slate-700 text-lg shrink-0">
+              ←
+            </Link>
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold text-slate-900 truncate">
+                {isEdit ? name || a.editTitle : a.createTitle}
+              </h1>
+              <p className="text-[11px] text-violet-700 truncate">{querySummary}</p>
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {builderMode && (
+              <BuilderModeToggleClient
+                active={builderMode}
+                autoHref="/automations/new/ai"
+                manualHref="/automations/new"
+              />
+            )}
             {saveOk && <span className="text-xs text-emerald-600 font-medium">{a.saveSuccess}</span>}
             {saveError && (
-              <span className="text-xs text-red-600 max-w-[220px] text-right leading-snug" title={saveError}>
+              <span className="text-xs text-red-600 max-w-[200px] text-right leading-snug" title={saveError}>
                 {saveError}
               </span>
+            )}
+            {isEdit && initial.id && (
+              <>
+                <RunButton agentId={initial.id} compact formId="automation-edit-form" />
+                <form action={toggleAutomationAction.bind(null, initial.id)}>
+                  <button
+                    type="submit"
+                    className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                  >
+                    {initial.enabled ? a.disable : a.enable}
+                  </button>
+                </form>
+                <form action={deleteAutomationAction.bind(null, initial.id)}>
+                  <button
+                    type="submit"
+                    className="rounded-md border border-red-100 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                  >
+                    {a.delete}
+                  </button>
+                </form>
+              </>
             )}
             <button
               type="submit"
               disabled={pending}
               title={a.saveHint}
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
+              className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
             >
-              {pending ? a.saving : initial.id ? a.saveAndActivate : a.createAndActivate}
+              {pending ? a.saving : isEdit ? a.saveAndActivate : a.createAndActivate}
             </button>
           </div>
-          {initial.id && <p className="text-[11px] text-slate-400">{a.saveOptionalRunHint}</p>}
         </div>
       </div>
 
-      <div className="flex-1 max-w-2xl px-8 py-6 space-y-6">
-        <section className="rounded-xl border border-sky-100 bg-sky-50/40 p-4">
-          <div className="text-sm font-semibold text-slate-800">{bc.initTitle}</div>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">{bc.initDesc}</p>
-        </section>
+      {/* ===== Body: 2-column layout ===== */}
+      <div className="flex-1 max-w-6xl mx-auto w-full px-6 py-5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Left: Query + Identity + Runs */}
+          <div className="lg:col-span-7 space-y-4">
+            <SectionCard title={aq.sectionTitle}>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className={labelCls}>{aq.sourceLabel}</label>
+                    <div className="flex flex-wrap gap-1">
+                      <button type="button" className={segBtn(source === "todos")} onClick={() => setSource("todos")}>
+                        {aq.sourceTodos}
+                      </button>
+                      <button type="button" className={segBtn(source === "opportunities")} onClick={() => setSource("opportunities")}>
+                        {aq.sourceOpportunities}
+                      </button>
+                      <button type="button" className={segBtn(source === "ai")} onClick={() => setSource("ai")}>
+                        {aq.sourceAi}
+                      </button>
+                    </div>
+                  </div>
 
-        {/* ===== Query rule ===== */}
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{aq.sectionTitle}</h2>
-            <p className="text-xs text-slate-400 mt-1">{aq.sectionDesc}</p>
-          </div>
+                  {source === "ai" ? (
+                    <div className="sm:col-span-2">
+                      <label className={labelCls}>{aq.aiGoalLabel}</label>
+                      <textarea
+                        className={`${inputCls} min-h-[72px]`}
+                        value={aiGoal}
+                        onChange={(e) => setAiGoal(e.target.value)}
+                        placeholder={aq.aiGoalPlaceholder}
+                        rows={2}
+                      />
+                    </div>
+                  ) : null}
 
-          <div>
-            <label className={labelCls}>{aq.sourceLabel}</label>
-            <div className="flex flex-wrap gap-1.5">
-              <button type="button" className={segBtn(source === "todos")} onClick={() => setSource("todos")}>
-                {aq.sourceTodos}
-              </button>
-              <button
-                type="button"
-                className={segBtn(source === "opportunities")}
-                onClick={() => setSource("opportunities")}
-              >
-                {aq.sourceOpportunities}
-              </button>
-              <button type="button" className={segBtn(source === "ai")} onClick={() => setSource("ai")}>
-                {aq.sourceAi}
-              </button>
-            </div>
-            {source === "ai" && <p className="text-xs text-slate-400 mt-1.5">{aq.sourceAiHint}</p>}
-          </div>
+                  <div>
+                    <label className={labelCls}>{aq.scopeLabel}</label>
+                    <div className="flex flex-wrap gap-1">
+                      <button type="button" className={segBtn(scope === "all")} onClick={() => setScope("all")}>
+                        {aq.scopeAll}
+                      </button>
+                      <button type="button" className={segBtn(scope === "partner")} onClick={() => setScope("partner")}>
+                        {aq.scopePartner}
+                      </button>
+                      <button type="button" className={segBtn(scope === "customer")} onClick={() => setScope("customer")}>
+                        {aq.scopeCustomer}
+                      </button>
+                    </div>
+                  </div>
 
-          {source === "ai" ? (
-            <div>
-              <label className={labelCls}>{aq.aiGoalLabel}</label>
-              <textarea
-                className={`${inputCls} min-h-[80px]`}
-                value={aiGoal}
-                onChange={(e) => setAiGoal(e.target.value)}
-                placeholder={aq.aiGoalPlaceholder}
-                rows={3}
-              />
-            </div>
-          ) : null}
+                  {scope === "partner" && (
+                    <div>
+                      <label className={labelCls}>{aq.partnerLabel}</label>
+                      <select className={inputCls} value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+                        <option value="">{aq.partnerPlaceholder}</option>
+                        {partnerOpts.map((p) => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-          {/* scope applies to all sources */}
-          <div>
-            <label className={labelCls}>{aq.scopeLabel}</label>
-            <div className="flex flex-wrap gap-1.5">
-              <button type="button" className={segBtn(scope === "all")} onClick={() => setScope("all")}>
-                {aq.scopeAll}
-              </button>
-              <button type="button" className={segBtn(scope === "partner")} onClick={() => setScope("partner")}>
-                {aq.scopePartner}
-              </button>
-              <button type="button" className={segBtn(scope === "customer")} onClick={() => setScope("customer")}>
-                {aq.scopeCustomer}
-              </button>
-            </div>
-          </div>
+                  {scope === "customer" && (
+                    <div>
+                      <label className={labelCls}>{aq.customerLabel}</label>
+                      <select className={inputCls} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+                        <option value="">{aq.customerPlaceholder}</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
 
-          {scope === "partner" && (
-            <div>
-              <label className={labelCls}>{aq.partnerLabel}</label>
-              <select className={inputCls} value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
-                <option value="">{aq.partnerPlaceholder}</option>
-                {partnerOpts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+                  {source === "todos" && (
+                    <>
+                      <div>
+                        <label className={labelCls}>{aq.assigneeLabel}</label>
+                        <select className={inputCls} value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+                          <option value="">{aq.assigneeAll}</option>
+                          {assignees.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>{aq.dueLabel}</label>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <button type="button" className={segBtn(dueFilter === "all")} onClick={() => setDueFilter("all")}>
+                            {aq.dueAll}
+                          </button>
+                          <button type="button" className={segBtn(dueFilter === "overdue")} onClick={() => setDueFilter("overdue")}>
+                            {aq.dueOverdue}
+                          </button>
+                          <button type="button" className={segBtn(dueFilter === "within_days")} onClick={() => setDueFilter("within_days")}>
+                            {aq.dueWithin}
+                          </button>
+                          {dueFilter === "within_days" && (
+                            <input
+                              type="number"
+                              min={1}
+                              max={90}
+                              className="w-16 rounded-md border border-slate-200 px-2 py-1 text-xs"
+                              value={dueWithinDays}
+                              onChange={(e) => setDueWithinDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
-          {scope === "customer" && (
-            <div>
-              <label className={labelCls}>{aq.customerLabel}</label>
-              <select className={inputCls} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                <option value="">{aq.customerPlaceholder}</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* todos-only filters */}
-          {source === "todos" && (
-            <>
-              <div>
-                <label className={labelCls}>{aq.assigneeLabel}</label>
-                <select className={inputCls} value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
-                  <option value="">{aq.assigneeAll}</option>
-                  {assignees.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>{aq.dueLabel}</label>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <button type="button" className={segBtn(dueFilter === "all")} onClick={() => setDueFilter("all")}>
-                    {aq.dueAll}
-                  </button>
-                  <button
-                    type="button"
-                    className={segBtn(dueFilter === "overdue")}
-                    onClick={() => setDueFilter("overdue")}
-                  >
-                    {aq.dueOverdue}
-                  </button>
-                  <button
-                    type="button"
-                    className={segBtn(dueFilter === "within_days")}
-                    onClick={() => setDueFilter("within_days")}
-                  >
-                    {aq.dueWithin}
-                  </button>
-                  {dueFilter === "within_days" && (
-                    <input
-                      type="number"
-                      min={1}
-                      max={90}
-                      className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-                      value={dueWithinDays}
-                      onChange={(e) => setDueWithinDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))}
-                      title={aq.dueWithinDays}
-                    />
+                  {source === "opportunities" && (
+                    <div>
+                      <label className={labelCls}>{aq.statusLabel}</label>
+                      <select
+                        className={inputCls}
+                        value={opportunityStatus}
+                        onChange={(e) => setOpportunityStatus(e.target.value as AutomationOpportunityStatus)}
+                      >
+                        <option value="ALL">{aq.statusAll}</option>
+                        <option value="ACTIVE">ACTIVE</option>
+                        <option value="WON">WON</option>
+                        <option value="LOST">LOST</option>
+                        <option value="PAUSED">PAUSED</option>
+                      </select>
+                    </div>
                   )}
                 </div>
               </div>
-            </>
-          )}
+            </SectionCard>
 
-          {/* opportunities-only filter */}
-          {source === "opportunities" && (
-            <div>
-              <label className={labelCls}>{aq.statusLabel}</label>
-              <select
-                className={inputCls}
-                value={opportunityStatus}
-                onChange={(e) => setOpportunityStatus(e.target.value as AutomationOpportunityStatus)}
-              >
-                <option value="ALL">{aq.statusAll}</option>
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="WON">WON</option>
-                <option value="LOST">LOST</option>
-                <option value="PAUSED">PAUSED</option>
-              </select>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-violet-100 bg-violet-50/40 px-3 py-2 text-xs text-violet-900">
-            {querySummary}
-          </div>
-        </section>
-
-        {/* ===== Trigger ===== */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.triggerConfig}</h2>
-          <div>
-            <label className={labelCls}>{a.cronExpr}</label>
-            <input name="cronExpr" className={inputCls} value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
-            <p className="text-xs text-sky-600 mt-1">{cronDesc}</p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {CRON_PRESETS.filter((p) => ["daily9", "daily18", "weekday9", "monday9"].includes(p.id)).map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setCronExpr(p.expr)}
-                className={`rounded-md px-2 py-1 text-xs border ${
-                  cronExpr === p.expr ? "border-sky-400 bg-sky-50 text-sky-700" : "border-slate-200 bg-white text-slate-600"
-                }`}
-              >
-                {locale === "zh" ? p.labelZh : p.labelEn}
-              </button>
-            ))}
-          </div>
-          <div>
-            <label className={labelCls}>{a.timezone}</label>
-            <select name="timezone" className={inputCls} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-              {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
-          </div>
-        </section>
-
-        {/* ===== Delivery ===== */}
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.pushResults}</h2>
-          {deliveryMissing && (
-            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{a.saveErrorDelivery}</p>
-          )}
-          <div>
-            <label className={labelCls}>{bc.wecomLabel}</label>
-            <select
-              name="wecomPushChatId"
-              className={inputCls}
-              value={wecomPushChatId}
-              onChange={(e) => setWecomPushChatId(e.target.value)}
-            >
-              <option value="">{bc.wecomNone}</option>
-              {wecomChats.map((c) => (
-                <option key={c.chatId} value={c.chatId}>
-                  {wecomLabel(c)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>{bc.emailLabel}</label>
-            <input
-              name="pushEmailTo"
-              list="automation-email-options"
-              className={inputCls}
-              value={pushEmailTo}
-              onChange={(e) => setPushEmailTo(e.target.value)}
-              placeholder={a.emailInputPlaceholder}
-            />
-            <datalist id="automation-email-options">
-              {emails.map((u) => (
-                <option key={u.id} value={u.email}>
-                  {u.name ? `${u.name} · ${u.email}` : u.email}
-                </option>
-              ))}
-            </datalist>
-            <p className="text-xs text-slate-400 mt-1">{a.emailInputHint}</p>
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-200">
-              <input
-                type="checkbox"
-                checked={pushWecomAppEnabled}
-                onChange={(e) => {
-                  setPushWecomAppEnabled(e.target.checked);
-                  if (!e.target.checked) {
-                    setWecomAppMode("creator");
-                    setWecomAppUserId("");
-                  }
-                }}
-                className="mt-0.5 rounded"
-              />
-              <span className="min-w-0">
-                <span className="text-sm font-medium text-slate-800 block">{bc.wecomAppLabel}</span>
-                <span className="text-xs text-slate-400 font-mono">send_wecom_app</span>
-              </span>
-            </label>
-            {pushWecomAppEnabled && (
-              <div className="ml-7 space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+            <SectionCard title={a.basicInfo}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>{a.wecomAppRecipientLabel}</label>
-                  <select
+                  <label className={labelCls}>{a.displayName}</label>
+                  <input
+                    name="name"
                     className={inputCls}
-                    value={wecomAppMode}
-                    onChange={(e) => {
-                      const mode = e.target.value as WecomAppRecipientMode;
-                      setWecomAppMode(mode);
-                      if (mode !== "user") setWecomAppUserId("");
-                    }}
-                  >
-                    <option value="creator">{a.wecomAppRecipientCreator}</option>
-                    {source === "todos" && (
-                      <option value="assignees">{a.wecomAppRecipientAssignees}</option>
-                    )}
-                    <option value="user">{a.wecomAppRecipientUser}</option>
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={a.taskGoalPlaceholder}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>{a.slugLabel}</label>
+                  <input
+                    name="slug"
+                    className={inputCls}
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    placeholder="acme-todos-daily"
+                  />
+                </div>
+              </div>
+            </SectionCard>
+
+            {isEdit && runs && (
+              <SectionCard title={a.runHistory}>
+                {scheduleHint && <p className="text-[11px] text-slate-400 mb-2">{scheduleHint}</p>}
+                <AutomationRunHistory runs={runs} />
+              </SectionCard>
+            )}
+          </div>
+
+          {/* Right: Schedule + Delivery */}
+          <div className="lg:col-span-5 space-y-4">
+            <SectionCard title={a.triggerConfig}>
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>{a.cronExpr}</label>
+                  <input name="cronExpr" className={inputCls} value={cronExpr} onChange={(e) => setCronExpr(e.target.value)} />
+                  <p className="text-[11px] text-sky-600 mt-1">{cronDesc}</p>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {CRON_PRESETS.filter((p) => ["daily9", "daily18", "weekday9", "monday9"].includes(p.id)).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setCronExpr(p.expr)}
+                      className={`rounded-md px-2 py-0.5 text-[11px] border ${
+                        cronExpr === p.expr ? "border-sky-400 bg-sky-50 text-sky-700" : "border-slate-200 text-slate-600"
+                      }`}
+                    >
+                      {locale === "zh" ? p.labelZh : p.labelEn}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <label className={labelCls}>{a.timezone}</label>
+                  <select name="timezone" className={inputCls} value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                    {TIMEZONES.map((tz) => (
+                      <option key={tz} value={tz}>{tz}</option>
+                    ))}
                   </select>
                 </div>
-                {wecomAppMode === "user" && (
-                  <div>
-                    <label className={labelCls}>{a.wecomAppRecipientUserPick}</label>
-                    <select
-                      className={inputCls}
-                      value={wecomAppUserId}
-                      onChange={(e) => setWecomAppUserId(e.target.value)}
-                    >
-                      <option value="">{a.wecomAppRecipientUserPlaceholder}</option>
-                      {assignees.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  {wecomAppMode === "creator" && a.wecomAppRecipientCreatorHint}
-                  {wecomAppMode === "assignees" && a.wecomAppRecipientAssigneesHint}
-                  {wecomAppMode === "user" && a.wecomAppRecipientUserHint}
-                </p>
               </div>
-            )}
-            <input type="hidden" name="pushWecomAppTo" value={pushWecomAppTo} />
-          </div>
-        </section>
+            </SectionCard>
 
-        {/* ===== Basic ===== */}
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.basicInfo}</h2>
-          <div>
-            <label className={labelCls}>{a.slugLabel}</label>
-            <input name="slug" className={inputCls} value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="acme-opportunities-daily" />
+            <SectionCard title={a.pushResults}>
+              <div className="space-y-3">
+                {deliveryMissing && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded-md px-2.5 py-1.5">{a.saveErrorDelivery}</p>
+                )}
+                <div>
+                  <label className={labelCls}>{bc.wecomLabel}</label>
+                  <select
+                    name="wecomPushChatId"
+                    className={inputCls}
+                    value={wecomPushChatId}
+                    onChange={(e) => setWecomPushChatId(e.target.value)}
+                  >
+                    <option value="">{bc.wecomNone}</option>
+                    {wecomChats.map((c) => (
+                      <option key={c.chatId} value={c.chatId}>{wecomLabel(c)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>{bc.emailLabel}</label>
+                  <input
+                    name="pushEmailTo"
+                    list="automation-email-options"
+                    className={inputCls}
+                    value={pushEmailTo}
+                    onChange={(e) => setPushEmailTo(e.target.value)}
+                    placeholder={a.emailInputPlaceholder}
+                  />
+                  <datalist id="automation-email-options">
+                    {emails.map((u) => (
+                      <option key={u.id} value={u.email}>
+                        {u.name ? `${u.name} · ${u.email}` : u.email}
+                      </option>
+                    ))}
+                  </datalist>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50/60 p-3 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={pushWecomAppEnabled}
+                      onChange={(e) => {
+                        setPushWecomAppEnabled(e.target.checked);
+                        if (!e.target.checked) {
+                          setWecomAppMode("creator");
+                          setWecomAppUserId("");
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-sm font-medium text-slate-800">{bc.wecomAppLabel}</span>
+                  </label>
+                  {pushWecomAppEnabled && (
+                    <div className="space-y-2 pl-6">
+                      <select
+                        className={inputCls}
+                        value={wecomAppMode}
+                        onChange={(e) => {
+                          const mode = e.target.value as WecomAppRecipientMode;
+                          setWecomAppMode(mode);
+                          if (mode !== "user") setWecomAppUserId("");
+                        }}
+                      >
+                        <option value="creator">{a.wecomAppRecipientCreator}</option>
+                        {source === "todos" && <option value="assignees">{a.wecomAppRecipientAssignees}</option>}
+                        <option value="user">{a.wecomAppRecipientUser}</option>
+                      </select>
+                      {wecomAppMode === "user" && (
+                        <select className={inputCls} value={wecomAppUserId} onChange={(e) => setWecomAppUserId(e.target.value)}>
+                          <option value="">{a.wecomAppRecipientUserPlaceholder}</option>
+                          {assignees.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SectionCard>
           </div>
-          <div>
-            <label className={labelCls}>{a.displayName}</label>
-            <input name="name" className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder={a.taskGoalPlaceholder} />
-          </div>
-        </section>
+        </div>
       </div>
     </form>
   );
