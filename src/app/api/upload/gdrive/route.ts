@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     const accessToken = await getUploaderAccessToken();
 
     if (!folderUrl && entityName) {
-      const resolved = await resolveEntityGdriveFolder(entityName, accessToken);
+      const resolved = await resolveEntityGdriveFolder(entityName);
       if (resolved) {
         folderUrl = resolved.folderUrl;
         autoResolvedFolderUrl = resolved.folderUrl;

@@ -14,6 +14,7 @@ export function GdriveFolderPicker({
   customerId,
   entityName,
   boundUrl,
+  browseReady,
   uploaderConnected,
   copy,
   onBound,
@@ -22,6 +23,8 @@ export function GdriveFolderPicker({
   customerId?: string | null;
   entityName: string;
   boundUrl: string | null;
+  /** 服务账号已配置，可列出 07_Client Information 子目录（与弹药库相同） */
+  browseReady: boolean;
   uploaderConnected: boolean;
   copy: Messages["gdriveMaterials"];
   onBound: (folderUrl: string) => void;
@@ -38,7 +41,7 @@ export function GdriveFolderPicker({
   const [pending, startTransition] = useTransition();
 
   const loadFolders = useCallback(async () => {
-    if (!uploaderConnected) return;
+    if (!browseReady) return;
     setLoading(true);
     setLoadError(null);
     const res = await listClientMaterialFoldersAction(entityName);
@@ -51,11 +54,11 @@ export function GdriveFolderPicker({
     setParentUrl(res.parentUrl);
     setParentName(res.parentName);
     setSuggested(res.suggested);
-  }, [entityName, uploaderConnected]);
+  }, [entityName, browseReady]);
 
   useEffect(() => {
-    if (expanded && uploaderConnected) void loadFolders();
-  }, [expanded, uploaderConnected, loadFolders]);
+    if (expanded && browseReady) void loadFolders();
+  }, [expanded, browseReady, loadFolders]);
 
   function bindFolderId(folderId: string) {
     startTransition(async () => {
@@ -83,7 +86,7 @@ export function GdriveFolderPicker({
     });
   }
 
-  if (!uploaderConnected) return null;
+  if (!browseReady) return null;
 
   if (boundUrl && !expanded) {
     return (
@@ -168,7 +171,7 @@ export function GdriveFolderPicker({
           >
             {copy.useSuggested.replace("{name}", suggested.name)}
           </button>
-        ) : (
+        ) : uploaderConnected ? (
           <button
             type="button"
             disabled={pending}
@@ -177,6 +180,8 @@ export function GdriveFolderPicker({
           >
             {copy.createFolder.replace("{name}", entityName)}
           </button>
+        ) : (
+          <span className="text-xs text-amber-700">{copy.needConnect}</span>
         )}
         <button
           type="button"

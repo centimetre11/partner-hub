@@ -1519,6 +1519,7 @@ export const messagesZh: Messages = {
     uploading: "正在上传到 Drive…",
     parsing: "解析中…",
     needConnect: "尚未连接上传账号，请联系管理员在「设置」中连接。",
+    needServiceAccount: "尚未配置 Google 服务账号，无法列出目录。请在设置 → 弹药库配置中配置（与弹药库浏览相同）。",
     needBind: "请先绑定 Google Drive 目录，再上传。",
     empty: "暂无材料。",
     view: "打开",

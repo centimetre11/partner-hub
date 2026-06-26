@@ -25,6 +25,7 @@ export function MaterialsSection({
   customerId,
   entityName,
   folderUrl,
+  browseReady,
   uploaderConnected,
   assets: initialAssets,
   copy,
@@ -33,6 +34,8 @@ export function MaterialsSection({
   customerId?: string | null;
   entityName: string;
   folderUrl: string | null;
+  /** 服务账号已配置，可浏览 07_Client Information 子目录 */
+  browseReady: boolean;
   uploaderConnected: boolean;
   assets: MaterialAsset[];
   copy: Messages["gdriveMaterials"];
@@ -135,18 +138,25 @@ export function MaterialsSection({
       </div>
 
       <div className="px-4 sm:px-5 py-4 space-y-4 text-sm">
-        {!uploaderConnected && (
+        {!browseReady && (
+          <p className="rounded-md bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
+            {copy.needServiceAccount}
+          </p>
+        )}
+
+        {!uploaderConnected && browseReady && (
           <p className="rounded-md bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
             {copy.needConnect}
           </p>
         )}
 
-        {uploaderConnected && (
+        {browseReady && (
           <GdriveFolderPicker
             partnerId={partnerId}
             customerId={customerId}
             entityName={entityName}
             boundUrl={boundUrl}
+            browseReady={browseReady}
             uploaderConnected={uploaderConnected}
             copy={copy}
             onBound={(url) => {

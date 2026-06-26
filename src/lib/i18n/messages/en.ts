@@ -1521,6 +1521,7 @@ export const messagesEn = {
     uploading: "Uploading to Drive…",
     parsing: "Parsing…",
     needConnect: "No upload account connected. Ask an admin to connect one in Settings.",
+    needServiceAccount: "Google service account is not configured — cannot list folders. Set it up in Settings → Ammo (same as ammo library browse).",
     needBind: "Bind a Google Drive folder first, then upload.",
     empty: "No materials yet.",
     view: "Open",

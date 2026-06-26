@@ -382,6 +382,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
               partnerId={p.id}
               entityName={p.name}
               folderUrl={p.gdriveFolderUrl}
+              browseReady={ammoConfig.gdriveServiceAccountConfigured}
               uploaderConnected={ammoConfig.gdriveUploaderConnected}
               assets={p.assets.map((a) => ({
                 id: a.id,

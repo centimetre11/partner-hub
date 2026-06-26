@@ -5,12 +5,15 @@ import { db } from "./db";
 import { requireUser } from "./session";
 import {
   createGdriveFolderOauth,
-  fetchDriveFolderNameOauth,
-  listGdriveSubfoldersOauth,
+  listGdriveFolderContents,
   parseGdriveFolderId,
 } from "./google-drive";
 import { folderUrlFromId, findFolderByName } from "./gdrive-entity-folder";
-import { resolveClientMaterialsFolderId, resolveClientMaterialsFolderUrl } from "./ammo-config";
+import {
+  resolveClientMaterialsFolderId,
+  resolveClientMaterialsFolderUrl,
+  resolveGdriveServiceAccountJson,
+} from "./ammo-config";
 import { getUploaderAccessToken } from "./google-oauth";
 import { saveLinkAsset } from "./link-assets";
 
@@ -59,7 +62,20 @@ export async function setCustomerGdriveFolderAction(customerId: string, formData
 
 export type MaterialFolderItem = { id: string; name: string; url: string; suggested: boolean };
 
-/** 列出 07_Client Information 下的现有子目录 */
+async function listClientMaterialSubfolders() {
+  const saJson = await resolveGdriveServiceAccountJson();
+  if (!saJson) {
+    throw new Error(
+      "Google 服务账号未配置，无法浏览目录。请在设置 → 弹药库配置中配置服务账号（与弹药库浏览相同）。",
+    );
+  }
+  const parentId = await resolveClientMaterialsFolderId();
+  if (!parentId) throw new Error("Client materials folder is not configured");
+  const { folderName, folders } = await listGdriveFolderContents(parentId, saJson);
+  return { parentId, parentName: folderName, subfolders: folders };
+}
+
+/** 列出 07_Client Information 下的现有子目录（服务账号只读，与弹药库相同） */
 export async function listClientMaterialFoldersAction(entityName?: string | null): Promise<
   | {
       ok: true;
@@ -72,15 +88,8 @@ export async function listClientMaterialFoldersAction(entityName?: string | null
 > {
   await requireUser();
   try {
-    const accessToken = await getUploaderAccessToken();
-    const parentId = await resolveClientMaterialsFolderId();
     const parentUrl = await resolveClientMaterialsFolderUrl();
-    if (!parentId) return { ok: false, error: "Client materials folder is not configured" };
-
-    const [parentName, subfolders] = await Promise.all([
-      fetchDriveFolderNameOauth(parentId, accessToken),
-      listGdriveSubfoldersOauth(parentId, accessToken),
-    ]);
+    const { parentName, subfolders } = await listClientMaterialSubfolders();
 
     const folders: MaterialFolderItem[] = subfolders.map((f) => {
       const suggested = entityName ? !!findFolderByName([f], entityName) : false;
@@ -120,7 +129,7 @@ export async function createMaterialFolderAction(target: EntityTarget, name: str
     const parentId = await resolveClientMaterialsFolderId();
     if (!parentId) return { ok: false as const, error: "Client materials folder is not configured" };
 
-    const existing = await listGdriveSubfoldersOauth(parentId, accessToken);
+    const { subfolders: existing } = await listClientMaterialSubfolders();
     const dup = findFolderByName(existing, folderName);
     if (dup) {
       const folderUrl = folderUrlFromId(dup.id);

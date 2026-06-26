@@ -140,6 +140,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         customerId={customer.id}
         entityName={customer.name}
         folderUrl={customer.gdriveFolderUrl}
+        browseReady={ammoConfig.gdriveServiceAccountConfigured}
         uploaderConnected={ammoConfig.gdriveUploaderConnected}
         assets={customer.assets.map((a) => ({
           id: a.id,
