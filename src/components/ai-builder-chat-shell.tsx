@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-/** Fixed-height builder chat: scroll messages, pin delivery bar + input in viewport. */
+/** Fixed-height builder chat: scroll messages, pin input in viewport. */
 export function AiBuilderChatShell({
   title,
   desc,
@@ -10,28 +10,35 @@ export function AiBuilderChatShell({
   children,
   footer,
   preview,
+  className = "",
 }: {
-  title: string;
-  desc: string;
+  title?: string;
+  desc?: string;
   initPanel?: ReactNode;
   children: ReactNode;
   footer: ReactNode;
   preview: ReactNode;
+  className?: string;
 }) {
+  const showHeader = !!(title || desc);
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-5 gap-5 items-stretch h-[calc(100dvh-14rem)] min-h-[480px] max-h-[920px]">
-      <div className="xl:col-span-3 bg-white rounded-lg border border-slate-200/80 shadow-sm flex flex-col min-h-0 overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-100 shrink-0">
-          <div className="text-sm font-semibold text-slate-900">{title}</div>
-          <div className="text-xs text-slate-400 mt-0.5">{desc}</div>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-3">
+    <div
+      className={`grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch h-full min-h-[480px] ${className}`}
+    >
+      <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200/80 flex flex-col min-h-0 overflow-hidden">
+        {showHeader ? (
+          <div className="px-4 py-3 border-b border-slate-100 shrink-0">
+            {title ? <div className="text-sm font-semibold text-slate-900">{title}</div> : null}
+            {desc ? <div className="text-xs text-slate-400 mt-0.5">{desc}</div> : null}
+          </div>
+        ) : null}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-3">
           {initPanel}
           {children}
         </div>
         <div className="border-t border-slate-100 p-3 flex flex-col gap-2 shrink-0 bg-white">{footer}</div>
       </div>
-      <div className="xl:col-span-2 min-h-0 overflow-y-auto space-y-4">{preview}</div>
+      <div className="lg:col-span-5 min-h-0 overflow-y-auto space-y-4">{preview}</div>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { NavLink } from "@/components/nav-link";
 import Link from "next/link";
 import type { Opportunity, TodoItem, Training } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -153,7 +154,7 @@ export default async function PartnersPage({
               const activeOpp = p.opportunities[0] ?? null;
               const activityTone = stale > 30 ? "text-red-600" : stale > 14 ? "text-amber-600" : "text-slate-700";
               return (
-                <Link
+                <NavLink
                   key={p.id}
                   href={`/partners/${p.id}`}
                   className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300 block"
@@ -218,7 +219,7 @@ export default async function PartnersPage({
                       <ScoreBar score={c.score} />
                     </div>
                   </div>
-                </Link>
+                </NavLink>
               );
             })}
           </div>

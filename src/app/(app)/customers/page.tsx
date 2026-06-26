@@ -1,3 +1,4 @@
+import { NavLink } from "@/components/nav-link";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
@@ -107,9 +108,9 @@ export default async function CustomersPage({
                   {customers.map((cust) => (
                     <tr key={cust.id} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3">
-                        <Link href={`/customers/${cust.id}`} className="font-medium text-slate-900 hover:text-sky-700">
+                        <NavLink href={`/customers/${cust.id}`} className="font-medium text-slate-900 hover:text-sky-700">
                           {cust.name}
-                        </Link>
+                        </NavLink>
                         <div className="text-[11px] text-slate-400 mt-0.5">{c.createdAt} {fmtDate(cust.createdAt, bcp47)}</div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{cust.industry ?? "—"}</td>
@@ -119,7 +120,7 @@ export default async function CustomersPage({
                           <span className="flex flex-wrap gap-x-1.5 gap-y-0.5">
                             {cust.partnerLinks.map((link, i) => (
                               <span key={link.partner.id}>
-                                <Link href={`/partners/${link.partner.id}`} className="text-sky-600 hover:underline">{link.partner.name}</Link>
+                                <NavLink href={`/partners/${link.partner.id}`} className="text-sky-600 hover:underline">{link.partner.name}</NavLink>
                                 {i < cust.partnerLinks.length - 1 && <span className="text-slate-300">,</span>}
                               </span>
                             ))}

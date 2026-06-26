@@ -36,6 +36,7 @@ import { describeCron } from "@/lib/cron";
 import { AiClarificationFlow } from "@/components/ai-clarification-flow";
 import { AiProcessTrace } from "@/components/ai-process-trace";
 import { AiBuilderChatShell, BuilderInitPanel } from "@/components/ai-builder-chat-shell";
+import { AutomationPageHeader } from "@/components/automation-page-header";
 import { useBuilderOptions } from "@/components/builder-delivery-bar";
 import { useLocale, useMessages } from "@/lib/i18n";
 
@@ -209,7 +210,7 @@ function DraftPreview({
   const showRationale = draft.rationale?.trim() && !draft.queryConfig?.trim();
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">
+    <div className="rounded-xl border border-slate-200/80 bg-white p-4 space-y-3">
       <div>
         <div className="text-xs text-slate-400 font-mono">{draft.slug || "—"}</div>
         <div className="text-sm font-semibold text-slate-900 mt-1">{draft.name || a.builderUntitled}</div>
@@ -347,8 +348,7 @@ export function AutomationBuilder() {
   }, [draft, partners, customers, lang]);
 
 
-  function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
+  function handleCreate() {
     if (!draft || !createReady || creating) return;
     setError(null);
     startCreate(async () => {
@@ -441,118 +441,141 @@ export function AutomationBuilder() {
   }
 
   return (
-    <AiBuilderChatShell
-      title={a.builderTitle}
-      desc={a.builderDesc}
-      initPanel={
-        showInit ? (
-          <BuilderInitPanel
-            title={bc.initTitle}
-            desc={bc.initDesc}
-            tryLabel={a.builderTryThese}
-            starters={starters}
-            onPick={send}
-            disabled={loading}
-          />
-        ) : null
-      }
-      footer={
-        <>
-          {clarifyBlocked && (
-            <div className="text-xs text-sky-700 bg-sky-50 rounded-lg px-3 py-2">{a.builderClarifyBlockedHint}</div>
-          )}
-          <div className="flex gap-2">
-            <input
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()}
-              placeholder={clarifyBlocked ? a.builderClarifyBlockedPlaceholder : a.builderInputPlaceholder}
-              disabled={clarifyBlocked}
-              className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-400`}
-            />
+    <div className="min-h-[calc(100vh-7rem)] flex flex-col">
+      <AutomationPageHeader
+        title={a.createTitle}
+        subtitle={a.createDesc}
+        builderMode="auto"
+        actions={
+          <>
+            {error && (
+              <span className="text-xs text-red-600 max-w-[220px] text-right leading-snug" title={error}>
+                {error}
+              </span>
+            )}
             <button
               type="button"
-              onClick={() => send()}
-              disabled={loading || clarifyBlocked || !inputText.trim()}
-              className="rounded-lg bg-slate-900 text-white px-4 text-sm hover:bg-slate-800 disabled:opacity-40 shrink-0"
+              onClick={handleCreate}
+              disabled={!createReady || creating}
+              title={createReady ? a.builderConfirmHint : a.builderCreatePending}
+              className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm font-medium hover:bg-slate-800 disabled:opacity-40"
             >
-              {a.builderSend}
+              {creating ? a.saving : a.createAndActivate}
             </button>
-          </div>
-        </>
-      }
-      preview={
-        draft ? (
-          <>
-            <DraftPreview
-              draft={draft}
-              scopeLabel={scopeLabel}
-              partners={partners}
-              customers={customers}
-              assignees={assignees}
-            />
-            <form onSubmit={handleCreate} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-              <p className="text-xs text-slate-500 leading-relaxed">{a.builderConfirmHint}</p>
-              {!isAutomationDraftReady(draft) && (
-                <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{a.builderDeliveryRequired}</p>
-              )}
-              <button
-                type="submit"
-                disabled={!createReady || creating}
-                className="w-full rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-700 disabled:opacity-40"
-              >
-                {creating ? a.saving : createReady ? a.builderCreateReady : a.builderCreatePending}
-              </button>
-            </form>
           </>
-        ) : (
-          <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-400 h-full min-h-[200px]">
-            {a.builderEmptyPreview}
-          </div>
-        )
-      }
-    >
-      {messages.map((msg, i) => (
-        <div key={i} className={msg.role === "user" ? "flex flex-col items-end gap-2" : "flex flex-col items-start gap-2"}>
-          {msg.role === "assistant" && msg.trace && Array.isArray(msg.trace) && msg.trace.length > 0 && (
-            <AiProcessTrace steps={msg.trace as AiTraceStep[]} className="w-full max-w-[92%]" />
-          )}
-          <div
-            className={`max-w-[86%] rounded-lg px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
-              msg.role === "user" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
-            }`}
-          >
-            {msg.content}
-          </div>
-        </div>
-      ))}
-      {pendingClarifications.length > 0 && !loading && (
-        <div className="flex justify-start w-full">
-          <AiClarificationFlow
-            key={pendingClarifications.map((c) => c.id).join("-")}
-            clarifications={pendingClarifications as AutomationBuilderClarification[]}
-            disabled={loading}
-            onRequiredContinue={handleClarificationContinue}
-            onRequiredSkip={() => send(a.builderSkipMessage)}
-            onPreferencePick={(answer) => send(formatPreferencePick(answer, locale))}
-          />
-        </div>
-      )}
-      {loading && (
-        <div className="space-y-2 w-full">
-          <AiProcessTrace steps={liveTrace} loading phase={phase} phaseLabel={phaseLabel} className="max-w-[92%]" />
-          {replyText ? (
-            <div className="max-w-[86%] rounded-lg px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-slate-100 text-slate-800 border border-slate-200/80">
-              {replyText}
-              <span className="inline-block w-1.5 h-4 bg-slate-400 ml-0.5 align-middle" />
+        }
+      />
+
+      <div className="flex-1 max-w-6xl mx-auto w-full px-6 py-5 min-h-0">
+        <AiBuilderChatShell
+          title={a.builderTitle}
+          desc={a.builderDesc}
+          initPanel={
+            showInit ? (
+              <BuilderInitPanel
+                title={bc.initTitle}
+                desc={bc.initDesc}
+                tryLabel={a.builderTryThese}
+                starters={starters}
+                onPick={send}
+                disabled={loading}
+              />
+            ) : null
+          }
+          footer={
+            <>
+              {clarifyBlocked && (
+                <div className="text-xs text-sky-700 bg-sky-50 rounded-lg px-3 py-2">{a.builderClarifyBlockedHint}</div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && send()}
+                  placeholder={clarifyBlocked ? a.builderClarifyBlockedPlaceholder : a.builderInputPlaceholder}
+                  disabled={clarifyBlocked}
+                  className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-400`}
+                />
+                <button
+                  type="button"
+                  onClick={() => send()}
+                  disabled={loading || clarifyBlocked || !inputText.trim()}
+                  className="rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40 shrink-0"
+                >
+                  {a.builderSend}
+                </button>
+              </div>
+            </>
+          }
+          preview={
+            draft ? (
+              <>
+                <DraftPreview
+                  draft={draft}
+                  scopeLabel={scopeLabel}
+                  partners={partners}
+                  customers={customers}
+                  assignees={assignees}
+                />
+                {!isAutomationDraftReady(draft) && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded-lg border border-amber-100 px-3 py-2">
+                    {a.builderDeliveryRequired}
+                  </p>
+                )}
+                {createReady && (
+                  <p className="text-xs text-slate-500 leading-relaxed">{a.builderConfirmHint}</p>
+                )}
+              </>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-400 min-h-[200px]">
+                {a.builderEmptyPreview}
+              </div>
+            )
+          }
+        >
+          {messages.map((msg, i) => (
+            <div key={i} className={msg.role === "user" ? "flex flex-col items-end gap-2" : "flex flex-col items-start gap-2"}>
+              {msg.role === "assistant" && msg.trace && Array.isArray(msg.trace) && msg.trace.length > 0 && (
+                <AiProcessTrace steps={msg.trace as AiTraceStep[]} className="w-full max-w-[92%]" />
+              )}
+              <div
+                className={`max-w-[86%] rounded-lg px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed ${
+                  msg.role === "user" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-800"
+                }`}
+              >
+                {msg.content}
+              </div>
             </div>
-          ) : liveTrace.length === 0 ? (
-            <div className="text-xs text-slate-400">{a.builderSending}</div>
-          ) : null}
-        </div>
-      )}
-      {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
-      <div ref={bottomRef} />
-    </AiBuilderChatShell>
+          ))}
+          {pendingClarifications.length > 0 && !loading && (
+            <div className="flex justify-start w-full">
+              <AiClarificationFlow
+                key={pendingClarifications.map((c) => c.id).join("-")}
+                clarifications={pendingClarifications as AutomationBuilderClarification[]}
+                disabled={loading}
+                onRequiredContinue={handleClarificationContinue}
+                onRequiredSkip={() => send(a.builderSkipMessage)}
+                onPreferencePick={(answer) => send(formatPreferencePick(answer, locale))}
+              />
+            </div>
+          )}
+          {loading && (
+            <div className="space-y-2 w-full">
+              <AiProcessTrace steps={liveTrace} loading phase={phase} phaseLabel={phaseLabel} className="max-w-[92%]" />
+              {replyText ? (
+                <div className="max-w-[86%] rounded-lg px-3.5 py-2.5 text-sm whitespace-pre-wrap leading-relaxed bg-slate-100 text-slate-800 border border-slate-200/80">
+                  {replyText}
+                  <span className="inline-block w-1.5 h-4 bg-slate-400 ml-0.5 align-middle" />
+                </div>
+              ) : liveTrace.length === 0 ? (
+                <div className="text-xs text-slate-400">{a.builderSending}</div>
+              ) : null}
+            </div>
+          )}
+          {error && !draft && <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{error}</div>}
+          <div ref={bottomRef} />
+        </AiBuilderChatShell>
+      </div>
+    </div>
   );
 }

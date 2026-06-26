@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
@@ -21,7 +20,7 @@ import {
   describeAutomationQuery,
 } from "@/lib/automation-query";
 import { useLocale, useMessages } from "@/lib/i18n/context";
-import { BuilderModeToggleClient } from "@/components/builder-mode-toggle-client";
+import { AutomationPageHeader } from "@/components/automation-page-header";
 import { AutomationRunHistory, type AutomationRunItem } from "@/components/automation-run-history";
 import { RunButton } from "@/app/(app)/agents/[id]/run-button";
 
@@ -240,28 +239,12 @@ export function AutomationForm({
       <input type="hidden" name="pushWecomAppTo" value={pushWecomAppTo} />
 
       {/* ===== Sticky header ===== */}
-      <div className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link href="/automations" className="text-slate-400 hover:text-slate-700 text-lg shrink-0">
-              ←
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-base font-semibold text-slate-900 truncate">
-                {isEdit ? name || a.editTitle : a.createTitle}
-              </h1>
-              <p className="text-[11px] text-violet-700 truncate">{querySummary}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {builderMode && (
-              <BuilderModeToggleClient
-                active={builderMode}
-                autoHref="/automations/new/ai"
-                manualHref="/automations/new"
-              />
-            )}
+      <AutomationPageHeader
+        title={isEdit ? name || a.editTitle : a.createTitle}
+        subtitle={isEdit ? querySummary : builderMode ? a.manualCreateDesc : undefined}
+        builderMode={builderMode}
+        actions={
+          <>
             {saveOk && <span className="text-xs text-emerald-600 font-medium">{a.saveSuccess}</span>}
             {saveError && (
               <span className="text-xs text-red-600 max-w-[200px] text-right leading-snug" title={saveError}>
@@ -297,9 +280,9 @@ export function AutomationForm({
             >
               {pending ? a.saving : isEdit ? a.saveAndActivate : a.createAndActivate}
             </button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* ===== Body: 2-column layout ===== */}
       <div className="flex-1 max-w-6xl mx-auto w-full px-6 py-5">
