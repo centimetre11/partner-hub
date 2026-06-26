@@ -128,65 +128,89 @@ function ApiEditForm({
 }
 
 function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const limitReached = !!api.dailyTokenLimit && api.usedTodayTokens >= api.dailyTokenLimit;
+
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-slate-900">{api.name}</span>
-            {api.isDefault && <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">Default</span>}
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${api.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-              {api.enabled ? "Enabled" : "Disabled"}
-            </span>
-            {api.priority !== 0 && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Priority {api.priority}</span>
-            )}
-          </div>
-          <dl className="mt-2 space-y-1 text-xs">
-            <div><span className="text-slate-400">Model </span><span className="font-mono text-slate-700">{api.model}</span></div>
-            <div><span className="text-slate-400">Base URL </span><span className="font-mono text-slate-700 break-all">{api.baseUrl}</span></div>
-            <div><span className="text-slate-400">Key tail </span><span className="font-mono text-slate-700">{api.keyTail}</span></div>
-            <div>
-              <span className="text-slate-400">Daily limit </span>
-              {api.dailyTokenLimit ? (
-                <span className={`font-mono ${api.usedTodayTokens >= api.dailyTokenLimit ? "text-red-600" : "text-slate-700"}`}>
-                  Today {fmtNum(api.usedTodayTokens)} / {fmtNum(api.dailyTokenLimit)} tokens
-                  {api.usedTodayTokens >= api.dailyTokenLimit ? " (limit reached; switched today)" : ""}
-                </span>
-              ) : (
-                <span className="font-mono text-slate-400">Unlimited</span>
-              )}
+    <div className="rounded-lg border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 rounded-lg"
+      >
+        <svg
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden
+        >
+          <path fillRule="evenodd" d="M7.21 5.23a.75.75 0 011.06.02l4 4.25a.75.75 0 010 1.04l-4 4.25a.75.75 0 11-1.08-1.04L10.69 10 7.23 6.29a.75.75 0 01-.02-1.06z" clipRule="evenodd" />
+        </svg>
+        <span className="text-sm font-semibold text-slate-900 truncate">{api.name}</span>
+        {api.isDefault && <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 shrink-0">Default</span>}
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 ${api.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+          {api.enabled ? "Enabled" : "Disabled"}
+        </span>
+        {api.priority !== 0 && (
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 shrink-0">Priority {api.priority}</span>
+        )}
+        {limitReached && (
+          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600 shrink-0">Limit reached</span>
+        )}
+        <span className="ml-auto font-mono text-[11px] text-slate-400 truncate shrink-0">{api.model}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-slate-100 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <dl className="space-y-1 text-xs">
+                <div><span className="text-slate-400">Model </span><span className="font-mono text-slate-700">{api.model}</span></div>
+                <div><span className="text-slate-400">Base URL </span><span className="font-mono text-slate-700 break-all">{api.baseUrl}</span></div>
+                <div><span className="text-slate-400">Key tail </span><span className="font-mono text-slate-700">{api.keyTail}</span></div>
+                <div>
+                  <span className="text-slate-400">Daily limit </span>
+                  {api.dailyTokenLimit ? (
+                    <span className={`font-mono ${limitReached ? "text-red-600" : "text-slate-700"}`}>
+                      Today {fmtNum(api.usedTodayTokens)} / {fmtNum(api.dailyTokenLimit)} tokens
+                      {limitReached ? " (limit reached; switched today)" : ""}
+                    </span>
+                  ) : (
+                    <span className="font-mono text-slate-400">Unlimited</span>
+                  )}
+                </div>
+              </dl>
+              <ModelSceneChips modelId={api.id} assignedScenes={api.assignedScenes} />
             </div>
-          </dl>
-          <ModelSceneChips modelId={api.id} assignedScenes={api.assignedScenes} />
-        </div>
-        <div className="flex flex-wrap justify-end gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600"
-          >
-            Edit
-          </button>
-          {!api.isDefault && (
-            <form action={setDefaultAiApiAction.bind(null, api.id)}>
-              <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
-                Set default
+            <div className="flex flex-wrap justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600"
+              >
+                Edit
               </button>
-            </form>
-          )}
-          <form action={toggleAiApiAction.bind(null, api.id, !api.enabled)}>
-            <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
-              {api.enabled ? "Disable" : "Enable"}
-            </button>
-          </form>
-          <form action={deleteAiApiAction.bind(null, api.id)}>
-            <button className="rounded-md border border-red-100 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50">
-              Delete
-            </button>
-          </form>
+              {!api.isDefault && (
+                <form action={setDefaultAiApiAction.bind(null, api.id)}>
+                  <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
+                    Set default
+                  </button>
+                </form>
+              )}
+              <form action={toggleAiApiAction.bind(null, api.id, !api.enabled)}>
+                <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
+                  {api.enabled ? "Disable" : "Enable"}
+                </button>
+              </form>
+              <form action={deleteAiApiAction.bind(null, api.id)}>
+                <button className="rounded-md border border-red-100 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50">
+                  Delete
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

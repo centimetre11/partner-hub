@@ -4,7 +4,7 @@
  */
 
 import { db } from "./db";
-import { findWebSearchBackend, KIMI_BUILTIN_SEARCH, listWebSearchBackends } from "./builtin-search";
+import { findWebSearchBackend, KIMI_BUILTIN_SEARCH, VOLC_BUILTIN_SEARCH, listWebSearchBackends } from "./builtin-search";
 import type { LlmScene } from "./llm-scenes";
 
 export type WebSearchResult =
@@ -63,7 +63,7 @@ export async function modelWebSearch(
 
   for (let i = 0; i < backends.length; i++) {
     const backend = backends[i]!;
-    const tools = backend.kind === "kimi" ? [KIMI_BUILTIN_SEARCH] : [];
+    const tools = backend.kind === "kimi" ? [KIMI_BUILTIN_SEARCH] : [VOLC_BUILTIN_SEARCH];
     const apiConfigId = backend.source === "db" ? backend.apiId : undefined;
     const label = backend.source === "db" ? backend.name : "Environment Kimi";
 

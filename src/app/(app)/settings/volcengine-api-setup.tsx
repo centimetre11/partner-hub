@@ -108,94 +108,117 @@ function VolcengineConfigCard({
   cfg: VolcengineApiForClient;
   onEdit: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const extraSummary = cfg.extraConfig ? summarizeVolcengineExtra(cfg.extraConfig) : [];
+  const limitReached = !!cfg.dailyTokenLimit && cfg.usedTodayTokens >= cfg.dailyTokenLimit;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-semibold text-slate-900">{cfg.name}</span>
-            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700">Volcengine</span>
-            {cfg.isDefault && (
-              <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">Default</span>
-            )}
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cfg.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
-            >
-              {cfg.enabled ? "Enabled" : "Disabled"}
-            </span>
-            {cfg.priority !== 0 && (
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Priority {cfg.priority}</span>
-            )}
-          </div>
-          <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
-            <div>
-              <dt className="text-slate-400">Endpoint</dt>
-              <dd className="font-mono text-slate-800 mt-0.5">{cfg.model}</dd>
-            </div>
-            <div>
-              <dt className="text-slate-400">API Key</dt>
-              <dd className="font-mono text-slate-800 mt-0.5">Tail {cfg.keyTail}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-slate-400">Base URL</dt>
-              <dd className="font-mono text-slate-800 mt-0.5 break-all">{cfg.baseUrl}</dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-slate-400">Daily token limit</dt>
-              {cfg.dailyTokenLimit ? (
-                <dd className={`font-mono mt-0.5 ${cfg.usedTodayTokens >= cfg.dailyTokenLimit ? "text-red-600" : "text-slate-800"}`}>
-                  Today {fmtNum(cfg.usedTodayTokens)} / {fmtNum(cfg.dailyTokenLimit)}
-                  {cfg.usedTodayTokens >= cfg.dailyTokenLimit ? " (limit reached; switched to another model today)" : ""}
-                </dd>
-              ) : (
-                <dd className="font-mono text-slate-400 mt-0.5">Unlimited</dd>
+    <div className="rounded-lg border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left hover:bg-slate-50 rounded-lg"
+      >
+        <svg
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-90" : ""}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          aria-hidden
+        >
+          <path fillRule="evenodd" d="M7.21 5.23a.75.75 0 011.06.02l4 4.25a.75.75 0 010 1.04l-4 4.25a.75.75 0 11-1.08-1.04L10.69 10 7.23 6.29a.75.75 0 01-.02-1.06z" clipRule="evenodd" />
+        </svg>
+        <span className="text-sm font-semibold text-slate-900 truncate">{cfg.name}</span>
+        <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700 shrink-0">Volcengine</span>
+        {cfg.isDefault && (
+          <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 shrink-0">Default</span>
+        )}
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-medium shrink-0 ${cfg.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}
+        >
+          {cfg.enabled ? "Enabled" : "Disabled"}
+        </span>
+        {cfg.priority !== 0 && (
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 shrink-0">Priority {cfg.priority}</span>
+        )}
+        {limitReached && (
+          <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600 shrink-0">Limit reached</span>
+        )}
+        <span className="ml-auto font-mono text-[11px] text-slate-400 truncate shrink-0">{cfg.model}</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-slate-100 px-4 py-3 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                <div>
+                  <dt className="text-slate-400">Endpoint</dt>
+                  <dd className="font-mono text-slate-800 mt-0.5">{cfg.model}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">API Key</dt>
+                  <dd className="font-mono text-slate-800 mt-0.5">Tail {cfg.keyTail}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-slate-400">Base URL</dt>
+                  <dd className="font-mono text-slate-800 mt-0.5 break-all">{cfg.baseUrl}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-slate-400">Daily token limit</dt>
+                  {cfg.dailyTokenLimit ? (
+                    <dd className={`font-mono mt-0.5 ${limitReached ? "text-red-600" : "text-slate-800"}`}>
+                      Today {fmtNum(cfg.usedTodayTokens)} / {fmtNum(cfg.dailyTokenLimit)}
+                      {limitReached ? " (limit reached; switched to another model today)" : ""}
+                    </dd>
+                  ) : (
+                    <dd className="font-mono text-slate-400 mt-0.5">Unlimited</dd>
+                  )}
+                </div>
+              </dl>
+              {extraSummary.length > 0 && (
+                <ul className="mt-2 space-y-0.5 text-xs text-orange-700">
+                  {extraSummary.map((line) => (
+                    <li key={line}>· {line}</li>
+                  ))}
+                </ul>
               )}
+              {!cfg.keyValid && (
+                <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  API Key was not saved correctly (possibly a placeholder or invalid format). Click &quot;Edit&quot;, paste the full key from the Volcengine Ark console into the key field, and save.
+                </p>
+              )}
+              <ModelSceneChips modelId={cfg.id} assignedScenes={cfg.assignedScenes} />
             </div>
-          </dl>
-          {extraSummary.length > 0 && (
-            <ul className="mt-2 space-y-0.5 text-xs text-orange-700">
-              {extraSummary.map((line) => (
-                <li key={line}>· {line}</li>
-              ))}
-            </ul>
-          )}
-          {!cfg.keyValid && (
-            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              API Key was not saved correctly (possibly a placeholder or invalid format). Click &quot;Edit&quot;, paste the full key from the Volcengine Ark console into the key field, and save.
-            </p>
-          )}
-          <ModelSceneChips modelId={cfg.id} assignedScenes={cfg.assignedScenes} />
-        </div>
-        <div className="flex flex-wrap justify-end gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-orange-300 hover:text-orange-700"
-          >
-            Edit
-          </button>
-          {!cfg.isDefault && (
-            <form action={setDefaultAiApiAction.bind(null, cfg.id)}>
-              <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
-                Set default
+            <div className="flex flex-wrap justify-end gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-orange-300 hover:text-orange-700"
+              >
+                Edit
               </button>
-            </form>
-          )}
-          <form action={toggleAiApiAction.bind(null, cfg.id, !cfg.enabled)}>
-            <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
-              {cfg.enabled ? "Disable" : "Enable"}
-            </button>
-          </form>
-          <form action={deleteAiApiAction.bind(null, cfg.id)}>
-            <button className="rounded-md border border-red-100 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50">
-              Delete
-            </button>
-          </form>
+              {!cfg.isDefault && (
+                <form action={setDefaultAiApiAction.bind(null, cfg.id)}>
+                  <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
+                    Set default
+                  </button>
+                </form>
+              )}
+              <form action={toggleAiApiAction.bind(null, cfg.id, !cfg.enabled)}>
+                <button className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-600">
+                  {cfg.enabled ? "Disable" : "Enable"}
+                </button>
+              </form>
+              <form action={deleteAiApiAction.bind(null, cfg.id)}>
+                <button className="rounded-md border border-red-100 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50">
+                  Delete
+                </button>
+              </form>
+            </div>
+          </div>
+          <VolcengineTestButton configId={cfg.id} />
         </div>
-      </div>
-      <VolcengineTestButton configId={cfg.id} />
+      )}
     </div>
   );
 }

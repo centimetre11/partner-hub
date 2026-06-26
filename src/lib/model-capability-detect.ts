@@ -1,6 +1,6 @@
 /**
  * 模型能力检测：不再由人工勾选，而是根据「配置本身」推断模型在某场景下能否胜任。
- * - web_search：火山配置的 curl/extraConfig 里带了 {type:"web_search"} 工具；或 Kimi(moonshot) 内置 $web_search。
+ * - web_search：火山 Ark 内置 web_search 工具，任意 Ark 模型注入即可联网；或 Kimi(moonshot) 内置 $web_search。
  * - vision：按模型名启发式判断（多模态模型名通常含 vl / vision / 4o / seed / omni 等）。
  */
 
@@ -20,21 +20,13 @@ export type ModelForDetect = {
   extraConfig: string | null;
 };
 
-function volcHasWebSearch(extraConfig: string | null): boolean {
-  try {
-    const extra = JSON.parse(extraConfig ?? "{}") as { tools?: Array<{ type?: string }> };
-    return (extra.tools ?? []).some((t) => t?.type === "web_search");
-  } catch {
-    return false;
-  }
-}
-
 function isKimiBaseUrl(baseUrl: string | null | undefined): boolean {
   return (baseUrl ?? "").toLowerCase().includes("moonshot");
 }
 
 export function detectWebSearch(api: ModelForDetect): boolean {
-  if (api.provider === "volcengine") return volcHasWebSearch(api.extraConfig);
+  // 火山 Ark 的 web_search 是平台内置工具，任意 Ark 模型在请求里注入即可联网，无需在 extraConfig 里预配。
+  if (api.provider === "volcengine") return true;
   return isKimiBaseUrl(api.baseUrl);
 }
 

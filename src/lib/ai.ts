@@ -455,7 +455,18 @@ function toVolcengineTool(tool: ToolDef | Record<string, unknown>): Record<strin
 }
 
 function toVolcengineTools(tools: (ToolDef | Record<string, unknown>)[]): Record<string, unknown>[] {
-  return tools.map(toVolcengineTool);
+  const mapped = tools.map(toVolcengineTool);
+  // 去重：内置工具（如 web_search）按 type 去重，函数工具按 name 去重，避免 extraConfig 与运行时注入重复。
+  const seen = new Set<string>();
+  const out: Record<string, unknown>[] = [];
+  for (const t of mapped) {
+    const type = typeof t.type === "string" ? t.type : "";
+    const key = type === "function" ? `function:${String(t.name ?? "")}` : `type:${type}`;
+    if (key !== "type:" && seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
 }
 
 function toOpenAiMessages(messages: ChatMessage[]): unknown[] {

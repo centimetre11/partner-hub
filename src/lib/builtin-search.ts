@@ -9,18 +9,12 @@ export const KIMI_BUILTIN_SEARCH = {
   function: { name: "$web_search" },
 };
 
+// Volcengine Ark builtin web search: inject as a platform tool; results are returned server-side.
+export const VOLC_BUILTIN_SEARCH = { type: "web_search" as const };
+
 export type WebSearchBackend =
   | { source: "db"; apiId: string; name: string; kind: "volcengine" | "kimi" }
   | { source: "env"; kind: "kimi" };
-
-function volcHasWebSearch(extraConfig: string | null | undefined): boolean {
-  try {
-    const extra = JSON.parse(extraConfig ?? "{}") as { tools?: Array<{ type?: string }> };
-    return (extra.tools ?? []).some((t) => t.type === "web_search");
-  } catch {
-    return false;
-  }
-}
 
 function isKimiBaseUrl(baseUrl: string | null | undefined): boolean {
   return (baseUrl ?? "").includes("moonshot");
@@ -55,7 +49,8 @@ export async function listWebSearchBackends(opts?: { scene?: LlmScene }): Promis
   const backends: WebSearchBackend[] = [];
 
   for (const api of ordered) {
-    if (api.provider === "volcengine" && volcHasWebSearch(api.extraConfig)) {
+    // 火山 Ark 内置 web_search，所有启用的火山模型都能联网（请求时自动注入工具）。
+    if (api.provider === "volcengine") {
       backends.push({ source: "db", apiId: api.id, name: api.name, kind: "volcengine" });
     }
   }
