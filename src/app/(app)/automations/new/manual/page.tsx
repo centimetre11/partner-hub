@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/ui";
 import { AiCenterNav } from "@/components/ai-center-nav";
 import { BuilderModeToggle } from "@/components/builder-mode-toggle";
 import { getServerI18n } from "@/lib/server-i18n";
+import { DEFAULT_AUTOMATION_QUERY } from "@/lib/automation-query";
 
 export default async function ManualNewAutomationPage() {
   await requireUser();
@@ -34,16 +35,15 @@ export default async function ManualNewAutomationPage() {
         initial={{
           slug: "",
           name: "",
-          description: "",
           cronExpr: "0 9 * * *",
           timezone: "Asia/Shanghai",
-          partnerId: "",
           wecomPushChatId: "",
           pushEmailTo: "",
           pushWecomAppTo: "",
           notifyOnSuccess: true,
           notifyOnFailure: true,
           enabled: true,
+          query: { ...DEFAULT_AUTOMATION_QUERY },
         }}
       />
     </div>

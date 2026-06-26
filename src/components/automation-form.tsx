@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { CRON_PRESETS, describeCron } from "@/lib/cron";
 import { automationSaveErrorMessage } from "@/lib/automation-save-errors";
-import { saveAutomationAction, type PersistAutomationResult } from "@/lib/automation-actions";
+import { saveAutomationAction } from "@/lib/automation-actions";
 import { isWecomAppPushEnabled, PUSH_WECOM_APP_ENABLED } from "@/lib/automation-delivery";
-import { AutomationPlanPreview } from "@/components/automation-plan-preview";
+import {
+  type AutomationQuery,
+  type AutomationQuerySource,
+  type AutomationQueryScope,
+  type AutomationDueFilter,
+  type AutomationOpportunityStatus,
+  describeAutomationQuery,
+} from "@/lib/automation-query";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 
 const TIMEZONES = ["Asia/Shanghai", "Asia/Dubai", "Asia/Riyadh", "Europe/London", "America/New_York", "UTC"];
@@ -16,19 +23,20 @@ export type AutomationFormData = {
   id?: string;
   slug: string;
   name: string;
-  description: string;
   cronExpr: string;
   timezone: string;
-  partnerId: string;
   wecomPushChatId: string;
   pushEmailTo: string;
   pushWecomAppTo: string;
   notifyOnSuccess: boolean;
   notifyOnFailure: boolean;
   enabled: boolean;
+  query: AutomationQuery;
 };
 
 type PartnerOption = { id: string; name: string };
+type CustomerOption = { id: string; name: string };
+type AssigneeOption = { id: string; name: string };
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
 type EmailOption = { id: string; name: string; email: string };
 
@@ -42,19 +50,36 @@ export function AutomationForm({
   const m = useMessages();
   const locale = useLocale();
   const a = m.automations;
+  const aq = a.aq;
   const bc = m.builderCommon;
+  const lang = locale === "zh" ? "zh" : "en";
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const [slug, setSlug] = useState(initial.slug);
   const [name, setName] = useState(initial.name);
-  const [description, setDescription] = useState(initial.description);
   const [cronExpr, setCronExpr] = useState(initial.cronExpr);
   const [timezone, setTimezone] = useState(initial.timezone);
-  const [partnerId, setPartnerId] = useState(initial.partnerId || "");
   const [wecomPushChatId, setWecomPushChatId] = useState(initial.wecomPushChatId);
   const [pushEmailTo, setPushEmailTo] = useState(initial.pushEmailTo);
   const [pushWecomAppEnabled, setPushWecomAppEnabled] = useState(isWecomAppPushEnabled(initial.pushWecomAppTo));
+
+  // Structured query state
+  const [source, setSource] = useState<AutomationQuerySource>(initial.query.source);
+  const [scope, setScope] = useState<AutomationQueryScope>(initial.query.scope);
+  const [partnerId, setPartnerId] = useState(initial.query.partnerId ?? "");
+  const [customerId, setCustomerId] = useState(initial.query.customerId ?? "");
+  const [assigneeId, setAssigneeId] = useState(initial.query.assigneeId ?? "");
+  const [dueFilter, setDueFilter] = useState<AutomationDueFilter>(initial.query.dueFilter ?? "all");
+  const [dueWithinDays, setDueWithinDays] = useState(initial.query.dueWithinDays ?? 3);
+  const [opportunityStatus, setOpportunityStatus] = useState<AutomationOpportunityStatus>(
+    initial.query.opportunityStatus ?? "ALL"
+  );
+  const [aiGoal, setAiGoal] = useState(initial.query.aiGoal ?? "");
+
+  const [partnerOpts, setPartnerOpts] = useState<PartnerOption[]>(partners);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
   const [wecomChats, setWecomChats] = useState<WecomOption[]>([]);
   const [emails, setEmails] = useState<EmailOption[]>([]);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -63,45 +88,61 @@ export function AutomationForm({
   useEffect(() => {
     void fetch("/api/builder-options")
       .then((r) => r.json())
-      .then((data: { wecomChats: WecomOption[]; emails: EmailOption[]; partners?: PartnerOption[] }) => {
-        setWecomChats(data.wecomChats ?? []);
-        setEmails(data.emails ?? []);
-      });
+      .then(
+        (data: {
+          wecomChats: WecomOption[];
+          emails: EmailOption[];
+          partners?: PartnerOption[];
+          customers?: CustomerOption[];
+          assignees?: AssigneeOption[];
+        }) => {
+          setWecomChats(data.wecomChats ?? []);
+          setEmails(data.emails ?? []);
+          if (data.partners?.length) setPartnerOpts(data.partners);
+          setCustomers(data.customers ?? []);
+          setAssignees(data.assignees ?? []);
+        }
+      );
   }, []);
 
-  const cronDesc = useMemo(() => describeCron(cronExpr, locale === "zh" ? "zh" : "en"), [cronExpr, locale]);
-  const partnerName = useMemo(
-    () => partners.find((p) => p.id === partnerId)?.name ?? "",
-    [partners, partnerId]
+  const cronDesc = useMemo(() => describeCron(cronExpr, lang), [cronExpr, lang]);
+  const deliveryMissing = !wecomPushChatId.trim() && !pushEmailTo.trim() && !pushWecomAppEnabled;
+
+  const currentQuery: AutomationQuery = useMemo(
+    () => ({
+      source,
+      scope,
+      partnerId: scope === "partner" ? partnerId : undefined,
+      customerId: scope === "customer" ? customerId : undefined,
+      assigneeId: source === "todos" ? assigneeId || undefined : undefined,
+      dueFilter: source === "todos" ? dueFilter : undefined,
+      dueWithinDays: source === "todos" && dueFilter === "within_days" ? dueWithinDays : undefined,
+      opportunityStatus: source === "opportunities" ? opportunityStatus : undefined,
+      aiGoal: source === "ai" ? aiGoal : undefined,
+    }),
+    [source, scope, partnerId, customerId, assigneeId, dueFilter, dueWithinDays, opportunityStatus, aiGoal]
   );
-  const deliveryMissing =
-    !wecomPushChatId.trim() && !pushEmailTo.trim() && !pushWecomAppEnabled;
+
+  const querySummary = useMemo(() => {
+    const names = {
+      partnerName: partnerOpts.find((p) => p.id === partnerId)?.name,
+      customerName: customers.find((c) => c.id === customerId)?.name,
+      assigneeName: assignees.find((u) => u.id === assigneeId)?.name,
+    };
+    return describeAutomationQuery(currentQuery, names, lang);
+  }, [currentQuery, partnerOpts, customers, assignees, partnerId, customerId, assigneeId, lang]);
 
   const inputCls =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-400";
   const labelCls = "block text-xs font-medium text-slate-600 mb-1.5";
+  const segBtn = (active: boolean) =>
+    `rounded-lg px-3 py-1.5 text-sm border ${
+      active ? "border-sky-400 bg-sky-50 text-sky-700 font-medium" : "border-slate-200 bg-white text-slate-600"
+    }`;
 
   function wecomLabel(c: WecomOption) {
     const parts = [c.partnerName, c.label].filter(Boolean);
     return parts.length ? parts.join(" · ") : c.chatId.slice(0, 16);
-  }
-
-  function buildFormData(): FormData {
-    const fd = new FormData();
-    if (initial.id) fd.set("id", initial.id);
-    fd.set("enabled", initial.enabled ? "on" : "off");
-    fd.set("notifyOnSuccess", initial.notifyOnSuccess ? "on" : "off");
-    fd.set("notifyOnFailure", initial.notifyOnFailure ? "on" : "off");
-    fd.set("description", description);
-    fd.set("cronExpr", cronExpr);
-    fd.set("timezone", timezone);
-    fd.set("partnerId", partnerId);
-    fd.set("wecomPushChatId", wecomPushChatId);
-    fd.set("pushEmailTo", pushEmailTo);
-    fd.set("pushWecomAppTo", pushWecomAppEnabled ? PUSH_WECOM_APP_ENABLED : "");
-    fd.set("slug", slug);
-    fd.set("name", name);
-    return fd;
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -112,9 +153,9 @@ export function AutomationForm({
       setSaveError(a.saveErrorDelivery);
       return;
     }
-
+    const fd = new FormData(e.currentTarget);
     startTransition(async () => {
-      const result = await saveAutomationAction(buildFormData());
+      const result = await saveAutomationAction(fd);
       if (!result.ok) {
         setSaveError(automationSaveErrorMessage(result.error, a));
         return;
@@ -135,6 +176,16 @@ export function AutomationForm({
       <input type="hidden" name="enabled" value={initial.enabled ? "on" : "off"} />
       <input type="hidden" name="notifyOnSuccess" value={initial.notifyOnSuccess ? "on" : "off"} />
       <input type="hidden" name="notifyOnFailure" value={initial.notifyOnFailure ? "on" : "off"} />
+      {/* structured query hidden fields (always submitted; server ignores irrelevant) */}
+      <input type="hidden" name="source" value={source} />
+      <input type="hidden" name="scope" value={scope} />
+      <input type="hidden" name="partnerId" value={scope === "partner" ? partnerId : ""} />
+      <input type="hidden" name="customerId" value={scope === "customer" ? customerId : ""} />
+      <input type="hidden" name="assigneeId" value={source === "todos" ? assigneeId : ""} />
+      <input type="hidden" name="dueFilter" value={source === "todos" ? dueFilter : "all"} />
+      <input type="hidden" name="dueWithinDays" value={String(dueWithinDays)} />
+      <input type="hidden" name="opportunityStatus" value={source === "opportunities" ? opportunityStatus : "ALL"} />
+      <input type="hidden" name="aiGoal" value={source === "ai" ? aiGoal : ""} />
 
       <div className="flex items-center justify-between gap-4 px-8 py-4 border-b border-slate-200/80 bg-white sticky top-0 z-10">
         <div className="flex items-center gap-3 min-w-0">
@@ -150,9 +201,7 @@ export function AutomationForm({
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           <div className="flex items-center gap-2">
-            {saveOk && (
-              <span className="text-xs text-emerald-600 font-medium">{a.saveSuccess}</span>
-            )}
+            {saveOk && <span className="text-xs text-emerald-600 font-medium">{a.saveSuccess}</span>}
             {saveError && (
               <span className="text-xs text-red-600 max-w-[220px] text-right leading-snug" title={saveError}>
                 {saveError}
@@ -167,9 +216,7 @@ export function AutomationForm({
               {pending ? a.saving : initial.id ? a.saveAndActivate : a.createAndActivate}
             </button>
           </div>
-          {initial.id && (
-            <p className="text-[11px] text-slate-400">{a.saveOptionalRunHint}</p>
-          )}
+          {initial.id && <p className="text-[11px] text-slate-400">{a.saveOptionalRunHint}</p>}
         </div>
       </div>
 
@@ -179,43 +226,164 @@ export function AutomationForm({
           <p className="text-xs text-slate-500 mt-1 leading-relaxed">{bc.initDesc}</p>
         </section>
 
+        {/* ===== Query rule ===== */}
         <section className="space-y-3">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.taskGoalLabel}</h2>
           <div>
-            <label className={labelCls}>{a.taskGoalHint}</label>
-            <textarea
-              name="description"
-              className={`${inputCls} min-h-[80px]`}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={a.taskGoalPlaceholder}
-              required
-              rows={3}
-            />
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{aq.sectionTitle}</h2>
+            <p className="text-xs text-slate-400 mt-1">{aq.sectionDesc}</p>
+          </div>
+
+          <div>
+            <label className={labelCls}>{aq.sourceLabel}</label>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className={segBtn(source === "todos")} onClick={() => setSource("todos")}>
+                {aq.sourceTodos}
+              </button>
+              <button
+                type="button"
+                className={segBtn(source === "opportunities")}
+                onClick={() => setSource("opportunities")}
+              >
+                {aq.sourceOpportunities}
+              </button>
+              <button type="button" className={segBtn(source === "ai")} onClick={() => setSource("ai")}>
+                {aq.sourceAi}
+              </button>
+            </div>
+            {source === "ai" && <p className="text-xs text-slate-400 mt-1.5">{aq.sourceAiHint}</p>}
+          </div>
+
+          {source === "ai" ? (
+            <div>
+              <label className={labelCls}>{aq.aiGoalLabel}</label>
+              <textarea
+                className={`${inputCls} min-h-[80px]`}
+                value={aiGoal}
+                onChange={(e) => setAiGoal(e.target.value)}
+                placeholder={aq.aiGoalPlaceholder}
+                rows={3}
+              />
+            </div>
+          ) : null}
+
+          {/* scope applies to all sources */}
+          <div>
+            <label className={labelCls}>{aq.scopeLabel}</label>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button" className={segBtn(scope === "all")} onClick={() => setScope("all")}>
+                {aq.scopeAll}
+              </button>
+              <button type="button" className={segBtn(scope === "partner")} onClick={() => setScope("partner")}>
+                {aq.scopePartner}
+              </button>
+              <button type="button" className={segBtn(scope === "customer")} onClick={() => setScope("customer")}>
+                {aq.scopeCustomer}
+              </button>
+            </div>
+          </div>
+
+          {scope === "partner" && (
+            <div>
+              <label className={labelCls}>{aq.partnerLabel}</label>
+              <select className={inputCls} value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
+                <option value="">{aq.partnerPlaceholder}</option>
+                {partnerOpts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {scope === "customer" && (
+            <div>
+              <label className={labelCls}>{aq.customerLabel}</label>
+              <select className={inputCls} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+                <option value="">{aq.customerPlaceholder}</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* todos-only filters */}
+          {source === "todos" && (
+            <>
+              <div>
+                <label className={labelCls}>{aq.assigneeLabel}</label>
+                <select className={inputCls} value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+                  <option value="">{aq.assigneeAll}</option>
+                  {assignees.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>{aq.dueLabel}</label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button type="button" className={segBtn(dueFilter === "all")} onClick={() => setDueFilter("all")}>
+                    {aq.dueAll}
+                  </button>
+                  <button
+                    type="button"
+                    className={segBtn(dueFilter === "overdue")}
+                    onClick={() => setDueFilter("overdue")}
+                  >
+                    {aq.dueOverdue}
+                  </button>
+                  <button
+                    type="button"
+                    className={segBtn(dueFilter === "within_days")}
+                    onClick={() => setDueFilter("within_days")}
+                  >
+                    {aq.dueWithin}
+                  </button>
+                  {dueFilter === "within_days" && (
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+                      value={dueWithinDays}
+                      onChange={(e) => setDueWithinDays(Math.max(1, Math.min(90, Number(e.target.value) || 1)))}
+                      title={aq.dueWithinDays}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* opportunities-only filter */}
+          {source === "opportunities" && (
+            <div>
+              <label className={labelCls}>{aq.statusLabel}</label>
+              <select
+                className={inputCls}
+                value={opportunityStatus}
+                onChange={(e) => setOpportunityStatus(e.target.value as AutomationOpportunityStatus)}
+              >
+                <option value="ALL">{aq.statusAll}</option>
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="WON">WON</option>
+                <option value="LOST">LOST</option>
+                <option value="PAUSED">PAUSED</option>
+              </select>
+            </div>
+          )}
+
+          <div className="rounded-lg border border-violet-100 bg-violet-50/40 px-3 py-2 text-xs text-violet-900">
+            {querySummary}
           </div>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.monitorPartner}</h2>
-          <div>
-            <label className={labelCls}>{a.monitorPartnerLabel}</label>
-            <select
-              name="partnerId"
-              className={inputCls}
-              value={partnerId}
-              onChange={(e) => setPartnerId(e.target.value)}
-            >
-              <option value="">{a.monitorPartnerAll}</option>
-              {partners.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-400 mt-1">{a.monitorPartnerAllHint}</p>
-          </div>
-        </section>
-
+        {/* ===== Trigger ===== */}
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.triggerConfig}</h2>
           <div>
@@ -249,6 +417,7 @@ export function AutomationForm({
           </div>
         </section>
 
+        {/* ===== Delivery ===== */}
         <section className="space-y-3">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.pushResults}</h2>
           {deliveryMissing && (
@@ -260,15 +429,7 @@ export function AutomationForm({
               name="wecomPushChatId"
               className={inputCls}
               value={wecomPushChatId}
-              onChange={(e) => {
-                const chatId = e.target.value;
-                setWecomPushChatId(chatId);
-                const chat = wecomChats.find((c) => c.chatId === chatId);
-                if (chat?.partnerName) {
-                  const match = partners.find((p) => p.name === chat.partnerName);
-                  if (match) setPartnerId(match.id);
-                }
-              }}
+              onChange={(e) => setWecomPushChatId(e.target.value)}
             >
               <option value="">{bc.wecomNone}</option>
               {wecomChats.map((c) => (
@@ -298,11 +459,7 @@ export function AutomationForm({
             <p className="text-xs text-slate-400 mt-1">{a.emailInputHint}</p>
           </div>
           <div>
-            <input
-              type="hidden"
-              name="pushWecomAppTo"
-              value={pushWecomAppEnabled ? PUSH_WECOM_APP_ENABLED : ""}
-            />
+            <input type="hidden" name="pushWecomAppTo" value={pushWecomAppEnabled ? PUSH_WECOM_APP_ENABLED : ""} />
             <label className="flex items-start gap-2.5 rounded-lg border border-slate-100 px-3.5 py-2.5 cursor-pointer hover:border-slate-200">
               <input
                 type="checkbox"
@@ -319,16 +476,7 @@ export function AutomationForm({
           </div>
         </section>
 
-        <AutomationPlanPreview
-          description={description}
-          partnerId={partnerId}
-          partnerName={partnerName}
-          wecomPushChatId={wecomPushChatId}
-          pushEmailTo={pushEmailTo}
-          pushWecomAppTo={pushWecomAppEnabled ? PUSH_WECOM_APP_ENABLED : ""}
-          cronExpr={cronExpr}
-        />
-
+        {/* ===== Basic ===== */}
         <section className="space-y-2">
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{a.basicInfo}</h2>
           <div>

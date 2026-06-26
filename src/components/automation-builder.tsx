@@ -23,6 +23,13 @@ import {
 } from "@/lib/automation-clarifications";
 import { isAutomationDraftReady, pushChannelsLabel } from "@/lib/builder-context-prompt";
 import { partnerScopeLabel, inferAutomationSkills } from "@/lib/automation-push";
+import {
+  describeAutomationQuery,
+  isDeterministicQuery,
+  parseAutomationQuery,
+  resolveQueryRuntimeSkills,
+  type AutomationQuery,
+} from "@/lib/automation-query";
 import { getToolLabel } from "@/lib/tool-labels";
 import { describeCron } from "@/lib/cron";
 import { AiClarificationFlow } from "@/components/ai-clarification-flow";
@@ -34,23 +41,165 @@ import { useLocale, useMessages } from "@/lib/i18n";
 const inputCls =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
+type NameOption = { id: string; name: string };
+
+function buildQueryTags(
+  query: AutomationQuery,
+  names: { partnerName?: string; customerName?: string; assigneeName?: string },
+  aq: ReturnType<typeof useMessages>["automations"]["aq"],
+  lang: "zh" | "en"
+): { key: string; label: string; tone: "violet" | "sky" | "emerald" | "amber" }[] {
+  const tags: { key: string; label: string; tone: "violet" | "sky" | "emerald" | "amber" }[] = [];
+
+  const sourceLabel =
+    query.source === "todos"
+      ? aq.sourceTodos
+      : query.source === "opportunities"
+        ? aq.sourceOpportunities
+        : aq.sourceAi;
+  tags.push({ key: "source", label: sourceLabel, tone: "violet" });
+
+  if (query.scope === "all") {
+    tags.push({ key: "scope", label: aq.scopeAll, tone: "sky" });
+  } else if (query.scope === "partner" && names.partnerName) {
+    tags.push({ key: "partner", label: `${aq.partnerLabel}: ${names.partnerName}`, tone: "sky" });
+  } else if (query.scope === "customer" && names.customerName) {
+    tags.push({ key: "customer", label: `${aq.customerLabel}: ${names.customerName}`, tone: "sky" });
+  }
+
+  if (query.source === "todos" && names.assigneeName) {
+    tags.push({ key: "assignee", label: `${aq.assigneeLabel}: ${names.assigneeName}`, tone: "emerald" });
+  }
+
+  if (query.source === "todos") {
+    if (query.dueFilter === "overdue") {
+      tags.push({ key: "due", label: aq.dueOverdue, tone: "amber" });
+    } else if (query.dueFilter === "within_days") {
+      const days = query.dueWithinDays ?? 3;
+      tags.push({
+        key: "due",
+        label: lang === "zh" ? `${days} 天内到期` : `Due in ${days}d`,
+        tone: "amber",
+      });
+    }
+  }
+
+  if (
+    query.source === "opportunities" &&
+    query.opportunityStatus &&
+    query.opportunityStatus !== "ALL"
+  ) {
+    tags.push({ key: "status", label: query.opportunityStatus, tone: "amber" });
+  }
+
+  return tags;
+}
+
+const tagToneCls = {
+  violet: "border-violet-200 bg-violet-50 text-violet-800",
+  sky: "border-sky-200 bg-sky-50 text-sky-800",
+  emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  amber: "border-amber-200 bg-amber-50 text-amber-800",
+} as const;
+
+function QueryPreview({
+  queryConfig,
+  partners,
+  customers,
+  assignees,
+}: {
+  queryConfig: string;
+  partners: NameOption[];
+  customers: NameOption[];
+  assignees: NameOption[];
+}) {
+  const a = useMessages().automations;
+  const aq = a.aq;
+  const locale = useLocale();
+  const lang = locale === "zh" ? "zh" : "en";
+
+  const query = useMemo(() => parseAutomationQuery(queryConfig), [queryConfig]);
+  const names = useMemo(() => {
+    if (!query) return {};
+    return {
+      partnerName: partners.find((p) => p.id === query.partnerId)?.name,
+      customerName: customers.find((c) => c.id === query.customerId)?.name,
+      assigneeName: assignees.find((u) => u.id === query.assigneeId)?.name,
+    };
+  }, [query, partners, customers, assignees]);
+
+  if (!query) return null;
+
+  const summary = describeAutomationQuery(query, names, lang);
+  const tags = buildQueryTags(query, names, aq, lang);
+  const deterministic = isDeterministicQuery(query);
+
+  return (
+    <div className="rounded-lg border border-violet-100 bg-violet-50/40 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-violet-900">{aq.sectionTitle}</div>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[10px] font-medium shrink-0 ${
+            deterministic ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          {deterministic ? a.builderDeterministicBadge : a.builderAiFallbackBadge}
+        </span>
+      </div>
+      <p className="text-xs text-violet-900 leading-relaxed">{summary}</p>
+      {tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tags.map((tag) => (
+            <span
+              key={tag.key}
+              className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${tagToneCls[tag.tone]}`}
+            >
+              {tag.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DraftPreview({
   draft,
-  partnerLabel,
+  scopeLabel,
+  partners,
+  customers,
+  assignees,
 }: {
   draft: AutomationBuilderDraft;
-  partnerLabel: string;
+  scopeLabel: string;
+  partners: NameOption[];
+  customers: NameOption[];
+  assignees: NameOption[];
 }) {
   const a = useMessages().automations;
   const locale = useLocale();
-  const runtimeTools = inferAutomationSkills({
-    description: draft.description,
-    taskMd: draft.taskMd,
-    wecomPushChatId: draft.wecomPushChatId,
-    pushEmailTo: draft.pushEmailTo,
-    pushWecomAppTo: draft.pushWecomAppTo,
-    partnerId: draft.partnerId,
-  });
+  const lang = locale === "zh" ? "zh" : "en";
+
+  const runtimeTools = useMemo(() => {
+    const query = parseAutomationQuery(draft.queryConfig);
+    if (query && isDeterministicQuery(query)) {
+      return resolveQueryRuntimeSkills(query, {
+        wecomPushChatId: draft.wecomPushChatId,
+        pushEmailTo: draft.pushEmailTo,
+        pushWecomAppTo: draft.pushWecomAppTo,
+      });
+    }
+    return inferAutomationSkills({
+      description: draft.description,
+      taskMd: draft.taskMd,
+      wecomPushChatId: draft.wecomPushChatId,
+      pushEmailTo: draft.pushEmailTo,
+      pushWecomAppTo: draft.pushWecomAppTo,
+      partnerId: draft.partnerId,
+    });
+  }, [draft]);
+
+  const showRationale = draft.rationale?.trim() && !draft.queryConfig?.trim();
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 space-y-3">
@@ -59,10 +208,18 @@ function DraftPreview({
         <div className="text-sm font-semibold text-slate-900 mt-1">{draft.name || a.builderUntitled}</div>
         <div className="text-xs text-slate-500 mt-0.5">{draft.description || a.builderWaitingDesc}</div>
       </div>
+      {draft.queryConfig?.trim() && (
+        <QueryPreview
+          queryConfig={draft.queryConfig}
+          partners={partners}
+          customers={customers}
+          assignees={assignees}
+        />
+      )}
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.monitorPartnerLabel}</div>
-          <div className="font-medium text-slate-800 truncate">{partnerLabel}</div>
+          <div className="font-medium text-slate-800 truncate">{scopeLabel}</div>
         </div>
         <div className="rounded-lg bg-white p-2">
           <div className="text-slate-400">{a.taskGoalLabel}</div>
@@ -107,7 +264,7 @@ function DraftPreview({
           </div>
         </div>
       )}
-      {draft.rationale && <p className="text-xs text-slate-500 leading-relaxed">{draft.rationale}</p>}
+      {showRationale && <p className="text-xs text-slate-500 leading-relaxed">{draft.rationale}</p>}
       {draft.missingSkillNotes.length > 0 && (
         <div className="rounded-lg bg-amber-50 border border-amber-100 p-3">
           <div className="text-xs font-semibold text-amber-800 mb-1">{a.builderSkillGaps}</div>
@@ -145,7 +302,7 @@ export function AutomationBuilder() {
   const locale = useLocale();
   const lang = locale === "zh" ? "zh" : "en";
   const starters = a.builderStarters;
-  const { wecomChats, emails, partners } = useBuilderOptions();
+  const { wecomChats, emails, partners, customers, assignees } = useBuilderOptions();
   const builderOpts = useMemo(() => ({ wecomChats, emails, partners }), [wecomChats, emails, partners]);
 
   const [messages, setMessages] = useState<AutomationBuilderMessage[]>([]);
@@ -162,11 +319,23 @@ export function AutomationBuilder() {
 
   const draft = turn?.draft ?? null;
 
-  const partnerLabel = useMemo(() => {
-    if (!draft?.partnerId) return partnerScopeLabel(undefined, lang);
-    const p = partners.find((x) => x.id === draft.partnerId);
-    return p?.name ?? draft.partnerId;
-  }, [draft, partners, lang]);
+  const scopeLabel = useMemo(() => {
+    if (!draft) return partnerScopeLabel(undefined, lang);
+    const query = parseAutomationQuery(draft.queryConfig);
+    if (query?.scope === "customer" && query.customerId) {
+      const c = customers.find((x) => x.id === query.customerId);
+      return c?.name ?? query.customerId;
+    }
+    if (query?.scope === "partner" && query.partnerId) {
+      const p = partners.find((x) => x.id === query.partnerId);
+      return p?.name ?? query.partnerId;
+    }
+    if (draft.partnerId) {
+      const p = partners.find((x) => x.id === draft.partnerId);
+      return p?.name ?? draft.partnerId;
+    }
+    return partnerScopeLabel(undefined, lang);
+  }, [draft, partners, customers, lang]);
 
 
   function handleCreate(e: React.FormEvent) {
@@ -306,7 +475,13 @@ export function AutomationBuilder() {
       preview={
         draft ? (
           <>
-            <DraftPreview draft={draft} partnerLabel={partnerLabel} />
+            <DraftPreview
+              draft={draft}
+              scopeLabel={scopeLabel}
+              partners={partners}
+              customers={customers}
+              assignees={assignees}
+            />
             <form onSubmit={handleCreate} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
               <p className="text-xs text-slate-500 leading-relaxed">{a.builderConfirmHint}</p>
               {!isAutomationDraftReady(draft) && (

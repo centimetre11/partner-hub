@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireSuperAdmin } from "./session";
 import { parseVolcengineSnippet, normalizeApiKeyInput } from "./volcengine-config";
-import { parseCapabilitiesFromForm, serializeAiCapabilities } from "./ai-capabilities";
 import { recordSystemEvent } from "./activity-log";
+import { isLlmScene, type LlmScene } from "./llm-scenes";
 
 function resolveVolcengineApiKey(opts: {
   formKey?: string;
@@ -70,7 +70,6 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
   const apiKey = cleanText(formData.get("apiKey"));
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
-  const capabilities = serializeAiCapabilities(parseCapabilitiesFromForm(formData));
   const dailyTokenLimit = parseDailyTokenLimit(formData.get("dailyTokenLimit"));
   const priority = parsePriority(formData.get("priority"));
 
@@ -85,7 +84,6 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
         baseUrl,
         model,
         enabled,
-        capabilities,
         dailyTokenLimit,
         priority,
         ...(apiKey ? { apiKey } : {}),
@@ -115,7 +113,6 @@ export async function upsertAiApiAction(_: AiApiActionState, formData: FormData)
       model,
       apiKey,
       enabled,
-      capabilities,
       dailyTokenLimit,
       priority,
       isDefault: isDefault || count === 0,
@@ -198,7 +195,6 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
   const snippet = cleanText(formData.get("snippet"));
   const enabled = formData.get("enabled") === "on";
   const isDefault = formData.get("isDefault") === "on";
-  const capabilities = serializeAiCapabilities(parseCapabilitiesFromForm(formData));
   const dailyTokenLimit = parseDailyTokenLimit(formData.get("dailyTokenLimit"));
   const priority = parsePriority(formData.get("priority"));
 
@@ -244,7 +240,6 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
         model,
         extraConfig,
         enabled,
-        capabilities,
         dailyTokenLimit,
         priority,
         ...(finalKey ? { apiKey: finalKey } : {}),
@@ -266,7 +261,6 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
       apiKey: finalKey!,
       extraConfig,
       enabled,
-      capabilities,
       dailyTokenLimit,
       priority,
       isDefault: isDefault || count === 0,
@@ -276,6 +270,87 @@ export async function upsertVolcengineApiAction(_: AiApiActionState, formData: F
   else await ensureDefaultApi();
   revalidatePath("/settings");
   return { ok: true, message: `Volcengine configuration saved (key tail ${finalKey!.slice(-4)}). Click "Test connection" to verify` };
+}
+
+/* ----------------------------- 场景模型分配 ----------------------------- */
+
+function parseScene(value: unknown): LlmScene | null {
+  const raw = String(value ?? "").trim();
+  return isLlmScene(raw) ? raw : null;
+}
+
+/** 把某模型追加到某场景末尾（已存在则忽略） */
+export async function assignSceneModelAction(scene: string, apiConfigId: string) {
+  const admin = await requireSuperAdmin();
+  const s = parseScene(scene);
+  if (!s || !apiConfigId) return;
+  const api = await db.aiApiConfig.findUnique({ where: { id: apiConfigId } });
+  if (!api) return;
+  const existing = await db.llmSceneModel.findUnique({
+    where: { scene_apiConfigId: { scene: s, apiConfigId } },
+  });
+  if (existing) return;
+  const last = await db.llmSceneModel.findFirst({
+    where: { scene: s },
+    orderBy: { order: "desc" },
+  });
+  await db.llmSceneModel.create({
+    data: { scene: s, apiConfigId, order: (last?.order ?? -1) + 1 },
+  });
+  void recordSystemEvent({
+    category: "SETTINGS",
+    action: "ai.scene.assign",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetType: "LlmSceneModel",
+    targetId: apiConfigId,
+    targetLabel: `${s} · ${api.name}`,
+    summary: `场景「${s}」已添加模型：${api.name}`,
+  });
+  revalidatePath("/settings");
+}
+
+/** 从某场景移除某模型 */
+export async function removeSceneModelAction(scene: string, apiConfigId: string) {
+  const admin = await requireSuperAdmin();
+  const s = parseScene(scene);
+  if (!s || !apiConfigId) return;
+  await db.llmSceneModel
+    .delete({ where: { scene_apiConfigId: { scene: s, apiConfigId } } })
+    .catch(() => undefined);
+  void recordSystemEvent({
+    category: "SETTINGS",
+    action: "ai.scene.remove",
+    actorId: admin.id,
+    actorLabel: admin.name,
+    targetType: "LlmSceneModel",
+    targetId: apiConfigId,
+    targetLabel: `${s} · ${apiConfigId}`,
+    summary: `场景「${s}」已移除模型`,
+  });
+  revalidatePath("/settings");
+}
+
+/** 在某场景内上移/下移某模型（调整尝试顺序） */
+export async function moveSceneModelAction(scene: string, apiConfigId: string, direction: "up" | "down") {
+  await requireSuperAdmin();
+  const s = parseScene(scene);
+  if (!s || !apiConfigId) return;
+  const list = await db.llmSceneModel.findMany({
+    where: { scene: s },
+    orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+  });
+  const idx = list.findIndex((r) => r.apiConfigId === apiConfigId);
+  if (idx < 0) return;
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= list.length) return;
+  const a = list[idx]!;
+  const b = list[swapIdx]!;
+  await db.$transaction([
+    db.llmSceneModel.update({ where: { id: a.id }, data: { order: b.order } }),
+    db.llmSceneModel.update({ where: { id: b.id }, data: { order: a.order } }),
+  ]);
+  revalidatePath("/settings");
 }
 
 export async function testVolcengineApiAction(_: AiApiActionState, formData: FormData): Promise<AiApiActionState> {

@@ -23,6 +23,13 @@ import {
 import { hasAutomationDeliveryChannel, PUSH_WECOM_APP_ENABLED } from "./automation-delivery";
 import { describeCron } from "./cron";
 import { db } from "./db";
+import { END_CUSTOMER_WHERE } from "./customer-filters";
+import {
+  deriveAutomationQueryFromGoal,
+  describeAutomationQuery,
+  serializeAutomationQuery,
+  type AutomationQuery,
+} from "./automation-query";
 import { listWecomChats } from "./wecom-chats";
 import type { Locale } from "./i18n/locale";
 import type {
@@ -74,15 +81,19 @@ function outputSchema(locale: Locale) {
     "goal": "one-line ${replyLang}",
     "dataType": "todos|opportunities|web_search|mixed",
     "partnerScope": "all|named|bound",
-    "partnerNameHint": "only if named",
+    "partnerNameHint": "only if a partner company is named",
+    "customerNameHint": "only if an end-customer/account is named",
+    "assigneeNameHint": "only if a person's name is mentioned (e.g. Jackie 的待办)",
     "deliveryChannel": "email|wecom_group|wecom_app|unset",
     "emailRecipient": "mine|unset",
     "cronExpr": "0 9 * * *",
     "dueWithinDays": null
   }
 }
-Server generates slug/name/TASK.md and shows email/partner/wecom pickers — do NOT output draft or IDs.
+Server generates slug/name/TASK.md and resolves names→IDs, and shows email/partner/wecom pickers — do NOT output draft or IDs.
 emailRecipient=mine ONLY if user said 我的邮箱/发给我/to me; bare 「发邮箱」→ unset (UI picks recipients).
+partnerNameHint = Fanruan partner company; customerNameHint = end-customer/account. They are different — pick the right one.
+assigneeNameHint = a Hub user / person whose todos to list (only for dataType=todos).
 clarifications always []. ready=true when goal + cronExpr + deliveryChannel are clear.`;
 }
 
@@ -119,13 +130,15 @@ Parse user intent → output JSON with intent.* semantic fields. Server fills ID
 Language: ${lang}. Keep reply and names in ${lang}; draft.slug in English kebab-case.
 
 Examples:
-- 「每天早上所有伙伴待办发到我邮箱」→ partnerScope=all, deliveryChannel=email, emailRecipient=mine, cronExpr=0 9 * * *
-- 「每天把所有客户待办发到邮箱」→ partnerScope=all, deliveryChannel=email, emailRecipient=unset
-- 「每天把 Acme 过期待办推到群」→ partnerScope=named, partnerNameHint=Acme, deliveryChannel=wecom
+- 「每天早上所有伙伴待办发到我邮箱」→ dataType=todos, partnerScope=all, deliveryChannel=email, emailRecipient=mine, cronExpr=0 9 * * *
+- 「每天把 Jackie 的待办推给我」→ dataType=todos, assigneeNameHint=Jackie, deliveryChannel=wecom_app, emailRecipient=unset
+- 「每天把 Acme 过期待办推到群」→ dataType=todos, partnerScope=named, partnerNameHint=Acme, dueWithinDays=1, deliveryChannel=wecom_group
+- 「每天汇总迪拜银行的商机发邮件」→ dataType=opportunities, customerNameHint=迪拜银行, deliveryChannel=email
+- 「每天搜索 Acme 的招标新闻推到群」→ dataType=web_search, partnerNameHint=Acme, deliveryChannel=wecom_group
 
 Rules:
 1. SCHEDULE-only. Runtime tools: list_todos, list_opportunities, web_search, push_wecom, send_wecom_app, send_email.
-2. partnerScope: all=全部; named=具体名字; bound=绑定伙伴.
+2. partnerScope: all=全部; named=具体伙伴名; bound=绑定伙伴. Use customerNameHint for end-customers.
 3. deliveryChannel: email=邮件; wecom_group=企微群; wecom_app=企微应用私信; unset=未说明（由 UI 澄清）.
 4. clarifications always []. ready when goal+cronExpr+deliveryChannel set.
 5. Keep JSON minimal — no extra fields, no draft block.
@@ -242,11 +255,114 @@ type AutomationBuilderAiIntent = {
   dataType?: string;
   partnerScope?: "all" | "named" | "bound";
   partnerNameHint?: string;
+  customerNameHint?: string;
+  assigneeNameHint?: string;
   deliveryChannel?: "email" | "wecom_group" | "wecom_app" | "unset";
   emailRecipient?: "mine" | "unset";
   cronExpr?: string;
   dueWithinDays?: number | null;
 };
+
+/** 模糊匹配 Hub 用户（姓名 / 邮箱 / CRM 名 / 企微显示名） */
+async function resolveAssigneeIdByName(name: string): Promise<{ id: string; name: string } | null> {
+  const q = name.trim().toLowerCase();
+  if (!q) return null;
+  const users = await db.user.findMany({
+    select: { id: true, name: true, email: true, crmSalesmanName: true, wecomDisplayName: true },
+    take: 200,
+  });
+  const hit =
+    users.find((u) => u.name?.toLowerCase() === q) ??
+    users.find((u) => u.name?.toLowerCase().includes(q)) ??
+    users.find((u) => u.email?.toLowerCase().includes(q)) ??
+    users.find((u) => u.crmSalesmanName?.toLowerCase().includes(q)) ??
+    users.find((u) => u.wecomDisplayName?.toLowerCase().includes(q)) ??
+    null;
+  return hit ? { id: hit.id, name: hit.name } : null;
+}
+
+/** 模糊匹配终端客户（排除伙伴自营影子档案） */
+async function resolveCustomerIdByName(name: string): Promise<{ id: string; name: string } | null> {
+  const q = name.trim();
+  if (!q) return null;
+  const c =
+    (await db.customer.findFirst({
+      where: { ...END_CUSTOMER_WHERE, name: { equals: q } },
+      select: { id: true, name: true },
+    })) ??
+    (await db.customer.findFirst({
+      where: { ...END_CUSTOMER_WHERE, name: { contains: q } },
+      select: { id: true, name: true },
+    }));
+  return c ?? null;
+}
+
+/** 把 AI intent + 已解析草案 → 结构化 AutomationQuery（解析负责人/客户名→ID） */
+async function buildBuilderQueryConfig(
+  intent: AutomationBuilderAiIntent | undefined,
+  draft: AutomationBuilderDraft
+): Promise<{ query: AutomationQuery; assigneeName?: string; customerName?: string }> {
+  const goal = draft.description?.trim() || intent?.goal?.trim() || "";
+  const dueWithinDays =
+    intent?.dueWithinDays != null && Number.isFinite(intent.dueWithinDays)
+      ? Number(intent.dueWithinDays)
+      : draft.dueWithinDays;
+
+  // 基线：从目标文本推断 source/scope/到期
+  const base = deriveAutomationQueryFromGoal({
+    goal,
+    partnerId: draft.partnerId || undefined,
+    dueWithinDays,
+  });
+
+  // 显式 dataType 覆盖 source
+  let source = base.source;
+  if (intent?.dataType === "todos") source = "todos";
+  else if (intent?.dataType === "opportunities") source = "opportunities";
+  else if (intent?.dataType === "web_search") source = "ai";
+
+  let customerName: string | undefined;
+  let assigneeName: string | undefined;
+  let scope = base.scope;
+  let partnerId = draft.partnerId || undefined;
+  let customerId: string | undefined;
+  let assigneeId: string | undefined;
+
+  // 客户优先于伙伴
+  if (intent?.customerNameHint?.trim()) {
+    const c = await resolveCustomerIdByName(intent.customerNameHint);
+    if (c) {
+      scope = "customer";
+      customerId = c.id;
+      customerName = c.name;
+      partnerId = undefined;
+    }
+  }
+
+  // 负责人（仅待办）
+  if (source === "todos" && intent?.assigneeNameHint?.trim()) {
+    const u = await resolveAssigneeIdByName(intent.assigneeNameHint);
+    if (u) {
+      assigneeId = u.id;
+      assigneeName = u.name;
+    }
+  }
+
+  const query: AutomationQuery = {
+    source,
+    scope,
+    partnerId: scope === "partner" ? partnerId : undefined,
+    customerId: scope === "customer" ? customerId : undefined,
+    assigneeId: source === "todos" ? assigneeId : undefined,
+    dueFilter: source === "todos" ? base.dueFilter ?? "all" : undefined,
+    dueWithinDays:
+      source === "todos" && (base.dueFilter ?? "all") === "within_days" ? base.dueWithinDays : undefined,
+    opportunityStatus: source === "opportunities" ? "ALL" : undefined,
+    aiGoal: source === "ai" ? goal || undefined : undefined,
+  };
+
+  return { query, assigneeName, customerName };
+}
 
 /** 将 AI 输出的语义 intent 解析为 draft 字段（伙伴/邮箱由服务端查库） */
 function applySemanticIntentFromAi(
@@ -478,6 +594,25 @@ ${buildRuntimeContextBlock(locale, {
         sourceChatId: opts.sourceChatId,
       }),
     };
+
+    // 解析负责人/客户名 → 结构化 queryConfig（驱动确定性管道；source=ai 时回退 LLM）
+    try {
+      const { query, assigneeName, customerName } = await buildBuilderQueryConfig(raw.intent, turn.draft);
+      const partnerName = query.partnerId
+        ? partners.find((p) => p.id === query.partnerId)?.name
+        : undefined;
+      const summary = describeAutomationQuery(query, { partnerName, customerName, assigneeName }, locale);
+      turn = {
+        ...turn,
+        draft: {
+          ...turn.draft,
+          queryConfig: serializeAutomationQuery(query),
+          rationale: turn.draft.rationale ? `${turn.draft.rationale}\n${summary}` : summary,
+        },
+      };
+    } catch {
+      // 解析失败不阻断草案；保存时会回退到 deriveAutomationQueryFromGoal
+    }
 
     const effectivePartnerId =
       turn.draft.partnerId.trim() ||

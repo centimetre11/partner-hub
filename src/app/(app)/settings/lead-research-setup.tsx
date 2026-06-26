@@ -10,7 +10,8 @@ type Props = {
   volcengineApis: VolcengineApiForClient[];
   showPresetForm: boolean;
   onAddVolcenginePreset: () => void;
-  onEditVolcengine: (id: string) => void;
+  /** 「线索研究」场景已分配的模型（来自场景分配，新机制） */
+  sceneModels?: { name: string; model: string }[];
 };
 
 function volcHasWebSearch(cfg: VolcengineApiForClient): boolean {
@@ -23,28 +24,18 @@ function hasWebSearch(apis: AiApiConfigForClient[], volcengineApis: VolcengineAp
   return apis.some((a) => a.enabled && a.baseUrl.toLowerCase().includes("moonshot"));
 }
 
-function synthesisVolcModels(volcengineApis: VolcengineApiForClient[]): VolcengineApiForClient[] {
-  return volcengineApis.filter((a) => a.enabled && a.capabilities.includes("lead_research"));
-}
-
-/** Existing enabled Volcengine config without lead_research — user can add the tag instead of a new entry */
-function volcMissingLeadResearchTag(volcengineApis: VolcengineApiForClient[]): VolcengineApiForClient | null {
-  if (synthesisVolcModels(volcengineApis).length) return null;
-  return volcengineApis.find((a) => a.enabled) ?? null;
-}
-
 export function LeadResearchSetup({
   apis,
   volcengineApis,
   showPresetForm,
   onAddVolcenginePreset,
-  onEditVolcengine,
+  sceneModels = [],
 }: Props) {
   const s = useMessages().settings.leadResearch;
   const webOk = hasWebSearch(apis, volcengineApis);
-  const synthModels = synthesisVolcModels(volcengineApis);
+  // 整理模型以「线索研究」场景里分配的模型为准（在下方「场景模型分配」里配置）
+  const synthModels = sceneModels;
   const ready = webOk && synthModels.length > 0;
-  const tagCandidate = volcMissingLeadResearchTag(volcengineApis);
 
   return (
     <section className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 space-y-3">
@@ -57,16 +48,7 @@ export function LeadResearchSetup({
           <p className="text-xs text-slate-500 mt-1">{s.desc}</p>
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
-          {!showPresetForm && synthModels.length === 0 && tagCandidate && (
-            <button
-              type="button"
-              onClick={() => onEditVolcengine(tagCandidate.id)}
-              className="rounded-lg border border-orange-300 bg-white px-3 py-1.5 text-xs text-orange-800 hover:bg-orange-50"
-            >
-              {s.tagExistingVolc}
-            </button>
-          )}
-          {!showPresetForm && synthModels.length === 0 && (
+          {!showPresetForm && (
             <button
               type="button"
               onClick={onAddVolcenginePreset}
@@ -96,8 +78,8 @@ export function LeadResearchSetup({
           <p className="text-slate-400">{s.synthesisHint}</p>
           {synthModels.length > 0 && (
             <ul className="mt-2 space-y-0.5 text-slate-600">
-              {synthModels.map((m) => (
-                <li key={m.id} className="font-mono text-[11px]">
+              {synthModels.map((m, i) => (
+                <li key={`${m.name}-${m.model}-${i}`} className="font-mono text-[11px]">
                   {m.name} · {m.model}
                 </li>
               ))}

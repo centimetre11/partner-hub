@@ -5,6 +5,7 @@
 
 import { db } from "./db";
 import { findWebSearchBackend, KIMI_BUILTIN_SEARCH, listWebSearchBackends } from "./builtin-search";
+import type { LlmScene } from "./llm-scenes";
 
 export type WebSearchResult =
   | { ok: true; text: string }
@@ -42,12 +43,12 @@ Requirements: only directly related results; each item with title, link, summary
 /** Run one search via a web-capable model; returns formatted text */
 export async function modelWebSearch(
   query: string,
-  opts: { feature?: string; mode?: ModelSearchMode; userId?: string | null } = {},
+  opts: { feature?: string; mode?: ModelSearchMode; userId?: string | null; scene?: LlmScene } = {},
 ): Promise<WebSearchResult> {
   const q = query.trim();
   if (!q) return { ok: false, error: "Search query is empty" };
 
-  const backends = await listWebSearchBackends();
+  const backends = await listWebSearchBackends({ scene: opts.scene });
   if (!backends.length) {
     return {
       ok: false,
@@ -121,10 +122,12 @@ export async function generalWebSearch(
   query: string,
   _maxResults = 5,
   topic?: "news",
+  opts?: { scene?: LlmScene },
 ): Promise<WebSearchResult> {
   return modelWebSearch(query, {
     feature: "News search",
     mode: topic === "news" ? "news" : "general",
+    scene: opts?.scene,
   });
 }
 
@@ -135,13 +138,14 @@ export async function linkedinSearch(args: {
   person?: string;
   topic?: string;
   maxResults?: number;
+  scene?: LlmScene;
 }): Promise<WebSearchResult> {
   const parts = [args.company, args.person, args.topic, args.query].filter(Boolean).map(String);
   if (!parts.length) {
     return { ok: false, error: "Provide at least one of company, person, or query" };
   }
   const q = `${parts.join(" ")} LinkedIn`.trim();
-  return modelWebSearch(q, { feature: "LinkedIn search", mode: "linkedin" });
+  return modelWebSearch(q, { feature: "LinkedIn search", mode: "linkedin", scene: args.scene });
 }
 
 /** For UI: which model actually handles web search */

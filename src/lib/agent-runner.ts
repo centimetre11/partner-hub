@@ -11,6 +11,7 @@ import {
 } from "./skills";
 import { partnerContext } from "./proposals";
 import { buildToolsForAgent, resolveAgentSkills } from "./skill-resolver";
+import { runDeterministicQueryPipeline } from "./automation-pipeline";
 import { resolveAutomationRuntimeSkills } from "./automation-push";
 
 const MAX_STEPS = 12;
@@ -115,6 +116,37 @@ export async function runAgent(
   const toolLog: { tool: string; args: unknown; result: string }[] = [];
 
   try {
+    if (agent.isAutomation) {
+      const pipeline = await runDeterministicQueryPipeline(agent);
+      if (pipeline) {
+        const output = pipeline.output;
+        await db.agentRun.update({
+          where: { id: run.id },
+          data: {
+            status: "SUCCESS",
+            output,
+            toolLog: JSON.stringify(pipeline.toolLog),
+            finishedAt: new Date(),
+          },
+        });
+        if (agent.notifyOnSuccess !== false) {
+          await db.notification.create({
+            data: {
+              title: `${agent.icon} ${agent.name} run completed`,
+              content: output,
+              agentRunId: run.id,
+              partnerId: agent.partnerId,
+            },
+          });
+        }
+        if (agent.webhookUrl) {
+          await pushWebhook(agent.webhookUrl, `${agent.name}`, output);
+        }
+        await db.agent.update({ where: { id: agent.id }, data: { lastRunAt: new Date() } });
+        return output;
+      }
+    }
+
     const resolved = await resolveAgentSkills(agent.id, agent.skills);
     let skillNames = resolved.skillNames;
     if (agent.isAutomation) {
@@ -150,7 +182,7 @@ export async function runAgent(
               ? `WeCom group push chatId=${agent.wecomPushChatId} — after querying, call push_wecom with the FULL formatted body (include every todo line).`
               : "",
             agent.pushWecomAppTo
-              ? `WeCom app message enabled — call send_wecom_app (useTextcard=true, guideToBot=true). For todos push per assignee via hubUserName; otherwise pick recipients from task context.`
+              ? `WeCom app message enabled — call send_wecom_app (useTextcard=true, guideToBot=true). If goal says push to me (推给我), use hubUserId=automation creator. For todos with @assignees, push per assignee via hubUserName; otherwise send full list to creator.`
               : "",
             agent.pushEmailTo
               ? `Default email for send_email: ${agent.pushEmailTo}`

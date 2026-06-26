@@ -10,12 +10,16 @@ import { useLocale, useMessages } from "@/lib/i18n";
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
 type EmailOption = { id: string; name: string; email: string };
 type PartnerOption = { id: string; name: string };
+type CustomerOption = { id: string; name: string };
+type AssigneeOption = { id: string; name: string };
 
-/** 仅加载系统内可选的伙伴 / 企微群 / 邮箱（供对话澄清使用） */
+/** 仅加载系统内可选的伙伴 / 客户 / 负责人 / 企微群 / 邮箱（供对话澄清与草案预览使用） */
 export function useBuilderOptions() {
   const [wecomChats, setWecomChats] = useState<WecomOption[]>([]);
   const [emails, setEmails] = useState<EmailOption[]>([]);
   const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [assignees, setAssignees] = useState<AssigneeOption[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,11 +31,15 @@ export function useBuilderOptions() {
           wecomChats: WecomOption[];
           emails: EmailOption[];
           partners: PartnerOption[];
+          customers?: CustomerOption[];
+          assignees?: AssigneeOption[];
         };
         if (cancelled) return;
         setWecomChats(data.wecomChats ?? []);
         setEmails(data.emails ?? []);
         setPartners(data.partners ?? []);
+        setCustomers(data.customers ?? []);
+        setAssignees(data.assignees ?? []);
       } finally {
         /* loaded */
       }
@@ -41,7 +49,7 @@ export function useBuilderOptions() {
     };
   }, []);
 
-  return { wecomChats, emails, partners };
+  return { wecomChats, emails, partners, customers, assignees };
 }
 
 export function useBuilderDeliveryPrefs() {

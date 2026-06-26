@@ -70,8 +70,13 @@ async function gatherSearchSnippets(
     queries.push(block.query);
     const result =
       block.kind === "linkedin"
-        ? await linkedinSearch({ company: plan.company, person: lead.contName ?? undefined, query: block.query })
-        : await generalWebSearch(block.query);
+        ? await linkedinSearch({
+            company: plan.company,
+            person: lead.contName ?? undefined,
+            query: block.query,
+            scene: "lead_research",
+          })
+        : await generalWebSearch(block.query, 5, undefined, { scene: "lead_research" });
     if (result.ok) {
       parts.push(`## ${block.label} search\nQuery: ${block.query}\n\n${result.text}`);
     } else {
@@ -137,18 +142,10 @@ Output JSON only:
     temperature: 0.2,
     taskTier: "fast" as const,
     maxTokens: SYNTHESIS_MAX_TOKENS,
+    scene: "lead_research" as const,
   };
 
-  try {
-    return normalizeStructured(
-      await chatJson<LeadResearchStructured>(system, user, {
-        ...baseOpts,
-        capability: "lead_research",
-      }),
-    );
-  } catch {
-    return normalizeStructured(await chatJson<LeadResearchStructured>(system, user, baseOpts));
-  }
+  return normalizeStructured(await chatJson<LeadResearchStructured>(system, user, baseOpts));
 }
 
 export async function getLeadResearch(leadId: string): Promise<CrmLeadResearch | null> {

@@ -10,9 +10,8 @@ import {
   type AiApiActionState,
 } from "@/lib/ai-settings-actions";
 import { VolcengineApiSetup, type VolcengineApiForClient } from "./volcengine-api-setup";
-import { AiCapabilityBadges, AiCapabilityFields } from "./ai-capability-fields";
 import { LeadResearchSetup } from "./lead-research-setup";
-import { LEAD_RESEARCH_PRESET_CAPABILITIES } from "@/lib/ai-capabilities";
+import { ModelSceneChips } from "./model-scene-chips";
 import { buildLeadResearchVolcengineSnippet } from "@/lib/volcengine-config";
 import type { AiCapability } from "@/lib/ai-capabilities";
 import { useMessages } from "@/lib/i18n/context";
@@ -30,6 +29,7 @@ export type AiApiConfigForClient = {
   dailyTokenLimit: number | null;
   usedTodayTokens: number;
   priority: number;
+  assignedScenes: string[];
   createdAt: string;
 };
 
@@ -85,7 +85,6 @@ function ApiEditForm({
           <span className={label}>API Key{api ? ` (current tail ${api.keyTail}; leave blank to keep)` : ""}</span>
           <input name="apiKey" type="password" required={!api} placeholder={api ? "Leave blank to keep existing key" : "sk-..."} className={input} autoComplete="off" />
         </label>
-        <AiCapabilityFields defaultCapabilities={api?.capabilities} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1 block">
             <span className={label}>Priority (higher numbers are tried first; default 0)</span>
@@ -159,7 +158,7 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
               )}
             </div>
           </dl>
-          <AiCapabilityBadges capabilities={api.capabilities} />
+          <ModelSceneChips modelId={api.id} assignedScenes={api.assignedScenes} />
         </div>
         <div className="flex flex-wrap justify-end gap-2 shrink-0">
           <button
@@ -195,15 +194,16 @@ function ApiConfigCard({ api, onEdit }: { api: AiApiConfigForClient; onEdit: () 
 export function AiApiManager({
   apis,
   volcengineApis,
+  leadResearchSceneModels = [],
 }: {
   apis: AiApiConfigForClient[];
   volcengineApis: VolcengineApiForClient[];
+  leadResearchSceneModels?: { name: string; model: string }[];
 }) {
   const lr = useMessages().settings.leadResearch;
   const genericApis = apis.filter((api) => api.provider !== "volcengine");
   const [genericPanel, setGenericPanel] = useState<"list" | "add" | string>("list");
   const [volcPanel, setVolcPanel] = useState<string>("list");
-  const [volcLeadResearchEditId, setVolcLeadResearchEditId] = useState<string | null>(null);
 
   const leadResearchPreset = useMemo(
     () => ({
@@ -212,14 +212,12 @@ export function AiApiManager({
       submitText: lr.addVolcSubmit,
       priority: 10,
       snippet: buildLeadResearchVolcengineSnippet(),
-      capabilities: LEAD_RESEARCH_PRESET_CAPABILITIES,
     }),
     [lr.addVolcFormTitle, lr.addVolcSubmit, lr.presetName],
   );
 
   const closeVolcPanel = () => {
     setVolcPanel("list");
-    setVolcLeadResearchEditId(null);
   };
 
   return (
@@ -227,14 +225,10 @@ export function AiApiManager({
       <LeadResearchSetup
         apis={apis}
         volcengineApis={volcengineApis}
+        sceneModels={leadResearchSceneModels}
         showPresetForm={volcPanel === "lead-research-add"}
         onAddVolcenginePreset={() => {
-          setVolcLeadResearchEditId(null);
           setVolcPanel("lead-research-add");
-        }}
-        onEditVolcengine={(id) => {
-          setVolcLeadResearchEditId(id);
-          setVolcPanel(id);
         }}
       />
 
@@ -245,7 +239,6 @@ export function AiApiManager({
           if (p === "list") closeVolcPanel();
           else setVolcPanel(p);
         }}
-        leadResearchEditId={volcLeadResearchEditId}
         leadResearchPreset={leadResearchPreset}
       />
 

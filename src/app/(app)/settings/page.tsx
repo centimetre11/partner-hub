@@ -4,6 +4,9 @@ import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/u
 import { RegisterForm } from "./register-form";
 import { MemberRow } from "./member-row";
 import { AiApiManager, type AiApiConfigForClient } from "./ai-api-manager";
+import { SceneModelsSetup, type SceneModelRef, type SceneModelOption } from "./scene-models-setup";
+import { LLM_SCENES } from "@/lib/llm-scenes";
+import { detectModelCapabilities } from "@/lib/model-capability-detect";
 import { SystemKmsSetup } from "./system-kms-setup";
 import { SystemKnowhowSetup } from "./knowhow-setup";
 import { AmmoSetup } from "./ammo-setup";
@@ -42,7 +45,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems, activityStats, aiConversationLogs, systemEventLogs] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems, activityStats, aiConversationLogs, systemEventLogs, sceneModelRows] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -86,10 +89,20 @@ export default async function SettingsPage() {
         actor: { select: { name: true } },
       },
     }),
+    db.llmSceneModel.findMany({
+      orderBy: [{ scene: "asc" }, { order: "asc" }, { createdAt: "asc" }],
+    }),
   ]);
 
   const todayUsageEarly = dailyUsage.filter((row) => row.day === today);
   const usedTodayByBucket = new Map(todayUsageEarly.map((row) => [row.bucketKey, row.totalTokens]));
+
+  const scenesByApi = new Map<string, string[]>();
+  for (const row of sceneModelRows) {
+    const arr = scenesByApi.get(row.apiConfigId) ?? [];
+    arr.push(row.scene);
+    scenesByApi.set(row.apiConfigId, arr);
+  }
 
   const apiConfigs: AiApiConfigForClient[] = aiApis.map((api) => ({
     id: api.id,
@@ -104,6 +117,7 @@ export default async function SettingsPage() {
     dailyTokenLimit: api.dailyTokenLimit ?? null,
     usedTodayTokens: usedTodayByBucket.get(`api:${api.id}`) ?? 0,
     priority: api.priority,
+    assignedScenes: scenesByApi.get(api.id) ?? [],
     createdAt: api.createdAt.toISOString(),
   }));
 
@@ -132,9 +146,37 @@ export default async function SettingsPage() {
         dailyTokenLimit: api.dailyTokenLimit ?? null,
         usedTodayTokens: usedTodayByBucket.get(`api:${api.id}`) ?? 0,
         priority: api.priority,
+        assignedScenes: scenesByApi.get(api.id) ?? [],
         createdAt: api.createdAt.toISOString(),
       };
     });
+  const apiById = new Map(aiApis.map((api) => [api.id, api]));
+  const detectedById = new Map(aiApis.map((api) => [api.id, detectModelCapabilities(api)]));
+  const sceneAssignments: Record<string, SceneModelRef[]> = Object.fromEntries(
+    LLM_SCENES.map((scene) => [scene, [] as SceneModelRef[]]),
+  );
+  for (const row of sceneModelRows) {
+    const api = apiById.get(row.apiConfigId);
+    if (!api) continue;
+    const list = sceneAssignments[row.scene];
+    if (!list) continue;
+    const caps = detectedById.get(api.id) ?? { webSearch: false, vision: false };
+    list.push({
+      apiConfigId: api.id,
+      name: api.name,
+      model: api.model,
+      enabled: api.enabled,
+      webSearch: caps.webSearch,
+      vision: caps.vision,
+    });
+  }
+  const sceneModelOptions: SceneModelOption[] = aiApis
+    .filter((api) => api.enabled)
+    .map((api) => {
+      const caps = detectedById.get(api.id) ?? { webSearch: false, vision: false };
+      return { id: api.id, name: api.name, model: api.model, webSearch: caps.webSearch, vision: caps.vision };
+    });
+
   const aiConfigured = aiApis.some((api) => api.enabled) || !!process.env.AI_API_KEY;
   const todayTokens = todayUsageEarly.reduce((sum, row) => sum + row.totalTokens, 0);
   const openFeedbackCount = feedbackItems.filter((f) => f.status === "OPEN" || f.status === "IN_PROGRESS").length;
@@ -203,7 +245,22 @@ export default async function SettingsPage() {
           </Card>
 
           <Card title={m.settings.llmCenter} className="lg:col-span-2">
-            <AiApiManager apis={apiConfigs} volcengineApis={volcengineConfigs} />
+            <AiApiManager
+              apis={apiConfigs}
+              volcengineApis={volcengineConfigs}
+              leadResearchSceneModels={(sceneAssignments.lead_research ?? []).map((x) => ({
+                name: x.name,
+                model: x.model,
+              }))}
+            />
+          </Card>
+
+          <Card title={m.settings.scenes.title} className="lg:col-span-2">
+            <SceneModelsSetup
+              assignments={sceneAssignments}
+              options={sceneModelOptions}
+              m={m.settings.scenes}
+            />
           </Card>
 
           <Card title={m.settings.dailyTokens14} className="lg:col-span-2">

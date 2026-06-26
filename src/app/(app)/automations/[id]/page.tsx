@@ -7,6 +7,9 @@ import { deleteAutomationAction, toggleAutomationAction } from "@/lib/automation
 import { describeCron } from "@/lib/cron";
 import { getServerI18n } from "@/lib/server-i18n";
 import { RunButton } from "@/app/(app)/agents/[id]/run-button";
+import { parseToolLog, toolLogToTrace } from "@/lib/ai-trace";
+import { AiProcessTrace } from "@/components/ai-process-trace";
+import { parseAutomationQuery, DEFAULT_AUTOMATION_QUERY } from "@/lib/automation-query";
 
 export default async function AutomationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
@@ -29,6 +32,13 @@ export default async function AutomationDetailPage({ params }: { params: Promise
   ]);
   if (!agent) notFound();
 
+  const query =
+    parseAutomationQuery(agent.queryConfig) ?? {
+      ...DEFAULT_AUTOMATION_QUERY,
+      scope: agent.partnerId ? ("partner" as const) : ("all" as const),
+      partnerId: agent.partnerId ?? undefined,
+    };
+
   return (
     <div className="pb-16">
       <AutomationForm
@@ -37,16 +47,15 @@ export default async function AutomationDetailPage({ params }: { params: Promise
           id: agent.id,
           slug: agent.slug ?? "",
           name: agent.name,
-          description: agent.description ?? "",
           cronExpr: agent.cronExpr ?? "0 9 * * *",
           timezone: agent.timezone ?? "Asia/Shanghai",
-          partnerId: agent.partnerId ?? "",
           wecomPushChatId: agent.wecomPushChatId ?? "",
           pushEmailTo: agent.pushEmailTo ?? "",
           pushWecomAppTo: agent.pushWecomAppTo ?? "",
           notifyOnSuccess: agent.notifyOnSuccess,
           notifyOnFailure: agent.notifyOnFailure,
           enabled: agent.enabled,
+          query,
         }}
       />
 
@@ -73,7 +82,9 @@ export default async function AutomationDetailPage({ params }: { params: Promise
           <p className="text-sm text-slate-400">{m.automations.noRuns}</p>
         ) : (
           <div className="space-y-3">
-            {agent.runs.map((run) => (
+            {agent.runs.map((run) => {
+              const toolLog = parseToolLog(run.toolLog);
+              return (
               <div key={run.id} className="bg-white rounded-lg border border-slate-200/80 p-4">
                 <div className="flex items-center justify-between gap-3 mb-2">
                   <span className="text-xs text-slate-400">{fmtDateTime(run.startedAt, bcp47)}</span>
@@ -85,8 +96,19 @@ export default async function AutomationDetailPage({ params }: { params: Promise
                   <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans line-clamp-6">{run.output}</pre>
                 )}
                 {run.error && <p className="text-sm text-red-600 mt-1">{run.error}</p>}
+                {toolLog.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="text-xs text-slate-500 cursor-pointer font-medium">
+                      {m.agents.toolTrace.replace("{n}", String(toolLog.length))}
+                    </summary>
+                    <div className="mt-2">
+                      <AiProcessTrace steps={toolLogToTrace(toolLog)} />
+                    </div>
+                  </details>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

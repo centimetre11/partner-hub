@@ -7,16 +7,26 @@ import { db } from "./db";
 import { requireUser } from "./session";
 import { computeNextRunAt } from "./agent-runner";
 import { cronToAgentSchedule } from "./cron";
-import { createAutomationFromDraft, buildAutomationInstructions, resolveAutomationDraftContent, ensureUniqueAutomationSlug } from "./automation-create";
+import { createAutomationFromDraft, buildAutomationInstructions, ensureUniqueAutomationSlug } from "./automation-create";
 import { isAutomationDraftReady } from "./builder-context-prompt";
 import {
   defaultAutomationName,
   defaultAutomationSlug,
-  partnerScopeLabel,
   resolveAutomationRuntimeSkills,
+  buildAutomationVariables,
+  pickAutomationTaskMd,
+  inferDueWithinDays,
 } from "./automation-push";
+import {
+  parseAutomationQuery,
+  serializeAutomationQuery,
+  describeAutomationQuery,
+  buildStructuredInstructions,
+  resolveQueryRuntimeSkills,
+  DEFAULT_AUTOMATION_QUERY,
+} from "./automation-query";
 import { hasAutomationDeliveryChannel } from "./automation-delivery";
-import type { AutomationBuilderDraft } from "./automation-builder-types";
+import type { AutomationBuilderDraft, AutomationVariable } from "./automation-builder-types";
 
 function slugify(raw: string): string {
   return raw
@@ -34,7 +44,6 @@ export type PersistAutomationResult =
 async function persistAutomationFromFormData(formData: FormData): Promise<PersistAutomationResult> {
   const user = await requireUser();
   const id = String(formData.get("id") ?? "");
-  const partnerId = String(formData.get("partnerId") ?? "").trim();
   const cronExpr = String(formData.get("cronExpr") ?? "0 9 * * *").trim();
   const timezone = String(formData.get("timezone") ?? "Asia/Shanghai").trim();
   const wecomPushChatId = String(formData.get("wecomPushChatId") ?? "").trim() || null;
@@ -45,22 +54,52 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
   const enabledInput = formData.get("enabled");
   const enabled =
     enabledInput === "on" || enabledInput === "off" ? enabledInput === "on" : true;
-  const description = String(formData.get("description") ?? "").trim();
   const nameInput = String(formData.get("name") ?? "").trim();
 
-  if (!description) return { ok: false, error: "description_required" };
+  const query =
+    parseAutomationQuery({
+      source: formData.get("source"),
+      scope: formData.get("scope"),
+      partnerId: formData.get("partnerId"),
+      customerId: formData.get("customerId"),
+      assigneeId: formData.get("assigneeId"),
+      dueFilter: formData.get("dueFilter"),
+      dueWithinDays: formData.get("dueWithinDays"),
+      opportunityStatus: formData.get("opportunityStatus"),
+      aiGoal: formData.get("aiGoal"),
+    }) ?? { ...DEFAULT_AUTOMATION_QUERY };
+
   if (!hasAutomationDeliveryChannel({ wecomPushChatId, pushEmailTo, pushWecomAppTo }))
     return { ok: false, error: "delivery_required" };
+  if (query.scope === "partner" && !query.partnerId) return { ok: false, error: "partner_required" };
+  if (query.scope === "customer" && !query.customerId) return { ok: false, error: "customer_required" };
+  if (query.source === "ai" && !query.aiGoal) return { ok: false, error: "goal_required" };
+
+  let partnerName = "";
+  let customerName = "";
+  let assigneeName = "";
+  if (query.partnerId) {
+    const p = await db.partner.findUnique({ where: { id: query.partnerId }, select: { name: true } });
+    if (!p) return { ok: false, error: "partner_not_found" };
+    partnerName = p.name;
+  }
+  if (query.customerId) {
+    const c = await db.customer.findUnique({ where: { id: query.customerId }, select: { name: true } });
+    if (!c) return { ok: false, error: "customer_not_found" };
+    customerName = c.name;
+  }
+  if (query.assigneeId) {
+    const u = await db.user.findUnique({ where: { id: query.assigneeId }, select: { name: true } });
+    assigneeName = u?.name ?? "";
+  }
+  const names = { partnerName, customerName, assigneeName };
+
+  const description =
+    query.source === "ai" ? query.aiGoal!.trim() : describeAutomationQuery(query, names, "zh");
 
   let slug = slugify(String(formData.get("slug") ?? ""));
   let name = nameInput;
-
-  const partner = partnerId
-    ? await db.partner.findUnique({ where: { id: partnerId }, select: { name: true } })
-    : null;
-  if (partnerId && !partner) return { ok: false, error: "partner_not_found" };
-
-  if (!slug) slug = defaultAutomationSlug(partner?.name || description.slice(0, 24));
+  if (!slug) slug = defaultAutomationSlug(partnerName || customerName || description.slice(0, 24));
   if (!name) name = defaultAutomationName(description, "zh");
 
   if (id) {
@@ -70,33 +109,42 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     slug = await ensureUniqueAutomationSlug(slug);
   }
 
-  const draft: AutomationBuilderDraft = {
-    slug,
-    name,
-    description,
-    taskMd: "",
-    triggerType: "SCHEDULE",
-    cronExpr,
-    timezone,
-    validityDays: 7,
-    variables: [],
-    maxIterations: 30,
-    timeoutMinutes: 60,
-    notifyOnSuccess,
-    notifyOnFailure,
-    wecomPushChatId: wecomPushChatId ?? "",
-    webhookUrl: "",
-    pushEmailTo: pushEmailTo ?? "",
-    pushWecomAppTo: pushWecomAppTo ?? "",
-    partnerId,
-    rationale: "",
-    questionnaire: [],
-    missingSkillNotes: [],
-  };
+  let instructions: string;
+  let skills: string[];
+  let variables: AutomationVariable[] = [];
+
+  if (query.source === "ai") {
+    const goal = query.aiGoal!.trim();
+    const dueWithinDays = inferDueWithinDays(goal, query.dueWithinDays);
+    variables = buildAutomationVariables({
+      goal,
+      partnerId: query.partnerId,
+      partnerName,
+      dueWithinDays,
+      wecomPushChatId: wecomPushChatId ?? "",
+      pushEmailTo: pushEmailTo ?? "",
+      pushWecomAppTo: pushWecomAppTo ?? "",
+      locale: "zh",
+    });
+    const taskMd = pickAutomationTaskMd({
+      goal,
+      partnerId: query.partnerId,
+      partnerName: partnerName || undefined,
+      dueWithinDays,
+      wecomPushChatId: wecomPushChatId ?? "",
+      pushEmailTo: pushEmailTo ?? "",
+      pushWecomAppTo: pushWecomAppTo ?? "",
+      locale: "zh",
+    });
+    instructions = buildAutomationInstructions(taskMd, variables);
+    skills = resolveAutomationRuntimeSkills({ wecomPushChatId, pushEmailTo, pushWecomAppTo });
+  } else {
+    instructions = buildStructuredInstructions(query, names, "zh");
+    skills = resolveQueryRuntimeSkills(query, { wecomPushChatId, pushEmailTo, pushWecomAppTo });
+  }
 
   const schedule = cronToAgentSchedule(cronExpr);
-  const { taskMd, variables } = await resolveAutomationDraftContent(draft, { locale: "zh" });
-  const instructions = buildAutomationInstructions(taskMd, variables);
+  const agentPartnerId = query.scope === "partner" ? query.partnerId! : null;
 
   const data = {
     name,
@@ -104,9 +152,7 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     icon: "⚡",
     description,
     instructions,
-    skills: JSON.stringify(
-      resolveAutomationRuntimeSkills({ wecomPushChatId, pushEmailTo, pushWecomAppTo })
-    ),
+    skills: JSON.stringify(skills),
     trigger: "SCHEDULE" as const,
     frequency: schedule.frequency,
     runHour: schedule.runHour,
@@ -115,6 +161,7 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     timezone,
     validityDays: 7,
     variables: JSON.stringify(variables),
+    queryConfig: serializeAutomationQuery(query),
     maxIterations: 30,
     timeoutMinutes: 60,
     notifyOnSuccess,
@@ -123,8 +170,8 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
     pushEmailTo,
     pushWecomAppTo,
     webhookUrl: null,
-    scopeType: partnerId ? ("PARTNER" as const) : ("ALL" as const),
-    partnerId: partnerId || null,
+    scopeType: agentPartnerId ? ("PARTNER" as const) : ("ALL" as const),
+    partnerId: agentPartnerId,
     shared: true,
     enabled,
     isAutomation: true,

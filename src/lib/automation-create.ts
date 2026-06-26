@@ -10,6 +10,13 @@ import {
   partnerScopeLabel,
   resolveAutomationRuntimeSkills,
 } from "./automation-push";
+import {
+  deriveAutomationQueryFromGoal,
+  serializeAutomationQuery,
+  parseAutomationQuery,
+  isDeterministicQuery,
+  resolveQueryRuntimeSkills,
+} from "./automation-query";
 import type { AutomationBuilderDraft } from "./automation-builder-types";
 import type { AutomationVariable } from "./automation-builder-types";
 
@@ -24,7 +31,7 @@ function slugify(raw: string): string {
 
 /** Ensure slug is unique; appends -2, -3, … when base is taken */
 export async function ensureUniqueAutomationSlug(base: string, excludeId?: string): Promise<string> {
-  let slug = slugify(base) || "scheduled-push";
+  const slug = slugify(base) || "scheduled-push";
   let candidate = slug;
   let n = 2;
   while (n < 100) {
@@ -53,7 +60,7 @@ export function buildAutomationInstructions(taskMd: string, variables: Automatio
 
 ---
 【自动化执行说明】
-- 定时管道：按 TASK.md 步骤执行，按需使用 list_todos / list_opportunities / web_search / push_wecom / send_wecom_app / send_email
+- 定时管道：待办类任务优先走确定性管道（list_todos → 格式化 → 推送，零 Token）；其余按 TASK.md 步骤执行
 - 变量已注入；完成后输出 Markdown 摘要（结论、条数、是否已推送）
 `;
 }
@@ -152,6 +159,18 @@ export async function createAutomationFromDraft(
   const pushEmailTo = draft.pushEmailTo?.trim() || null;
   const pushWecomAppTo = draft.pushWecomAppTo?.trim() || null;
 
+  const dueWithinDays = inferDueWithinDays(goal, draft.dueWithinDays);
+  // 优先用 AI 解析出的结构化配置（含客户/负责人），否则从目标文本推断
+  const query =
+    parseAutomationQuery(draft.queryConfig) ??
+    deriveAutomationQueryFromGoal({ goal, partnerId: partnerId ?? undefined, dueWithinDays });
+  const queryConfig = serializeAutomationQuery(query);
+  // agent.partnerId 与 query 范围对齐（客户/全部范围时清空伙伴）
+  const agentPartnerId = query.scope === "partner" ? (query.partnerId ?? partnerId) : null;
+  const skills = isDeterministicQuery(query)
+    ? resolveQueryRuntimeSkills(query, { wecomPushChatId, pushEmailTo, pushWecomAppTo })
+    : resolveAutomationRuntimeSkills({ wecomPushChatId, pushEmailTo, pushWecomAppTo });
+
   const created = await db.agent.create({
     data: {
       name,
@@ -159,13 +178,7 @@ export async function createAutomationFromDraft(
       icon: "⚡",
       description: draft.description?.trim() || goal,
       instructions: buildAutomationInstructions(taskMd, variables),
-      skills: JSON.stringify(
-        resolveAutomationRuntimeSkills({
-          wecomPushChatId,
-          pushEmailTo,
-          pushWecomAppTo,
-        })
-      ),
+      skills: JSON.stringify(skills),
       trigger: "SCHEDULE",
       frequency: schedule.frequency,
       runHour: schedule.runHour,
@@ -174,6 +187,7 @@ export async function createAutomationFromDraft(
       timezone: draft.timezone || "Asia/Shanghai",
       validityDays: draft.validityDays || 7,
       variables: JSON.stringify(variables),
+      queryConfig,
       maxIterations: draft.maxIterations || 30,
       timeoutMinutes: draft.timeoutMinutes || 60,
       notifyOnSuccess: draft.notifyOnSuccess !== false,
@@ -182,8 +196,8 @@ export async function createAutomationFromDraft(
       pushEmailTo,
       pushWecomAppTo,
       webhookUrl: null,
-      scopeType: partnerId ? "PARTNER" : "ALL",
-      partnerId,
+      scopeType: agentPartnerId ? "PARTNER" : "ALL",
+      partnerId: agentPartnerId,
       shared: true,
       enabled: true,
       isAutomation: true,

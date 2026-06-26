@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { listWecomChats } from "@/lib/wecom-chats";
 import { requireUser } from "@/lib/session";
+import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 
 export async function GET() {
   const user = await requireUser();
-  const [chats, users, partners] = await Promise.all([
+  const [chats, users, partners, customers] = await Promise.all([
     listWecomChats(),
     db.user.findMany({
       select: { id: true, name: true, email: true },
@@ -15,7 +16,13 @@ export async function GET() {
       where: { status: { not: "ARCHIVED" } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
-      take: 100,
+      take: 200,
+    }),
+    db.customer.findMany({
+      where: { ...END_CUSTOMER_WHERE, status: { not: "INACTIVE" } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: 300,
     }),
   ]);
 
@@ -35,5 +42,7 @@ export async function GET() {
     })),
     emails: sortedEmails,
     partners,
+    customers,
+    assignees: users.map((u) => ({ id: u.id, name: u.name })),
   });
 }

@@ -476,6 +476,21 @@ model AiApiConfig {
   updatedAt   DateTime            @updatedAt
   tokenUsages AiTokenUsage[]
   dailyUsages AiDailyTokenUsage[]
+  sceneModels LlmSceneModel[]
+}
+
+/// 场景模型分配：把模型按顺序加入某个场景（线索研究 / 快速交互 / 建档 / 图片 / 默认）。
+/// 选中场景时按 order 依次尝试，额度用尽自动切下一个；全部用尽后回退到「默认」场景再到全部启用模型。
+model LlmSceneModel {
+  id          String      @id @default(cuid())
+  scene       String // lead_research | fast | profiling | vision | default
+  apiConfigId String
+  apiConfig   AiApiConfig @relation(fields: [apiConfigId], references: [id], onDelete: Cascade)
+  order       Int         @default(0)
+  createdAt   DateTime    @default(now())
+
+  @@unique([scene, apiConfigId])
+  @@index([scene, order])
 }
 
 model AiTokenUsage {
@@ -547,6 +562,7 @@ model Agent {
   timezone         String?   @default("Asia/Shanghai")
   validityDays     Int       @default(7) // 任务有效期（天）
   variables        String?   // JSON：[{ key, value, label? }]
+  queryConfig      String?   // JSON：结构化查询配置 AutomationQuery（待办/商机/AI 兜底）
   maxIterations    Int       @default(30) // 单次执行最大迭代次数
   timeoutMinutes   Int       @default(60) // 超时时间（分钟）
   notifyOnSuccess  Boolean   @default(true)

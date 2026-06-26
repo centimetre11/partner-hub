@@ -15,6 +15,7 @@ import { recordAiConversation, recordSystemEvent } from "./activity-log";
 import { chatCompletion, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import type { AiTaskTier } from "./ai-capabilities";
 import { maxTokensForTaskTier } from "./ai-capabilities";
+import type { LlmScene } from "./llm-scenes";
 import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
 import { extractPatchFromTool } from "./proposal-patch-extract";
@@ -195,6 +196,11 @@ function intakeTaskTier(scope: IntakeScope): AiTaskTier {
   return isFastIntakeScope(scope) ? "fast" : "standard";
 }
 
+/** 建档/补全等重任务走 profiling 场景，轻量录入走 fast 场景 */
+function intakeScene(scope: IntakeScope): LlmScene {
+  return isFastIntakeScope(scope) ? "fast" : "profiling";
+}
+
 async function partnerContextForScope(scope: IntakeScope, partnerId: string, locale: Locale): Promise<string> {
   if (scope === "powermap") return powermapContext(partnerId, locale);
   if (scope === "business_record" || scope === "training") return businessRecordContext(partnerId, locale);
@@ -244,7 +250,7 @@ async function customerContextForIntake(customerId: string, locale: Locale): Pro
 /** Call LLM for JSON extraction; streams reply_delta when emit is set */
 async function callIntakeExtract(
   chat: ChatMessage[],
-  opts: { feature: string; userId?: string; taskTier: AiTaskTier; emit?: TraceEmitter; streamFast?: boolean },
+  opts: { feature: string; userId?: string; taskTier: AiTaskTier; scene?: LlmScene; emit?: TraceEmitter; streamFast?: boolean },
 ): Promise<string | null> {
   const runOnce = async (retry: boolean): Promise<string | null> => {
     if (retry) {
@@ -268,6 +274,7 @@ async function callIntakeExtract(
       feature: opts.feature,
       userId: opts.userId,
       taskTier: opts.taskTier,
+      scene: opts.scene,
       maxTokens: maxTokensForTaskTier(opts.taskTier),
       onDelta,
     });
@@ -417,6 +424,7 @@ async function parseIntakeTurnFromContent(
     feature?: string;
     userId?: string;
     taskTier?: AiTaskTier;
+    scene?: LlmScene;
     today?: string;
     partnerId?: string;
     customerId?: string;
@@ -453,6 +461,7 @@ async function parseIntakeTurnFromContent(
         feature: `${opts.feature} (json repair)`,
         userId: opts.userId,
         taskTier: opts.taskTier,
+        scene: opts.scene,
         maxTokens: maxTokensForTaskTier(opts.taskTier),
       });
       const repaired = safeParseJsonLoose<Partial<IntakeTurn>>(fixed ?? "");
@@ -617,6 +626,7 @@ async function extractIntakeJson(
     },
   });
   const extractChat = [...chat, { role: "user" as const, content: extractFinalJsonUserMessage(locale) }];
+  const scene = intakeScene(scope);
   let content: string | null;
   try {
     ({ content } = await chatCompletion(extractChat, {
@@ -624,6 +634,7 @@ async function extractIntakeJson(
       temperature: 0.3,
       feature,
       userId,
+      scene,
     }));
   } catch {
     extractChat[0].content = (extractChat[0].content ?? "") + "\n\nYou must output one valid JSON object only.";
@@ -631,12 +642,14 @@ async function extractIntakeJson(
       temperature: 0.3,
       feature,
       userId,
+      scene,
     }));
   }
   const turn = await parseIntakeTurnFromContent(content ?? "", locale, scope, {
     chat: extractChat,
     feature,
     userId,
+    scene,
     partnerId,
     customerId,
   });
@@ -962,6 +975,7 @@ async function runIntakeTurnCore(opts: {
         chat,
         feature,
         userId: opts.userId,
+        scene: intakeScene(opts.scope),
         partnerId: opts.partnerId,
         customerId: opts.customerId,
       });
@@ -976,10 +990,12 @@ async function runIntakeTurnCore(opts: {
 
   emitPhase(opts.emit, "extract", "Building proposal");
   const taskTier = intakeTaskTier(opts.scope);
+  const scene = intakeScene(opts.scope);
   const content = await callIntakeExtract(chat, {
     feature,
     userId: opts.userId,
     taskTier,
+    scene,
     emit: opts.emit,
     streamFast: false,
   });
@@ -988,6 +1004,7 @@ async function runIntakeTurnCore(opts: {
     feature,
     userId: opts.userId,
     taskTier,
+    scene,
     today: opts.today,
     partnerId: opts.partnerId,
     customerId: opts.customerId,

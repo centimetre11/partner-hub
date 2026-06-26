@@ -17,9 +17,8 @@ import {
   VOLCENGINE_SNIPPET_PLACEHOLDER,
   type VolcengineExtraConfig,
 } from "@/lib/volcengine-config";
-import { AiCapabilityBadges, AiCapabilityFields } from "./ai-capability-fields";
 import type { AiCapability } from "@/lib/ai-capabilities";
-import { LEAD_RESEARCH_PRESET_CAPABILITIES } from "@/lib/ai-capabilities";
+import { ModelSceneChips } from "./model-scene-chips";
 
 const monoInput =
   "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono";
@@ -47,6 +46,7 @@ export type VolcengineApiForClient = {
   dailyTokenLimit: number | null;
   usedTodayTokens: number;
   priority: number;
+  assignedScenes: string[];
   createdAt: string;
 };
 
@@ -161,12 +161,12 @@ function VolcengineConfigCard({
               ))}
             </ul>
           )}
-          <AiCapabilityBadges capabilities={cfg.capabilities} />
           {!cfg.keyValid && (
             <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
               API Key was not saved correctly (possibly a placeholder or invalid format). Click &quot;Edit&quot;, paste the full key from the Volcengine Ark console into the key field, and save.
             </p>
           )}
+          <ModelSceneChips modelId={cfg.id} assignedScenes={cfg.assignedScenes} />
         </div>
         <div className="flex flex-wrap justify-end gap-2 shrink-0">
           <button
@@ -207,7 +207,6 @@ function VolcengineEditForm({
   formTitle,
   defaultName,
   defaultPriority,
-  defaultCapabilities,
   initialSnippetOverride,
 }: {
   existing?: VolcengineApiForClient;
@@ -216,7 +215,6 @@ function VolcengineEditForm({
   formTitle?: string;
   defaultName?: string;
   defaultPriority?: number;
-  defaultCapabilities?: AiCapability[];
   initialSnippetOverride?: string;
 }) {
   const initialSnippet = existing
@@ -290,8 +288,6 @@ function VolcengineEditForm({
         </label>
 
         <ParsePreview snippet={snippet} />
-
-        <AiCapabilityFields defaultCapabilities={existing?.capabilities ?? defaultCapabilities} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <label className="space-y-1 block">
@@ -370,19 +366,16 @@ export function VolcengineApiSetup({
   panel: controlledPanel,
   onPanelChange,
   leadResearchPreset,
-  leadResearchEditId,
 }: {
   configs: VolcengineApiForClient[];
   panel?: string;
   onPanelChange?: (panel: string) => void;
-  leadResearchEditId?: string | null;
   leadResearchPreset?: {
     name: string;
     formTitle: string;
     submitText: string;
     priority: number;
     snippet: string;
-    capabilities: AiCapability[];
   };
 }) {
   const [internalPanel, setInternalPanel] = useState<"list" | "add" | string>("list");
@@ -423,7 +416,6 @@ export function VolcengineApiSetup({
           formTitle={leadResearchPreset.formTitle}
           defaultName={leadResearchPreset.name}
           defaultPriority={leadResearchPreset.priority}
-          defaultCapabilities={leadResearchPreset.capabilities}
           initialSnippetOverride={leadResearchPreset.snippet}
         />
       )}
@@ -441,16 +433,7 @@ export function VolcengineApiSetup({
       {configs.map((cfg) => (
         <div key={cfg.id} className="space-y-3">
           {panel === cfg.id ? (
-            <VolcengineEditForm
-              existing={cfg}
-              onCancel={() => setPanel("list")}
-              submitText="Save changes"
-              defaultCapabilities={
-                leadResearchEditId === cfg.id
-                  ? ([...new Set([...cfg.capabilities, ...LEAD_RESEARCH_PRESET_CAPABILITIES])] as AiCapability[])
-                  : cfg.capabilities
-              }
-            />
+            <VolcengineEditForm existing={cfg} onCancel={() => setPanel("list")} submitText="Save changes" />
           ) : (
             <VolcengineConfigCard cfg={cfg} onEdit={() => setPanel(cfg.id)} />
           )}

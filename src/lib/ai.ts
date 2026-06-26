@@ -10,6 +10,12 @@ import {
   resolveFastIntakeMaxTokens,
 } from "./ai-capabilities";
 import { normalizeMessagesForAi } from "./ai-images-server";
+import {
+  getSceneAssignments,
+  orderedSceneApiIds,
+  type LlmScene,
+} from "./llm-scenes";
+import { detectVision } from "./model-capability-detect";
 
 export type ChatImage = { url: string; name?: string };
 
@@ -157,11 +163,77 @@ export function requiredCapabilitiesForChat(opts: {
   return required;
 }
 
+type ConfiguredApiRow = {
+  id: string;
+  name: string;
+  provider: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  extraConfig: string | null;
+  capabilities: string | null;
+  dailyTokenLimit: number | null;
+};
+
+/**
+ * 场景调度：按「场景模型分配」依次返回候选模型。
+ * 顺序 = 该场景分配 → 默认场景分配 → 全部启用模型（兜底）；
+ * 每组内额度未用尽的排前面，用尽的排最后作最终兜底。
+ * 若尚未配置任何场景分配，返回空数组，由调用方回退到能力调度。
+ */
+async function buildSceneCandidates(
+  configured: ConfiguredApiRow[],
+  scene: LlmScene,
+  apiConfigId?: string,
+): Promise<ResolvedAiApi[]> {
+  const assignments = await getSceneAssignments();
+  if (!assignments.size) return [];
+  const preferred = orderedSceneApiIds(assignments, scene);
+  if (!preferred.length) return [];
+
+  const byId = new Map(configured.map((a) => [a.id, a]));
+  // 显式部分：管理员在该场景（含默认）里指定的模型，严格按其顺序
+  const explicitIds: string[] = [];
+  const pushExplicit = (id: string) => {
+    if (byId.has(id) && !explicitIds.includes(id)) explicitIds.push(id);
+  };
+  if (apiConfigId) pushExplicit(apiConfigId);
+  for (const id of preferred) pushExplicit(id);
+
+  // 兜底部分：其余全部启用模型
+  let fallbackRows = configured.filter((a) => !explicitIds.includes(a.id));
+  if (scene === "vision") {
+    // 兜底里优先选疑似支持视觉的模型，避免选到纯文本模型导致失败
+    const visionRank = (a: ConfiguredApiRow) => (detectVision(a.model) ? 0 : 1);
+    fallbackRows = [...fallbackRows].sort((a, b) => visionRank(a) - visionRank(b));
+  }
+
+  const orderedIds = [...explicitIds, ...fallbackRows.map((a) => a.id)];
+
+  const day = new Date().toISOString().slice(0, 10);
+  const usages = await db.aiDailyTokenUsage.findMany({
+    where: { day, bucketKey: { in: configured.map((a) => `api:${a.id}`) } },
+  });
+  const usedByBucket = new Map(usages.map((u) => [u.bucketKey, u.totalTokens]));
+  const isOver = (a: ConfiguredApiRow) => {
+    const limit = a.dailyTokenLimit ?? 0;
+    if (limit <= 0) return false;
+    return (usedByBucket.get(`api:${a.id}`) ?? 0) >= limit;
+  };
+
+  const rows = orderedIds.map((id) => byId.get(id)!);
+  const under = rows.filter((a) => !isOver(a));
+  const over = rows.filter((a) => isOver(a));
+  return [...under, ...over].map(toResolvedApi);
+}
+
 async function listAiApiCandidates(opts?: {
   capabilities?: AiCapability[];
   taskTier?: AiTaskTier;
   /** Prefer this API first (e.g. web-search entry); on failure callers try the rest */
   apiConfigId?: string;
+  /** 业务场景：优先按「场景模型分配」调度，未配置则回退能力调度 */
+  scene?: LlmScene;
 }): Promise<ResolvedAiApi[]> {
   const required = opts?.capabilities ?? ["chat"];
   const configured = await db.aiApiConfig.findMany({
@@ -180,6 +252,11 @@ async function listAiApiCandidates(opts?: {
 
   if (configured.length) {
     type ConfiguredApi = (typeof configured)[number];
+
+    if (opts?.scene) {
+      const sceneCandidates = await buildSceneCandidates(configured, opts.scene, opts.apiConfigId);
+      if (sceneCandidates.length) return sceneCandidates;
+    }
 
     if (opts?.apiConfigId) {
       const forced = configured.find((a) => a.id === opts.apiConfigId);
@@ -973,10 +1050,14 @@ export async function chatCompletion(
     /** When false, do not try other APIs after the primary candidate fails (default true) */
     apiFallback?: boolean;
     toolChoice?: "auto" | "required" | "none";
+    /** 业务场景：优先按「场景模型分配」调度；不传则按「默认」场景兜底 */
+    scene?: LlmScene;
   } = {}
 ): Promise<{ content: string | null; toolCalls: ToolCall[]; volcengineReplay?: unknown[] }> {
   messages = normalizeMessagesForAi(messages);
   const maxTokens = opts.maxTokens ?? maxTokensForTaskTier(opts.taskTier);
+  // 图片输入强制走「图片识别」场景，确保选到视觉模型
+  const effectiveScene: LlmScene = messageHasImages(messages) ? "vision" : opts.scene ?? "default";
   const candidates = await listAiApiCandidates({
     capabilities: requiredCapabilitiesForChat({
       messages,
@@ -986,6 +1067,7 @@ export async function chatCompletion(
     }),
     taskTier: opts.taskTier,
     apiConfigId: opts.apiConfigId,
+    scene: effectiveScene,
   });
 
   const tryList = opts.apiFallback === false ? candidates.slice(0, 1) : candidates;
@@ -1128,6 +1210,7 @@ async function chatJsonOnce(
     maxTokens?: number;
     onDelta?: (delta: string) => void;
     jsonMode?: boolean;
+    scene?: LlmScene;
   }
 ): Promise<string> {
   const { content } = await chatCompletion(
@@ -1144,6 +1227,7 @@ async function chatJsonOnce(
       capability: opts.capability,
       maxTokens: opts.maxTokens,
       onDelta: opts.onDelta,
+      scene: opts.scene,
     }
   );
   return content ?? "";
@@ -1159,6 +1243,7 @@ export async function chatJson<T>(
     taskTier?: import("./ai-capabilities").AiTaskTier;
     capability?: AiCapability;
     maxTokens?: number;
+    scene?: LlmScene;
   } = {}
 ): Promise<T> {
   try {
@@ -1187,6 +1272,7 @@ export async function chatJsonStream<T>(
     taskTier?: import("./ai-capabilities").AiTaskTier;
     maxTokens?: number;
     emit?: import("./ai-trace").TraceEmitter;
+    scene?: LlmScene;
   } = {}
 ): Promise<{ data: T }> {
   let streamed = "";

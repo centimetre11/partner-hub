@@ -26,6 +26,8 @@ export type AutomationBuilderDraft = {
   pushWecomAppTo: string;
   partnerId: string;
   dueWithinDays?: number;
+  /** 结构化查询配置（AI 解析后序列化）；存库到 agent.queryConfig，驱动确定性管道 */
+  queryConfig?: string;
   rationale: string;
   questionnaire: string[];
   missingSkillNotes: string[];
