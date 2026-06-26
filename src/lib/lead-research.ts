@@ -172,7 +172,7 @@ export async function runLeadResearch(leadId: string, userId?: string): Promise<
     return { ok: false, error: gathered.error, needsWebSearch: gathered.needsWebSearch };
   }
 
-  const searchBackend = await webSearchBackendLabel();
+  const searchBackend = await webSearchBackendLabel({ scene: "lead_research" });
   let structured: LeadResearchStructured;
   try {
     structured = await synthesizeFromSnippets(lead, gathered.raw, userId);

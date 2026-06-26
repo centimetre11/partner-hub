@@ -148,9 +148,11 @@ export async function linkedinSearch(args: {
   return modelWebSearch(q, { feature: "LinkedIn search", mode: "linkedin", scene: args.scene });
 }
 
-/** For UI: which model actually handles web search */
-export async function webSearchBackendLabel(): Promise<string> {
-  const b = await findWebSearchBackend();
+/** For UI: which model actually handles web search（传 scene 时按场景顺序取第一个，和实际搜索一致） */
+export async function webSearchBackendLabel(opts?: { scene?: LlmScene }): Promise<string> {
+  const b = opts?.scene
+    ? ((await listWebSearchBackends({ scene: opts.scene }))[0] ?? null)
+    : await findWebSearchBackend();
   if (!b) return "Not configured";
   if (b.kind === "volcengine") {
     const name = b.source === "db" ? b.name : "Volcengine";

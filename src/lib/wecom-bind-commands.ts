@@ -225,7 +225,6 @@ export async function handleWecomBindCommand(
       `• 企微 userid：\`${result.wecomUserId}\``,
       "",
       "若 CRM 尚未绑定，可发送：`@我 绑定 CRM 你的销售英文名`",
-      "或在 Web 个人中心选择 CRM 用户后保存。",
     ].join("\n");
   }
 
