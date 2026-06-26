@@ -1,21 +1,35 @@
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./login-form";
 import { LoginLocaleSwitcher } from "@/components/locale-switcher";
+import { WecomWebLogin } from "@/components/wecom-web-login";
 import { getServerI18n } from "@/lib/server-i18n";
+import { isWecomInAppUserAgent, defaultWecomOAuthRedirect } from "@/lib/wecom-env";
+import { buildWecomOAuthStartUrl } from "@/lib/wecom-oauth";
 
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ wecom_oauth?: string; wecomUserId?: string }>;
+  searchParams: Promise<{ wecom_oauth?: string; wecomUserId?: string; redirect?: string }>;
 }) {
   const user = await getCurrentUser();
   if (user) redirect("/");
   const firstRun = (await db.user.count()) === 0;
   const { locale, messages: m } = await getServerI18n();
-  const { wecom_oauth: wecomOauthStatus, wecomUserId } = await searchParams;
+  const { wecom_oauth: wecomOauthStatus, wecomUserId, redirect: redirectParam } = await searchParams;
   const wecomMessage = wecomOauthStatus ? wecomOauthMessage(m.login.wecomOAuth, wecomOauthStatus, wecomUserId) : null;
+
+  const headersList = await headers();
+  const userAgent = headersList.get("user-agent") ?? "";
+  if (!wecomOauthStatus && isWecomInAppUserAgent(userAgent)) {
+    const target =
+      redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+        ? redirectParam
+        : defaultWecomOAuthRedirect(userAgent);
+    redirect(buildWecomOAuthStartUrl(target));
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
@@ -33,8 +47,17 @@ export default async function LoginPage({
         {wecomMessage && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {wecomMessage}
+            {wecomOauthStatus && wecomOauthStatus !== "missing_config" && (
+              <a
+                href={buildWecomOAuthStartUrl(defaultWecomOAuthRedirect(userAgent))}
+                className="mt-2 block text-sm font-medium text-amber-900 underline"
+              >
+                {m.login.wecomRetry}
+              </a>
+            )}
           </div>
         )}
+        <WecomWebLogin messages={m.login.wecomWebLogin} />
         <LoginForm firstRun={firstRun} messages={m.login} />
       </div>
     </div>

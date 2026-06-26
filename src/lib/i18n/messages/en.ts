@@ -89,6 +89,12 @@ export const messagesEn = {
       invalidUserId: "WeCom returned an invalid UserID.",
       generic: "WeCom login failed. Please try again.",
     },
+    wecomRetry: "Retry WeCom login",
+    wecomWebLogin: {
+      title: "Sign in with WeCom",
+      desc: "On PC browsers, scan the QR code or use quick login (requires WeCom desktop client).",
+      fail: "WeCom login failed. Try again or use email and password.",
+    },
   },
   common: {
     save: "Save",
@@ -1223,7 +1229,7 @@ export const messagesEn = {
     saveHint: "Save settings (no trial run required)",
     saveSuccess: "Saved",
     saving: "Saving…",
-    saveOptionalRunHint: "Trial run is optional — use Run below to execute once",
+    saveOptionalRunHint: "After saving, use Trial run in the top-right toolbar",
     emailInputPlaceholder: "e.g. you@company.com — separate multiple with commas",
     emailInputHint: "Pick from suggestions or type manually; set WeCom group, WeCom app, and/or email",
     wecomAppCheckboxHint: "Send via the configured WeCom self-built app (pick recipients after enabling)",

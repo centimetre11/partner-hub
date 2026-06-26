@@ -1,5 +1,7 @@
 /** 应用消息里引导用户去智能机器人 / 移动工作台 AI 的文案与链接 */
 
+import { buildWecomOAuthStartUrl } from "@/lib/wecom-oauth";
+
 export function resolveAppBaseUrl(): string {
   return (process.env.APP_BASE_URL || "http://localhost:3000").trim().replace(/\/+$/, "");
 }
@@ -15,8 +17,12 @@ export function wecomBotGuidePageUrl(): string {
 
 /** 企微内打开移动工作台（OAuth 后进入 /mobile） */
 export function wecomMobileAiOAuthUrl(): string {
-  const redirect = encodeURIComponent("/mobile");
-  return `${resolveAppBaseUrl()}/api/wecom/oauth/start?redirect=${redirect}`;
+  return buildWecomOAuthStartUrl("/mobile", resolveAppBaseUrl());
+}
+
+/** 企微 PC 工作台应用主页（OAuth 后进入桌面端首页） */
+export function wecomPcOAuthUrl(): string {
+  return buildWecomOAuthStartUrl("/", resolveAppBaseUrl());
 }
 
 /** 应用消息 textcard 默认跳转：直达移动工作台（企微 OAuth） */

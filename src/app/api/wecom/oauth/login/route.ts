@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { loginByWecomCode } from "@/lib/wecom-oauth";
 
+function safeRedirectPath(value: string | null | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
 export async function POST(req: NextRequest) {
   let code = "";
+  let redirectTo = "/";
   try {
-    const body = (await req.json()) as { code?: unknown };
+    const body = (await req.json()) as { code?: unknown; redirectTo?: unknown };
     code = typeof body.code === "string" ? body.code : "";
+    redirectTo = safeRedirectPath(typeof body.redirectTo === "string" ? body.redirectTo : null);
   } catch {
     return NextResponse.json({ ok: false, code: "bad_request", message: "Invalid JSON body." }, { status: 400 });
   }
@@ -25,6 +32,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     user: result.user,
-    redirectTo: "/",
+    redirectTo,
   });
 }

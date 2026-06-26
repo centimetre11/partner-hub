@@ -3,6 +3,28 @@ import { createSession } from "@/lib/session";
 import { recordSystemEvent } from "@/lib/activity-log";
 import { isValidWecomUserId, sanitizeWecomUserId } from "@/lib/wecom-identity-validation";
 
+export function buildWecomOAuthStartUrl(redirect: string, appBaseUrl?: string): string {
+  const base = (appBaseUrl ?? process.env.APP_BASE_URL ?? "http://localhost:3000").trim().replace(/\/+$/, "");
+  return `${base}/api/wecom/oauth/start?redirect=${encodeURIComponent(redirect)}`;
+}
+
+/** Public slice of OAuth config for Web login panel (@wecom/jssdk). */
+export function getWecomOAuthPublicConfig(): {
+  enabled: boolean;
+  corpId?: string;
+  agentId?: string;
+  appBaseUrl?: string;
+} {
+  const cfg = resolveWecomOauthConfig();
+  if (!cfg?.agentId) return { enabled: false };
+  return {
+    enabled: true,
+    corpId: cfg.corpId,
+    agentId: cfg.agentId,
+    appBaseUrl: cfg.appBaseUrl,
+  };
+}
+
 const DEFAULT_API_BASE_URL = "https://qyapi.weixin.qq.com";
 
 type TokenCache = {

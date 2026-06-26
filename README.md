@@ -77,11 +77,20 @@ WECOM_APP_SECRET="..."
 WECOM_AGENT_ID="1000002"
 ```
 
-4. 把自建应用首页或菜单指向：
+4. 把自建应用首页或菜单指向（手机与 PC 可分开配置，或共用一条由系统按 UA 自动跳转）：
 
 ```text
+# 手机工作台 → 移动页
+https://partner.example.com/api/wecom/oauth/start?redirect=/mobile
+
+# PC 工作台 → 桌面首页
 https://partner.example.com/api/wecom/oauth/start?redirect=/
+
+# 或共用（自动识别手机/PC）
+https://partner.example.com/api/wecom/oauth/start
 ```
+
+企微 **PC 内置浏览器** 从工作台打开时会走 OAuth 静默授权；在 **系统浏览器** 打开登录页时显示企微 Web 登录组件（扫码/快速登录）。
 
 也可以由前端拿到企微 `code` 后调用：
 

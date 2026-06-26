@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildWecomAuthorizeUrl, resolveWecomOauthConfig } from "@/lib/wecom-oauth";
+import { defaultWecomOAuthRedirect } from "@/lib/wecom-env";
 
 const STATE_COOKIE = "wecom_oauth_state";
 
@@ -16,7 +17,11 @@ export async function GET(req: NextRequest) {
   }
 
   const url = new URL(req.url);
-  const redirect = safeRedirectPath(url.searchParams.get("redirect"));
+  const ua = req.headers.get("user-agent") ?? "";
+  const redirectParam = url.searchParams.get("redirect");
+  const redirect = redirectParam
+    ? safeRedirectPath(redirectParam)
+    : defaultWecomOAuthRedirect(ua);
   const state = crypto.randomUUID();
   const callbackUrl = new URL("/api/wecom/oauth/callback", cfg.appBaseUrl);
   callbackUrl.searchParams.set("redirect", redirect);

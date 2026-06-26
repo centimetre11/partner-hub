@@ -17,6 +17,7 @@
     "@blocknote/react": "^0.51.4",
     "@prisma/client": "^6.19.3",
     "@wecom/aibot-node-sdk": "^1.0.7",
+    "@wecom/jssdk": "^2.4.2",
     "@xyflow/react": "^12.11.0",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.3",
