@@ -1,4 +1,4 @@
-/** Lead web research: 1–2 model builtin searches → lightweight JSON synthesis (token-saving). */
+/** Lead web research: 多组并行联网检索（官网/概况/LinkedIn/新闻/联系人）→ 轻量 JSON 整理。 */
 
 import type { CrmLead, CrmLeadResearch } from "@prisma/client";
 import { db } from "./db";
@@ -6,7 +6,7 @@ import { chatJson } from "./ai";
 import { buildEnglishSearchQueries } from "./lead-research-query";
 import { generalWebSearch, isWebSearchAvailable, linkedinSearch, webSearchBackendLabel } from "./web-search";
 
-const MAX_RAW_CHARS = 12_000;
+const MAX_RAW_CHARS = 20_000;
 const SYNTHESIS_MAX_TOKENS = 2600;
 
 export type LeadResearchSource = { title: string; url?: string; note?: string };
@@ -63,26 +63,24 @@ async function gatherSearchSnippets(
     };
   }
 
-  const parts: string[] = [`## Lead hints (for context only, not for strict matching)\n${leadHints(lead)}`];
-  const queries: string[] = [];
+  const queries = plan.blocks.map((b) => b.query);
 
-  for (const block of plan.blocks) {
-    queries.push(block.query);
-    const result =
-      block.kind === "linkedin"
-        ? await linkedinSearch({
-            company: plan.company,
-            person: lead.contName ?? undefined,
-            query: block.query,
-            scene: "lead_research",
-          })
-        : await generalWebSearch(block.query, 5, undefined, { scene: "lead_research" });
-    if (result.ok) {
-      parts.push(`## ${block.label} search\nQuery: ${block.query}\n\n${result.text}`);
-    } else {
-      parts.push(`## ${block.label} search\nQuery: ${block.query}\n\n(no results: ${result.error})`);
-    }
-  }
+  // 并行执行多组检索，扩大召回又不显著拉长总时长。
+  const results = await Promise.all(
+    plan.blocks.map(async (block) => {
+      const result =
+        block.kind === "linkedin"
+          ? await linkedinSearch({ query: block.query, scene: "lead_research" })
+          : await generalWebSearch(block.query, 5, block.kind === "news" ? "news" : undefined, {
+              scene: "lead_research",
+            });
+      return result.ok
+        ? `## ${block.label} search\nQuery: ${block.query}\n\n${result.text}`
+        : `## ${block.label} search\nQuery: ${block.query}\n\n(no results: ${result.error})`;
+    }),
+  );
+
+  const parts = [`## Lead hints (for context only, not for strict matching)\n${leadHints(lead)}`, ...results];
 
   return { ok: true, raw: parts.join("\n\n").slice(0, MAX_RAW_CHARS), queries };
 }

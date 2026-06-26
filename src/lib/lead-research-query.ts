@@ -113,6 +113,31 @@ export function quoteSearchTerm(name: string): string {
   return /\s/.test(n) ? `"${n}"` : n;
 }
 
+const join = (...parts: (string | null | undefined)[]) =>
+  parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+
+/** 去掉 region 中已出现在公司名里的词，避免重复（大小写不敏感，整词匹配） */
+function dedupeRegion(company: string, region: string): string {
+  if (!region) return "";
+  const have = new Set(company.toLowerCase().split(/\s+/).filter(Boolean));
+  const kept = region.split(/\s+/).filter((w) => w && !have.has(w.toLowerCase()));
+  return kept.join(" ");
+}
+
+/**
+ * 是否值得用「精确短语」检索：词数较少时加引号能提精度；过长（如名字里塞了城市/国家）则放宽，
+ * 否则强制整串精确匹配几乎必然零命中。
+ */
+function shouldQuoteExact(company: string): boolean {
+  return company.trim().split(/\s+/).length <= 4;
+}
+
+export type LeadSearchBlock = { label: string; query: string; kind: "web" | "linkedin" | "news" };
+
+/**
+ * 从线索字段构造多组英文检索词（扩大召回）：公司官网/概况/LinkedIn/新闻 + 联系人 LinkedIn/网页。
+ * 公司名过长时不再整串加引号，并额外补一条不加引号的宽召回查询。
+ */
 export function buildEnglishSearchQueries(lead: {
   name?: string | null;
   countryCn?: string | null;
@@ -120,24 +145,41 @@ export function buildEnglishSearchQueries(lead: {
   province?: string | null;
   contName?: string | null;
   contDuty?: string | null;
-}): { company: string; region: string; blocks: { label: string; query: string; kind: "web" | "linkedin" }[] } | null {
+}): { company: string; region: string; blocks: LeadSearchBlock[] } | null {
   const company = latinSearchText(lead.name) || lead.name?.trim();
   if (!company) return null;
 
   const region = englishRegionFromLead(lead);
-  const companyTerm = quoteSearchTerm(company);
-  const companyQuery = [companyTerm, region, "company official website"].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  const extraRegion = dedupeRegion(company, region);
+  const exact = shouldQuoteExact(company);
+  const companyTerm = exact ? quoteSearchTerm(company) : company;
 
-  const blocks: { label: string; query: string; kind: "web" | "linkedin" }[] = [
-    { label: "Company", query: companyQuery, kind: "web" },
+  const blocks: LeadSearchBlock[] = [
+    // 1) 官网（精确名优先）
+    { label: "Company site", query: join(companyTerm, extraRegion, "official website"), kind: "web" },
+    // 2) 宽召回（始终不加引号，提升找到真实主体的概率）
+    { label: "Company profile", query: join(company, extraRegion, "company profile about"), kind: "web" },
+    // 3) 公司 LinkedIn
+    { label: "Company LinkedIn", query: join(company, extraRegion), kind: "linkedin" },
+    // 4) 新闻/公开报道
+    { label: "Company news", query: join(company, extraRegion), kind: "news" },
   ];
 
   const person = latinSearchText(lead.contName) || lead.contName?.trim();
   if (person) {
     const title = dutyToEnglish(lead.contDuty);
-    const contactQuery = [person, title, companyTerm, region].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-    blocks.push({ label: "Contact", query: contactQuery, kind: "linkedin" });
+    blocks.push({ label: "Contact LinkedIn", query: join(person, title, company), kind: "linkedin" });
+    blocks.push({ label: "Contact", query: join(person, title, company, extraRegion), kind: "web" });
   }
 
-  return { company, region, blocks };
+  // 去掉 query 完全相同且 kind 相同的重复项
+  const seen = new Set<string>();
+  const deduped = blocks.filter((b) => {
+    const k = `${b.kind}::${b.query}`;
+    if (!b.query || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  return { company, region, blocks: deduped };
 }
