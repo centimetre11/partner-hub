@@ -7,7 +7,7 @@ import { db } from "./db";
 import { createSession, destroySession, getCurrentUser, requireUser, requireSuperAdmin } from "./session";
 import { stageName } from "./constants";
 import { stringifyIndustries } from "./taxonomy";
-import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
+import { ACTIVE_PARTNER_DEFAULTS } from "./partner-onboarding";
 import { normalizeUserRole } from "./user-roles";
 import { getLocale } from "./i18n/locale-server";
 import { getMessages } from "./i18n/messages";
@@ -211,7 +211,6 @@ export async function createPartnerAction(formData: FormData) {
         createdById: user.id,
       },
     });
-    await createStarterTodos(partner.id, partner.name, user.id);
   } else {
     await db.timelineEvent.create({
       data: { partnerId: partner.id, type: "SYSTEM", title: "Manually added prospect" },
@@ -255,8 +254,6 @@ export async function promotePartnerAction(partnerId: string) {
       createdById: user.id,
     },
   });
-  // 转正自动生成起步待办
-  await createStarterTodos(partnerId, p.name, user.id);
   revalidatePath("/pool");
   revalidatePath("/partners");
   revalidatePath(`/partners/${partnerId}`);

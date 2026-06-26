@@ -7,7 +7,7 @@ import { buildEnglishSearchQueries } from "./lead-research-query";
 import { generalWebSearch, isWebSearchAvailable, linkedinSearch, webSearchBackendLabel } from "./web-search";
 
 const MAX_RAW_CHARS = 12_000;
-const SYNTHESIS_MAX_TOKENS = 1200;
+const SYNTHESIS_MAX_TOKENS = 2600;
 
 export type LeadResearchSource = { title: string; url?: string; note?: string };
 
@@ -117,14 +117,16 @@ Rules:
 - If evidence is missing, set verified=false and confidence=low; leave optional fields empty.
 - company.verified = true when snippets clearly describe a real company with useful public info.
 - contact.verified = true when snippets clearly describe the named person (or a likely match at that company).
-- summary: concise Markdown in Simplified Chinese (2–6 bullet points) for sales; mention confidence and gaps.
-- sources: cite snippet titles/urls used; max 5 per section.
+- description: <= 280 Simplified Chinese characters.
+- summary: concise Markdown in Simplified Chinese (2–5 short bullet points) for sales.
+- sources: at most 2 per section; keep title short; omit note unless essential.
+- Keep the whole JSON compact so it is not truncated.
 Output JSON only:
 {
-  "company": {"name","verified","country","website","industry","description","confidence","sources":[{"title","url","note"}]},
-  "contact": {"name","title","verified","confidence","sources":[{"title","url","note"}]},
+  "company": {"name","verified","country","website","industry","description","confidence","sources":[{"title","url"}]},
+  "contact": {"name","title","verified","confidence","sources":[{"title","url"}]},
   "summary": "markdown string",
-  "notes": "optional string"
+  "notes": "optional short string"
 }`;
 
   const user = `${leadHints(lead)}\n\n---\n\nSearch snippets:\n${raw}`;

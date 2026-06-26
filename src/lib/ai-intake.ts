@@ -61,7 +61,7 @@ import {
 } from "./proposals";
 import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
 
-import { ACTIVE_PARTNER_DEFAULTS, createStarterTodos } from "./partner-onboarding";
+import { ACTIVE_PARTNER_DEFAULTS } from "./partner-onboarding";
 import { partnerFieldValueFromText } from "./tier";
 import {
   finalizeFastIntakeTurn,
@@ -1258,25 +1258,6 @@ async function applyCustomerIntake(opts: {
     applied.push(...(await applyCustomerContacts(customerId, proposal.contacts, locale)));
   }
 
-  // Todos (optional, e.g. follow-ups captured during onboarding)
-  for (const t of proposal.todos) {
-    const title = asTrimmedString(t.title);
-    if (!title) continue;
-    const assigneeId = await resolveTodoAssigneeId(t.assigneeName, userId);
-    await db.todoItem.create({
-      data: {
-        title,
-        detail: t.detail,
-        customerId,
-        assigneeId,
-        dueDate: parseOptionalDate(t.dueDate),
-        priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
-        source: "AI",
-      },
-    });
-    applied.push(applyTodoAdded(locale, title));
-  }
-
   await db.timelineEvent.create({
     data: {
       customerId,
@@ -1466,7 +1447,6 @@ export async function applyIntake(opts: {
         meta: JSON.stringify({ via: "ai-intake", intent: asActive ? "active" : "prospect", sourceText: opts.sourceText?.slice(0, 8000) }),
       },
     });
-    if (asActive) await createStarterTodos(partnerId, created.name, userId);
   } else if (scope === "business_record") {
     if (proposal.saveMode === "crm_only" && proposal.crmCustomerId) {
       partnerId = "";
@@ -1729,24 +1709,26 @@ export async function applyIntake(opts: {
     applied.push(applyBusinessRecordAdded(locale, title));
   }
 
-  // ---- Todos ----
-  for (const t of proposal.todos) {
-    const title = asTrimmedString(t.title);
-    if (!title) continue;
-    const assigneeId = await resolveTodoAssigneeId(t.assigneeName, userId);
-    await db.todoItem.create({
-      data: {
-        title,
-        detail: t.detail,
-        partnerId: partnerId || null,
-        customerId: customerId || null,
-        assigneeId,
-        dueDate: parseOptionalDate(t.dueDate),
-        priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
-        source: "AI",
-      },
-    });
-    applied.push(applyTodoAdded(locale, title));
+  // ---- Todos (not during partner/customer onboarding — use todo scope instead) ----
+  if (scope !== "new_partner" && scope !== "new_customer") {
+    for (const t of proposal.todos) {
+      const title = asTrimmedString(t.title);
+      if (!title) continue;
+      const assigneeId = await resolveTodoAssigneeId(t.assigneeName, userId);
+      await db.todoItem.create({
+        data: {
+          title,
+          detail: t.detail,
+          partnerId: partnerId || null,
+          customerId: customerId || null,
+          assigneeId,
+          dueDate: parseOptionalDate(t.dueDate),
+          priority: t.priority && ["HIGH", "MEDIUM", "LOW"].includes(t.priority) ? t.priority : "MEDIUM",
+          source: "AI",
+        },
+      });
+      applied.push(applyTodoAdded(locale, title));
+    }
   }
 
   // ---- Timeline audit (non-onboarding; onboarding already logged) ----

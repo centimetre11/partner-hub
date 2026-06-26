@@ -407,7 +407,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
 
   switch (scope) {
     case "new_partner":
-      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industries values: ${ind}; pipelineStage 1–10: ${st}); add contacts if people appear in text/research. Do NOT extract opportunities/deals — leave opportunities as empty array. Leave trainings/solutions as empty arrays.`;
+      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industries values: ${ind}; pipelineStage 1–10: ${st}); add contacts if people appear in text/research. Do NOT extract opportunities/deals — leave opportunities as empty array. Do NOT extract follow-up todos/next steps from meeting notes — leave todos as empty array. Leave trainings/solutions as empty arrays.`;
     case "powermap":
       return "Fill contacts only (action=add or update with id). Leave fields/opportunities/todos/trainings/solutions as empty arrays.";
     case "opportunity":
@@ -423,7 +423,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
     case "todo":
       return "Fill todos only (title=task content only; assigneeName for 负责人/owner; strip command words from title). Leave fields/contacts/opportunities/trainings/solutions/businessRecords as empty arrays.";
     case "new_customer":
-      return `Set partnerName to the END-CUSTOMER company name; fill customer profile fields in fields (codes only: ${fieldListForScope(locale, scope)}; status: ACTIVE/PROSPECT/INACTIVE). Add people to contacts. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
+      return `Set partnerName to the END-CUSTOMER company name; fill customer profile fields in fields (codes only: ${fieldListForScope(locale, scope)}; status: ACTIVE/PROSPECT/INACTIVE). Add people to contacts. Do NOT extract follow-up todos/next steps from meeting notes — leave todos as empty array. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
     case "customer_profile":
       return `Fill customer fields only (FieldUpdate; oldValue may be empty). Codes: ${fieldListForScope(locale, scope)}. Use tools when info is insufficient. Add new people to contacts. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
   }
@@ -482,7 +482,7 @@ const SCOPE_CONFIG: Record<IntakeScope, ScopeConfig> = {
     title: "New partner onboarding",
     intro:
       "The user wants to create a new prospect partner. Input may be: company name only, long meeting/chat text, company intro, or a Fanruan KMS link (combine KMS with web/LinkedIn research; goal is to fill the profile as completely as possible).",
-    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill profile fields via research (see tool notes). Ask 1–2 brief follow-ups only after research. Do NOT extract sales opportunities/deals from meeting notes — those belong to end-customers and are added separately.
+    guide: `Minimum for onboarding: company name (partnerName, required). Try to fill profile fields via research (see tool notes). Ask 1–2 brief follow-ups only after research. Do NOT extract sales opportunities/deals from meeting notes — those belong to end-customers and are added separately. Do NOT extract follow-up todos or action items from meeting notes — leave todos empty; users add todos separately.
 
 Identity: only tier:"required" identity clarifications when genuinely ambiguous; KMS/user clear name+website → write directly. search_partners near-match → dedupe clarification. Profile fields use tier:"preference".`,
   },
@@ -551,7 +551,7 @@ No web research. ready=true when title is clear AND no blocking partner clarific
     title: "New customer onboarding",
     intro:
       "The user wants to create a new END-CUSTOMER (account) — the company that buys/uses Fanruan products (possibly served by a partner), NOT a Fanruan partner. Input may be: company name only, meeting/chat text, a company intro, or a Fanruan KMS link. Combine KMS with web/LinkedIn research to profile the customer as fully as possible.",
-    guide: `Minimum to create: customer company name (partnerName, required). Try to fill profile fields via research (industry, scale, city, country, website, primary contact). Ask 1–2 brief follow-ups only after research.
+    guide: `Minimum to create: customer company name (partnerName, required). Try to fill profile fields via research (industry, scale, city, country, website, primary contact). Ask 1–2 brief follow-ups only after research. Do NOT extract follow-up todos or action items from meeting notes — leave todos empty; users add todos separately.
 This is a CUSTOMER, not a partner: never emit partner-only fields (category, tier, partnerArchetype, valuePattern, playbook, etc.).
 Identity: only emit a tier:"required" identity clarification when the company is genuinely ambiguous; a clear unique name/website from KMS or the user → write it directly.`,
   },

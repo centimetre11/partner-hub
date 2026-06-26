@@ -85,7 +85,6 @@ export function sanitizeProposalForScope(scope: IntakeScope, raw: IntakeProposal
         summary,
         fields: raw.fields ?? [],
         contacts: raw.contacts ?? [],
-        todos: raw.todos ?? [],
       };
     case "new_partner":
       return {
@@ -94,7 +93,6 @@ export function sanitizeProposalForScope(scope: IntakeScope, raw: IntakeProposal
         summary,
         fields: raw.fields ?? [],
         contacts: raw.contacts ?? [],
-        todos: raw.todos ?? [],
         trainings: raw.trainings ?? [],
         solutions: raw.solutions ?? [],
         businessRecords: raw.businessRecords ?? [],
@@ -231,7 +229,7 @@ export function scopeDraftSections(scope?: IntakeScope): ScopeDraftSections {
         websiteHint: true,
         contacts: true,
         opportunities: false,
-        todos: true,
+        todos: false,
         trainings: false,
         solutions: false,
         businessRecords: false,
@@ -243,7 +241,7 @@ export function scopeDraftSections(scope?: IntakeScope): ScopeDraftSections {
         websiteHint: true,
         contacts: true,
         opportunities: false,
-        todos: true,
+        todos: false,
         trainings: true,
         solutions: true,
         businessRecords: true,
