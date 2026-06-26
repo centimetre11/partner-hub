@@ -5,6 +5,7 @@
 import {
   isListTodosAction,
   isProposeBuiltinAction,
+  isSelfTodoQueryPhrase,
   isTodoQueryPhrase,
   scoreBuiltinActions,
   topBuiltinAction,
@@ -47,6 +48,9 @@ function main() {
   );
   cases.push(assert("「现在多少待办」isTodoQueryPhrase", isTodoQueryPhrase("现在多少待办")));
   cases.push(assert("「现在多少待办」isListTodosAction", isListTodosAction("现在多少待办")));
+  cases.push(assert("「我的待办有哪些」是查询", isTodoQueryPhrase("我的待办有哪些")));
+  cases.push(assert("「我的待办有哪些」isSelfTodo", isSelfTodoQueryPhrase("我的待办有哪些")));
+  cases.push(assert("「jackie的待办」非 self", !isSelfTodoQueryPhrase("jackie的待办")));
   cases.push(assert("「现在多少待办」不进 Propose", !shouldUseProposeMode([{ role: "user", content: "现在多少待办" }])));
 
   cases.push(

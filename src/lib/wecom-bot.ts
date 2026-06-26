@@ -960,6 +960,7 @@ async function handleTextMessage(frame: WsFrame) {
         patchTargetId: intentSession.patchTargetId,
         patchTargetLabel: intentSession.patchTargetLabel,
         patchInstruction: intentSession.patchInstruction,
+        actorDisplayName: actor.hubUser?.name ?? undefined,
       });
       const reply = await applyAssistantTurnResult({
         result,
@@ -996,6 +997,7 @@ async function handleTextMessage(frame: WsFrame) {
           confirmedActionId: altActionId,
           previousScope: session?.scope,
           focus: focusSessions.get(key),
+          actorDisplayName: actor.hubUser?.name ?? undefined,
         });
         const reply = await applyAssistantTurnResult({
           result,
@@ -1163,6 +1165,7 @@ async function handleTextMessage(frame: WsFrame) {
       skipIntentConfirm: continuingPropose,
       previousScope: forcedScope ?? session?.scope,
       focus,
+      actorDisplayName: actor.hubUser?.name ?? undefined,
     });
 
     const reply = await applyAssistantTurnResult({

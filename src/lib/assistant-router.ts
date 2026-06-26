@@ -222,6 +222,8 @@ export async function runAssistantTurn(opts: {
   patchTargetId?: string;
   patchTargetLabel?: string;
   patchInstruction?: string;
+  /** Hub display name for WeCom / web operator — used for「我的待办」queries */
+  actorDisplayName?: string;
 }): Promise<AssistantTurnResult> {
   const started = Date.now();
   const userMessage = lastUserText(opts.messages);
@@ -278,6 +280,7 @@ async function runAssistantTurnCore(opts: {
   patchTargetId?: string;
   patchTargetLabel?: string;
   patchInstruction?: string;
+  actorDisplayName?: string;
 }): Promise<AssistantTurnResult> {
   const locale = opts.locale as Locale;
 
@@ -380,14 +383,30 @@ async function runAssistantTurnCore(opts: {
   }
 
   if (route.route.mode === "query") {
-    const result = await runQueryAssistant(opts.messages, opts.userId, {
-      locale: opts.locale as AssistantLocale,
-      feature: queryFeature(route, opts.feature),
-      emit: opts.emit,
-      queryKind: route.route.queryKind,
-      customerId: opts.customerId,
-      customerName: opts.customerName,
-    });
+    const selfTodos =
+      route.route.queryKind === "list_todos"
+        ? await trySelfTodoListQuery(opts.messages, opts.userId, {
+            locale: opts.locale as AssistantLocale,
+            actorDisplayName: opts.actorDisplayName,
+            partnerId: opts.partnerId,
+            partnerName: opts.partnerName,
+            customerId: opts.customerId,
+            customerName: opts.customerName,
+          })
+        : null;
+    const result = selfTodos
+      ? { mode: "query" as const, reply: selfTodos.reply, actions: selfTodos.actions }
+      : await runQueryAssistant(opts.messages, opts.userId, {
+          locale: opts.locale as AssistantLocale,
+          feature: queryFeature(route, opts.feature),
+          emit: opts.emit,
+          queryKind: route.route.queryKind,
+          customerId: opts.customerId,
+          customerName: opts.customerName,
+          partnerId: opts.partnerId,
+          partnerName: opts.partnerName,
+          actorDisplayName: opts.actorDisplayName,
+        });
     const focus = await buildFocusAfterQueryAsync({
       actionId: route.actionId,
       reply: result.reply,
