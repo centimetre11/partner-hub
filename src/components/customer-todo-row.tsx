@@ -9,6 +9,7 @@ export function CustomerTodoRow({
   todo,
   customerId,
   bcp47,
+  tag,
 }: {
   todo: {
     id: string;
@@ -19,6 +20,7 @@ export function CustomerTodoRow({
   };
   customerId: string;
   bcp47: string;
+  tag?: { label: string } | null;
 }) {
   const m = useMessages();
   const isDone = todo.status === "DONE";
@@ -32,7 +34,12 @@ export function CustomerTodoRow({
         customerId={customerId}
       />
       <div className="min-w-0 flex-1">
-        <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>{todo.title}</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>{todo.title}</span>
+          {tag && (
+            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{tag.label}</span>
+          )}
+        </div>
         <div className="text-xs text-slate-400">
           {todo.dueDate && fmtDate(todo.dueDate, bcp47)}
           {todo.assignee && ` · ${todo.assignee.name}`}

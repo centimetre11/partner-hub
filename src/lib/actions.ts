@@ -467,6 +467,10 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     status: String(formData.get("status") ?? "ACTIVE"),
     notes: String(formData.get("notes") ?? "") || null,
   };
+  if (formData.has("dealType")) {
+    const dt = String(formData.get("dealType") ?? "").trim();
+    data.dealType = dt === "PROJECT" || dt === "PRODUCT" ? dt : null;
+  }
   if (!data.name) return;
   // 商机以客户为主体，伙伴为可选关联（带单/交付方）；反之亦然
   const crossPartnerId = formData.has("partnerId") ? String(formData.get("partnerId") ?? "").trim() || null : undefined;
@@ -492,6 +496,85 @@ export async function deleteOpportunityAction(owner: OwnerRef, oppId: string) {
   revalidatePath(ownerPath(owner));
 }
 
+// ============ 合作项目 ============
+
+const PROJECT_PHASES = ["KICKOFF", "IMPLEMENT", "ACCEPTANCE", "GOLIVE", "MAINTENANCE"] as const;
+const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "DONE", "CLOSED"] as const;
+
+export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
+  await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const phase = String(formData.get("phase") ?? "KICKOFF");
+  const status = String(formData.get("status") ?? "ACTIVE");
+  const start = String(formData.get("startDate") ?? "");
+  const end = String(formData.get("endDate") ?? "");
+  const data: Record<string, unknown> = {
+    name: String(formData.get("name") ?? "").trim(),
+    amount: String(formData.get("amount") ?? "") || null,
+    phase: (PROJECT_PHASES as readonly string[]).includes(phase) ? phase : "KICKOFF",
+    status: (PROJECT_STATUSES as readonly string[]).includes(status) ? status : "ACTIVE",
+    startDate: start ? new Date(start) : null,
+    endDate: end ? new Date(end) : null,
+    notes: String(formData.get("notes") ?? "") || null,
+  };
+  if (!data.name) return;
+  // 项目以客户为主体，伙伴为可选交付方
+  const crossPartnerId = formData.has("partnerId")
+    ? String(formData.get("partnerId") ?? "").trim() || null
+    : undefined;
+  if (id) {
+    if (crossPartnerId !== undefined) data.partnerId = crossPartnerId;
+    const proj = await db.project.update({ where: { id }, data });
+    if (proj.partnerId) revalidatePath(`/partners/${proj.partnerId}`);
+    revalidatePath(`/customers/${proj.customerId}`);
+  } else {
+    // 项目必须挂在客户下
+    const customerId = owner.kind === "customer" ? owner.id : String(formData.get("customerId") ?? "").trim();
+    if (!customerId) return;
+    const createData: Record<string, unknown> = { ...data, customerId };
+    if (crossPartnerId !== undefined) createData.partnerId = crossPartnerId;
+    else if (owner.kind === "partner") createData.partnerId = owner.id;
+    await db.project.create({ data: createData as never });
+  }
+  revalidatePath(ownerPath(owner));
+}
+
+export async function deleteProjectAction(owner: OwnerRef, projectId: string) {
+  await requireUser();
+  await db.project.delete({ where: { id: projectId } });
+  revalidatePath(ownerPath(owner));
+}
+
+// 机会赢单后一键转化为合作项目（幂等：已转化则直接复用）
+export async function convertOpportunityToProjectAction(owner: OwnerRef, oppId: string) {
+  await requireUser();
+  const opp = await db.opportunity.findUnique({ where: { id: oppId } });
+  if (!opp || !opp.customerId) return;
+  // 纯产品型成交不含交付项目，不允许转项目
+  if (opp.dealType === "PRODUCT") return;
+  const existing = await db.project.findUnique({ where: { sourceOpportunityId: oppId } });
+  if (!existing) {
+    await db.project.create({
+      data: {
+        customerId: opp.customerId,
+        partnerId: opp.partnerId ?? null,
+        name: opp.name,
+        amount: opp.amount ?? null,
+        sourceOpportunityId: oppId,
+        phase: "KICKOFF",
+        status: "ACTIVE",
+      },
+    });
+  }
+  // 转化即视为赢单且为项目型成交
+  if (opp.status !== "WON" || opp.dealType !== "PROJECT") {
+    await db.opportunity.update({ where: { id: oppId }, data: { status: "WON", dealType: "PROJECT" } });
+  }
+  if (opp.partnerId) revalidatePath(`/partners/${opp.partnerId}`);
+  revalidatePath(`/customers/${opp.customerId}`);
+  revalidatePath(ownerPath(owner));
+}
+
 // ============ 待办 ============
 
 export async function createTodoAction(formData: FormData) {
@@ -499,14 +582,32 @@ export async function createTodoAction(formData: FormData) {
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return;
   const due = String(formData.get("dueDate") ?? "");
-  const partnerId = String(formData.get("partnerId") ?? "") || null;
-  const customerId = String(formData.get("customerId") ?? "") || null;
+  let partnerId = String(formData.get("partnerId") ?? "") || null;
+  let customerId = String(formData.get("customerId") ?? "") || null;
+  const opportunityId = String(formData.get("opportunityId") ?? "") || null;
+  const projectId = String(formData.get("projectId") ?? "") || null;
+  // 挂到机会/项目时回填其所属客户/伙伴，便于客户层与伙伴层汇总
+  if (projectId && !customerId) {
+    const proj = await db.project.findUnique({ where: { id: projectId }, select: { customerId: true, partnerId: true } });
+    if (proj) {
+      customerId = customerId ?? proj.customerId;
+      partnerId = partnerId ?? proj.partnerId;
+    }
+  } else if (opportunityId && !customerId && !partnerId) {
+    const opp = await db.opportunity.findUnique({ where: { id: opportunityId }, select: { customerId: true, partnerId: true } });
+    if (opp) {
+      customerId = opp.customerId;
+      partnerId = opp.partnerId;
+    }
+  }
   await db.todoItem.create({
     data: {
       title,
       detail: String(formData.get("detail") ?? "") || null,
       partnerId,
       customerId,
+      opportunityId,
+      projectId,
       assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
       dueDate: due ? new Date(due) : null,
       priority: String(formData.get("priority") ?? "MEDIUM"),

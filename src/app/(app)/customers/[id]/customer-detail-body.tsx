@@ -18,6 +18,9 @@ import { CustomerTodoRow } from "@/components/customer-todo-row";
 import {
   upsertOpportunityAction,
   deleteOpportunityAction,
+  upsertProjectAction,
+  deleteProjectAction,
+  convertOpportunityToProjectAction,
   addNoteAction,
   createTodoAction,
   deleteTodoAction,
@@ -37,7 +40,17 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       createdBy: { select: { name: true } },
       contacts: true,
       contactLinks: true,
-      opportunities: { include: { partner: { select: { id: true, name: true } } }, orderBy: { updatedAt: "desc" } },
+      opportunities: {
+        include: { partner: { select: { id: true, name: true } }, project: { select: { id: true } } },
+        orderBy: { updatedAt: "desc" },
+      },
+      projects: {
+        include: {
+          partner: { select: { id: true, name: true } },
+          todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], include: { assignee: true } },
+        },
+        orderBy: { updatedAt: "desc" },
+      },
       todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], include: { assignee: true } },
       events: { orderBy: { createdAt: "desc" }, take: 100, include: { createdBy: { select: { name: true } } } },
       businessRecords: {
@@ -72,6 +85,20 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   const contactOptions = customer.contacts.map((ct) => ({ id: ct.id, name: ct.name }));
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
   const openTodos = customer.todos.filter((t) => t.status !== "DONE").length;
+
+  // 待办归属（机会/项目）名称查找，用于在待办行上打小标签
+  const oppNameById = new Map(customer.opportunities.map((o) => [o.id, o.name] as const));
+  const projNameById = new Map(customer.projects.map((p) => [p.id, p.name] as const));
+  const todoTag = (t: { opportunityId?: string | null; projectId?: string | null }) => {
+    if (t.projectId && projNameById.has(t.projectId)) return { label: `${c.belongsToProject}: ${projNameById.get(t.projectId)}` };
+    if (t.opportunityId && oppNameById.has(t.opportunityId)) return { label: `${c.belongsToOpportunity}: ${oppNameById.get(t.opportunityId)}` };
+    return null;
+  };
+
+  const phaseLabel = (p: string): string =>
+    (({ KICKOFF: c.phaseKICKOFF, IMPLEMENT: c.phaseIMPLEMENT, ACCEPTANCE: c.phaseACCEPTANCE, GOLIVE: c.phaseGOLIVE, MAINTENANCE: c.phaseMAINTENANCE } as Record<string, string>)[p] ?? p);
+  const projStatusLabel = (s: string): string =>
+    (({ ACTIVE: c.projectStatusACTIVE, ON_HOLD: c.projectStatusON_HOLD, DONE: c.projectStatusDONE, CLOSED: c.projectStatusCLOSED } as Record<string, string>)[s] ?? s);
 
   // ============ 资料 ============
   const profilePanel = (
@@ -129,6 +156,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
             todo={t}
             customerId={customer.id}
             bcp47={bcp47}
+            tag={todoTag(t)}
           />
         ))}
         {customer.todos.length === 0 && <EmptyState text={c.noTodos} />}
@@ -194,6 +222,9 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
                 </Badge>
                 <Badge tone="blue">{o.stage}</Badge>
+                {o.dealType === "PRODUCT" && <Badge tone="amber">{c.dealTypeProduct}</Badge>}
+                {o.dealType === "PROJECT" && <Badge tone="indigo">{c.dealTypeProject}</Badge>}
+                {o.project && <Badge tone="indigo">{c.projectConverted}</Badge>}
               </div>
               <div className="text-xs text-slate-400 mt-0.5">
                 {m.common.amount}: {o.amount ?? "—"}
@@ -217,7 +248,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 <option value="LOST">{m.common.lost}</option>
                 <option value="PAUSED">{m.common.paused}</option>
               </select>
-              <select name="partnerId" defaultValue={o.partnerId ?? ""} className={`${input} md:col-span-2`}>
+              <select name="dealType" defaultValue={o.dealType ?? ""} className={input}>
+                <option value="">{c.dealTypeNone}</option>
+                <option value="PROJECT">{c.dealTypeProject}</option>
+                <option value="PRODUCT">{c.dealTypeProduct}</option>
+              </select>
+              <select name="partnerId" defaultValue={o.partnerId ?? ""} className={`${input} md:col-span-3`}>
                 <option value="">{c.viaPartnerNone}</option>
                 {partners.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
@@ -227,6 +263,26 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 <button formAction={deleteOpportunityAction.bind(null, owner, o.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
                 <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
               </div>
+            </form>
+            {!o.project && o.dealType !== "PRODUCT" && (
+              <form action={convertOpportunityToProjectAction.bind(null, owner, o.id)} className="mt-2 flex items-center justify-end gap-2">
+                <span className="text-[11px] text-slate-400">{c.convertHint}</span>
+                <button className="rounded-md border border-indigo-200 bg-indigo-50 text-indigo-600 px-3 py-1.5 text-xs hover:bg-indigo-100">
+                  {c.convertToProject}
+                </button>
+              </form>
+            )}
+            <form action={createTodoAction} className="mt-3 flex flex-wrap gap-2 border-t border-slate-50 pt-3">
+              <input type="hidden" name="customerId" value={customer.id} />
+              <input type="hidden" name="opportunityId" value={o.id} />
+              <input name="title" required placeholder={c.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
+              <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" />
+              <select name="assigneeId" defaultValue={customer.ownerId ?? user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[140px]">
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+              </select>
+              <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
             </form>
           </div>
         </details>
@@ -240,10 +296,129 @@ export async function CustomerDetailBody({ id }: { id: string }) {
           <input name="stage" placeholder={m.common.stage} className={input} />
           <input name="nextStep" placeholder={m.common.nextStep} className={input} />
           <input name="followUpAt" type="date" className={input} />
+          <select name="dealType" defaultValue="" className={input}>
+            <option value="">{c.dealTypeNone}</option>
+            <option value="PROJECT">{c.dealTypeProject}</option>
+            <option value="PRODUCT">{c.dealTypeProduct}</option>
+          </select>
           <select name="partnerId" defaultValue={customer.partnerLinks[0]?.partner.id ?? ""} className={input}>
             <option value="">{c.viaPartnerNone}</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <div className="col-span-2 md:col-span-3 flex justify-end">
+            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
+          </div>
+        </form>
+      </details>
+    </div>
+  );
+
+  // ============ 合作项目 ============
+  const projectsPanel = (
+    <div className="space-y-3">
+      {customer.projects.map((p) => {
+        const total = p.todos.length;
+        const done = p.todos.filter((t) => t.status === "DONE").length;
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        return (
+          <details key={p.id} className="group rounded-lg border border-slate-100 hover:border-slate-200">
+            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-slate-900">{p.name}</span>
+                  <Badge tone="blue">{phaseLabel(p.phase)}</Badge>
+                  <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "DONE" ? "indigo" : "zinc"}>
+                    {projStatusLabel(p.status)}
+                  </Badge>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="h-1.5 flex-1 max-w-[160px] rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-[11px] text-slate-400">{c.projectProgress}: {done}/{total}</span>
+                  {p.partner && <span className="text-[11px] text-slate-400">· {c.deliveryPartner}: {p.partner.name}</span>}
+                </div>
+              </div>
+              <span className="text-slate-300 group-open:rotate-90">›</span>
+            </summary>
+            <div className="px-4 pb-4 pt-1 border-t border-slate-50">
+              <form action={upsertProjectAction.bind(null, owner)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                <input type="hidden" name="id" value={p.id} />
+                <input name="name" defaultValue={p.name} className={input} />
+                <input name="amount" defaultValue={p.amount ?? ""} placeholder={m.common.amount} className={input} />
+                <select name="phase" defaultValue={p.phase} className={input}>
+                  <option value="KICKOFF">{c.phaseKICKOFF}</option>
+                  <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>
+                  <option value="ACCEPTANCE">{c.phaseACCEPTANCE}</option>
+                  <option value="GOLIVE">{c.phaseGOLIVE}</option>
+                  <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
+                </select>
+                <select name="status" defaultValue={p.status} className={input}>
+                  <option value="ACTIVE">{c.projectStatusACTIVE}</option>
+                  <option value="ON_HOLD">{c.projectStatusON_HOLD}</option>
+                  <option value="DONE">{c.projectStatusDONE}</option>
+                  <option value="CLOSED">{c.projectStatusCLOSED}</option>
+                </select>
+                <input name="startDate" type="date" defaultValue={p.startDate ? new Date(p.startDate).toISOString().slice(0, 10) : ""} className={input} placeholder={c.projectStartDate} />
+                <input name="endDate" type="date" defaultValue={p.endDate ? new Date(p.endDate).toISOString().slice(0, 10) : ""} className={input} placeholder={c.projectEndDate} />
+                <select name="partnerId" defaultValue={p.partnerId ?? ""} className={`${input} md:col-span-3`}>
+                  <option value="">{c.deliveryPartnerNone}</option>
+                  {partners.map((pp) => (
+                    <option key={pp.id} value={pp.id}>{pp.name}</option>
+                  ))}
+                </select>
+                <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
+                  <button formAction={deleteProjectAction.bind(null, owner, p.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
+                  <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
+                </div>
+              </form>
+
+              <div className="mt-4 border-t border-slate-50 pt-3">
+                <div className="text-xs font-semibold text-slate-500 mb-2">{c.projectTodos}</div>
+                <form action={createTodoAction} className="flex flex-wrap gap-2 mb-3">
+                  <input type="hidden" name="customerId" value={customer.id} />
+                  <input type="hidden" name="projectId" value={p.id} />
+                  <input name="title" required placeholder={c.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
+                  <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" />
+                  <select name="assigneeId" defaultValue={customer.ownerId ?? user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[140px]">
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                  <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
+                </form>
+                <div className="divide-y divide-slate-50">
+                  {p.todos.map((t) => (
+                    <CustomerTodoRow key={t.id} todo={t} customerId={customer.id} bcp47={bcp47} />
+                  ))}
+                  {p.todos.length === 0 && <EmptyState text={c.noTodos} />}
+                </div>
+              </div>
+            </div>
+          </details>
+        );
+      })}
+      {customer.projects.length === 0 && <EmptyState text={c.noProjects} />}
+      <details className="rounded-lg border border-dashed border-slate-200">
+        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addProject}</summary>
+        <form action={upsertProjectAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+          <input name="name" required placeholder={c.projectName} className={input} />
+          <input name="amount" placeholder={m.common.amount} className={input} />
+          <select name="phase" defaultValue="KICKOFF" className={input}>
+            <option value="KICKOFF">{c.phaseKICKOFF}</option>
+            <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>
+            <option value="ACCEPTANCE">{c.phaseACCEPTANCE}</option>
+            <option value="GOLIVE">{c.phaseGOLIVE}</option>
+            <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
+          </select>
+          <input name="startDate" type="date" className={input} placeholder={c.projectStartDate} />
+          <input name="endDate" type="date" className={input} placeholder={c.projectEndDate} />
+          <select name="partnerId" defaultValue={customer.partnerLinks[0]?.partner.id ?? ""} className={input}>
+            <option value="">{c.deliveryPartnerNone}</option>
+            {partners.map((pp) => (
+              <option key={pp.id} value={pp.id}>{pp.name}</option>
             ))}
           </select>
           <div className="col-span-2 md:col-span-3 flex justify-end">
@@ -347,6 +522,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       desc: c.tabOpportunitiesDesc,
       badge: customer.opportunities.length ? String(customer.opportunities.length) : null,
       content: opportunitiesPanel,
+    },
+    {
+      id: "projects",
+      label: c.tabProjects,
+      desc: c.tabProjectsDesc,
+      badge: customer.projects.length ? String(customer.projects.length) : null,
+      content: projectsPanel,
     },
     {
       id: "capability",

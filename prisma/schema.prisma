@@ -37,6 +37,7 @@ model User {
   feedbackSubmissions FeedbackSubmission[]
   ownedCustomers   Customer[] @relation("CustomerOwner")
   createdCustomers Customer[] @relation("CustomerCreatedBy")
+  ownedProjects    Project[]  @relation("ProjectOwner")
   crmSalesmanName String? // 帆软 CRM 销售英文名，对应 com_salesman（如 Fay.Wen）
   wecomUserId     String? @unique // 企业微信成员 userid，用于识别发消息者与 @ 提醒
   wecomDisplayName String? @unique // 企微群聊显示名（如 saber-陈敏），userid 不可用时的兜底匹配
@@ -102,6 +103,7 @@ model Partner {
   contacts      Contact[]
   contactLinks  ContactLink[]
   opportunities Opportunity[]
+  projects      Project[]
   todos         TodoItem[]
   events        TimelineEvent[]
   trainings     Training[]
@@ -162,6 +164,7 @@ model Customer {
   contacts        Contact[]
   contactLinks    ContactLink[]
   opportunities   Opportunity[]
+  projects        Project[]
   todos           TodoItem[]
   events          TimelineEvent[]
   businessRecords BusinessRecord[]
@@ -394,9 +397,45 @@ model Opportunity {
   nextStep   String?
   followUpAt DateTime?
   status     String    @default("ACTIVE") // ACTIVE / WON / LOST / PAUSED
+  // 成交类型（赢单后区分是否含交付项目）：PROJECT 项目型（可转项目）/ PRODUCT 纯产品型（无项目）。null 未定
+  dealType   String?
   notes      String?
+  // 赢单后转化生成的合作项目（一对一）
+  project    Project?  @relation("OpportunityProject")
+  todos      TodoItem[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([partnerId])
+}
+
+// 已合作项目：机会赢单后转化生成的交付/合作项目（以客户为主体）
+model Project {
+  id                  String       @id @default(cuid())
+  customerId          String
+  customer            Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  // 可选交付方/带单伙伴
+  partnerId           String?
+  partner             Partner?     @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  name                String
+  // 来源机会（一对一回溯），赢单转化时写入
+  sourceOpportunityId String?      @unique
+  sourceOpportunity   Opportunity? @relation("OpportunityProject", fields: [sourceOpportunityId], references: [id], onDelete: SetNull)
+  // KICKOFF 启动 / IMPLEMENT 实施 / ACCEPTANCE 验收 / GOLIVE 上线 / MAINTENANCE 运维
+  phase               String       @default("KICKOFF")
+  // ACTIVE 进行中 / ON_HOLD 暂停 / DONE 已完成 / CLOSED 已关闭
+  status              String       @default("ACTIVE")
+  amount              String?
+  startDate           DateTime?
+  endDate             DateTime?
+  ownerId             String?
+  owner               User?        @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  notes               String?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  todos               TodoItem[]
+  events              TimelineEvent[]
 
   @@index([customerId])
   @@index([partnerId])
@@ -410,6 +449,10 @@ model TodoItem {
   partner    Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  projectId  String?
+  project    Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   assigneeId String?
   assignee   User?     @relation(fields: [assigneeId], references: [id])
   dueDate    DateTime?
@@ -419,6 +462,9 @@ model TodoItem {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   doneAt     DateTime?
+
+  @@index([opportunityId])
+  @@index([projectId])
 }
 
 model TimelineEvent {
@@ -427,6 +473,8 @@ model TimelineEvent {
   partner     Partner? @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   customerId  String?
   customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   // NOTE / MEETING / CHAT_IMPORT / AI_SUMMARY / NEWS / SYSTEM / CHANGE
   type        String   @default("NOTE")
   title       String
@@ -438,6 +486,7 @@ model TimelineEvent {
 
   @@index([partnerId])
   @@index([customerId])
+  @@index([projectId])
 }
 
 model Training {
