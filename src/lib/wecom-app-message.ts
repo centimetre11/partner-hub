@@ -4,9 +4,39 @@ import { isValidWecomUserId, sanitizeWecomUserId } from "@/lib/wecom-identity-va
 
 const MAX_CONTENT_BYTES = 2048;
 const MAX_TEXTCARD_TITLE_CHARS = 128;
-const MAX_TEXTCARD_DESC_CHARS = 512;
+export const MAX_TEXTCARD_DESC_BYTES = 512;
+const MAX_TEXTCARD_DESC_CHARS = MAX_TEXTCARD_DESC_BYTES;
 const MAX_TEXTCARD_URL_BYTES = 2048;
 const MAX_TEXTCARD_BTNTXT_CHARS = 4;
+
+function byteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
+/** 按 UTF-8 字节数截断（企微 textcard description 上限 512 bytes） */
+export function truncateToMaxBytes(text: string, maxBytes: number, suffix = "…"): string {
+  if (maxBytes <= 0) return "";
+  if (byteLength(text) <= maxBytes) return text;
+  const suffixBytes = byteLength(suffix);
+  let out = "";
+  for (const ch of text) {
+    const candidate = out + ch;
+    if (byteLength(candidate) + suffixBytes > maxBytes) break;
+    out = candidate;
+  }
+  return out + suffix;
+}
+
+/**
+ * textcard 正文（guideToBot 前）预留 HTML 尾部与 <br/> 转换空间，避免超长被拒。
+ */
+export function fitTextcardPlainBody(body: string, reserveBytes = 180): string {
+  const maxPlain = MAX_TEXTCARD_DESC_BYTES - reserveBytes;
+  const normalized = body.trim();
+  if (maxPlain <= 0) return "";
+  if (byteLength(normalized) <= maxPlain) return normalized;
+  return truncateToMaxBytes(normalized, maxPlain);
+}
 
 type WecomApiError = {
   errcode?: number;
@@ -62,10 +92,6 @@ export function resolveWecomAppMessageConfig(): WecomAppMessageConfig | null {
 
 function apiError(prefix: string, data: WecomApiError): Error {
   return new Error(`${prefix}: ${data.errcode ?? "unknown"} ${data.errmsg ?? ""}`.trim());
-}
-
-function byteLength(text: string): number {
-  return new TextEncoder().encode(text).length;
 }
 
 function splitIds(raw: string): string[] {
@@ -222,7 +248,7 @@ export async function sendWecomAppMessage(input: SendWecomAppMessageInput): Prom
 
   if (msgtype === "textcard") {
     const title = input.title?.trim() || input.content.trim().split(/\n/)[0]?.trim();
-    const description = input.content.trim();
+    let description = input.content.trim();
     const cardUrl = input.url?.trim();
     if (!title) return { ok: false, error: "textcard requires title (or non-empty content first line)." };
     if (!description) return { ok: false, error: "Message content is empty." };
@@ -233,7 +259,7 @@ export async function sendWecomAppMessage(input: SendWecomAppMessageInput): Prom
       return { ok: false, error: `textcard title exceeds ${MAX_TEXTCARD_TITLE_CHARS} characters.` };
     }
     if (byteLength(description) > MAX_TEXTCARD_DESC_CHARS) {
-      return { ok: false, error: `textcard description exceeds ${MAX_TEXTCARD_DESC_CHARS} bytes.` };
+      description = truncateToMaxBytes(description, MAX_TEXTCARD_DESC_CHARS);
     }
     if (byteLength(cardUrl) > MAX_TEXTCARD_URL_BYTES) {
       return { ok: false, error: `textcard url exceeds ${MAX_TEXTCARD_URL_BYTES} bytes.` };

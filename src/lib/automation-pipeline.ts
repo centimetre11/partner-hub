@@ -97,6 +97,46 @@ function emptyText(query: AutomationQuery, locale: "zh" | "en"): string {
   return locale === "zh" ? "✅ 当前无 OPEN 待办" : "✅ No open todos";
 }
 
+function shortenLine(text: string, maxChars: number): string {
+  const t = text.trim();
+  if (t.length <= maxChars) return t;
+  return `${t.slice(0, Math.max(1, maxChars - 1))}…`;
+}
+
+/** 企微 textcard 用精简摘要（完整明细走邮件/群推送） */
+function buildWecomAppCardBody(
+  query: AutomationQuery,
+  count: number,
+  todos: TodoRow[],
+  opportunities: OpportunityRow[],
+  locale: "zh" | "en"
+): string {
+  if (count === 0) return emptyText(query, locale);
+
+  if (query.source === "todos") {
+    const lines = todos.slice(0, 4).map((t, i) => {
+      const due = t.dueDate?.toISOString().slice(0, 10) ?? "-";
+      return locale === "zh"
+        ? `${i + 1}. ${shortenLine(t.title, 32)}（${due}）`
+        : `${i + 1}. ${shortenLine(t.title, 32)} (${due})`;
+    });
+    if (count > 4) {
+      lines.push(locale === "zh" ? `…共 ${count} 条，点击下方查看` : `…${count} total — tap below`);
+    }
+    return lines.join("\n");
+  }
+
+  const lines = opportunities.slice(0, 4).map((o, i) =>
+    locale === "zh"
+      ? `${i + 1}. ${shortenLine(o.name, 32)}（${o.stage}）`
+      : `${i + 1}. ${shortenLine(o.name, 32)} (${o.stage})`
+  );
+  if (count > 4) {
+    lines.push(locale === "zh" ? `…共 ${count} 条，点击下方查看` : `…${count} total — tap below`);
+  }
+  return lines.join("\n");
+}
+
 // ---------- delivery helpers ----------
 
 async function pushWecomGroup(
@@ -151,13 +191,13 @@ async function sendWecomApp(
   return result;
 }
 
-/** 企微应用私信：指定人 / 按负责人 / 创建者 */
+/** 企微应用私信：指定人 / 按负责人 / 创建者（cardBody 为精简 textcard 摘要） */
 async function deliverWecomApp(
   agent: AgentForPipeline,
   query: AutomationQuery,
   todos: TodoRow[],
   cardTitle: string,
-  fullBody: string,
+  cardBody: string,
   toolLog: ToolLogEntry[],
   pushNotes: string[],
   locale: "zh" | "en"
@@ -176,7 +216,13 @@ async function deliverWecomApp(
     }
     const results: string[] = [];
     for (const [name, items] of byAssignee) {
-      const body = items.map((t) => formatTodoLine(t, locale)).join("\n");
+      const body = buildWecomAppCardBody(
+        { ...query, assigneeId: undefined },
+        items.length,
+        items,
+        [],
+        locale
+      );
       results.push(
         await sendWecomApp(
           {
@@ -204,7 +250,7 @@ async function deliverWecomApp(
       {
         hubUserId: recipient.hubUserId,
         title: cardTitle,
-        content: fullBody,
+        content: cardBody,
         useTextcard: true,
         guideToBot: true,
       },
@@ -229,7 +275,7 @@ async function deliverWecomApp(
   }
   const pushToSelf = mentionsPushToSelf(agent.description, agent.name);
   const r = await sendWecomApp(
-    { hubUserId: agent.createdById, title: cardTitle, content: fullBody, useTextcard: true, guideToBot: true },
+    { hubUserId: agent.createdById, title: cardTitle, content: cardBody, useTextcard: true, guideToBot: true },
     toolLog
   );
   const ok = /sent to/i.test(r);
@@ -281,6 +327,7 @@ export async function runDeterministicQueryPipeline(
   let listBody: string;
   let count: number;
   let todos: TodoRow[] = [];
+  let opportunities: OpportunityRow[] = [];
 
   if (query.source === "todos") {
     todos = await queryTodos(query);
@@ -299,9 +346,9 @@ export async function runDeterministicQueryPipeline(
       result: count ? `${count} open todo(s)` : "No open todos",
     });
   } else {
-    const rows = await queryOpportunities(query);
-    count = rows.length;
-    listBody = count ? rows.map((o) => formatOpportunityLine(o, locale)).join("\n") : emptyText(query, locale);
+    opportunities = await queryOpportunities(query);
+    count = opportunities.length;
+    listBody = count ? opportunities.map((o) => formatOpportunityLine(o, locale)).join("\n") : emptyText(query, locale);
     toolLog.push({
       tool: "list_opportunities",
       args: { scope: query.scope, partnerId: query.partnerId, customerId: query.customerId, status: query.opportunityStatus },
@@ -320,6 +367,7 @@ export async function runDeterministicQueryPipeline(
         ? `${heading} (${count})`
         : heading;
 
+  const cardBody = buildWecomAppCardBody(query, count, todos, opportunities, locale);
   const pushNotes: string[] = [];
   if (agent.wecomPushChatId?.trim()) {
     await pushWecomGroup(agent.wecomPushChatId.trim(), fullBody, toolLog, pushNotes, locale);
@@ -328,7 +376,7 @@ export async function runDeterministicQueryPipeline(
     await pushEmail(agent.pushEmailTo.trim(), heading, fullBody, toolLog, pushNotes, locale);
   }
   if (isWecomAppPushEnabled(agent.pushWecomAppTo)) {
-    await deliverWecomApp(agent, query, todos, cardTitle, fullBody, toolLog, pushNotes, locale);
+    await deliverWecomApp(agent, query, todos, cardTitle, cardBody, toolLog, pushNotes, locale);
   }
 
   const intro =

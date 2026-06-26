@@ -11,6 +11,7 @@ import {
   resolveHubUserIdsToWecomUserIds,
   resolveHubUserNamesToWecomUserIds,
   sendWecomAppMessage,
+  fitTextcardPlainBody,
   type WecomAppMessageType,
 } from "../wecom-app-message";
 
@@ -72,9 +73,12 @@ export async function runSendWecomAppMessageTool(
     }
     if (!title) title = "Partner Hub 通知";
     if (guideToBot) {
+      content = fitTextcardPlainBody(content);
       content = buildBotGuideTextcardDescription(content);
       if (!url) url = wecomBotGuidePageUrl();
       if (!btntxt) btntxt = DEFAULT_BOT_GUIDE_BTNTXT;
+    } else {
+      content = fitTextcardPlainBody(content, 40);
     }
     if (!url) return "textcard requires url (set url or guideToBot=true for default guide page)";
   } else if (guideToBot && content) {
