@@ -1149,7 +1149,7 @@ const sendWecomAppTool: Skill = {
     function: {
       name: "send_wecom_app",
       description:
-        "Send a WeCom self-built application message to one or more users. Use title + useTextcard for a clickable card (recommended for reminders). guideToBot=true (default) appends a button linking to AI / bot guide. Requires WECOM_CORP_ID, WECOM_APP_SECRET, WECOM_AGENT_ID.",
+        "Send a WeCom self-built application message to one or more users. Use title + useTextcard for a clickable card (recommended for reminders). guideToBot=true (default) opens mobile workbench (/mobile via OAuth). Requires WECOM_CORP_ID, WECOM_APP_SECRET, WECOM_AGENT_ID.",
       parameters: {
         type: "object",
         properties: {
@@ -1176,7 +1176,7 @@ const sendWecomAppTool: Skill = {
           },
           url: {
             type: "string",
-            description: "textcard jump URL (https). Default guide page when guideToBot=true",
+            description: "textcard jump URL (https). Default: mobile workbench OAuth when guideToBot=true",
           },
           btntxt: {
             type: "string",

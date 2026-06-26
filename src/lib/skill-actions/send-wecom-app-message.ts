@@ -3,7 +3,7 @@ import {
   appendWecomBotGuideText,
   buildBotGuideTextcardDescription,
   DEFAULT_BOT_GUIDE_BTNTXT,
-  wecomBotGuidePageUrl,
+  wecomAppTextcardJumpUrl,
 } from "../wecom-bot-guide";
 import {
   isWecomAppMessageConfigured,
@@ -75,7 +75,7 @@ export async function runSendWecomAppMessageTool(
     if (guideToBot) {
       content = fitTextcardPlainBody(content);
       content = buildBotGuideTextcardDescription(content);
-      if (!url) url = wecomBotGuidePageUrl();
+      if (!url) url = wecomAppTextcardJumpUrl();
       if (!btntxt) btntxt = DEFAULT_BOT_GUIDE_BTNTXT;
     } else {
       content = fitTextcardPlainBody(content, 40);

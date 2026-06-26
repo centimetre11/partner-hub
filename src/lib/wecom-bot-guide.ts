@@ -8,7 +8,7 @@ export function resolveWecomBotDisplayName(): string {
   return process.env.WECOM_BOT_DISPLAY_NAME?.trim() || "MEA 伙伴助手";
 }
 
-/** 引导页：说明如何找到机器人 + 一键打开移动工作台 */
+/** 引导页：说明如何找到机器人 + 一键打开移动工作台（textcard 不再默认跳此页） */
 export function wecomBotGuidePageUrl(): string {
   return `${resolveAppBaseUrl()}/wecom/bot`;
 }
@@ -19,18 +19,21 @@ export function wecomMobileAiOAuthUrl(): string {
   return `${resolveAppBaseUrl()}/api/wecom/oauth/start?redirect=${redirect}`;
 }
 
-export const DEFAULT_BOT_GUIDE_BTNTXT = "和 AI 对话";
+/** 应用消息 textcard 默认跳转：直达移动工作台（企微 OAuth） */
+export function wecomAppTextcardJumpUrl(): string {
+  return wecomMobileAiOAuthUrl();
+}
+
+export const DEFAULT_BOT_GUIDE_BTNTXT = "工作台";
 
 export function appendWecomBotGuideText(content: string): string {
-  const name = resolveWecomBotDisplayName();
-  const url = wecomBotGuidePageUrl();
-  return `${content.trim()}\n\n💬 查待办、录商务：打开 ${url}\n或在企微搜索智能机器人「${name}」私聊。`;
+  const url = wecomAppTextcardJumpUrl();
+  return `${content.trim()}\n\n💬 打开移动工作台：${url}`;
 }
 
 /** textcard description（支持企微 HTML：br / div.gray） */
 export function buildBotGuideTextcardDescription(body: string): string {
-  const name = resolveWecomBotDisplayName();
   const main = body.trim().replace(/\n/g, "<br/>");
-  const tail = `<div class="gray">也可在企微搜索智能机器人「${name}」私聊。</div>`;
+  const tail = `<div class="gray">点击下方按钮打开移动工作台。</div>`;
   return main ? `${main}<br/>${tail}` : tail;
 }
