@@ -10,9 +10,13 @@ export function uploadDir() {
   return process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
 }
 
+export function maxUploadMb() {
+  const parsed = parseInt(process.env.MAX_UPLOAD_MB || "500", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 500;
+}
+
 export function maxUploadBytes() {
-  const mb = parseInt(process.env.MAX_UPLOAD_MB || "20", 10);
-  return mb * 1024 * 1024;
+  return maxUploadMb() * 1024 * 1024;
 }
 
 export function isAllowedFile(filename: string, mimeType: string) {
@@ -29,7 +33,7 @@ export async function saveUploadedFile(file: File, userId: string | null) {
     throw new Error("Unsupported file type");
   }
   if (file.size > maxUploadBytes()) {
-    throw new Error(`File exceeds ${process.env.MAX_UPLOAD_MB || 20}MB limit`);
+    throw new Error(`File exceeds ${maxUploadMb()}MB limit`);
   }
   const dir = uploadDir();
   await mkdir(dir, { recursive: true });

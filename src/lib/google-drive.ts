@@ -76,39 +76,18 @@ export type GdriveUploadResult = {
 };
 
 /**
- * 用 OAuth access token 把文件直传到指定文件夹（multipart 上传，内存中转，不落本地磁盘）。
- * 上传者/文件归属为授权的真人账号。
+ * 初始化 Google Drive Resumable Upload，返回浏览器可直传的 upload URL（文件不经我方服务器）。
+ * 上传者/文件归属为授权的真人 OAuth 账号。
  */
-export async function uploadFileToGdrive(
+export async function initResumableGdriveUpload(
   folderId: string,
-  file: File,
+  filename: string,
+  mimeType: string,
+  fileSize: number,
   accessToken: string,
-): Promise<GdriveUploadResult> {
-  const metadata = {
-    name: file.name,
-    parents: [folderId],
-  };
-  const boundary = `partnerhub${crypto.randomUUID().replace(/-/g, "")}`;
-  const encoder = new TextEncoder();
-  const mime = file.type || "application/octet-stream";
-
-  const head = encoder.encode(
-    `--${boundary}\r\n` +
-      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-      `${JSON.stringify(metadata)}\r\n` +
-      `--${boundary}\r\n` +
-      `Content-Type: ${mime}\r\n\r\n`,
-  );
-  const tail = encoder.encode(`\r\n--${boundary}--\r\n`);
-  const fileBytes = new Uint8Array(await file.arrayBuffer());
-
-  const body = new Uint8Array(head.length + fileBytes.length + tail.length);
-  body.set(head, 0);
-  body.set(fileBytes, head.length);
-  body.set(tail, head.length + fileBytes.length);
-
+): Promise<{ uploadUrl: string }> {
   const params = new URLSearchParams({
-    uploadType: "multipart",
+    uploadType: "resumable",
     supportsAllDrives: "true",
     fields: "id,name,mimeType,webViewLink,thumbnailLink",
   });
@@ -117,23 +96,27 @@ export async function uploadFileToGdrive(
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
+      "Content-Type": "application/json",
+      "X-Upload-Content-Type": mimeType,
+      "X-Upload-Content-Length": String(fileSize),
     },
-    body,
-    signal: AbortSignal.timeout(120000),
+    body: JSON.stringify({
+      name: filename,
+      parents: [folderId],
+    }),
+    signal: AbortSignal.timeout(30000),
   });
 
-  const data = (await res.json()) as RawDriveItem & { error?: { message?: string } };
   if (!res.ok) {
-    throw new Error(data.error?.message || `Drive upload failed (${res.status})`);
+    const data = (await res.json()) as { error?: { message?: string } };
+    throw new Error(data.error?.message || `Resumable init failed (${res.status})`);
   }
-  return {
-    id: data.id,
-    name: data.name,
-    webViewLink: data.webViewLink ?? `https://drive.google.com/file/d/${data.id}/view`,
-    thumbnailLink: data.thumbnailLink ?? null,
-    mimeType: data.mimeType,
-  };
+
+  const uploadUrl = res.headers.get("Location");
+  if (!uploadUrl) {
+    throw new Error("Google Drive did not return an upload URL");
+  }
+  return { uploadUrl };
 }
 
 /** OAuth 在指定父目录下创建文件夹 */

@@ -20,6 +20,52 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type GdriveUploadResult = {
+  id?: string;
+  name?: string;
+  webViewLink?: string;
+  error?: { message?: string };
+};
+
+function uploadFileDirectToGoogle(
+  uploadUrl: string,
+  file: File,
+  onProgress: (percent: number) => void,
+): Promise<GdriveUploadResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as GdriveUploadResult);
+        } catch {
+          reject(new Error("Invalid response from Google Drive"));
+        }
+        return;
+      }
+      try {
+        const data = JSON.parse(xhr.responseText) as GdriveUploadResult;
+        reject(new Error(data.error?.message || `Upload failed (${xhr.status})`));
+      } catch {
+        reject(new Error(`Upload failed (${xhr.status})`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Network error during upload"));
+    xhr.onabort = () => reject(new Error("Upload aborted"));
+    xhr.send(file);
+  });
+}
+
 export function GdriveUploadField({
   partnerId,
   customerId,
@@ -48,6 +94,7 @@ export function GdriveUploadField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<UploadPhase>("idle");
   const [activeFile, setActiveFile] = useState<{ name: string; size: number } | null>(null);
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const loading = phase === "matching" || phase === "uploading";
@@ -57,41 +104,51 @@ export function GdriveUploadField({
     if (!file) return;
     setActiveFile({ name: file.name, size: file.size });
     setError(null);
+    setUploadPercent(0);
     setPhase(folderUrl ? "uploading" : "matching");
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      if (partnerId) fd.append("partnerId", partnerId);
-      if (customerId) fd.append("customerId", customerId);
-      if (folderUrl) fd.append("folderUrl", folderUrl);
-
       if (!folderUrl) {
         await new Promise((r) => setTimeout(r, 300));
         setPhase("uploading");
       }
 
-      const res = await fetch("/api/upload/gdrive", { method: "POST", body: fd });
-      const data = (await res.json()) as {
+      const initRes = await fetch("/api/upload/gdrive/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          partnerId: partnerId ?? undefined,
+          customerId: customerId ?? undefined,
+          folderUrl: folderUrl ?? undefined,
+        }),
+      });
+      const initData = (await initRes.json()) as {
         error?: string;
         code?: string;
-        asset?: UploadedAsset;
+        uploadUrl?: string;
         folderUrl?: string | null;
       };
-      if (!res.ok) {
-        const msg = data.error ?? "Upload failed";
+      if (!initRes.ok || !initData.uploadUrl) {
+        const msg = initData.error ?? "Upload init failed";
         setError(msg);
         setPhase("error");
-        onError?.(msg, data.code);
+        onError?.(msg, initData.code);
         return;
       }
+
+      await uploadFileDirectToGoogle(initData.uploadUrl, file, setUploadPercent);
+
       setPhase("success");
       onUploaded({
-        folderUrl: data.folderUrl ?? null,
-        filename: activeFile?.name,
+        folderUrl: initData.folderUrl ?? null,
+        filename: file.name,
       });
       window.setTimeout(() => {
         setPhase("idle");
         setActiveFile(null);
+        setUploadPercent(0);
       }, 2500);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -141,10 +198,21 @@ export function GdriveUploadField({
         <div className="rounded-lg border border-sky-100 bg-sky-50/70 px-3 py-2.5 space-y-2">
           <div className="flex items-center gap-2 text-xs text-sky-900">
             <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-300 border-t-sky-700 shrink-0" />
-            <span className="min-w-0 truncate">{statusText}</span>
+            <span className="min-w-0 truncate">
+              {statusText}
+              {phase === "uploading" && uploadPercent > 0 ? ` · ${uploadPercent}%` : ""}
+            </span>
           </div>
           <div className="h-1.5 rounded-full bg-sky-100 overflow-hidden">
-            <div className="h-full w-1/3 rounded-full bg-sky-500 animate-[upload-pulse_1.2s_ease-in-out_infinite]" />
+            <div
+              className="h-full rounded-full bg-sky-500 transition-[width] duration-150 ease-out"
+              style={{
+                width:
+                  phase === "matching"
+                    ? "33%"
+                    : `${Math.max(uploadPercent, phase === "uploading" ? 2 : 0)}%`,
+              }}
+            />
           </div>
         </div>
       )}

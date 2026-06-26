@@ -49,7 +49,7 @@ server {
     listen 80;
     server_name ${SERVER_NAME};
 
-    client_max_body_size 25m;
+    client_max_body_size 550m;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
