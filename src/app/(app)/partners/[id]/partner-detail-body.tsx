@@ -380,7 +380,9 @@ export async function PartnerDetailBody({ id }: { id: string }) {
               uploaderConnected={ammoConfig.gdriveUploaderConnected}
               solutions={p.solutions}
               solutionCopy={m.partnerDetail.solutionsSection}
-              assets={p.assets.map((a) => ({
+              assets={p.assets
+                .filter((a) => !(a.provider === "gdrive" && a.size > 0))
+                .map((a) => ({
                 id: a.id,
                 filename: a.filename,
                 url: a.url,

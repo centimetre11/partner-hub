@@ -93,30 +93,10 @@ export async function POST(req: NextRequest) {
 
     const uploaded = await uploadFileToGdrive(folderId, file, accessToken);
 
-    const asset = await db.asset.create({
-      data: {
-        kind: "LINK",
-        filename: uploaded.name || file.name,
-        mimeType: uploaded.mimeType || file.type || "application/octet-stream",
-        size: file.size,
-        url: uploaded.webViewLink,
-        thumbnailUrl: uploaded.thumbnailLink,
-        provider: "gdrive",
-        uploadedById: uid,
-        partnerId,
-        customerId,
-      },
-    });
-
     return NextResponse.json({
-      asset: {
-        id: asset.id,
-        filename: asset.filename,
-        mimeType: asset.mimeType,
-        size: asset.size,
-        url: asset.url,
-        thumbnailUrl: asset.thumbnailUrl,
-        provider: asset.provider,
+      uploaded: {
+        name: uploaded.name || file.name,
+        webViewLink: uploaded.webViewLink,
       },
       folderUrl: autoResolvedFolderUrl,
     });

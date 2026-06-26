@@ -22,7 +22,17 @@ export type BuiltinActionDef = {
 
 /** User asks to list/count todos — not create */
 const TODO_QUERY_RE =
-  /看看.{0,10}待办|看一下.{0,10}待办|查.{0,8}待办|查询.{0,6}待办|列出.{0,6}待办|现在.{0,8}多少.{0,8}待办|当前.{0,8}待办|有多少.{0,8}待办|有几.{0,8}待办|待办.{0,12}(有哪些|有什么|多少|几个|数量|总数|几条|列表|清单|\bopen\b|\ball\b)|(有哪些|有什么|多少|几个|列出|查询|显示|展示).{0,16}待办|^(看看|看一下|查|查询|列出|显示|展示).{0,20}待办|\b(list|show|what|open|view|how many).{0,16}todos?\b|\btodos?\b.{0,16}(list|show|what|open|view)/i;
+  /看看.{0,10}待办|看一下.{0,10}待办|查.{0,8}待办|查询.{0,6}待办|列出.{0,6}待办|现在.{0,8}多少.{0,8}待办|当前.{0,8}待办|有多少.{0,8}待办|有几.{0,8}待办|待办.{0,12}(有哪些|有什么|多少|几个|数量|总数|几条|列表|清单|\bopen\b|\ball\b)|(有哪些|有什么|多少|几个|列出|查询|显示|展示).{0,16}待办|^(看看|看一下|查|查询|列出|显示|展示).{0,20}待办|我的.{0,6}待办|我.{0,4}待办|\b(list|show|what|open|view|how many).{0,16}todos?\b|\btodos?\b.{0,16}(list|show|what|open|view)|\bmy\s+todos?\b/i;
+
+/** User asks for their own todos (「我的待办」) — assignee = current operator. */
+export function isSelfTodoQueryPhrase(text: string): boolean {
+  const t = normalizeActionText(text);
+  if (!/待办|todos?\b/i.test(t)) return false;
+  return (
+    /^(?:我的|我(?:的)?)\s*待办|我(?:的)?待办|我(?:负责|名下|手上).{0,8}待办|待办.{0,8}(?:我的|mine)|\bmy\s+todos?\b/i.test(t) ||
+    (/^我/.test(t) && /待办/.test(t) && /(有哪些|有什么|多少|几个|列表|清单)/.test(t))
+  );
+}
 
 const TODO_CREATE_VERB_RE =
   /建.{0,4}待办|创建待办|新.{0,2}待办|录入待办|加.{0,2}待办|帮.{0,12}(?:建|创|加|记|写|添).{0,6}待办|添加待办|记.{0,4}待办|\b(create|add|log|new)\s+todos?\b|待办[：:，]|^事项[是：:]|^the item is\b/i;

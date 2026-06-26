@@ -42,7 +42,7 @@ export function GdriveUploadField({
   matchingLabel: string;
   uploadingLabel: string;
   successLabel: string;
-  onUploaded: (asset: UploadedAsset, meta?: { folderUrl?: string | null }) => void;
+  onUploaded: (meta?: { folderUrl?: string | null; filename?: string }) => void;
   onError?: (message: string, code?: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -85,7 +85,10 @@ export function GdriveUploadField({
         return;
       }
       setPhase("success");
-      onUploaded(data.asset as UploadedAsset, { folderUrl: data.folderUrl ?? null });
+      onUploaded({
+        folderUrl: data.folderUrl ?? null,
+        filename: activeFile?.name,
+      });
       window.setTimeout(() => {
         setPhase("idle");
         setActiveFile(null);

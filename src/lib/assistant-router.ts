@@ -5,7 +5,7 @@ import { shouldUseAgentBuilderMode } from "./agent-builder-intent";
 import { shouldUseAutomationBuilderMode } from "./automation-builder-intent";
 import { runAgentBuilderTurn, type AgentBuilderMessage } from "./agent-builder";
 import { runAutomationBuilderTurn, type AutomationBuilderMessage } from "./automation-builder";
-import { runQueryAssistant, type AssistantLocale } from "./assistant-core";
+import { runQueryAssistant, trySelfTodoListQuery, type AssistantLocale } from "./assistant-core";
 import {
   buildFocusFromListItems,
   extractListItemsFromFormattedReply,

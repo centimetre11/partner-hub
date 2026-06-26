@@ -142,7 +142,9 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         folderUrl={customer.gdriveFolderUrl}
         browseReady={ammoConfig.gdriveServiceAccountConfigured}
         uploaderConnected={ammoConfig.gdriveUploaderConnected}
-        assets={customer.assets.map((a) => ({
+        assets={customer.assets
+          .filter((a) => !(a.provider === "gdrive" && a.size > 0))
+          .map((a) => ({
           id: a.id,
           filename: a.filename,
           url: a.url,

@@ -8,6 +8,7 @@ import {
   runSkill,
   skillsToTools,
 } from "@/lib/skills";
+import { isSelfTodoQueryPhrase, normalizeActionText } from "@/lib/intake-action-registry";
 import { isKmsConfiguredForUser } from "@/lib/kms";
 import { isKnowhowConfigured } from "@/lib/knowhow";
 
@@ -66,6 +67,59 @@ You can use tools to query and modify system data, search the public web, read K
 7. Context: Fanruan products FineReport (complex reporting) / FineBI (self-service analytics) / FineDataLink (data integration); Middle East differentiation is complex reporting plus data-sovereignty compliance (on-prem deployment); strategy materials include Tier A/B/C playbooks, first-three-deal subsidy (first deal +20% discount + 2 weeks free onsite), first-year super discount (L2 40% / L3 50% / L4 60%), Fast Track (Tableau/Microsoft migration partners with ≥5 certified staff go straight to L2).`;
 }
 
+function formatSelfTodosReply(raw: string, locale: AssistantLocale, displayName?: string): string {
+  const who = displayName?.trim();
+  if (raw === "No open todos") {
+    return locale === "zh"
+      ? who
+        ? `${who}，您当前没有进行中的待办。`
+        : "您当前没有进行中的待办。"
+      : who
+        ? `${who}, you have no open todos.`
+        : "You have no open todos.";
+  }
+  const lines = raw.split("\n").filter(Boolean);
+  if (locale === "zh") {
+    const head = who
+      ? `${who}，您当前有 ${lines.length} 条 open 待办：`
+      : `您当前有 ${lines.length} 条 open 待办：`;
+    return `${head}\n\n${lines.join("\n")}`;
+  }
+  const head = who ? `${who}, you have ${lines.length} open todo(s):` : `You have ${lines.length} open todo(s):`;
+  return `${head}\n\n${lines.join("\n")}`;
+}
+
+/** Deterministic「我的待办」query — uses current Hub userId, no LLM round-trip. */
+export async function trySelfTodoListQuery(
+  messages: IntakeMessage[],
+  userId: string,
+  options?: {
+    locale?: AssistantLocale;
+    actorDisplayName?: string;
+    partnerId?: string;
+    partnerName?: string;
+    customerId?: string;
+    customerName?: string;
+  },
+): Promise<{ reply: string; actions: string[] } | null> {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  if (!isSelfTodoQueryPhrase(normalizeActionText(lastUser))) return null;
+
+  const args: Record<string, unknown> = { assigneeUserId: userId };
+  if (options?.customerId) args.customerId = options.customerId;
+  else if (options?.customerName) args.customerName = options.customerName;
+  else if (options?.partnerId) args.partnerId = options.partnerId;
+  else if (options?.partnerName) args.partnerName = options.partnerName;
+
+  const ctx = newSkillContext({ mode: "assistant", userId });
+  const raw = await runSkill("list_todos", args, ctx);
+  const locale = options?.locale ?? "zh";
+  return {
+    reply: formatSelfTodosReply(raw, locale, options?.actorDisplayName),
+    actions: ctx.actions,
+  };
+}
+
 export async function runQueryAssistant(
   messages: IntakeMessage[],
   uid: string,
@@ -76,6 +130,9 @@ export async function runQueryAssistant(
     queryKind?: "list_todos" | "list_opportunities" | "list_business_records" | "general";
     customerId?: string;
     customerName?: string;
+    partnerId?: string;
+    partnerName?: string;
+    actorDisplayName?: string;
   }
 ) {
   const locale = options?.locale ?? "en";
@@ -89,7 +146,13 @@ export async function runQueryAssistant(
         ? `\n\n本轮用户要查待办：必须先调用 list_todos，回复中保留每条 [id:…] 前缀。${
             options?.customerId || options?.customerName
               ? `当前会话绑定客户${options.customerName ? `「${options.customerName}」` : ""}${options.customerId ? `（customerId=${options.customerId}）` : ""}，list_todos 必须传 customerName 或 customerId，禁止用 partnerName。`
-              : "用户提到「客户」时传 customerName（可先 search_customers 查名）；提到「伙伴」时传 partnerName。问某人的待办（如 jackie的待办）传 assigneeName，禁止把人名当 partnerName。"
+              : options?.partnerId || options?.partnerName
+                ? `当前会话绑定伙伴${options.partnerName ? `「${options.partnerName}」` : ""}，可按 partnerName/partnerId 过滤。`
+                : "用户提到「客户」时传 customerName（可先 search_customers 查名）；提到「伙伴」时传 partnerName。问某人的待办（如 jackie的待办）传 assigneeName，禁止把人名当 partnerName。"
+          }${
+            options?.actorDisplayName
+              ? `\n当前操作人 Hub 姓名是「${options.actorDisplayName}」。用户说「我的待办/我有哪些待办」时，list_todos 必须传 assigneeUserId 或 assigneeName="${options.actorDisplayName}"，禁止向用户索要姓名。`
+              : ""
           }`
         : `\n\nUser wants todos: call list_todos first; keep [id:…] prefixes.${
             options?.customerId || options?.customerName

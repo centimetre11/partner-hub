@@ -472,6 +472,10 @@ const listTodos: Skill = {
             type: "string",
             description: "Filter by assignee / 负责人 Hub user name (fuzzy match, e.g. Jackie, areeb)",
           },
+          assigneeUserId: {
+            type: "string",
+            description: "Filter by exact Hub user id (use for「我的待办」= current operator userId)",
+          },
           overdueOnly: { type: "boolean", description: "Overdue only (due before today)" },
           dueWithinDays: {
             type: "number",
@@ -489,6 +493,9 @@ const listTodos: Skill = {
     const dueWindow = args.dueWithinDays != null ? dueWithinDaysRange(Number(args.dueWithinDays)) : null;
     const { partnerId, customerId } = await resolveOwnerFilter(args);
     let assigneeId: string | undefined;
+    if (args.assigneeUserId != null && String(args.assigneeUserId).trim()) {
+      assigneeId = String(args.assigneeUserId).trim();
+    }
     if (args.assigneeName != null && String(args.assigneeName).trim()) {
       const u = await findUserByName(String(args.assigneeName));
       if (!u) return `No user found matching assignee "${String(args.assigneeName).trim()}"`;
