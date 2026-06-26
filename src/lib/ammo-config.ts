@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { parseGdriveFolderId } from "./google-drive";
+import { CLIENT_MATERIALS_GDRIVE_FOLDER_URL } from "./solution-config";
 
 export const DEFAULT_GDRIVE_FOLDER_URL =
   "https://drive.google.com/drive/folders/167rUvv3r0lo17tSW6zfX53a4WewFV22J";
@@ -49,6 +50,16 @@ export async function resolveGdriveFolderId(): Promise<string | null> {
   const url = await resolveGdriveFolderUrl();
   if (!url) return null;
   return parseGdriveFolderId(url);
+}
+
+export async function resolveClientMaterialsFolderUrl(): Promise<string> {
+  return (
+    process.env.GDRIVE_CLIENT_MATERIALS_FOLDER_URL?.trim() || CLIENT_MATERIALS_GDRIVE_FOLDER_URL
+  );
+}
+
+export async function resolveClientMaterialsFolderId(): Promise<string | null> {
+  return parseGdriveFolderId(await resolveClientMaterialsFolderUrl());
 }
 
 export async function getAmmoConfigForClient(): Promise<AmmoConfigForClient> {

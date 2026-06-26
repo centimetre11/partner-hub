@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GdriveUploadField, type UploadedAsset } from "@/components/gdrive-upload-field";
+import { GdriveFolderPicker } from "@/components/gdrive-folder-picker";
 import {
   setPartnerGdriveFolderAction,
   setCustomerGdriveFolderAction,
@@ -22,6 +23,7 @@ export type MaterialAsset = {
 export function MaterialsSection({
   partnerId,
   customerId,
+  entityName,
   folderUrl,
   uploaderConnected,
   assets: initialAssets,
@@ -29,6 +31,7 @@ export function MaterialsSection({
 }: {
   partnerId?: string | null;
   customerId?: string | null;
+  entityName: string;
   folderUrl: string | null;
   uploaderConnected: boolean;
   assets: MaterialAsset[];
@@ -47,7 +50,7 @@ export function MaterialsSection({
   const [mode, setMode] = useState<"file" | "link">("file");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLoading, setLinkLoading] = useState(false);
-  const [showFolderBind, setShowFolderBind] = useState(!folderUrl?.trim());
+  const [showFolderBind, setShowFolderBind] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -138,6 +141,23 @@ export function MaterialsSection({
           </p>
         )}
 
+        {uploaderConnected && (
+          <GdriveFolderPicker
+            partnerId={partnerId}
+            customerId={customerId}
+            entityName={entityName}
+            boundUrl={boundUrl}
+            uploaderConnected={uploaderConnected}
+            copy={copy}
+            onBound={(url) => {
+              setLocalBoundUrl(url);
+              setFolderDraft(url);
+              setError(null);
+              router.refresh();
+            }}
+          />
+        )}
+
         {/* 上传 / 贴链接 — 主操作 */}
         <div className="space-y-2">
           <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
@@ -163,8 +183,14 @@ export function MaterialsSection({
                 partnerId={partnerId}
                 customerId={customerId}
                 folderUrl={boundUrl}
-                disabled={!uploaderConnected}
-                disabledReason={!uploaderConnected ? copy.needConnect : null}
+                disabled={!uploaderConnected || !boundUrl}
+                disabledReason={
+                  !uploaderConnected
+                    ? copy.needConnect
+                    : !boundUrl
+                      ? copy.needPickFolder
+                      : null
+                }
                 buttonLabel={copy.chooseAndUpload}
                 matchingLabel={copy.uploadMatching}
                 uploadingLabel={copy.uploadUploading}
@@ -175,7 +201,9 @@ export function MaterialsSection({
                   if (code === "FOLDER_NOT_FOUND") setShowFolderBind(true);
                 }}
               />
-              <p className="text-xs text-slate-400">{copy.uploadHintAuto}</p>
+              {!boundUrl && uploaderConnected && (
+                <p className="text-xs text-amber-700">{copy.needPickFolder}</p>
+              )}
             </>
           ) : (
             <div className="flex gap-2">
@@ -241,16 +269,16 @@ export function MaterialsSection({
           </ul>
         )}
 
-        {/* 目录绑定 — 可选 / 高级 */}
+        {/* 手动粘贴目录链接（备用） */}
         <div className="border-t border-slate-100 pt-3 space-y-2">
           <button
             type="button"
             onClick={() => setShowFolderBind((v) => !v)}
             className="text-xs text-slate-500 hover:text-slate-800"
           >
-            {showFolderBind ? copy.hideFolderBind : copy.showFolderBind}
+            {showFolderBind ? copy.hidePasteFolder : copy.showPasteFolder}
           </button>
-          {(showFolderBind || boundUrl) && (
+          {showFolderBind && (
             <div className="space-y-1.5">
               <label className="block text-xs font-medium text-slate-700">{copy.bindLabel}</label>
               <div className="flex gap-2">

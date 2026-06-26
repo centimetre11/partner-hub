@@ -136,6 +136,44 @@ export async function uploadFileToGdrive(
   };
 }
 
+/** OAuth 在指定父目录下创建文件夹 */
+export async function createGdriveFolderOauth(
+  parentId: string,
+  name: string,
+  accessToken: string,
+): Promise<{ id: string; name: string; webViewLink: string }> {
+  const params = new URLSearchParams({
+    supportsAllDrives: "true",
+    fields: "id,name,webViewLink",
+  });
+  const res = await fetch(`${DRIVE_API}/files?${params}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: name.trim(),
+      mimeType: FOLDER_MIME,
+      parents: [parentId],
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data = (await res.json()) as { id?: string; name?: string; webViewLink?: string; error?: { message?: string } };
+  if (!res.ok || !data.id) {
+    throw new Error(data.error?.message || `Create folder failed (${res.status})`);
+  }
+  return {
+    id: data.id,
+    name: data.name ?? name,
+    webViewLink: data.webViewLink ?? folderUrlFromId(data.id),
+  };
+}
+
+function folderUrlFromId(id: string): string {
+  return `https://drive.google.com/drive/folders/${id}`;
+}
+
 export async function fetchGdriveFileById(
   fileId: string,
   serviceAccountJson: string,
@@ -219,6 +257,10 @@ async function fetchDriveFolderName(token: string, folderId: string): Promise<st
     throw new Error(data.error?.message || `Drive metadata failed (${res.status})`);
   }
   return data.name ?? "Folder";
+}
+
+export async function fetchDriveFolderNameOauth(folderId: string, accessToken: string): Promise<string> {
+  return fetchDriveFolderName(accessToken, folderId);
 }
 
 function mapFileItem(f: RawDriveItem): GdriveFileItem {

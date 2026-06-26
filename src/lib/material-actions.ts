@@ -3,8 +3,32 @@
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { requireUser } from "./session";
-import { parseGdriveFolderId } from "./google-drive";
+import {
+  createGdriveFolderOauth,
+  fetchDriveFolderNameOauth,
+  listGdriveSubfoldersOauth,
+  parseGdriveFolderId,
+} from "./google-drive";
+import { folderUrlFromId, findFolderByName } from "./gdrive-entity-folder";
+import { resolveClientMaterialsFolderId, resolveClientMaterialsFolderUrl } from "./ammo-config";
+import { getUploaderAccessToken } from "./google-oauth";
 import { saveLinkAsset } from "./link-assets";
+
+type EntityTarget = { partnerId?: string | null; customerId?: string | null };
+
+function revalidateEntity(target: EntityTarget) {
+  if (target.partnerId) revalidatePath(`/partners/${target.partnerId}`);
+  if (target.customerId) revalidatePath(`/customers/${target.customerId}`);
+}
+
+async function bindFolderUrl(target: EntityTarget, folderUrl: string | null) {
+  if (target.partnerId) {
+    await db.partner.update({ where: { id: target.partnerId }, data: { gdriveFolderUrl: folderUrl } });
+  } else if (target.customerId) {
+    await db.customer.update({ where: { id: target.customerId }, data: { gdriveFolderUrl: folderUrl } });
+  }
+  revalidateEntity(target);
+}
 
 function cleanFolderUrl(raw: FormDataEntryValue | null): string | null {
   const url = String(raw ?? "").trim();
@@ -31,6 +55,85 @@ export async function setCustomerGdriveFolderAction(customerId: string, formData
   await db.customer.update({ where: { id: customerId }, data: { gdriveFolderUrl } });
   revalidatePath(`/customers/${customerId}`);
   return { ok: true as const };
+}
+
+export type MaterialFolderItem = { id: string; name: string; url: string; suggested: boolean };
+
+/** 列出 07_Client Information 下的现有子目录 */
+export async function listClientMaterialFoldersAction(entityName?: string | null): Promise<
+  | {
+      ok: true;
+      parentUrl: string;
+      parentName: string;
+      folders: MaterialFolderItem[];
+      suggested: MaterialFolderItem | null;
+    }
+  | { ok: false; error: string }
+> {
+  await requireUser();
+  try {
+    const accessToken = await getUploaderAccessToken();
+    const parentId = await resolveClientMaterialsFolderId();
+    const parentUrl = await resolveClientMaterialsFolderUrl();
+    if (!parentId) return { ok: false, error: "Client materials folder is not configured" };
+
+    const [parentName, subfolders] = await Promise.all([
+      fetchDriveFolderNameOauth(parentId, accessToken),
+      listGdriveSubfoldersOauth(parentId, accessToken),
+    ]);
+
+    const folders: MaterialFolderItem[] = subfolders.map((f) => {
+      const suggested = entityName ? !!findFolderByName([f], entityName) : false;
+      return {
+        id: f.id,
+        name: f.name,
+        url: folderUrlFromId(f.id),
+        suggested,
+      };
+    });
+
+    const suggested = entityName ? folders.find((f) => f.suggested) ?? null : null;
+    return { ok: true, parentUrl, parentName, folders, suggested };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** 选择已有子目录并绑定 */
+export async function bindMaterialFolderIdAction(target: EntityTarget, folderId: string) {
+  await requireUser();
+  const id = folderId.trim();
+  if (!id) return { ok: false as const, error: "Invalid folder" };
+  const folderUrl = folderUrlFromId(id);
+  await bindFolderUrl(target, folderUrl);
+  return { ok: true as const, folderUrl };
+}
+
+/** 在 07_Client Information 下新建子目录并绑定 */
+export async function createMaterialFolderAction(target: EntityTarget, name: string) {
+  await requireUser();
+  const folderName = name.trim();
+  if (!folderName) return { ok: false as const, error: "Folder name is required" };
+
+  try {
+    const accessToken = await getUploaderAccessToken();
+    const parentId = await resolveClientMaterialsFolderId();
+    if (!parentId) return { ok: false as const, error: "Client materials folder is not configured" };
+
+    const existing = await listGdriveSubfoldersOauth(parentId, accessToken);
+    const dup = findFolderByName(existing, folderName);
+    if (dup) {
+      const folderUrl = folderUrlFromId(dup.id);
+      await bindFolderUrl(target, folderUrl);
+      return { ok: true as const, folderUrl, existed: true as const };
+    }
+
+    const created = await createGdriveFolderOauth(parentId, folderName, accessToken);
+    await bindFolderUrl(target, created.webViewLink);
+    return { ok: true as const, folderUrl: created.webViewLink, existed: false as const };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 /** 粘贴外链作为材料（解析后落库并归档到伙伴/客户） */
