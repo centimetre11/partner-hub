@@ -71,35 +71,55 @@ export function TablePageSkeleton({ rows = 8 }: { rows?: number }) {
   );
 }
 
+export function DetailHeaderSkeleton() {
+  return (
+    <div className="px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-slate-200/60 bg-white space-y-4">
+      <div className="flex items-start gap-3">
+        <Pulse className="h-8 w-8 shrink-0" />
+        <div className="flex-1 space-y-2">
+          <Pulse className="h-7 w-64 max-w-full" />
+          <Pulse className="h-4 w-96 max-w-full" />
+        </div>
+      </div>
+      <div className="flex gap-2 overflow-hidden">
+        {Array.from({ length: 6 }, (_, i) => (
+          <Pulse key={i} className="h-7 w-24 shrink-0 rounded-full" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function DetailBodySkeleton() {
+  return (
+    <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-12 sm:pb-16">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-5">
+        {Array.from({ length: 5 }, (_, i) => (
+          <Pulse key={i} className="h-16 rounded-lg" />
+        ))}
+      </div>
+      <div className="rounded-lg border border-slate-200/80 bg-white shadow-sm overflow-hidden">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-slate-50/50">
+          <Pulse className="h-5 w-32" />
+          <Pulse className="h-4 w-48 mt-2" />
+        </div>
+        <div className="p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <Pulse className="h-48 rounded-lg" />
+            <Pulse className="h-48 rounded-lg" />
+          </div>
+          <Pulse className="h-40 rounded-lg" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DetailPageSkeleton() {
   return (
     <div>
-      <div className="px-8 pt-5 sm:pt-7 pb-4 sm:pb-5 border-b border-slate-200/60 bg-white space-y-4">
-        <div className="flex items-start gap-3">
-          <Pulse className="h-8 w-8 shrink-0" />
-          <div className="flex-1 space-y-2">
-            <Pulse className="h-7 w-64 max-w-full" />
-            <Pulse className="h-4 w-96 max-w-full" />
-          </div>
-        </div>
-        <div className="flex gap-2 overflow-hidden">
-          {Array.from({ length: 6 }, (_, i) => (
-            <Pulse key={i} className="h-7 w-24 shrink-0 rounded-full" />
-          ))}
-        </div>
-      </div>
-      <div className="px-8 py-6 space-y-5">
-        <div className="flex gap-2 border-b border-slate-200 pb-3">
-          {Array.from({ length: 5 }, (_, i) => (
-            <Pulse key={i} className="h-8 w-20" />
-          ))}
-        </div>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <Pulse className="h-48 rounded-lg" />
-          <Pulse className="h-48 rounded-lg" />
-        </div>
-        <Pulse className="h-64 rounded-lg" />
-      </div>
+      <DetailHeaderSkeleton />
+      <DetailBodySkeleton />
     </div>
   );
 }
