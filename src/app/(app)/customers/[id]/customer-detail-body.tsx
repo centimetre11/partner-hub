@@ -9,6 +9,7 @@ import { CustomerWorkspaceShell, type CustomerTab } from "@/components/customer-
 import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerIntegrationsPanel } from "@/components/customer-integrations-panel";
 import { MaterialsSection } from "@/components/materials-section";
+import { TrainingList } from "@/components/training-list";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getWecomChatForCustomer } from "@/lib/wecom-chats";
 import { CustomerProfilePanel } from "@/components/customer-profile-panel";
@@ -44,11 +45,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         include: { createdBy: { select: { name: true } }, contact: { select: { name: true } } },
       },
       assets: { orderBy: { createdAt: "desc" } },
+      trainings: { orderBy: { updatedAt: "desc" } },
     },
   });
   if (!customer) notFound();
 
-  const [partners, users, wecomChat, matchedCrmCustomer, ammoConfig] = await Promise.all([
+  const [partners, users, wecomChat, matchedCrmCustomer, ammoConfig, linkedSolutions] = await Promise.all([
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true } }),
     getWecomChatForCustomer(id),
@@ -59,6 +61,11 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         })
       : Promise.resolve(null),
     getAmmoConfigForClient(),
+    db.solution.findMany({
+      where: { partnerId: { in: customer.partnerLinks.map((l) => l.partner.id) } },
+      orderBy: { updatedAt: "desc" },
+      include: { assets: { include: { asset: true } } },
+    }),
   ]);
 
   const owner = { kind: "customer" as const, id: customer.id };
@@ -129,6 +136,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </>
   );
 
+  const linkAssets = customer.assets.filter((a) => !(a.provider === "gdrive" && a.size > 0));
+
   // ============ 客户概览（三连接 + 商务记录 + 待办） ============
   const overviewPanel = (
     <div className="space-y-5">
@@ -136,15 +145,31 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos))}>
         {todosContent}
       </Card>
+      {integrationsPanel}
+    </div>
+  );
+
+  // ============ 能力建设（培训 + 材料） ============
+  const capabilityPanel = (
+    <div className="space-y-5">
+      <Card title={pd.trainingCert.replace("{count}", String(customer.trainings.length))}>
+        <TrainingList owner={{ customerId: customer.id }} trainings={customer.trainings} input={input} m={m} />
+      </Card>
       <MaterialsSection
         customerId={customer.id}
         entityName={customer.name}
         folderUrl={customer.gdriveFolderUrl}
         browseReady={ammoConfig.gdriveServiceAccountConfigured}
         uploaderConnected={ammoConfig.gdriveUploaderConnected}
-        assets={customer.assets
-          .filter((a) => !(a.provider === "gdrive" && a.size > 0))
-          .map((a) => ({
+        solutions={linkedSolutions.map((s) => ({
+        id: s.id,
+        partnerId: s.partnerId,
+        name: s.name,
+        notes: s.notes,
+        assets: s.assets,
+      }))}
+        solutionCopy={pd.solutionsSection}
+        assets={linkAssets.map((a) => ({
           id: a.id,
           filename: a.filename,
           url: a.url,
@@ -153,7 +178,6 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         }))}
         copy={m.gdriveMaterials}
       />
-      {integrationsPanel}
     </div>
   );
 
@@ -308,6 +332,16 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       desc: c.tabOverviewDesc,
       badge: openTodos ? String(openTodos) : null,
       content: overviewPanel,
+    },
+    {
+      id: "capability",
+      label: c.tabCapability,
+      desc: c.tabCapabilityDesc,
+      badge:
+        customer.trainings.length + linkAssets.length + linkedSolutions.length > 0
+          ? String(customer.trainings.length + linkAssets.length + linkedSolutions.length)
+          : null,
+      content: capabilityPanel,
     },
     { id: "profile", label: c.tabProfile, desc: c.tabProfileDesc, content: profilePanel },
     {

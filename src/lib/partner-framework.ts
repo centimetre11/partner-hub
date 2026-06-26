@@ -3,7 +3,7 @@ import { labelsEn, stageNameFromLabels, type LabelsBundle } from "./i18n/labels"
 import { formatTierLabel, normalizePartnerTier } from "./tier";
 import { labelsFromMap, labelFromMap, parseIndustries, type TaxonomyDimension } from "./taxonomy";
 
-export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "capability" | "relationship";
+export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "relationship";
 
 /** @deprecated Use getLabels(locale).partnerArchetypeLabels */
 export const PARTNER_ARCHETYPE_LABELS = labelsEn.partnerArchetypeLabels;
@@ -39,14 +39,14 @@ export const INSTANCE_NODE_TARGETS: Record<string, { panel: WorkspacePanelId; ed
   playbook: { panel: "positioning", editable: true },
   pitch: { panel: "positioning", editable: true },
   domain_commitment: { panel: "positioning", editable: true },
-  domain_capability: { panel: "capability" },
+  domain_capability: { panel: "guide" },
   domain_pipeline: { panel: "pipeline" },
   domain_relationship: { panel: "relationship" },
   mod_profile: { panel: "positioning" },
   mod_powermap: { panel: "relationship" },
   mod_opp: { panel: "pipeline" },
-  mod_training: { panel: "capability" },
-  mod_solution: { panel: "capability" },
+  mod_training: { panel: "guide" },
+  mod_solution: { panel: "guide" },
   mod_timeline: { panel: "relationship" },
   stage_exit: { panel: "guide" },
 };

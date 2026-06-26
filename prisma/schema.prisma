@@ -167,6 +167,7 @@ model Customer {
   businessRecords BusinessRecord[]
   wecomChat       WecomChat?
   assets          Asset[]
+  trainings       Training[]
 
   @@index([partnerId])
   @@index([name])
@@ -441,8 +442,10 @@ model TimelineEvent {
 
 model Training {
   id          String    @id @default(cuid())
-  partnerId   String
-  partner     Partner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId   String?
+  partner     Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   person      String
   currentSkill String?
   targetCert  String?
@@ -451,6 +454,9 @@ model Training {
   status      String    @default("PLANNED") // PLANNED / IN_PROGRESS / DONE
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([partnerId])
+  @@index([customerId])
 }
 
 model Setting {

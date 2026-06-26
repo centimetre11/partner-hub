@@ -646,7 +646,10 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
 
 // ============ 培训 ============
 
-export async function upsertTrainingAction(partnerId: string, formData: FormData) {
+export async function upsertTrainingAction(
+  owner: { partnerId: string } | { customerId: string },
+  formData: FormData,
+) {
   await requireUser();
   const id = String(formData.get("id") ?? "");
   const deadline = String(formData.get("deadline") ?? "");
@@ -659,15 +662,21 @@ export async function upsertTrainingAction(partnerId: string, formData: FormData
     status: String(formData.get("status") ?? "PLANNED"),
   };
   if (!data.person) return;
+  const scope = "partnerId" in owner ? { partnerId: owner.partnerId } : { customerId: owner.customerId };
   if (id) await db.training.update({ where: { id }, data });
-  else await db.training.create({ data: { ...data, partnerId } });
-  revalidatePath(`/partners/${partnerId}`);
+  else await db.training.create({ data: { ...data, ...scope } });
+  if ("partnerId" in owner) revalidatePath(`/partners/${owner.partnerId}`);
+  else revalidatePath(`/customers/${owner.customerId}`);
 }
 
-export async function deleteTrainingAction(partnerId: string, trainingId: string) {
+export async function deleteTrainingAction(
+  owner: { partnerId: string } | { customerId: string },
+  trainingId: string,
+) {
   await requireUser();
   await db.training.delete({ where: { id: trainingId } });
-  revalidatePath(`/partners/${partnerId}`);
+  if ("partnerId" in owner) revalidatePath(`/partners/${owner.partnerId}`);
+  else revalidatePath(`/customers/${owner.customerId}`);
 }
 
 // ============ 时间线 ============

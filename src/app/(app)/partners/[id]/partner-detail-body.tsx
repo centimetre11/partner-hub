@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import type { Opportunity, TimelineEvent, TodoItem, Training, User } from "@prisma/client";
+import type { Opportunity, TimelineEvent, TodoItem, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime } from "@/components/ui";
@@ -20,13 +20,10 @@ import { PartnerGtmPanelLoader } from "@/components/partner-gtm-panel-loader";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
 import {
   addNoteAction, createTodoAction,
-  deleteTodoAction, deleteTrainingAction,
-  upsertTrainingAction,
+  deleteTodoAction,
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
 import { AiPanel } from "./ai-panel";
-import { MaterialsSection } from "@/components/materials-section";
-import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { PartnerCustomersSection } from "@/components/partner-customers-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
@@ -84,7 +81,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
         },
       },
       customerLinks: { include: { customer: true }, orderBy: { customer: { name: "asc" } } },
-      assets: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!p) notFound();
@@ -96,7 +92,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
 
   const [
     users,
-    ammoConfig,
     unboundCustomers,
     relatedOpportunities,
     partnerAgents,
@@ -110,7 +105,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     taxonomyCategory,
   ] = await Promise.all([
     db.user.findMany(),
-    getAmmoConfigForClient(),
     db.customer.findMany({
       where: { ...END_CUSTOMER_WHERE, partnerLinks: { none: { partnerId: id } } },
       select: { id: true, name: true },
@@ -367,32 +361,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
             </Card>
           </div>
         }
-        capability={
-          <div className="space-y-5">
-            <Card title={m.partnerDetail.trainingCert.replace("{count}", String(p.trainings.length))}>
-              <TrainingList partnerId={p.id} trainings={p.trainings} input={input} m={m} />
-            </Card>
-            <MaterialsSection
-              partnerId={p.id}
-              entityName={p.name}
-              folderUrl={p.gdriveFolderUrl}
-              browseReady={ammoConfig.gdriveServiceAccountConfigured}
-              uploaderConnected={ammoConfig.gdriveUploaderConnected}
-              solutions={p.solutions}
-              solutionCopy={m.partnerDetail.solutionsSection}
-              assets={p.assets
-                .filter((a) => !(a.provider === "gdrive" && a.size > 0))
-                .map((a) => ({
-                id: a.id,
-                filename: a.filename,
-                url: a.url,
-                thumbnailUrl: a.thumbnailUrl,
-                provider: a.provider,
-              }))}
-              copy={m.gdriveMaterials}
-            />
-          </div>
-        }
         relationship={
           <div className="space-y-5">
             <Card title={m.partnerDetail.powerMap.replace("{count}", String(p.contacts.length))}>
@@ -517,51 +485,6 @@ function RelatedOpportunityList({
         </div>
       ))}
       {opportunities.length === 0 && <EmptyState text={m.partnerDetail.noOpportunities} />}
-    </div>
-  );
-}
-
-function TrainingList({
-  partnerId,
-  trainings,
-  input,
-  m,
-}: {
-  partnerId: string;
-  trainings: Training[];
-  input: string;
-  m: Messages;
-}) {
-  return (
-    <div className="space-y-2">
-      {trainings.map((t) => (
-        <form key={t.id} action={upsertTrainingAction.bind(null, partnerId)} className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm items-center">
-          <input type="hidden" name="id" value={t.id} />
-          <input name="person" defaultValue={t.person} className={input} />
-          <input name="currentSkill" defaultValue={t.currentSkill ?? ""} placeholder={m.common.currentSkill} className={input} />
-          <input name="targetCert" defaultValue={t.targetCert ?? ""} placeholder={m.common.targetCert} className={input} />
-          <input name="deadline" type="date" defaultValue={t.deadline ? new Date(t.deadline).toISOString().slice(0, 10) : ""} className={input} />
-          <select name="status" defaultValue={t.status} className={input}>
-            <option value="PLANNED">{m.common.planned}</option>
-            <option value="IN_PROGRESS">{m.common.inProgress}</option>
-            <option value="DONE">{m.common.completed}</option>
-          </select>
-          <div className="flex gap-1 justify-end">
-            <button className="rounded-md bg-slate-900 text-white px-2.5 py-1.5 text-xs">{m.common.save}</button>
-            <button formAction={deleteTrainingAction.bind(null, partnerId, t.id)} className="text-xs text-slate-400 hover:text-red-600 px-1">{m.partnerDetail.trainingDel}</button>
-          </div>
-        </form>
-      ))}
-      <details className="rounded-lg border border-dashed border-slate-200">
-        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{m.partnerDetail.addTrainingPlan}</summary>
-        <form action={upsertTrainingAction.bind(null, partnerId)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
-          <input name="person" required placeholder={m.partnerDetail.personRequired} className={input} />
-          <input name="currentSkill" placeholder={m.common.currentSkill} className={input} />
-          <input name="targetCert" placeholder={m.common.targetCert} className={input} />
-          <input name="deadline" type="date" className={input} />
-          <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
-        </form>
-      </details>
     </div>
   );
 }

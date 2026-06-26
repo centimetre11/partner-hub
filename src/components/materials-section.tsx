@@ -27,6 +27,7 @@ export type MaterialAsset = {
 
 type SolutionRow = {
   id: string;
+  partnerId: string;
   name: string;
   notes: string | null;
   assets: {
@@ -287,7 +288,7 @@ export function MaterialsSection({
                         </summary>
                         <div className="px-3 pb-3 pt-1 border-t border-slate-100">
                           <EditSolutionForm
-                            partnerId={partnerId!}
+                            partnerId={sol.partnerId}
                             solutionId={sol.id}
                             defaultLinkUrl={link?.url ?? ""}
                             initialPreview={link ? toLinkPreview(link) : null}

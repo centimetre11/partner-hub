@@ -35,7 +35,6 @@ export function PartnerWorkspaceShell({
   guide,
   positioning,
   pipeline,
-  capability,
   relationship,
 }: {
   mapNodes: FrameworkMapNode[];
@@ -46,7 +45,6 @@ export function PartnerWorkspaceShell({
   guide: ReactNode;
   positioning: ReactNode;
   pipeline: ReactNode;
-  capability: ReactNode;
   relationship: ReactNode;
 }) {
   const labels = useLabels();
@@ -60,7 +58,6 @@ export function PartnerWorkspaceShell({
     guide,
     positioning,
     pipeline,
-    capability,
     relationship,
   };
 
@@ -90,7 +87,7 @@ export function PartnerWorkspaceShell({
             {m.workspace.frameworkGuide}
           </Link>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {workspacePanels.map((p) => {
             const active = activePanel === p.id;
             const badge = badges[p.id];
