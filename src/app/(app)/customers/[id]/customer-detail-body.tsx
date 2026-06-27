@@ -15,6 +15,8 @@ import { getWecomChatForCustomer } from "@/lib/wecom-chats";
 import { CustomerProfilePanel } from "@/components/customer-profile-panel";
 import { CustomerStockPanel } from "@/components/customer-stock-panel";
 import { CustomerTodoRow } from "@/components/customer-todo-row";
+import { CreateTodoDrawer } from "@/components/create-todo-drawer";
+import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
 import {
   upsertOpportunityAction,
   deleteOpportunityAction,
@@ -137,50 +139,18 @@ export async function CustomerDetailBody({ id }: { id: string }) {
 
   // ============ 待办 ============
   const todosContent = (
-    <>
-      <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4">
-        <input type="hidden" name="customerId" value={customer.id} />
-        <input name="title" required placeholder={c.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
-        {(customer.opportunities.length > 0 || customer.projects.length > 0) && (
-          <select name="link" defaultValue="" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[160px]">
-            <option value="">{c.linkNone}</option>
-            {customer.opportunities.length > 0 && (
-              <optgroup label={c.belongsToOpportunity}>
-                {customer.opportunities.map((o) => (
-                  <option key={o.id} value={`opp:${o.id}`}>{o.name}</option>
-                ))}
-              </optgroup>
-            )}
-            {customer.projects.length > 0 && (
-              <optgroup label={c.belongsToProject}>
-                {customer.projects.map((p) => (
-                  <option key={p.id} value={`proj:${p.id}`}>{p.name}</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-        )}
-        <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" />
-        <select name="assigneeId" defaultValue={customer.ownerId ?? user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[140px]">
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-        <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
-      </form>
-      <div className="divide-y divide-slate-50">
-        {customer.todos.map((t) => (
-          <CustomerTodoRow
-            key={t.id}
-            todo={t}
-            customerId={customer.id}
-            bcp47={bcp47}
-            tag={todoTag(t)}
-          />
-        ))}
-        {customer.todos.length === 0 && <EmptyState text={c.noTodos} />}
-      </div>
-    </>
+    <div className="divide-y divide-slate-50">
+      {customer.todos.map((t) => (
+        <CustomerTodoRow
+          key={t.id}
+          todo={t}
+          customerId={customer.id}
+          bcp47={bcp47}
+          tag={todoTag(t)}
+        />
+      ))}
+      {customer.todos.length === 0 && <EmptyState text={c.noTodos} />}
+    </div>
   );
 
   const linkAssets = customer.assets.filter((a) => !(a.provider === "gdrive" && a.size > 0));
@@ -189,7 +159,19 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   const overviewPanel = (
     <div className="space-y-5">
       <BusinessRecordsSection owner={owner} records={customer.businessRecords} contacts={contactOptions} />
-      <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos))}>
+      <Card
+        title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos))}
+        actions={
+          <CreateTodoDrawer
+            userId={user.id}
+            partners={partners}
+            customers={[{ id: customer.id, name: customer.name }]}
+            users={users}
+            defaultOwnerRef={encodeTodoOwnerRef("customer", customer.id)}
+            lockOwner
+          />
+        }
+      >
         {todosContent}
       </Card>
       {integrationsPanel}

@@ -47,7 +47,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems, activityStats, aiConversationLogs, systemEventLogs, sceneModelRows] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems, activityStats, sceneModelRows] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -76,21 +76,6 @@ export default async function SettingsPage() {
       },
     }),
     getActivityLogStats(),
-    db.aiConversationLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 80,
-      include: {
-        user: { select: { name: true, email: true } },
-        partner: { select: { name: true } },
-      },
-    }),
-    db.systemEventLog.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 80,
-      include: {
-        actor: { select: { name: true } },
-      },
-    }),
     db.llmSceneModel.findMany({
       orderBy: [{ scene: "asc" }, { order: "asc" }, { createdAt: "asc" }],
     }),
@@ -330,37 +315,7 @@ export default async function SettingsPage() {
 
         <SettingsSection id="logs" title={m.activityLogs.sectionTitle} desc={m.activityLogs.sectionDesc}>
           <Card title={m.activityLogs.title} className="lg:col-span-2">
-            <ActivityLogsCard
-              aiLogs={aiConversationLogs.map((row) => ({
-                id: row.id,
-                channel: row.channel,
-                feature: row.feature,
-                mode: row.mode,
-                userMessage: row.userMessage,
-                assistantReply: row.assistantReply,
-                status: row.status,
-                error: row.error,
-                durationMs: row.durationMs,
-                createdAt: row.createdAt.toISOString(),
-                user: row.user,
-                partner: row.partner,
-              }))}
-              systemLogs={systemEventLogs.map((row) => ({
-                id: row.id,
-                category: row.category,
-                action: row.action,
-                actorLabel: row.actorLabel,
-                targetType: row.targetType,
-                targetLabel: row.targetLabel,
-                summary: row.summary,
-                detail: row.detail,
-                status: row.status,
-                createdAt: row.createdAt.toISOString(),
-                actor: row.actor,
-              }))}
-              stats={activityStats}
-              bcp47={bcp47}
-            />
+            <ActivityLogsCard stats={activityStats} bcp47={bcp47} />
           </Card>
         </SettingsSection>
 

@@ -16,22 +16,29 @@ export function CreateTodoDrawer({
   partners,
   customers,
   users,
+  defaultOwnerRef = "",
+  lockOwner = false,
 }: {
   userId: string;
   partners: Option[];
   customers: Option[];
   users: Option[];
+  /** Pre-select related partner/customer (e.g. `customer:abc` on customer detail). */
+  defaultOwnerRef?: string;
+  /** Hide related-entity picker; use defaultOwnerRef only. */
+  lockOwner?: boolean;
 }) {
   const m = useMessages();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [ownerRef, setOwnerRef] = useState("");
+  const [ownerRef, setOwnerRef] = useState(defaultOwnerRef);
   const [link, setLink] = useState("");
   const [linkOptions, setLinkOptions] = useState<{ opportunities: Option[]; projects: Option[] } | null>(null);
   const [linkLoading, setLinkLoading] = useState(false);
 
-  const parsedOwner = parseTodoOwnerRef(ownerRef);
+  const effectiveOwnerRef = lockOwner ? defaultOwnerRef : ownerRef;
+  const parsedOwner = parseTodoOwnerRef(effectiveOwnerRef);
   const customerId = parsedOwner.customerId;
 
   useEffect(() => {
@@ -50,12 +57,12 @@ export function CreateTodoDrawer({
 
   useEffect(() => {
     if (!open) {
-      setOwnerRef("");
+      setOwnerRef(defaultOwnerRef);
       setLink("");
       setLinkOptions(null);
       setLinkLoading(false);
     }
-  }, [open]);
+  }, [open, defaultOwnerRef]);
 
   useEffect(() => {
     setLink("");
@@ -154,35 +161,39 @@ export function CreateTodoDrawer({
                   />
                 </label>
 
-                <label className="block min-w-0">
-                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
-                  <select
-                    name="ownerRef"
-                    value={ownerRef}
-                    onChange={(e) => setOwnerRef(e.target.value)}
-                    className={input}
-                  >
-                    <option value="">{m.todos.noRelated}</option>
-                    {partners.length > 0 && (
-                      <optgroup label={m.todos.partnersGroup}>
-                        {partners.map((p) => (
-                          <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {customers.length > 0 && (
-                      <optgroup label={m.todos.customersGroup}>
-                        {customers.map((c) => (
-                          <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-                </label>
+                {lockOwner && defaultOwnerRef ? (
+                  <input type="hidden" name="ownerRef" value={defaultOwnerRef} />
+                ) : (
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
+                    <select
+                      name="ownerRef"
+                      value={ownerRef}
+                      onChange={(e) => setOwnerRef(e.target.value)}
+                      className={input}
+                    >
+                      <option value="">{m.todos.noRelated}</option>
+                      {partners.length > 0 && (
+                        <optgroup label={m.todos.partnersGroup}>
+                          {partners.map((p) => (
+                            <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {customers.length > 0 && (
+                        <optgroup label={m.todos.customersGroup}>
+                          {customers.map((c) => (
+                            <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </label>
+                )}
 
                 {customerId && (
                   <label className="block min-w-0">
@@ -217,7 +228,7 @@ export function CreateTodoDrawer({
                   </label>
                 )}
 
-                {!customerId && ownerRef && parsedOwner.partnerId && (
+                {!customerId && effectiveOwnerRef && parsedOwner.partnerId && (
                   <p className="text-[11px] text-slate-400">{m.todos.linkCustomerOnlyHint}</p>
                 )}
 

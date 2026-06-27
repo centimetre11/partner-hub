@@ -19,7 +19,7 @@ import {
 import { PartnerGtmPanelLoader } from "@/components/partner-gtm-panel-loader";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
 import {
-  addNoteAction, createTodoAction,
+  addNoteAction,
   deleteTodoAction,
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
@@ -29,6 +29,8 @@ import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { TodoItemRow } from "@/components/todo-item-row";
+import { CreateTodoDrawer } from "@/components/create-todo-drawer";
+import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
 import { getWecomChatForPartner } from "@/lib/wecom-chats";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
@@ -213,18 +215,19 @@ export async function PartnerDetailBody({ id }: { id: string }) {
               contacts={contactOptions}
             />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <Card title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos.length))}>
-                <form action={createTodoAction} className="flex flex-wrap gap-2 mb-4">
-                  <input type="hidden" name="partnerId" value={p.id} />
-                  <input name="title" required placeholder={m.partnerDetail.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
-                  <select name="assigneeId" defaultValue={user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" aria-label={m.common.owner}>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                  <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm w-36 shrink-0" />
-                  <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
-                </form>
+              <Card
+                title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos.length))}
+                actions={
+                  <CreateTodoDrawer
+                    userId={user.id}
+                    partners={[{ id: p.id, name: p.name }]}
+                    customers={[]}
+                    users={users.map((u) => ({ id: u.id, name: u.name }))}
+                    defaultOwnerRef={encodeTodoOwnerRef("partner", p.id)}
+                    lockOwner
+                  />
+                }
+              >
                 <TodoList todos={p.todos} users={users} partnerId={p.id} m={m} L={L} bcp47={bcp47} />
               </Card>
               <div className="space-y-5">

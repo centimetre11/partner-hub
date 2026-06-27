@@ -141,3 +141,94 @@ export async function getActivityLogStats() {
   ]);
   return { aiToday, aiWeek, sysToday, sysWeek };
 }
+
+const PAGE_SIZE = 10;
+
+export type AiLogFilters = {
+  channel?: string;
+  status?: string;
+  search?: string;
+};
+
+export type SystemLogFilters = {
+  category?: string;
+  status?: string;
+  search?: string;
+};
+
+export async function queryAiConversationLogs(page: number, filters: AiLogFilters = {}) {
+  const where: Record<string, unknown> = {};
+  if (filters.channel && filters.channel !== "ALL") where.channel = filters.channel;
+  if (filters.status && filters.status !== "ALL") where.status = filters.status;
+  if (filters.search?.trim()) {
+    where.userMessage = { contains: filters.search.trim() };
+  }
+
+  const skip = Math.max(0, (page - 1) * PAGE_SIZE);
+  const [items, total] = await Promise.all([
+    db.aiConversationLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: PAGE_SIZE,
+      include: {
+        user: { select: { name: true, email: true } },
+        partner: { select: { name: true } },
+      },
+    }),
+    db.aiConversationLog.count({ where }),
+  ]);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+  };
+}
+
+export async function querySystemEventLogs(page: number, filters: SystemLogFilters = {}) {
+  const where: Record<string, unknown> = {};
+  if (filters.category && filters.category !== "ALL") where.category = filters.category;
+  if (filters.status && filters.status !== "ALL") where.status = filters.status;
+  if (filters.search?.trim()) {
+    const q = filters.search.trim();
+    where.OR = [
+      { summary: { contains: q } },
+      { action: { contains: q } },
+      { actorLabel: { contains: q } },
+      { targetLabel: { contains: q } },
+    ];
+  }
+
+  const skip = Math.max(0, (page - 1) * PAGE_SIZE);
+  const [items, total] = await Promise.all([
+    db.systemEventLog.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: PAGE_SIZE,
+      include: {
+        actor: { select: { name: true } },
+      },
+    }),
+    db.systemEventLog.count({ where }),
+  ]);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize: PAGE_SIZE,
+    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+  };
+}
+
+export async function getActivityLogTotals() {
+  const [aiTotal, systemTotal] = await Promise.all([
+    db.aiConversationLog.count(),
+    db.systemEventLog.count(),
+  ]);
+  return { aiTotal, systemTotal };
+}
