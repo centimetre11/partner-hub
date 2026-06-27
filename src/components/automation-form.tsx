@@ -17,6 +17,8 @@ import {
   type AutomationQueryScope,
   type AutomationDueFilter,
   type AutomationOpportunityStatus,
+  type AutomationDealType,
+  type AutomationTodoLinkFilter,
   describeAutomationQuery,
 } from "@/lib/automation-query";
 import { useLocale, useMessages } from "@/lib/i18n/context";
@@ -98,9 +100,11 @@ export function AutomationForm({
   const [assigneeId, setAssigneeId] = useState(initial.query.assigneeId ?? "");
   const [dueFilter, setDueFilter] = useState<AutomationDueFilter>(initial.query.dueFilter ?? "all");
   const [dueWithinDays, setDueWithinDays] = useState(initial.query.dueWithinDays ?? 3);
+  const [linkFilter, setLinkFilter] = useState<AutomationTodoLinkFilter>(initial.query.linkFilter ?? "all");
   const [opportunityStatus, setOpportunityStatus] = useState<AutomationOpportunityStatus>(
     initial.query.opportunityStatus ?? "ALL"
   );
+  const [dealType, setDealType] = useState<AutomationDealType>(initial.query.dealType ?? "ALL");
   const [aiGoal, setAiGoal] = useState(initial.query.aiGoal ?? "");
 
   const [partnerOpts, setPartnerOpts] = useState<PartnerOption[]>(partners);
@@ -160,10 +164,12 @@ export function AutomationForm({
       assigneeId: source === "todos" ? assigneeId || undefined : undefined,
       dueFilter: source === "todos" ? dueFilter : undefined,
       dueWithinDays: source === "todos" && dueFilter === "within_days" ? dueWithinDays : undefined,
+      linkFilter: source === "todos" ? linkFilter : undefined,
       opportunityStatus: source === "opportunities" ? opportunityStatus : undefined,
+      dealType: source === "opportunities" ? dealType : undefined,
       aiGoal: source === "ai" ? aiGoal : undefined,
     }),
-    [source, scope, partnerId, customerId, assigneeId, dueFilter, dueWithinDays, opportunityStatus, aiGoal]
+    [source, scope, partnerId, customerId, assigneeId, dueFilter, dueWithinDays, linkFilter, opportunityStatus, dealType, aiGoal]
   );
 
   const querySummary = useMemo(() => {
@@ -234,7 +240,9 @@ export function AutomationForm({
       <input type="hidden" name="assigneeId" value={source === "todos" ? assigneeId : ""} />
       <input type="hidden" name="dueFilter" value={source === "todos" ? dueFilter : "all"} />
       <input type="hidden" name="dueWithinDays" value={String(dueWithinDays)} />
+      <input type="hidden" name="linkFilter" value={source === "todos" ? linkFilter : "all"} />
       <input type="hidden" name="opportunityStatus" value={source === "opportunities" ? opportunityStatus : "ALL"} />
+      <input type="hidden" name="dealType" value={source === "opportunities" ? dealType : "ALL"} />
       <input type="hidden" name="aiGoal" value={source === "ai" ? aiGoal : ""} />
       <input type="hidden" name="pushWecomAppTo" value={pushWecomAppTo} />
 
@@ -394,24 +402,51 @@ export function AutomationForm({
                           )}
                         </div>
                       </div>
+                      <div>
+                        <label className={labelCls}>{aq.linkLabel}</label>
+                        <select
+                          className={inputCls}
+                          value={linkFilter}
+                          onChange={(e) => setLinkFilter(e.target.value as AutomationTodoLinkFilter)}
+                        >
+                          <option value="all">{aq.linkAll}</option>
+                          <option value="project">{aq.linkProject}</option>
+                          <option value="opportunity">{aq.linkOpportunity}</option>
+                          <option value="unlinked">{aq.linkUnlinked}</option>
+                        </select>
+                      </div>
                     </>
                   )}
 
                   {source === "opportunities" && (
-                    <div>
-                      <label className={labelCls}>{aq.statusLabel}</label>
-                      <select
-                        className={inputCls}
-                        value={opportunityStatus}
-                        onChange={(e) => setOpportunityStatus(e.target.value as AutomationOpportunityStatus)}
-                      >
-                        <option value="ALL">{aq.statusAll}</option>
-                        <option value="ACTIVE">ACTIVE</option>
-                        <option value="WON">WON</option>
-                        <option value="LOST">LOST</option>
-                        <option value="PAUSED">PAUSED</option>
-                      </select>
-                    </div>
+                    <>
+                      <div>
+                        <label className={labelCls}>{aq.statusLabel}</label>
+                        <select
+                          className={inputCls}
+                          value={opportunityStatus}
+                          onChange={(e) => setOpportunityStatus(e.target.value as AutomationOpportunityStatus)}
+                        >
+                          <option value="ALL">{aq.statusAll}</option>
+                          <option value="ACTIVE">ACTIVE</option>
+                          <option value="WON">WON</option>
+                          <option value="LOST">LOST</option>
+                          <option value="PAUSED">PAUSED</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>{aq.dealTypeLabel}</label>
+                        <select
+                          className={inputCls}
+                          value={dealType}
+                          onChange={(e) => setDealType(e.target.value as AutomationDealType)}
+                        >
+                          <option value="ALL">{aq.dealTypeAll}</option>
+                          <option value="PROJECT">{aq.dealTypeProject}</option>
+                          <option value="PRODUCT">{aq.dealTypeProduct}</option>
+                        </select>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

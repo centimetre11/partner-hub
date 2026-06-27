@@ -88,7 +88,13 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
   const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications] = await Promise.all([
     db.todoItem.findMany({
       where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore(now) } },
-      include: { partner: true, assignee: true },
+      include: {
+        partner: true,
+        assignee: true,
+        customer: { select: { id: true, name: true } },
+        opportunity: { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
+      },
       orderBy: { dueDate: "asc" },
       take: 10,
     }),

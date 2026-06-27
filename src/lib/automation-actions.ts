@@ -65,7 +65,9 @@ async function persistAutomationFromFormData(formData: FormData): Promise<Persis
       assigneeId: formData.get("assigneeId"),
       dueFilter: formData.get("dueFilter"),
       dueWithinDays: formData.get("dueWithinDays"),
+      linkFilter: formData.get("linkFilter"),
       opportunityStatus: formData.get("opportunityStatus"),
+      dealType: formData.get("dealType"),
       aiGoal: formData.get("aiGoal"),
     }) ?? { ...DEFAULT_AUTOMATION_QUERY };
 

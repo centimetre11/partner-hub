@@ -61,6 +61,7 @@ export type OpportunityProposal = {
   nextStep?: string;
   status?: string;
   notes?: string;
+  dealType?: string;
   reason?: string;
 };
 
@@ -120,7 +121,7 @@ export async function partnerContext(partnerId: string, locale: Locale = "zh"): 
     ? p.opportunities
         .map(
           (o) =>
-            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status}`
+            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status} dealType:${o.dealType ?? "-"}`
         )
         .join("\n")
     : noneLabel(locale);
@@ -134,7 +135,13 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
     include: {
       contacts: { orderBy: { createdAt: "asc" } },
       opportunities: { where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 20 },
-      todos: { where: { status: "OPEN" }, orderBy: { dueDate: "asc" }, take: 20 },
+      projects: { where: { status: { not: "CLOSED" } }, orderBy: { updatedAt: "desc" }, take: 20, include: { partner: { select: { name: true } } } },
+      todos: {
+        where: { status: "OPEN" },
+        orderBy: { dueDate: "asc" },
+        take: 20,
+        include: { opportunity: { select: { name: true } }, project: { select: { name: true } } },
+      },
       partnerLinks: { include: { partner: { select: { name: true } } } },
       wecomChat: true,
     },
@@ -170,17 +177,31 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
     ? c.opportunities
         .map(
           (o) =>
-            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status}`
+            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status} dealType:${o.dealType ?? "-"}`
+        )
+        .join("\n")
+    : noneLabel(locale);
+  const projects = c.projects.length
+    ? c.projects
+        .map(
+          (pr) =>
+            `- id=${pr.id} name:${pr.name} phase:${pr.phase} status:${pr.status} deliveryPartner:${pr.partner?.name ?? "-"}`
         )
         .join("\n")
     : noneLabel(locale);
   const todos = c.todos.length
-    ? c.todos.map((t) => `- id=${t.id} ${t.title} | due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | ${t.priority}`).join("\n")
+    ? c.todos
+        .map((t) => {
+          const link = t.project ? ` | project:${t.project.name}` : t.opportunity ? ` | deal:${t.opportunity.name}` : "";
+          return `- id=${t.id} ${t.title} | due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | ${t.priority}${link}`;
+        })
+        .join("\n")
     : noneLabel(locale);
   const contactsSection = locale === "zh" ? "[权力地图 / 关键人物]" : "[Power map / key people]";
   const oppsSection = locale === "zh" ? "[商机]" : "[Opportunities]";
+  const projectsSection = locale === "zh" ? "[合作项目]" : "[Projects]";
   const todosSection = locale === "zh" ? "[进行中待办]" : "[Open todos]";
-  return `${header}\n- name[name]: ${c.name}\n${fields}\n${partnerLine}\n${wecomLine}\n\n${contactsSection}\n${contacts}\n\n${oppsSection}\n${opps}\n\n${todosSection}\n${todos}`;
+  return `${header}\n- name[name]: ${c.name}\n${fields}\n${partnerLine}\n${wecomLine}\n\n${contactsSection}\n${contacts}\n\n${oppsSection}\n${opps}\n\n${projectsSection}\n${projects}\n\n${todosSection}\n${todos}`;
 }
 
 /** Business record intake: partner name + contacts only (fast attribute extraction) */
@@ -375,6 +396,7 @@ export async function applyProposal(opts: {
       nextStep: o.nextStep,
       status: o.status ?? "ACTIVE",
       notes: o.notes,
+      dealType: o.dealType && ["PROJECT", "PRODUCT"].includes(o.dealType) ? o.dealType : undefined,
     };
     if (o.action === "update" && o.id) {
       const exists = await db.opportunity.findFirst({ where: { id: o.id, partnerId } });

@@ -5,6 +5,9 @@ export type AutomationQuerySource = "todos" | "opportunities" | "ai";
 export type AutomationQueryScope = "all" | "partner" | "customer";
 export type AutomationDueFilter = "all" | "overdue" | "within_days";
 export type AutomationOpportunityStatus = "ALL" | "ACTIVE" | "WON" | "LOST" | "PAUSED";
+export type AutomationDealType = "ALL" | "PROJECT" | "PRODUCT";
+/** 待办按机会/项目归属过滤 */
+export type AutomationTodoLinkFilter = "all" | "project" | "opportunity" | "unlinked";
 
 export type AutomationQuery = {
   source: AutomationQuerySource;
@@ -16,8 +19,12 @@ export type AutomationQuery = {
   /** 待办：到期过滤 */
   dueFilter?: AutomationDueFilter;
   dueWithinDays?: number;
+  /** 待办：按机会/项目归属过滤 */
+  linkFilter?: AutomationTodoLinkFilter;
   /** 商机：状态过滤 */
   opportunityStatus?: AutomationOpportunityStatus;
+  /** 商机：成交类型过滤 */
+  dealType?: AutomationDealType;
   /** source=ai：自然语言目标，交给 LLM 工具循环 */
   aiGoal?: string;
 };
@@ -70,6 +77,14 @@ export function parseAutomationQuery(raw: unknown): AutomationQuery | null {
       ? statusRaw
       : "ALL";
 
+  const dealRaw = obj.dealType;
+  const dealType: AutomationDealType =
+    dealRaw === "PROJECT" || dealRaw === "PRODUCT" ? dealRaw : "ALL";
+
+  const linkRaw = obj.linkFilter;
+  const linkFilter: AutomationTodoLinkFilter =
+    linkRaw === "project" || linkRaw === "opportunity" || linkRaw === "unlinked" ? linkRaw : "all";
+
   const query: AutomationQuery = {
     source,
     scope,
@@ -79,7 +94,9 @@ export function parseAutomationQuery(raw: unknown): AutomationQuery | null {
     dueFilter: source === "todos" ? dueFilter : undefined,
     dueWithinDays:
       source === "todos" && dueFilter === "within_days" ? clampDays(obj.dueWithinDays) ?? 3 : undefined,
+    linkFilter: source === "todos" ? linkFilter : undefined,
     opportunityStatus: source === "opportunities" ? opportunityStatus : undefined,
+    dealType: source === "opportunities" ? dealType : undefined,
     aiGoal: source === "ai" ? String(obj.aiGoal ?? "").trim() || undefined : undefined,
   };
   return query;
@@ -130,7 +147,13 @@ export function describeAutomationQuery(
       query.opportunityStatus && query.opportunityStatus !== "ALL"
         ? `（${query.opportunityStatus}）`
         : "";
-    return zh ? `商机 · ${scopeLabel}${status}` : `Opportunities · ${scopeLabel}${status}`;
+    const deal =
+      query.dealType === "PROJECT"
+        ? zh ? " · 项目型" : " · project-based"
+        : query.dealType === "PRODUCT"
+          ? zh ? " · 纯产品型" : " · product-only"
+          : "";
+    return zh ? `商机 · ${scopeLabel}${status}${deal}` : `Opportunities · ${scopeLabel}${status}${deal}`;
   }
 
   const who = ctx.assigneeName
@@ -148,7 +171,15 @@ export function describeAutomationQuery(
           ? ` · ${query.dueWithinDays ?? 3} 天内到期`
           : ` · due in ${query.dueWithinDays ?? 3}d`
         : "";
-  return zh ? `待办 · ${scopeLabel}${who}${due}` : `Todos · ${scopeLabel}${who}${due}`;
+  const link =
+    query.linkFilter === "project"
+      ? zh ? " · 仅项目" : " · project-linked"
+      : query.linkFilter === "opportunity"
+        ? zh ? " · 仅商机" : " · deal-linked"
+        : query.linkFilter === "unlinked"
+          ? zh ? " · 未挂机会/项目" : " · unlinked"
+          : "";
+  return zh ? `待办 · ${scopeLabel}${who}${due}${link}` : `Todos · ${scopeLabel}${who}${due}${link}`;
 }
 
 /** 结构化自动化的 instructions（确定性管道不依赖它执行，仅供可读 + 编辑回显 + AI 兜底参考） */

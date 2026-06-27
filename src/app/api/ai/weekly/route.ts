@@ -39,7 +39,16 @@ async function generateWeekly(uid: string, locale: Locale, emit?: Parameters<typ
       take: 60,
     }),
     db.todoItem.count({ where: { status: "OPEN" } }),
-    db.todoItem.findMany({ where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } }, include: { partner: true }, take: 20 }),
+    db.todoItem.findMany({
+      where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } },
+      include: {
+        partner: { select: { name: true } },
+        customer: { select: { name: true } },
+        opportunity: { select: { name: true } },
+        project: { select: { name: true } },
+      },
+      take: 20,
+    }),
   ]);
 
   const partnerLines = active
@@ -56,7 +65,13 @@ async function generateWeekly(uid: string, locale: Locale, emit?: Parameters<typ
   const eventLines = recentEvents
     .map((e) => `${new Date(e.createdAt).toLocaleDateString(bcp47)} ${e.partner?.name ?? "-"}: ${e.title}`)
     .join("\n");
-  const overdueLines = overdue.map((t) => `${t.title} (${t.partner?.name ?? "-"})`).join("\n");
+  const overdueLines = overdue
+    .map((t) => {
+      const owner = t.customer?.name ?? t.partner?.name ?? "-";
+      const link = t.project ? ` · ${t.project.name}` : t.opportunity ? ` · ${t.opportunity.name}` : "";
+      return `${t.title} (${owner}${link})`;
+    })
+    .join("\n");
 
   const content = await streamTextCompletion(
     [

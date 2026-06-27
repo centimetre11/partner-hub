@@ -71,16 +71,19 @@ function pipelineLocale(agent: AgentForPipeline): "zh" | "en" {
 function formatTodoLine(t: TodoRow, locale: "zh" | "en"): string {
   const due = t.dueDate?.toISOString().slice(0, 10) ?? "-";
   if (locale === "zh") {
-    return `- [id:${t.id}] ${t.title} | 伙伴:${t.partner?.name ?? "-"} | 客户:${t.customer?.name ?? "-"} | 截止:${due} | 负责人:${t.assignee?.name ?? "-"}`;
+    const link = t.project ? ` | 项目:${t.project.name}` : t.opportunity ? ` | 商机:${t.opportunity.name}` : "";
+    return `- [id:${t.id}] ${t.title} | 伙伴:${t.partner?.name ?? "-"} | 客户:${t.customer?.name ?? "-"}${link} | 截止:${due} | 负责人:${t.assignee?.name ?? "-"}`;
   }
-  return `- [id:${t.id}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Customer:${t.customer?.name ?? "-"} | Due:${due} | Assignee:${t.assignee?.name ?? "-"}`;
+  const link = t.project ? ` | Project:${t.project.name}` : t.opportunity ? ` | Deal:${t.opportunity.name}` : "";
+  return `- [id:${t.id}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Customer:${t.customer?.name ?? "-"}${link} | Due:${due} | Assignee:${t.assignee?.name ?? "-"}`;
 }
 
 function formatOpportunityLine(o: OpportunityRow, locale: "zh" | "en"): string {
+  const dealType = o.dealType ? (o.dealType === "PROJECT" ? (locale === "zh" ? "项目型" : "project") : (locale === "zh" ? "纯产品" : "product")) : "-";
   if (locale === "zh") {
-    return `- [id:${o.id}] ${o.name} | 客户:${o.customer?.name ?? "-"} | 伙伴:${o.partner?.name ?? "-"} | 阶段:${o.stage} | 金额:${o.amount ?? "-"} | 状态:${o.status}`;
+    return `- [id:${o.id}] ${o.name} | 客户:${o.customer?.name ?? "-"} | 伙伴:${o.partner?.name ?? "-"} | 阶段:${o.stage} | 金额:${o.amount ?? "-"} | 状态:${o.status} | 成交类型:${dealType}`;
   }
-  return `- [id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status}`;
+  return `- [id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status} | DealType:${dealType}`;
 }
 
 function emptyText(query: AutomationQuery, locale: "zh" | "en"): string {

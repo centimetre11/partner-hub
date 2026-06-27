@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { updateTodoAction } from "@/lib/actions";
+import { useMessages } from "@/lib/i18n/context";
 
 type TodoData = {
   id: string;
@@ -9,6 +10,9 @@ type TodoData = {
   detail?: string | null;
   dueDate?: Date | string | null;
   partnerId?: string | null;
+  customerId?: string | null;
+  opportunityId?: string | null;
+  projectId?: string | null;
   assigneeId?: string | null;
 };
 
@@ -31,11 +35,48 @@ export function TodoEditButton({
   partners?: Option[];
   users: Option[];
 }) {
+  const m = useMessages();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [linkOptions, setLinkOptions] = useState<{ opportunities: Option[]; projects: Option[] } | null>(null);
+  const defaultLink = todo.projectId ? `proj:${todo.projectId}` : todo.opportunityId ? `opp:${todo.opportunityId}` : "";
+  const [link, setLink] = useState(defaultLink);
+
+  useEffect(() => {
+    if (!open || !todo.customerId) {
+      setLinkOptions(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/todos/link-options?customerId=${encodeURIComponent(todo.customerId)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
+      .then((data: { opportunities: Option[]; projects: Option[] }) => {
+        if (!cancelled) setLinkOptions(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkOptions({ opportunities: [], projects: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, todo.customerId]);
 
   const input =
     "rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 w-full";
+
+  // 编辑时若关联的机会/项目当前不在可选列表（如已关闭/丢单），仍保留为可选项以免误清空
+  const linkOptionsWithCurrent = (() => {
+    if (!linkOptions) return null;
+    const opps = [...linkOptions.opportunities];
+    const projs = [...linkOptions.projects];
+    if (todo.opportunityId && !opps.some((o) => o.id === todo.opportunityId)) {
+      opps.push({ id: todo.opportunityId, name: todo.opportunityId });
+    }
+    if (todo.projectId && !projs.some((p) => p.id === todo.projectId)) {
+      projs.push({ id: todo.projectId, name: todo.projectId });
+    }
+    return { opportunities: opps, projects: projs };
+  })();
 
   return (
     <>
@@ -104,6 +145,33 @@ export function TodoEditButton({
                         {p.name}
                       </option>
                     ))}
+                  </select>
+                </div>
+              )}
+
+              {todo.customerId && (
+                <div>
+                  <label className="mb-1 block text-xs text-slate-500">{m.common.linkLabel}</label>
+                  <select name="link" value={link} onChange={(e) => setLink(e.target.value)} className={input}>
+                    <option value="">{m.common.linkNone}</option>
+                    {linkOptionsWithCurrent && linkOptionsWithCurrent.opportunities.length > 0 && (
+                      <optgroup label={m.common.linkOpportunity}>
+                        {linkOptionsWithCurrent.opportunities.map((o) => (
+                          <option key={o.id} value={`opp:${o.id}`}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {linkOptionsWithCurrent && linkOptionsWithCurrent.projects.length > 0 && (
+                      <optgroup label={m.common.linkProject}>
+                        {linkOptionsWithCurrent.projects.map((p) => (
+                          <option key={p.id} value={`proj:${p.id}`}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 </div>
               )}

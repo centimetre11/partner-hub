@@ -51,7 +51,14 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       opportunities: { orderBy: { updatedAt: "desc" } },
       events: { orderBy: { createdAt: "desc" }, take: 100, include: { createdBy: true } },
       trainings: true,
-      todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], include: { assignee: true } },
+      todos: {
+        orderBy: [{ status: "asc" }, { dueDate: "asc" }],
+        include: {
+          assignee: true,
+          opportunity: { select: { id: true, name: true } },
+          project: { select: { id: true, name: true } },
+        },
+      },
       ...(SENTIMENT_MONITOR_ENABLED
         ? {
             monitorSources: { orderBy: { createdAt: "desc" as const } },
@@ -468,6 +475,8 @@ function RelatedOpportunityList({
                 {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
               </Badge>
               <Badge tone="blue">{o.stage}</Badge>
+              {o.dealType === "PRODUCT" && <Badge tone="amber">{m.common.dealTypeProduct}</Badge>}
+              {o.dealType === "PROJECT" && <Badge tone="indigo">{m.common.dealTypeProject}</Badge>}
             </div>
             <div className="text-xs text-slate-400 mt-0.5">
               {o.customer ? (

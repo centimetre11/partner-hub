@@ -723,20 +723,30 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
   const due = String(formData.get("dueDate") ?? "");
   const hasPartnerField = formData.has("partnerId");
   const hasCustomerField = formData.has("customerId");
-  const t = await db.todoItem.update({
-    where: { id: todoId },
-    data: {
-      title,
-      detail: String(formData.get("detail") ?? "") || null,
-      ...(hasPartnerField ? { partnerId: String(formData.get("partnerId") ?? "") || null } : {}),
-      ...(hasCustomerField ? { customerId: String(formData.get("customerId") ?? "") || null } : {}),
-      assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
-      dueDate: due ? new Date(due) : null,
-      ...(formData.has("priority")
-        ? { priority: String(formData.get("priority") ?? "MEDIUM") }
-        : {}),
-    },
-  });
+  const data: Record<string, unknown> = {
+    title,
+    detail: String(formData.get("detail") ?? "") || null,
+    ...(hasPartnerField ? { partnerId: String(formData.get("partnerId") ?? "") || null } : {}),
+    ...(hasCustomerField ? { customerId: String(formData.get("customerId") ?? "") || null } : {}),
+    assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
+    dueDate: due ? new Date(due) : null,
+    ...(formData.has("priority") ? { priority: String(formData.get("priority") ?? "MEDIUM") } : {}),
+  };
+  // 关联机会/项目（组合字段 link：opp:<id> / proj:<id> / 空=清除），仅在表单提交该字段时处理
+  if (formData.has("link")) {
+    const link = String(formData.get("link") ?? "");
+    if (link.startsWith("opp:")) {
+      data.opportunityId = link.slice(4) || null;
+      data.projectId = null;
+    } else if (link.startsWith("proj:")) {
+      data.projectId = link.slice(5) || null;
+      data.opportunityId = null;
+    } else {
+      data.opportunityId = null;
+      data.projectId = null;
+    }
+  }
+  const t = await db.todoItem.update({ where: { id: todoId }, data });
   revalidatePath("/todos");
   revalidatePath("/");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);

@@ -23,20 +23,36 @@ export async function queryTodos(query: AutomationQuery) {
           })()
         : {};
 
+  const linkWhere =
+    query.linkFilter === "project"
+      ? { projectId: { not: null } }
+      : query.linkFilter === "opportunity"
+        ? { opportunityId: { not: null } }
+        : query.linkFilter === "unlinked"
+          ? { projectId: null, opportunityId: null }
+          : {};
+
   return db.todoItem.findMany({
     where: {
       status: "OPEN",
       ...scopeWhere(query),
       ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
       ...dueWhere,
+      ...linkWhere,
     },
-    include: { partner: true, customer: true, assignee: true },
+    include: {
+      partner: true,
+      customer: true,
+      assignee: true,
+      opportunity: { select: { id: true, name: true } },
+      project: { select: { id: true, name: true } },
+    },
     orderBy: { dueDate: "asc" },
     take: 50,
   });
 }
 
-/** 商机（结构化过滤：范围 + 状态） */
+/** 商机（结构化过滤：范围 + 状态 + 成交类型） */
 export async function queryOpportunities(query: AutomationQuery) {
   return db.opportunity.findMany({
     where: {
@@ -44,8 +60,9 @@ export async function queryOpportunities(query: AutomationQuery) {
       ...(query.opportunityStatus && query.opportunityStatus !== "ALL"
         ? { status: query.opportunityStatus }
         : {}),
+      ...(query.dealType && query.dealType !== "ALL" ? { dealType: query.dealType } : {}),
     },
-    include: { partner: true, customer: true },
+    include: { partner: true, customer: true, project: { select: { id: true } } },
     orderBy: { updatedAt: "desc" },
     take: 50,
   });

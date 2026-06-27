@@ -1613,6 +1613,7 @@ export async function applyIntake(opts: {
         nextStep: o.nextStep,
         status: o.status ?? "ACTIVE",
         notes: o.notes,
+        dealType: o.dealType && ["PROJECT", "PRODUCT"].includes(o.dealType) ? o.dealType : undefined,
       };
       const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined && v !== null));
       const existing =

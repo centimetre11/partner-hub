@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BusinessRecordForm } from "@/components/business-record-form";
-import { TodoOwnerSelectField } from "@/components/todo-owner-select-field";
 import { createTodoAction } from "@/lib/actions";
+import { useMessages } from "@/lib/i18n/context";
 import type { OwnerRef } from "@/lib/owner";
-import { appendTodoOwnerToFormData, parseOwnerRef } from "@/lib/todo-owner-select";
+import { appendTodoOwnerToFormData, encodeTodoOwnerRef, parseOwnerRef, parseTodoOwnerRef } from "@/lib/todo-owner-select";
 
 type Option = { id: string; name: string };
 
@@ -112,12 +112,47 @@ export function MobileTodoCapture({
   };
 }) {
   const router = useRouter();
+  const m = useMessages();
   const [open, setOpen] = useState(autoOpen);
   const [saving, setSaving] = useState(false);
+  const [ownerRef, setOwnerRef] = useState("");
+  const [link, setLink] = useState("");
+  const [linkOptions, setLinkOptions] = useState<{ opportunities: Option[]; projects: Option[] } | null>(null);
+  const customerId = parseTodoOwnerRef(ownerRef).customerId;
 
   useEffect(() => {
     if (autoOpen) setOpen(true);
   }, [autoOpen]);
+
+  useEffect(() => {
+    if (!open) {
+      setOwnerRef("");
+      setLink("");
+      setLinkOptions(null);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    setLink("");
+    if (!customerId) {
+      setLinkOptions(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/todos/link-options?customerId=${encodeURIComponent(customerId)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
+      .then((data: { opportunities: Option[]; projects: Option[] }) => {
+        if (!cancelled) setLinkOptions(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkOptions({ opportunities: [], projects: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId]);
+
+  const hasLinkOptions = !!linkOptions && (linkOptions.opportunities.length > 0 || linkOptions.projects.length > 0);
 
   return (
     <>
@@ -160,15 +195,57 @@ export function MobileTodoCapture({
             <input name="title" required autoFocus placeholder={labels.titlePlaceholder} className={input} />
           </label>
 
-          <TodoOwnerSelectField
-            partners={partners}
-            customers={customers}
-            label={labels.relatedTo}
-            noneLabel={labels.none}
-            partnersGroupLabel={labels.partnersGroup}
-            customersGroupLabel={labels.customersGroup}
-            className={input}
-          />
+          <label className="block min-w-0">
+            <span className="mb-1 block text-xs font-medium text-slate-500">{labels.relatedTo}</span>
+            <select name="ownerRef" value={ownerRef} onChange={(e) => setOwnerRef(e.target.value)} className={input}>
+              <option value="">{labels.none}</option>
+              {partners.length > 0 && (
+                <optgroup label={labels.partnersGroup}>
+                  {partners.map((item) => (
+                    <option key={item.id} value={encodeTodoOwnerRef("partner", item.id)}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {customers.length > 0 && (
+                <optgroup label={labels.customersGroup}>
+                  {customers.map((item) => (
+                    <option key={item.id} value={encodeTodoOwnerRef("customer", item.id)}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
+
+          {customerId && hasLinkOptions && (
+            <label className="block min-w-0">
+              <span className="mb-1 block text-xs font-medium text-slate-500">{m.common.linkLabel}</span>
+              <select name="link" value={link} onChange={(e) => setLink(e.target.value)} className={input}>
+                <option value="">{m.common.linkNone}</option>
+                {linkOptions!.opportunities.length > 0 && (
+                  <optgroup label={m.common.linkOpportunity}>
+                    {linkOptions!.opportunities.map((o) => (
+                      <option key={o.id} value={`opp:${o.id}`}>
+                        {o.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {linkOptions!.projects.length > 0 && (
+                  <optgroup label={m.common.linkProject}>
+                    {linkOptions!.projects.map((p) => (
+                      <option key={p.id} value={`proj:${p.id}`}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </label>
+          )}
 
           <label className="block min-w-0">
             <span className="mb-1 block text-xs font-medium text-slate-500">{labels.owner}</span>

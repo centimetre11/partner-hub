@@ -416,7 +416,7 @@ const createTodo: Skill = {
     function: {
       name: "create_todo",
       description:
-        "Create a todo item. Link to an end-customer via customerName/customerId, or to a partner via partnerName/partnerId. Customer and partner are different entities.",
+        "Create a todo item. Link to an end-customer via customerName/customerId, or to a partner via partnerName/partnerId. Optionally attach to a specific deal (opportunityId) or delivery project (projectId) of that customer — get ids from list_opportunities / list_projects. Customer and partner are different entities.",
       parameters: {
         type: "object",
         properties: {
@@ -425,6 +425,8 @@ const createTodo: Skill = {
           partnerId: { type: "string", description: "Exact partner id (optional)" },
           customerName: { type: "string", description: "Linked end-customer / account company name (optional)" },
           customerId: { type: "string", description: "Exact customer id (optional)" },
+          opportunityId: { type: "string", description: "Attach to this deal/opportunity id (optional)" },
+          projectId: { type: "string", description: "Attach to this delivery project id (optional)" },
           dueDate: { type: "string", description: "Due date YYYY-MM-DD (optional)" },
           priority: { type: "string", enum: ["HIGH", "MEDIUM", "LOW"] },
           detail: { type: "string" },
@@ -434,13 +436,36 @@ const createTodo: Skill = {
     },
   },
   run: async (args, ctx) => {
-    const { partnerId, customerId, ownerLabel } = await resolveOwnerLink(args);
+    const resolved = await resolveOwnerLink(args);
+    let partnerId = resolved.partnerId;
+    let customerId = resolved.customerId;
+    let ownerLabel = resolved.ownerLabel;
+    const opportunityId = args.opportunityId ? String(args.opportunityId).trim() : null;
+    const projectId = args.projectId ? String(args.projectId).trim() : null;
+    // 挂到项目/机会时回填其所属客户/伙伴
+    if (projectId && !customerId) {
+      const proj = await db.project.findUnique({ where: { id: projectId }, select: { customerId: true, partnerId: true, name: true } });
+      if (proj) {
+        customerId = proj.customerId;
+        partnerId = partnerId || proj.partnerId;
+        ownerLabel = ownerLabel ?? proj.name;
+      }
+    } else if (opportunityId && !customerId && !partnerId) {
+      const opp = await db.opportunity.findUnique({ where: { id: opportunityId }, select: { customerId: true, partnerId: true, name: true } });
+      if (opp) {
+        customerId = opp.customerId ?? null;
+        partnerId = opp.partnerId ?? null;
+        ownerLabel = ownerLabel ?? opp.name;
+      }
+    }
     const t = await db.todoItem.create({
       data: {
         title: String(args.title),
         detail: args.detail ? String(args.detail) : ctx.agentName ? `Created by Agent "${ctx.agentName}"` : null,
         partnerId,
         customerId,
+        opportunityId,
+        projectId,
         assigneeId: ctx.userId,
         dueDate: args.dueDate ? new Date(String(args.dueDate)) : null,
         priority: ["HIGH", "MEDIUM", "LOW"].includes(String(args.priority)) ? String(args.priority) : "MEDIUM",
@@ -448,7 +473,8 @@ const createTodo: Skill = {
       },
     });
     const owner = customerId ? `customer ${ownerLabel ?? customerId}` : partnerId ? `partner ${ownerLabel ?? partnerId}` : "unlinked";
-    const msg = `Created todo: ${t.title}${t.dueDate ? ` (due ${t.dueDate.toISOString().slice(0, 10)})` : ""} · ${owner}`;
+    const linkNote = projectId ? ` · project` : opportunityId ? ` · deal` : "";
+    const msg = `Created todo: ${t.title}${t.dueDate ? ` (due ${t.dueDate.toISOString().slice(0, 10)})` : ""} · ${owner}${linkNote}`;
     ctx.actions.push(msg);
     return msg;
   },
@@ -516,7 +542,7 @@ const listTodos: Skill = {
           ? { customer: { name: { contains: String(args.customerName) }, ...END_CUSTOMER_WHERE } }
           : {}),
       },
-      include: { partner: true, customer: true, assignee: true },
+      include: { partner: true, customer: true, assignee: true, opportunity: { select: { name: true } }, project: { select: { name: true } } },
       orderBy: { dueDate: "asc" },
       take: 50,
     });
@@ -524,7 +550,7 @@ const listTodos: Skill = {
       ? todos
           .map(
             (t) =>
-              `[id:${t.id}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Customer:${t.customer?.name ?? "-"} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
+              `[id:${t.id}] ${t.title} | Partner:${t.partner?.name ?? "-"} | Customer:${t.customer?.name ?? "-"}${t.project ? ` | Project:${t.project.name}` : t.opportunity ? ` | Deal:${t.opportunity.name}` : ""} | Due:${t.dueDate?.toISOString().slice(0, 10) ?? "-"} | Assignee:${t.assignee?.name ?? "-"}`
           )
           .join("\n")
       : "No open todos";
@@ -551,6 +577,8 @@ const updateTodo: Skill = {
           dueDate: { type: "string", description: "Due date YYYY-MM-DD or empty to clear" },
           priority: { type: "string", enum: ["HIGH", "MEDIUM", "LOW"] },
           status: { type: "string", enum: ["OPEN", "DONE", "CANCELLED"] },
+          opportunityId: { type: "string", description: "Attach to this deal id, or empty string to detach" },
+          projectId: { type: "string", description: "Attach to this delivery project id, or empty string to detach" },
         },
         required: ["todoId"],
       },
@@ -594,6 +622,18 @@ const updateTodo: Skill = {
       data.assigneeId = u.id;
       changes.push(`assignee → ${u.name ?? u.email}`);
     }
+    if (args.projectId !== undefined) {
+      const pid = String(args.projectId ?? "").trim();
+      data.projectId = pid || null;
+      if (pid) data.opportunityId = null;
+      changes.push(`project → ${pid || "(cleared)"}`);
+    }
+    if (args.opportunityId !== undefined) {
+      const oid = String(args.opportunityId ?? "").trim();
+      data.opportunityId = oid || null;
+      if (oid) data.projectId = null;
+      changes.push(`deal → ${oid || "(cleared)"}`);
+    }
     if (!changes.length) return "No fields to update";
 
     await db.todoItem.update({ where: { id: todoId }, data });
@@ -622,6 +662,7 @@ const listOpportunities: Skill = {
           customerName: { type: "string", description: "Filter by end-customer / account company name" },
           customerId: { type: "string", description: "Filter by exact customer id" },
           status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
+          dealType: { type: "string", enum: ["PROJECT", "PRODUCT"], description: "Filter by deal type: PROJECT=有交付项目 / PRODUCT=纯产品" },
         },
       },
     },
@@ -639,8 +680,9 @@ const listOpportunities: Skill = {
           ? { customer: { name: { contains: String(args.customerName) }, ...END_CUSTOMER_WHERE } }
           : {}),
         ...(args.status ? { status: String(args.status) } : {}),
+        ...(args.dealType && ["PROJECT", "PRODUCT"].includes(String(args.dealType)) ? { dealType: String(args.dealType) } : {}),
       },
-      include: { partner: true, customer: true },
+      include: { partner: true, customer: true, project: { select: { id: true } } },
       orderBy: { updatedAt: "desc" },
       take: 30,
     });
@@ -648,7 +690,7 @@ const listOpportunities: Skill = {
       ? rows
           .map(
             (o) =>
-              `[id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status}`
+              `[id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status} | DealType:${o.dealType ?? "-"}${o.project ? " | Converted→Project" : ""}`
           )
           .join("\n")
       : "No opportunities found";
@@ -675,6 +717,7 @@ const updateOpportunity: Skill = {
           stage: { type: "string" },
           nextStep: { type: "string" },
           status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
+          dealType: { type: "string", enum: ["PROJECT", "PRODUCT"], description: "PROJECT=有交付项目 / PRODUCT=纯产品成交" },
           notes: { type: "string" },
         },
         required: ["opportunityId"],
@@ -694,12 +737,70 @@ const updateOpportunity: Skill = {
         changes.push(`${key} → ${data[key]}`);
       }
     }
+    if (args.dealType != null && ["PROJECT", "PRODUCT"].includes(String(args.dealType))) {
+      data.dealType = String(args.dealType);
+      changes.push(`dealType → ${data.dealType}`);
+    }
     if (!changes.length) return "No fields to update";
 
     await db.opportunity.update({ where: { id }, data });
     const msg = `Updated opportunity「${existing.name}」: ${changes.join("; ")}`;
     ctx.actions.push(msg);
     return msg;
+  },
+};
+
+// ---- List projects ----
+const listProjects: Skill = {
+  name: "list_projects",
+  label: "List projects",
+  desc: "List delivery/collaboration projects (converted from won deals) with progress",
+  def: {
+    type: "function",
+    function: {
+      name: "list_projects",
+      description:
+        "List delivery/collaboration projects (合作项目, created when a deal is won and converted). Projects belong to an end-customer; a partner may be the delivery partner. Returns phase, status and todo progress. Filter by customer, partner, status, or phase.",
+      parameters: {
+        type: "object",
+        properties: {
+          customerName: { type: "string", description: "Filter by end-customer / account company name" },
+          customerId: { type: "string", description: "Filter by exact customer id" },
+          partnerName: { type: "string", description: "Filter by delivery partner company name" },
+          partnerId: { type: "string", description: "Filter by exact partner id" },
+          status: { type: "string", enum: ["ACTIVE", "ON_HOLD", "DONE", "CLOSED"] },
+          phase: { type: "string", enum: ["KICKOFF", "IMPLEMENT", "ACCEPTANCE", "GOLIVE", "MAINTENANCE"] },
+        },
+      },
+    },
+  },
+  run: async (args) => {
+    const { partnerId, customerId } = await resolveOwnerFilter(args);
+    const rows = await db.project.findMany({
+      where: {
+        ...(customerId ? { customerId } : {}),
+        ...(partnerId ? { partnerId } : {}),
+        ...(args.customerName && !customerId
+          ? { customer: { name: { contains: String(args.customerName) }, ...END_CUSTOMER_WHERE } }
+          : {}),
+        ...(args.partnerName && !partnerId
+          ? { partner: { name: { contains: String(args.partnerName) } } }
+          : {}),
+        ...(args.status && ["ACTIVE", "ON_HOLD", "DONE", "CLOSED"].includes(String(args.status)) ? { status: String(args.status) } : {}),
+        ...(args.phase && ["KICKOFF", "IMPLEMENT", "ACCEPTANCE", "GOLIVE", "MAINTENANCE"].includes(String(args.phase)) ? { phase: String(args.phase) } : {}),
+      },
+      include: { customer: true, partner: true, todos: { select: { status: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+    });
+    return rows.length
+      ? rows
+          .map((p) => {
+            const done = p.todos.filter((t) => t.status === "DONE").length;
+            return `[id:${p.id}] ${p.name} | Customer:${p.customer?.name ?? "-"} | DeliveryPartner:${p.partner?.name ?? "-"} | Phase:${p.phase} | Status:${p.status} | Progress:${done}/${p.todos.length}`;
+          })
+          .join("\n")
+      : "No projects found";
   },
 };
 
@@ -1252,6 +1353,7 @@ export const SKILLS: Skill[] = [
   listTodos,
   listOpportunities,
   updateOpportunity,
+  listProjects,
   listBusinessRecords,
   linkedinSearchTool,
   webSearch,
@@ -1310,6 +1412,7 @@ export const ASSISTANT_SKILLS = [
   "list_todos",
   "list_opportunities",
   "update_opportunity",
+  "list_projects",
   "list_business_records",
   "linkedin_search",
   "web_search",

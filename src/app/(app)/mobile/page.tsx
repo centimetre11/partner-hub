@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import { requireUser } from "@/lib/session";
 import { isTodoOverdue, overdueDueDateBefore } from "@/lib/todo-dates";
+import { todoLinkLabel } from "@/lib/todo-display";
 import type { Prisma } from "@prisma/client";
 import { MobileBusinessRecordCapture, MobileTodoCapture } from "./mobile-desk-actions";
 import { MobileDirectorySearch } from "./mobile-directory-search";
@@ -76,6 +77,8 @@ export default async function MobileDeskPage({
       include: {
         partner: { select: { id: true, name: true } },
         customer: { select: { id: true, name: true } },
+        opportunity: { select: { id: true, name: true } },
+        project: { select: { id: true, name: true } },
         assignee: { select: { name: true } },
       },
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -190,7 +193,17 @@ export default async function MobileDeskPage({
                 <div key={todo.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-900">{todo.title}</div>
+                      <div className="text-sm font-medium text-slate-900">
+                        {todo.title}
+                        {(() => {
+                          const label = todoLinkLabel(todo, { opportunity: m.common.linkOpportunity, project: m.common.linkProject });
+                          return label ? (
+                            <span className="ml-1 inline-block rounded-full bg-white px-1.5 py-0.5 text-[10px] font-normal text-slate-500 align-middle">
+                              {label}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
                         {todo.dueDate && (
                           <span className={overdue ? "font-semibold text-red-600" : ""}>

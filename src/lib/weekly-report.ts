@@ -20,15 +20,29 @@ export type WeeklyUserStats = {
   userId: string;
   name: string;
   email: string | null;
-  doneTodos: { title: string; doneAt: Date | null; owner: string }[];
+  doneTodos: { title: string; doneAt: Date | null; owner: string; link: string }[];
   businessRecords: { title: string; category: string; occurredAt: Date; owner: string }[];
   newCustomers: { name: string; status: string }[];
-  upcomingTodos: { title: string; dueDate: Date | null; overdue: boolean; owner: string }[];
-  activeOpportunities: { name: string; stage: string; amount: string | null; owner: string }[];
+  upcomingTodos: { title: string; dueDate: Date | null; overdue: boolean; owner: string; link: string }[];
+  activeOpportunities: { name: string; stage: string; amount: string | null; owner: string; dealType: string | null }[];
+  activeProjects: { name: string; phase: string; status: string; owner: string; done: number; total: number }[];
 };
 
 function ownerLabel(row: { partner?: { name: string } | null; customer?: { name: string } | null }): string {
   return row.customer?.name ?? row.partner?.name ?? "-";
+}
+
+/** 待办的机会/项目归属文本（项目优先） */
+function todoLinkText(row: { project?: { name: string } | null; opportunity?: { name: string } | null }): string {
+  if (row.project) return `项目: ${row.project.name}`;
+  if (row.opportunity) return `商机: ${row.opportunity.name}`;
+  return "";
+}
+
+function dealTypeText(dealType: string | null): string {
+  if (dealType === "PROJECT") return "项目型";
+  if (dealType === "PRODUCT") return "纯产品型";
+  return "";
 }
 
 export function statsActivityCount(s: WeeklyUserStats): number {
@@ -42,10 +56,15 @@ export async function gatherUserWeekly(
   const inWindow = { gte: window.start, lte: window.end };
   const next7 = new Date(window.end.getTime() + 7 * 24 * 3600 * 1000);
 
-  const [doneTodos, businessRecords, newCustomers, upcomingTodos, activeOpps] = await Promise.all([
+  const [doneTodos, businessRecords, newCustomers, upcomingTodos, activeOpps, activeProjects] = await Promise.all([
     db.todoItem.findMany({
       where: { assigneeId: user.id, status: "DONE", doneAt: inWindow },
-      include: { partner: { select: { name: true } }, customer: { select: { name: true } } },
+      include: {
+        partner: { select: { name: true } },
+        customer: { select: { name: true } },
+        opportunity: { select: { name: true } },
+        project: { select: { name: true } },
+      },
       orderBy: { doneAt: "desc" },
       take: 100,
     }),
@@ -70,7 +89,12 @@ export async function gatherUserWeekly(
         status: "OPEN",
         OR: [{ dueDate: { lte: next7 } }, { dueDate: null }],
       },
-      include: { partner: { select: { name: true } }, customer: { select: { name: true } } },
+      include: {
+        partner: { select: { name: true } },
+        customer: { select: { name: true } },
+        opportunity: { select: { name: true } },
+        project: { select: { name: true } },
+      },
       orderBy: { dueDate: "asc" },
       take: 50,
     }),
@@ -83,6 +107,15 @@ export async function gatherUserWeekly(
       orderBy: { updatedAt: "desc" },
       take: 30,
     }),
+    db.project.findMany({
+      where: {
+        status: { in: ["ACTIVE", "ON_HOLD"] },
+        OR: [{ ownerId: user.id }, { customer: { ownerId: user.id } }],
+      },
+      include: { customer: { select: { name: true } }, partner: { select: { name: true } }, todos: { select: { status: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+    }),
   ]);
 
   const now = window.end;
@@ -90,7 +123,7 @@ export async function gatherUserWeekly(
     userId: user.id,
     name: user.name,
     email: user.email,
-    doneTodos: doneTodos.map((t) => ({ title: t.title, doneAt: t.doneAt, owner: ownerLabel(t) })),
+    doneTodos: doneTodos.map((t) => ({ title: t.title, doneAt: t.doneAt, owner: ownerLabel(t), link: todoLinkText(t) })),
     businessRecords: businessRecords.map((r) => ({
       title: r.title,
       category: r.category,
@@ -103,12 +136,22 @@ export async function gatherUserWeekly(
       dueDate: t.dueDate,
       overdue: !!t.dueDate && t.dueDate < now,
       owner: ownerLabel(t),
+      link: todoLinkText(t),
     })),
     activeOpportunities: activeOpps.map((o) => ({
       name: o.name,
       stage: o.stage,
       amount: o.amount,
       owner: ownerLabel(o),
+      dealType: o.dealType,
+    })),
+    activeProjects: activeProjects.map((p) => ({
+      name: p.name,
+      phase: p.phase,
+      status: p.status,
+      owner: ownerLabel(p),
+      done: p.todos.filter((t) => t.status === "DONE").length,
+      total: p.todos.length,
     })),
   };
 }
@@ -127,7 +170,7 @@ export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow): st
   lines.push(`## 已完成待办（${s.doneTodos.length}）`);
   lines.push(
     s.doneTodos.length
-      ? s.doneTodos.map((t) => `- ${t.title}（${t.owner}，完成于 ${ymd(t.doneAt)}）`).join("\n")
+      ? s.doneTodos.map((t) => `- ${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，完成于 ${ymd(t.doneAt)}）`).join("\n")
       : "- 无"
   );
   lines.push("");
@@ -147,7 +190,7 @@ export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow): st
   lines.push(
     s.upcomingTodos.length
       ? s.upcomingTodos
-          .map((t) => `- ${t.title}（${t.owner}，截止 ${ymd(t.dueDate)}${t.overdue ? "，已逾期" : ""}）`)
+          .map((t) => `- ${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，截止 ${ymd(t.dueDate)}${t.overdue ? "，已逾期" : ""}）`)
           .join("\n")
       : "- 无"
   );
@@ -156,7 +199,16 @@ export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow): st
   lines.push(
     s.activeOpportunities.length
       ? s.activeOpportunities
-          .map((o) => `- ${o.name}（${o.owner}，阶段 ${o.stage}，金额 ${o.amount ?? "-"}）`)
+          .map((o) => `- ${o.name}（${o.owner}，阶段 ${o.stage}，金额 ${o.amount ?? "-"}${dealTypeText(o.dealType) ? `，${dealTypeText(o.dealType)}` : ""}）`)
+          .join("\n")
+      : "- 无"
+  );
+  lines.push("");
+  lines.push(`## 进行中合作项目（${s.activeProjects.length}）`);
+  lines.push(
+    s.activeProjects.length
+      ? s.activeProjects
+          .map((p) => `- ${p.name}（${p.owner}，阶段 ${p.phase}，状态 ${p.status}，待办 ${p.done}/${p.total}）`)
           .join("\n")
       : "- 无"
   );
@@ -193,18 +245,22 @@ export function renderUserEmailHtml(s: WeeklyUserStats, window: WeekWindow, narr
     ${narrativeHtml || '<p style="color:#888">（暂无内容）</p>'}
   </div>
   <h3 style="margin:16px 0 4px">✅ 已完成待办（${s.doneTodos.length}）</h3>
-  ${listHtml(s.doneTodos.map((t) => `${t.title}（${t.owner}，${ymd(t.doneAt)}）`))}
+  ${listHtml(s.doneTodos.map((t) => `${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，${ymd(t.doneAt)}）`))}
   <h3 style="margin:16px 0 4px">🤝 商务记录（${s.businessRecords.length}）</h3>
   ${listHtml(s.businessRecords.map((r) => `[${r.category}] ${r.title}（${r.owner}，${ymd(r.occurredAt)}）`))}
   <h3 style="margin:16px 0 4px">🆕 新增客户（${s.newCustomers.length}）</h3>
   ${listHtml(s.newCustomers.map((c) => `${c.name}（${c.status}）`))}
   <h3 style="margin:16px 0 4px">📅 下周待办（${s.upcomingTodos.length}）</h3>
   ${listHtml(
-    s.upcomingTodos.map((t) => `${t.title}（${t.owner}，截止 ${ymd(t.dueDate)}${t.overdue ? "，已逾期" : ""}）`)
+    s.upcomingTodos.map((t) => `${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，截止 ${ymd(t.dueDate)}${t.overdue ? "，已逾期" : ""}）`)
   )}
   <h3 style="margin:16px 0 4px">💼 活跃商机（${s.activeOpportunities.length}）</h3>
   ${listHtml(
-    s.activeOpportunities.map((o) => `${o.name}（${o.owner}，阶段 ${o.stage}，金额 ${o.amount ?? "-"}）`)
+    s.activeOpportunities.map((o) => `${o.name}（${o.owner}，阶段 ${o.stage}，金额 ${o.amount ?? "-"}${dealTypeText(o.dealType) ? `，${dealTypeText(o.dealType)}` : ""}）`)
+  )}
+  <h3 style="margin:16px 0 4px">📦 进行中合作项目（${s.activeProjects.length}）</h3>
+  ${listHtml(
+    s.activeProjects.map((p) => `${p.name}（${p.owner}，阶段 ${p.phase}，状态 ${p.status}，待办 ${p.done}/${p.total}）`)
   )}
   <p style="color:#9ca3af;font-size:12px;margin-top:24px;border-top:1px solid #e5e7eb;padding-top:12px">
     本邮件由 Partner Hub 周报自动化生成。数据来自系统记录，建议部分由 AI 生成，仅供参考。
