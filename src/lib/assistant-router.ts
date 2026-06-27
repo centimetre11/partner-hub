@@ -11,8 +11,9 @@ import {
   extractListItemsFromFormattedReply,
   focusIsFresh,
   inferFocusKindFromQueryAction,
-  resolveFocusTarget,
+  resolveFocusPatchTargets,
   type FocusEntity,
+  type FocusPatchTarget,
 } from "./focus-entity";
 import type { Locale } from "./i18n/locale";
 import {
@@ -25,7 +26,7 @@ import {
 } from "./intake-intent-confirm";
 import { normalizeActionText } from "./intake-action-registry";
 import { resolveAssistantRoute, type ResolvedAssistantRoute } from "./intake-route-resolver";
-import { runPatchAssistant } from "./patch-assistant";
+import { runBatchPatchAssistant, runPatchAssistant } from "./patch-assistant";
 import { db } from "./db";
 import {
   modeFromAssistantTurn,
@@ -52,6 +53,7 @@ export type AssistantIntentConfirmResult = {
   patchInstruction?: string;
   patchTargetId?: string;
   patchTargetLabel?: string;
+  patchBatch?: FocusPatchTarget[];
 };
 
 export type AssistantAgentBuilderResult = Awaited<ReturnType<typeof runAgentBuilderTurn>> & {
@@ -222,6 +224,7 @@ export async function runAssistantTurn(opts: {
   patchTargetId?: string;
   patchTargetLabel?: string;
   patchInstruction?: string;
+  patchBatch?: FocusPatchTarget[];
   /** Hub display name for WeCom / web operator — used for「我的待办」queries */
   actorDisplayName?: string;
 }): Promise<AssistantTurnResult> {
@@ -280,6 +283,7 @@ async function runAssistantTurnCore(opts: {
   patchTargetId?: string;
   patchTargetLabel?: string;
   patchInstruction?: string;
+  patchBatch?: FocusPatchTarget[];
   actorDisplayName?: string;
 }): Promise<AssistantTurnResult> {
   const locale = opts.locale as Locale;
@@ -331,11 +335,39 @@ async function runAssistantTurnCore(opts: {
 
   // Confirmed patch execution (after intent confirm)
   if (
-    opts.patchTargetId &&
-    opts.patchInstruction &&
     opts.focus &&
-    opts.confirmedActionId?.startsWith("patch.")
+    opts.confirmedActionId?.startsWith("patch.") &&
+    (opts.patchBatch?.length || (opts.patchTargetId && opts.patchInstruction))
   ) {
+    if (opts.patchBatch?.length) {
+      const batch = await runBatchPatchAssistant({
+        focus: opts.focus,
+        patches: opts.patchBatch,
+        userId: opts.userId,
+        locale,
+        emit: opts.emit,
+        feature: opts.feature,
+      });
+      const last = opts.patchBatch[opts.patchBatch.length - 1];
+      return {
+        mode: "query",
+        reply: batch.reply,
+        actions: batch.actions,
+        focus: {
+          ...opts.focus,
+          id: last.id,
+          label: last.label,
+          updatedAt: Date.now(),
+        },
+      };
+    }
+    if (!opts.patchTargetId || !opts.patchInstruction) {
+      return {
+        mode: "query",
+        reply: locale === "zh" ? "缺少修改目标或指令。" : "Missing patch target or instruction.",
+        focus: opts.focus,
+      };
+    }
     const patch = await runPatchAssistant({
       focus: opts.focus,
       targetId: opts.patchTargetId,
@@ -456,7 +488,7 @@ async function runAssistantTurnCore(opts: {
         focus: null,
       };
     }
-    const resolved = resolveFocusTarget(opts.focus, instruction);
+    const resolved = resolveFocusPatchTargets(opts.focus, instruction);
     if (!resolved) {
       return {
         mode: "query",
@@ -477,15 +509,17 @@ async function runAssistantTurnCore(opts: {
       !opts.skipIntentConfirm
     ) {
       const sourceText = sourceTextForRouting(opts.messages);
+      const isBatch = resolved.length > 1;
       const session = buildIntentConfirmSession({
         route,
         sourceText,
         locale,
         partnerName: opts.partnerName,
         focus: opts.focus,
-        patchInstruction: instruction,
-        patchTargetId: resolved.id,
-        patchTargetLabel: resolved.label,
+        patchInstruction: isBatch ? instruction : resolved[0].instruction,
+        patchTargetId: isBatch ? undefined : resolved[0].id,
+        patchTargetLabel: isBatch ? undefined : resolved[0].label,
+        patchBatch: isBatch ? resolved : undefined,
       });
       return {
         mode: "intent_confirm",
@@ -494,9 +528,10 @@ async function runAssistantTurnCore(opts: {
         route: session.route,
         alternatives: session.alternatives,
         focus: opts.focus,
-        patchInstruction: instruction,
-        patchTargetId: resolved.id,
-        patchTargetLabel: resolved.label,
+        patchInstruction: session.patchInstruction,
+        patchTargetId: session.patchTargetId,
+        patchTargetLabel: session.patchTargetLabel,
+        patchBatch: session.patchBatch,
       };
     }
   }

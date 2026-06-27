@@ -19,13 +19,13 @@ export function isTodoSelfAssignee(name: string | undefined): boolean {
 }
 
 export function mentionsSelfTodoAssignee(text: string): boolean {
-  return /^(?:帮我|请|麻烦|给我)\s*(?:加|添|创|增加|新增|添加|创建|记(?:录|个|一下)?)\s*(?:一个|一下|个)?\s*待办/i.test(
-    text.trim(),
+  return /^(?:帮我|请|麻烦|给我)\s*(?:加|添|创|增加|新增|添加|创建|记(?:录|个|一下)?)\s*(?:一个|一下|个)?\s*(?:待办|代办)/i.test(
+    text.trim().replace(/代办/g, "待办"),
   );
 }
 
 export function stripTodoCommandPrefix(text: string): string {
-  const todoTail = String.raw`(?:一个|一下|个)?\s*待办`;
+  const todoTail = String.raw`(?:一个|一下|一条|个)?\s*(?:待办|代办)`;
   const addVerb = String.raw`(?:增加|新增|添加|加|创(?:建|个)?|记(?:录|个|一下)?)`;
   const prefixes = [
     String.raw`^(?:帮我|请|麻烦|给我)\s*${addVerb}\s*${todoTail}[：:,，、\s]*`,
@@ -56,8 +56,30 @@ function inferDueDate(text: string, today: string): string | undefined {
   return undefined;
 }
 
+function parseWecomMention(raw: string): string {
+  const m = raw.replace(/^@/, "").trim();
+  if (!m) return raw;
+  if (m.includes("-")) {
+    const chinese = m.split("-").find((p) => /[\u4e00-\u9fa5]/.test(p));
+    if (chinese?.trim()) return chinese.trim();
+    return m.split("-")[0]?.trim() || m;
+  }
+  return m;
+}
+
 function extractAssignee(text: string): { rest: string; assigneeName?: string } {
   let s = text.trim();
+  const wecomAt =
+    s.match(/^(?:给|for)\s*@([A-Za-z0-9_\u4e00-\u9fa5.-]+)\s*[，,：:\s]+/i) ??
+    s.match(/(?:给|for)\s*@([A-Za-z0-9_\u4e00-\u9fa5.-]+)\s*[，,：:\s]+/i);
+  if (wecomAt?.[1]?.trim()) {
+    const assigneeName = parseWecomMention(wecomAt[1]);
+    const rest = s.slice(0, wecomAt.index!).trim() + s.slice(wecomAt.index! + wecomAt[0].length).trim();
+    return {
+      rest: rest.replace(/^(?:给|for)\s*$/i, "").trim(),
+      assigneeName,
+    };
+  }
   const forPerson = s.match(
     /^(?:给|for)\s+([A-Za-z\u4e00-\u9fa5][A-Za-z0-9\u4e00-\u9fa5.\s'-]{0,30}?)\s*[，,：:\s]+/i,
   );
@@ -82,7 +104,7 @@ function extractAssignee(text: string): { rest: string; assigneeName?: string } 
 
 /** Parse todo title / assignee / dates from free-form user text (WeCom or web). */
 export function parseTodoFromText(text: string, today?: string): TodoProposal {
-  const raw = text.trim();
+  const raw = text.trim().replace(/代办/g, "待办");
   let s = stripTodoCommandPrefix(raw);
   const { rest, assigneeName } = extractAssignee(s);
   s = rest.replace(/^[，,、]\s*/, "").trim();

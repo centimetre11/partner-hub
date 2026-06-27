@@ -24,6 +24,7 @@ import {
   buildFocusFromListItems,
   extractListItemsFromFormattedReply,
   isModificationPhrase,
+  resolveFocusPatchTargets,
   resolveFocusTarget,
   patchActionIdForKind,
 } from "../src/lib/focus-entity";
@@ -166,6 +167,43 @@ function main() {
   const target = focus ? resolveFocusTarget(focus, "责任人改成 areeb") : null;
   cases.push(assert("resolveFocusTarget 单条", target != null && !("ambiguous" in target)));
   cases.push(assert("patch action id", patchActionIdForKind("todo") === "patch.todo"));
+
+  // ---- 代办 ↔ 待办 + 批量修改 ----
+  cases.push(assert("「还有什么代办」→ query.list_todos", topBuiltinAction("还有什么代办")?.action.id === "query.list_todos"));
+  cases.push(assert("「还有什么代办」isTodoQueryPhrase", isTodoQueryPhrase("还有什么代办")));
+  cases.push(assert("「加一条代办给 Zayne」→ intake.todo", topBuiltinAction("加一条代办给 Zayne，test")?.action.id === "intake.todo"));
+  cases.push(assert("「延后半个月」是修改句", isModificationPhrase("第二条待办延后半个月")));
+  cases.push(assert("「标记已完成」是修改句", isModificationPhrase("第一条标记已完成")));
+
+  const multiFocus = buildFocusFromListItems({
+    kind: "todo",
+    items: [
+      { id: "id1", label: "Task one" },
+      { id: "id2", label: "Task two" },
+    ],
+  })!;
+  const batch = resolveFocusPatchTargets(
+    multiFocus,
+    "第二条代办延后半个月，第一条标记已完成",
+  );
+  cases.push(
+    assert(
+      "批量 resolve 两条",
+      Array.isArray(batch) &&
+        batch.length === 2 &&
+        batch.some((b) => b.id === "id1" && /完成/.test(b.instruction)) &&
+        batch.some((b) => b.id === "id2" && /延后/.test(b.instruction)),
+      Array.isArray(batch) ? batch.map((b) => `${b.id}:${b.instruction}`).join(";") : "ambiguous",
+    ),
+  );
+  const ord2 = resolveFocusTarget(multiFocus, "第二条代办延后半个月");
+  cases.push(
+    assert(
+      "resolve 第二条",
+      ord2 != null && !("ambiguous" in ord2) && ord2.id === "id2",
+      ord2 && "id" in ord2 ? ord2.id : "ambiguous",
+    ),
+  );
 
   const failed = cases.filter((c) => !c.pass);
   console.log(`\n${cases.length - failed.length}/${cases.length} passed`);

@@ -1,5 +1,5 @@
 import type { Locale } from "./i18n/locale";
-import type { FocusEntity } from "./focus-entity";
+import type { FocusEntity, FocusPatchTarget } from "./focus-entity";
 import {
   builtinActionById,
   getAlternativeActions,
@@ -26,6 +26,8 @@ export type IntentConfirmSession = {
   patchInstruction?: string;
   patchTargetId?: string;
   patchTargetLabel?: string;
+  /** Batch patch — multiple targets in one confirm */
+  patchBatch?: FocusPatchTarget[];
 };
 
 const INTENT_CONFIRM_RE =
@@ -87,6 +89,7 @@ export function buildIntentConfirmSession(opts: {
   patchInstruction?: string;
   patchTargetId?: string;
   patchTargetLabel?: string;
+  patchBatch?: FocusPatchTarget[];
 }): IntentConfirmSession {
   const action = builtinActionById(opts.route.actionId);
   const alts = getAlternativeActions(opts.sourceText, opts.route.actionId, 3).map((s, i) => ({
@@ -104,6 +107,7 @@ export function buildIntentConfirmSession(opts: {
     patchInstruction: opts.patchInstruction,
     patchTargetId: opts.patchTargetId,
     patchTargetLabel: opts.patchTargetLabel,
+    patchBatch: opts.patchBatch,
   };
 }
 
@@ -121,11 +125,16 @@ export function formatIntentConfirmReply(session: IntentConfirmSession, locale: 
     : "";
 
   const isPatch = session.route.mode === "patch";
+  const batch = session.patchBatch?.length ? session.patchBatch : null;
   const targetLine =
-    session.patchTargetLabel &&
-    (locale === "zh"
-      ? `目标：**${session.patchTargetLabel}**`
-      : `Target: **${session.patchTargetLabel}**`);
+    batch && batch.length > 1
+      ? locale === "zh"
+        ? `目标（${batch.length} 条）：\n${batch.map((p, i) => `  ${i + 1}. **${p.label}** — ${p.instruction}`).join("\n")}`
+        : `Targets (${batch.length}):\n${batch.map((p, i) => `  ${i + 1}. **${p.label}** — ${p.instruction}`).join("\n")}`
+      : session.patchTargetLabel &&
+        (locale === "zh"
+          ? `目标：**${session.patchTargetLabel}**`
+          : `Target: **${session.patchTargetLabel}**`);
   const instructionLine =
     session.patchInstruction &&
     (locale === "zh"

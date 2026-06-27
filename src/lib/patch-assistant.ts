@@ -2,7 +2,7 @@ import type { ChatMessage } from "./ai";
 import { runToolLoop } from "./ai-tool-loop";
 import type { TraceEmitter } from "./ai-trace";
 import { db } from "./db";
-import type { FocusEntity } from "./focus-entity";
+import type { FocusEntity, FocusPatchTarget } from "./focus-entity";
 import type { Locale } from "./i18n/locale";
 import { newSkillContext, runSkill, skillsToTools } from "./skills";
 
@@ -141,4 +141,38 @@ export async function runPatchAssistant(opts: {
     reply: content?.trim() || (opts.locale === "zh" ? "已完成修改。" : "Update applied."),
     actions: ctx.actions,
   };
+}
+
+/** Execute multiple confirmed patches in order (compound follow-up). */
+export async function runBatchPatchAssistant(opts: {
+  focus: FocusEntity;
+  patches: FocusPatchTarget[];
+  userId: string;
+  locale: Locale;
+  emit?: TraceEmitter;
+  feature?: string;
+}): Promise<{ reply: string; actions: string[] }> {
+  if (!opts.patches.length) {
+    return {
+      reply: opts.locale === "zh" ? "没有可执行的修改。" : "No patches to apply.",
+      actions: [],
+    };
+  }
+  const replies: string[] = [];
+  const actions: string[] = [];
+  for (const patch of opts.patches) {
+    const result = await runPatchAssistant({
+      focus: opts.focus,
+      targetId: patch.id,
+      targetLabel: patch.label,
+      instruction: patch.instruction,
+      userId: opts.userId,
+      locale: opts.locale,
+      emit: opts.emit,
+      feature: opts.feature,
+    });
+    replies.push(result.reply);
+    actions.push(...result.actions);
+  }
+  return { reply: replies.join("\n\n"), actions };
 }

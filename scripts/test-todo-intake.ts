@@ -139,6 +139,29 @@ function main() {
   cases.push(assert("list 格式含 priority 可解析", idRe.test(withPri)));
   cases.push(assert("list 格式无 priority 可解析", idRe.test(withoutPri)));
 
+  // ---- 代办 + 企微 @ 负责人 ----
+  cases.push(assert("「还有什么代办」是查询", isListTodosAction("还有什么代办")));
+  cases.push(assert("「加一条代办」是创建", isProposeBuiltinAction("加一条代办给 Zayne，test")));
+
+  const wecomAssignee = parseTodoFromText(
+    "加一条代办给@XuShengkai-徐圣凯，下周来见一下技术团队探明",
+    TODAY,
+  );
+  cases.push(
+    assert(
+      "企微 @ 负责人",
+      wecomAssignee.assigneeName === "徐圣凯",
+      wecomAssignee.assigneeName,
+    ),
+  );
+  cases.push(
+    assert(
+      "企微 @ 标题不含命令前缀",
+      wecomAssignee.title === "下周来见一下技术团队探明",
+      wecomAssignee.title,
+    ),
+  );
+
   const failed = cases.filter((c) => !c.pass);
   console.log(`\n${cases.length - failed.length}/${cases.length} passed`);
   if (failed.length) {

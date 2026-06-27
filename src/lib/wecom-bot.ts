@@ -502,6 +502,7 @@ async function applyAssistantTurnResult(opts: {
         patchInstruction: result.patchInstruction,
         patchTargetId: result.patchTargetId,
         patchTargetLabel: result.patchTargetLabel,
+        patchBatch: result.patchBatch,
       })
     );
     if (result.focus) focusSessions.set(key, result.focus);
@@ -960,6 +961,7 @@ async function handleTextMessage(frame: WsFrame) {
         patchTargetId: intentSession.patchTargetId,
         patchTargetLabel: intentSession.patchTargetLabel,
         patchInstruction: intentSession.patchInstruction,
+        patchBatch: intentSession.patchBatch,
         actorDisplayName: actor.hubUser?.name ?? undefined,
       });
       const reply = await applyAssistantTurnResult({
