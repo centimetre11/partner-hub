@@ -41,7 +41,11 @@ export default async function LeadsPage({
     getLeadsLastSyncAt(),
     getLeadSalesmen(),
   ]);
-  const leads = [...rawLeads].sort(compareKpiDeadline);
+  const leads =
+    view === "nurture"
+      ? [...rawLeads].sort((a, b) => (b.recdate?.getTime() ?? 0) - (a.recdate?.getTime() ?? 0))
+      : [...rawLeads].sort(compareKpiDeadline);
+  const showKpiDeadline = view === "new";
 
   const syncedLabel = lastSyncAt
     ? `${l.syncedAt} ${fmtDateTime(lastSyncAt, bcp47)}`
@@ -129,12 +133,14 @@ export default async function LeadsPage({
                     <th className="px-4 py-2.5 font-medium">{l.colSource}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colSalesman}</th>
                     <th className="px-4 py-2.5 font-medium">{l.colKpiStart}</th>
-                    <th className="px-4 py-2.5 font-medium">{l.colKpiDeadline}</th>
+                    {showKpiDeadline && (
+                      <th className="px-4 py-2.5 font-medium">{l.colKpiDeadline}</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {leads.map((lead) => {
-                    const urgent = isKpiDeadlineUrgent(lead.jzDate);
+                    const urgent = showKpiDeadline && isKpiDeadlineUrgent(lead.jzDate, new Date(), lead.status);
                     return (
                     <tr key={lead.id} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3">
@@ -157,13 +163,15 @@ export default async function LeadsPage({
                       <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
                         {lead.recdate ? fmtDate(lead.recdate, bcp47) : "—"}
                       </td>
-                      <td
-                        className={`px-4 py-3 whitespace-nowrap ${
-                          urgent ? "text-red-600 font-semibold" : "text-slate-500"
-                        }`}
-                      >
-                        {lead.jzDate ? fmtDate(lead.jzDate, bcp47) : "—"}
-                      </td>
+                      {showKpiDeadline && (
+                        <td
+                          className={`px-4 py-3 whitespace-nowrap ${
+                            urgent ? "text-red-600 font-semibold" : "text-slate-500"
+                          }`}
+                        >
+                          {lead.jzDate ? fmtDate(lead.jzDate, bcp47) : "—"}
+                        </td>
+                      )}
                     </tr>
                     );
                   })}

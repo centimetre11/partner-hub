@@ -64,7 +64,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           </div>
           <p className="text-sm text-slate-500 mt-1">
             {[lead.countryCn, lead.city, lead.province].filter(Boolean).join(" · ") || "—"}
-            {lead.jzDate ? ` · ${l.fieldKpiDeadline} ${fmtDate(lead.jzDate, bcp47)}` : ""}
+            {!nurturing && lead.jzDate ? ` · ${l.fieldKpiDeadline} ${fmtDate(lead.jzDate, bcp47)}` : ""}
           </p>
         </div>
       </div>
@@ -133,10 +133,12 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               label={l.fieldKpiStart}
               value={lead.recdate ? fmtDateTime(lead.recdate, bcp47) : null}
             />
-            <DetailRow
-              label={l.fieldKpiDeadline}
-              value={lead.jzDate ? fmtDate(lead.jzDate, bcp47) : null}
-            />
+            {!nurturing && (
+              <DetailRow
+                label={l.fieldKpiDeadline}
+                value={lead.jzDate ? fmtDate(lead.jzDate, bcp47) : null}
+              />
+            )}
             <DetailRow label={l.fieldSyncedAt} value={fmtDateTime(lead.syncedAt, bcp47)} />
           </dl>
         </Card>

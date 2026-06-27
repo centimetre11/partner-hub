@@ -266,25 +266,39 @@ function startOfLocalDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-/** KPI 截止距今天数（按本地日历日；无截止日返回 null） */
-export function getKpiDaysRemaining(jzDate: Date | null | undefined, now = new Date()) {
+/** KPI 截止距今天数（按本地日历日；无截止日返回 null；培育线索不关注 KPI） */
+export function getKpiDaysRemaining(
+  jzDate: Date | null | undefined,
+  now = new Date(),
+  status?: string | null,
+) {
+  if (isNurturingLead(status)) return null;
   if (!jzDate) return null;
   const today = startOfLocalDay(now).getTime();
   const deadline = startOfLocalDay(jzDate).getTime();
   return Math.round((deadline - today) / MS_PER_DAY);
 }
 
-/** 截止日在 3 天内（含已过期）标为紧急 */
-export function isKpiDeadlineUrgent(jzDate: Date | null | undefined, now = new Date()) {
-  const days = getKpiDaysRemaining(jzDate, now);
+/** 截止日在 3 天内（含已过期）标为紧急；培育线索不标红 */
+export function isKpiDeadlineUrgent(
+  jzDate: Date | null | undefined,
+  now = new Date(),
+  status?: string | null,
+) {
+  const days = getKpiDaysRemaining(jzDate, now, status);
   return days !== null && days <= 3;
 }
 
-/** KPI 截止时间由近到远；无截止日的排最后 */
+/** KPI 截止时间由近到远；无截止日的排最后；培育线索不参与 KPI 排序 */
 export function compareKpiDeadline(
-  a: { jzDate: Date | null },
-  b: { jzDate: Date | null },
+  a: { jzDate: Date | null; status?: string | null },
+  b: { jzDate: Date | null; status?: string | null },
 ) {
+  const aNurture = isNurturingLead(a.status);
+  const bNurture = isNurturingLead(b.status);
+  if (aNurture && bNurture) return 0;
+  if (aNurture) return 1;
+  if (bNurture) return -1;
   if (!a.jzDate && !b.jzDate) return 0;
   if (!a.jzDate) return 1;
   if (!b.jzDate) return -1;
