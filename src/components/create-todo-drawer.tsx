@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { TodoOwnerSelectField } from "@/components/todo-owner-select-field";
 import { createTodoAction } from "@/lib/actions";
 import { useMessages } from "@/lib/i18n/context";
-import { appendTodoOwnerToFormData } from "@/lib/todo-owner-select";
+import { appendTodoOwnerToFormData, encodeTodoOwnerRef, parseTodoOwnerRef } from "@/lib/todo-owner-select";
 
 type Option = { id: string; name: string };
 
@@ -27,6 +26,13 @@ export function CreateTodoDrawer({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [ownerRef, setOwnerRef] = useState("");
+  const [link, setLink] = useState("");
+  const [linkOptions, setLinkOptions] = useState<{ opportunities: Option[]; projects: Option[] } | null>(null);
+  const [linkLoading, setLinkLoading] = useState(false);
+
+  const parsedOwner = parseTodoOwnerRef(ownerRef);
+  const customerId = parsedOwner.customerId;
 
   useEffect(() => {
     if (!open) return;
@@ -41,6 +47,44 @@ export function CreateTodoDrawer({
       window.removeEventListener("keydown", onKey);
     };
   }, [open, saving]);
+
+  useEffect(() => {
+    if (!open) {
+      setOwnerRef("");
+      setLink("");
+      setLinkOptions(null);
+      setLinkLoading(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    setLink("");
+    if (!customerId) {
+      setLinkOptions(null);
+      setLinkLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLinkLoading(true);
+    fetch(`/api/todos/link-options?customerId=${encodeURIComponent(customerId)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
+      .then((data: { opportunities: Option[]; projects: Option[] }) => {
+        if (cancelled) return;
+        setLinkOptions(data);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkOptions({ opportunities: [], projects: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setLinkLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [customerId]);
+
+  const hasLinkOptions =
+    !!linkOptions && (linkOptions.opportunities.length > 0 || linkOptions.projects.length > 0);
 
   return (
     <>
@@ -85,6 +129,7 @@ export function CreateTodoDrawer({
                 setSaving(true);
                 try {
                   appendTodoOwnerToFormData(formData);
+                  if (link) formData.set("link", link);
                   await createTodoAction(formData);
                   setOpen(false);
                   router.refresh();
@@ -109,15 +154,72 @@ export function CreateTodoDrawer({
                   />
                 </label>
 
-                <TodoOwnerSelectField
-                  partners={partners}
-                  customers={customers}
-                  label={m.todos.fieldRelated}
-                  noneLabel={m.todos.noRelated}
-                  partnersGroupLabel={m.todos.partnersGroup}
-                  customersGroupLabel={m.todos.customersGroup}
-                  className={input}
-                />
+                <label className="block min-w-0">
+                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
+                  <select
+                    name="ownerRef"
+                    value={ownerRef}
+                    onChange={(e) => setOwnerRef(e.target.value)}
+                    className={input}
+                  >
+                    <option value="">{m.todos.noRelated}</option>
+                    {partners.length > 0 && (
+                      <optgroup label={m.todos.partnersGroup}>
+                        {partners.map((p) => (
+                          <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {customers.length > 0 && (
+                      <optgroup label={m.todos.customersGroup}>
+                        {customers.map((c) => (
+                          <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </label>
+
+                {customerId && (
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldLink}</span>
+                    {linkLoading ? (
+                      <div className={`${input} text-slate-400`}>{m.common.loading}</div>
+                    ) : hasLinkOptions ? (
+                      <select name="link" value={link} onChange={(e) => setLink(e.target.value)} className={input}>
+                        <option value="">{m.todos.linkNone}</option>
+                        {linkOptions!.opportunities.length > 0 && (
+                          <optgroup label={m.todos.opportunitiesGroup}>
+                            {linkOptions!.opportunities.map((o) => (
+                              <option key={o.id} value={`opp:${o.id}`}>
+                                {o.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {linkOptions!.projects.length > 0 && (
+                          <optgroup label={m.todos.projectsGroup}>
+                            {linkOptions!.projects.map((p) => (
+                              <option key={p.id} value={`proj:${p.id}`}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    ) : (
+                      <div className={`${input} text-slate-400 bg-slate-50`}>{m.todos.linkNone}</div>
+                    )}
+                  </label>
+                )}
+
+                {!customerId && ownerRef && parsedOwner.partnerId && (
+                  <p className="text-[11px] text-slate-400">{m.todos.linkCustomerOnlyHint}</p>
+                )}
 
                 <label className="block">
                   <span className="mb-1 block text-xs text-slate-500">{m.common.owner}</span>
