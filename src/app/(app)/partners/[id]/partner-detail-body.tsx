@@ -112,6 +112,8 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     taxonomyIndustry,
     taxonomyValuePattern,
     taxonomyCategory,
+    allPartners,
+    allCustomers,
   ] = await Promise.all([
     db.user.findMany(),
     db.customer.findMany({
@@ -157,6 +159,12 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     getTaxonomyOptions("INDUSTRY"),
     getTaxonomyOptions("VALUE_PATTERN"),
     getTaxonomyOptions("CATEGORY"),
+    db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.customer.findMany({
+      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   const taxonomy = {
@@ -220,11 +228,10 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                 actions={
                   <CreateTodoDrawer
                     userId={user.id}
-                    partners={[{ id: p.id, name: p.name }]}
-                    customers={[]}
+                    partners={allPartners}
+                    customers={allCustomers}
                     users={users.map((u) => ({ id: u.id, name: u.name }))}
                     defaultOwnerRef={encodeTodoOwnerRef("partner", p.id)}
-                    lockOwner
                   />
                 }
               >

@@ -35,19 +35,20 @@ export function AddCustomerForm({
   const [open, setOpen] = useState(defaultOpen);
   const messages = useMessages();
   const c = messages.customers;
+  const p = messages.pool;
   const cancelLabel = messages.common.cancel;
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
   return (
     <>
       <div className="flex gap-2">
-        <CustomerAiIntakeButton variant="primary" />
+        <CustomerAiIntakeButton variant="primary" label={p.aiIntake} />
         <button
           type="button"
           onClick={() => setOpen(true)}
           className="rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50"
         >
-          {c.add}
+          {p.addManually}
         </button>
       </div>
 
@@ -60,9 +61,9 @@ export function AddCustomerForm({
               <input name="name" required placeholder={c.namePlaceholder} className={input} />
               <div className="flex gap-2">
                 <input name="industry" placeholder={c.industryPlaceholder} className={input} />
-                <select name="status" defaultValue="ACTIVE" className={input} aria-label={c.statusLabel}>
-                  <option value="ACTIVE">{c.statusActive}</option>
+                <select name="status" defaultValue="PROSPECT" className={input} aria-label={c.statusLabel}>
                   <option value="PROSPECT">{c.statusProspect}</option>
+                  <option value="ACTIVE">{c.statusActive}</option>
                   <option value="INACTIVE">{c.statusInactive}</option>
                 </select>
               </div>

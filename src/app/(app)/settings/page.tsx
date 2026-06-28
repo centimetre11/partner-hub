@@ -28,6 +28,7 @@ import { getWeeklyReportStatusAction } from "@/lib/weekly-report-actions";
 import { getServerI18n } from "@/lib/server-i18n";
 import { SettingsShell, SettingsSection } from "./settings-shell";
 import { ActivityLogsCard } from "./activity-logs-card";
+import { CollapsibleCard } from "./collapsible-card";
 import { getActivityLogStats } from "@/lib/activity-log";
 
 function maskKey(apiKey: string, notSet: string) {
@@ -320,7 +321,7 @@ export default async function SettingsPage() {
         </SettingsSection>
 
         <SettingsSection id="knowledge" title={m.settings.sectionKnowledge} desc={m.settings.sectionKnowledgeDesc}>
-          <Card title={m.settings.systemKmsTitle} className="lg:col-span-2">
+          <CollapsibleCard title={m.settings.systemKmsTitle} className="lg:col-span-2">
             <SystemKmsSetup
               credential={{
                 configured: !!systemKms?.accessToken,
@@ -333,9 +334,9 @@ export default async function SettingsPage() {
               {m.settings.personalKmsHint}{" "}
               <a href="/account" className="text-sky-600 hover:underline">{m.nav.account}</a>
             </p>
-          </Card>
+          </CollapsibleCard>
 
-          <Card title={m.settings.systemKnowhowTitle} className="lg:col-span-2">
+          <CollapsibleCard title={m.settings.systemKnowhowTitle} className="lg:col-span-2">
             <SystemKnowhowSetup
               credential={{
                 configured: !!systemKnowhow?.apiKey,
@@ -344,11 +345,11 @@ export default async function SettingsPage() {
                 updatedAt: systemKnowhow?.updatedAt?.toISOString(),
               }}
             />
-          </Card>
+          </CollapsibleCard>
 
-          <Card title={m.ammoSettings.title} className="lg:col-span-2">
+          <CollapsibleCard title={m.ammoSettings.title} className="lg:col-span-2">
             <AmmoSetup config={ammoConfig} />
-          </Card>
+          </CollapsibleCard>
         </SettingsSection>
 
         <SettingsSection id="integrations" title={m.settings.sectionIntegrations} desc={m.settings.sectionIntegrationsDesc}>

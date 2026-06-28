@@ -65,8 +65,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   });
   if (!customer) notFound();
 
-  const [partners, users, wecomChat, matchedCrmCustomer, ammoConfig, linkedSolutions] = await Promise.all([
+  const [partners, customers, users, wecomChat, matchedCrmCustomer, ammoConfig, linkedSolutions] = await Promise.all([
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.customer.findMany({
+      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
     db.user.findMany({ select: { id: true, name: true } }),
     getWecomChatForCustomer(id),
     customer.crmCustomerId
@@ -165,10 +170,9 @@ export async function CustomerDetailBody({ id }: { id: string }) {
           <CreateTodoDrawer
             userId={user.id}
             partners={partners}
-            customers={[{ id: customer.id, name: customer.name }]}
+            customers={customers}
             users={users}
             defaultOwnerRef={encodeTodoOwnerRef("customer", customer.id)}
-            lockOwner
           />
         }
       >

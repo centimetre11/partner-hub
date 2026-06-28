@@ -10,7 +10,7 @@ const CUSTOMER_STATUSES = ["ACTIVE", "PROSPECT", "INACTIVE"] as const;
 
 function normalizeStatus(value: string | null | undefined): string {
   const v = String(value ?? "").trim().toUpperCase();
-  return (CUSTOMER_STATUSES as readonly string[]).includes(v) ? v : "ACTIVE";
+  return (CUSTOMER_STATUSES as readonly string[]).includes(v) ? v : "PROSPECT";
 }
 
 function str(formData: FormData, key: string): string | null {
@@ -197,7 +197,7 @@ export async function createCustomerForPartnerAction(partnerId: string, formData
   const customer = await db.customer.create({
     data: {
       name,
-      status: "ACTIVE",
+      status: "PROSPECT",
       partnerRelation: "SERVED_BY",
       createdById: user.id,
       industry: str(formData, "industry"),
