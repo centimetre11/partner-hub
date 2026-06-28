@@ -233,17 +233,70 @@ export async function createPartnerAction(formData: FormData) {
 }
 
 export async function setPoolFlagAction(partnerId: string, flag: string) {
-  await requireUser();
-  await db.partner.update({ where: { id: partnerId }, data: { poolFlag: flag } });
+  const user = await requireUser();
+  const existing = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
+  const data: { poolFlag: string; poolContactedAt?: Date } = { poolFlag: flag };
+  if (existing.status === "PROSPECT" && existing.poolFlag === "NEW" && !existing.poolContactedAt) {
+    data.poolContactedAt = new Date();
+  }
+  await db.partner.update({ where: { id: partnerId }, data });
+  if (existing.status === "PROSPECT" && existing.poolFlag === "NEW" && flag !== "NEW") {
+    await db.timelineEvent.create({
+      data: {
+        partnerId,
+        type: "SYSTEM",
+        title: flag === "WATCHING" ? "Marked for watch" : flag === "DROPPED" ? "Dropped from pool" : "Pool flag updated",
+        content: `${existing.name}: pool flag → ${flag}`,
+        createdById: user.id,
+      },
+    });
+  }
   revalidatePath("/pool");
+  revalidatePath("/pool/review");
+  revalidatePath(`/partners/${partnerId}`);
+}
+
+export async function markPoolContactedAction(partnerId: string) {
+  const user = await requireUser();
+  const p = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
+  if (p.status !== "PROSPECT" || p.poolFlag !== "NEW") return;
+  if (p.poolContactedAt) {
+    revalidatePath("/pool/review");
+    return;
+  }
+  await db.partner.update({
+    where: { id: partnerId },
+    data: { poolContactedAt: new Date() },
+  });
+  await db.timelineEvent.create({
+    data: {
+      partnerId,
+      type: "SYSTEM",
+      title: "Prospect contacted",
+      content: `${p.name} marked as contacted in partner pool review.`,
+      createdById: user.id,
+    },
+  });
+  revalidatePath("/pool");
+  revalidatePath("/pool/review");
   revalidatePath(`/partners/${partnerId}`);
 }
 
 export async function promotePartnerAction(partnerId: string) {
   const user = await requireUser();
+  const existing = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
   const p = await db.partner.update({
     where: { id: partnerId },
-    data: { status: "ACTIVE", promotedAt: new Date(), poolFlag: "ADVANCING", pipelineStage: 2, ownerId: undefined },
+    data: {
+      status: "ACTIVE",
+      promotedAt: new Date(),
+      poolFlag: "ADVANCING",
+      pipelineStage: 2,
+      ownerId: undefined,
+      ...(existing.status === "PROSPECT" && existing.poolFlag === "NEW" && !existing.poolContactedAt
+        ? { poolContactedAt: new Date() }
+        : {}),
+    },
   });
   await db.timelineEvent.create({
     data: {
@@ -255,6 +308,7 @@ export async function promotePartnerAction(partnerId: string) {
     },
   });
   revalidatePath("/pool");
+  revalidatePath("/pool/review");
   revalidatePath("/partners");
   revalidatePath(`/partners/${partnerId}`);
 }

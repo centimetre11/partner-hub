@@ -97,6 +97,7 @@ model Partner {
   presalesUserId   String?
   presalesUser     User?    @relation("PartnerPresalesUser", fields: [presalesUserId], references: [id])
   promotedAt       DateTime?
+  poolContactedAt  DateTime? // 候选审阅：首次标记「已联络」
   notes            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

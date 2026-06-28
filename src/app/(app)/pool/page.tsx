@@ -6,6 +6,7 @@ import { normalizePartnerTier } from "@/lib/tier";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps } from "@/lib/taxonomy";
 import { computeCompleteness } from "@/lib/completeness";
 import { deletePartnerAction, promotePartnerAction, restorePartnerAction, setPoolFlagAction } from "@/lib/actions";
+import { getPoolReviewCounts, poolReviewListFilter } from "@/lib/pool-review";
 import { AddPartnerForm } from "./add-partner-form";
 import { DeletePartnerButton } from "./delete-partner-button";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
@@ -13,7 +14,7 @@ import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 export default async function PoolPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string; country?: string; tier?: string; flag?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; country?: string; tier?: string; flag?: string; view?: string; review?: string }>;
 }) {
   await requireUser();
   const { labels, messages: m } = await getServerI18n();
@@ -33,13 +34,15 @@ export default async function PoolPage({
   const statusWhere =
     view === "archived" ? "ARCHIVED" : view === "all" ? { in: ["PROSPECT", "ARCHIVED"] } : "PROSPECT";
 
+  const reviewFilter = view !== "archived" ? poolReviewListFilter(sp.review, view as "prospect" | "all") : null;
+
   const partners = await db.partner.findMany({
     where: {
-      status: statusWhere as never,
+      ...(reviewFilter ?? { status: statusWhere as never }),
       ...(sp.q ? { name: { contains: sp.q } } : {}),
       ...(sp.category ? { category: sp.category } : {}),
       ...(sp.tier ? { tier: sp.tier } : {}),
-      ...(sp.flag && view !== "archived" ? { poolFlag: sp.flag } : {}),
+      ...(sp.flag && view !== "archived" && !reviewFilter ? { poolFlag: sp.flag } : {}),
       ...(sp.country ? { country: { contains: sp.country } } : {}),
     },
     include: { contacts: true, opportunities: true, events: true, trainings: true },
@@ -50,6 +53,8 @@ export default async function PoolPage({
     prospect: await db.partner.count({ where: { status: "PROSPECT" } }),
     archived: await db.partner.count({ where: { status: "ARCHIVED" } }),
   };
+
+  const reviewCounts = await getPoolReviewCounts();
 
   const countries = await db.partner.findMany({
     where: { status: { in: ["PROSPECT", "ARCHIVED"] } },
@@ -62,7 +67,7 @@ export default async function PoolPage({
 
   const qs = (next: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
-    const merged = { q: sp.q, category: sp.category, tier: sp.tier, country: sp.country, view, ...next };
+    const merged = { q: sp.q, category: sp.category, tier: sp.tier, country: sp.country, review: sp.review, view, ...next };
     for (const [k, v] of Object.entries(merged)) if (v) params.set(k, v);
     return `/pool?${params.toString()}`;
   };
@@ -72,7 +77,29 @@ export default async function PoolPage({
       <PageHeader
         title={m.pool.title}
         desc={m.pool.desc}
-        actions={<AddPartnerForm taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {reviewCounts.pendingTotal > 0 ? (
+              <Link
+                href="/pool/review"
+                className="relative rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm font-medium hover:bg-slate-800"
+              >
+                {m.pool.startReview}
+                <span className="ml-1.5 inline-flex min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-[10px] font-medium items-center justify-center align-middle">
+                  {reviewCounts.pendingTotal > 99 ? "99+" : reviewCounts.pendingTotal}
+                </span>
+              </Link>
+            ) : (
+              <Link
+                href="/pool/review"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              >
+                {m.pool.startReview}
+              </Link>
+            )}
+            <AddPartnerForm taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />
+          </div>
+        }
       />
 
       <div className="px-8">
@@ -123,6 +150,14 @@ export default async function PoolPage({
               ))}
             </select>
           )}
+          {view !== "archived" && (
+            <select name="review" defaultValue={sp.review ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+              <option value="">{m.pool.allReviewStatuses}</option>
+              <option value="pending_contact">{m.pool.reviewPendingContact}</option>
+              <option value="contacted">{m.pool.reviewContacted}</option>
+              <option value="processed">{m.pool.reviewProcessed}</option>
+            </select>
+          )}
           <select name="country" defaultValue={sp.country ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.pool.allCountries}</option>
             {countries.filter((c) => c.country).map((c) => (
@@ -130,8 +165,8 @@ export default async function PoolPage({
             ))}
           </select>
           <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">{m.common.filter}</button>
-          {(sp.q || sp.category || sp.tier || sp.flag || sp.country) && (
-            <Link href={qs({ q: undefined, category: undefined, tier: undefined, country: undefined, flag: undefined })} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500 hover:text-slate-800">
+          {(sp.q || sp.category || sp.tier || sp.flag || sp.country || sp.review) && (
+            <Link href={qs({ q: undefined, category: undefined, tier: undefined, country: undefined, flag: undefined, review: undefined })} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-500 hover:text-slate-800">
               {m.common.clear}
             </Link>
           )}
@@ -181,7 +216,12 @@ export default async function PoolPage({
                       {archived ? (
                         <Badge tone="zinc">{m.common.archived}</Badge>
                       ) : (
-                        <Badge tone={flagTone(p.poolFlag)}>{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge tone={flagTone(p.poolFlag)}>{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>
+                          {!archived && p.status === "PROSPECT" && p.poolFlag === "NEW" && p.poolContactedAt && (
+                            <Badge tone="indigo">{m.pool.contactedBadge}</Badge>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-3">
