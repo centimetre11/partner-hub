@@ -12,9 +12,9 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
 import { recordAiConversation, recordSystemEvent } from "./activity-log";
-import { chatCompletion, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
+import { chatCompletion, messageHasImages, parseJsonLoose, safeParseJsonLoose, type ChatMessage, type ToolCall } from "./ai";
 import type { AiTaskTier } from "./ai-capabilities";
-import { maxTokensForTaskTier } from "./ai-capabilities";
+import { maxTokensForTaskTier, maxTokensForVisionIntake } from "./ai-capabilities";
 import type { LlmScene } from "./llm-scenes";
 import { runToolLoop } from "./ai-tool-loop";
 import { nextTraceId, emitReplyChunks, emitProposalUpdate, emitProposalPatch, emitPhase, type TraceEmitter } from "./ai-trace";
@@ -247,17 +247,57 @@ async function customerContextForIntake(customerId: string, locale: Locale): Pro
   return `${header}\n${lines.join("\n")}`;
 }
 
+/** OCR plain text from the latest user image (fallback when JSON extract returns empty). */
+async function visionOcrFromChat(
+  chat: ChatMessage[],
+  locale: Locale,
+  userId?: string,
+): Promise<string | null> {
+  const lastUser = [...chat].reverse().find((m) => m.role === "user" && (m.images?.length ?? 0) > 0);
+  if (!lastUser?.images?.length) return null;
+  const prompt =
+    locale === "zh"
+      ? "请读取图片中的名片或联系人信息，逐条列出姓名、职位、部门、公司、电话、邮箱、地址等。只输出图片中可见的文字，不要编造。"
+      : "Read the business card or contact info in the image. List name, title, department, company, phone, email, address. Only visible text, do not invent.";
+  try {
+    const { content } = await chatCompletion([{ role: "user", content: prompt, images: lastUser.images }], {
+      jsonMode: false,
+      temperature: 0.1,
+      feature: "AI intake: vision OCR",
+      userId,
+      scene: "vision",
+      maxTokens: maxTokensForVisionIntake(),
+      toolChoice: "none",
+    });
+    return content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Build chat copy with OCR text injected (drop images to avoid double vision calls). */
+function chatWithOcrText(chat: ChatMessage[], ocr: string): ChatMessage[] {
+  return chat.map((m) => {
+    if (m.role !== "user" || !m.images?.length) return m;
+    const prefix = m.content?.trim() ? `${m.content.trim()}\n\n` : "";
+    return {
+      role: m.role,
+      content: `${prefix}[Image OCR]\n${ocr}`,
+      images: undefined,
+    };
+  });
+}
+
 /** Call LLM for JSON extraction; streams reply_delta when emit is set */
 async function callIntakeExtract(
   chat: ChatMessage[],
-  opts: { feature: string; userId?: string; taskTier: AiTaskTier; scene?: LlmScene; emit?: TraceEmitter; streamFast?: boolean },
+  opts: { feature: string; userId?: string; taskTier: AiTaskTier; scene?: LlmScene; emit?: TraceEmitter; streamFast?: boolean; locale?: Locale },
 ): Promise<string | null> {
-  const runOnce = async (retry: boolean): Promise<string | null> => {
-    if (retry) {
-      chat[0].content = (chat[0].content ?? "") + "\n\nYou must output one valid JSON object only.";
-    } else {
-      opts.emit?.({ event: "reply_reset" });
-    }
+  const hasImages = messageHasImages(chat);
+  const maxTokens = hasImages ? maxTokensForVisionIntake() : maxTokensForTaskTier(opts.taskTier);
+  const baseSystem = chat[0]?.content ?? "";
+
+  const runOnce = async (attemptChat: ChatMessage[], jsonMode: boolean): Promise<string | null> => {
     let streamed = "";
     const streamReply = opts.taskTier !== "fast" || opts.streamFast;
     const onDelta =
@@ -268,26 +308,41 @@ async function callIntakeExtract(
           }
         : undefined;
 
-    const { content } = await chatCompletion(chat, {
-      jsonMode: !retry,
+    const { content } = await chatCompletion(attemptChat, {
+      jsonMode,
       temperature: opts.taskTier === "fast" ? 0.1 : 0.3,
       feature: opts.feature,
       userId: opts.userId,
       taskTier: opts.taskTier,
       scene: opts.scene,
-      maxTokens: maxTokensForTaskTier(opts.taskTier),
+      maxTokens,
       onDelta,
+      toolChoice: hasImages && jsonMode ? "none" : undefined,
     });
     if (opts.emit && streamed) opts.emit({ event: "reply_done" });
     const merged = (content ?? "").trim() || streamed.trim();
     return merged || null;
   };
 
-  try {
-    return await runOnce(false);
-  } catch {
-    return await runOnce(true);
+  opts.emit?.({ event: "reply_reset" });
+
+  let content = await runOnce(chat, true);
+  if (!content && hasImages) content = await runOnce(chat, false);
+  if (!content && hasImages && opts.locale) {
+    const ocr = await visionOcrFromChat(chat, opts.locale, opts.userId);
+    if (ocr) {
+      const textChat = chatWithOcrText(chat, ocr);
+      content = (await runOnce(textChat, true)) ?? (await runOnce(textChat, false));
+    }
   }
+  if (!content) {
+    const retryChat: ChatMessage[] = [
+      { ...chat[0], content: `${baseSystem}\n\nYou must output one valid JSON object only.` },
+      ...chat.slice(1),
+    ];
+    content = await runOnce(retryChat, false);
+  }
+  return content;
 }
 
 const MAX_RESEARCH_STEPS = 8;
@@ -998,6 +1053,7 @@ async function runIntakeTurnCore(opts: {
     scene,
     emit: opts.emit,
     streamFast: false,
+    locale,
   });
   const turn = await parseIntakeTurnFromContent(content ?? "", locale, opts.scope, {
     chat,

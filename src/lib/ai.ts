@@ -554,6 +554,16 @@ function messagesToVolcengineInput(messages: ChatMessage[]): unknown[] {
   return input;
 }
 
+function extractVolcengineTextPart(part: unknown): string {
+  if (typeof part === "string") return part;
+  if (!part || typeof part !== "object") return "";
+  const p = part as Record<string, unknown>;
+  if (typeof p.text === "string") return p.text;
+  if (typeof p.output_text === "string") return p.output_text;
+  if (typeof p.content === "string") return p.content;
+  return "";
+}
+
 function parseVolcengineResponse(data: Record<string, unknown>): {
   content: string | null;
   toolCalls: ToolCall[];
@@ -561,12 +571,26 @@ function parseVolcengineResponse(data: Record<string, unknown>): {
 } {
   const output = (data.output ?? []) as Array<Record<string, unknown>>;
   const textParts: string[] = [];
+  if (typeof data.output_text === "string" && data.output_text.trim()) {
+    textParts.push(data.output_text.trim());
+  }
   const toolCalls: ToolCall[] = [];
   for (const item of output) {
+    if (item.type === "output_text") {
+      const t = extractVolcengineTextPart(item);
+      if (t) textParts.push(t);
+      continue;
+    }
     if (item.type === "message") {
-      const parts = (item.content ?? []) as Array<{ type?: string; text?: string }>;
+      const content = item.content;
+      if (typeof content === "string" && content.trim()) {
+        textParts.push(content.trim());
+        continue;
+      }
+      const parts = Array.isArray(content) ? content : [];
       for (const part of parts) {
-        if (part.text) textParts.push(part.text);
+        const t = extractVolcengineTextPart(part);
+        if (t) textParts.push(t);
       }
       continue;
     }
@@ -583,7 +607,7 @@ function parseVolcengineResponse(data: Record<string, unknown>): {
     }
   }
   return {
-    content: textParts.length ? textParts.join("\n") : null,
+    content: textParts.length ? textParts.join("\n").trim() : null,
     toolCalls,
     volcengineReplay: prepareVolcengineReplay(output),
   };
@@ -622,8 +646,11 @@ async function volcengineResponsesCompletion(
   const configuredInstructions = typeof extra.instructions === "string" ? extra.instructions : "";
   const instructions = [configuredInstructions, systemText].filter(Boolean).join("\n\n");
 
+  const hasImages = messageHasImages(messages);
+  // 识图 + JSON 结构化提取时禁用 extra 工具（如 web_search），避免模型只回 tool_call 无正文
+  const includeExtraTools = !(opts.jsonMode && hasImages);
   const tools = toVolcengineTools([
-    ...((extra.tools as (ToolDef | Record<string, unknown>)[]) ?? []),
+    ...(includeExtraTools ? ((extra.tools as (ToolDef | Record<string, unknown>)[]) ?? []) : []),
     ...(opts.tools ?? []),
   ]);
 
@@ -638,7 +665,11 @@ async function volcengineResponsesCompletion(
     ...(typeof maxOutputTokens === "number" ? { max_output_tokens: maxOutputTokens } : {}),
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(tools.length ? { tools } : {}),
-    ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
+    ...(opts.toolChoice
+      ? { tool_choice: opts.toolChoice }
+      : opts.jsonMode && hasImages
+        ? { tool_choice: "none" }
+        : {}),
   };
   if (opts.jsonMode) {
     body.text = { format: { type: "json_object" } };
@@ -717,8 +748,10 @@ async function volcengineResponsesStream(
   const configuredInstructions = typeof extra.instructions === "string" ? extra.instructions : "";
   const instructions = [configuredInstructions, systemText].filter(Boolean).join("\n\n");
 
+  const hasImages = messageHasImages(messages);
+  const includeExtraTools = !(opts.jsonMode && hasImages);
   const tools = toVolcengineTools([
-    ...((extra.tools as (ToolDef | Record<string, unknown>)[]) ?? []),
+    ...(includeExtraTools ? ((extra.tools as (ToolDef | Record<string, unknown>)[]) ?? []) : []),
     ...(opts.tools ?? []),
   ]);
 
@@ -733,7 +766,11 @@ async function volcengineResponsesStream(
     ...(typeof maxOutputTokens === "number" ? { max_output_tokens: maxOutputTokens } : {}),
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     ...(tools.length ? { tools } : {}),
-    ...(opts.toolChoice ? { tool_choice: opts.toolChoice } : {}),
+    ...(opts.toolChoice
+      ? { tool_choice: opts.toolChoice }
+      : opts.jsonMode && hasImages
+        ? { tool_choice: "none" }
+        : {}),
   };
   if (opts.jsonMode) {
     body.text = { format: { type: "json_object" } };
@@ -1099,6 +1136,12 @@ export async function chatCompletion(
     const api = tryList[i]!;
     try {
       const result = await chatCompletionWithApi(api, messages, callOpts);
+      const text = (result.content ?? "").trim();
+      if (!text && i < tryList.length - 1) {
+        errors.push(`${api.name}: empty response`);
+        console.warn(`[ai] ${api.name} returned empty content, trying next API…`);
+        continue;
+      }
       if (i > 0) {
         console.warn(`[ai] Switched to ${api.name} after ${i} failed attempt(s): ${errors[errors.length - 1]?.slice(0, 120)}`);
       }

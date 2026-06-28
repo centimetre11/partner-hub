@@ -35,6 +35,17 @@ export function maxTokensForTaskTier(tier?: AiTaskTier): number | undefined {
   return tier === "fast" ? resolveFastIntakeMaxTokens() : undefined;
 }
 
+/** Vision / OCR intake needs more output budget (Seed 等模型会先 reasoning 再输出 JSON) */
+export const DEFAULT_VISION_INTAKE_MAX_TOKENS = 4096;
+
+export function maxTokensForVisionIntake(): number {
+  const raw = process.env.VISION_INTAKE_MAX_TOKENS?.trim();
+  if (!raw) return DEFAULT_VISION_INTAKE_MAX_TOKENS;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 256) return DEFAULT_VISION_INTAKE_MAX_TOKENS;
+  return Math.min(Math.floor(n), 8192);
+}
+
 export const ALL_STORED_AI_CAPABILITIES = Object.keys(AI_CAPABILITY_META) as StoredAiCapability[];
 
 /** Default capabilities for new/unlabeled models */
