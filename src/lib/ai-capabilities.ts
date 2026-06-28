@@ -1,8 +1,7 @@
-/** AI model capability tags: for settings UI labels and automatic model selection by scenario */
+/** AI model capability tags: internal routing + optional manual presets (vision is auto-detected only). */
 
 export const AI_CAPABILITY_META = {
   chat: { label: "General chat", hint: "Daily Q&A and assistant replies" },
-  vision: { label: "Vision", hint: "Image understanding, business cards, screenshot OCR" },
   tools: { label: "Tool calling", hint: "Database, web search, KMS, and other Agent capabilities" },
   json: { label: "JSON output", hint: "Profile proposals and structured extraction" },
   reasoning: { label: "Deep reasoning", hint: "Complex analysis and multi-step planning (optional)" },
@@ -13,7 +12,12 @@ export const AI_CAPABILITY_META = {
   },
 } as const;
 
-export type AiCapability = keyof typeof AI_CAPABILITY_META;
+/** Stored / manually preset tags (vision is never stored — see model-capability-detect) */
+export type StoredAiCapability = keyof typeof AI_CAPABILITY_META;
+
+/** Runtime routing may also require auto-detected vision */
+export type AiCapability = StoredAiCapability | "vision";
+
 export type AiTaskTier = "fast" | "standard";
 
 /** Default max completion tokens for fast intake (AI Add, WeCom propose, business records). */
@@ -31,46 +35,40 @@ export function maxTokensForTaskTier(tier?: AiTaskTier): number | undefined {
   return tier === "fast" ? resolveFastIntakeMaxTokens() : undefined;
 }
 
-export const ALL_AI_CAPABILITIES = Object.keys(AI_CAPABILITY_META) as AiCapability[];
+export const ALL_STORED_AI_CAPABILITIES = Object.keys(AI_CAPABILITY_META) as StoredAiCapability[];
 
 /** Default capabilities for new/unlabeled models */
-export const DEFAULT_AI_CAPABILITIES: AiCapability[] = ["chat", "tools", "json"];
+export const DEFAULT_AI_CAPABILITIES: StoredAiCapability[] = ["chat", "tools", "json"];
 
 /** Recommended tags for lead research synthesis (cheap model; search uses Kimi/Volcengine separately) */
-export const LEAD_RESEARCH_PRESET_CAPABILITIES: AiCapability[] = ["lead_research", "fast", "json"];
+export const LEAD_RESEARCH_PRESET_CAPABILITIES: StoredAiCapability[] = ["lead_research", "fast", "json"];
 
-export function parseAiCapabilities(raw: string | null | undefined): AiCapability[] {
+export function parseAiCapabilities(raw: string | null | undefined): StoredAiCapability[] {
   if (!raw?.trim()) return [...DEFAULT_AI_CAPABILITIES];
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [...DEFAULT_AI_CAPABILITIES];
-    const valid = new Set(ALL_AI_CAPABILITIES);
-    const caps = parsed.filter((c): c is AiCapability => typeof c === "string" && valid.has(c as AiCapability));
+    const valid = new Set(ALL_STORED_AI_CAPABILITIES);
+    const caps = parsed.filter(
+      (c): c is StoredAiCapability => typeof c === "string" && valid.has(c as StoredAiCapability),
+    );
     return caps.length ? caps : [...DEFAULT_AI_CAPABILITIES];
   } catch {
     return [...DEFAULT_AI_CAPABILITIES];
   }
 }
 
-export function serializeAiCapabilities(caps: AiCapability[]): string {
-  const valid = new Set(ALL_AI_CAPABILITIES);
+export function serializeAiCapabilities(caps: StoredAiCapability[]): string {
+  const valid = new Set(ALL_STORED_AI_CAPABILITIES);
   const unique = [...new Set(caps.filter((c) => valid.has(c)))];
   return JSON.stringify(unique.length ? unique : DEFAULT_AI_CAPABILITIES);
 }
 
-export function capabilityLabel(cap: AiCapability): string {
+export function capabilityLabel(cap: StoredAiCapability): string {
   return AI_CAPABILITY_META[cap].label;
 }
 
 export function apiHasCapabilities(apiCaps: AiCapability[], required: AiCapability[]): boolean {
   const set = new Set(apiCaps);
   return required.every((r) => set.has(r));
-}
-
-export function parseCapabilitiesFromForm(formData: FormData): AiCapability[] {
-  const caps = formData
-    .getAll("capabilities")
-    .map((v) => String(v).trim())
-    .filter((v): v is AiCapability => ALL_AI_CAPABILITIES.includes(v as AiCapability));
-  return caps.length ? caps : [...DEFAULT_AI_CAPABILITIES];
 }

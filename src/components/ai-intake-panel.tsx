@@ -11,6 +11,7 @@ import { mergeBusinessRecordIntakeProposal } from "@/lib/business-record-intake"
 import { intakeProposalReplacesDraft, isFastIntakeScope, shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { applyIntakeProposalClient } from "@/lib/apply-intake-client";
 import { consumeAiSse } from "@/lib/ai-trace";
+import { ensureChatImagesWithinLimit } from "@/lib/ai-images";
 import {
   applyDirectClarification,
   applyProposalEdit,
@@ -186,14 +187,23 @@ export function AiIntakePanel({
     const text = (override ?? input).trim();
     if ((!text && !pendingImages.length) || loading) return;
     if (!override && hasBlockingClarifications(clarifications)) return;
-    const next = [
+
+    const compressedPending = pendingImages.length
+      ? await ensureChatImagesWithinLimit(pendingImages)
+      : [];
+    const nextRaw = [
       ...messages,
       {
         role: "user" as const,
         content: text || am.imageFallback,
-        images: pendingImages.length ? pendingImages : undefined,
+        images: compressedPending.length ? compressedPending : undefined,
       },
     ];
+    const next = await Promise.all(
+      nextRaw.map(async (m) =>
+        m.images?.length ? { ...m, images: await ensureChatImagesWithinLimit(m.images) } : m,
+      ),
+    );
     setMessages(next);
     setInput("");
     setPendingImages([]);
@@ -332,7 +342,7 @@ export function AiIntakePanel({
           onRemoveImage={(i) => setPendingImages((p) => p.filter((_, j) => j !== i))}
           inputPlaceholder={proposal ? am.inputDraft : undefined}
           sendDisabled={loading || autoApplying || (!input.trim() && !pendingImages.length)}
-          showDraftPanel={!autoApplyMode || autoApplyFailed}
+          showDraftPanel
         />
         {error && (
           <div className="absolute bottom-24 left-6 right-[62%] text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2 shadow-sm z-10">

@@ -15,7 +15,7 @@ import {
   orderedSceneApiIds,
   type LlmScene,
 } from "./llm-scenes";
-import { detectVision } from "./model-capability-detect";
+import { apiMeetsRequiredCapabilities, detectVisionFromText } from "./model-capability-detect";
 
 export type ChatImage = { url: string; name?: string };
 
@@ -204,7 +204,8 @@ async function buildSceneCandidates(
   let fallbackRows = configured.filter((a) => !explicitIds.includes(a.id));
   if (scene === "vision") {
     // 兜底里优先选疑似支持视觉的模型，避免选到纯文本模型导致失败
-    const visionRank = (a: ConfiguredApiRow) => (detectVision(a.model) ? 0 : 1);
+    const visionRank = (a: ConfiguredApiRow) =>
+      detectVisionFromText(a.name, a.model, a.extraConfig) ? 0 : 1;
     fallbackRows = [...fallbackRows].sort((a, b) => visionRank(a) - visionRank(b));
   }
 
@@ -274,8 +275,7 @@ async function listAiApiCandidates(opts?: {
       if (limit <= 0) return false;
       return (usedByBucket.get(`api:${api.id}`) ?? 0) >= limit;
     };
-    const matchesCap = (api: ConfiguredApi) =>
-      apiHasCapabilities(parseAiCapabilities(api.capabilities), required);
+    const matchesCap = (api: ConfiguredApi) => apiMeetsRequiredCapabilities(api, required);
 
     const available = configured.filter((api) => !isOverDailyLimit(api));
 
