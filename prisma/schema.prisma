@@ -36,6 +36,7 @@ model User {
   businessRecords BusinessRecord[]
   feedbackSubmissions FeedbackSubmission[]
   ownedCustomers   Customer[] @relation("CustomerOwner")
+  presalesCustomers Customer[] @relation("CustomerPresalesUser")
   createdCustomers Customer[] @relation("CustomerCreatedBy")
   ownedProjects    Project[]  @relation("ProjectOwner")
   crmSalesmanName String? // 帆软 CRM 销售英文名，对应 com_salesman（如 Fay.Wen）
@@ -153,9 +154,11 @@ model Customer {
   kmsRootPath   String? // KMS 主目录
   gdriveFolderUrl String? // 该客户材料归档的 Google Drive 子目录链接
   crmCustomerId String? // 帆软 CRM 客户 ID
-  // 负责人（销售/客户经理）
+  // 销售负责人 / 售前负责人
   ownerId      String?
   owner        User?    @relation("CustomerOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  presalesUserId String?
+  presalesUser   User?  @relation("CustomerPresalesUser", fields: [presalesUserId], references: [id], onDelete: SetNull)
   createdById  String?
   createdBy    User?    @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())

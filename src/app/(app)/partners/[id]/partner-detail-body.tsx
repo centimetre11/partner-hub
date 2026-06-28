@@ -135,7 +135,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     p.crmCustomerId
       ? db.crmCustomer.findUnique({
           where: { id: p.crmCustomerId },
-          select: { id: true, name: true, city: true, status: true, salesman: true },
+          select: { id: true, name: true, city: true, status: true, salesman: true, presales: true },
         })
       : Promise.resolve(null),
     db.agent.findMany({

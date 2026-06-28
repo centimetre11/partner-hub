@@ -3,7 +3,11 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useMessages } from "@/lib/i18n/context";
-import { suggestCrmCustomersForPartnerAction, type CrmCustomerSuggestion } from "@/lib/crm-actions";
+import {
+  suggestCrmCustomersForPartnerAction,
+  suggestCrmCustomersForCustomerAction,
+  type CrmCustomerSuggestion,
+} from "@/lib/crm-actions";
 import { buildCrmCustomerViewUrl } from "@/lib/crm";
 
 export type CrmCustomerOption = {
@@ -12,19 +16,33 @@ export type CrmCustomerOption = {
   city: string | null;
   status: string | null;
   salesman: string | null;
+  presales?: string | null;
 };
+
+function formatCrmMeta(c: Pick<CrmCustomerOption, "city" | "status" | "salesman" | "presales">) {
+  const parts: string[] = [];
+  if (c.city) parts.push(c.city);
+  if (c.status) parts.push(c.status);
+  if (c.salesman) parts.push(c.salesman);
+  if (c.presales) parts.push(c.presales);
+  return parts.join(" · ");
+}
 
 export function CrmCustomerPicker({
   value,
   onChange,
   partnerId,
   partnerName,
+  customerId,
+  customerName,
   matchedCustomer,
 }: {
   value: string;
   onChange: (id: string, customer?: CrmCustomerOption | null) => void;
   partnerId?: string;
   partnerName?: string;
+  customerId?: string;
+  customerName?: string;
   matchedCustomer?: CrmCustomerOption | null;
 }) {
   const { crm, integrations: intg } = useMessages();
@@ -37,6 +55,10 @@ export function CrmCustomerPicker({
   const [suggestions, setSuggestions] = useState<CrmCustomerSuggestion[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestMsg, setSuggestMsg] = useState<string | null>(null);
+
+  const suggestEnabled = !!(partnerId || customerId);
+  const entityName = partnerName || customerName || "";
+  const suggestLabel = customerId ? crm.suggestMatchCustomer : crm.suggestMatch;
 
   useEffect(() => {
     if (!query.trim()) {
@@ -66,21 +88,23 @@ export function CrmCustomerPicker({
   }
 
   function runSuggest() {
-    if (!partnerId) return;
+    if (!partnerId && !customerId) return;
     setSuggestMsg(null);
     setSuggestOpen(true);
     startTransition(async () => {
-      const res = await suggestCrmCustomersForPartnerAction(partnerId, 8);
+      const res = partnerId
+        ? await suggestCrmCustomersForPartnerAction(partnerId, 8)
+        : await suggestCrmCustomersForCustomerAction(customerId!, 8);
+      const name =
+        ("partnerName" in res ? res.partnerName : res.customerName) || entityName;
       setSuggestions(res.candidates);
       if (res.candidates.length === 0) {
-        setSuggestMsg(
-          crm.suggestEmpty.replace("{name}", res.partnerName || partnerName || ""),
-        );
+        setSuggestMsg(crm.suggestEmpty.replace("{name}", name));
       } else {
         setSuggestMsg(
           crm.suggestFound
             .replace("{count}", String(res.candidates.length))
-            .replace("{name}", res.partnerName || partnerName || ""),
+            .replace("{name}", name),
         );
       }
     });
@@ -101,7 +125,7 @@ export function CrmCustomerPicker({
 
   return (
     <div className="space-y-2">
-      {partnerId && (
+      {suggestEnabled && (
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -110,10 +134,10 @@ export function CrmCustomerPicker({
               onClick={runSuggest}
               className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300 hover:text-sky-700 disabled:opacity-50"
             >
-              {pending ? crm.suggestLoading : crm.suggestMatch}
+              {pending ? crm.suggestLoading : suggestLabel}
             </button>
-            {partnerName && (
-              <span className="text-[11px] text-slate-400 truncate max-w-[200px]">{partnerName}</span>
+            {entityName && (
+              <span className="text-[11px] text-slate-400 truncate max-w-[200px]">{entityName}</span>
             )}
           </div>
 
@@ -146,9 +170,7 @@ export function CrmCustomerPicker({
                         {matchReasonLabel(c.matchReason)}
                       </span>
                     </div>
-                    <div className="text-slate-500 mt-0.5">
-                      {[c.city, c.status, c.salesman].filter(Boolean).join(" · ")}
-                    </div>
+                    <div className="text-slate-500 mt-0.5">{formatCrmMeta(c)}</div>
                     {selected && (
                       <div className="text-emerald-700 mt-1">{crm.currentMatch}</div>
                     )}
@@ -164,9 +186,7 @@ export function CrmCustomerPicker({
         <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900">
           <div className="font-medium">{matchedCustomer.name}</div>
           <div className="text-emerald-700/80 mt-0.5 font-mono break-all">{matchedCustomer.id}</div>
-          <div className="text-emerald-700/70 mt-1">
-            {[matchedCustomer.city, matchedCustomer.status, matchedCustomer.salesman].filter(Boolean).join(" · ")}
-          </div>
+          <div className="text-emerald-700/70 mt-1">{formatCrmMeta(matchedCustomer)}</div>
           <a
             href={buildCrmCustomerViewUrl(matchedCustomer.id)}
             target="_blank"
@@ -212,9 +232,7 @@ export function CrmCustomerPicker({
                 className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 border-b border-slate-50 last:border-0"
               >
                 <div className="font-medium text-slate-800">{c.name}</div>
-                <div className="text-slate-500 mt-0.5">
-                  {[c.city, c.status, c.salesman].filter(Boolean).join(" · ")}
-                </div>
+                <div className="text-slate-500 mt-0.5">{formatCrmMeta(c)}</div>
               </button>
             ))}
           </div>

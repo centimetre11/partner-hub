@@ -6,7 +6,7 @@ import { createCustomerAction } from "@/lib/customer-actions";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { useMessages } from "@/lib/i18n/context";
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; role?: string };
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -38,6 +38,8 @@ export function AddCustomerForm({
   const p = messages.pool;
   const cancelLabel = messages.common.cancel;
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
+  const salesUsers = users.filter((u) => u.role === "SALES" || u.role === "ADMIN");
+  const presalesUsers = users.filter((u) => u.role === "PRESALES" || u.role === "ADMIN");
 
   return (
     <>
@@ -80,9 +82,17 @@ export function AddCustomerForm({
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <select name="ownerId" defaultValue="" className={input} aria-label={c.ownerLabel}>
-                  <option value="">{c.ownerLabel}</option>
-                  {users.map((u) => (
+              </div>
+              <div className="flex gap-2">
+                <select name="ownerId" defaultValue="" className={input} aria-label={c.salesOwnerLabel}>
+                  <option value="">{c.salesOwnerLabel}</option>
+                  {salesUsers.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <select name="presalesUserId" defaultValue="" className={input} aria-label={c.presalesOwnerLabel}>
+                  <option value="">{c.presalesOwnerLabel}</option>
+                  {presalesUsers.map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>

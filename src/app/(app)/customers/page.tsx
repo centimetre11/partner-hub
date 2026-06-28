@@ -38,12 +38,13 @@ export default async function CustomersPage({
       include: {
         partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
         owner: { select: { name: true } },
+        presalesUser: { select: { name: true } },
         contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
       },
       orderBy: { updatedAt: "desc" },
     }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    db.user.findMany({ select: { id: true, name: true } }),
+    db.user.findMany({ select: { id: true, name: true, role: true } }),
   ]);
 
   const statusLabel = (s: string) =>
@@ -101,6 +102,7 @@ export default async function CustomersPage({
                     <th className="px-4 py-2.5 font-medium">{c.colPartner}</th>
                     <th className="px-4 py-2.5 font-medium">{c.colContact}</th>
                     <th className="px-4 py-2.5 font-medium">{c.colOwner}</th>
+                    <th className="px-4 py-2.5 font-medium">{c.colPresales}</th>
                     <th className="px-4 py-2.5 font-medium">{c.colStatus}</th>
                   </tr>
                 </thead>
@@ -140,6 +142,7 @@ export default async function CustomersPage({
                         ) : "—"}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{cust.owner?.name ?? "—"}</td>
+                      <td className="px-4 py-3 text-slate-600">{cust.presalesUser?.name ?? "—"}</td>
                       <td className="px-4 py-3"><Badge tone={statusTone(cust.status)}>{statusLabel(cust.status)}</Badge></td>
                     </tr>
                   ))}

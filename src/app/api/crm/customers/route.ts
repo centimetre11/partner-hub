@@ -20,6 +20,7 @@ export async function GET(req: Request) {
           { id: { contains: q } },
           { city: { contains: q } },
           { salesman: { contains: q } },
+          { presales: { contains: q } },
         ],
       },
       orderBy: { name: "asc" },
@@ -30,6 +31,7 @@ export async function GET(req: Request) {
         city: true,
         status: true,
         salesman: true,
+        presales: true,
       },
     });
 

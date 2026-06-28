@@ -6,7 +6,7 @@ import { Card } from "@/components/ui";
 import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
 import { useMessages } from "@/lib/i18n/context";
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; role?: string };
 
 type BoundPartner = { id: string; name: string; relation: string };
 
@@ -22,6 +22,8 @@ type CustomerProfile = {
   notes: string | null;
   ownerId: string | null;
   owner: { name: string } | null;
+  presalesUserId: string | null;
+  presalesUser: { name: string } | null;
   boundPartners: BoundPartner[];
   partnerRelation: string | null;
 };
@@ -41,6 +43,9 @@ export function CustomerProfilePanel({
   const c = m.customers;
   const [open, setOpen] = useState(false);
 
+  const salesUsers = users.filter((u) => u.role === "SALES" || u.role === "ADMIN");
+  const presalesUsers = users.filter((u) => u.role === "PRESALES" || u.role === "ADMIN");
+
   const boundIds = new Set(customer.boundPartners.map((bp) => bp.id));
   const availablePartners = partners.filter((p) => !boundIds.has(p.id));
 
@@ -50,7 +55,8 @@ export function CustomerProfilePanel({
   const fields: [string, string | null][] = [
     [c.colName, customer.name],
     [c.statusLabel, statusLabel(customer.status)],
-    [c.ownerLabel, customer.owner?.name ?? null],
+    [c.salesOwnerLabel, customer.owner?.name ?? null],
+    [c.presalesOwnerLabel, customer.presalesUser?.name ?? null],
     [c.industryLabel, customer.industry],
     [c.scaleLabel, customer.scale],
     [c.cityPlaceholder, customer.city],
@@ -167,10 +173,21 @@ export function CustomerProfilePanel({
                 </select>
               </label>
               <label className="text-sm">
-                <span className="text-xs text-slate-500">{c.ownerLabel}</span>
+                <span className="text-xs text-slate-500">{c.salesOwnerLabel}</span>
                 <select name="ownerId" defaultValue={customer.ownerId ?? ""} className={input}>
                   <option value="">—</option>
-                  {users.map((u) => (
+                  {salesUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-xs text-slate-500">{c.presalesOwnerLabel}</span>
+                <select name="presalesUserId" defaultValue={customer.presalesUserId ?? ""} className={input}>
+                  <option value="">—</option>
+                  {presalesUsers.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}
                     </option>

@@ -61,6 +61,7 @@ export async function searchCrmCustomersAction(query: string, limit = 20) {
         { id: { contains: q } },
         { city: { contains: q } },
         { salesman: { contains: q } },
+        { presales: { contains: q } },
       ],
     },
     orderBy: { name: "asc" },
@@ -71,6 +72,7 @@ export async function searchCrmCustomersAction(query: string, limit = 20) {
       city: true,
       status: true,
       salesman: true,
+      presales: true,
     },
   });
 }
@@ -81,12 +83,13 @@ export type CrmCustomerSuggestion = {
   city: string | null;
   status: string | null;
   salesman: string | null;
+  presales: string | null;
   matchReason: "exact" | "contains" | "token" | "prefix";
   score: number;
 };
 
-function scorePartnerCrmName(partnerName: string, customerName: string) {
-  const p = partnerName.toLowerCase().trim();
+function scoreEntityCrmName(entityName: string, customerName: string) {
+  const p = entityName.toLowerCase().trim();
   const c = customerName.toLowerCase().trim();
   if (!p || !c) return { score: 0, matchReason: "prefix" as const };
 
@@ -110,24 +113,19 @@ function scorePartnerCrmName(partnerName: string, customerName: string) {
   return { score: 0, matchReason: "prefix" as const };
 }
 
-export async function suggestCrmCustomersForPartnerAction(partnerId: string, limit = 8) {
-  await requireUser();
-  const partner = await db.partner.findUnique({
-    where: { id: partnerId },
-    select: { name: true },
-  });
-  if (!partner?.name.trim()) {
-    return { partnerName: "", candidates: [] as CrmCustomerSuggestion[] };
+async function suggestCrmCustomersByEntityName(entityName: string, limit: number) {
+  const name = entityName.trim();
+  if (!name) {
+    return { entityName: "", candidates: [] as CrmCustomerSuggestion[] };
   }
 
-  const partnerName = partner.name.trim();
-  const words = partnerName.split(/\s+/).filter((w) => w.length >= 2);
-  const prefix = partnerName.slice(0, Math.min(8, partnerName.length));
+  const words = name.split(/\s+/).filter((w) => w.length >= 2);
+  const prefix = name.slice(0, Math.min(8, name.length));
 
   const rows = await db.crmCustomer.findMany({
     where: {
       OR: [
-        { name: { contains: partnerName } },
+        { name: { contains: name } },
         ...(prefix.length >= 3 ? [{ name: { contains: prefix } }] : []),
         ...words.map((w) => ({ name: { contains: w } })),
       ],
@@ -139,19 +137,40 @@ export async function suggestCrmCustomersForPartnerAction(partnerId: string, lim
       city: true,
       status: true,
       salesman: true,
+      presales: true,
     },
   });
 
   const ranked = rows
     .map((row) => {
-      const { score, matchReason } = scorePartnerCrmName(partnerName, row.name);
+      const { score, matchReason } = scoreEntityCrmName(name, row.name);
       return { ...row, score, matchReason };
     })
     .filter((row) => row.score > 0)
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
     .slice(0, limit);
 
-  return { partnerName, candidates: ranked };
+  return { entityName: name, candidates: ranked };
+}
+
+export async function suggestCrmCustomersForPartnerAction(partnerId: string, limit = 8) {
+  await requireUser();
+  const partner = await db.partner.findUnique({
+    where: { id: partnerId },
+    select: { name: true },
+  });
+  const result = await suggestCrmCustomersByEntityName(partner?.name ?? "", limit);
+  return { partnerName: result.entityName, candidates: result.candidates };
+}
+
+export async function suggestCrmCustomersForCustomerAction(customerId: string, limit = 8) {
+  await requireUser();
+  const customer = await db.customer.findUnique({
+    where: { id: customerId },
+    select: { name: true },
+  });
+  const result = await suggestCrmCustomersByEntityName(customer?.name ?? "", limit);
+  return { customerName: result.entityName, candidates: result.candidates };
 }
 
 /** @deprecated use suggestCrmCustomersForPartnerAction */

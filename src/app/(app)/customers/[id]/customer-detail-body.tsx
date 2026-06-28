@@ -39,6 +39,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     include: {
       partnerLinks: { include: { partner: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
       owner: { select: { id: true, name: true } },
+      presalesUser: { select: { id: true, name: true } },
       createdBy: { select: { name: true } },
       contacts: true,
       contactLinks: true,
@@ -72,12 +73,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    db.user.findMany({ select: { id: true, name: true } }),
+    db.user.findMany({ select: { id: true, name: true, role: true } }),
     getWecomChatForCustomer(id),
     customer.crmCustomerId
       ? db.crmCustomer.findUnique({
           where: { id: customer.crmCustomerId },
-          select: { id: true, name: true, city: true, status: true, salesman: true },
+          select: { id: true, name: true, city: true, status: true, salesman: true, presales: true },
         })
       : Promise.resolve(null),
     getAmmoConfigForClient(),
@@ -122,6 +123,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         notes: customer.notes,
         ownerId: customer.ownerId,
         owner: customer.owner,
+        presalesUserId: customer.presalesUserId,
+        presalesUser: customer.presalesUser,
         boundPartners: customer.partnerLinks.map((l) => ({ id: l.partner.id, name: l.partner.name, relation: l.relation })),
         partnerRelation: customer.partnerRelation,
       }}

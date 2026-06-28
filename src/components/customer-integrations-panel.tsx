@@ -175,7 +175,13 @@ export function CustomerIntegrationsPanel({
           <div className="space-y-1">
             <span className="text-xs font-medium text-slate-700">{intg.crmCustomerId}</span>
             <p className="text-xs text-slate-500">{intg.crmCustomerIdHint}</p>
-            <CrmCustomerPicker value={crm} onChange={handleCrmChange} matchedCustomer={crmCustomer} />
+            <CrmCustomerPicker
+              value={crm}
+              onChange={handleCrmChange}
+              customerId={customerId}
+              customerName={customerName}
+              matchedCustomer={crmCustomer}
+            />
           </div>
           <button
             type="submit"

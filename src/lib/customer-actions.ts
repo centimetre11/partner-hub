@@ -31,6 +31,7 @@ function readCustomerFields(formData: FormData) {
     contactEmail: str(formData, "contactEmail"),
     notes: str(formData, "notes"),
     ownerId: str(formData, "ownerId"),
+    presalesUserId: str(formData, "presalesUserId"),
   };
 }
 
