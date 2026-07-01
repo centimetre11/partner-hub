@@ -77,7 +77,7 @@ import {
   inferTraceAction,
   inferTraceNature,
 } from "./crm-trace-payload";
-import { persistBusinessRecord, normalizeBusinessRecordCategory, type BusinessRecordCategory } from "./business-record-core";
+import { persistBusinessRecord, normalizeBusinessRecordCategory, assertCrmRecordersMapped, type BusinessRecordCategory } from "./business-record-core";
 import { countProposalItems } from "./proposal-merge";
 import {
   buildCustomerBindingPrompt,
@@ -144,6 +144,8 @@ export type IntakeProposal = {
   crmCustomerName?: string;
   /** both=Hub+CRM（默认）；crm_only=仅写入 CRM（Hub 未建档时用户确认） */
   saveMode?: "both" | "crm_only";
+  /** 商务记录同行人（Hub user IDs，每人各写一条 CRM 记录） */
+  crmRecorderUserIds?: string[];
   summary: string;
   fields: FieldUpdate[];
   contacts: ContactProposal[];
@@ -1722,6 +1724,17 @@ export async function applyIntake(opts: {
   }
 
   // ---- Business records ----
+  const recorderIds = [...new Set((proposal.crmRecorderUserIds?.length ? proposal.crmRecorderUserIds : [userId]).filter(Boolean))];
+  if (proposal.businessRecords.length > 0 && proposal.saveMode !== "crm_only") {
+    const recorderCheck = await assertCrmRecordersMapped(recorderIds);
+    if (!recorderCheck.ok) {
+      throw new Error(
+        locale === "zh" ? "请至少选择一位已绑定 CRM 账号的同行人" : "Select at least one CRM-linked companion",
+      );
+    }
+  }
+  const resolvedRecorderIds = recorderIds;
+
   for (const r of proposal.businessRecords) {
     const title = asTrimmedString(r.title);
     if (!title) continue;
@@ -1785,6 +1798,7 @@ export async function applyIntake(opts: {
       traceNature: r.traceNature,
       traceAction: r.traceAction,
       source: "AI",
+      crmRecorderUserIds: resolvedRecorderIds,
     });
     applied.push(applyBusinessRecordAdded(locale, title));
   }

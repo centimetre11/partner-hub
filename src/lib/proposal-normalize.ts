@@ -20,6 +20,7 @@ export type NormalizedProposal = {
   trainings: IntakeProposal["trainings"];
   solutions: IntakeProposal["solutions"];
   businessRecords: IntakeProposal["businessRecords"];
+  crmRecorderUserIds?: string[];
 };
 
 export function isIntakeProposal(p: IntakeProposal | ExtractionProposal): p is IntakeProposal {
@@ -40,6 +41,7 @@ export function normalizeProposal(p: IntakeProposal | ExtractionProposal, scope?
       trainings: p.trainings,
       solutions: p.solutions,
       businessRecords: p.businessRecords,
+      crmRecorderUserIds: p.crmRecorderUserIds,
     };
   }
   return {
@@ -81,6 +83,7 @@ export function filterNormalized(
     businessRecords: p.businessRecords.filter(
       (r, i) => !isExcluded(excluded, [businessRecordKey(r.title), `br${i}`])
     ),
+    crmRecorderUserIds: p.crmRecorderUserIds,
   };
 }
 
@@ -95,6 +98,7 @@ export function normalizedToIntake(p: NormalizedProposal): IntakeProposal {
     trainings: p.trainings,
     solutions: p.solutions,
     businessRecords: p.businessRecords,
+    crmRecorderUserIds: p.crmRecorderUserIds,
   };
 }
 

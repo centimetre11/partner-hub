@@ -197,12 +197,19 @@ export function applyDirectClarification(
 export type ProposalEditPatch =
   | { type: "partnerName"; value: string }
   | { type: "field"; field: string; value: string }
-  | { type: "businessRecord"; index: number; field: "traceNature" | "traceAction"; value: string };
+  | { type: "businessRecord"; index: number; field: "traceNature" | "traceAction"; value: string }
+  | { type: "crmRecorders"; ids: string[] };
 
 export function applyProposalEdit(
   proposal: IntakeProposal,
   patch: ProposalEditPatch
 ): { proposal: IntakeProposal; changes: ProposalChanges } {
+  if (patch.type === "crmRecorders") {
+    return {
+      proposal: { ...proposal, crmRecorderUserIds: [...new Set(patch.ids.filter(Boolean))] },
+      changes: { added: [], updated: [], removed: [], aiReupdates: [] },
+    };
+  }
   if (patch.type === "businessRecord") {
     const records = [...proposal.businessRecords];
     const row = records[patch.index];

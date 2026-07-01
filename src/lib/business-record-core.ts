@@ -17,6 +17,28 @@ export function normalizeBusinessRecordCategory(raw: string): BusinessRecordCate
   return BUSINESS_RECORD_CATEGORIES.includes(raw as BusinessRecordCategory) ? (raw as BusinessRecordCategory) : "OTHER";
 }
 
+export type HubCrmRecorderOption = {
+  id: string;
+  name: string;
+  crmSalesmanName: string;
+};
+
+/** Hub 用户中已绑定 CRM 销售账号的成员（商务记录同行人候选） */
+export async function listHubUsersWithCrmAccount(): Promise<HubCrmRecorderOption[]> {
+  const users = await db.user.findMany({
+    where: { crmSalesmanName: { not: null } },
+    select: { id: true, name: true, crmSalesmanName: true },
+    orderBy: { name: "asc" },
+  });
+  return users
+    .filter((u) => u.crmSalesmanName?.trim())
+    .map((u) => ({
+      id: u.id,
+      name: u.name,
+      crmSalesmanName: u.crmSalesmanName!.trim(),
+    }));
+}
+
 export type BusinessRecordCrmSyncStatus = "SYNCED" | "FAILED" | "SKIPPED" | "PARTIAL";
 
 export type BusinessRecordCrmSyncDisplay = {

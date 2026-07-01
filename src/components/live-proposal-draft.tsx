@@ -17,6 +17,7 @@ import { scopeDraftSections } from "@/lib/proposal-scope";
 import { CRM_TRACE_ACTIONS, CRM_TRACE_NATURES } from "@/lib/crm-trace-constants";
 import { businessRecordCrmFieldsComplete } from "@/lib/crm-trace-payload";
 import { type ProposalEditPatch } from "@/lib/clarification-apply";
+import { CrmRecorderPicker, useDefaultCrmRecorderSelection, type CrmRecorderOption } from "@/components/crm-recorder-picker";
 import { useLabels, useMessages } from "@/lib/i18n/context";
 import { attitudeLabelFromLabels } from "@/lib/i18n/labels";
 
@@ -130,6 +131,8 @@ type Props = {
   ready?: boolean;
   loading?: boolean;
   scope?: IntakeScope;
+  partnerId?: string;
+  customerId?: string;
   /** When true, save is blocked until left-chat AI clarifications are answered */
   identityBlocked?: boolean;
 };
@@ -144,6 +147,8 @@ export function LiveProposalDraft({
   ready = false,
   loading = false,
   scope,
+  partnerId,
+  customerId,
   identityBlocked: identityBlockedProp,
 }: Props) {
   const { assistant: am, intakePanel: ip } = useMessages();
@@ -158,10 +163,37 @@ export function LiveProposalDraft({
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [flashKeys, setFlashKeys] = useState<Set<string>>(new Set());
+  const [crmMeta, setCrmMeta] = useState<{ currentUserId: string; crmRecorders: CrmRecorderOption[] } | null>(null);
+  const [defaultRecorderIds, setDefaultRecorderIds] = useDefaultCrmRecorderSelection(
+    crmMeta?.crmRecorders,
+    crmMeta?.currentUserId,
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
   const count = proposal ? countProposalItems(proposal) : 0;
   const identityBlocked = identityBlockedProp ?? false;
   const websiteField = normalized?.fieldUpdates.find((f) => f.field === "website");
+  const selectedRecorderIds = proposal?.crmRecorderUserIds?.length
+    ? proposal.crmRecorderUserIds
+    : defaultRecorderIds;
+
+  useEffect(() => {
+    if (scope !== "business_record") return;
+    const qs = customerId
+      ? `customerId=${customerId}`
+      : partnerId
+        ? `partnerId=${partnerId}`
+        : "";
+    const url = qs ? `/api/business-record/meta?${qs}` : "/api/business-record/recorders";
+    void fetch(url)
+      .then((r) => r.json())
+      .then((data: { currentUserId: string; crmRecorders: CrmRecorderOption[] }) => setCrmMeta(data))
+      .catch(() => setCrmMeta(null));
+  }, [scope, partnerId, customerId]);
+
+  function handleRecorderChange(ids: string[]) {
+    setDefaultRecorderIds(ids);
+    onProposalEdit?.({ type: "crmRecorders", ids });
+  }
 
   useEffect(() => {
     if (!changes) return;
@@ -187,7 +219,11 @@ export function LiveProposalDraft({
     setApplying(true);
     setApplyError(null);
     try {
-      await onConfirm(filterNormalized(normalized, excluded));
+      const filtered = filterNormalized(normalized, excluded);
+      if (scope === "business_record" && selectedRecorderIds.length) {
+        filtered.crmRecorderUserIds = selectedRecorderIds;
+      }
+      await onConfirm(filtered);
     } catch (e) {
       setApplyError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -220,12 +256,13 @@ export function LiveProposalDraft({
     total - excluded.size <= 0 ||
     identityBlocked ||
     (scope === "business_record" &&
-      !businessRecordCrmFieldsComplete(
+      (!businessRecordCrmFieldsComplete(
         normalized.businessRecords.filter((r, i) => {
           const k = businessRecordKey(r.title) || `br${i}`;
           return !excluded.has(k);
         })
-      ));
+      ) ||
+        !selectedRecorderIds.length));
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-4 flex flex-col h-full min-h-0 space-y-3">
@@ -484,6 +521,18 @@ export function LiveProposalDraft({
         </div>
       )}
 
+      {scope === "business_record" && crmMeta?.crmRecorders.length && crmMeta.currentUserId && (
+        <div className="shrink-0 rounded-lg border border-slate-100 bg-white p-3">
+          <CrmRecorderPicker
+            recorders={crmMeta.crmRecorders}
+            currentUserId={crmMeta.currentUserId}
+            selectedIds={selectedRecorderIds}
+            onChange={handleRecorderChange}
+            compact
+          />
+        </div>
+      )}
+
       <div className="shrink-0 sticky bottom-0 pt-3 mt-auto border-t border-slate-200/80 flex flex-col gap-2">
         {identityBlocked && (
           <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{am.confirmBlockedIdentity}</div>
@@ -492,7 +541,9 @@ export function LiveProposalDraft({
           <div className="text-xs text-slate-500">{ip.crmSyncHint}</div>
         )}
         {scope === "business_record" && saveDisabled && total - excluded.size > 0 && !identityBlocked && (
-          <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">{ip.crmFieldsRequired}</div>
+          <div className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
+            {!selectedRecorderIds.length ? ip.crmRecorderRequired : ip.crmFieldsRequired}
+          </div>
         )}
         <div className="flex items-center justify-between gap-3">
           <div className="text-xs text-slate-400">

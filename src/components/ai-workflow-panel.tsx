@@ -331,6 +331,8 @@ export function AiWorkflowPanel({
                 loading={loading}
                 scope={scope}
                 onProposalEdit={onProposalEdit}
+                partnerId={partnerId}
+                customerId={customerId}
                 identityBlocked={hasBlockingClarifications(clarifications ?? [])}
               />
             )}
