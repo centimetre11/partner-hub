@@ -141,7 +141,7 @@ curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
 | 现象 | 原因 | 处理 |
 |------|------|------|
 | 返回 **HTML** `400 Bad Request` + `nginx/1.24.0` | 请求在 nginx 层被拒，**未进入 Partner Hub**；常见于公司网络拦截自定义 Header | **去掉** `X-CRM-Callback-Secret` Header，改在 JSON body 里加 `"callbackSecret":"..."` |
-| 返回 JSON `401 Unauthorized` | 密钥错误或缺失 | 核对 48 位密钥，不要带引号/空格 |
+| 返回 JSON `401 Unauthorized`（浏览器从 CRM 发起） | 密钥错误或仍用 Header 传密钥 | 改用 body `callbackSecret`；核对 48 位密钥；CRM 里勿用 `complete` 误判成功 |
 | 返回 JSON `400 Invalid JSON` | Body 为空或不是合法 JSON | Postman Body 选 raw → JSON，并填写内容 |
 | GET 测试页 200，POST Header 方式 400 HTML | 同上，Header 被拦 | 改用 body `callbackSecret` |
 
@@ -210,19 +210,28 @@ if (fr_submitinfo.success) {
     url: "https://camelusai.com/api/leads/crm-callback",
     type: "POST",
     contentType: "application/json",
-    headers: { "X-CRM-Callback-Secret": "你的密钥" },
     data: JSON.stringify({
       clueId: "${clueid}",
-      action: "toNurture"
+      action: "toNurture",
+      callbackSecret: "你的48位密钥"
     }),
-    complete: function () {
-      FR.Msg.toast("提交成功，Partner Hub 已同步");
+    success: function (res) {
+      if (res && res.ok) {
+        FR.Msg.toast("提交成功，Partner Hub 已同步");
+      } else {
+        FR.Msg.toast("Partner Hub 同步失败");
+      }
+    },
+    error: function (xhr) {
+      FR.Msg.toast("Partner Hub 同步失败（HTTP " + xhr.status + "）");
     }
   });
 } else {
   FR.Msg.toast("提交失败：" + fr_submitinfo.failinfo);
 }
 ```
+
+> **重要**：浏览器跨域回调必须用 body 里的 `callbackSecret`，不要仅依赖 Header；旧版 `complete` 在 401 时也会弹「已同步」，请更新为上面的 `success`/`error` 写法。
 
 ---
 

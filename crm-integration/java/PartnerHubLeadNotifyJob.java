@@ -51,7 +51,7 @@ public class PartnerHubLeadNotifyJob extends TotalSubmitJob {
         }
         String secret = trim(callbackSecret);
 
-        String json = buildJson(id, act, syncAll);
+        String json = buildJson(id, act, syncAll, secret);
         int httpCode = postJson(url, secret, json);
 
         FineLoggerFactory.getLogger().info(
@@ -78,13 +78,16 @@ public class PartnerHubLeadNotifyJob extends TotalSubmitJob {
         return s.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static String buildJson(String clueId, String action, boolean fullSync) {
+    private static String buildJson(String clueId, String action, boolean fullSync, String secret) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\"clueId\":\"").append(escapeJson(clueId)).append("\"");
         if (fullSync) {
             sb.append(",\"fullSync\":true");
         } else if (!action.isEmpty()) {
             sb.append(",\"action\":\"").append(escapeJson(action)).append("\"");
+        }
+        if (!secret.isEmpty()) {
+            sb.append(",\"callbackSecret\":\"").append(escapeJson(secret)).append("\"");
         }
         sb.append("}");
         return sb.toString();

@@ -9,9 +9,15 @@ FR.ajax({
   url: CALLBACK_URL,
   type: "POST",
   contentType: "application/json",
-  headers: { "X-CRM-Callback-Secret": SECRET },
-  data: JSON.stringify({ fullSync: true }),
-  complete: function () {
-    FR.Msg.toast("已触发 Partner Hub 全量同步（后台执行，约 1 分钟）");
+  data: JSON.stringify({ fullSync: true, callbackSecret: SECRET }),
+  success: function (res) {
+    if (res && res.ok) {
+      FR.Msg.toast("已触发 Partner Hub 全量同步（后台执行，约 1 分钟）");
+    } else {
+      FR.Msg.toast("Partner Hub 全量同步失败：" + (res && (res.error || res.reason) ? (res.error || res.reason) : "未知"));
+    }
+  },
+  error: function (xhr) {
+    FR.Msg.toast("Partner Hub 全量同步失败（HTTP " + (xhr ? xhr.status : "?") + "）");
   },
 });

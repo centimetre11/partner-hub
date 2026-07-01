@@ -14,10 +14,16 @@ if (fr_submitinfo.success) {
     url: CALLBACK_URL,
     type: "POST",
     contentType: "application/json",
-    headers: { "X-CRM-Callback-Secret": SECRET },
-    data: JSON.stringify({ clueId: CLUE_ID, action: "toNurture" }),
-    complete: function () {
-      FR.Msg.toast("提交成功，Partner Hub 已同步");
+    data: JSON.stringify({ clueId: CLUE_ID, action: "toNurture", callbackSecret: SECRET }),
+    success: function (res) {
+      if (res && res.ok) {
+        FR.Msg.toast("提交成功，Partner Hub 已同步");
+      } else {
+        FR.Msg.toast("Partner Hub 同步失败：" + (res && (res.error || res.reason) ? (res.error || res.reason) : "未知"));
+      }
+    },
+    error: function (xhr) {
+      FR.Msg.toast("Partner Hub 同步失败（HTTP " + (xhr ? xhr.status : "?") + "），请检查密钥或联系管理员");
     },
   });
 } else {

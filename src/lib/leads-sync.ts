@@ -236,10 +236,13 @@ export async function refreshLeadById(
 
   try {
     if (action === "toNurture") {
-      await db.crmLead.update({
+      const updated = await db.crmLead.updateMany({
         where: { id: leadId },
         data: { status: NURTURE_STATUS },
       });
+      if (updated.count === 0) {
+        console.warn(`[leads-refresh] toNurture: lead not found id=${leadId}, reconciling from CRM`);
+      }
       void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
         console.error("[leads-refresh] reconcile failed:", e),
       );
@@ -247,7 +250,10 @@ export async function refreshLeadById(
     }
 
     if (action === "toChannel" || action === "toCustomer") {
-      await db.crmLead.deleteMany({ where: { id: leadId } });
+      const deleted = await db.crmLead.deleteMany({ where: { id: leadId } });
+      if (deleted.count === 0) {
+        console.warn(`[leads-refresh] ${action}: lead not found id=${leadId}, reconciling from CRM`);
+      }
       void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
         console.error("[leads-refresh] reconcile failed:", e),
       );
@@ -303,38 +309,40 @@ export async function handleCrmLeadCallback(payload: CrmCallbackPayload): Promis
     return { ok: true, mode: "ignored" };
   }
 
+  if (
+    actionNorm !== "toNurture" &&
+    actionNorm !== "toChannel" &&
+    actionNorm !== "toCustomer" &&
+    actionNorm !== "edit" &&
+    actionNorm !== "shift"
+  ) {
+    return { ok: false, reason: "unknown_action", error: String(payload.action) };
+  }
+
   const leadId = clueId;
 
   try {
-    switch (actionNorm) {
-      case "toNurture":
-        await db.crmLead.updateMany({
-          where: { id: leadId },
-          data: { status: NURTURE_STATUS },
-        });
-        void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
-          console.error("[crm-callback] reconcile failed:", e),
-        );
-        return { ok: true, mode: "updated" };
-
-      case "toChannel":
-      case "toCustomer":
-        await db.crmLead.deleteMany({ where: { id: leadId } });
-        void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
-          console.error("[crm-callback] reconcile failed:", e),
-        );
-        return { ok: true, mode: "removed" };
-
-      case "edit":
-      case "shift":
-        void reconcileLeadFromCrm(leadId, clueId).catch((e) =>
-          console.error("[crm-callback] reconcile failed:", e),
-        );
-        return { ok: true, mode: "reconcile_started" };
-
-      default:
-        return { ok: false, reason: "unknown_action", error: String(payload.action) };
+    if (actionNorm === "edit" || actionNorm === "shift") {
+      void refreshLeadById(leadId, actionNorm).catch((e) =>
+        console.error("[crm-callback] reconcile failed:", e),
+      );
+      console.log(`[crm-callback] action=${actionNorm} clueId=${clueId} mode=reconcile_started`);
+      return { ok: true, mode: "reconcile_started" };
     }
+
+    const result = await refreshLeadById(leadId, actionNorm);
+    if (!result.ok) {
+      console.error(`[crm-callback] action=${actionNorm} clueId=${clueId} failed:`, result.error ?? result.reason);
+      return {
+        ok: false,
+        reason: result.reason === "no_clue_id" ? "invalid_payload" : result.reason,
+        error: result.error,
+      };
+    }
+
+    const mode = result.status === "removed" ? "removed" : "updated";
+    console.log(`[crm-callback] action=${actionNorm} clueId=${clueId} mode=${mode}`);
+    return { ok: true, mode };
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     return { ok: false, reason: "fetch_failed", error };

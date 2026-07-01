@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import {
   getCrmCallbackPublicInfo,
   handleCrmLeadCallback,
@@ -7,8 +8,19 @@ import {
 
 const CALLBACK_HEADER = "x-crm-callback-secret";
 
+function normalizeSecretInput(raw: string): string {
+  let s = raw.trim();
+  if (
+    (s.startsWith('"') && s.endsWith('"')) ||
+    (s.startsWith("'") && s.endsWith("'"))
+  ) {
+    s = s.slice(1, -1).trim();
+  }
+  return s;
+}
+
 function getCallbackSecret() {
-  return process.env.CRM_CALLBACK_SECRET?.trim() || "";
+  return normalizeSecretInput(process.env.CRM_CALLBACK_SECRET ?? "");
 }
 
 function extractProvidedSecret(
@@ -16,13 +28,13 @@ function extractProvidedSecret(
   body?: Record<string, unknown>,
 ): string | null {
   const header = req.headers.get(CALLBACK_HEADER)?.trim();
-  if (header) return header;
+  if (header) return normalizeSecretInput(header);
   const auth = req.headers.get("authorization")?.trim();
-  if (auth?.startsWith("Bearer ")) return auth.slice("Bearer ".length).trim();
+  if (auth?.startsWith("Bearer ")) return normalizeSecretInput(auth.slice("Bearer ".length));
   const query = req.nextUrl.searchParams.get("secret")?.trim();
-  if (query) return query;
+  if (query) return normalizeSecretInput(query);
   const bodySecret = body?.callbackSecret;
-  if (typeof bodySecret === "string" && bodySecret.trim()) return bodySecret.trim();
+  if (typeof bodySecret === "string" && bodySecret.trim()) return normalizeSecretInput(bodySecret);
   return null;
 }
 
@@ -87,6 +99,9 @@ export async function POST(req: NextRequest) {
   }
 
   if (!isAuthorized(extractProvidedSecret(req, body))) {
+    console.warn(
+      `[crm-callback] Unauthorized from ${req.headers.get("origin") ?? req.headers.get("referer") ?? "unknown"}`,
+    );
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: cors });
   }
 
@@ -96,5 +111,11 @@ export async function POST(req: NextRequest) {
     const status = result.reason === "unknown_action" ? 400 : 502;
     return NextResponse.json(result, { status, headers: cors });
   }
+
+  revalidatePath("/leads");
+  if (payload.clueId?.trim()) {
+    revalidatePath(`/leads/${payload.clueId.trim()}`);
+  }
+
   return NextResponse.json(result, { headers: cors });
 }
