@@ -82,3 +82,20 @@ export async function getNextPoolReviewPartner(skipIds: string[]): Promise<{
   }
   return null;
 }
+
+// 明细表：一次取出全部待审阅候选（待联络在前，其次待决策），每条带阶段标记。
+export async function getPoolReviewQueue(): Promise<
+  { partner: PoolReviewPartner; phase: PoolReviewPhase }[]
+> {
+  const queue: { partner: PoolReviewPartner; phase: PoolReviewPhase }[] = [];
+  for (const phase of ["pending_contact", "pending_decision"] as const) {
+    const rows = await db.partner.findMany({
+      where: poolReviewWhere(phase),
+      include: partnerReviewInclude,
+    });
+    for (const partner of sortPoolReviewCandidates(rows)) {
+      queue.push({ partner, phase });
+    }
+  }
+  return queue;
+}
