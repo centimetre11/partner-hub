@@ -196,10 +196,11 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
       crmTraceAction: true,
       crmSyncedAt: true,
       crmSyncStatus: true,
+      crmRecorderUserIds: true,
     },
   });
   if (!record) return { error: "商务记录不存在" };
-  if (record.crmSyncStatus === "SYNCED" || record.crmSyncedAt) return { error: "该记录已同步到 CRM" };
+  if (record.crmSyncStatus === "SYNCED") return { error: "该记录已同步到 CRM" };
 
   const owner = record.customerId
     ? ({ kind: "customer", id: record.customerId } as const)
@@ -208,12 +209,14 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
       : null;
   if (!owner) return { error: "商务记录缺少归属" };
 
-  const { syncBusinessRecordToCrm } = await import("./crm-business-record");
-  const { normalizeBusinessRecordCategory } = await import("./business-record-core");
+  const { syncBusinessRecordToCrm, parseCrmRecorderUserIds } = await import("./crm-business-record");
+  const { normalizeBusinessRecordCategory, formatBusinessRecordCrmFeedback } = await import("./business-record-core");
+  const storedRecorderIds = parseCrmRecorderUserIds(record.crmRecorderUserIds);
   const crmSync = await syncBusinessRecordToCrm({
     recordId: record.id,
     owner,
     userId: user.id,
+    recorderUserIds: storedRecorderIds.length ? storedRecorderIds : undefined,
     category: normalizeBusinessRecordCategory(record.category),
     title: record.title,
     content: record.content,
@@ -224,12 +227,10 @@ export async function retryCrmBusinessRecordSyncAction(recordId: string) {
   });
 
   revalidatePath(owner.kind === "customer" ? `/customers/${owner.id}` : `/partners/${owner.id}`);
-  if (crmSync.status === "synced") {
-    return { ok: true, message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };
-  }
-  if (crmSync.status === "failed") {
-    return { error: crmSync.error };
-  }
+  const feedback = formatBusinessRecordCrmFeedback(crmSync);
+  if (crmSync.status === "synced") return { ok: true, message: feedback.message };
+  if (crmSync.status === "partial") return { error: feedback.warning };
+  if (crmSync.status === "failed") return { error: crmSync.error };
   return { error: crmSync.reason };
 }
 

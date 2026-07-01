@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { useMessages } from "@/lib/i18n/context";
 import { createBusinessRecordAction } from "@/lib/actions";
 import { BusinessRecordDimensions, CrmBindingStatus } from "@/components/business-record-dimensions";
+import { CrmRecorderPicker, useDefaultCrmRecorderSelection, type CrmRecorderOption } from "@/components/crm-recorder-picker";
 import type { OwnerRef } from "@/lib/owner";
 
 type CrmMeta = {
   crmCustomerBound: boolean;
   crmCustomerName: string | null;
   crmSalesmanBound: boolean;
+  currentUserId?: string;
+  crmRecorders?: CrmRecorderOption[];
 };
 
 export function BusinessRecordForm({
@@ -37,6 +40,10 @@ export function BusinessRecordForm({
   const [occurredAt, setOccurredAt] = useState(new Date().toISOString().slice(0, 10));
   const [dims, setDims] = useState({ traceNature: "", traceAction: "", contactName: "" });
   const [crmMeta, setCrmMeta] = useState<CrmMeta | null>(null);
+  const [selectedRecorderIds, setSelectedRecorderIds] = useDefaultCrmRecorderSelection(
+    crmMeta?.crmRecorders,
+    crmMeta?.currentUserId,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "info" | "err"; text: string } | null>(null);
 
@@ -63,6 +70,10 @@ export function BusinessRecordForm({
       setFeedback({ tone: "err", text: ip.crmFieldsRequired });
       return;
     }
+    if (!selectedRecorderIds.length) {
+      setFeedback({ tone: "err", text: ip.crmRecorderRequired });
+      return;
+    }
     setSubmitting(true);
     setFeedback(null);
     try {
@@ -74,10 +85,18 @@ export function BusinessRecordForm({
       fd.set("traceNature", dims.traceNature);
       fd.set("traceAction", dims.traceAction);
       if (dims.contactName.trim()) fd.set("contactName", dims.contactName.trim());
+      for (const id of selectedRecorderIds) fd.append("crmRecorderUserIds", id);
       if (sourceTodoId) fd.set("sourceTodoId", sourceTodoId);
       const res = await createBusinessRecordAction(owner, fd);
-      if (res?.error === "crm_fields_required") {
-        setFeedback({ tone: "err", text: ip.crmFieldsRequired });
+      if (res?.ok === false) {
+        if (res.error === "crm_fields_required") {
+          setFeedback({ tone: "err", text: ip.crmFieldsRequired });
+          return;
+        }
+        if (res.error === "crm_recorders_required" || res.error === "crm_recorders_unmapped") {
+          setFeedback({ tone: "err", text: ip.crmRecorderRequired });
+          return;
+        }
         return;
       }
       if (res?.message) setFeedback({ tone: "ok", text: res.message });
@@ -138,6 +157,15 @@ export function BusinessRecordForm({
           inferContent={content}
           compact={compact}
         />
+        {crmMeta?.crmRecorders && crmMeta.currentUserId && (
+          <CrmRecorderPicker
+            recorders={crmMeta.crmRecorders}
+            currentUserId={crmMeta.currentUserId}
+            selectedIds={selectedRecorderIds}
+            onChange={setSelectedRecorderIds}
+            compact={compact}
+          />
+        )}
         <p className="text-[11px] text-slate-500">{ip.crmSyncHint}</p>
       </div>
 

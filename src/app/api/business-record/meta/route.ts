@@ -17,16 +17,27 @@ export async function GET(req: Request) {
     : await db.partner.findUnique({ where: { id: partnerId! }, select: { crmCustomerId: true } });
 
   const crmCustomerId = ownerRow?.crmCustomerId ?? null;
-  const [crmCustomer, salesman] = await Promise.all([
+  const [crmCustomer, salesman, teamUsers] = await Promise.all([
     crmCustomerId
       ? db.crmCustomer.findUnique({ where: { id: crmCustomerId }, select: { id: true, name: true } })
       : Promise.resolve(null),
     db.user.findUnique({ where: { id: user.id }, select: { crmSalesmanName: true } }),
+    db.user.findMany({
+      select: { id: true, name: true, crmSalesmanName: true },
+      orderBy: { name: "asc" },
+      take: 100,
+    }),
   ]);
 
   return NextResponse.json({
     crmCustomerBound: !!crmCustomerId && !!crmCustomer,
     crmCustomerName: crmCustomer?.name ?? null,
     crmSalesmanBound: !!salesman?.crmSalesmanName?.trim(),
+    currentUserId: user.id,
+    crmRecorders: teamUsers.map((u) => ({
+      id: u.id,
+      name: u.name,
+      crmSalesmanName: u.crmSalesmanName?.trim() || null,
+    })),
   });
 }

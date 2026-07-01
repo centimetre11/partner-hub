@@ -218,8 +218,9 @@ model BusinessRecord {
   createdBy       User?     @relation(fields: [createdById], references: [id])
   crmTraceId      String?
   crmSyncedAt     DateTime?
-  crmSyncStatus   String?   // SYNCED | FAILED | SKIPPED
+  crmSyncStatus   String?   // SYNCED | FAILED | SKIPPED | PARTIAL
   crmSyncError    String?   // failure or skip reason
+  crmRecorderUserIds String? // JSON array of Hub user IDs credited in CRM
   createdAt       DateTime  @default(now())
 
   @@index([partnerId, occurredAt])

@@ -1739,14 +1739,20 @@ export async function applyIntake(opts: {
       });
       if (crmResult.status === "failed") throw new Error(crmResult.error);
       const label = proposal.crmCustomerName ?? proposal.crmCustomerId;
+      const skipReason =
+        crmResult.status === "skipped"
+          ? crmResult.reason
+          : crmResult.status === "partial"
+            ? crmResult.error
+            : "";
       applied.push(
         crmResult.status === "synced"
           ? locale === "zh"
             ? `已写入帆软 CRM（${label}，未存 Partner Hub）`
             : `Saved to FanRuan CRM (${label}, not in Partner Hub)`
           : locale === "zh"
-            ? `CRM 未写入：${crmResult.reason}`
-            : `CRM skipped: ${crmResult.reason}`
+            ? `CRM 未写入：${skipReason}`
+            : `CRM skipped: ${skipReason}`
       );
       continue;
     }
