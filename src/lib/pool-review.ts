@@ -17,16 +17,18 @@ export function sortPoolReviewCandidates<T extends Pick<Partner, "tier" | "fitSc
   });
 }
 
+// 扫库审阅覆盖「伙伴库」里所有候选（PROSPECT），用 poolContactedAt 作为「已扫/已联络」标记，与 poolFlag 无关。
+// 待联络：还没扫到（未标记已联络）。已决策：已扫且仍是 NEW（尚未转正/观察/放弃）。
 export function poolReviewWhere(phase: PoolReviewPhase): Prisma.PartnerWhereInput {
-  const base = { status: "PROSPECT" as const, poolFlag: "NEW" as const };
-  if (phase === "pending_contact") return { ...base, poolContactedAt: null };
-  return { ...base, poolContactedAt: { not: null } };
+  if (phase === "pending_contact") return { status: "PROSPECT", poolContactedAt: null };
+  return { status: "PROSPECT", poolFlag: "NEW", poolContactedAt: { not: null } };
 }
 
+// 已处理：已扫且已有明确去向（转正 / 观察 / 放弃 / 推进中）。
 export const POOL_REVIEW_PROCESSED_WHERE: Prisma.PartnerWhereInput = {
   OR: [
     { status: "ACTIVE" },
-    { status: "PROSPECT", poolFlag: { in: ["WATCHING", "DROPPED"] } },
+    { status: "PROSPECT", poolContactedAt: { not: null }, poolFlag: { in: ["WATCHING", "DROPPED", "ADVANCING"] } },
   ],
 };
 
@@ -38,7 +40,7 @@ export function poolReviewListFilter(
   if (review === "contacted") return poolReviewWhere("pending_decision");
   if (review === "processed") {
     if (view === "prospect") {
-      return { status: "PROSPECT", poolFlag: { in: ["WATCHING", "DROPPED"] } };
+      return { status: "PROSPECT", poolContactedAt: { not: null }, poolFlag: { in: ["WATCHING", "DROPPED", "ADVANCING"] } };
     }
     return POOL_REVIEW_PROCESSED_WHERE;
   }

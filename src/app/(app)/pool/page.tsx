@@ -218,7 +218,7 @@ export default async function PoolPage({
                       ) : (
                         <div className="flex flex-wrap items-center gap-1">
                           <Badge tone={flagTone(p.poolFlag)}>{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>
-                          {!archived && p.status === "PROSPECT" && p.poolFlag === "NEW" && p.poolContactedAt && (
+                          {!archived && p.status === "PROSPECT" && p.poolContactedAt && (
                             <Badge tone="indigo">{m.pool.contactedBadge}</Badge>
                           )}
                         </div>
