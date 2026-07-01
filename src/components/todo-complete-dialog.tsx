@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { completeTodoWithNoteAction, toggleTodoAction } from "@/lib/actions";
 import { BusinessRecordDimensions, CrmBindingStatus } from "@/components/business-record-dimensions";
+import { CrmRecorderPicker, useDefaultCrmRecorderSelection, type CrmRecorderOption } from "@/components/crm-recorder-picker";
 import { useMessages } from "@/lib/i18n/context";
 import type { OwnerRef } from "@/lib/owner";
 
@@ -20,6 +21,8 @@ type CrmMeta = {
   crmCustomerBound: boolean;
   crmCustomerName: string | null;
   crmSalesmanBound: boolean;
+  currentUserId?: string;
+  crmRecorders?: CrmRecorderOption[];
 };
 
 export function TodoCompleteDialog({
@@ -52,6 +55,10 @@ export function TodoCompleteDialog({
     contactName: "",
   });
   const [crmMeta, setCrmMeta] = useState<CrmMeta | null>(null);
+  const [selectedRecorderIds, setSelectedRecorderIds] = useDefaultCrmRecorderSelection(
+    crmMeta?.crmRecorders,
+    crmMeta?.currentUserId,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ tone: "ok" | "warn" | "info" | "err"; text: string } | null>(null);
 
@@ -101,6 +108,10 @@ export function TodoCompleteDialog({
       setFeedback({ tone: "err", text: ip.crmFieldsRequired });
       return;
     }
+    if (sync && canSync && !selectedRecorderIds.length) {
+      setFeedback({ tone: "err", text: ip.crmRecorderRequired });
+      return;
+    }
     setSubmitting(true);
     setFeedback(null);
     try {
@@ -111,8 +122,17 @@ export function TodoCompleteDialog({
       fd.set("traceNature", dims.traceNature);
       fd.set("traceAction", dims.traceAction);
       if (dims.contactName.trim()) fd.set("contactName", dims.contactName.trim());
+      for (const id of selectedRecorderIds) fd.append("crmRecorderUserIds", id);
       const res = await completeTodoWithNoteAction(fd);
       if (!res.ok) {
+        if (res.error === "crm_fields_required") {
+          setFeedback({ tone: "err", text: ip.crmFieldsRequired });
+          return;
+        }
+        if (res.error === "crm_recorders_required" || res.error === "crm_recorders_unmapped") {
+          setFeedback({ tone: "err", text: ip.crmRecorderRequired });
+          return;
+        }
         setFeedback({ tone: "err", text: t.noteRequired });
         return;
       }
@@ -200,6 +220,15 @@ export function TodoCompleteDialog({
                   inferContent={note}
                   compact
                 />
+                {crmMeta?.crmRecorders && crmMeta.currentUserId && (
+                  <CrmRecorderPicker
+                    recorders={crmMeta.crmRecorders}
+                    currentUserId={crmMeta.currentUserId}
+                    selectedIds={selectedRecorderIds}
+                    onChange={setSelectedRecorderIds}
+                    compact
+                  />
+                )}
               </>
             )}
           </div>

@@ -12,7 +12,7 @@ import { normalizeUserRole } from "./user-roles";
 import { getLocale } from "./i18n/locale-server";
 import { getMessages } from "./i18n/messages";
 import { normalizePartnerTier } from "./tier";
-import { persistBusinessRecord, normalizeBusinessRecordCategory } from "./business-record-core";
+import { persistBusinessRecord, normalizeBusinessRecordCategory, parseCrmRecorderUserIdsFromForm, formatBusinessRecordCrmFeedback, assertCrmRecordersMapped } from "./business-record-core";
 import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
 import { recordSystemEvent } from "./activity-log";
 import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
@@ -719,6 +719,12 @@ export async function completeTodoWithNoteAction(formData: FormData) {
     if (!normalizeCrmTraceNature(traceNature) || !normalizeCrmTraceAction(traceAction)) {
       return { ok: false as const, error: "crm_fields_required" };
     }
+    const crmRecorderUserIds = parseCrmRecorderUserIdsFromForm(formData, user.id);
+    if (!crmRecorderUserIds.length) {
+      return { ok: false as const, error: "crm_recorders_required" };
+    }
+    const recorderCheck = await assertCrmRecordersMapped(crmRecorderUserIds);
+    if (!recorderCheck.ok) return { ok: false as const, error: recorderCheck.error };
     const content = contactName ? `【联系人 ${contactName}】\n${note}` : note;
     const { crmSync } = await persistBusinessRecord({
       owner,
@@ -732,14 +738,9 @@ export async function completeTodoWithNoteAction(formData: FormData) {
       sourceTodoId: todoId,
       traceNature,
       traceAction,
+      crmRecorderUserIds,
     });
-    if (crmSync.status === "synced") {
-      crmFeedback = { message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };
-    } else if (crmSync.status === "failed") {
-      crmFeedback = { warning: `本地已保存，CRM 同步失败：${crmSync.error}` };
-    } else {
-      crmFeedback = { info: `本地已保存（CRM：${crmSync.reason}）` };
-    }
+    crmFeedback = formatBusinessRecordCrmFeedback(crmSync);
   } else {
     const completionNote = `[完成备注 ${new Date().toISOString().slice(0, 10)}] ${note}`;
     await db.todoItem.update({
@@ -909,6 +910,12 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
   const contactId = String(formData.get("contactId") ?? "").trim() || null;
   const source = String(formData.get("source") ?? "MANUAL");
   const sourceTodoId = String(formData.get("sourceTodoId") ?? "").trim() || null;
+  const crmRecorderUserIds = parseCrmRecorderUserIdsFromForm(formData, user.id);
+  if (!crmRecorderUserIds.length) {
+    return { ok: false as const, error: "crm_recorders_required" as const };
+  }
+  const recorderCheck = await assertCrmRecordersMapped(crmRecorderUserIds);
+  if (!recorderCheck.ok) return { ok: false as const, error: recorderCheck.error };
 
   const { crmSync } = await persistBusinessRecord({
     owner,
@@ -922,6 +929,7 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
     sourceTodoId,
     traceNature,
     traceAction,
+    crmRecorderUserIds,
   });
 
   revalidatePath(ownerPath(owner));
@@ -929,13 +937,7 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
   revalidatePath("/");
   revalidatePath("/mobile");
 
-  if (crmSync.status === "synced") {
-    return { ok: true, message: `已同步到 CRM（${crmSync.traceId.slice(0, 8)}…）` };
-  }
-  if (crmSync.status === "failed") {
-    return { ok: true, warning: `本地已保存，CRM 同步失败：${crmSync.error}` };
-  }
-  return { ok: true, info: `本地已保存（CRM：${crmSync.reason}）` };
+  return { ok: true, ...formatBusinessRecordCrmFeedback(crmSync) };
 }
 
 export async function deleteBusinessRecordAction(owner: OwnerRef, recordId: string) {
