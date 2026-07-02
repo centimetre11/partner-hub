@@ -8,7 +8,7 @@ import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { countProposalItems, emptyIntakeProposal, mergeFinalProposal } from "@/lib/proposal-merge";
 import { mergeBusinessRecordIntakeProposal } from "@/lib/business-record-intake";
-import { intakeProposalReplacesDraft, isFastIntakeScope, shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
+import { intakeProposalReplacesDraft, isFastIntakeScope, intakeScopePrefetchesPublicResearch, shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { applyIntakeProposalClient } from "@/lib/apply-intake-client";
 import { consumeAiSse } from "@/lib/ai-trace";
 import { ensureChatImagesWithinLimit } from "@/lib/ai-images";
@@ -21,7 +21,6 @@ import {
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
 import { formatPreferencePick, getClarificationTier } from "@/lib/ai-clarifications";
-import { intakeScopePrefetchesPublicResearch } from "@/lib/intake-public-research";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { useMessages, useLocale } from "@/lib/i18n/context";

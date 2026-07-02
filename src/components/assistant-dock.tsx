@@ -9,7 +9,7 @@ import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
 import { countProposalItems, emptyIntakeProposal, mergeFinalProposal } from "@/lib/proposal-merge";
 import { mergeBusinessRecordIntakeProposal } from "@/lib/business-record-intake";
-import { intakeProposalReplacesDraft } from "@/lib/proposal-scope";
+import { intakeProposalReplacesDraft, intakeScopePrefetchesPublicResearch } from "@/lib/proposal-scope";
 import { consumeAiSse } from "@/lib/ai-trace";
 import {
   applyDirectClarification,
@@ -20,7 +20,6 @@ import {
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
 import { formatPreferencePick, getClarificationTier } from "@/lib/ai-clarifications";
-import { intakeScopePrefetchesPublicResearch } from "@/lib/intake-public-research";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { AssistantBuilderPanel } from "@/components/assistant-builder-panel";

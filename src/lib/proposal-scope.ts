@@ -307,6 +307,16 @@ export function isFastIntakeScope(scope: IntakeScope): boolean {
   return FAST_INTAKE_SCOPES.includes(scope);
 }
 
+/** Scopes that run web/LinkedIn research after identity clarifications are answered. */
+export function intakeScopePrefetchesPublicResearch(scope: IntakeScope): boolean {
+  return (
+    scope === "new_partner" ||
+    scope === "profile" ||
+    scope === "new_customer" ||
+    scope === "customer_profile"
+  );
+}
+
 /** Bound partner + fast scope + ready draft → skip content confirm (disabled: intent confirm required first). */
 export function shouldAutoApplyBoundIntake(_opts: {
   scope: IntakeScope;

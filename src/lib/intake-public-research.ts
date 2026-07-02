@@ -3,16 +3,10 @@ import { runSkill, newSkillContext } from "./skills";
 import { emitTraceResultChunks, nextTraceId, summarizeToolResult, toolTraceStep, type TraceEmitter } from "./ai-trace";
 import type { Locale } from "./i18n/locale";
 import type { IntakeScope } from "./ai-locale";
-
-const PUBLIC_RESEARCH_SCOPES = new Set<IntakeScope>([
-  "new_partner",
-  "profile",
-  "new_customer",
-  "customer_profile",
-]);
+import { intakeScopePrefetchesPublicResearch as scopePrefetchesResearch } from "./proposal-scope";
 
 export function intakeScopePrefetchesPublicResearch(scope: IntakeScope): boolean {
-  return PUBLIC_RESEARCH_SCOPES.has(scope);
+  return scopePrefetchesResearch(scope);
 }
 
 /** Infer company/account name for parallel web + LinkedIn prefetch. */
