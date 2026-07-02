@@ -21,6 +21,11 @@ function emptyDraft(): IntakeProposal {
   return { summary: "", fields: [], contacts: [], opportunities: [], todos: [], trainings: [], solutions: [], businessRecords: [] };
 }
 
+/** Baseline draft when AI returns clarifications but no filled fields yet. */
+export function emptyIntakeProposal(): IntakeProposal {
+  return emptyDraft();
+}
+
 export function fieldKey(field: string) {
   return `field:${field}`;
 }

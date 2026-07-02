@@ -6,7 +6,7 @@ import type { IntakeProposal, IntakeScope, IntakeClarification } from "@/lib/ai-
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
-import { countProposalItems, mergeFinalProposal } from "@/lib/proposal-merge";
+import { countProposalItems, emptyIntakeProposal, mergeFinalProposal } from "@/lib/proposal-merge";
 import { mergeBusinessRecordIntakeProposal } from "@/lib/business-record-intake";
 import { intakeProposalReplacesDraft, isFastIntakeScope, shouldAutoApplyBoundIntake } from "@/lib/proposal-scope";
 import { applyIntakeProposalClient } from "@/lib/apply-intake-client";
@@ -21,6 +21,7 @@ import {
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
 import { formatPreferencePick, getClarificationTier } from "@/lib/ai-clarifications";
+import { intakeScopePrefetchesPublicResearch } from "@/lib/intake-public-research";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { useMessages, useLocale } from "@/lib/i18n/context";
@@ -84,11 +85,11 @@ export function AiIntakePanel({
   }
 
   function handleDirectClarify(id: string, value: string) {
-    if (!proposal) return;
+    const base = proposal ?? emptyIntakeProposal();
     const c = clarifications.find((x) => x.id === id);
     if (!c) return;
     const tier = getClarificationTier(c);
-    const { proposal: next, changes } = applyDirectClarification(proposal, c, value);
+    const { proposal: next, changes } = applyDirectClarification(base, c, value);
     setProposal(next);
     const remaining = clarifications.filter((x) => x.id !== id);
     setClarifications(remaining);
@@ -98,9 +99,8 @@ export function AiIntakePanel({
       directRequiredAnswersRef.current.push({ id, question: c.question, value });
     }
 
-    const usesResearch = scope === "new_partner" || scope === "profile";
     if (
-      usesResearch &&
+      intakeScopePrefetchesPublicResearch(scope) &&
       tier === "required" &&
       !hasBlockingClarifications(remaining) &&
       directRequiredAnswersRef.current.length > 0
@@ -174,7 +174,7 @@ export function AiIntakePanel({
   }
 
   function mergeTurnProposal(turnProposal: IntakeProposal, prev: IntakeProposal | null): IntakeProposal | null {
-    if (!turnProposal || countProposalItems(turnProposal) <= 0) return prev;
+    if (!turnProposal || countProposalItems(turnProposal) <= 0) return prev ?? turnProposal ?? emptyIntakeProposal();
     if (scope === "business_record" && prev) {
       return mergeBusinessRecordIntakeProposal(prev, turnProposal);
     }

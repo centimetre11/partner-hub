@@ -7,7 +7,7 @@ import { PROPOSE_INTENT_RE } from "@/lib/propose-intent";
 import type { AiStreamState, AiTraceStep } from "@/lib/ai-trace";
 import type { ChatImage } from "@/lib/ai";
 import type { ProposalChanges } from "@/lib/proposal-merge";
-import { countProposalItems, mergeFinalProposal } from "@/lib/proposal-merge";
+import { countProposalItems, emptyIntakeProposal, mergeFinalProposal } from "@/lib/proposal-merge";
 import { mergeBusinessRecordIntakeProposal } from "@/lib/business-record-intake";
 import { intakeProposalReplacesDraft } from "@/lib/proposal-scope";
 import { consumeAiSse } from "@/lib/ai-trace";
@@ -15,10 +15,12 @@ import {
   applyDirectClarification,
   applyProposalEdit,
   formatAiClarificationMessage,
+  hasBlockingClarifications,
   type ClarificationAnswer,
   type ProposalEditPatch,
 } from "@/lib/clarification-apply";
-import { formatPreferencePick } from "@/lib/ai-clarifications";
+import { formatPreferencePick, getClarificationTier } from "@/lib/ai-clarifications";
+import { intakeScopePrefetchesPublicResearch } from "@/lib/intake-public-research";
 import { AiWorkflowPanel } from "@/components/ai-workflow-panel";
 import { AiFullscreenOverlay } from "@/components/ai-fullscreen-overlay";
 import { AssistantBuilderPanel } from "@/components/assistant-builder-panel";
@@ -119,13 +121,24 @@ export function AssistantDock() {
   }
 
   function handleDirectClarify(id: string, value: string) {
-    if (!proposal) return;
+    const base = proposal ?? emptyIntakeProposal();
     const c = clarifications.find((x) => x.id === id);
     if (!c) return;
-    const { proposal: next, changes } = applyDirectClarification(proposal, c, value);
+    const tier = getClarificationTier(c);
+    const { proposal: next, changes } = applyDirectClarification(base, c, value);
     setProposal(next);
-    setClarifications((prev) => prev.filter((x) => x.id !== id));
+    const remaining = clarifications.filter((x) => x.id !== id);
+    setClarifications(remaining);
     setPatchChanges(changes);
+
+    if (
+      proposeMode &&
+      intakeScopePrefetchesPublicResearch(proposeScope) &&
+      tier === "required" &&
+      !hasBlockingClarifications(remaining)
+    ) {
+      void send(formatAiClarificationMessage([{ id, question: c.question, value }], locale));
+    }
   }
 
   function handleProposalEdit(patch: ProposalEditPatch) {

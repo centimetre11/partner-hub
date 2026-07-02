@@ -16,7 +16,7 @@ import { fieldKey, businessRecordKey, mergeProposalPatch, type ProposalChanges }
 export type ClarificationApplyMode = "direct" | "ai";
 
 /** Identity anchor fields — shown as blocking checkpoints before deep research continues */
-const IDENTITY_CLARIFICATION_IDS = new Set(["partnerName", "name", "website", "dedupe", TODO_PARTNER_NOT_FOUND_ID]);
+const IDENTITY_CLARIFICATION_IDS = new Set(["partnerName", "name", "customerName", "website", "dedupe", TODO_PARTNER_NOT_FOUND_ID]);
 
 /** Profile fields that map 1:1 from clarification id → draft field (no LLM round-trip) */
 const DIRECT_CLARIFICATION_IDS = new Set([
@@ -118,7 +118,7 @@ export function getClarificationMode(c: IntakeClarification): ClarificationApply
   if (c.apply === "direct" || c.apply === "ai") return c.apply;
   if (/^br-\d+-(nature|action)$/.test(c.id)) return "direct";
   if (c.id === "dedupe") return "ai";
-  if (c.id === "partnerName" || c.id === "name" || c.id === "website" || c.id === TODO_PARTNER_NOT_FOUND_ID) return "direct";
+  if (c.id === "partnerName" || c.id === "name" || c.id === "website" || c.id === "customerName" || c.id === TODO_PARTNER_NOT_FOUND_ID) return "direct";
   if (DIRECT_CLARIFICATION_IDS.has(c.id) && c.id in PARTNER_FIELD_LABELS) return "direct";
   return "ai";
 }
@@ -173,6 +173,16 @@ export function applyDirectClarification(
       new Set()
     );
     return { proposal: draft, changes };
+  }
+
+  if (clarification.id === "customerName") {
+    const next = { ...proposal, customerName: trimmed, partnerName: undefined };
+    return {
+      proposal: next,
+      changes: proposal.customerName !== trimmed
+        ? { added: proposal.customerName ? [] : ["customer"], updated: proposal.customerName ? ["customer"] : [], removed: [], aiReupdates: [] }
+        : { added: [], updated: [], removed: [], aiReupdates: [] },
+    };
   }
 
   const field = clarification.id in PARTNER_FIELD_LABELS ? clarification.id : clarification.id;
