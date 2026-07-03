@@ -135,7 +135,9 @@ const EDITABLE_FIELDS = [
   "name", "category", "partnerArchetype", "valuePattern",
   "valuePartnerOffer", "valueFanruanOffer", "valueCustomerOutcome", "dedicatedHeadcount",
   "tier", "city", "country", "headcount", "website", "companyType",
-  "coreBusiness", "capability", "knownClients", "certLevel", "currentTools",
+  "coreBusiness", "capability", "knownClients",
+  "partnerAnnualRevenue", "partnerDealsPerYear", "estimatedAnnualValue",
+  "certLevel", "currentTools",
   "keyDifferentiator", "playbook", "pitch", "bestChannel", "notes",
 ] as const;
 

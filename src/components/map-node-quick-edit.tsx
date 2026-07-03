@@ -175,6 +175,22 @@ export function MapNodeQuickEdit({
                 </label>
               </>
             )}
+            {node.id === "annual_value" && (
+              <>
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-500">Partner annual revenue (est.)</span>
+                  <input name="partnerAnnualRevenue" defaultValue={partner.partnerAnnualRevenue ?? ""} placeholder="e.g. ~$2M" className={input} />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-500">Deals per year (est.)</span>
+                  <input name="partnerDealsPerYear" defaultValue={partner.partnerDealsPerYear ?? ""} placeholder="e.g. 5–8" className={input} />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-500">Est. annual value to FanRuan</span>
+                  <input name="estimatedAnnualValue" defaultValue={partner.estimatedAnnualValue ?? ""} placeholder="e.g. $80K license + services" className={input} />
+                </label>
+              </>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                 Cancel

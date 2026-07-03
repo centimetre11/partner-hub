@@ -30,6 +30,7 @@ export type FrameworkMapNode = {
 /** Instance map node → workspace panel & quick-edit eligibility */
 export const INSTANCE_NODE_TARGETS: Record<string, { panel: WorkspacePanelId; editable?: boolean }> = {
   tier: { panel: "positioning", editable: true },
+  annual_value: { panel: "positioning", editable: true },
   stage: { panel: "positioning", editable: true },
   archetype: { panel: "positioning", editable: true },
   category: { panel: "positioning", editable: true },
@@ -228,6 +229,21 @@ function nodeStatus(ok: boolean, partial?: boolean, current?: boolean): MapNodeS
   return "missing";
 }
 
+function formatAnnualValueSummary(
+  p: Pick<Partner, "partnerAnnualRevenue" | "partnerDealsPerYear" | "estimatedAnnualValue">,
+  ui: LabelsBundle,
+): string {
+  const fb = ui.fallbacks;
+  if (p.estimatedAnnualValue) return p.estimatedAnnualValue;
+  const parts: string[] = [];
+  if (p.partnerAnnualRevenue) parts.push(p.partnerAnnualRevenue);
+  if (p.partnerDealsPerYear) {
+    parts.push(ui.locale === "zh" ? `${p.partnerDealsPerYear}单/年` : `${p.partnerDealsPerYear} deals/yr`);
+  }
+  if (parts.length) return `${parts.join(" · ")} · ${fb.toBeWritten}`;
+  return fb.tbd;
+}
+
 export function buildPartnerInstanceMap(
   p: PartnerFrameworkInput,
   labelMaps?: Partial<Record<TaxonomyDimension, Record<string, string>>>,
@@ -258,6 +274,17 @@ export function buildPartnerInstanceMap(
 
   const nodes: FrameworkMapNode[] = [
     { id: "tier", layer: layerPos, label: "Tier", hint: "Investment intensity", status: nodeStatus(!!p.tier), value: tierLabel },
+    {
+      id: "annual_value",
+      layer: layerPos,
+      label: ui.locale === "zh" ? "年度价值" : "Annual value",
+      hint: ui.locale === "zh" ? "从他自身营收与年单量判断" : "From their revenue & deals/year",
+      status: nodeStatus(
+        !!p.estimatedAnnualValue,
+        !!(p.partnerAnnualRevenue || p.partnerDealsPerYear),
+      ),
+      value: formatAnnualValueSummary(p, ui),
+    },
     { id: "stage", layer: layerPos, label: "Stage", hint: "Relationship progress", status: "current", value: `${stage}. ${stageNameFromLabels(ui, stage)}` },
     { id: "archetype", layer: layerPos, label: ui.taxonomyMeta.ARCHETYPE.label, hint: ui.taxonomyMeta.ARCHETYPE.hint, status: nodeStatus(!!p.partnerArchetype && p.partnerArchetype !== "OTHER", !!p.partnerArchetype), value: archetypeLabel },
     { id: "category", layer: layerPos, label: ui.taxonomyMeta.CATEGORY.label, hint: ui.taxonomyMeta.CATEGORY.hint, status: nodeStatus(p.category !== "OTHER"), value: categoryLabel },
@@ -348,6 +375,7 @@ export function buildFrameworkReferenceMap(ui: LabelsBundle = { ...labelsEn, loc
       layer: layerPos,
       nodes: [
         { id: "tier", label: "Tier A/B/C", hint: ui.locale === "zh" ? "决定投入强度与接触频率" : "Drives investment intensity and touch frequency" },
+        { id: "annual_value", label: ui.locale === "zh" ? "年度价值" : "Annual value", hint: ui.locale === "zh" ? "从他自身营收与年单量判断能为帆软带来多少" : "Estimate FanRuan value from their revenue & deals/year" },
         { id: "stage", label: "Stage 1–10", hint: ui.locale === "zh" ? "决定本阶段必做动作" : "Drives required actions for this stage" },
         { id: "archetype", label: ui.taxonomyMeta.ARCHETYPE.label, hint: ui.taxonomyMeta.ARCHETYPE.hint },
         { id: "category", label: ui.taxonomyMeta.CATEGORY.label, hint: ui.taxonomyMeta.CATEGORY.hint },

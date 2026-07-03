@@ -75,6 +75,9 @@ model Partner {
   coreBusiness     String?
   capability       String?
   knownClients     String?
+  partnerAnnualRevenue String? // 伙伴自身年营收（估算）
+  partnerDealsPerYear  String? // 一年约几单
+  estimatedAnnualValue String? // 预估为帆软一年带来多少
   certLevel        String?
   currentTools     String?
   keyDifferentiator String?

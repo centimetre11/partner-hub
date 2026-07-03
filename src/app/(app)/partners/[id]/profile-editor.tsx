@@ -130,6 +130,18 @@ export function ProfileEditor({
                 <span className="text-xs text-slate-500">{pe.knownClients}</span>
                 <input name="knownClients" defaultValue={p.knownClients ?? ""} className={input} />
               </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">{pe.partnerAnnualRevenue}</span>
+                <input name="partnerAnnualRevenue" defaultValue={p.partnerAnnualRevenue ?? ""} placeholder={pe.partnerAnnualRevenuePlaceholder} className={input} />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-500">{pe.partnerDealsPerYear}</span>
+                <input name="partnerDealsPerYear" defaultValue={p.partnerDealsPerYear ?? ""} placeholder={pe.partnerDealsPerYearPlaceholder} className={input} />
+              </label>
+              <label className="space-y-1 col-span-2 md:col-span-3">
+                <span className="text-xs text-slate-500">{pe.estimatedAnnualValue}</span>
+                <input name="estimatedAnnualValue" defaultValue={p.estimatedAnnualValue ?? ""} placeholder={pe.estimatedAnnualValuePlaceholder} className={input} />
+              </label>
               <label className="space-y-1 col-span-2 md:col-span-3">
                 <span className="text-xs text-slate-500">{pe.currentTools}</span>
                 <input name="currentTools" defaultValue={p.currentTools ?? ""} className={input} />
