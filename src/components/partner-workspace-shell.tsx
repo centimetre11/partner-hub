@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { Partner, User } from "@prisma/client";
 import { PartnerFrameworkMap } from "@/components/partner-framework-map";
@@ -81,12 +80,7 @@ export function PartnerWorkspaceShell({
   return (
     <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-12 sm:pb-16">
       <div className="flex flex-col gap-3 mb-5">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs text-slate-500">{m.workspace.clickModule}</p>
-          <Link href="/framework" className="text-xs text-sky-600 hover:underline shrink-0">
-            {m.workspace.frameworkGuide}
-          </Link>
-        </div>
+        <p className="text-xs text-slate-500">{m.workspace.clickModule}</p>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {workspacePanels.map((p) => {
             const active = activePanel === p.id;

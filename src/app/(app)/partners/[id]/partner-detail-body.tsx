@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import type { Opportunity, TimelineEvent, TodoItem, User } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -16,14 +15,12 @@ import {
   loadTaxonomyLabelMaps,
   parseIndustries,
 } from "@/lib/taxonomy";
-import { PartnerGtmPanelLoader } from "@/components/partner-gtm-panel-loader";
+import { ProfileEditor } from "./profile-editor";
 import { PartnerWorkspaceShell } from "@/components/partner-workspace-shell";
 import {
   addNoteAction,
   deleteTodoAction,
 } from "@/lib/actions";
-import { ProfileEditor } from "./profile-editor";
-import { AnnualValueSection } from "@/components/annual-value-section";
 import { AiPanel } from "./ai-panel";
 import { PartnerCustomersSection } from "@/components/partner-customers-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
@@ -308,8 +305,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
               )}
             </div>
 
-            <AnnualValueSection partner={p} />
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <Card title={m.partnerDetail.positioningTags} className="lg:col-span-1">
                 <dl className="space-y-3 text-sm">
@@ -337,6 +332,9 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                     [m.partnerDetail.coreCapabilities, p.capability],
                     [m.partnerDetail.currentTools, p.currentTools],
                     [m.partnerDetail.knownClients, p.knownClients],
+                    [m.partnerDetail.partnerAnnualRevenue, p.partnerAnnualRevenue],
+                    [m.partnerDetail.partnerDealsPerYear, p.partnerDealsPerYear],
+                    [m.partnerDetail.estimatedAnnualValue, p.estimatedAnnualValue],
                   ].map(([k, v]) => (
                     <div key={k as string}>
                       <dt className="text-xs text-slate-400">{k}</dt>
@@ -346,17 +344,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                 </dl>
               </Card>
             </div>
-
-            <Suspense
-              fallback={
-                <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-5 space-y-3 animate-pulse">
-                  <div className="h-4 w-32 bg-slate-200/80 rounded" />
-                  <div className="h-24 bg-slate-200/80 rounded" />
-                </div>
-              }
-            >
-              <PartnerGtmPanelLoader partner={p} labelMaps={labelMaps} />
-            </Suspense>
           </div>
         }
         pipeline={

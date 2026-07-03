@@ -51,7 +51,6 @@ export function NavLinks({
         { href: "/knowhow", label: m.nav.knowhow, icon: "🔍" },
         { href: "/faq", label: m.nav.faq, icon: "?" },
         { href: "/taxonomy", label: m.nav.taxonomy, icon: "◇" },
-        { href: "/playbook-library", label: m.nav.playbookLibrary, icon: "◈" },
       ],
     },
     ...(INBOX_NAV_ENABLED

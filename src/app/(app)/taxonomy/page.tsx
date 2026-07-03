@@ -37,7 +37,6 @@ export default async function TaxonomyPage({
     m.taxonomy.howItWorksBullet1,
     m.taxonomy.howItWorksBullet2,
     m.taxonomy.howItWorksBullet3,
-    m.taxonomy.howItWorksBullet4,
   ];
 
   return (

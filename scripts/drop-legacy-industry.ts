@@ -1,5 +1,5 @@
 /**
- * Backfill Partner/GtmLibrary.industries from legacy industry column before schema drop.
+ * Backfill Partner.industries from legacy industry column before schema drop.
  * Safe to re-run; no-ops when industry column is already gone.
  */
 import { PrismaClient } from "@prisma/client";
@@ -9,20 +9,20 @@ const db = new PrismaClient();
 
 type LegacyRow = { id: string; industry: string | null; industries: string | null };
 
-async function tableHasIndustryColumn(table: "Partner" | "GtmLibrary"): Promise<boolean> {
+async function tableHasIndustryColumn(): Promise<boolean> {
   // Works on both PostgreSQL (information_schema) and SQLite (pragma_table_info).
   // On a fresh Postgres database the legacy `industry` column never existed, so
   // this resolves to false and the backfill is correctly skipped.
   try {
     const rows = await db.$queryRawUnsafe<{ name: string }[]>(
       `SELECT column_name AS name FROM information_schema.columns WHERE table_name = $1 AND column_name = 'industry'`,
-      table,
+      "Partner",
     );
     return rows.length > 0;
   } catch {
     try {
       const rows = await db.$queryRaw<{ name: string }[]>`
-        SELECT name FROM pragma_table_info(${table}) WHERE name = 'industry'
+        SELECT name FROM pragma_table_info('Partner') WHERE name = 'industry'
       `;
       return rows.length > 0;
     } catch {
@@ -31,38 +31,27 @@ async function tableHasIndustryColumn(table: "Partner" | "GtmLibrary"): Promise<
   }
 }
 
-async function backfillTable(table: "Partner" | "GtmLibrary") {
-  if (!(await tableHasIndustryColumn(table))) {
-    console.log(`[drop-legacy-industry] ${table}.industry already removed — skip`);
+async function backfillPartnerIndustries() {
+  if (!(await tableHasIndustryColumn())) {
+    console.log("[drop-legacy-industry] Partner.industry already removed — skip");
     return;
   }
 
-  const rows =
-    table === "Partner"
-      ? await db.$queryRaw<LegacyRow[]>`
-          SELECT id, industry, industries FROM Partner
-          WHERE industry IS NOT NULL AND industry != ''
-        `
-      : await db.$queryRaw<LegacyRow[]>`
-          SELECT id, industry, industries FROM GtmLibrary
-          WHERE industry IS NOT NULL AND industry != ''
-        `;
+  const rows = await db.$queryRaw<LegacyRow[]>`
+    SELECT id, industry, industries FROM Partner
+    WHERE industry IS NOT NULL AND industry != ''
+  `;
 
   for (const row of rows) {
     if (row.industries?.trim()) continue;
     const industries = stringifyIndustries([row.industry!]);
-    if (table === "Partner") {
-      await db.partner.update({ where: { id: row.id }, data: { industries } });
-    } else {
-      await db.gtmLibrary.update({ where: { id: row.id }, data: { industries } });
-    }
-    console.log(`[drop-legacy-industry] ${table} ${row.id}: ${row.industry} → ${industries}`);
+    await db.partner.update({ where: { id: row.id }, data: { industries } });
+    console.log(`[drop-legacy-industry] Partner ${row.id}: ${row.industry} → ${industries}`);
   }
 }
 
 async function main() {
-  await backfillTable("Partner");
-  await backfillTable("GtmLibrary");
+  await backfillPartnerIndustries();
   console.log("[drop-legacy-industry] backfill done");
 }
 

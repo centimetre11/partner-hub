@@ -26,7 +26,6 @@ model User {
   materials    Material[]
   knowledgeArticles KnowledgeArticle[]
   faqEntries        FaqEntry[]
-  gtmLibraryItems   GtmLibrary[]
   taxonomyOptions   TaxonomyOption[]
   skills       Skill[]
   aiTokenUsages AiTokenUsage[]
@@ -256,30 +255,6 @@ model WecomPushJob {
   sentAt    DateTime?
 
   @@index([status, createdAt])
-}
-
-// 打法库：playbook + pitch 存档（支持同标题多版本）
-model GtmLibrary {
-  id               String   @id @default(cuid())
-  title            String
-  playbook         String?
-  pitch            String?
-  industries       String?
-  valuePattern     String?
-  partnerArchetype String?
-  category         String?
-  notes            String?
-  version          Int      @default(1)
-  groupId          String   // 同一组 = 同一打法的不同版本
-  sourcePartnerId  String?
-  sourcePartnerName String?
-  createdById      String?
-  createdBy        User?    @relation(fields: [createdById], references: [id])
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([groupId])
-  @@index([title])
 }
 
 // 维度库：伙伴类型 / 行业 / 价值模式 / 竞品基因 的可扩展选项

@@ -139,6 +139,10 @@ export function ProfileEditor({
                 <span className="text-xs text-slate-500">{pe.knownClients}</span>
                 <input name="knownClients" defaultValue={p.knownClients ?? ""} className={input} />
               </label>
+              <div className="col-span-2 md:col-span-3 pt-1 border-t border-slate-100">
+                <p className="text-xs font-medium text-slate-600 mb-2">{pe.annualValueSection}</p>
+                <p className="text-[11px] text-slate-400 mb-3">{pe.annualValueHint}</p>
+              </div>
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{pe.partnerAnnualRevenue}</span>
                 <input name="partnerAnnualRevenue" defaultValue={p.partnerAnnualRevenue ?? ""} placeholder={pe.partnerAnnualRevenuePlaceholder} className={input} />
