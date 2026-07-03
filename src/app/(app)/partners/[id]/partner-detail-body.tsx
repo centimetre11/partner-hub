@@ -23,6 +23,7 @@ import {
   deleteTodoAction,
 } from "@/lib/actions";
 import { ProfileEditor } from "./profile-editor";
+import { AnnualValueSection } from "@/components/annual-value-section";
 import { AiPanel } from "./ai-panel";
 import { PartnerCustomersSection } from "@/components/partner-customers-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
@@ -307,24 +308,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
               )}
             </div>
 
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-5">
-              <h3 className="text-sm font-semibold text-slate-800 mb-3">{m.partnerDetail.annualValueEstimate}</h3>
-              <p className="text-xs text-slate-500 mb-4">{m.partnerDetail.annualValueHint}</p>
-              <dl className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                {[
-                  [m.partnerDetail.partnerAnnualRevenue, p.partnerAnnualRevenue],
-                  [m.partnerDetail.partnerDealsPerYear, p.partnerDealsPerYear],
-                  [m.partnerDetail.estimatedAnnualValue, p.estimatedAnnualValue],
-                ].map(([k, v]) => (
-                  <div key={k as string}>
-                    <dt className="text-xs text-slate-500">{k}</dt>
-                    <dd className={`mt-1 font-medium ${v ? "text-emerald-900" : "text-slate-300 font-normal"}`}>
-                      {v || m.common.toBeFilled}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
+            <AnnualValueSection partner={p} />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               <Card title={m.partnerDetail.positioningTags} className="lg:col-span-1">

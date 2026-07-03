@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction, setPipelineStageAction } from "@/lib/actions";
 import { tierSelectValue } from "@/components/ui";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
 import { PartnerTeamFields } from "@/components/partner-team-fields";
+import { ModalPortal } from "@/components/modal-portal";
 import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
 import { type FrameworkMapNode } from "@/lib/partner-framework";
 
@@ -28,6 +30,9 @@ export function MapNodeQuickEdit({
   taxonomy: TaxonomyOptionsMap;
   onClose: () => void;
 }) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -37,14 +42,8 @@ export function MapNodeQuickEdit({
   }, [onClose]);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-lg w-full border border-slate-200 max-w-lg p-5 max-h-[85vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <ModalPortal onClose={() => !saving && onClose()}>
+      <div className="bg-white rounded-lg w-full border border-slate-200 max-w-lg p-5 max-h-[85vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Edit · {node.label}</h3>
@@ -83,8 +82,14 @@ export function MapNodeQuickEdit({
         ) : (
           <form
             action={async (fd) => {
-              await updatePartnerAction(partner.id, fd);
-              onClose();
+              setSaving(true);
+              try {
+                await updatePartnerAction(partner.id, fd);
+                onClose();
+                router.refresh();
+              } finally {
+                setSaving(false);
+              }
             }}
             className="space-y-3 text-sm"
           >
@@ -192,14 +197,16 @@ export function MapNodeQuickEdit({
               </>
             )}
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
+              <button type="button" disabled={saving} onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                 Cancel
               </button>
-              <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">Save</button>
+              <button type="submit" disabled={saving} className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60">
+                {saving ? "Saving…" : "Save"}
+              </button>
             </div>
           </form>
         )}
       </div>
-    </div>
+    </ModalPortal>
   );
 }
