@@ -10,6 +10,26 @@ export function resolveWecomBotDisplayName(): string {
   return process.env.WECOM_BOT_DISPLAY_NAME?.trim() || "MEA 伙伴助手";
 }
 
+/** @ 前缀后的机器人显示名（群聊指令常见） */
+export function extractWecomAtMention(text: string): string | null {
+  const m = text.trim().match(/^@([\w.\u4e00-\u9fa5.\s-]{1,40})\s+/);
+  return m?.[1]?.trim() ?? null;
+}
+
+/** partnerName 是否其实是 @ 机器人，而非业务伙伴/客户 */
+export function isLikelyWecomBotMentionName(name: string, userText?: string): boolean {
+  const q = name.trim().replace(/^@/, "");
+  if (!q) return false;
+  const configured = resolveWecomBotDisplayName();
+  const lower = q.toLowerCase();
+  const cfgLower = configured.toLowerCase();
+  if (lower === cfgLower) return true;
+  if (lower.includes("beard gang") || cfgLower.includes(lower) || lower.includes(cfgLower)) return true;
+  const at = userText ? extractWecomAtMention(userText) : null;
+  if (at && at.toLowerCase() === lower) return true;
+  return false;
+}
+
 /** 引导页：说明如何找到机器人 + 一键打开移动工作台（textcard 不再默认跳此页） */
 export function wecomBotGuidePageUrl(): string {
   return `${resolveAppBaseUrl()}/wecom/bot`;

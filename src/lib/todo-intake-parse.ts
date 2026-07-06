@@ -89,6 +89,14 @@ function extractAssignee(text: string): { rest: string; assigneeName?: string } 
       assigneeName: forPerson[1].trim(),
     };
   }
+  const giveAddTodo = s.match(
+    /^(?:给|for)\s*([A-Za-z\u4e00-\u9fa5][A-Za-z0-9\u4e00-\u9fa5.\s'-]{0,20}?)\s*(?:加|添|创|增加|新增|添加|创建|记(?:录|个|一下)?)\s*(?:一个|一下|一条|个)?\s*(?:待办|代办)/i,
+  );
+  if (giveAddTodo?.[1]?.trim()) {
+    const assigneeName = giveAddTodo[1].trim();
+    const rest = s.slice(giveAddTodo[0].length).trim().replace(/^(?:待办|代办)[：:,，、\s]*/i, "");
+    return { rest, assigneeName };
+  }
   const patterns = [
     /[,，、]\s*(?:负责人|责任人|指派给|分配给|owner|assignee)\s*(?:是|:|：|=)\s*([^,，。；;\n]+)\s*$/i,
     /\s+(?:负责人|责任人|owner|assignee)\s*(?:是|:|：|=)\s*([^,，。；;\n]+)\s*$/i,

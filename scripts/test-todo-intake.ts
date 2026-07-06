@@ -16,6 +16,8 @@ import {
 import { parseTodoFromText, resolveSelfAssigneeNames } from "../src/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "../src/lib/intake-text";
 import { extractPartnerNameFromIntakeText } from "../src/lib/intake-partner-binding";
+import { isLikelyWecomBotMentionName } from "../src/lib/wecom-bot-guide";
+import { stripWecomCommandPrefix } from "../src/lib/wecom-user-resolve";
 
 type Case = { name: string; pass: boolean; detail?: string };
 
@@ -159,6 +161,34 @@ function main() {
       "企微 @ 标题不含命令前缀",
       wecomAssignee.title === "下周来见一下技术团队探明",
       wecomAssignee.title,
+    ),
+  );
+
+  const songjian = parseTodoFromText(
+    stripWecomCommandPrefix("@MENA Beard Gang 给宋健加一个待办关于 Zatka 项目的合同和首付款进度"),
+    TODAY,
+  );
+  cases.push(assert("给宋健加一个待办：负责人", songjian.assigneeName === "宋健", songjian.assigneeName));
+  cases.push(
+    assert(
+      "给宋健加一个待办：标题",
+      songjian.title.includes("Zatka") && !/给宋健|加一个待办/.test(songjian.title),
+      songjian.title,
+    ),
+  );
+  cases.push(
+    assert(
+      "@MENA Beard Gang 不是伙伴名",
+      isLikelyWecomBotMentionName(
+        "MENA Beard Gang",
+        "@MENA Beard Gang 给宋健加一个待办关于 Zatka 项目的合同和首付款进度",
+      ),
+    ),
+  );
+  cases.push(
+    assert(
+      "正文不含 @ 时不误判机器人",
+      !isLikelyWecomBotMentionName("AkLogiks", "给 areeb 记两个待办"),
     ),
   );
 

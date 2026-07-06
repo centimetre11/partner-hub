@@ -5,6 +5,8 @@ import type { Locale } from "./i18n/locale";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { lookupSingleCustomerByName } from "./business-record-intake";
 import { isLikelyHubAssigneeName } from "./hub-assignee-names";
+import { isLikelyWecomBotMentionName } from "./wecom-bot-guide";
+import { stripWecomCommandPrefix } from "./wecom-user-resolve";
 
 /** Scopes whose primary payload must belong to a specific partner */
 export const PARTNER_REQUIRED_SCOPES: IntakeScope[] = [
@@ -75,12 +77,33 @@ export async function lookupSinglePartnerByName(query: string) {
 
 /** Partner name candidates for clarification buttons (Partner Hub). */
 export async function suggestPartnersFromIntakeText(text: string, limit = 6) {
-  const extracted = extractPartnerNameFromIntakeText(text);
+  const stripped = stripWecomCommandPrefix(text).trim();
+  const extracted = extractPartnerNameFromIntakeText(stripped);
   if (extracted) {
+    if (isLikelyWecomBotMentionName(extracted, text)) return [];
     const matches = await findPartnersByName(extracted, limit);
     if (matches.length) return matches;
   }
-  return findPartnersByName(text.slice(0, 40), limit);
+  const slice = stripped.slice(0, 40).trim();
+  if (!slice || isLikelyWecomBotMentionName(slice, text)) return [];
+  return findPartnersByName(slice, limit);
+}
+
+/** Open intake: drop @机器人 / 负责人 误写入的 partnerName */
+export async function sanitizeOpenIntakePartnerName(
+  proposal: IntakeProposal,
+  opts?: { userText?: string; boundPartnerId?: string; boundCustomerId?: string },
+): Promise<IntakeProposal> {
+  if (opts?.boundPartnerId || opts?.boundCustomerId) return proposal;
+  const pn = proposal.partnerName?.trim();
+  if (!pn) return proposal;
+  if (isLikelyWecomBotMentionName(pn, opts?.userText)) {
+    return { ...proposal, partnerName: undefined, hubPartnerId: undefined };
+  }
+  if (await isLikelyHubAssigneeName(pn)) {
+    return { ...proposal, partnerName: undefined, hubPartnerId: undefined };
+  }
+  return proposal;
 }
 
 /** Try to pull a company/partner name from free-form intake text. */
@@ -109,12 +132,20 @@ export async function enrichProposalPartnerFromText(
   userText: string,
   boundPartnerId?: string
 ): Promise<IntakeProposal> {
-  if (boundPartnerId || proposal.partnerName?.trim()) return proposal;
-  const extracted = extractPartnerNameFromIntakeText(userText);
-  if (!extracted) return proposal;
+  if (boundPartnerId || proposal.partnerName?.trim()) {
+    return sanitizeOpenIntakePartnerName(proposal, { userText, boundPartnerId });
+  }
+  const stripped = stripWecomCommandPrefix(userText);
+  const extracted = extractPartnerNameFromIntakeText(stripped);
+  if (!extracted || isLikelyWecomBotMentionName(extracted, userText)) {
+    return sanitizeOpenIntakePartnerName(proposal, { userText, boundPartnerId });
+  }
   if (await isLikelyHubAssigneeName(extracted)) return proposal;
   const match = await lookupSinglePartnerByName(extracted);
-  return { ...proposal, partnerName: match?.name ?? extracted };
+  return sanitizeOpenIntakePartnerName(
+    { ...proposal, partnerName: match?.name ?? extracted },
+    { userText, boundPartnerId },
+  );
 }
 
 export type ResolveIntakePartnerResult =
@@ -439,6 +470,11 @@ export async function enrichTodoPartnerBinding(opts: {
   }
 
   let proposal = opts.proposal;
+  proposal = await sanitizeOpenIntakePartnerName(proposal, {
+    userText: opts.userText,
+    boundPartnerId: opts.boundPartnerId,
+    boundCustomerId: opts.boundCustomerId,
+  });
   if (opts.userText?.trim()) {
     proposal = await enrichProposalPartnerFromText(proposal, opts.userText, opts.boundPartnerId);
   }
