@@ -16,7 +16,7 @@ import {
 import { parseTodoFromText, resolveSelfAssigneeNames } from "../src/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "../src/lib/intake-text";
 import { extractPartnerNameFromIntakeText } from "../src/lib/intake-partner-binding";
-import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "../src/lib/wecom-bot-guide";
+import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "../src/lib/wecom-bot-intake";
 
 type Case = { name: string; pass: boolean; detail?: string };
 

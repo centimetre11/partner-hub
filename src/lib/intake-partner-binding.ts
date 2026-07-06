@@ -5,7 +5,7 @@ import type { Locale } from "./i18n/locale";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { lookupSingleCustomerByName } from "./business-record-intake";
 import { isLikelyHubAssigneeName } from "./hub-assignee-names";
-import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "./wecom-bot-guide";
+import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "./wecom-bot-intake";
 
 /** Scopes whose primary payload must belong to a specific partner */
 export const PARTNER_REQUIRED_SCOPES: IntakeScope[] = [
