@@ -5,8 +5,7 @@ import type { Locale } from "./i18n/locale";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { lookupSingleCustomerByName } from "./business-record-intake";
 import { isLikelyHubAssigneeName } from "./hub-assignee-names";
-import { isLikelyWecomBotMentionName } from "./wecom-bot-guide";
-import { stripWecomCommandPrefix } from "./wecom-user-resolve";
+import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "./wecom-bot-guide";
 
 /** Scopes whose primary payload must belong to a specific partner */
 export const PARTNER_REQUIRED_SCOPES: IntakeScope[] = [
@@ -77,7 +76,7 @@ export async function lookupSinglePartnerByName(query: string) {
 
 /** Partner name candidates for clarification buttons (Partner Hub). */
 export async function suggestPartnersFromIntakeText(text: string, limit = 6) {
-  const stripped = stripWecomCommandPrefix(text).trim();
+  const stripped = stripWecomCommandPrefixForIntake(text).trim();
   const extracted = extractPartnerNameFromIntakeText(stripped);
   if (extracted) {
     if (isLikelyWecomBotMentionName(extracted, text)) return [];
@@ -135,7 +134,7 @@ export async function enrichProposalPartnerFromText(
   if (boundPartnerId || proposal.partnerName?.trim()) {
     return sanitizeOpenIntakePartnerName(proposal, { userText, boundPartnerId });
   }
-  const stripped = stripWecomCommandPrefix(userText);
+  const stripped = stripWecomCommandPrefixForIntake(userText);
   const extracted = extractPartnerNameFromIntakeText(stripped);
   if (!extracted || isLikelyWecomBotMentionName(extracted, userText)) {
     return sanitizeOpenIntakePartnerName(proposal, { userText, boundPartnerId });

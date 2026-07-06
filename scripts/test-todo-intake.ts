@@ -16,8 +16,7 @@ import {
 import { parseTodoFromText, resolveSelfAssigneeNames } from "../src/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "../src/lib/intake-text";
 import { extractPartnerNameFromIntakeText } from "../src/lib/intake-partner-binding";
-import { isLikelyWecomBotMentionName } from "../src/lib/wecom-bot-guide";
-import { stripWecomCommandPrefix } from "../src/lib/wecom-user-resolve";
+import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "../src/lib/wecom-bot-guide";
 
 type Case = { name: string; pass: boolean; detail?: string };
 
@@ -165,7 +164,7 @@ function main() {
   );
 
   const songjian = parseTodoFromText(
-    stripWecomCommandPrefix("@MENA Beard Gang 给宋健加一个待办关于 Zatka 项目的合同和首付款进度"),
+    stripWecomCommandPrefixForIntake("@MENA Beard Gang 给宋健加一个待办关于 Zatka 项目的合同和首付款进度"),
     TODAY,
   );
   cases.push(assert("给宋健加一个待办：负责人", songjian.assigneeName === "宋健", songjian.assigneeName));

@@ -10,10 +10,29 @@ export function resolveWecomBotDisplayName(): string {
   return process.env.WECOM_BOT_DISPLAY_NAME?.trim() || "MEA 伙伴助手";
 }
 
-/** @ 前缀后的机器人显示名（群聊指令常见） */
+/** @ 前缀后的机器人显示名（群聊指令常见；不含中文，避免吞掉「给宋健…」等业务正文） */
 export function extractWecomAtMention(text: string): string | null {
-  const m = text.trim().match(/^@([\w.\u4e00-\u9fa5.\s-]{1,40})\s+/);
-  return m?.[1]?.trim() ?? null;
+  const t = text.trim();
+  const multiWord = t.match(/^@([\w.\s-]{1,40})\s+/);
+  if (multiWord?.[1]?.trim()) return multiWord[1].trim();
+  const configured = resolveWecomBotDisplayName();
+  if (configured && t.startsWith(`@${configured}`)) return configured;
+  const single = t.match(/^@([^\s@]{1,40})\s+/);
+  return single?.[1]?.trim() ?? null;
+}
+
+/** 去掉 @机器人 前缀（开放录入解析用，无 server 依赖；与 wecom-user-resolve.stripWecomCommandPrefix 一致） */
+export function stripWecomCommandPrefixForIntake(text: string): string {
+  let t = text.trim();
+  const multiWord = t.match(/^@([\w.\s-]{1,40})\s+([\s\S]+)$/);
+  if (multiWord?.[2]) return multiWord[2].trim();
+  const configured = resolveWecomBotDisplayName();
+  if (configured) {
+    const escaped = configured.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const stripped = t.replace(new RegExp(`^@${escaped}\\s+`), "").trim();
+    if (stripped !== t) return stripped;
+  }
+  return t.replace(/^(?:@[^\s]+\s*)+/, "").trim();
 }
 
 /** partnerName 是否其实是 @ 机器人，而非业务伙伴/客户 */
