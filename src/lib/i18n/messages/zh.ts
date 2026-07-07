@@ -393,7 +393,7 @@ export const messagesZh: Messages = {
   },
   leads: {
     title: "线索",
-    desc: "共 {count} 条线索（2026）· 每晚从 CRM 自动同步",
+    desc: "共 {count} 条线索（2026）· 每天凌晨 5:00（利雅得）从 CRM 自动同步",
     syncedAt: "最近同步",
     neverSynced: "尚未同步",
     searchPlaceholder: "搜索公司名称 / 电话 / 销售…",
@@ -403,7 +403,7 @@ export const messagesZh: Messages = {
     tabNurture: "培育线索",
     viewHint:
       "新线索与培育线索按 com_status 区分：「销售尚未联络 / 尚未联络」为新线索，其余为培育线索。",
-    empty: "暂无线索。数据每晚自动同步。",
+    empty: "暂无线索。数据每天凌晨 5:00（利雅得）自动同步。",
     emptyNurture: "当前筛选下暂无培育线索。",
     unnamed: "未命名公司",
     fieldClueId: "线索 ID",

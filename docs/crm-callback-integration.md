@@ -308,7 +308,7 @@ export FR_HOME=/opt/finereport/WebReport        # 可选：同时复制到帆软
 |------|------|
 | 销售在 CRM 完成转培育/转客户/编辑等 | 单条回调（对应 action） |
 | CRM 批量脚本改库、数据大面积不一致 | `fullSync: true` 或服务器 `npm run leads-sync` |
-| 每晚定时 | 已有 `LEADS_SYNC` 定时任务，无需回调 |
+| 每天定时（利雅得 05:00） | 已有 `LEADS_SYNC` 定时任务，无需回调 |
 
 单条回调仍会在后台拉 CRM pub API 做校准（pub API 无按 clueId 查询，需全量拉取后过滤一条）；接口本身 **立即返回**，不阻塞 CRM 提交。
 

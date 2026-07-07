@@ -969,7 +969,7 @@ model CrmSyncLog {
   createdAt     DateTime @default(now())
 }
 
-// 帆软 CRM 线索（clue_id 为主键），每晚全量拉取 2026 年线索后整表替换
+// 帆软 CRM 线索（clue_id 为主键），每天利雅得 05:00 全量拉取 2026 年线索后整表替换
 model CrmLead {
   id           String    @id // clue_id
   companyId    String? // com_id

@@ -393,7 +393,7 @@ export const messagesEn = {
   },
   leads: {
     title: "Leads",
-    desc: "{count} leads (2026) · Synced nightly from CRM",
+    desc: "{count} leads (2026) · Synced daily at 5:00 AM (Riyadh) from CRM",
     syncedAt: "Last synced",
     neverSynced: "Not synced yet",
     searchPlaceholder: "Search company / phone / sales…",
@@ -403,7 +403,7 @@ export const messagesEn = {
     tabNurture: "Nurturing Leads",
     viewHint:
       "New vs nurturing is based on com_status: 销售尚未联络 = new lead; all other statuses = nurturing.",
-    empty: "No leads yet. Data syncs automatically every night.",
+    empty: "No leads yet. Data syncs daily at 5:00 AM (Riyadh).",
     emptyNurture: "No nurturing leads in the current filters.",
     unnamed: "Unnamed company",
     fieldClueId: "Lead ID",
