@@ -32,6 +32,8 @@ export function AiIntakePanel({
   partnerId,
   customerId,
   intent,
+  seedMessage,
+  autoStart,
   onClose,
   onDone,
 }: {
@@ -39,6 +41,10 @@ export function AiIntakePanel({
   partnerId?: string;
   customerId?: string;
   intent?: "prospect" | "active";
+  /** 预填的首条消息（如从 CRM 客户带入的信息），配合 autoStart 自动发送 */
+  seedMessage?: string;
+  /** 挂载后自动发送 seedMessage */
+  autoStart?: boolean;
   onClose: () => void;
   onDone?: (id: string) => void;
 }) {
@@ -62,6 +68,7 @@ export function AiIntakePanel({
   const [pendingImages, setPendingImages] = useState<ChatImage[]>([]);
   const excludedRef = useRef(new Set<string>());
   const abortRef = useRef<AbortController | null>(null);
+  const didAutoStartRef = useRef(false);
   const directRequiredAnswersRef = useRef<ClarificationAnswer[]>([]);
   const autoApplyMode = !!((partnerId || customerId) && isFastIntakeScope(scope) && scope !== "business_record");
   const [autoApplyFailed, setAutoApplyFailed] = useState(false);
@@ -295,6 +302,14 @@ export function AiIntakePanel({
       abortRef.current = null;
     }
   }
+
+  useEffect(() => {
+    if (autoStart && seedMessage && !didAutoStartRef.current) {
+      didAutoStartRef.current = true;
+      void send(seedMessage);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleApplied(id: string) {
     if (onDone) onDone(id);

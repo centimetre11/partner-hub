@@ -92,7 +92,7 @@ export function WeeklyReportSetup({
   return (
     <div className="space-y-5 text-sm">
       <p className="text-xs text-slate-500 leading-relaxed">
-        每周定时为每位成员生成个人周报（本周完成待办 / 商务记录 / 新增客户 + AI 下周计划建议），发到其个人邮箱；并向管理者发送一份团队汇总。
+        每周定时为每位成员生成个人周报（本周完成待办 / 商务记录 / 新增客户 + AI 下周计划建议），发到其个人邮箱并抄送下方配置的管理者；管理者另收到一份含各成员要点摘录的团队汇总。
         统计周期为「本周日 00:00 → 运行时刻」（按所选时区，覆盖中东工作周）。
       </p>
 

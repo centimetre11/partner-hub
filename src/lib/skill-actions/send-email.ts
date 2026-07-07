@@ -31,17 +31,24 @@ export async function runSendEmailTool(
   if (!recipients.length) return "Please provide at least one valid recipient email";
   if (invalid.length) return `Invalid email address(es): ${invalid.join(", ")}`;
 
+  const ccRaw = args.cc ? String(args.cc).trim() : "";
+  const ccRecipients = ccRaw ? parseEmailRecipients(ccRaw) : [];
+  const ccInvalid = ccRecipients.filter((e) => !EMAIL_RE.test(e));
+  if (ccInvalid.length) return `Invalid CC email address(es): ${ccInvalid.join(", ")}`;
+
   const config = await resolveEmailConfig();
   await sendEmail(
     {
       to: recipients,
+      ...(ccRecipients.length ? { cc: ccRecipients } : {}),
       subject,
       text: body || undefined,
       html: html || undefined,
     },
     config ?? undefined,
   );
-  const msg = `Email sent to ${recipients.join(", ")} (subject: ${subject.slice(0, 80)}${subject.length > 80 ? "…" : ""})`;
+  const ccNote = ccRecipients.length ? `, cc: ${ccRecipients.join(", ")}` : "";
+  const msg = `Email sent to ${recipients.join(", ")}${ccNote} (subject: ${subject.slice(0, 80)}${subject.length > 80 ? "…" : ""})`;
   ctx.actions.push(msg);
   return msg;
 }

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddCustomerForm } from "./add-customer-form";
+import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
@@ -16,7 +17,7 @@ function statusTone(status: string): "green" | "blue" | "zinc" {
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; partner?: string; unbound?: string; add?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; partner?: string; owner?: string; presales?: string; unbound?: string; add?: string }>;
 }) {
   await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
@@ -29,6 +30,8 @@ export default async function CustomersPage({
         ...END_CUSTOMER_WHERE,
         ...(sp.q ? { name: { contains: sp.q } } : {}),
         ...(sp.status ? { status: sp.status } : {}),
+        ...(sp.owner ? { ownerId: sp.owner } : {}),
+        ...(sp.presales ? { presalesUserId: sp.presales } : {}),
         ...(sp.unbound === "1"
           ? { partnerLinks: { none: {} } }
           : sp.partner
@@ -44,7 +47,7 @@ export default async function CustomersPage({
       orderBy: { updatedAt: "desc" },
     }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    db.user.findMany({ select: { id: true, name: true, role: true } }),
+    db.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
   ]);
 
   const statusLabel = (s: string) =>
@@ -56,12 +59,15 @@ export default async function CustomersPage({
         title={c.title}
         desc={c.desc.replace("{count}", String(customers.length))}
         actions={
-          <AddCustomerForm
-            partners={partners}
-            users={users}
-            defaultPartnerId={sp.partner}
-            defaultOpen={sp.add === "1"}
-          />
+          <div className="flex gap-2">
+            <AddCustomerForm
+              partners={partners}
+              users={users}
+              defaultPartnerId={sp.partner}
+              defaultOpen={sp.add === "1"}
+            />
+            <CreateFromCrmButton entity="customer" />
+          </div>
         }
       />
       <div className="px-8">
@@ -77,6 +83,18 @@ export default async function CustomersPage({
             <option value="">{c.allPartners}</option>
             {partners.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">{c.allSalesOwners}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+          <select name="presales" defaultValue={sp.presales ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">{c.allPresalesOwners}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
             ))}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-slate-600 px-2">

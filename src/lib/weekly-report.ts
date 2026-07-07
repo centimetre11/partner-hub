@@ -282,7 +282,19 @@ export function renderUserEmailText(s: WeeklyUserStats, window: WeekWindow, narr
 
 // ============ 管理者汇总 ============
 
-export function renderManagerDigestHtml(all: WeeklyUserStats[], window: WeekWindow): string {
+export type WeeklyUserReport = { stats: WeeklyUserStats; narrative: string };
+
+function narrativeExcerptHtml(narrative: string): string {
+  const trimmed = narrative.trim();
+  if (!trimmed) return `<p style="color:#888;margin:0">（暂无 AI 小结）</p>`;
+  return trimmed
+    .split(/\n{2,}/)
+    .map((p) => `<p style="margin:4px 0;line-height:1.6;font-size:13px">${esc(p.trim()).replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+}
+
+export function renderManagerDigestHtml(reports: WeeklyUserReport[], window: WeekWindow): string {
+  const all = reports.map((r) => r.stats);
   const rows = all
     .map((s) => {
       const active = statsActivityCount(s) > 0;
@@ -305,6 +317,17 @@ export function renderManagerDigestHtml(all: WeeklyUserStats[], window: WeekWind
     },
     { done: 0, br: 0, cust: 0 }
   );
+  const highlightBlocks = reports
+    .map(({ stats: s, narrative }) => {
+      const active = statsActivityCount(s) > 0;
+      if (!active && !narrative.trim()) return "";
+      return `<div style="margin:0 0 14px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;background:${active ? "#fff" : "#fafafa"}">
+        <h4 style="margin:0 0 6px;color:#111827;font-size:14px">${esc(s.name)} <span style="color:#6b7280;font-weight:normal;font-size:12px">（待办 ${s.doneTodos.length} · 商务 ${s.businessRecords.length} · 客户 ${s.newCustomers.length}）</span></h4>
+        ${narrativeExcerptHtml(narrative)}
+      </div>`;
+    })
+    .filter(Boolean)
+    .join("");
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;color:#1f2937">
   <h2 style="margin:0 0 4px">📈 团队周报汇总</h2>
   <p style="color:#6b7280;margin:0 0 16px">统计周期：${esc(window.label)}（利雅得时间） · 共 ${all.length} 人</p>
@@ -322,10 +345,30 @@ export function renderManagerDigestHtml(all: WeeklyUserStats[], window: WeekWind
     </thead>
     <tbody>${rows}</tbody>
   </table>
+  ${highlightBlocks ? `<h3 style="margin:24px 0 12px;font-size:16px">📝 各成员本周要点摘录</h3>${highlightBlocks}` : ""}
   <p style="color:#9ca3af;font-size:12px;margin-top:24px;border-top:1px solid #e5e7eb;padding-top:12px">
-    本邮件由 Partner Hub 周报自动化生成。灰色行表示本周无统计活动。
+    本邮件由 Partner Hub 周报自动化生成。灰色行表示本周无统计活动；要点摘录来自各成员 AI 周报正文。
   </p>
 </div>`;
+}
+
+export function renderManagerDigestText(reports: WeeklyUserReport[], window: WeekWindow): string {
+  const tableLines = reports.map(
+    ({ stats: s }) =>
+      `${s.name}: 完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 新增客户 ${s.newCustomers.length} | 下周待办 ${s.upcomingTodos.length} | 活跃商机 ${s.activeOpportunities.length}`
+  );
+  const excerptLines = reports
+    .filter(({ stats: s, narrative }) => statsActivityCount(s) > 0 || narrative.trim())
+    .map(({ stats: s, narrative }) => `【${s.name}】\n${narrative.trim() || "（本周无统计活动）"}`);
+  return [
+    `团队周报汇总（${window.label}）`,
+    "",
+    ...tableLines,
+    "",
+    "--- 各成员本周要点摘录 ---",
+    "",
+    ...excerptLines,
+  ].join("\n");
 }
 
 // ============ AI 叙述 ============
@@ -404,17 +447,26 @@ export async function runWeeklyReportPipeline(
     result: `${users.length} user(s): ${users.map((u) => u.name).join(", ") || "none"}`,
   });
 
-  // 逐人聚合
-  const allStats: WeeklyUserStats[] = [];
+  // 逐人聚合 + 生成 AI 叙述（个人邮件与管理者汇总共用）
+  const allReports: WeeklyUserReport[] = [];
   for (const u of users) {
-    allStats.push(await gatherUserWeekly(u, window));
+    const stats = await gatherUserWeekly(u, window);
+    const active = statsActivityCount(stats) > 0;
+    const narrative =
+      active || config.includeInactive
+        ? await generateNarrative(stats, window, agent.createdById)
+        : "";
+    allReports.push({ stats, narrative });
   }
 
-  // 逐人发个人周报
+  const { emails: managerEmails, resolved: managerResolved } = await resolveManagerEmails(config.managers);
+  const ccManagers = managerEmails.join(",");
+
+  // 逐人发个人周报（抄送管理者）
   let sentPersonal = 0;
   let skippedNoEmail = 0;
   let skippedInactive = 0;
-  for (const s of allStats) {
+  for (const { stats: s, narrative } of allReports) {
     const active = statsActivityCount(s) > 0;
     if (!active && !config.includeInactive) {
       skippedInactive++;
@@ -425,36 +477,37 @@ export async function runWeeklyReportPipeline(
       toolLog.push({ tool: "send_email", args: { user: s.name }, result: "skipped: no email" });
       continue;
     }
-    const narrative = await generateNarrative(s, window, agent.createdById);
     const html = renderUserEmailHtml(s, window, narrative);
     const text = renderUserEmailText(s, window, narrative);
     const subject = `📊 你的本周工作周报（${window.label}）`;
+    const cc = managerEmails.filter((e) => e.toLowerCase() !== s.email!.toLowerCase()).join(",");
     const ctx = { actions: [] as string[] };
-    const result = await runSendEmailTool({ to: s.email, subject, body: text, html }, ctx);
+    const result = await runSendEmailTool(
+      { to: s.email, ...(cc ? { cc } : {}), subject, body: text, html },
+      ctx
+    );
     const ok = /Email sent/i.test(result);
     if (ok) sentPersonal++;
-    toolLog.push({ tool: "send_email", args: { to: s.email, subject }, result: result.slice(0, 200) });
+    toolLog.push({
+      tool: "send_email",
+      args: { to: s.email, cc: cc || undefined, subject },
+      result: result.slice(0, 200),
+    });
   }
-  pushNotes.push(`个人周报已发 ${sentPersonal} 人`);
+  pushNotes.push(`个人周报已发 ${sentPersonal} 人${ccManagers ? "（抄送管理者）" : ""}`);
   if (skippedInactive) pushNotes.push(`跳过无活动 ${skippedInactive} 人`);
   if (skippedNoEmail) pushNotes.push(`无邮箱跳过 ${skippedNoEmail} 人`);
 
   // 管理者汇总
   let managerOk = false;
-  const { emails: managerEmails, resolved: managerResolved } = await resolveManagerEmails(config.managers);
   const unresolved = managerResolved.filter((r) => !r.email).map((r) => r.token);
   if (managerEmails.length) {
-    const html = renderManagerDigestHtml(allStats, window);
-    const text = allStats
-      .map(
-        (s) =>
-          `${s.name}: 完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 新增客户 ${s.newCustomers.length} | 下周待办 ${s.upcomingTodos.length} | 活跃商机 ${s.activeOpportunities.length}`
-      )
-      .join("\n");
+    const html = renderManagerDigestHtml(allReports, window);
+    const text = renderManagerDigestText(allReports, window);
     const subject = `📈 团队周报汇总（${window.label}）`;
     const ctx = { actions: [] as string[] };
     const result = await runSendEmailTool(
-      { to: managerEmails.join(","), subject, body: `团队周报汇总（${window.label}）\n\n${text}`, html },
+      { to: managerEmails.join(","), subject, body: text, html },
       ctx
     );
     managerOk = /Email sent/i.test(result);
@@ -467,19 +520,19 @@ export async function runWeeklyReportPipeline(
 
   // 运行结果
   const allOk =
-    (sentPersonal > 0 || skippedInactive === allStats.length || allStats.length === 0) &&
+    (sentPersonal > 0 || skippedInactive === allReports.length || allReports.length === 0) &&
     (managerEmails.length === 0 || managerOk) &&
     unresolved.length === 0 &&
     skippedNoEmail === 0;
   const runStatus: "SUCCESS" | "PARTIAL_SUCCESS" = allOk ? "SUCCESS" : "PARTIAL_SUCCESS";
 
-  const summaryLines = allStats.map(
-    (s) =>
+  const summaryLines = allReports.map(
+    ({ stats: s }) =>
       `- ${s.name}：完成待办 ${s.doneTodos.length} · 商务记录 ${s.businessRecords.length} · 新增客户 ${s.newCustomers.length}`
   );
   const output = `### 团队周报（${window.label}）
 
-覆盖 **${allStats.length}** 人（角色：${config.roles.join("/")}）
+覆盖 **${allReports.length}** 人（角色：${config.roles.join("/")}）
 
 ${summaryLines.join("\n") || "（无目标用户）"}
 

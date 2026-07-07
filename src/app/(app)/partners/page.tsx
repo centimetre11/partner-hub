@@ -7,6 +7,7 @@ import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState, fmtDate } from "@/c
 import { computeCompleteness, staleDays, type PartnerWithRelations } from "@/lib/completeness";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
+import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { getServerI18n, stageName } from "@/lib/server-i18n";
 import { isTodoOverdue } from "@/lib/todo-dates";
 
@@ -97,7 +98,12 @@ export default async function PartnersPage({
       <PageHeader
         title={m.partners.title}
         desc={m.partners.desc.replace("{count}", String(partners.length))}
-        actions={<AddPartnerForm intent="active" taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />}
+        actions={
+          <div className="flex gap-2">
+            <AddPartnerForm intent="active" taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />
+            <CreateFromCrmButton entity="partner" />
+          </div>
+        }
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">

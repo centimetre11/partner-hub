@@ -144,12 +144,16 @@ curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
 | 返回 JSON `401 Unauthorized`（浏览器从 CRM 发起） | 密钥错误或仍用 Header 传密钥 | 改用 body `callbackSecret`；核对 48 位密钥；CRM 里勿用 `complete` 误判成功 |
 | 返回 JSON `400 Invalid JSON` | Body 为空或不是合法 JSON | Postman Body 选 raw → JSON，并填写内容 |
 | GET 测试页 200，POST Header 方式 400 HTML | 同上，Header 被拦 | 改用 body `callbackSecret` |
+| 弹窗 `CustomJSError: fr_submitinfo is not defined` | JS 写在错误位置（如按钮普通「JavaScript」点击事件、模板 Web 事件），不在「提交入库→设置回调函数」里 | 见下方 **3.1 回调位置**；或改用 **方式 A（Java 自定义提交）** 免 JS |
+| 弹「成功」但 Partner Hub 未更新 | 用了旧版 `complete` 回调，401 也会误判成功 | 改用 `success` / `error` 写法（见 3.2 示例） |
 
 各 action 与 CPT 对应见第 1 节场景表。
 
 ---
 
 ## 3. 接入方式（二选一）
+
+> **推荐 Java 方式**。完整操作步骤见 **[crm-java-custom-submit.md](./crm-java-custom-submit.md)**（含 class 部署、各 CPT 绑定、测试清单）。
 
 ### 方式 A：Java 自定义提交（推荐）
 
@@ -187,10 +191,22 @@ curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
 
 **缺点**：浏览器跨域；已在 Partner Hub 接口配置 CORS（`overseas.finereporthelp.com` 等）。密钥会出现在 JS 中，安全性略低。
 
+#### 3.1 回调位置（必读，避免 `fr_submitinfo is not defined`）
+
+`fr_submitinfo` **只在**「提交入库」事件的 **「设置回调函数」** 弹窗里注入，其它地方引用都会报 `fr_submitinfo is not defined`。
+
+| 正确 ✅ | 错误 ❌ |
+|---------|---------|
+| 按钮 → 事件 → **提交入库** → **设置回调函数** → 粘贴 JS | 按钮 → 事件 → **JavaScript**（普通点击脚本） |
+| 自定义提交插件 → **设置回调函数** | 模板 → Web 事件 → 填报后 / 加载结束 |
+| | 报表填报属性对话框的其它 JS 输入框 |
+
+> 上次没加 `callbackSecret` 能跑、这次加了就报错：多半是脚本被挪到了错误位置，或同时改了事件类型。**加 `callbackSecret` 本身不会导致此错误**。
+
 **步骤**
 
 1. 控件/按钮 → 事件 → **提交入库** → 设置填报属性
-2. 点击 **设置回调函数**
+2. 点击 **设置回调函数**（不是事件列表里的「JavaScript」）
 3. 粘贴 `crm-integration/js/` 下对应场景的脚本，修改 `CLUE_ID`、`SECRET`
 
 | 场景 | 脚本文件 |
@@ -205,7 +221,9 @@ curl -sS -X POST https://camelusai.com/api/leads/crm-callback \
 回调示例（转培育）：
 
 ```javascript
-if (fr_submitinfo.success) {
+if (typeof fr_submitinfo === "undefined") {
+  FR.Msg.toast("回调位置错误：请在「提交入库→设置回调函数」中粘贴本脚本");
+} else if (fr_submitinfo.success) {
   FR.ajax({
     url: "https://camelusai.com/api/leads/crm-callback",
     type: "POST",
@@ -237,7 +255,8 @@ if (fr_submitinfo.success) {
 
 ## 4. 编译与部署 Java class
 
-源码：`crm-integration/java/PartnerHubLeadNotifyJob.java`
+源码：`crm-integration/java/com/fr/data/PartnerHubLeadNotifyJob.java`  
+预编译 class：`crm-integration/dist/com/fr/data/PartnerHubLeadNotifyJob.class`
 
 ### 4.1 前置条件
 
@@ -246,17 +265,28 @@ if (fr_submitinfo.success) {
 
 ### 4.2 命令行编译
 
+**方式 1：直接使用预编译 class（推荐）**
+
+```
+crm-integration/dist/com/fr/data/PartnerHubLeadNotifyJob.class
+```
+
+复制到 `<FR_HOME>/WEB-INF/classes/com/fr/data/` 后重启即可。
+
+**方式 2：本地或 CRM 服务器重新编译**
+
 ```bash
 cd partner-hub/crm-integration/java
-export FR_HOME=/opt/finereport/WebReport   # 按实际路径修改
 chmod +x compile.sh
+./compile.sh                                    # 无 FR_HOME 时用 stubs，输出到 ../dist/
+export FR_HOME=/opt/finereport/WebReport        # 可选：同时复制到帆软 classes
 ./compile.sh
 ```
 
 脚本会：
 
-1. 使用 `WEB-INF/lib/*` 作为 classpath 编译
-2. 将 `com/fr/data/PartnerHubLeadNotifyJob.class` 复制到 `WEB-INF/classes/com/fr/data/`
+1. 无 `FR_HOME` 时用 `stubs/` 编译，产物在 `crm-integration/dist/`
+2. 有 `FR_HOME` 时用帆软 `WEB-INF/lib/*` 编译，并复制到 `WEB-INF/classes/com/fr/data/`
 
 ### 4.3 设计器内编译（可选）
 
@@ -310,9 +340,11 @@ curl -X POST https://camelusai.com/api/leads/crm-callback \
 
 ```
 crm-integration/
+├── dist/com/fr/data/
+│   └── PartnerHubLeadNotifyJob.class  # 预编译，可直接部署
 ├── java/
-│   ├── PartnerHubLeadNotifyJob.java   # 自定义提交类源码
-│   └── compile.sh                     # 编译脚本
+│   ├── com/fr/data/PartnerHubLeadNotifyJob.java
+│   └── compile.sh
 └── js/
     ├── callback-toNurture.js
     ├── callback-toChannel.js

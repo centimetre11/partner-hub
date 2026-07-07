@@ -5,7 +5,9 @@ var CLUE_ID = "${clueid}";
 var CALLBACK_URL = "https://camelusai.com/api/leads/crm-callback";
 var SECRET = "请填写与 Partner Hub 一致的密钥";
 
-if (fr_submitinfo.success) {
+if (typeof fr_submitinfo === "undefined") {
+  FR.Msg.toast("回调位置错误：请在「提交入库→设置回调函数」中粘贴本脚本");
+} else if (fr_submitinfo.success) {
   FR.ajax({
     url: CALLBACK_URL,
     type: "POST",

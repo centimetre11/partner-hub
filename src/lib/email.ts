@@ -5,6 +5,7 @@ import { isEmailConfigured, resolveEmailConfig, type EmailConfig } from "./email
 
 export type SendEmailOptions = {
   to: string | string[];
+  cc?: string | string[];
   subject: string;
   text?: string;
   html?: string;
@@ -48,6 +49,7 @@ export async function sendEmail(options: SendEmailOptions, config?: EmailConfig)
   await transporter.sendMail({
     from: formatFrom(resolved),
     to: normalizeRecipients(options.to),
+    ...(options.cc ? { cc: normalizeRecipients(options.cc) } : {}),
     subject: options.subject,
     text: options.text,
     html: options.html,
