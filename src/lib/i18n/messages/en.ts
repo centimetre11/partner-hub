@@ -473,9 +473,11 @@ export const messagesEn = {
     },
     email: {
       title: "Email",
-      openExmail: "Exmail web",
-      copiedHint: "Recipient, subject, and body copied",
-      attachmentHint: "Checked attachments will download automatically — add them manually in Exmail compose",
+      openExmail: "Open compose",
+      copiedHint: "Also copied to clipboard (fallback)",
+      mailtoHint:
+        "Opens compose with recipient, subject, and body prefilled. If the web compose page does not open, set Chrome to handle mailto with QQ Mail / Exmail (QQ Mail → Settings → open email links with QQ Mail).",
+      attachmentHint: "Checked attachments will download automatically — add them manually in compose",
       attachmentsTitle: "Common attachments",
       manage: "Manage phrases",
       manageAttachments: "Manage attachments",

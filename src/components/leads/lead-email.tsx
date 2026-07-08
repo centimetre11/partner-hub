@@ -7,11 +7,11 @@ import {
   DEFAULT_LEAD_EMAIL_TEMPLATES,
   TEMPLATES_STORAGE_KEY,
   applyLeadEmailTemplate,
-  buildExmailWebLink,
   downloadAttachment,
   downloadAttachmentsSequential,
   formatEmailClipboard,
   getGivenName,
+  openMailtoCompose,
   normalizeLeadEmail,
   parseEmailTemplate,
   type LeadEmailAttachment,
@@ -199,17 +199,17 @@ export function LeadEmail({
 
   const openExmail = async () => {
     if (!normalizedEmail) return;
+    const selected = attachments.filter((a) => checkedIds.has(a.id));
+    if (selected.length) await downloadAttachmentsSequential(selected);
+    openMailtoCompose(normalizedEmail, subject, body);
     try {
       await navigator.clipboard.writeText(formatEmailClipboard(normalizedEmail, subject, body));
       setCopied(true);
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = setTimeout(() => setCopied(false), 3000);
     } catch {
-      // clipboard may fail; still open exmail
+      // mailto 已预填；剪贴板失败可忽略
     }
-    const selected = attachments.filter((a) => checkedIds.has(a.id));
-    if (selected.length) await downloadAttachmentsSequential(selected);
-    window.open(buildExmailWebLink(), "_blank", "noopener,noreferrer");
   };
 
   if (!normalizedEmail) {
@@ -376,6 +376,7 @@ export function LeadEmail({
         {copied && <span className="text-xs text-sky-600">{l.copiedHint}</span>}
         <span className="text-xs text-slate-400">{l.emailLabel}: {normalizedEmail}</span>
       </div>
+      <p className="text-xs text-slate-400 mt-2">{l.mailtoHint}</p>
     </div>
   );
 }

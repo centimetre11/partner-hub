@@ -51,11 +51,33 @@ export function parseEmailTemplate(raw: string): { subject: string; body: string
   };
 }
 
+/** 企业邮网页入口（已登录时直达邮箱；未登录会跳转登录）。 */
 export function buildExmailWebLink(): string {
-  return "https://exmail.qq.com/login";
+  return "https://work.weixin.qq.com/mail/";
 }
 
-/** 格式化为可粘贴的撰写内容。 */
+/**
+ * mailto 链接：预填收件人 / 主题 / 正文。
+ * Chrome 将 mailto 关联到 QQ 邮箱或企业邮箱后，会在浏览器打开写信页并带入内容。
+ */
+export function buildMailtoLink(to: string, subject: string, body: string): string {
+  const parts: string[] = [];
+  if (subject.trim()) parts.push(`subject=${encodeURIComponent(subject.trim())}`);
+  if (body.trim()) parts.push(`body=${encodeURIComponent(body.trim())}`);
+  const qs = parts.join("&");
+  return qs ? `mailto:${to}?${qs}` : `mailto:${to}`;
+}
+
+export function openMailtoCompose(to: string, subject: string, body: string): void {
+  const a = document.createElement("a");
+  a.href = buildMailtoLink(to, subject, body);
+  a.rel = "noopener noreferrer";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/** 格式化为可粘贴的撰写内容（mailto 未关联时的备用）。 */
 export function formatEmailClipboard(to: string, subject: string, body: string): string {
   const lines = [`收件人: ${to}`];
   if (subject.trim()) lines.push(`主题: ${subject.trim()}`);

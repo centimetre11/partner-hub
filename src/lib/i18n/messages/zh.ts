@@ -473,9 +473,11 @@ export const messagesZh: Messages = {
     },
     email: {
       title: "邮件联系",
-      openExmail: "企业邮网页版",
-      copiedHint: "已复制收件人、主题和正文",
-      attachmentHint: "已勾选附件将自动下载，请在企业邮撰写页手动添加",
+      openExmail: "打开写信页",
+      copiedHint: "内容已同步复制到剪贴板（备用）",
+      mailtoHint:
+        "将打开写信页并预填收件人、主题和正文。若未自动打开网页写信，请在 Chrome 设置中将 mailto 协议关联到 QQ 邮箱/企业邮箱（QQ 邮箱 → 设置 → 用 QQ 邮箱打开邮件链接）。",
+      attachmentHint: "已勾选附件将自动下载，请在撰写页手动添加",
       attachmentsTitle: "常用附件",
       manage: "管理常用语",
       manageAttachments: "管理常用附件",
