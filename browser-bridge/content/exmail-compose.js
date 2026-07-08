@@ -1,6 +1,6 @@
 // 企业邮写信页适配器：点击写信 → 填充收件人/主题/正文 → 注入附件。
-// 兼容经典版（frameset + #toAreaCtrl + QMEditor iframe）与新版（React DOM），
-// 所有查找均递归遍历同源 iframe/frame，选择器按多策略依次尝试。
+// 关键设计：先定位正文编辑器（QMEditor iframe / contenteditable），以其所在文档为
+// 「写信表单文档」，收件人/主题/附件均只在该文档内查找，避免误填顶层搜索框等无关输入。
 
 (() => {
   if (window.__phBridgeComposeLoaded) return;
@@ -20,36 +20,57 @@
   });
 
   async function runFillCompose({ to, subject, body, files }) {
-    // 1. 写信表单未打开时，找到并点击「写信」入口
-    if (!findRecipientField()) {
+    // 1. 写信表单未打开时，点击「写信」入口
+    if (!findEditorBody()) {
       const btn = await waitFor(() => findComposeButton(), 15000, "找不到「写信」按钮，请确认已登录企业邮");
       btn.click();
     }
 
-    // 2. 等待写信表单出现
-    const recipientField = await waitFor(() => findRecipientField(), 15000, "写信表单未出现");
+    // 2. 等待写信表单（以正文编辑器出现为准）
+    const editorBody = await waitFor(() => findEditorBody(), 15000, "写信表单未出现（找不到正文编辑器）");
+    // 写信表单文档：编辑器 iframe 所在的文档（经典版），或编辑器自身所在文档（新版）
+    const composeDoc = editorBody.__phComposeDoc || editorBody.ownerDocument;
 
-    // 3. 填充主题 / 正文 / 收件人（收件人最后填，避免地址解析弹层干扰）
-    if (subject) fillSubject(subject);
-    if (body) await fillBody(body);
-    await fillRecipient(recipientField, to);
+    const problems = [];
 
-    // 4. 注入附件
-    let attachError = null;
-    if (files && files.length > 0) {
-      try {
-        await injectAttachments(files);
-      } catch (err) {
-        attachError = String(err && err.message ? err.message : err);
+    // 3. 主题（仅在写信表单文档内查找）
+    if (subject) {
+      const subjectField = findSubjectField(composeDoc);
+      if (subjectField) {
+        subjectField.focus();
+        setNativeValue(subjectField, subject);
+      } else {
+        problems.push("主题输入框未找到");
       }
     }
 
-    return attachError
-      ? { ok: true, warning: `内容已填充，但附件注入失败：${attachError}，请手动添加` }
-      : { ok: true };
+    // 4. 正文
+    if (body) fillBody(editorBody, body);
+
+    // 5. 收件人
+    const recipientField = findRecipientField(composeDoc);
+    if (recipientField) {
+      await fillRecipient(recipientField, to);
+    } else {
+      problems.push("收件人输入框未找到");
+    }
+
+    // 6. 附件
+    if (files && files.length > 0) {
+      try {
+        await injectAttachments(composeDoc, files);
+      } catch (err) {
+        problems.push(`附件注入失败：${String(err && err.message ? err.message : err)}`);
+      }
+    }
+
+    if (problems.length > 0) {
+      return { ok: true, warning: `${problems.join("；")}【诊断: ${diagnostics(composeDoc)}】` };
+    }
+    return { ok: true };
   }
 
-  // ---------- 查找辅助：递归遍历同源 iframe / frame ----------
+  // ---------- 文档遍历 ----------
 
   function allDocuments(root = document) {
     const docs = [root];
@@ -64,7 +85,7 @@
     return docs;
   }
 
-  function queryAll(selector) {
+  function queryAllGlobal(selector) {
     const out = [];
     for (const doc of allDocuments()) out.push(...doc.querySelectorAll(selector));
     return out;
@@ -101,17 +122,17 @@
     });
   }
 
-  function diagnostics() {
+  function diagnostics(composeDoc) {
     try {
-      const docs = allDocuments();
+      const doc = composeDoc || document;
       const parts = [
-        `frames=${docs.length}`,
-        `toArea=${queryAll("#toAreaCtrl").length}`,
-        `toInput=${queryAll("input[name='to']").length}`,
-        `addrText=${queryAll(".addr_text, .addr_area input").length}`,
-        `subject=${queryAll("input[name='subject'], #subject").length}`,
-        `editableIframe=${countEditableIframes()}`,
-        `fileInput=${queryAll("input[type='file']").length}`,
+        `frames=${allDocuments().length}`,
+        `scoped=${composeDoc ? "yes" : "no"}`,
+        `toArea=${doc.querySelectorAll("#toAreaCtrl").length}`,
+        `toInput=${doc.querySelectorAll("input[name='to'], .addr_text").length}`,
+        `subject=${doc.querySelectorAll("input[name='subject'], #subject").length}`,
+        `fileInput=${doc.querySelectorAll("input[type='file']").length}`,
+        `textInputs=${doc.querySelectorAll("input[type='text']").length}`,
       ];
       return parts.join(", ");
     } catch (err) {
@@ -119,27 +140,12 @@
     }
   }
 
-  function countEditableIframes() {
-    let n = 0;
-    for (const doc of allDocuments()) {
-      for (const iframe of doc.querySelectorAll("iframe")) {
-        try {
-          const d = iframe.contentDocument;
-          if (d && d.body && (d.body.isContentEditable || d.designMode === "on")) n++;
-        } catch {
-          // 忽略
-        }
-      }
-    }
-    return n;
-  }
-
   // ---------- 写信入口 ----------
 
   function findComposeButton() {
-    const byId = queryAll("#composebtn").find(isVisible);
+    const byId = queryAllGlobal("#composebtn").find(isVisible);
     if (byId) return byId;
-    const candidates = queryAll("a, button, div[role='button'], span[role='button'], li");
+    const candidates = queryAllGlobal("a, button, div[role='button'], span[role='button'], li");
     for (const el of candidates) {
       const text = (el.textContent || "").trim();
       if ((text === "写信" || text === "写邮件" || text === "Compose") && isVisible(el)) return el;
@@ -147,25 +153,61 @@
     return null;
   }
 
-  // ---------- 字段定位 ----------
+  // ---------- 正文编辑器（写信表单的锚点）----------
 
-  function findRecipientField() {
+  function findEditorBody() {
+    // 经典版：QMEditor iframe（body contenteditable 或 designMode=on）
+    for (const doc of allDocuments()) {
+      for (const iframe of doc.querySelectorAll("iframe")) {
+        try {
+          const innerDoc = iframe.contentDocument;
+          const innerBody = innerDoc && innerDoc.body;
+          if (
+            innerBody &&
+            isVisible(iframe) &&
+            (innerBody.isContentEditable ||
+              innerBody.getAttribute("contenteditable") === "true" ||
+              innerDoc.designMode === "on")
+          ) {
+            innerBody.__phComposeDoc = doc; // 编辑器 iframe 所在文档 = 写信表单文档
+            return innerBody;
+          }
+        } catch {
+          // 跨域忽略
+        }
+      }
+    }
+    // 新版：页面内最大的 contenteditable 区域
+    const editables = queryAllGlobal("div[contenteditable='true']").filter(isVisible);
+    let best = null;
+    let bestArea = 0;
+    for (const el of editables) {
+      const rect = el.getBoundingClientRect();
+      const area = rect.width * rect.height;
+      if (area > bestArea && rect.height > 100) {
+        best = el;
+        bestArea = area;
+      }
+    }
+    if (best) best.__phComposeDoc = best.ownerDocument;
+    return best;
+  }
+
+  // ---------- 字段定位（限定写信表单文档）----------
+
+  function findRecipientField(doc) {
     const strategies = [
-      // 经典版：收件人地址区（chip 输入框）
-      () => queryAll("#toAreaCtrl input[type='text']").find(isVisible),
-      () => queryAll(".addr_area input[type='text'], input.addr_text").find(isVisible),
-      // 通用 name 匹配
-      () => queryAll("input[name='to']").find(isVisible),
-      () => queryAll("textarea[name='to']").find(isVisible),
-      () => queryAll("input[name='toemail']").find(isVisible),
-      // 行标签匹配：所在行文本以「收件人」开头的可见文本框
-      () => findInputByRowLabel(/^收件人/),
-      // 新版：contenteditable 收件人区
+      () => Array.from(doc.querySelectorAll("#toAreaCtrl input[type='text']")).find(isVisible),
       () =>
-        queryAll("div[contenteditable='true']").find(
+        Array.from(doc.querySelectorAll(".addr_area input[type='text'], input.addr_text")).find(isVisible),
+      () => Array.from(doc.querySelectorAll("input[name='to']")).find(isVisible),
+      () => Array.from(doc.querySelectorAll("textarea[name='to']")).find(isVisible),
+      () => findInputByRowLabel(doc, /^收件人/),
+      () =>
+        Array.from(doc.querySelectorAll("div[contenteditable='true']")).find(
           (el) => isVisible(el) && /收件人|to/i.test(nearbyLabelText(el)),
         ),
-      () => queryAll("input[placeholder*='收件人']").find(isVisible),
+      () => Array.from(doc.querySelectorAll("input[placeholder*='收件人']")).find(isVisible),
     ];
     for (const s of strategies) {
       const el = s();
@@ -174,8 +216,22 @@
     return null;
   }
 
-  function findInputByRowLabel(labelRe) {
-    for (const input of queryAll("input[type='text'], input:not([type])")) {
+  function findSubjectField(doc) {
+    const strategies = [
+      () => Array.from(doc.querySelectorAll("input[name='subject']")).find(isVisible),
+      () => (isVisible(doc.querySelector("#subject")) ? doc.querySelector("#subject") : null),
+      () => Array.from(doc.querySelectorAll("input[placeholder*='主题']")).find(isVisible),
+      () => findInputByRowLabel(doc, /^主\s*题/),
+    ];
+    for (const s of strategies) {
+      const el = s();
+      if (el) return el;
+    }
+    return null;
+  }
+
+  function findInputByRowLabel(doc, labelRe) {
+    for (const input of doc.querySelectorAll("input[type='text'], input:not([type])")) {
       if (!isVisible(input)) continue;
       const row = input.closest("tr, .compose_field, .field, li, div");
       if (row && labelRe.test((row.textContent || "").trim().slice(0, 12))) return input;
@@ -193,57 +249,6 @@
       }
     }
     return "";
-  }
-
-  function findSubjectField() {
-    const strategies = [
-      () => queryAll("input[name='subject']").find(isVisible),
-      () => queryAll("#subject").find(isVisible),
-      () => queryAll("input[placeholder*='主题']").find(isVisible),
-      () => queryAll("input[placeholder*='Subject']").find(isVisible),
-      () => findInputByRowLabel(/^主\s*题/),
-    ];
-    for (const s of strategies) {
-      const el = s();
-      if (el) return el;
-    }
-    return null;
-  }
-
-  function findBodyEditor() {
-    // 经典版：QMEditor 富文本 iframe（iframe 内 body contenteditable 或 designMode=on）
-    for (const doc of allDocuments()) {
-      for (const iframe of doc.querySelectorAll("iframe")) {
-        try {
-          const innerDoc = iframe.contentDocument;
-          const innerBody = innerDoc && innerDoc.body;
-          if (
-            innerBody &&
-            isVisible(iframe) &&
-            (innerBody.isContentEditable ||
-              innerBody.getAttribute("contenteditable") === "true" ||
-              innerDoc.designMode === "on")
-          ) {
-            return innerBody;
-          }
-        } catch {
-          // 跨域忽略
-        }
-      }
-    }
-    // 新版：页面内最大的 contenteditable 区域
-    const editables = queryAll("div[contenteditable='true']").filter(isVisible);
-    let best = null;
-    let bestArea = 0;
-    for (const el of editables) {
-      const rect = el.getBoundingClientRect();
-      const area = rect.width * rect.height;
-      if (area > bestArea && rect.height > 100) {
-        best = el;
-        bestArea = area;
-      }
-    }
-    return best;
   }
 
   // ---------- 填充 ----------
@@ -280,12 +285,12 @@
       field.textContent = to;
       field.dispatchEvent(new InputEvent("input", { bubbles: true, data: to }));
     }
-    // 经典版靠回车/分号/失焦把地址解析成 chip；多管齐下
+    // 经典版靠回车/失焦把地址解析成 chip
     pressKey(field, "Enter", 13);
     if (typeof field.blur === "function") field.blur();
     field.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
-    // 若解析后输入框被清空但没有生成 chip，再补一次值兜底
     await new Promise((r) => setTimeout(r, 300));
+    // 解析后输入框被清空且没生成 chip 时，补一次值兜底
     if (
       (field.tagName === "INPUT" || field.tagName === "TEXTAREA") &&
       !field.value &&
@@ -301,30 +306,22 @@
     return Boolean(area.querySelector(".addr_base:not(.addr_input), .addr_normal, .addr_item"));
   }
 
-  function fillSubject(subject) {
-    const field = findSubjectField();
-    if (!field) return;
-    field.focus();
-    setNativeValue(field, subject);
-  }
-
-  async function fillBody(body) {
-    const editor = await waitFor(() => findBodyEditor(), 8000, "找不到正文编辑器");
-    editor.focus();
+  function fillBody(editorBody, body) {
+    editorBody.focus();
     const html = body
       .split("\n")
       .map((line) => `<div>${escapeHtml(line) || "<br>"}</div>`)
       .join("");
     // 保留编辑器已有签名等内容，插到最前
-    editor.innerHTML = html + editor.innerHTML;
-    editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    editorBody.innerHTML = html + editorBody.innerHTML;
+    editorBody.dispatchEvent(new InputEvent("input", { bubbles: true }));
   }
 
   function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  // ---------- 附件 ----------
+  // ---------- 附件（限定写信表单文档）----------
 
   function base64ToFile(item, doc) {
     const binary = atob(item.base64);
@@ -334,9 +331,9 @@
     return new FileCtor([bytes], item.filename, { type: item.mimeType });
   }
 
-  async function injectAttachments(files) {
-    // 策略 1：写信表单的「添加附件」背后通常有隐藏 file input
-    const fileInput = queryAll("input[type='file']").find((el) => {
+  async function injectAttachments(composeDoc, files) {
+    // 策略 1：写信表单内的 file input（「添加附件」背后的隐藏 input）
+    const fileInput = Array.from(composeDoc.querySelectorAll("input[type='file']")).find((el) => {
       const accept = el.getAttribute("accept") || "";
       return accept === "" || accept === "*/*" || accept === "*" || !/^image\//.test(accept);
     });
@@ -351,8 +348,8 @@
     }
 
     // 策略 2：向正文编辑区 dispatch drop 事件（模拟拖拽）
-    const editor = findBodyEditor();
-    const target = editor || document.body;
+    const editor = findEditorBody();
+    const target = editor || composeDoc.body;
     const targetDoc = target.ownerDocument;
     const win = targetDoc.defaultView;
     const dt = new win.DataTransfer();
