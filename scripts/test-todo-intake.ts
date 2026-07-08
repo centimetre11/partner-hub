@@ -15,7 +15,7 @@ import {
 } from "../src/lib/fast-intake-heuristic";
 import { parseTodoFromText, resolveSelfAssigneeNames } from "../src/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "../src/lib/intake-text";
-import { extractPartnerNameFromIntakeText } from "../src/lib/intake-partner-binding";
+import { extractPartnerNameFromIntakeText, applyBoundContextToProposal } from "../src/lib/intake-partner-binding";
 import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "../src/lib/wecom-bot-intake";
 import { userTextMentionsPartnerName } from "../src/lib/intake-partner-binding";
 
@@ -220,6 +220,24 @@ function main() {
 
   const dup = parseTodoFromText("alpha beta gamma alpha beta gamma", TODAY);
   cases.push(assert("重复短语去重", dup.title === "alpha beta gamma", dup.title));
+
+  const bound = applyBoundContextToProposal(
+    {
+      summary: "test",
+      fields: [{ field: "name", label: "公司全称", newValue: "MENA Beard Gang", oldValue: null, reason: "" }],
+      contacts: [],
+      opportunities: [],
+      todos: [{ title: "约一下 global 线上认识一下", assigneeName: "jackie" }],
+      trainings: [],
+      solutions: [],
+      businessRecords: [],
+      partnerName: "WrongCo",
+    },
+    { boundPartnerId: "p1", boundPartnerName: "GlobCom", scope: "todo" },
+  );
+  cases.push(assert("绑定群待办归属 GlobCom", bound.partnerName === "GlobCom" && bound.hubPartnerId === "p1", bound.partnerName));
+  cases.push(assert("绑定群待办清掉建档 fields", bound.fields.length === 0));
+  cases.push(assert("绑定群待办保留 todos", bound.todos.length === 1));
 
   const failed = cases.filter((c) => !c.pass);
   console.log(`\n${cases.length - failed.length}/${cases.length} passed`);

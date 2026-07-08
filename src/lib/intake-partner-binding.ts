@@ -34,6 +34,63 @@ export async function loadIntakePartnerBinding(partnerId?: string): Promise<Inta
   return { mode: "bound", partnerId: partner.id, partnerName: partner.name };
 }
 
+/** 企微群已绑定伙伴/客户时，强制草案归属（优先于正文里的 global 等歧义词） */
+export function applyBoundContextToProposal(
+  proposal: IntakeProposal,
+  opts: {
+    boundPartnerId?: string;
+    boundPartnerName?: string;
+    boundCustomerId?: string;
+    boundCustomerName?: string;
+    scope?: IntakeScope;
+  },
+): IntakeProposal {
+  const scope = opts.scope;
+  if (opts.boundPartnerId && opts.boundPartnerName) {
+    const stripNonTodo =
+      scope === "todo"
+        ? {
+            fields: [] as IntakeProposal["fields"],
+            contacts: [] as IntakeProposal["contacts"],
+            opportunities: [] as IntakeProposal["opportunities"],
+            trainings: [] as IntakeProposal["trainings"],
+            solutions: [] as IntakeProposal["solutions"],
+            businessRecords: [] as IntakeProposal["businessRecords"],
+          }
+        : {};
+    return {
+      ...proposal,
+      ...stripNonTodo,
+      partnerName: opts.boundPartnerName,
+      hubPartnerId: opts.boundPartnerId,
+      customerId: undefined,
+      customerName: undefined,
+    };
+  }
+  if (opts.boundCustomerId && opts.boundCustomerName) {
+    const stripNonTodo =
+      scope === "todo"
+        ? {
+            fields: [] as IntakeProposal["fields"],
+            contacts: [] as IntakeProposal["contacts"],
+            opportunities: [] as IntakeProposal["opportunities"],
+            trainings: [] as IntakeProposal["trainings"],
+            solutions: [] as IntakeProposal["solutions"],
+            businessRecords: [] as IntakeProposal["businessRecords"],
+          }
+        : {};
+    return {
+      ...proposal,
+      ...stripNonTodo,
+      customerId: opts.boundCustomerId,
+      customerName: opts.boundCustomerName,
+      partnerName: undefined,
+      hubPartnerId: undefined,
+    };
+  }
+  return proposal;
+}
+
 async function findCustomersByName(query: string, limit = 6) {
   const q = query.trim();
   if (!q) return [];
@@ -403,6 +460,11 @@ export function buildPartnerBindingPrompt(opts: {
 }): string {
   if (opts.binding.mode === "bound") {
     const { partnerName } = opts.binding;
+    if (opts.scope === "todo") {
+      return opts.locale === "zh"
+        ? `[伙伴绑定 · 已锁定]\n当前企微群已绑定伙伴「${partnerName}」。待办默认全部归属该伙伴；不要追问属于哪家公司，也不要从任务正文里的英文词（如 global/online）推断其他公司名。\nproposal.partnerName 必须设为「${partnerName}」。\n「给 X / 负责人 X」中的 X 是 Hub 团队成员 assigneeName，不是 partnerName。\n信息足够时 ready=true；群聊需 @机器人 回复「确认」后才会保存。`
+        : `[Partner binding · locked]\nWeCom group bound to "${partnerName}". Todos belong to this partner — do not infer other companies from words like "global" in the task text.\nSet proposal.partnerName to "${partnerName}". Names after「给/for」go in assigneeName.\nSet ready=true when the todo is clear; @bot confirm in groups before save.`;
+    }
     if (opts.scope === "business_record") {
       return opts.locale === "zh"
         ? `[伙伴绑定 · 已锁定]\n当前录入会话已绑定伙伴「${partnerName}」。商务记录默认归属该伙伴；不要追问属于哪家公司。\nproposal.partnerName 必须设为「${partnerName}」。\nbusinessRecords 至少一条；必须填写 title、traceNature（现场/非现场）与 traceAction（CRM 商务行为）；ready=true 仅当上述字段齐全。\n用户回复「确认」（企微/Web 均可）后才会保存并同步 CRM。`

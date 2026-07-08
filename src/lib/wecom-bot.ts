@@ -50,6 +50,7 @@ import {
 import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
+import { applyBoundContextToProposal } from "@/lib/intake-partner-binding";
 import { sanitizeProposalForScope } from "@/lib/proposal-scope";
 import { detectTraceNatureOverride, refinalProposeIntakeTurn } from "@/lib/fast-intake-heuristic";
 import { resolveSelfAssigneeNames } from "@/lib/todo-intake-parse";
@@ -274,7 +275,7 @@ function withPartnerHint(
   if (boundPartnerId && boundPartnerName) {
     return appendUserHint(
       history,
-      `系统提示：当前会话已绑定伙伴「${boundPartnerName}」。商务记录、商机、联系人、培训、联合方案等均默认归属该伙伴；「这个伙伴/该客户」均指该伙伴。`
+      `系统提示：当前会话已绑定伙伴「${boundPartnerName}」。商务记录、商机、联系人、待办、培训、联合方案等均默认归属该伙伴；「这个伙伴/该客户」均指该伙伴。`
     );
   }
   if (boundCustomerName) {
@@ -471,6 +472,7 @@ async function applyAssistantTurnResult(opts: {
   boundPartnerId?: string;
   boundPartnerName?: string;
   boundCustomerId?: string;
+  boundCustomerName?: string;
   chatType: "group" | "single";
   actorUserId: string;
   actor: Awaited<ReturnType<typeof resolveWecomActorUserId>>;
@@ -484,6 +486,7 @@ async function applyAssistantTurnResult(opts: {
     boundPartnerId,
     boundPartnerName,
     boundCustomerId,
+    boundCustomerName,
     chatType,
     actorUserId,
     actor,
@@ -521,7 +524,16 @@ async function applyAssistantTurnResult(opts: {
     intentConfirmSessions.delete(key);
     const scope = result.scope;
     const priorProposal = session?.scope === scope ? session?.proposal ?? null : null;
-    let merged = sanitizeProposalForScope(scope, mergeFinalProposal(priorProposal, result.proposal, new Set()));
+    let merged = sanitizeProposalForScope(
+      scope,
+      applyBoundContextToProposal(mergeFinalProposal(priorProposal, result.proposal, new Set()), {
+        boundPartnerId,
+        boundPartnerName,
+        boundCustomerId,
+        boundCustomerName,
+        scope,
+      }),
+    );
     const sourceText = history
       .filter((m) => m.role === "user")
       .map((m) => m.content)
@@ -566,7 +578,16 @@ async function applyAssistantTurnResult(opts: {
       if (scope === "todo") {
         merged = resolveSelfAssigneeNames(merged, actor.hubUser?.name ?? undefined);
       }
-      merged = sanitizeProposalForScope(scope, merged);
+      merged = sanitizeProposalForScope(
+        scope,
+        applyBoundContextToProposal(merged, {
+          boundPartnerId,
+          boundPartnerName,
+          boundCustomerId,
+          boundCustomerName,
+          scope,
+        }),
+      );
       if (
         (scope === "business_record" || scope === "todo") &&
         isIntakeParseErrorReply(replyText)
@@ -1014,6 +1035,7 @@ async function handleTextMessage(frame: WsFrame) {
         boundPartnerId,
         boundPartnerName,
         boundCustomerId,
+        boundCustomerName,
         chatType,
         actorUserId,
         actor,
@@ -1051,6 +1073,7 @@ async function handleTextMessage(frame: WsFrame) {
           boundPartnerId,
           boundPartnerName,
           boundCustomerId,
+          boundCustomerName,
           chatType,
           actorUserId,
           actor,
@@ -1121,7 +1144,13 @@ async function handleTextMessage(frame: WsFrame) {
         );
         session = {
           ...session,
-          proposal: refinal.proposal,
+          proposal: applyBoundContextToProposal(refinal.proposal, {
+            boundPartnerId,
+            boundPartnerName,
+            boundCustomerId,
+            boundCustomerName,
+            scope: session.scope,
+          }),
           ready: refinal.ready,
           crmOnlyReady: refinal.crmOnlyReady,
         };
@@ -1220,6 +1249,7 @@ async function handleTextMessage(frame: WsFrame) {
       boundPartnerId,
       boundPartnerName,
       boundCustomerId,
+      boundCustomerName,
       chatType,
       actorUserId,
       actor,
