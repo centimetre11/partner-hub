@@ -19,7 +19,7 @@
     return true;
   });
 
-  async function runFillCompose({ to, subject, body, files }) {
+  async function runFillCompose({ to, subject, body, bodyHtml, files }) {
     // 1. 写信表单未打开时，点击「写信」入口
     if (!findEditorBody()) {
       const btn = await waitFor(() => findComposeButton(), 15000, "找不到「写信」按钮，请确认已登录企业邮");
@@ -44,8 +44,8 @@
       }
     }
 
-    // 4. 正文
-    if (body) fillBody(editorBody, body);
+    // 4. 正文（优先 HTML 富文本）
+    if (body || bodyHtml) fillBody(editorBody, body, bodyHtml);
 
     // 5. 收件人
     const recipientField = findRecipientField(composeDoc);
@@ -306,12 +306,14 @@
     return Boolean(area.querySelector(".addr_base:not(.addr_input), .addr_normal, .addr_item"));
   }
 
-  function fillBody(editorBody, body) {
+  function fillBody(editorBody, body, bodyHtml) {
     editorBody.focus();
-    const html = body
-      .split("\n")
-      .map((line) => `<div>${escapeHtml(line) || "<br>"}</div>`)
-      .join("");
+    const html = bodyHtml && bodyHtml.trim()
+      ? bodyHtml
+      : body
+        .split("\n")
+        .map((line) => `<div>${escapeHtml(line) || "<br>"}</div>`)
+        .join("");
     // 保留编辑器已有签名等内容，插到最前
     editorBody.innerHTML = html + editorBody.innerHTML;
     editorBody.dispatchEvent(new InputEvent("input", { bubbles: true }));

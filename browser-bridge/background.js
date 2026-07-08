@@ -3,7 +3,7 @@
 // 指令协议：{ type: "ping" } / { type: "composeEmail", to, subject, body, attachments: [{url, filename}] }
 // 协议预留扩展位：openAndFill / click / extract 等后续按需增加。
 
-const VERSION = "1.0.2";
+const VERSION = "1.0.3";
 
 const MAIL_TAB_PATTERNS = [
   "https://exmail.qq.com/*",
@@ -73,6 +73,7 @@ async function handleComposeEmail(payload) {
     to,
     subject: subject || "",
     body: body || "",
+    bodyHtml: payload.bodyHtml || "",
     files,
   });
   return response || { ok: false, error: "no response from page" };

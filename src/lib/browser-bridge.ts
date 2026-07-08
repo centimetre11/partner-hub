@@ -76,6 +76,8 @@ export async function composeEmailViaBridge(params: {
   to: string;
   subject: string;
   body: string;
+  /** 富文本 HTML；有值时优先注入企业邮编辑器 */
+  bodyHtml?: string;
   attachments: BridgeAttachment[];
 }): Promise<ComposeResult> {
   try {
