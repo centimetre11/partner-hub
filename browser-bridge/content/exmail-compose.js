@@ -411,9 +411,11 @@
     const html = bodyHtml && bodyHtml.trim()
       ? bodyHtml
       : body
-        .split("\n")
-        .map((line) => `<div>${escapeHtml(line) || "<br>"}</div>`)
-        .join("");
+          .replace(/\\\r?\n/g, "\n")
+          .replace(/\\$/gm, "")
+          .split("\n")
+          .map((line) => `<div>${escapeHtml(line) || "<br>"}</div>`)
+          .join("");
     // 保留编辑器已有签名等内容，插到最前
     editorBody.innerHTML = html + editorBody.innerHTML;
     editorBody.dispatchEvent(new InputEvent("input", { bubbles: true }));

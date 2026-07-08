@@ -16,6 +16,7 @@ import {
   markdownToEmailHtml,
   markdownToPlainText,
   migrateEmailTemplates,
+  normalizeEmailMarkdown,
   openMailtoCompose,
   normalizeLeadEmail,
   templateChipLabel,
@@ -281,15 +282,16 @@ export function LeadEmail({
         subject,
         body,
         bodyHtml: markdownToEmailHtml(body),
-        attachments: selected.map((a) => ({
-          url: `${window.location.origin}/api/assets/${a.assetId}`,
-          filename: a.filename,
-        })),
       });
       if (result.ok && result.warning) {
         setBridgeNotice({ kind: "warn", text: result.warning });
       } else if (result.ok) {
-        setBridgeNotice({ kind: "ok", text: l.bridgeDone });
+        if (selected.length) {
+          await downloadAttachmentsSequential(selected);
+          setBridgeNotice({ kind: "ok", text: l.bridgeDoneWithAttachments });
+        } else {
+          setBridgeNotice({ kind: "ok", text: l.bridgeDone });
+        }
       } else {
         setBridgeNotice({ kind: "error", text: result.error || l.bridgeFailed });
       }
@@ -504,7 +506,7 @@ export function LeadEmail({
         ) : (
           <div className="px-3 py-2 text-sm text-slate-800 min-h-[4rem] prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1">
             {bodyPreview ? (
-              <ReactMarkdown>{body}</ReactMarkdown>
+              <ReactMarkdown>{normalizeEmailMarkdown(body)}</ReactMarkdown>
             ) : (
               <span className="text-slate-400">{l.messagePlaceholder}</span>
             )}

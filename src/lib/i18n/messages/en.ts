@@ -477,8 +477,9 @@ export const messagesEn = {
       composeViaBridge: "Compose in Exmail",
       bridgeSending: "Opening compose…",
       bridgeDone: "Compose filled in Exmail",
+      bridgeDoneWithAttachments: "Compose filled — attachments are downloading; add them manually in compose",
       bridgeFailed: "Auto-fill failed — retry or compose manually",
-      bridgeHint: "Browser helper connected: opens Exmail compose and fills recipient, subject, rich-text body, and checked attachments automatically.",
+      bridgeHint: "Browser helper connected: opens Exmail compose and fills recipient, subject, and rich-text body. Attachments download locally — add them manually in compose.",
       installBridge: "Install browser helper (auto-fill compose)",
       copiedHint: "Also copied to clipboard (fallback)",
       mailtoHint:

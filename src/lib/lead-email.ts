@@ -111,9 +111,18 @@ export function templateChipLabel(tpl: LeadEmailTemplate, vars?: LeadEmailTempla
   return markdownToPlainText(body).slice(0, 40) || "…";
 }
 
+/** 规范化 BlockNote / Markdown 换行（行尾 \\ 硬换行符等）。 */
+export function normalizeEmailMarkdown(markdown: string): string {
+  return markdown
+    .replace(/\\\r?\n/g, "\n")
+    .replace(/\\$/gm, "")
+    .replace(/ {2}\r?\n/g, "\n")
+    .replace(/\r\n/g, "\n");
+}
+
 /** Markdown 转纯文本（mailto / 剪贴板降级）。 */
 export function markdownToPlainText(markdown: string): string {
-  return markdown
+  return normalizeEmailMarkdown(markdown)
     .replace(/```[\s\S]*?```/g, "")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
@@ -139,15 +148,22 @@ function inlineMarkdownToHtml(text: string): string {
 
 /** Markdown 转 HTML（浏览器助手注入企业邮富文本编辑器）。 */
 export function markdownToEmailHtml(markdown: string): string {
-  const trimmed = markdown.trim();
-  if (!trimmed) return "";
+  const md = normalizeEmailMarkdown(markdown).trim();
+  if (!md) return "";
 
-  const blocks = trimmed.split(/\n{2,}/);
+  // 有双换行按段落分；否则每行一段（邮件正文常见）
+  const hasParagraphBreaks = /\n\s*\n/.test(md);
+  const blocks = hasParagraphBreaks
+    ? md.split(/\n{2,}/)
+    : md.split("\n").filter((l) => l.trim());
+
   const parts: string[] = [];
 
   for (const block of blocks) {
-    const lines = block.split("\n");
-    if (lines.every((l) => /^[-*+]\s+/.test(l.trim()))) {
+    const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) continue;
+
+    if (lines.every((l) => /^[-*+]\s+/.test(l))) {
       parts.push(
         "<ul>" +
           lines
@@ -157,7 +173,7 @@ export function markdownToEmailHtml(markdown: string): string {
       );
       continue;
     }
-    if (lines.every((l) => /^\d+\.\s+/.test(l.trim()))) {
+    if (lines.every((l) => /^\d+\.\s+/.test(l))) {
       parts.push(
         "<ol>" +
           lines
@@ -167,8 +183,11 @@ export function markdownToEmailHtml(markdown: string): string {
       );
       continue;
     }
-    const para = lines.map((l) => inlineMarkdownToHtml(l)).join("<br>");
-    parts.push(`<p>${para || "<br>"}</p>`);
+
+    // 邮件正文：每行独立成段，换行清晰
+    for (const line of lines) {
+      parts.push(`<p>${inlineMarkdownToHtml(line)}</p>`);
+    }
   }
 
   return parts.join("");

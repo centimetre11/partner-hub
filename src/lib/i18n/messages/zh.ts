@@ -477,8 +477,9 @@ export const messagesZh: Messages = {
       composeViaBridge: "一键写邮件",
       bridgeSending: "正在打开写信页…",
       bridgeDone: "已在企业邮写信页填充内容",
+      bridgeDoneWithAttachments: "写信页已填充，附件已开始下载，请在写信页点击「添加附件」上传",
       bridgeFailed: "自动填充失败，请重试或手动撰写",
-      bridgeHint: "浏览器助手已连接：将自动打开企业邮写信页并填充收件人、主题、富文本正文与勾选的附件。",
+      bridgeHint: "浏览器助手已连接：自动打开企业邮写信页并填充收件人、主题与富文本正文；附件将下载到本地，请在写信页手动添加。",
       installBridge: "安装浏览器助手（自动填充写信页）",
       copiedHint: "内容已同步复制到剪贴板（备用）",
       mailtoHint:

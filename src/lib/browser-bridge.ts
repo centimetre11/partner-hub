@@ -78,12 +78,22 @@ export async function composeEmailViaBridge(params: {
   body: string;
   /** 富文本 HTML；有值时优先注入企业邮编辑器 */
   bodyHtml?: string;
-  attachments: BridgeAttachment[];
+  /** 是否由扩展注入附件（大文件易超时，默认 false，改由 Hub 触发本地下载） */
+  injectAttachments?: boolean;
+  attachments?: BridgeAttachment[];
 }): Promise<ComposeResult> {
   try {
     const res = await sendToBridge<ComposeResult>(
-      { type: "composeEmail", ...params },
-      60000, // 附件下载 + 页面加载可能较慢
+      {
+        type: "composeEmail",
+        to: params.to,
+        subject: params.subject,
+        body: params.body,
+        bodyHtml: params.bodyHtml,
+        injectAttachments: params.injectAttachments ?? false,
+        attachments: params.injectAttachments ? params.attachments ?? [] : [],
+      },
+      30000,
     );
     return res ?? { ok: false, error: "no response" };
   } catch (err) {
