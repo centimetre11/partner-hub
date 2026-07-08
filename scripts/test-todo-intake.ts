@@ -17,6 +17,7 @@ import { parseTodoFromText, resolveSelfAssigneeNames } from "../src/lib/todo-int
 import { isIntakeParseErrorReply } from "../src/lib/intake-text";
 import { extractPartnerNameFromIntakeText } from "../src/lib/intake-partner-binding";
 import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "../src/lib/wecom-bot-intake";
+import { userTextMentionsPartnerName } from "../src/lib/intake-partner-binding";
 
 type Case = { name: string; pass: boolean; detail?: string };
 
@@ -190,6 +191,35 @@ function main() {
       !isLikelyWecomBotMentionName("AkLogiks", "给 areeb 记两个待办"),
     ),
   );
+
+  const jackieRaw =
+    stripWecomCommandPrefixForIntake(
+      "@MENA Beard Gang 帮我给 jackie 建个待办，约一下 global 线上认识一下，邀约大会",
+    );
+  const jackie = parseTodoFromText(jackieRaw, TODAY);
+  cases.push(assert("给 jackie 建个待办：负责人", jackie.assigneeName?.toLowerCase() === "jackie", jackie.assigneeName));
+  cases.push(
+    assert(
+      "给 jackie 建个待办：标题不含命令",
+      jackie.title.includes("global") && !/建个待办|帮我给/.test(jackie.title),
+      jackie.title,
+    ),
+  );
+  cases.push(
+    assert(
+      "global 不是 GlobCom 明示",
+      !userTextMentionsPartnerName(jackieRaw, "GlobCom"),
+    ),
+  );
+  cases.push(
+    assert(
+      "global 词不能匹配 globcom token",
+      !userTextMentionsPartnerName("约一下 global 线上", "GlobCom"),
+    ),
+  );
+
+  const dup = parseTodoFromText("alpha beta gamma alpha beta gamma", TODAY);
+  cases.push(assert("重复短语去重", dup.title === "alpha beta gamma", dup.title));
 
   const failed = cases.filter((c) => !c.pass);
   console.log(`\n${cases.length - failed.length}/${cases.length} passed`);

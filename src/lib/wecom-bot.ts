@@ -50,6 +50,7 @@ import {
 import { runAgent } from "@/lib/agent-runner";
 import { runAssistantTurn, type AssistantTurnResult } from "@/lib/assistant-router";
 import { mergeFinalProposal } from "@/lib/proposal-merge";
+import { sanitizeProposalForScope } from "@/lib/proposal-scope";
 import { detectTraceNatureOverride, refinalProposeIntakeTurn } from "@/lib/fast-intake-heuristic";
 import { resolveSelfAssigneeNames } from "@/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "@/lib/intake-text";
@@ -518,12 +519,13 @@ async function applyAssistantTurnResult(opts: {
 
   if (result.mode === "propose") {
     intentConfirmSessions.delete(key);
-    let merged = mergeFinalProposal(session?.proposal ?? null, result.proposal, new Set());
+    const scope = result.scope;
+    const priorProposal = session?.scope === scope ? session?.proposal ?? null : null;
+    let merged = sanitizeProposalForScope(scope, mergeFinalProposal(priorProposal, result.proposal, new Set()));
     const sourceText = history
       .filter((m) => m.role === "user")
       .map((m) => m.content)
       .join("\n");
-    const scope = result.scope;
     const partnerId = boundPartnerId ?? session?.partnerId;
 
     let ready = result.ready;
@@ -564,6 +566,7 @@ async function applyAssistantTurnResult(opts: {
       if (scope === "todo") {
         merged = resolveSelfAssigneeNames(merged, actor.hubUser?.name ?? undefined);
       }
+      merged = sanitizeProposalForScope(scope, merged);
       if (
         (scope === "business_record" || scope === "todo") &&
         isIntakeParseErrorReply(replyText)

@@ -27,7 +27,7 @@ import {
   normalizeCrmTraceAction,
   normalizeCrmTraceNature,
 } from "./crm-trace-payload";
-import { parseTodoFromText, stripTodoCommandPrefix, normalizeTodoItem, mentionsSelfTodoAssignee } from "./todo-intake-parse";
+import { parseTodoFromText, stripTodoCommandPrefix, normalizeTodoItem, mentionsSelfTodoAssignee, dedupeRepeatedPhrase } from "./todo-intake-parse";
 
 function stripIntakeSystemHint(content: string): string {
   const zh = content.indexOf("\n\n（系统提示：");
@@ -639,11 +639,15 @@ async function finalizeTodoTurn(
     ...partnerClarifications,
     ...buildTodoClarifications(todos, locale).filter((c) => !turn.clarifications.some((x) => x.id === c.id)),
   ];
-  const primaryTitle = todos[0]?.title?.trim();
+  const primaryTitle = dedupeRepeatedPhrase(todos[0]?.title?.trim() ?? "");
+  const cleanedTodos = todos.map((t, i) =>
+    i === 0 && primaryTitle ? { ...t, title: primaryTitle } : { ...t, title: dedupeRepeatedPhrase(t.title) },
+  );
+  const summaryRaw = proposal.summary?.trim();
   const cleanedProposal =
-    primaryTitle && (!proposal.summary?.trim() || /(?:待办|todo)/i.test(proposal.summary))
-      ? { ...proposal, summary: primaryTitle, todos }
-      : { ...proposal, todos };
+    primaryTitle && (!summaryRaw || /(?:待办|todo)/i.test(summaryRaw) || summaryRaw === todos[0]?.title)
+      ? { ...proposal, summary: primaryTitle, todos: cleanedTodos }
+      : { ...proposal, summary: dedupeRepeatedPhrase(summaryRaw ?? ""), todos: cleanedTodos };
   return {
     ...turn,
     proposal: cleanedProposal,

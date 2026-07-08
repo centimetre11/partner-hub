@@ -97,6 +97,14 @@ function extractAssignee(text: string): { rest: string; assigneeName?: string } 
     const rest = s.slice(giveAddTodo[0].length).trim().replace(/^(?:待办|代办)[：:,，、\s]*/i, "");
     return { rest, assigneeName };
   }
+  const giveCreateTodo = s.match(
+    /^(?:帮我|请|麻烦|给我)?\s*(?:给|for)\s*([A-Za-z\u4e00-\u9fa5][A-Za-z0-9\u4e00-\u9fa5.\s'-]{0,20}?)\s*(?:建|创|加|添|记).{0,4}?(?:个|一个|一下|条)?\s*(?:待办|代办)/i,
+  );
+  if (giveCreateTodo?.[1]?.trim()) {
+    const assigneeName = giveCreateTodo[1].trim();
+    const rest = s.slice(giveCreateTodo[0].length).trim().replace(/^[，,、：:\s]+/, "");
+    return { rest, assigneeName };
+  }
   const patterns = [
     /[,，、]\s*(?:负责人|责任人|指派给|分配给|owner|assignee)\s*(?:是|:|：|=)\s*([^,，。；;\n]+)\s*$/i,
     /\s+(?:负责人|责任人|owner|assignee)\s*(?:是|:|：|=)\s*([^,，。；;\n]+)\s*$/i,
@@ -110,13 +118,25 @@ function extractAssignee(text: string): { rest: string; assigneeName?: string } 
   return { rest: s };
 }
 
+/** Collapse accidental duplicate halves (LLM echo), e.g. "foo bar foo bar" → "foo bar". */
+export function dedupeRepeatedPhrase(text: string): string {
+  const t = text.trim();
+  if (t.length < 24) return t;
+  const half = Math.floor(t.length / 2);
+  const a = t.slice(0, half).trim();
+  const b = t.slice(half).trim();
+  if (a.length >= 12 && a === b) return a;
+  return t;
+}
+
 /** Parse todo title / assignee / dates from free-form user text (WeCom or web). */
 export function parseTodoFromText(text: string, today?: string): TodoProposal {
   const raw = text.trim().replace(/代办/g, "待办");
   let s = stripTodoCommandPrefix(raw);
   const { rest, assigneeName } = extractAssignee(s);
   s = rest.replace(/^[，,、]\s*/, "").trim();
-  const title = s.length <= 120 ? s : `${s.slice(0, 117)}…`;
+  const titleRaw = s.length <= 120 ? s : `${s.slice(0, 117)}…`;
+  const title = dedupeRepeatedPhrase(titleRaw);
   const selfAssignee = mentionsSelfTodoAssignee(raw) && !assigneeName;
   return {
     title,

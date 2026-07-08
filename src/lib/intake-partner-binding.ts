@@ -74,6 +74,43 @@ export async function lookupSinglePartnerByName(query: string) {
   return matches.length === 1 ? matches[0]! : null;
 }
 
+/** Partner / customer name appears explicitly in user text (not fuzzy DB substring only). */
+export function userTextMentionsPartnerName(userText: string, partnerName: string): boolean {
+  const text = userText.trim();
+  const name = partnerName.trim();
+  if (!text || !name) return false;
+  if (text.toLowerCase().includes(name.toLowerCase())) return true;
+  const tokens = name
+    .toLowerCase()
+    .split(/[\s._-]+/)
+    .filter((t) => t.length >= 4);
+  return tokens.some((tok) => {
+    const re = new RegExp(`(?:^|[^a-z0-9])${tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:[^a-z0-9]|$)`, "i");
+    return re.test(text);
+  });
+}
+
+/** Open todo: only link partner when user text credibly names that company (blocks global→GlobCom). */
+export async function isOpenTodoPartnerNameCredible(partnerName: string, userText: string): Promise<boolean> {
+  const pn = partnerName.trim();
+  if (!pn) return false;
+  if (isLikelyWecomBotMentionName(pn, userText)) return false;
+  if (await isLikelyHubAssigneeName(pn)) return false;
+  if (userTextMentionsPartnerName(userText, pn)) return true;
+
+  const stripped = stripWecomCommandPrefixForIntake(userText);
+  const extracted = extractPartnerNameFromIntakeText(stripped);
+  if (extracted && !isLikelyWecomBotMentionName(extracted, userText)) {
+    if (extracted.toLowerCase() === pn.toLowerCase()) return true;
+    const match = await lookupSinglePartnerByName(extracted);
+    if (match && match.name.toLowerCase() === pn.toLowerCase()) return true;
+  }
+
+  const matches = await findPartnersByName(pn);
+  if (matches.length === 1 && userTextMentionsPartnerName(userText, matches[0]!.name)) return true;
+  return false;
+}
+
 /** Partner name candidates for clarification buttons (Partner Hub). */
 export async function suggestPartnersFromIntakeText(text: string, limit = 6) {
   const stripped = stripWecomCommandPrefixForIntake(text).trim();
@@ -83,26 +120,41 @@ export async function suggestPartnersFromIntakeText(text: string, limit = 6) {
     const matches = await findPartnersByName(extracted, limit);
     if (matches.length) return matches;
   }
-  const slice = stripped.slice(0, 40).trim();
-  if (!slice || isLikelyWecomBotMentionName(slice, text)) return [];
-  return findPartnersByName(slice, limit);
+  return [];
 }
 
-/** Open intake: drop @机器人 / 负责人 误写入的 partnerName */
+/** Open intake: drop @机器人 / 负责人 / 臆测伙伴名 */
 export async function sanitizeOpenIntakePartnerName(
   proposal: IntakeProposal,
   opts?: { userText?: string; boundPartnerId?: string; boundCustomerId?: string },
 ): Promise<IntakeProposal> {
   if (opts?.boundPartnerId || opts?.boundCustomerId) return proposal;
-  const pn = proposal.partnerName?.trim();
-  if (!pn) return proposal;
-  if (isLikelyWecomBotMentionName(pn, opts?.userText)) {
-    return { ...proposal, partnerName: undefined, hubPartnerId: undefined };
+  let next = { ...proposal };
+  const pn = next.partnerName?.trim();
+  if (pn) {
+    if (
+      isLikelyWecomBotMentionName(pn, opts?.userText) ||
+      (await isLikelyHubAssigneeName(pn)) ||
+      (opts?.userText && !(await isOpenTodoPartnerNameCredible(pn, opts.userText)))
+    ) {
+      next = { ...next, partnerName: undefined, hubPartnerId: undefined };
+    }
   }
-  if (await isLikelyHubAssigneeName(pn)) {
-    return { ...proposal, partnerName: undefined, hubPartnerId: undefined };
+  const cn = next.customerName?.trim();
+  if (cn && opts?.userText && !(await isOpenTodoPartnerNameCredible(cn, opts.userText))) {
+    next = { ...next, customerName: undefined, customerId: undefined };
   }
-  return proposal;
+  if (opts?.userText && next.fields?.length) {
+    next = {
+      ...next,
+      fields: next.fields.filter((f) => {
+        const v = f.newValue?.trim();
+        if (!v) return true;
+        return !isLikelyWecomBotMentionName(v, opts.userText);
+      }),
+    };
+  }
+  return next;
 }
 
 /** Try to pull a company/partner name from free-form intake text. */
