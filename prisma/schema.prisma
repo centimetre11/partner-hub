@@ -91,6 +91,8 @@ model Partner {
   kmsRootPath      String? // KMS 主目录，手动填写
   gdriveFolderUrl  String? // 该伙伴材料归档的 Google Drive 子目录链接
   crmCustomerId    String? // 帆软 CRM 客户 ID
+  wecomChatBindCode          String?
+  wecomChatBindCodeExpiresAt DateTime?
   pipelineStage    Int      @default(1) // 1-10 十阶段
   ownerId          String?
   owner            User?    @relation(fields: [ownerId], references: [id])
@@ -157,6 +159,8 @@ model Customer {
   kmsRootPath   String? // KMS 主目录
   gdriveFolderUrl String? // 该客户材料归档的 Google Drive 子目录链接
   crmCustomerId String? // 帆软 CRM 客户 ID
+  wecomChatBindCode          String?
+  wecomChatBindCodeExpiresAt DateTime?
   // 销售负责人 / 售前负责人
   ownerId      String?
   owner        User?    @relation("CustomerOwner", fields: [ownerId], references: [id], onDelete: SetNull)

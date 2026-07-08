@@ -1232,7 +1232,7 @@ const listWecomChatsTool: Skill = {
       return `Partner ${p.name}: WeCom group not bound. Use list_wecom_chats with unboundOnly=true to see available groups, or bind on the partner page.`;
     }
     let chats = await listWecomChats();
-    if (args.unboundOnly === true) chats = chats.filter((c) => !c.partnerId);
+    if (args.unboundOnly === true) chats = chats.filter((c) => !c.partnerId && !c.customerId);
     if (!chats.length) {
       return args.unboundOnly
         ? "No unbound WeCom chats registered. @ the bot in a group first."
@@ -1241,7 +1241,7 @@ const listWecomChatsTool: Skill = {
     return chats
       .map(
         (c, i) =>
-          `${i + 1}. chatId=${c.chatId} | ${c.chatType} | label=${c.label ?? "—"} | partner=${c.partnerName ?? "unbound"}`,
+          `${i + 1}. chatId=${c.chatId} | ${c.chatType} | label=${c.label ?? "—"} | partner=${c.partnerName ?? "unbound"} | customer=${c.customerName ?? "unbound"}`,
       )
       .join("\n");
   },

@@ -7,14 +7,24 @@ export type WecomChatRow = {
   label: string | null;
   partnerId: string | null;
   partnerName: string | null;
+  customerId: string | null;
+  customerName: string | null;
   lastSeenAt: string;
 };
+
+export type BindableEntityRow = {
+  id: string;
+  name: string;
+  createdAt: Date;
+};
+
+const RECENT_BINDABLE_LIMIT = 10;
 
 function stripBotMention(text: string) {
   return text.replace(/@[^\s]+/g, "").trim();
 }
 
-/** 收到消息时自动登记会话（群聊会记录 chatId） */
+/** 收到消息或入群时自动登记会话（群聊会记录 chatId） */
 export async function registerWecomChat(input: {
   chatId?: string | null;
   chatType?: string | null;
@@ -51,20 +61,65 @@ export async function registerWecomChat(input: {
   });
 }
 
-export async function listWecomChats(): Promise<WecomChatRow[]> {
-  const rows = await db.wecomChat.findMany({
-    orderBy: { lastSeenAt: "desc" },
-    include: { partner: { select: { name: true } } },
-  });
-  return rows.map((r) => ({
+function mapWecomChatRow(
+  r: {
+    id: string;
+    chatId: string;
+    chatType: string;
+    label: string | null;
+    partnerId: string | null;
+    customerId: string | null;
+    lastSeenAt: Date;
+    partner?: { name: string } | null;
+    customer?: { name: string } | null;
+  },
+): WecomChatRow {
+  return {
     id: r.id,
     chatId: r.chatId,
     chatType: r.chatType,
     label: r.label,
     partnerId: r.partnerId,
     partnerName: r.partner?.name ?? null,
+    customerId: r.customerId,
+    customerName: r.customer?.name ?? null,
     lastSeenAt: r.lastSeenAt.toISOString(),
-  }));
+  };
+}
+
+export async function listWecomChats(): Promise<WecomChatRow[]> {
+  const rows = await db.wecomChat.findMany({
+    orderBy: { lastSeenAt: "desc" },
+    include: {
+      partner: { select: { name: true } },
+      customer: { select: { name: true } },
+    },
+  });
+  return rows.map(mapWecomChatRow);
+}
+
+export async function listRecentBindableCustomers(limit = RECENT_BINDABLE_LIMIT): Promise<BindableEntityRow[]> {
+  return db.customer.findMany({
+    where: {
+      status: { not: "INACTIVE" },
+      wecomChat: null,
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: { id: true, name: true, createdAt: true },
+  });
+}
+
+export async function listRecentBindablePartners(limit = RECENT_BINDABLE_LIMIT): Promise<BindableEntityRow[]> {
+  return db.partner.findMany({
+    where: {
+      status: { not: "ARCHIVED" },
+      wecomChat: null,
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: { id: true, name: true, createdAt: true },
+  });
 }
 
 export async function bindWecomChatToPartner(chatId: string, partnerId: string | null, label?: string) {
@@ -81,18 +136,26 @@ export async function bindWecomChatToPartner(chatId: string, partnerId: string |
         chatId,
         chatType: "group",
         partnerId,
+        customerId: partnerId ? null : undefined,
         label: label?.trim() || null,
       },
-      include: { partner: { select: { id: true, name: true } } },
+      include: {
+        partner: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true } },
+      },
     });
   }
   return db.wecomChat.update({
     where: { chatId },
     data: {
       partnerId,
+      ...(partnerId ? { customerId: null } : {}),
       ...(label?.trim() ? { label: label.trim() } : {}),
     },
-    include: { partner: { select: { id: true, name: true } } },
+    include: {
+      partner: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true } },
+    },
   });
 }
 
@@ -110,18 +173,26 @@ export async function bindWecomChatToCustomer(chatId: string, customerId: string
         chatId,
         chatType: "group",
         customerId,
+        partnerId: customerId ? null : undefined,
         label: label?.trim() || null,
       },
-      include: { customer: { select: { id: true, name: true } } },
+      include: {
+        partner: { select: { id: true, name: true } },
+        customer: { select: { id: true, name: true } },
+      },
     });
   }
   return db.wecomChat.update({
     where: { chatId },
     data: {
       customerId,
+      ...(customerId ? { partnerId: null } : {}),
       ...(label?.trim() ? { label: label.trim() } : {}),
     },
-    include: { customer: { select: { id: true, name: true } } },
+    include: {
+      partner: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true } },
+    },
   });
 }
 
@@ -138,5 +209,11 @@ export async function getWecomChatForCustomer(customerId: string) {
 }
 
 export async function getWecomChatByChatId(chatId: string) {
-  return db.wecomChat.findUnique({ where: { chatId } });
+  return db.wecomChat.findUnique({
+    where: { chatId },
+    include: {
+      partner: { select: { id: true, name: true } },
+      customer: { select: { id: true, name: true } },
+    },
+  });
 }

@@ -81,6 +81,11 @@ import {
   parseWecomBindCommand,
 } from "@/lib/wecom-bind-commands";
 import {
+  handleWecomChatBindCommand,
+  isWecomChatStatusQuery,
+  parseWecomChatBindCommand,
+} from "@/lib/wecom-chat-bind-commands";
+import {
   formatWecomIdentityReply,
   isWecomIdentityQuery,
   resolveWecomActorUserId,
@@ -656,6 +661,40 @@ async function handleTextMessage(frame: WsFrame) {
     appendHistory(key, "assistant", reply);
     await wsClient.replyStream(frame, streamId, reply, true);
     console.log(`[wecom-bot] 身份查询 from=${fromUserId ?? "?"} matched=${actor.matchedBy} hub=${actorUserId.slice(0, 8)}…`);
+    return;
+  }
+
+  if (isWecomChatStatusQuery(text)) {
+    const streamId = generateReqId("stream");
+    const chatType = frame.body?.chattype === "group" ? "group" : "single";
+    const reply = await handleWecomChatBindCommand(
+      { type: "status" },
+      {
+        chatId: chat?.chatId ?? frame.body?.chatid?.trim() ?? "",
+        chatType,
+        hubUserId: actorUserId,
+      },
+    );
+    appendHistory(key, "user", text);
+    appendHistory(key, "assistant", reply);
+    await wsClient.replyStream(frame, streamId, reply, true);
+    return;
+  }
+
+  const chatBindCommand = parseWecomChatBindCommand(text);
+  if (chatBindCommand) {
+    const streamId = generateReqId("stream");
+    const chatType = frame.body?.chattype === "group" ? "group" : "single";
+    const reply = await handleWecomChatBindCommand(chatBindCommand, {
+      chatId: chat?.chatId ?? frame.body?.chatid?.trim() ?? "",
+      chatType,
+      hubUserId: actorUserId,
+      text,
+    });
+    appendHistory(key, "user", text);
+    appendHistory(key, "assistant", reply);
+    await wsClient.replyStream(frame, streamId, reply, true);
+    console.log(`[wecom-bot] 群绑定指令 type=${chatBindCommand.type} from=${fromUserId ?? "?"}`);
     return;
   }
 
@@ -1289,13 +1328,25 @@ export async function startWecomBot() {
   });
 
   wsClient.on("event.enter_chat", (frame: WsFrame) => {
-    void wsClient?.replyWelcome(frame, {
-      msgtype: "text",
-      text: {
-        content:
-          "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 指令：推进阶段、创建待办\n• 身份：@我 我是谁 / @我 绑定 / @我 帮助\n• Agent 创建：@我 创建一个 Agent（如定时提醒、扫描待办）→ 多轮澄清 → @我 确认\n• 录入（协作 Agent）：\n  - 记录商务进展 / 拜访 / 会议纪要\n  - 添加商机、联系人\n  录入时会先给出草案，群聊请 @我 并回复「确认」保存或「取消」放弃。\n\n直接 @我 发消息即可开始。",
-      },
-    });
+    void (async () => {
+      const chatId = frame.body?.chatid?.trim();
+      if (chatId) {
+        const chat = await registerWecomChat({
+          chatId,
+          chatType: "group",
+        });
+        if (chat) {
+          console.log(`[wecom-bot] 入群登记 chatId=${chat.chatId}`);
+        }
+      }
+      await wsClient?.replyWelcome(frame, {
+        msgtype: "text",
+        text: {
+          content:
+            "你好！我是帆软中东伙伴管理助手。\n\n你可以：\n• 查询：当前有哪些 Tier A 伙伴？某伙伴档案？\n• 群绑定：`@我 绑定客户` / `@我 绑定伙伴`（选编号）或 `@我 本群` 查看状态\n• 身份：`@我 我是谁` / `@我 绑定` / `@我 帮助`\n• Agent 创建：`@我 创建一个 Agent…` → 多轮澄清 → `@我 确认`\n• 录入：记录商务进展 / 拜访 / 待办 / 商机 → 群聊请 `@我 确认` 保存\n\n直接 @我 发消息即可开始。",
+        },
+      });
+    })();
   });
 
   wsClient.connect();

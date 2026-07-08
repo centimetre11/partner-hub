@@ -8,6 +8,7 @@ import { getServerI18n } from "@/lib/server-i18n";
 import { getClueId, isNurturingLead } from "@/lib/leads";
 import { LeadActions } from "@/components/leads/lead-actions";
 import { LeadResearchPanel } from "@/components/leads/lead-research-panel";
+import { LeadEmail } from "@/components/leads/lead-email";
 import { LeadWhatsApp } from "@/components/leads/lead-whatsapp";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
@@ -85,7 +86,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
               value={lead.contRecdate ? fmtDate(lead.contRecdate, bcp47) : null}
             />
           </dl>
-          <div className="mt-3">
+          <div className="mt-3 flex flex-col gap-3">
+            <LeadEmail
+              contEmail={lead.contEmail}
+              contName={lead.contName}
+              companyName={lead.name}
+              city={lead.city}
+              country={lead.countryCn}
+            />
             <LeadWhatsApp
               phone={lead.phone}
               contName={lead.contName}

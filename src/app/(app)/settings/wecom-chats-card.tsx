@@ -11,10 +11,11 @@ export async function WecomChatsCard() {
   return (
     <Card title="企业微信会话" className="lg:col-span-2">
       <p className="text-xs text-slate-500 mb-4">
-        群聊中 @ 机器人后会自动出现在此列表。复制 Chat ID 到伙伴详情页绑定，即可向该群主动推送消息。
+        将机器人拉入群聊后会自动登记。在客户/伙伴详情 → 帆软连接 从下拉选择绑定，或在群内发送
+        「@我 绑定客户」/「@我 绑定伙伴」。
       </p>
       {chats.length === 0 ? (
-        <EmptyState text="暂无记录。请先在企微群或单聊中 @ 机器人发一条消息。" />
+        <EmptyState text="暂无记录。请先将机器人拉入企微群。" />
       ) : (
         <div className="space-y-2">
           {chats.map((c) => (
@@ -32,6 +33,12 @@ export async function WecomChatsCard() {
                 <div className="text-xs font-mono text-slate-500 break-all mt-1">{c.chatId}</div>
                 {c.partnerName && (
                   <div className="text-xs text-emerald-600 mt-1">已绑定伙伴：{c.partnerName}</div>
+                )}
+                {c.customerName && (
+                  <div className="text-xs text-emerald-600 mt-1">已绑定客户：{c.customerName}</div>
+                )}
+                {!c.partnerName && !c.customerName && (
+                  <div className="text-xs text-amber-600 mt-1">未绑定</div>
                 )}
               </div>
               <div className="text-xs text-slate-400 shrink-0">
