@@ -33,7 +33,18 @@
 
     const problems = [];
 
-    // 3. 主题（仅在写信表单文档内查找）
+    // 3. 收件人（最先填，避免正文抢焦点；经典版需模拟真实输入 + Tab/Enter 确认）
+    if (to) {
+      const recipientField = findRecipientField(composeDoc);
+      if (recipientField) {
+        const filled = await fillRecipient(recipientField, to);
+        if (!filled) problems.push("收件人填充失败");
+      } else {
+        problems.push("收件人输入框未找到");
+      }
+    }
+
+    // 4. 主题（仅在写信表单文档内查找）
     if (subject) {
       const subjectField = findSubjectField(composeDoc);
       if (subjectField) {
@@ -44,16 +55,8 @@
       }
     }
 
-    // 4. 正文（优先 HTML 富文本）
+    // 5. 正文（优先 HTML 富文本）
     if (body || bodyHtml) fillBody(editorBody, body, bodyHtml);
-
-    // 5. 收件人
-    const recipientField = findRecipientField(composeDoc);
-    if (recipientField) {
-      await fillRecipient(recipientField, to);
-    } else {
-      problems.push("收件人输入框未找到");
-    }
 
     // 6. 附件
     if (files && files.length > 0) {
@@ -129,7 +132,7 @@
         `frames=${allDocuments().length}`,
         `scoped=${composeDoc ? "yes" : "no"}`,
         `toArea=${doc.querySelectorAll("#toAreaCtrl").length}`,
-        `toInput=${doc.querySelectorAll("input[name='to'], .addr_text").length}`,
+        `toSel=${doc.querySelectorAll("#toAreaCtrl .addr_text input, #toAreaCtrl input").length}`,
         `subject=${doc.querySelectorAll("input[name='subject'], #subject").length}`,
         `fileInput=${doc.querySelectorAll("input[type='file']").length}`,
         `textInputs=${doc.querySelectorAll("input[type='text']").length}`,
@@ -197,22 +200,40 @@
 
   function findRecipientField(doc) {
     const strategies = [
-      () => Array.from(doc.querySelectorAll("#toAreaCtrl input[type='text']")).find(isVisible),
+      () => doc.querySelector("#toAreaCtrl .addr_text input"),
+      () => doc.querySelector("#toAreaCtrl .addr_input input"),
+      () => doc.querySelector("#toAreaCtrl input:not([type='hidden'])"),
+      () => doc.querySelector("#toAreaCtrl textarea"),
+      () => doc.querySelector("#to"),
+      () => doc.querySelector("textarea[name='to']"),
+      () => Array.from(doc.querySelectorAll("#toAreaCtrl input")).find(isVisible),
       () =>
-        Array.from(doc.querySelectorAll(".addr_area input[type='text'], input.addr_text")).find(isVisible),
+        Array.from(doc.querySelectorAll(".addr_area .addr_text input, .addr_area input.addr_text")).find(
+          isVisible,
+        ),
       () => Array.from(doc.querySelectorAll("input[name='to']")).find(isVisible),
-      () => Array.from(doc.querySelectorAll("textarea[name='to']")).find(isVisible),
+      () => findInputBeforeSubject(doc),
       () => findInputByRowLabel(doc, /^收件人/),
       () =>
-        Array.from(doc.querySelectorAll("div[contenteditable='true']")).find(
-          (el) => isVisible(el) && /收件人|to/i.test(nearbyLabelText(el)),
-        ),
+        Array.from(doc.querySelectorAll("#toAreaCtrl [contenteditable='true']")).find(isVisible),
       () => Array.from(doc.querySelectorAll("input[placeholder*='收件人']")).find(isVisible),
     ];
     for (const s of strategies) {
       const el = s();
-      if (el) return el;
+      if (el && isVisible(el)) return el;
     }
+    return null;
+  }
+
+  /** 主题字段之前的第一个可见输入框，通常是收件人。 */
+  function findInputBeforeSubject(doc) {
+    const subject = findSubjectField(doc);
+    if (!subject) return null;
+    const candidates = Array.from(
+      doc.querySelectorAll("input[type='text'], input:not([type]), textarea, [contenteditable='true']"),
+    ).filter(isVisible);
+    const idx = candidates.indexOf(subject);
+    if (idx > 0) return candidates[idx - 1];
     return null;
   }
 
@@ -277,33 +298,112 @@
     }
   }
 
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  function dispatchInputText(el, text) {
+    const win = el.ownerDocument.defaultView;
+    el.focus();
+    el.dispatchEvent(
+      new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        inputType: "insertText",
+        data: text,
+      }),
+    );
+    if (el.isContentEditable || el.getAttribute("contenteditable") === "true") {
+      el.textContent = text;
+    } else if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+      if (el.ownerDocument.execCommand("insertText", false, text)) {
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        setNativeValue(el, text);
+      }
+    }
+    el.dispatchEvent(
+      new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }),
+    );
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
   async function fillRecipient(field, to) {
+    const area = field.closest("#toAreaCtrl, .addr_area");
+    if (area) area.click();
     field.focus();
+    await sleep(80);
+
+    // 清空后写入
     if (field.tagName === "INPUT" || field.tagName === "TEXTAREA") {
-      setNativeValue(field, to);
+      setNativeValue(field, "");
     } else {
-      field.textContent = to;
-      field.dispatchEvent(new InputEvent("input", { bubbles: true, data: to }));
+      field.textContent = "";
     }
-    // 经典版靠回车/失焦把地址解析成 chip
+    await sleep(50);
+    dispatchInputText(field, to);
+    await sleep(120);
+
+    // 经典企业邮：Tab 或 Enter 将地址解析为 chip
+    for (const [key, code] of [
+      ["Tab", 9],
+      ["Enter", 13],
+    ]) {
+      pressKey(field, key, code);
+      await sleep(250);
+      if (recipientLooksFilled(field, to)) return true;
+    }
+
+    // 再试逗号 / 分号分隔
+    dispatchInputText(field, to + ",");
     pressKey(field, "Enter", 13);
-    if (typeof field.blur === "function") field.blur();
-    field.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
-    await new Promise((r) => setTimeout(r, 300));
-    // 解析后输入框被清空且没生成 chip 时，补一次值兜底
-    if (
-      (field.tagName === "INPUT" || field.tagName === "TEXTAREA") &&
-      !field.value &&
-      !hasAddressChip(field)
-    ) {
-      setNativeValue(field, to);
+    await sleep(250);
+    if (recipientLooksFilled(field, to)) return true;
+
+    // 逐字模拟输入（企业邮地址组件常只响应真实按键序列）
+    if (field.tagName === "INPUT" || field.tagName === "TEXTAREA") {
+      setNativeValue(field, "");
+      field.focus();
+      for (const ch of to) {
+        pressKey(field, ch, ch.charCodeAt(0));
+        setNativeValue(field, (field.value || "") + ch);
+        field.dispatchEvent(
+          new InputEvent("input", { bubbles: true, data: ch, inputType: "insertText" }),
+        );
+        await sleep(15);
+      }
+      pressKey(field, "Tab", 9);
+      await sleep(200);
+      pressKey(field, "Enter", 13);
+      await sleep(200);
+      if (recipientLooksFilled(field, to)) return true;
     }
+
+    // 兜底：保留输入框中的邮箱文本（即使未生成 chip 也可手动确认）
+    if (field.tagName === "INPUT" || field.tagName === "TEXTAREA") {
+      if (!field.value || !field.value.includes("@")) setNativeValue(field, to);
+      return Boolean(field.value && field.value.includes("@"));
+    }
+    return recipientLooksFilled(field, to);
+  }
+
+  function recipientLooksFilled(field, to) {
+    if (hasAddressChip(field)) return true;
+    const val =
+      field.tagName === "INPUT" || field.tagName === "TEXTAREA"
+        ? field.value
+        : field.textContent || "";
+    return val.includes("@") || val.includes(to.split("@")[0] || "");
   }
 
   function hasAddressChip(field) {
     const area = field.closest("#toAreaCtrl, .addr_area");
     if (!area) return false;
-    return Boolean(area.querySelector(".addr_base:not(.addr_input), .addr_normal, .addr_item"));
+    return Boolean(
+      area.querySelector(
+        ".addr_base:not(.addr_input), .addr_normal, .addr_item, .addr_chip, .addr_name",
+      ),
+    );
   }
 
   function fillBody(editorBody, body, bodyHtml) {
