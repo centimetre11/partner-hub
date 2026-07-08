@@ -17,6 +17,7 @@ import {
   type LeadEmailAttachment,
   type LeadEmailTemplateVars,
 } from "@/lib/lead-email";
+import { composeEmailViaBridge, isBridgeAvailable } from "@/lib/browser-bridge";
 
 const chipClass =
   "inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-700 transition-all hover:border-sky-300 hover:bg-sky-100 active:scale-95";
@@ -63,8 +64,21 @@ export function LeadEmail({
   const [copied, setCopied] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [bridgeReady, setBridgeReady] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [bridgeNotice, setBridgeNotice] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    isBridgeAvailable().then((ok) => {
+      if (!cancelled) setBridgeReady(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -209,6 +223,33 @@ export function LeadEmail({
       copiedTimerRef.current = setTimeout(() => setCopied(false), 3000);
     } catch {
       // mailto 已预填；剪贴板失败可忽略
+    }
+  };
+
+  const composeViaBridge = async () => {
+    if (!normalizedEmail || sending) return;
+    setSending(true);
+    setBridgeNotice(null);
+    try {
+      const selected = attachments.filter((a) => checkedIds.has(a.id));
+      const result = await composeEmailViaBridge({
+        to: normalizedEmail,
+        subject,
+        body,
+        attachments: selected.map((a) => ({
+          url: `${window.location.origin}/api/assets/${a.assetId}`,
+          filename: a.filename,
+        })),
+      });
+      if (result.ok && result.warning) {
+        setBridgeNotice({ kind: "warn", text: result.warning });
+      } else if (result.ok) {
+        setBridgeNotice({ kind: "ok", text: l.bridgeDone });
+      } else {
+        setBridgeNotice({ kind: "error", text: result.error || l.bridgeFailed });
+      }
+    } finally {
+      setSending(false);
     }
   };
 
@@ -364,19 +405,42 @@ export function LeadEmail({
       <div className="flex flex-wrap items-center gap-2 mt-3">
         <button
           type="button"
-          onClick={openExmail}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-sky-700 active:scale-95"
+          disabled={sending}
+          onClick={bridgeReady ? composeViaBridge : openExmail}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-all hover:bg-sky-700 active:scale-95 disabled:opacity-60"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="2" y="4" width="20" height="16" rx="2" />
             <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
           </svg>
-          {l.openExmail}
+          {sending ? l.bridgeSending : bridgeReady ? l.composeViaBridge : l.openExmail}
         </button>
         {copied && <span className="text-xs text-sky-600">{l.copiedHint}</span>}
+        {bridgeNotice && (
+          <span
+            className={
+              bridgeNotice.kind === "ok"
+                ? "text-xs text-emerald-600"
+                : bridgeNotice.kind === "warn"
+                  ? "text-xs text-amber-600"
+                  : "text-xs text-red-600"
+            }
+          >
+            {bridgeNotice.text}
+          </span>
+        )}
         <span className="text-xs text-slate-400">{l.emailLabel}: {normalizedEmail}</span>
       </div>
-      <p className="text-xs text-slate-400 mt-2">{l.mailtoHint}</p>
+      {bridgeReady ? (
+        <p className="text-xs text-slate-400 mt-2">{l.bridgeHint}</p>
+      ) : (
+        <p className="text-xs text-slate-400 mt-2">
+          {l.mailtoHint}{" "}
+          <a href="/downloads/browser-bridge.zip" className="text-sky-600 hover:underline" download>
+            {l.installBridge}
+          </a>
+        </p>
+      )}
     </div>
   );
 }

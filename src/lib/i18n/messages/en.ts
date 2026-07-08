@@ -474,6 +474,12 @@ export const messagesEn = {
     email: {
       title: "Email",
       openExmail: "Open compose",
+      composeViaBridge: "Compose in Exmail",
+      bridgeSending: "Opening compose…",
+      bridgeDone: "Compose filled in Exmail",
+      bridgeFailed: "Auto-fill failed — retry or compose manually",
+      bridgeHint: "Browser helper connected: opens Exmail compose and fills recipient, subject, body, and checked attachments automatically.",
+      installBridge: "Install browser helper (auto-fill compose)",
       copiedHint: "Also copied to clipboard (fallback)",
       mailtoHint:
         "Opens compose with recipient, subject, and body prefilled. If the web compose page does not open, set Chrome to handle mailto with QQ Mail / Exmail (QQ Mail → Settings → open email links with QQ Mail).",

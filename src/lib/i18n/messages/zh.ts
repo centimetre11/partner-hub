@@ -474,6 +474,12 @@ export const messagesZh: Messages = {
     email: {
       title: "邮件联系",
       openExmail: "打开写信页",
+      composeViaBridge: "一键写邮件",
+      bridgeSending: "正在打开写信页…",
+      bridgeDone: "已在企业邮写信页填充内容",
+      bridgeFailed: "自动填充失败，请重试或手动撰写",
+      bridgeHint: "浏览器助手已连接：将自动打开企业邮写信页并填充收件人、主题、正文与勾选的附件。",
+      installBridge: "安装浏览器助手（自动填充写信页）",
       copiedHint: "内容已同步复制到剪贴板（备用）",
       mailtoHint:
         "将打开写信页并预填收件人、主题和正文。若未自动打开网页写信，请在 Chrome 设置中将 mailto 协议关联到 QQ 邮箱/企业邮箱（QQ 邮箱 → 设置 → 用 QQ 邮箱打开邮件链接）。",
