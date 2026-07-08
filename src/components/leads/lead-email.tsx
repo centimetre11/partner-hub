@@ -259,7 +259,10 @@ export function LeadEmail({
   const openExmail = async () => {
     if (!normalizedEmail) return;
     const selected = attachments.filter((a) => checkedIds.has(a.id));
-    if (selected.length) await downloadAttachmentsSequential(selected);
+    if (selected.length) {
+      const { failed } = await downloadAttachmentsSequential(selected);
+      if (failed.length) setBridgeNotice({ kind: "warn", text: l.attachmentDownloadFailed });
+    }
     openMailtoCompose(normalizedEmail, subject, body);
     try {
       await navigator.clipboard.writeText(formatEmailClipboard(normalizedEmail, subject, body));
@@ -277,6 +280,14 @@ export function LeadEmail({
     setBridgeNotice(null);
     try {
       const selected = attachments.filter((a) => checkedIds.has(a.id));
+
+      // 先下载附件（Hub 标签页仍在前台时），再打开企业邮，避免后台标签页下载被 Chrome 拦截
+      let downloadFailed: typeof selected = [];
+      if (selected.length) {
+        const { failed } = await downloadAttachmentsSequential(selected);
+        downloadFailed = failed;
+      }
+
       const result = await composeEmailViaBridge({
         to: normalizedEmail,
         subject,
@@ -286,8 +297,9 @@ export function LeadEmail({
       if (result.ok && result.warning) {
         setBridgeNotice({ kind: "warn", text: result.warning });
       } else if (result.ok) {
-        if (selected.length) {
-          await downloadAttachmentsSequential(selected);
+        if (downloadFailed.length > 0) {
+          setBridgeNotice({ kind: "warn", text: l.attachmentDownloadFailed });
+        } else if (selected.length) {
           setBridgeNotice({ kind: "ok", text: l.bridgeDoneWithAttachments });
         } else {
           setBridgeNotice({ kind: "ok", text: l.bridgeDone });
@@ -557,7 +569,9 @@ export function LeadEmail({
                 </span>
                 <button
                   type="button"
-                  onClick={() => downloadAttachment(att)}
+                  onClick={() => downloadAttachment(att).then((ok) => {
+                    if (!ok) setBridgeNotice({ kind: "warn", text: l.attachmentDownloadFailed });
+                  })}
                   className="text-sky-600 hover:underline"
                 >
                   {l.downloadAttachment}

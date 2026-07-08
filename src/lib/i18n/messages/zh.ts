@@ -478,6 +478,7 @@ export const messagesZh: Messages = {
       bridgeSending: "正在打开写信页…",
       bridgeDone: "已在企业邮写信页填充内容",
       bridgeDoneWithAttachments: "写信页已填充，附件已开始下载，请在写信页点击「添加附件」上传",
+      attachmentDownloadFailed: "部分附件下载失败，请在线索页点击「下载」重试，或重新上传附件",
       bridgeFailed: "自动填充失败，请重试或手动撰写",
       bridgeHint: "浏览器助手已连接：自动打开企业邮写信页并填充收件人、主题与富文本正文；附件将下载到本地，请在写信页手动添加。",
       installBridge: "安装浏览器助手（自动填充写信页）",

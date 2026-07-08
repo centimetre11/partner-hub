@@ -229,18 +229,34 @@ export function formatEmailClipboard(to: string, subject: string, body: string):
   return lines.join("\n");
 }
 
-export function buildAssetDownloadUrl(assetId: string): string {
-  return `/api/assets/${assetId}`;
+export function buildAssetDownloadUrl(assetId: string, download = false): string {
+  const base = `/api/assets/${assetId}`;
+  return download ? `${base}?download=1` : base;
 }
 
-export function downloadAttachment(att: LeadEmailAttachment): void {
-  const a = document.createElement("a");
-  a.href = buildAssetDownloadUrl(att.assetId);
-  a.download = att.filename;
-  a.rel = "noopener noreferrer";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+/** 通过 fetch + Blob 触发下载（比 <a href> 更可靠，避免后台标签页被拦截）。 */
+export async function downloadAttachment(att: LeadEmailAttachment): Promise<boolean> {
+  try {
+    const res = await fetch(buildAssetDownloadUrl(att.assetId, true), {
+      credentials: "same-origin",
+    });
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = att.filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 2000);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function delay(ms: number): Promise<void> {
@@ -250,10 +266,15 @@ function delay(ms: number): Promise<void> {
 /** 依次下载附件，降低浏览器批量拦截概率。 */
 export async function downloadAttachmentsSequential(
   attachments: LeadEmailAttachment[],
-  gapMs = 300,
-): Promise<void> {
+  gapMs = 600,
+): Promise<{ ok: LeadEmailAttachment[]; failed: LeadEmailAttachment[] }> {
+  const ok: LeadEmailAttachment[] = [];
+  const failed: LeadEmailAttachment[] = [];
   for (let i = 0; i < attachments.length; i++) {
-    downloadAttachment(attachments[i]!);
+    const att = attachments[i]!;
+    if (await downloadAttachment(att)) ok.push(att);
+    else failed.push(att);
     if (i < attachments.length - 1) await delay(gapMs);
   }
+  return { ok, failed };
 }
