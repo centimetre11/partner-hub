@@ -71,6 +71,13 @@ export async function isBridgeAvailable(): Promise<boolean> {
 
 export type ComposeResult = { ok: boolean; warning?: string; error?: string };
 
+/** 按附件数量估算超时（大文件 base64 编码较慢，需多等一会儿）。 */
+export function bridgeComposeTimeoutMs(attachmentCount: number): number {
+  const base = 90_000;
+  const perFile = 60_000;
+  return Math.min(300_000, base + Math.max(0, attachmentCount) * perFile);
+}
+
 /** 通过扩展打开企业邮写信页并填充内容与附件。 */
 export async function composeEmailViaBridge(params: {
   to: string;
@@ -78,22 +85,13 @@ export async function composeEmailViaBridge(params: {
   body: string;
   /** 富文本 HTML；有值时优先注入企业邮编辑器 */
   bodyHtml?: string;
-  /** 是否由扩展注入附件（大文件易超时，默认 false，改由 Hub 触发本地下载） */
-  injectAttachments?: boolean;
   attachments?: BridgeAttachment[];
 }): Promise<ComposeResult> {
+  const attachments = params.attachments ?? [];
   try {
     const res = await sendToBridge<ComposeResult>(
-      {
-        type: "composeEmail",
-        to: params.to,
-        subject: params.subject,
-        body: params.body,
-        bodyHtml: params.bodyHtml,
-        injectAttachments: params.injectAttachments ?? false,
-        attachments: params.injectAttachments ? params.attachments ?? [] : [],
-      },
-      30000,
+      { type: "composeEmail", ...params, attachments },
+      bridgeComposeTimeoutMs(attachments.length),
     );
     return res ?? { ok: false, error: "no response" };
   } catch (err) {

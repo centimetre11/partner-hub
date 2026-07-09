@@ -3,7 +3,7 @@
 // 指令协议：{ type: "ping" } / { type: "composeEmail", to, subject, body, attachments: [{url, filename}] }
 // 协议预留扩展位：openAndFill / click / extract 等后续按需增加。
 
-const VERSION = "1.0.5";
+const VERSION = "1.0.6";
 
 const MAIL_TAB_PATTERNS = [
   "https://exmail.qq.com/*",
@@ -38,24 +38,22 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
 });
 
 async function handleComposeEmail(payload) {
-  const { to, subject, body, attachments, injectAttachments } = payload;
+  const { to, subject, body, attachments } = payload;
   if (!to) return { ok: false, error: "missing recipient" };
 
   const files = [];
-  if (injectAttachments) {
-    for (const att of attachments || []) {
-      try {
-        const res = await fetch(att.url, { credentials: "include" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const buf = await res.arrayBuffer();
-        files.push({
-          filename: att.filename || "attachment",
-          mimeType: res.headers.get("content-type") || "application/octet-stream",
-          base64: arrayBufferToBase64(buf),
-        });
-      } catch (err) {
-        return { ok: false, error: `附件下载失败（${att.filename}）: ${err.message}` };
-      }
+  for (const att of attachments || []) {
+    try {
+      const res = await fetch(att.url, { credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const buf = await res.arrayBuffer();
+      files.push({
+        filename: att.filename || "attachment",
+        mimeType: res.headers.get("content-type") || "application/octet-stream",
+        base64: arrayBufferToBase64(buf),
+      });
+    } catch (err) {
+      return { ok: false, error: `附件下载失败（${att.filename}）: ${err.message}` };
     }
   }
 

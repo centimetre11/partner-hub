@@ -280,30 +280,23 @@ export function LeadEmail({
     setBridgeNotice(null);
     try {
       const selected = attachments.filter((a) => checkedIds.has(a.id));
-
-      // 先下载附件（Hub 标签页仍在前台时），再打开企业邮，避免后台标签页下载被 Chrome 拦截
-      let downloadFailed: typeof selected = [];
-      if (selected.length) {
-        const { failed } = await downloadAttachmentsSequential(selected);
-        downloadFailed = failed;
-      }
-
       const result = await composeEmailViaBridge({
         to: normalizedEmail,
         subject,
         body,
         bodyHtml: markdownToEmailHtml(body),
+        attachments: selected.map((a) => ({
+          url: `${window.location.origin}/api/assets/${a.assetId}`,
+          filename: a.filename,
+        })),
       });
       if (result.ok && result.warning) {
         setBridgeNotice({ kind: "warn", text: result.warning });
       } else if (result.ok) {
-        if (downloadFailed.length > 0) {
-          setBridgeNotice({ kind: "warn", text: l.attachmentDownloadFailed });
-        } else if (selected.length) {
-          setBridgeNotice({ kind: "ok", text: l.bridgeDoneWithAttachments });
-        } else {
-          setBridgeNotice({ kind: "ok", text: l.bridgeDone });
-        }
+        setBridgeNotice({
+          kind: "ok",
+          text: selected.length ? l.bridgeDoneWithAttachments : l.bridgeDone,
+        });
       } else {
         setBridgeNotice({ kind: "error", text: result.error || l.bridgeFailed });
       }
@@ -604,7 +597,13 @@ export function LeadEmail({
             <rect x="2" y="4" width="20" height="16" rx="2" />
             <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
           </svg>
-          {sending ? l.bridgeSending : bridgeReady ? l.composeViaBridge : l.openExmail}
+          {sending
+            ? checkedIds.size > 0
+              ? l.bridgeSendingWithAttachments
+              : l.bridgeSending
+            : bridgeReady
+              ? l.composeViaBridge
+              : l.openExmail}
         </button>
         {copied && <span className="text-xs text-sky-600">{l.copiedHint}</span>}
         {bridgeNotice && (
