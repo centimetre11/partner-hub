@@ -9,6 +9,8 @@ import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { BoardOverview } from "./dashboard/board-overview";
 import { DashboardWorkbenchTodos } from "./dashboard-workbench-todos";
+import { MeetingScheduler } from "@/components/meeting-scheduler";
+import { getMeetingSchedulerContext } from "@/lib/meeting-context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import { getServerI18n, stageName } from "@/lib/server-i18n";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
@@ -85,7 +87,8 @@ type WorkProps = {
 };
 
 async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkProps) {
-  const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications] = await Promise.all([
+  const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications, meetingCtx] =
+    await Promise.all([
     db.todoItem.findMany({
       where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore(now) } },
       include: {
@@ -113,6 +116,7 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
           include: { agentRun: { include: { agent: true } } },
         })
       : Promise.resolve([]),
+    getMeetingSchedulerContext(userId),
   ]);
 
   const stalePartners = activePartners
@@ -228,6 +232,15 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
             </Card>
           )}
           <WeeklyReport />
+          <Card title={m.dashboard.scheduleMeeting.title}>
+            <MeetingScheduler
+              currentUserId={userId}
+              googleMeetConnected={meetingCtx.googleMeetConnected}
+              wecomScheduleConfigured={meetingCtx.wecomScheduleConfigured}
+              boundUsers={meetingCtx.boundUsers}
+              variant="card"
+            />
+          </Card>
           <Card title={m.dashboard.quickLinks}>
             <div className="space-y-2 text-sm">
               <div className="rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">

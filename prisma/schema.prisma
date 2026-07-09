@@ -32,6 +32,7 @@ model User {
   aiConversationLogs AiConversationLog[]
   systemEventLogs SystemEventLog[] @relation("SystemEventActor")
   kmsCredential UserKmsCredential?
+  googleMeetCredential UserGoogleMeetCredential?
   businessRecords BusinessRecord[]
   feedbackSubmissions FeedbackSubmission[]
   ownedCustomers   Customer[] @relation("CustomerOwner")
@@ -826,6 +827,16 @@ model AgentSkill {
   agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
   skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
   @@id([agentId, skillId])
+}
+
+// 用户个人 Google Meet 授权（每人独立 refresh_token，与团队 Drive 上传隔离）
+model UserGoogleMeetCredential {
+  userId       String   @id
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleEmail  String?
+  refreshToken String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 // 用户个人 KMS（Confluence）访问令牌，每人一份

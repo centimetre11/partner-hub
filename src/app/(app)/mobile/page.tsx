@@ -8,6 +8,8 @@ import { todoLinkLabel } from "@/lib/todo-display";
 import type { Prisma } from "@prisma/client";
 import { MobileBusinessRecordCapture, MobileTodoCapture } from "./mobile-desk-actions";
 import { MobileDirectorySearch } from "./mobile-directory-search";
+import { MeetingScheduler } from "@/components/meeting-scheduler";
+import { getMeetingSchedulerContext } from "@/lib/meeting-context";
 
 type ActionTileProps = {
   eyebrow: string;
@@ -71,6 +73,7 @@ export default async function MobileDeskPage({
     activePartners,
     activeCustomers,
     users,
+    meetingCtx,
   ] = await Promise.all([
     db.todoItem.findMany({
       where: myTodoWhere,
@@ -113,6 +116,7 @@ export default async function MobileDeskPage({
       orderBy: { name: "asc" },
     }),
     db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    getMeetingSchedulerContext(user.id),
   ]);
 
   const scenario = desk.scenarios;
@@ -175,6 +179,20 @@ export default async function MobileDeskPage({
             href="#directory"
             actionLabel={scenario.browseDirectory.action}
           />
+          <ActionTile
+            eyebrow={scenario.scheduleMeeting.eyebrow}
+            title={scenario.scheduleMeeting.title}
+            desc={scenario.scheduleMeeting.desc}
+          >
+            <MeetingScheduler
+              currentUserId={user.id}
+              googleMeetConnected={meetingCtx.googleMeetConnected}
+              wecomScheduleConfigured={meetingCtx.wecomScheduleConfigured}
+              boundUsers={meetingCtx.boundUsers}
+              variant="drawer"
+              autoOpen={openAction === "meeting"}
+            />
+          </ActionTile>
         </section>
 
         <section id="my-todos" className="mt-5 scroll-mt-20 rounded-2xl border border-slate-200 bg-white shadow-sm">

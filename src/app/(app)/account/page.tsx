@@ -5,7 +5,9 @@ import { KmsSetup } from "../settings/kms-setup";
 import { ProfileSetup } from "./profile-setup";
 import { PasswordSetup } from "./password-setup";
 import { UserIdentitySetup } from "@/components/user-identity-setup";
+import { GoogleMeetSetup } from "@/components/google-meet-setup";
 import { getKmsConfigStatus, getUserKmsCredential, KMS_DEFAULT_BASE_URL } from "@/lib/kms";
+import { getUserGoogleMeetStatus } from "@/lib/google-meet-oauth";
 import { getCrmSalesmenAction } from "@/lib/crm-actions";
 import { db } from "@/lib/db";
 import { getServerI18n } from "@/lib/server-i18n";
@@ -20,7 +22,7 @@ export default async function AccountPage() {
     where: { id: user.id },
     select: { crmSalesmanName: true, wecomUserId: true, wecomDisplayName: true, name: true },
   });
-  const [salesmen, myFeedback] = await Promise.all([
+  const [salesmen, myFeedback, googleMeet] = await Promise.all([
     getCrmSalesmenAction(),
     db.feedbackSubmission.findMany({
       where: { createdById: user.id },
@@ -30,12 +32,14 @@ export default async function AccountPage() {
         assets: { include: { asset: { select: { id: true, filename: true, mimeType: true, kind: true } } } },
       },
     }),
+    getUserGoogleMeetStatus(user.id),
   ]);
   const am = m.account;
 
   const nav = [
     { id: "profile", label: am.sectionProfile },
     { id: "identity", label: am.sectionIdentity },
+    { id: "google-meet", label: am.sectionGoogleMeet },
     { id: "kms", label: am.sectionKms },
     { id: "my-feedback", label: am.sectionFeedback },
   ];
@@ -78,6 +82,16 @@ export default async function AccountPage() {
               wecomDisplayName={freshUser?.wecomDisplayName ?? null}
               crmSalesmanName={freshUser?.crmSalesmanName ?? null}
               salesmen={salesmen}
+            />
+          </Card>
+        </SectionNavGroup>
+
+        <SectionNavGroup id="google-meet" title={am.sectionGoogleMeet} desc={am.sectionGoogleMeetDesc}>
+          <Card title={am.googleMeetTitle} className="lg:col-span-2">
+            <GoogleMeetSetup
+              connected={googleMeet.connected}
+              googleEmail={googleMeet.googleEmail}
+              clientConfigured={googleMeet.clientConfigured}
             />
           </Card>
         </SectionNavGroup>
