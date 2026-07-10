@@ -13,6 +13,7 @@ export function AddPartnerForm({
   taxonomy,
   defaultParentId,
   distributorOptions,
+  parentLabel,
   compact = false,
 }: {
   intent?: "prospect" | "active";
@@ -21,6 +22,8 @@ export function AddPartnerForm({
   defaultParentId?: string;
   /** Candidates for parent dropdown (top-level partners). */
   distributorOptions?: { id: string; name: string }[];
+  /** When set with defaultParentId, lock parent and show this label instead of a select. */
+  parentLabel?: string;
   /** Compact trigger for embedding in card actions. */
   compact?: boolean;
 }) {
@@ -60,7 +63,13 @@ export function AddPartnerForm({
       </div>
 
       {aiOpen && (
-        <AiIntakePanel scope="new_partner" intent={intent} onClose={() => setAiOpen(false)} onDone={(id) => (window.location.href = `/partners/${id}`)} />
+        <AiIntakePanel
+          scope="new_partner"
+          intent={intent}
+          parentId={defaultParentId}
+          onClose={() => setAiOpen(false)}
+          onDone={(id) => (window.location.href = `/partners/${id}`)}
+        />
       )}
 
       {open && (
@@ -102,7 +111,12 @@ export function AddPartnerForm({
               {(defaultParentId || (distributorOptions && distributorOptions.length > 0)) && (
                 <label className="block space-y-1">
                   <span className="text-xs text-slate-500">{p.parentDistributor}</span>
-                  {distributorOptions ? (
+                  {defaultParentId && parentLabel ? (
+                    <>
+                      <input type="hidden" name="parentId" value={defaultParentId} />
+                      <p className="text-sm text-slate-700">{parentLabel}</p>
+                    </>
+                  ) : distributorOptions ? (
                     <select
                       name="parentId"
                       defaultValue={defaultParentId ?? ""}

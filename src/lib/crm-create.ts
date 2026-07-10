@@ -192,10 +192,20 @@ export async function createCustomerFromCrmAction(comId: string): Promise<Create
 }
 
 /** 从 CRM 客户直接创建「伙伴」档案（正式伙伴，画像字段留空待补） */
-export async function createPartnerFromCrmAction(comId: string): Promise<CreateResult> {
+export async function createPartnerFromCrmAction(
+  comId: string,
+  opts?: { parentId?: string },
+): Promise<CreateResult> {
   const user = await requireUser();
   const detail = await loadCrmDetail(comId);
   if (!detail) return { error: "CRM 客户不存在，请先执行 CRM 同步" };
+
+  const parentId = opts?.parentId?.trim() || null;
+  if (parentId) {
+    const { assertTwoLevelHierarchy } = await import("./partner-hierarchy");
+    const check = await assertTwoLevelHierarchy(null, parentId);
+    if (!check.ok) return { error: check.error };
+  }
 
   try {
     const partner = await db.partner.create({
@@ -206,6 +216,7 @@ export async function createPartnerFromCrmAction(comId: string): Promise<CreateR
         crmCustomerId: detail.id,
         salesUserId: detail.salesUserId ?? undefined,
         presalesUserId: detail.presalesUserId ?? undefined,
+        parentId,
         ...ACTIVE_PARTNER_DEFAULTS,
         promotedAt: new Date(),
         ...(detail.contact?.name
@@ -242,11 +253,12 @@ export async function createPartnerFromCrmAction(comId: string): Promise<CreateR
       targetId: partner.id,
       targetLabel: partner.name,
       summary: `从 CRM 创建伙伴：${partner.name}`,
-      meta: { crmCustomerId: detail.id },
+      meta: { crmCustomerId: detail.id, parentId },
     });
 
     revalidatePath("/partners");
     revalidatePath("/pool");
+    if (parentId) revalidatePath(`/partners/${parentId}`);
     return { id: partner.id };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {

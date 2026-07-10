@@ -32,6 +32,7 @@ export function AiIntakePanel({
   partnerId,
   customerId,
   intent,
+  parentId,
   seedMessage,
   autoStart,
   onClose,
@@ -41,6 +42,8 @@ export function AiIntakePanel({
   partnerId?: string;
   customerId?: string;
   intent?: "prospect" | "active";
+  /** When creating a new partner under a Distributor. */
+  parentId?: string;
   /** 预填的首条消息（如从 CRM 客户带入的信息），配合 autoStart 自动发送 */
   seedMessage?: string;
   /** 挂载后自动发送 seedMessage */
@@ -165,6 +168,7 @@ export function AiIntakePanel({
         proposal: nextProposal,
         sourceText,
         intent,
+        parentId,
       });
       const detail = result.applied.length ? result.applied.join("；") : ip.autoSaved;
       setMessages((m) => [...m, { role: "assistant", content: `${turn.reply}\n\n✅ ${detail}` }]);
@@ -345,6 +349,7 @@ export function AiIntakePanel({
           partnerId={partnerId}
           customerId={customerId}
           intent={intent}
+          parentId={parentId}
           sourceText={messages.filter((m) => m.role === "user").map((m) => m.content).join("\n")}
           onApplied={handleApplied}
           input={input}

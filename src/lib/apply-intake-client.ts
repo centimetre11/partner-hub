@@ -8,6 +8,7 @@ export async function applyIntakeProposalClient(opts: {
   proposal: IntakeProposal;
   sourceText?: string;
   intent?: "prospect" | "active";
+  parentId?: string;
 }): Promise<{ partnerId: string; customerId: string; applied: string[] }> {
   const normalized = normalizeProposal(opts.proposal, opts.scope);
   const res = await fetch("/api/ai/intake/apply", {
@@ -20,6 +21,7 @@ export async function applyIntakeProposalClient(opts: {
       proposal: normalizedToIntake(normalized),
       sourceText: opts.sourceText,
       intent: opts.intent,
+      parentId: opts.parentId,
     }),
   });
   const data = (await res.json()) as { partnerId?: string; customerId?: string; applied?: string[]; error?: string };

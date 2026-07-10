@@ -22,7 +22,14 @@ function metaLine(c: Pick<CrmCustomerOption, "city" | "status" | "salesman" | "p
   return [c.city, c.status, c.salesman, c.presales].filter(Boolean).join(" · ");
 }
 
-export function CreateFromCrmButton({ entity }: { entity: Entity }) {
+export function CreateFromCrmButton({
+  entity,
+  parentId,
+}: {
+  entity: Entity;
+  /** When creating a partner under a Distributor. */
+  parentId?: string;
+}) {
   const router = useRouter();
   const { crm } = useMessages();
   const t = crm.createFromCrm;
@@ -98,7 +105,7 @@ export function CreateFromCrmButton({ entity }: { entity: Entity }) {
     startCreate(async () => {
       const res =
         entity === "partner"
-          ? await createPartnerFromCrmAction(selected.id)
+          ? await createPartnerFromCrmAction(selected.id, parentId ? { parentId } : undefined)
           : await createCustomerFromCrmAction(selected.id);
       if ("error" in res) {
         setError(res.error);
@@ -294,6 +301,7 @@ export function CreateFromCrmButton({ entity }: { entity: Entity }) {
         <AiIntakePanel
           scope={entity === "partner" ? "new_partner" : "new_customer"}
           intent={entity === "partner" ? "active" : undefined}
+          parentId={entity === "partner" ? parentId : undefined}
           seedMessage={detail.seedText}
           autoStart
           onClose={() => setAiOpen(false)}

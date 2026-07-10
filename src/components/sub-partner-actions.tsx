@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { attachPartnerToDistributorAction, createPartnerAction } from "@/lib/actions";
-import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import { attachPartnerToDistributorAction } from "@/lib/actions";
+import { AddPartnerForm } from "@/app/(app)/pool/add-partner-form";
+import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { useMessages } from "@/lib/i18n/context";
 
@@ -11,7 +12,8 @@ type AttachCandidate = { id: string; name: string; status: string };
 
 /**
  * Sub-partner entry from a Distributor detail page.
- * Reuses createPartnerAction for "new", and attachPartnerToDistributorAction for existing.
+ * - Attach: pick an existing partner
+ * - Create: reuse the same AI / manual / CRM entry points as Active Partners
  */
 export function SubPartnerActions({
   distributorId,
@@ -160,43 +162,23 @@ export function SubPartnerActions({
                 </div>
               </form>
             ) : (
-              <form
-                action={async (fd) => {
-                  setSaving(true);
-                  setError(null);
-                  try {
-                    const result = await createPartnerAction(fd);
-                    if (result && typeof result === "object" && "error" in result && result.error) {
-                      setError(result.error);
-                    }
-                    // createPartnerAction redirects on success
-                  } finally {
-                    setSaving(false);
-                  }
-                }}
-                className="space-y-3"
-              >
-                <input type="hidden" name="intent" value="active" />
-                <input type="hidden" name="parentId" value={distributorId} />
-                <input name="name" required placeholder={pd.createNamePlaceholder} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <TaxonomySelectField dimension="CATEGORY" name="category" value="OTHER" options={taxonomy.CATEGORY} />
-                <TaxonomyMultiField dimension="INDUSTRY" name="industries" selected={[]} options={taxonomy.INDUSTRY} />
-                <div className="flex gap-2">
-                  <input name="city" placeholder="City" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                  <input name="country" placeholder="Country" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              <div className="space-y-4">
+                <p className="text-xs text-slate-500 leading-relaxed">{pd.createReuseHint}</p>
+                <div className="flex flex-wrap gap-2">
+                  <AddPartnerForm
+                    intent="active"
+                    taxonomy={taxonomy}
+                    defaultParentId={distributorId}
+                    parentLabel={distributorName}
+                  />
+                  <CreateFromCrmButton entity="partner" parentId={distributorId} />
                 </div>
-                <input name="coreBusiness" placeholder={pd.createCoreBusinessPlaceholder} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <p className="text-[11px] text-slate-400">{pd.createReuseHint}</p>
-                {error && <p className="text-xs text-red-600">{error}</p>}
-                <div className="flex justify-end gap-2 pt-1">
-                  <button type="button" disabled={saving} onClick={close} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
+                <div className="flex justify-end pt-1">
+                  <button type="button" onClick={close} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                     {m.common.cancel}
                   </button>
-                  <button disabled={saving} className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60">
-                    {saving ? m.common.loading : pd.createConfirm}
-                  </button>
                 </div>
-              </form>
+              </div>
             )}
           </div>
         </div>

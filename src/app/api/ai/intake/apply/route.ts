@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
-  const { scope, partnerId, customerId, proposal, sourceText, intent } = await req.json();
+  const { scope, partnerId, customerId, proposal, sourceText, intent, parentId } = await req.json();
   if (!proposal) return NextResponse.json({ error: "Missing proposal" }, { status: 400 });
 
   try {
@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       userId: uid,
       sourceText,
       intent: intent === "active" ? "active" : "prospect",
+      parentId: typeof parentId === "string" && parentId.trim() ? parentId.trim() : undefined,
       locale,
     });
     revalidatePath("/pool");
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
     revalidatePath("/customers");
     if (result.partnerId) revalidatePath(`/partners/${result.partnerId}`);
     if (result.customerId) revalidatePath(`/customers/${result.customerId}`);
+    if (typeof parentId === "string" && parentId.trim()) revalidatePath(`/partners/${parentId.trim()}`);
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json({ error: `Failed to save: ${e instanceof Error ? e.message : e}` }, { status: 500 });

@@ -1429,6 +1429,8 @@ export async function applyIntake(opts: {
   sourceText?: string;
   /** active: onboard from Active Partners page as ACTIVE; default is PROSPECT */
   intent?: "prospect" | "active";
+  /** Attach new partner under this Distributor (two-level hierarchy). */
+  parentId?: string;
   locale: Locale;
 }): Promise<{ applied: string[]; partnerId: string; customerId?: string }> {
   const { scope, userId, locale } = opts;
@@ -1488,9 +1490,15 @@ export async function applyIntake(opts: {
       proposal.partnerName || proposal.fields.find((f) => f.field === "name")?.newValue || ""
     );
     if (!name) throw new Error("Company name is required for onboarding");
+    const parentId = opts.parentId?.trim() || null;
+    if (parentId) {
+      const { assertTwoLevelHierarchy } = await import("./partner-hierarchy");
+      const check = await assertTwoLevelHierarchy(null, parentId);
+      if (!check.ok) throw new Error(check.error);
+    }
     const data: Record<string, unknown> = asActive
-      ? { name, ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date() }
-      : { name, status: "PROSPECT", poolFlag: "NEW" };
+      ? { name, ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date(), parentId }
+      : { name, status: "PROSPECT", poolFlag: "NEW", parentId };
     for (const f of proposal.fields) {
       if (f.field === "name" || !(f.field in PARTNER_FIELD_LABELS)) continue;
       if (f.field === "industries") {
@@ -1519,9 +1527,15 @@ export async function applyIntake(opts: {
         title: asActive ? "AI onboarding (active partner)" : "AI onboarding",
         content: proposal.summary || "Onboarded via AI intake assistant",
         createdById: userId,
-        meta: JSON.stringify({ via: "ai-intake", intent: asActive ? "active" : "prospect", sourceText: opts.sourceText?.slice(0, 8000) }),
+        meta: JSON.stringify({
+          via: "ai-intake",
+          intent: asActive ? "active" : "prospect",
+          parentId,
+          sourceText: opts.sourceText?.slice(0, 8000),
+        }),
       },
     });
+    if (parentId) revalidatePath(`/partners/${parentId}`);
   } else if (scope === "business_record") {
     if (proposal.saveMode === "crm_only" && proposal.crmCustomerId) {
       partnerId = "";

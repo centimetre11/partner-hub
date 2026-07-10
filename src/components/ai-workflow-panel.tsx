@@ -53,6 +53,7 @@ export function AiWorkflowPanel({
   customerId,
   sourceText,
   intent,
+  parentId,
   onApplied,
   input,
   onInputChange,
@@ -89,6 +90,7 @@ export function AiWorkflowPanel({
   customerId?: string;
   sourceText?: string;
   intent?: "prospect" | "active";
+  parentId?: string;
   onApplied?: (id: string) => void;
   input: string;
   onInputChange: (v: string) => void;
@@ -118,6 +120,7 @@ export function AiWorkflowPanel({
         proposal: normalizedToIntake(filtered),
         sourceText,
         intent,
+        parentId,
       }),
     });
     const data = await res.json();
