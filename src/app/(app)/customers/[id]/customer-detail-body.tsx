@@ -330,35 +330,32 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </div>
   );
 
-  // ============ 合作项目 ============
+  // ============ 合作项目（默认展开，不折叠） ============
   const projectsPanel = (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {customer.projects.map((p) => {
         const total = p.todos.length;
         const done = p.todos.filter((t) => t.status === "DONE").length;
         const pct = total ? Math.round((done / total) * 100) : 0;
         return (
-          <details key={p.id} className="group rounded-lg border border-slate-100 hover:border-slate-200">
-            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-medium text-slate-900">{p.name}</span>
-                  <Badge tone="blue">{phaseLabel(p.phase)}</Badge>
-                  <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "DONE" ? "indigo" : "zinc"}>
-                    {projStatusLabel(p.status)}
-                  </Badge>
-                </div>
-                <div className="mt-1.5 flex items-center gap-2">
-                  <div className="h-1.5 flex-1 max-w-[160px] rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-[11px] text-slate-400">{c.projectProgress}: {done}/{total}</span>
-                  {p.partner && <span className="text-[11px] text-slate-400">· {c.deliveryPartner}: {p.partner.name}</span>}
-                </div>
+          <div key={p.id} className="rounded-lg border border-slate-100">
+            <div className="px-4 py-3 border-b border-slate-50">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-medium text-slate-900">{p.name}</span>
+                <Badge tone="blue">{phaseLabel(p.phase)}</Badge>
+                <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "DONE" ? "indigo" : "zinc"}>
+                  {projStatusLabel(p.status)}
+                </Badge>
               </div>
-              <span className="text-slate-300 group-open:rotate-90">›</span>
-            </summary>
-            <div className="px-4 pb-4 pt-1 border-t border-slate-50">
+              <div className="mt-1.5 flex items-center gap-2">
+                <div className="h-1.5 flex-1 max-w-[160px] rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+                </div>
+                <span className="text-[11px] text-slate-400">{c.projectProgress}: {done}/{total}</span>
+                {p.partner && <span className="text-[11px] text-slate-400">· {c.deliveryPartner}: {p.partner.name}</span>}
+              </div>
+            </div>
+            <div className="px-4 py-4">
               <form action={upsertProjectAction.bind(null, owner)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
                 <input type="hidden" name="id" value={p.id} />
                 <input name="name" defaultValue={p.name} className={input} />
@@ -449,7 +446,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 </div>
               </div>
             </div>
-          </details>
+          </div>
         );
       })}
       {customer.projects.length === 0 && <EmptyState text={c.noProjects} />}
