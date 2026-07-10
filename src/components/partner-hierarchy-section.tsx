@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Badge, Card, EmptyState, fmtDate } from "@/components/ui";
 import type { Messages } from "@/lib/i18n/messages/en";
 import { stageName, type ServerI18n } from "@/lib/server-i18n";
-import { AddPartnerForm } from "@/app/(app)/pool/add-partner-form";
+import { SubPartnerActions } from "@/components/sub-partner-actions";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 
 type ChildPartner = {
@@ -37,18 +37,22 @@ type RollupProject = {
 
 export function PartnerHierarchySection({
   partnerId,
+  partnerName,
   children,
   opportunities,
   projects,
+  attachCandidates,
   m,
   labels,
   bcp47,
   taxonomy,
 }: {
   partnerId: string;
+  partnerName: string;
   children: ChildPartner[];
   opportunities: RollupOpp[];
   projects: RollupProject[];
+  attachCandidates: { id: string; name: string; status: string }[];
   m: Messages;
   labels: ServerI18n["labels"];
   bcp47: string;
@@ -69,11 +73,11 @@ export function PartnerHierarchySection({
       <Card
         title={pd.subPartners.replace("{count}", String(children.length))}
         actions={
-          <AddPartnerForm
-            intent="active"
+          <SubPartnerActions
+            distributorId={partnerId}
+            distributorName={partnerName}
+            attachCandidates={attachCandidates}
             taxonomy={taxonomy}
-            defaultParentId={partnerId}
-            compact
           />
         }
       >

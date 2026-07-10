@@ -129,6 +129,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     allPartners,
     allCustomers,
     distributorOptions,
+    attachCandidates,
     rollupOpportunities,
     rollupProjects,
   ] = await Promise.all([
@@ -183,6 +184,17 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       orderBy: { name: "asc" },
     }),
     listDistributorCandidates(id),
+    db.partner.findMany({
+      where: {
+        id: { not: id },
+        isDistributor: false,
+        parentId: null,
+        status: { in: ["ACTIVE", "PROSPECT"] },
+      },
+      select: { id: true, name: true, status: true },
+      orderBy: { name: "asc" },
+      take: 500,
+    }),
     p.isDistributor
       ? db.opportunity.findMany({
           where: { partnerId: { in: networkPartnerIds } },
@@ -408,9 +420,11 @@ export async function PartnerDetailBody({ id }: { id: string }) {
             {p.isDistributor && (
               <PartnerHierarchySection
                 partnerId={p.id}
+                partnerName={p.name}
                 children={p.children}
                 opportunities={rollupOpportunities}
                 projects={rollupProjects}
+                attachCandidates={attachCandidates}
                 m={m}
                 labels={labels}
                 bcp47={bcp47}

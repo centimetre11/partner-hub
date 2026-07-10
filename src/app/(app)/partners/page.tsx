@@ -45,7 +45,6 @@ export default async function PartnersPage({
     owner?: string;
     tier?: string;
     industry?: string;
-    parent?: string;
     role?: string;
   }>;
 }) {
@@ -59,16 +58,11 @@ export default async function PartnersPage({
         ? { parentId: { not: null } }
         : {};
 
-  const [labelMaps, industryOptions, categoryOptions, users, distributors, distributorOptions, partners] = await Promise.all([
+  const [labelMaps, industryOptions, categoryOptions, users, distributorOptions, partners] = await Promise.all([
     loadTaxonomyLabelMaps(),
     getTaxonomyOptions("INDUSTRY"),
     getTaxonomyOptions("CATEGORY"),
     db.user.findMany({ select: { id: true, name: true } }),
-    db.partner.findMany({
-      where: { isDistributor: true, status: "ACTIVE" },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
     db.partner.findMany({
       where: { isDistributor: true, parentId: null, status: { in: ["ACTIVE", "PROSPECT"] } },
       select: { id: true, name: true },
@@ -94,7 +88,6 @@ export default async function PartnersPage({
               OR: [{ industries: { contains: `"${sp.industry}"` } }],
             }
           : {}),
-        ...(sp.parent ? { parentId: sp.parent } : {}),
         ...roleFilter,
       },
       include: {
@@ -132,7 +125,6 @@ export default async function PartnersPage({
               intent="active"
               taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }}
               distributorOptions={distributorOptions}
-              defaultParentId={sp.parent}
             />
             <CreateFromCrmButton entity="partner" />
           </div>
@@ -169,12 +161,6 @@ export default async function PartnersPage({
             <option value="">{m.partners.roleAll}</option>
             <option value="distributor">{m.partners.roleDistributor}</option>
             <option value="sub">{m.partners.roleSub}</option>
-          </select>
-          <select name="parent" defaultValue={sp.parent ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">{m.partners.allParents}</option>
-            {distributors.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
           </select>
           <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">{m.common.filter}</button>
         </form>

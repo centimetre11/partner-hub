@@ -282,6 +282,34 @@ export async function createPartnerAction(formData: FormData) {
   redirect(`/partners/${partner.id}`);
 }
 
+/** Attach an existing partner under a Distributor (sets parentId). */
+export async function attachPartnerToDistributorAction(formData: FormData) {
+  await requireUser();
+  const childId = String(formData.get("childId") ?? "").trim();
+  const parentId = String(formData.get("parentId") ?? "").trim();
+  if (!childId || !parentId) return { error: "Select a partner and Distributor" };
+
+  const child = await db.partner.findUnique({
+    where: { id: childId },
+    select: { id: true, name: true, isDistributor: true, parentId: true },
+  });
+  if (!child) return { error: "Partner not found" };
+  if (child.isDistributor) return { error: "A Distributor cannot be attached under another partner" };
+  if (child.parentId && child.parentId !== parentId) {
+    return { error: "This partner is already under another Distributor" };
+  }
+  if (child.parentId === parentId) return { ok: true as const };
+
+  const check = await assertTwoLevelHierarchy(childId, parentId);
+  if (!check.ok) return { error: check.error };
+
+  await db.partner.update({ where: { id: childId }, data: { parentId } });
+  revalidatePath(`/partners/${childId}`);
+  revalidatePath(`/partners/${parentId}`);
+  revalidatePath("/partners");
+  return { ok: true as const };
+}
+
 export async function setPoolFlagAction(partnerId: string, flag: string) {
   const user = await requireUser();
   const existing = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
