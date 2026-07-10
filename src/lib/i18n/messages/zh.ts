@@ -656,6 +656,8 @@ export const messagesZh: Messages = {
     noProjects: "暂无合作项目",
     addProject: "+ 新增项目",
     projectName: "项目名称 *",
+    projectInfo: "项目信息",
+    editProject: "编辑项目",
     convertToProject: "转为项目",
     projectConverted: "已转项目",
     projectProgress: "进度",

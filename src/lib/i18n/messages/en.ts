@@ -656,6 +656,8 @@ export const messagesEn = {
     noProjects: "No projects yet",
     addProject: "+ Add project",
     projectName: "Project name *",
+    projectInfo: "Project info",
+    editProject: "Edit project",
     convertToProject: "Convert to project",
     projectConverted: "Project created",
     projectProgress: "Progress",

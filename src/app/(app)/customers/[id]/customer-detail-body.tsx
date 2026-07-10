@@ -14,6 +14,7 @@ import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getWecomChatForCustomer } from "@/lib/wecom-chats";
 import { CustomerProfilePanel } from "@/components/customer-profile-panel";
 import { CustomerStockPanel } from "@/components/customer-stock-panel";
+import { CustomerProjectCard } from "@/components/customer-project-card";
 import { CustomerTodoRow } from "@/components/customer-todo-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
@@ -21,9 +22,6 @@ import {
   upsertOpportunityAction,
   deleteOpportunityAction,
   upsertProjectAction,
-  deleteProjectAction,
-  createProjectWorkLogAction,
-  deleteProjectWorkLogAction,
   convertOpportunityToProjectAction,
   addNoteAction,
   createTodoAction,
@@ -110,10 +108,6 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     return null;
   };
 
-  const phaseLabel = (p: string): string =>
-    (({ KICKOFF: c.phaseKICKOFF, IMPLEMENT: c.phaseIMPLEMENT, ACCEPTANCE: c.phaseACCEPTANCE, GOLIVE: c.phaseGOLIVE, MAINTENANCE: c.phaseMAINTENANCE } as Record<string, string>)[p] ?? p);
-  const projStatusLabel = (s: string): string =>
-    (({ ACTIVE: c.projectStatusACTIVE, ON_HOLD: c.projectStatusON_HOLD, DONE: c.projectStatusDONE, CLOSED: c.projectStatusCLOSED } as Record<string, string>)[s] ?? s);
 
   // ============ 资料 ============
   const profilePanel = (
@@ -330,125 +324,21 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </div>
   );
 
-  // ============ 合作项目（默认展开，不折叠） ============
+  // ============ 合作项目（默认展开；日常操作优先，基本信息只读） ============
   const projectsPanel = (
     <div className="space-y-4">
-      {customer.projects.map((p) => {
-        const total = p.todos.length;
-        const done = p.todos.filter((t) => t.status === "DONE").length;
-        const pct = total ? Math.round((done / total) * 100) : 0;
-        return (
-          <div key={p.id} className="rounded-lg border border-slate-100">
-            <div className="px-4 py-3 border-b border-slate-50">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-slate-900">{p.name}</span>
-                <Badge tone="blue">{phaseLabel(p.phase)}</Badge>
-                <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "DONE" ? "indigo" : "zinc"}>
-                  {projStatusLabel(p.status)}
-                </Badge>
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <div className="h-1.5 flex-1 max-w-[160px] rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="text-[11px] text-slate-400">{c.projectProgress}: {done}/{total}</span>
-                {p.partner && <span className="text-[11px] text-slate-400">· {c.deliveryPartner}: {p.partner.name}</span>}
-              </div>
-            </div>
-            <div className="px-4 py-4">
-              <form action={upsertProjectAction.bind(null, owner)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                <input type="hidden" name="id" value={p.id} />
-                <input name="name" defaultValue={p.name} className={input} />
-                <input name="amount" defaultValue={p.amount ?? ""} placeholder={m.common.amount} className={input} />
-                <select name="phase" defaultValue={p.phase} className={input}>
-                  <option value="KICKOFF">{c.phaseKICKOFF}</option>
-                  <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>
-                  <option value="ACCEPTANCE">{c.phaseACCEPTANCE}</option>
-                  <option value="GOLIVE">{c.phaseGOLIVE}</option>
-                  <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
-                </select>
-                <select name="status" defaultValue={p.status} className={input}>
-                  <option value="ACTIVE">{c.projectStatusACTIVE}</option>
-                  <option value="ON_HOLD">{c.projectStatusON_HOLD}</option>
-                  <option value="DONE">{c.projectStatusDONE}</option>
-                  <option value="CLOSED">{c.projectStatusCLOSED}</option>
-                </select>
-                <input name="startDate" type="date" defaultValue={p.startDate ? new Date(p.startDate).toISOString().slice(0, 10) : ""} className={input} placeholder={c.projectStartDate} />
-                <input name="endDate" type="date" defaultValue={p.endDate ? new Date(p.endDate).toISOString().slice(0, 10) : ""} className={input} placeholder={c.projectEndDate} />
-                <select name="partnerId" defaultValue={p.partnerId ?? ""} className={`${input} md:col-span-3`}>
-                  <option value="">{c.deliveryPartnerNone}</option>
-                  {partners.map((pp) => (
-                    <option key={pp.id} value={pp.id}>{pp.name}</option>
-                  ))}
-                </select>
-                <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
-                  <button formAction={deleteProjectAction.bind(null, owner, p.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
-                  <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
-                </div>
-              </form>
-
-              <div className="mt-4 border-t border-slate-50 pt-3">
-                <div className="text-xs font-semibold text-slate-500 mb-2">{c.projectTodos}</div>
-                <form action={createTodoAction} className="flex flex-wrap gap-2 mb-3">
-                  <input type="hidden" name="customerId" value={customer.id} />
-                  <input type="hidden" name="projectId" value={p.id} />
-                  <input name="title" required placeholder={c.addTodoPlaceholder} className={`${input} flex-1 min-w-[140px]`} />
-                  <input name="dueDate" type="date" className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0" />
-                  <select name="assigneeId" defaultValue={customer.ownerId ?? user.id} className="rounded-lg border border-slate-200 px-2 py-2 text-sm shrink-0 max-w-[140px]">
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                  <button className="rounded-lg bg-slate-900 text-white px-3 py-2 text-sm shrink-0 hover:bg-slate-700">+</button>
-                </form>
-                <div className="divide-y divide-slate-50">
-                  {p.todos.map((t) => (
-                    <CustomerTodoRow key={t.id} todo={t} customerId={customer.id} bcp47={bcp47} />
-                  ))}
-                  {p.todos.length === 0 && <EmptyState text={c.noTodos} />}
-                </div>
-              </div>
-
-              <div className="mt-4 border-t border-slate-50 pt-3">
-                <div className="text-xs font-semibold text-slate-500 mb-2">{c.projectWorkLogs}</div>
-                <form action={createProjectWorkLogAction.bind(null, owner)} className="mb-3">
-                  <input type="hidden" name="projectId" value={p.id} />
-                  <textarea
-                    name="content"
-                    required
-                    rows={3}
-                    placeholder={c.projectWorkLogPlaceholder}
-                    className={`${input} w-full resize-y`}
-                  />
-                  <div className="flex justify-end mt-2">
-                    <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-700">
-                      {c.addWorkLog}
-                    </button>
-                  </div>
-                </form>
-                <div className="divide-y divide-slate-50">
-                  {p.workLogs.map((log) => (
-                    <div key={log.id} className="py-2.5 group">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm text-slate-700 whitespace-pre-wrap flex-1">{log.content}</p>
-                        <form action={deleteProjectWorkLogAction.bind(null, owner, log.id)}>
-                          <button className="text-xs text-slate-300 hover:text-red-600 opacity-0 group-hover:opacity-100 shrink-0">
-                            {m.common.delete}
-                          </button>
-                        </form>
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-1">
-                        {log.author.name} · {fmtDate(log.createdAt, bcp47)}
-                      </div>
-                    </div>
-                  ))}
-                  {p.workLogs.length === 0 && <EmptyState text={c.noWorkLogs} />}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {customer.projects.map((p) => (
+        <CustomerProjectCard
+          key={p.id}
+          project={p}
+          owner={owner}
+          customerId={customer.id}
+          defaultAssigneeId={customer.ownerId ?? user.id}
+          partners={partners}
+          users={users}
+          bcp47={bcp47}
+        />
+      ))}
       {customer.projects.length === 0 && <EmptyState text={c.noProjects} />}
       <details className="rounded-lg border border-dashed border-slate-200">
         <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addProject}</summary>
