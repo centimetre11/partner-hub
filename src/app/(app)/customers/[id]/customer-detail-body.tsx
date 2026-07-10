@@ -22,6 +22,8 @@ import {
   deleteOpportunityAction,
   upsertProjectAction,
   deleteProjectAction,
+  createProjectWorkLogAction,
+  deleteProjectWorkLogAction,
   convertOpportunityToProjectAction,
   addNoteAction,
   createTodoAction,
@@ -51,6 +53,11 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         include: {
           partner: { select: { id: true, name: true } },
           todos: { orderBy: [{ status: "asc" }, { dueDate: "asc" }], include: { assignee: true } },
+          workLogs: {
+            orderBy: { createdAt: "desc" },
+            take: 30,
+            include: { author: { select: { id: true, name: true } } },
+          },
         },
         orderBy: { updatedAt: "desc" },
       },
@@ -402,6 +409,43 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                     <CustomerTodoRow key={t.id} todo={t} customerId={customer.id} bcp47={bcp47} />
                   ))}
                   {p.todos.length === 0 && <EmptyState text={c.noTodos} />}
+                </div>
+              </div>
+
+              <div className="mt-4 border-t border-slate-50 pt-3">
+                <div className="text-xs font-semibold text-slate-500 mb-2">{c.projectWorkLogs}</div>
+                <form action={createProjectWorkLogAction.bind(null, owner)} className="mb-3">
+                  <input type="hidden" name="projectId" value={p.id} />
+                  <textarea
+                    name="content"
+                    required
+                    rows={3}
+                    placeholder={c.projectWorkLogPlaceholder}
+                    className={`${input} w-full resize-y`}
+                  />
+                  <div className="flex justify-end mt-2">
+                    <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-700">
+                      {c.addWorkLog}
+                    </button>
+                  </div>
+                </form>
+                <div className="divide-y divide-slate-50">
+                  {p.workLogs.map((log) => (
+                    <div key={log.id} className="py-2.5 group">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm text-slate-700 whitespace-pre-wrap flex-1">{log.content}</p>
+                        <form action={deleteProjectWorkLogAction.bind(null, owner, log.id)}>
+                          <button className="text-xs text-slate-300 hover:text-red-600 opacity-0 group-hover:opacity-100 shrink-0">
+                            {m.common.delete}
+                          </button>
+                        </form>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        {log.author.name} · {fmtDate(log.createdAt, bcp47)}
+                      </div>
+                    </div>
+                  ))}
+                  {p.workLogs.length === 0 && <EmptyState text={c.noWorkLogs} />}
                 </div>
               </div>
             </div>

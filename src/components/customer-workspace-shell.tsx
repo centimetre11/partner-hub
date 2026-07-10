@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import type { ReactNode } from "react";
 
 export type CustomerTab = {
   id: string;
@@ -11,8 +12,21 @@ export type CustomerTab = {
 };
 
 export function CustomerWorkspaceShell({ tabs }: { tabs: CustomerTab[] }) {
-  const [active, setActive] = useState(tabs[0]?.id ?? "");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const active =
+    tabParam && tabs.some((t) => t.id === tabParam) ? tabParam : (tabs[0]?.id ?? "");
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0];
+
+  function selectTab(id: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id === tabs[0]?.id) params.delete("tab");
+    else params.set("tab", id);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-12 sm:pb-16">
@@ -23,7 +37,7 @@ export function CustomerWorkspaceShell({ tabs }: { tabs: CustomerTab[] }) {
             <button
               key={t.id}
               type="button"
-              onClick={() => setActive(t.id)}
+              onClick={() => selectTab(t.id)}
               className={`rounded-lg border px-4 py-3 text-left ${
                 isActive
                   ? "border-slate-700 bg-slate-900 text-white"

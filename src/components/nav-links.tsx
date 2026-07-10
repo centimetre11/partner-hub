@@ -40,6 +40,8 @@ export function NavLinks({
     { href: "/leads", label: m.nav.leads, icon: "◔" },
     { href: "/partners", label: m.nav.activePartners, icon: "◮" },
     { href: "/customers", label: m.nav.customers, icon: "◍" },
+    { href: "/opportunities", label: m.nav.opportunities, icon: "◉" },
+    { href: "/projects", label: m.nav.projects, icon: "▤" },
     {
       id: "resources",
       label: m.nav.resources,

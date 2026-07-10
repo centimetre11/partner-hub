@@ -5,7 +5,7 @@
  *   npx tsx scripts/setup-weekly-report.ts
  *
  * 可选环境变量覆盖：
- *   WEEKLY_MANAGERS  逗号分隔的管理者标识（用户名/显示名/邮箱），默认 saber,zayne,sean.song
+ *   WEEKLY_MANAGERS  逗号分隔的管理者标识（用户名/显示名/邮箱），默认 saber,zayne,sean.song,lican
  *   WEEKLY_ROLES     逗号分隔的角色，默认 SALES,PRESALES
  *   WEEKLY_CRON      cron 表达式，默认 "0 0 * * 5"（利雅得周四晚 12 点 = 周五 00:00）
  *   WEEKLY_TZ        时区，默认 Asia/Riyadh
@@ -47,7 +47,7 @@ async function resolveCreatorId(managers: string[]): Promise<string | null> {
 }
 
 async function main() {
-  const managers = listFromEnv("WEEKLY_MANAGERS", ["saber", "zayne", "sean.song"]);
+  const managers = listFromEnv("WEEKLY_MANAGERS", ["saber", "zayne", "sean.song", "lican"]);
   const roles = listFromEnv("WEEKLY_ROLES", [...DEFAULT_WEEKLY_REPORT_ROLES]).map((r) => r.toUpperCase());
   const cronExpr = process.env.WEEKLY_CRON?.trim() || "0 0 * * 5";
   const timezone = process.env.WEEKLY_TZ?.trim() || "Asia/Riyadh";

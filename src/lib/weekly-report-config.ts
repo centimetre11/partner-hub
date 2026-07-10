@@ -10,7 +10,7 @@ import {
 export const WEEKLY_REPORT_SLUG = "weekly-personal-report";
 
 export const DEFAULT_WEEKLY_REPORT_ROLES = ["SALES", "PRESALES"];
-export const DEFAULT_WEEKLY_REPORT_MANAGERS = ["saber", "zayne", "sean.song"];
+export const DEFAULT_WEEKLY_REPORT_MANAGERS = ["saber", "zayne", "sean.song", "lican"];
 export const DEFAULT_WEEKLY_REPORT_CRON = "0 0 * * 5"; // 利雅得周四晚 12 点 = 周五 00:00
 export const DEFAULT_WEEKLY_REPORT_TZ = "Asia/Riyadh";
 
@@ -97,12 +97,69 @@ export function computeWorkWeekWindow(now: Date, timeZone: string): WeekWindow {
 
 export type ResolvedTargetUser = { id: string; name: string; email: string | null; role: string };
 
+type UserLookupRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string;
+  wecomDisplayName: string | null;
+  crmSalesmanName: string | null;
+};
+
+function matchUserByToken(users: UserLookupRow[], token: string): UserLookupRow | undefined {
+  const lower = token.toLowerCase();
+  return (
+    users.find((u) => u.name?.toLowerCase() === lower) ??
+    users.find((u) => u.email?.toLowerCase().split("@")[0] === lower) ??
+    users.find((u) => u.wecomDisplayName?.toLowerCase() === lower) ??
+    users.find((u) => u.crmSalesmanName?.toLowerCase() === lower) ??
+    users.find((u) => u.name?.toLowerCase().includes(lower)) ??
+    users.find((u) => u.wecomDisplayName?.toLowerCase().includes(lower)) ??
+    users.find((u) => u.email?.toLowerCase().includes(lower))
+  );
+}
+
 export async function resolveTargetUsers(roles: string[]): Promise<ResolvedTargetUser[]> {
   return db.user.findMany({
     where: { role: { in: roles } },
     select: { id: true, name: true, email: true, role: true },
     orderBy: { name: "asc" },
   });
+}
+
+/** 把管理者标识解析为 Hub 用户（用于生成其个人周报） */
+export async function resolveManagerUsers(tokens: string[]): Promise<ResolvedTargetUser[]> {
+  if (!tokens.length) return [];
+  const users = await db.user.findMany({
+    select: { id: true, name: true, email: true, role: true, wecomDisplayName: true, crmSalesmanName: true },
+  });
+  const found: ResolvedTargetUser[] = [];
+  const seen = new Set<string>();
+  for (const tokenRaw of tokens) {
+    const token = tokenRaw.trim();
+    if (!token || token.includes("@")) continue;
+    const match = matchUserByToken(users, token);
+    if (match && !seen.has(match.id)) {
+      seen.add(match.id);
+      found.push({ id: match.id, name: match.name, email: match.email, role: match.role });
+    }
+  }
+  return found.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** 角色成员 + 管理者去重合并（管理者即使非销售/售前也会收到个人周报） */
+export function mergeWeeklyReportUsers(
+  roleUsers: ResolvedTargetUser[],
+  managerUsers: ResolvedTargetUser[]
+): ResolvedTargetUser[] {
+  const seen = new Set<string>();
+  const merged: ResolvedTargetUser[] = [];
+  for (const u of [...roleUsers, ...managerUsers]) {
+    if (seen.has(u.id)) continue;
+    seen.add(u.id);
+    merged.push(u);
+  }
+  return merged.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** 把「saber / zayne / sean.song」等标识解析成用户邮箱 */
@@ -112,7 +169,7 @@ export async function resolveManagerEmails(
   const resolved: { token: string; email: string | null; name: string | null }[] = [];
   if (!tokens.length) return { emails: [], resolved };
   const users = await db.user.findMany({
-    select: { name: true, email: true, wecomDisplayName: true, crmSalesmanName: true },
+    select: { id: true, name: true, email: true, role: true, wecomDisplayName: true, crmSalesmanName: true },
   });
   const emails = new Set<string>();
   for (const tokenRaw of tokens) {
@@ -123,15 +180,7 @@ export async function resolveManagerEmails(
       resolved.push({ token, email: token, name: null });
       continue;
     }
-    const lower = token.toLowerCase();
-    const match =
-      users.find((u) => u.name?.toLowerCase() === lower) ??
-      users.find((u) => u.email?.toLowerCase().split("@")[0] === lower) ??
-      users.find((u) => u.wecomDisplayName?.toLowerCase() === lower) ??
-      users.find((u) => u.crmSalesmanName?.toLowerCase() === lower) ??
-      users.find((u) => u.name?.toLowerCase().includes(lower)) ??
-      users.find((u) => u.wecomDisplayName?.toLowerCase().includes(lower)) ??
-      users.find((u) => u.email?.toLowerCase().includes(lower));
+    const match = matchUserByToken(users, token);
     if (match?.email) {
       emails.add(match.email);
       resolved.push({ token, email: match.email, name: match.name });

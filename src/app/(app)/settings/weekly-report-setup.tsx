@@ -92,7 +92,7 @@ export function WeeklyReportSetup({
   return (
     <div className="space-y-5 text-sm">
       <p className="text-xs text-slate-500 leading-relaxed">
-        每周定时为每位成员生成个人周报（本周完成待办 / 商务记录 / 新增客户 + AI 下周计划建议），发到其个人邮箱并抄送下方配置的管理者；管理者另收到一份含各成员要点摘录的团队汇总。
+        每周定时为每位成员（含下方管理者）生成个人周报（本周完成待办 / 商务记录 / 项目工作记录 / 问答库贡献 / 新增客户 + AI 下周计划建议），发到其个人邮箱并抄送管理者；管理者另收到一份含各成员要点摘录的团队汇总。
         统计周期为「本周日 00:00 → 运行时刻」（按所选时区，覆盖中东工作周）。
       </p>
 
@@ -146,7 +146,7 @@ export function WeeklyReportSetup({
           ))}
         </div>
         <p className="text-xs text-slate-400">
-          当前命中 {status.targetUsers.length} 人：
+          当前命中 {status.targetUsers.length} 人（含管理者）：
           {status.targetUsers.map((u) => u.name).join("、") || "（无）"}
           {status.targetUsers.some((u) => !u.email) && (
             <span className="text-amber-600">（部分无邮箱，会被跳过）</span>
@@ -156,15 +156,15 @@ export function WeeklyReportSetup({
 
       {/* 管理者 */}
       <label className="block space-y-1">
-        <span className="text-xs font-medium text-slate-700">管理者汇总收件人</span>
+        <span className="text-xs font-medium text-slate-700">管理者（个人周报 + 团队汇总）</span>
         <textarea
           value={managers}
           onChange={(e) => setManagers(e.target.value)}
           rows={3}
-          placeholder={"saber\nzayne\nsean.song\n或直接填邮箱 someone@qq.com"}
+          placeholder={"saber\nzayne\nsean.song\nlican\n或直接填邮箱 someone@qq.com"}
           className={`${input} font-mono text-xs`}
         />
-        <span className="text-xs text-slate-400">每行一个；可填用户名 / 显示名 / 邮箱前缀 / 完整邮箱。逗号、分号也可分隔。</span>
+        <span className="text-xs text-slate-400">每行一个；可填用户名 / 显示名 / 邮箱前缀 / 完整邮箱。管理者也会收到自己的个人周报，并抄送其他管理者。</span>
       </label>
       {status.resolvedManagers.length > 0 && (
         <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs space-y-1">

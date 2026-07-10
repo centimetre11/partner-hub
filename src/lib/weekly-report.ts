@@ -10,9 +10,14 @@ import {
   computeWorkWeekWindow,
   parseWeeklyReportConfig,
   resolveManagerEmails,
+  resolveManagerUsers,
   resolveTargetUsers,
+  mergeWeeklyReportUsers,
   type WeekWindow,
 } from "./weekly-report-config";
+import { labelsZh } from "./i18n/labels/zh";
+
+const FAQ_CATEGORY_LABELS = labelsZh.faqCategoryLabels as Record<string, string>;
 
 // ============ 单人聚合 ============
 
@@ -22,6 +27,8 @@ export type WeeklyUserStats = {
   email: string | null;
   doneTodos: { title: string; doneAt: Date | null; owner: string; link: string }[];
   businessRecords: { title: string; category: string; occurredAt: Date; owner: string }[];
+  workLogs: { projectName: string; customerName: string; content: string; createdAt: Date }[];
+  faqEntries: { question: string; category: string; action: "created" | "updated"; verified: boolean; answerPreview: string; at: Date }[];
   newCustomers: { name: string; status: string }[];
   upcomingTodos: { title: string; dueDate: Date | null; overdue: boolean; owner: string; link: string }[];
   activeOpportunities: { name: string; stage: string; amount: string | null; owner: string; dealType: string | null }[];
@@ -46,7 +53,31 @@ function dealTypeText(dealType: string | null): string {
 }
 
 export function statsActivityCount(s: WeeklyUserStats): number {
-  return s.doneTodos.length + s.businessRecords.length + s.newCustomers.length;
+  return s.doneTodos.length + s.businessRecords.length + s.workLogs.length + s.faqEntries.length + s.newCustomers.length;
+}
+
+function faqCategoryLabel(category: string): string {
+  return FAQ_CATEGORY_LABELS[category] ?? category;
+}
+
+function faqAnswerPreview(answer: string, max = 80): string {
+  const flat = answer.replace(/\s+/g, " ").trim();
+  if (!flat) return "";
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
+
+function classifyFaqEntry(
+  entry: { id: string; createdById: string | null; createdAt: Date; lastEditorName: string | null; updatedAt: Date },
+  user: { id: string; name: string },
+  window: WeekWindow
+): "created" | "updated" | null {
+  const createdInWindow =
+    entry.createdById === user.id && entry.createdAt >= window.start && entry.createdAt <= window.end;
+  if (createdInWindow) return "created";
+  const updatedInWindow =
+    entry.lastEditorName === user.name && entry.updatedAt >= window.start && entry.updatedAt <= window.end;
+  if (updatedInWindow) return "updated";
+  return null;
 }
 
 export async function gatherUserWeekly(
@@ -56,7 +87,7 @@ export async function gatherUserWeekly(
   const inWindow = { gte: window.start, lte: window.end };
   const next7 = new Date(window.end.getTime() + 7 * 24 * 3600 * 1000);
 
-  const [doneTodos, businessRecords, newCustomers, upcomingTodos, activeOpps, activeProjects] = await Promise.all([
+  const [doneTodos, businessRecords, workLogs, faqRaw, newCustomers, upcomingTodos, activeOpps, activeProjects] = await Promise.all([
     db.todoItem.findMany({
       where: { assigneeId: user.id, status: "DONE", doneAt: inWindow },
       include: {
@@ -73,6 +104,29 @@ export async function gatherUserWeekly(
       include: { partner: { select: { name: true } }, customer: { select: { name: true } } },
       orderBy: { occurredAt: "desc" },
       take: 100,
+    }),
+    db.projectWorkLog.findMany({
+      where: { authorId: user.id, createdAt: inWindow },
+      include: {
+        project: {
+          select: {
+            name: true,
+            customer: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    db.faqEntry.findMany({
+      where: {
+        OR: [
+          { createdById: user.id, createdAt: inWindow },
+          { lastEditorName: user.name, updatedAt: inWindow },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
     }),
     db.customer.findMany({
       where: {
@@ -119,6 +173,21 @@ export async function gatherUserWeekly(
   ]);
 
   const now = window.end;
+  const faqEntries = faqRaw
+    .map((f) => {
+      const action = classifyFaqEntry(f, user, window);
+      if (!action) return null;
+      return {
+        question: f.question,
+        category: f.category,
+        action,
+        verified: f.verified,
+        answerPreview: faqAnswerPreview(f.answer),
+        at: action === "created" ? f.createdAt : f.updatedAt,
+      };
+    })
+    .filter((f): f is NonNullable<typeof f> => f !== null);
+
   return {
     userId: user.id,
     name: user.name,
@@ -130,6 +199,13 @@ export async function gatherUserWeekly(
       occurredAt: r.occurredAt,
       owner: ownerLabel(r),
     })),
+    workLogs: workLogs.map((w) => ({
+      projectName: w.project.name,
+      customerName: w.project.customer.name,
+      content: w.content,
+      createdAt: w.createdAt,
+    })),
+    faqEntries,
     newCustomers: newCustomers.map((c) => ({ name: c.name, status: c.status })),
     upcomingTodos: upcomingTodos.map((t) => ({
       title: t.title,
@@ -162,6 +238,13 @@ function ymd(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : "-";
 }
 
+function faqEntryText(f: WeeklyUserStats["faqEntries"][number]): string {
+  const actionLabel = f.action === "created" ? "新增" : "更新";
+  const official = f.verified ? "，已认证" : "";
+  const preview = f.answerPreview ? `：${f.answerPreview}` : "";
+  return `[${faqCategoryLabel(f.category)}] ${f.question}（${actionLabel}，${ymd(f.at)}${official}）${preview}`;
+}
+
 /** 给 LLM 看的纯文本数据块（数字与明细都是确定的，AI 只负责写小结/建议） */
 export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow): string {
   const lines: string[] = [];
@@ -179,6 +262,20 @@ export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow): st
     s.businessRecords.length
       ? s.businessRecords.map((r) => `- [${r.category}] ${r.title}（${r.owner}，${ymd(r.occurredAt)}）`).join("\n")
       : "- 无"
+  );
+  lines.push("");
+  lines.push(`## 项目工作记录（${s.workLogs.length}）`);
+  lines.push(
+    s.workLogs.length
+      ? s.workLogs
+          .map((w) => `- ${w.projectName}（${w.customerName}，${ymd(w.createdAt)}）：${w.content}`)
+          .join("\n")
+      : "- 无"
+  );
+  lines.push("");
+  lines.push(`## 问答库贡献（${s.faqEntries.length}）`);
+  lines.push(
+    s.faqEntries.length ? s.faqEntries.map((f) => `- ${faqEntryText(f)}`).join("\n") : "- 无"
   );
   lines.push("");
   lines.push(`## 新增客户（${s.newCustomers.length}）`);
@@ -238,6 +335,8 @@ export function renderUserEmailHtml(s: WeeklyUserStats, window: WeekWindow, narr
   <div style="display:flex;gap:12px;margin:0 0 20px;flex-wrap:wrap">
     ${statCard("完成待办", s.doneTodos.length)}
     ${statCard("商务记录", s.businessRecords.length)}
+    ${statCard("项目工作记录", s.workLogs.length)}
+    ${statCard("问答库", s.faqEntries.length)}
     ${statCard("新增客户", s.newCustomers.length)}
   </div>
   <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 18px;margin:0 0 20px">
@@ -248,6 +347,10 @@ export function renderUserEmailHtml(s: WeeklyUserStats, window: WeekWindow, narr
   ${listHtml(s.doneTodos.map((t) => `${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，${ymd(t.doneAt)}）`))}
   <h3 style="margin:16px 0 4px">🤝 商务记录（${s.businessRecords.length}）</h3>
   ${listHtml(s.businessRecords.map((r) => `[${r.category}] ${r.title}（${r.owner}，${ymd(r.occurredAt)}）`))}
+  <h3 style="margin:16px 0 4px">📝 项目工作记录（${s.workLogs.length}）</h3>
+  ${listHtml(s.workLogs.map((w) => `${w.projectName}（${w.customerName}，${ymd(w.createdAt)}）：${w.content}`))}
+  <h3 style="margin:16px 0 4px">💬 问答库贡献（${s.faqEntries.length}）</h3>
+  ${listHtml(s.faqEntries.map(faqEntryText))}
   <h3 style="margin:16px 0 4px">🆕 新增客户（${s.newCustomers.length}）</h3>
   ${listHtml(s.newCustomers.map((c) => `${c.name}（${c.status}）`))}
   <h3 style="margin:16px 0 4px">📅 下周待办（${s.upcomingTodos.length}）</h3>
@@ -277,7 +380,7 @@ function statCard(label: string, value: number): string {
 
 /** 单人周报纯文本兜底 */
 export function renderUserEmailText(s: WeeklyUserStats, window: WeekWindow, narrative: string): string {
-  return `${s.name} 的本周工作周报\n统计周期：${window.label}（利雅得时间）\n\n完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 新增客户 ${s.newCustomers.length}\n\n【本周小结与下周计划】\n${narrative}\n\n---\n${renderStatsForPrompt(s, window)}`;
+  return `${s.name} 的本周工作周报\n统计周期：${window.label}（利雅得时间）\n\n完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 项目工作记录 ${s.workLogs.length} | 问答库 ${s.faqEntries.length} | 新增客户 ${s.newCustomers.length}\n\n【本周小结与下周计划】\n${narrative}\n\n---\n${renderStatsForPrompt(s, window)}`;
 }
 
 // ============ 管理者汇总 ============
@@ -302,6 +405,7 @@ export function renderManagerDigestHtml(reports: WeeklyUserReport[], window: Wee
         <td style="padding:8px 10px;border-bottom:1px solid #eee">${esc(s.name)}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${s.doneTodos.length}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${s.businessRecords.length}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${s.faqEntries.length}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${s.newCustomers.length}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${s.upcomingTodos.length}</td>
         <td style="padding:8px 10px;border-bottom:1px solid #eee;text-align:center">${s.activeOpportunities.length}</td>
@@ -312,17 +416,18 @@ export function renderManagerDigestHtml(reports: WeeklyUserReport[], window: Wee
     (acc, s) => {
       acc.done += s.doneTodos.length;
       acc.br += s.businessRecords.length;
+      acc.faq += s.faqEntries.length;
       acc.cust += s.newCustomers.length;
       return acc;
     },
-    { done: 0, br: 0, cust: 0 }
+    { done: 0, br: 0, faq: 0, cust: 0 }
   );
   const highlightBlocks = reports
     .map(({ stats: s, narrative }) => {
       const active = statsActivityCount(s) > 0;
       if (!active && !narrative.trim()) return "";
       return `<div style="margin:0 0 14px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;background:${active ? "#fff" : "#fafafa"}">
-        <h4 style="margin:0 0 6px;color:#111827;font-size:14px">${esc(s.name)} <span style="color:#6b7280;font-weight:normal;font-size:12px">（待办 ${s.doneTodos.length} · 商务 ${s.businessRecords.length} · 客户 ${s.newCustomers.length}）</span></h4>
+        <h4 style="margin:0 0 6px;color:#111827;font-size:14px">${esc(s.name)} <span style="color:#6b7280;font-weight:normal;font-size:12px">（待办 ${s.doneTodos.length} · 商务 ${s.businessRecords.length} · 问答 ${s.faqEntries.length} · 客户 ${s.newCustomers.length}）</span></h4>
         ${narrativeExcerptHtml(narrative)}
       </div>`;
     })
@@ -331,13 +436,14 @@ export function renderManagerDigestHtml(reports: WeeklyUserReport[], window: Wee
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;color:#1f2937">
   <h2 style="margin:0 0 4px">📈 团队周报汇总</h2>
   <p style="color:#6b7280;margin:0 0 16px">统计周期：${esc(window.label)}（利雅得时间） · 共 ${all.length} 人</p>
-  <p style="margin:0 0 12px">本周合计：完成待办 <b>${totals.done}</b> · 商务记录 <b>${totals.br}</b> · 新增客户 <b>${totals.cust}</b></p>
+  <p style="margin:0 0 12px">本周合计：完成待办 <b>${totals.done}</b> · 商务记录 <b>${totals.br}</b> · 问答库 <b>${totals.faq}</b> · 新增客户 <b>${totals.cust}</b></p>
   <table style="border-collapse:collapse;width:100%;font-size:14px">
     <thead>
       <tr style="background:#1d4ed8;color:#fff">
         <th style="padding:8px 10px;text-align:left">成员</th>
         <th style="padding:8px 10px">完成待办</th>
         <th style="padding:8px 10px">商务记录</th>
+        <th style="padding:8px 10px">问答库</th>
         <th style="padding:8px 10px">新增客户</th>
         <th style="padding:8px 10px">下周待办</th>
         <th style="padding:8px 10px">活跃商机</th>
@@ -355,7 +461,7 @@ export function renderManagerDigestHtml(reports: WeeklyUserReport[], window: Wee
 export function renderManagerDigestText(reports: WeeklyUserReport[], window: WeekWindow): string {
   const tableLines = reports.map(
     ({ stats: s }) =>
-      `${s.name}: 完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 新增客户 ${s.newCustomers.length} | 下周待办 ${s.upcomingTodos.length} | 活跃商机 ${s.activeOpportunities.length}`
+      `${s.name}: 完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 问答库 ${s.faqEntries.length} | 新增客户 ${s.newCustomers.length} | 下周待办 ${s.upcomingTodos.length} | 活跃商机 ${s.activeOpportunities.length}`
   );
   const excerptLines = reports
     .filter(({ stats: s, narrative }) => statsActivityCount(s) > 0 || narrative.trim())
@@ -385,7 +491,7 @@ async function generateNarrative(
       content:
         "你是中东 BI 伙伴管理团队的周报助手。根据给定的本周工作数据，用简体中文撰写周报正文。" +
         "严格分两部分：\n" +
-        "【本周小结】用一段话提炼本周亮点与进展（结合完成待办、商务记录、新增客户）。\n" +
+        "【本周小结】用一段话提炼本周亮点与进展（结合完成待办、商务记录、项目工作记录、问答库贡献、新增客户）。\n" +
         "【下周计划与建议】基于「下周待办」和「活跃商机」给出 3-5 条具体、可执行的建议，按优先级排列。\n" +
         "要求：语气专业、简洁、积极；只依据给定数据，绝不编造数字或客户；如某类数据为空可如实指出。不要重复罗列全部明细（明细邮件里已有），重在洞察与建议。",
     },
@@ -412,7 +518,7 @@ async function generateNarrative(
     s.upcomingTodos.length || s.activeOpportunities.length
       ? "下周计划：请关注上述「下周待办」与「活跃商机」，优先推进逾期项与高阶段商机。"
       : "下周计划：本周暂无待办与活跃商机，建议主动开拓新客户与商机。";
-  return `本周小结：完成待办 ${s.doneTodos.length} 项，商务记录 ${s.businessRecords.length} 条，新增客户 ${s.newCustomers.length} 个。\n\n${next}`;
+  return `本周小结：完成待办 ${s.doneTodos.length} 项，商务记录 ${s.businessRecords.length} 条，项目工作记录 ${s.workLogs.length} 条，问答库贡献 ${s.faqEntries.length} 条，新增客户 ${s.newCustomers.length} 个。\n\n${next}`;
 }
 
 // ============ 管道入口 ============
@@ -440,10 +546,14 @@ export async function runWeeklyReportPipeline(
   const toolLog: WeeklyPipelineResult["toolLog"] = [];
   const pushNotes: string[] = [];
 
-  const users = await resolveTargetUsers(config.roles);
+  const [roleUsers, managerUsers] = await Promise.all([
+    resolveTargetUsers(config.roles),
+    resolveManagerUsers(config.managers),
+  ]);
+  const users = mergeWeeklyReportUsers(roleUsers, managerUsers);
   toolLog.push({
     tool: "resolve_users",
-    args: { roles: config.roles },
+    args: { roles: config.roles, managers: config.managers },
     result: `${users.length} user(s): ${users.map((u) => u.name).join(", ") || "none"}`,
   });
 
@@ -528,7 +638,7 @@ export async function runWeeklyReportPipeline(
 
   const summaryLines = allReports.map(
     ({ stats: s }) =>
-      `- ${s.name}：完成待办 ${s.doneTodos.length} · 商务记录 ${s.businessRecords.length} · 新增客户 ${s.newCustomers.length}`
+      `- ${s.name}：完成待办 ${s.doneTodos.length} · 商务记录 ${s.businessRecords.length} · 问答库 ${s.faqEntries.length} · 新增客户 ${s.newCustomers.length}`
   );
   const output = `### 团队周报（${window.label}）
 
@@ -577,7 +687,7 @@ export async function sendSingleUserReport(opts: {
   return {
     ok,
     message: ok
-      ? `已试发 ${user.name} 的周报至 ${to}（完成待办 ${stats.doneTodos.length}·商务记录 ${stats.businessRecords.length}·新增客户 ${stats.newCustomers.length}）`
+      ? `已试发 ${user.name} 的周报至 ${to}（完成待办 ${stats.doneTodos.length}·商务记录 ${stats.businessRecords.length}·问答库 ${stats.faqEntries.length}·新增客户 ${stats.newCustomers.length}）`
       : `试发失败：${result.slice(0, 160)}`,
   };
 }

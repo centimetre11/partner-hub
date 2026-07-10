@@ -133,7 +133,7 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
         {[
           { label: m.dashboard.statsActivePartners, value: activeCount, href: "/partners", tone: "text-sky-600" },
           { label: m.dashboard.pocBeyond, value: pocPlusCount, href: "/partners", tone: "text-purple-600" },
-          { label: m.dashboard.statsActiveOpps, value: activeOppCount, href: "/partners", tone: "text-sky-600" },
+          { label: m.dashboard.statsActiveOpps, value: activeOppCount, href: "/opportunities", tone: "text-sky-600" },
           { label: m.dashboard.stalePartners, value: stalePartners.length, href: "/partners", tone: stalePartners.length ? "text-red-600" : "text-emerald-600" },
         ].map((s) => (
           <Link key={s.label} href={s.href} className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300">

@@ -544,12 +544,20 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     await db.opportunity.create({ data: createData as never });
   }
   revalidatePath(ownerPath(owner));
+  revalidatePath("/opportunities");
+}
+
+export async function createOpportunityFromListAction(formData: FormData) {
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) return;
+  await upsertOpportunityAction({ kind: "customer", id: customerId }, formData);
 }
 
 export async function deleteOpportunityAction(owner: OwnerRef, oppId: string) {
   await requireUser();
   await db.opportunity.delete({ where: { id: oppId } });
   revalidatePath(ownerPath(owner));
+  revalidatePath("/opportunities");
 }
 
 // ============ 合作项目 ============
@@ -593,11 +601,50 @@ export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
     await db.project.create({ data: createData as never });
   }
   revalidatePath(ownerPath(owner));
+  revalidatePath("/projects");
+}
+
+export async function createProjectFromListAction(formData: FormData) {
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  if (!customerId) return;
+  await upsertProjectAction({ kind: "customer", id: customerId }, formData);
 }
 
 export async function deleteProjectAction(owner: OwnerRef, projectId: string) {
   await requireUser();
   await db.project.delete({ where: { id: projectId } });
+  revalidatePath(ownerPath(owner));
+  revalidatePath("/projects");
+}
+
+export async function createProjectWorkLogAction(owner: OwnerRef, formData: FormData) {
+  const user = await requireUser();
+  const projectId = String(formData.get("projectId") ?? "").trim();
+  const content = String(formData.get("content") ?? "").trim();
+  if (!projectId || !content) return;
+  const proj = await db.project.findUnique({
+    where: { id: projectId },
+    select: { customerId: true, partnerId: true },
+  });
+  if (!proj) return;
+  await db.projectWorkLog.create({
+    data: { projectId, authorId: user.id, content },
+  });
+  revalidatePath(`/customers/${proj.customerId}`);
+  if (proj.partnerId) revalidatePath(`/partners/${proj.partnerId}`);
+  revalidatePath(ownerPath(owner));
+}
+
+export async function deleteProjectWorkLogAction(owner: OwnerRef, logId: string) {
+  await requireUser();
+  const log = await db.projectWorkLog.findUnique({
+    where: { id: logId },
+    include: { project: { select: { customerId: true, partnerId: true } } },
+  });
+  if (!log) return;
+  await db.projectWorkLog.delete({ where: { id: logId } });
+  revalidatePath(`/customers/${log.project.customerId}`);
+  if (log.project.partnerId) revalidatePath(`/partners/${log.project.partnerId}`);
   revalidatePath(ownerPath(owner));
 }
 

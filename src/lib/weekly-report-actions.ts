@@ -14,6 +14,8 @@ import {
   parseWeeklyReportConfig,
   serializeWeeklyReportConfig,
   resolveTargetUsers,
+  resolveManagerUsers,
+  mergeWeeklyReportUsers,
   resolveManagerEmails,
   type WeeklyReportConfig,
 } from "./weekly-report-config";
@@ -59,11 +61,13 @@ export async function getWeeklyReportStatusAction(): Promise<WeeklyReportStatus>
   const cronExpr = agent?.cronExpr || DEFAULT_WEEKLY_REPORT_CRON;
   const timezone = resolveAgentTimezone(agent?.timezone || DEFAULT_WEEKLY_REPORT_TZ);
 
-  const [targetUsers, { resolved }, emailConfigured] = await Promise.all([
+  const [roleUsers, managerUsers, { resolved }, emailConfigured] = await Promise.all([
     resolveTargetUsers(config.roles),
+    resolveManagerUsers(config.managers),
     resolveManagerEmails(config.managers),
     isEmailServiceConfigured(),
   ]);
+  const targetUsers = mergeWeeklyReportUsers(roleUsers, managerUsers);
 
   return {
     exists: !!agent,

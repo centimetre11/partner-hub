@@ -15,9 +15,8 @@ import {
 } from "../src/lib/fast-intake-heuristic";
 import { parseTodoFromText, resolveSelfAssigneeNames } from "../src/lib/todo-intake-parse";
 import { isIntakeParseErrorReply } from "../src/lib/intake-text";
-import { extractPartnerNameFromIntakeText, applyBoundContextToProposal } from "../src/lib/intake-partner-binding";
+import { extractPartnerNameFromIntakeText, applyBoundContextToProposal, userTextMentionsPartnerName } from "../src/lib/intake-partner-binding";
 import { isLikelyWecomBotMentionName, stripWecomCommandPrefixForIntake } from "../src/lib/wecom-bot-intake";
-import { userTextMentionsPartnerName } from "../src/lib/intake-partner-binding";
 
 type Case = { name: string; pass: boolean; detail?: string };
 

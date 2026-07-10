@@ -39,6 +39,7 @@ model User {
   presalesCustomers Customer[] @relation("CustomerPresalesUser")
   createdCustomers Customer[] @relation("CustomerCreatedBy")
   ownedProjects    Project[]  @relation("ProjectOwner")
+  projectWorkLogs  ProjectWorkLog[]
   crmSalesmanName String? // 帆软 CRM 销售英文名，对应 com_salesman（如 Fay.Wen）
   wecomUserId     String? @unique // 企业微信成员 userid，用于识别发消息者与 @ 提醒
   wecomDisplayName String? @unique // 企微群聊显示名（如 saber-陈敏），userid 不可用时的兜底匹配
@@ -424,9 +425,25 @@ model Project {
   updatedAt           DateTime     @updatedAt
   todos               TodoItem[]
   events              TimelineEvent[]
+  workLogs            ProjectWorkLog[]
 
   @@index([customerId])
   @@index([partnerId])
+}
+
+// 项目工作记录：按条记录交付进展，供周报汇总
+model ProjectWorkLog {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([authorId])
+  @@index([createdAt])
 }
 
 model TodoItem {
