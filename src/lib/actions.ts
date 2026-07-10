@@ -17,6 +17,7 @@ import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-co
 import { recordSystemEvent } from "./activity-log";
 import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
+import { assertTwoLevelHierarchy } from "./partner-hierarchy";
 
 // ============ 认证 ============
 
@@ -176,11 +177,20 @@ export async function updatePartnerAction(partnerId: string, formData: FormData)
     const codes = formData.getAll("industries").map(String).filter(Boolean);
     data.industries = stringifyIndustries(codes);
   }
+  if (formData.has("parentId")) {
+    const parentId = String(formData.get("parentId") ?? "").trim() || null;
+    const check = await assertTwoLevelHierarchy(partnerId, parentId);
+    if (!check.ok) return { error: check.error };
+    data.parentId = parentId;
+  }
   if (!data.name) delete data.name;
   await db.partner.update({ where: { id: partnerId }, data });
+  const parentId = data.parentId as string | null | undefined;
   revalidatePath(`/partners/${partnerId}`);
+  if (parentId) revalidatePath(`/partners/${parentId}`);
   revalidatePath("/partners");
   revalidatePath("/pool");
+  return { ok: true as const };
 }
 
 export async function createPartnerAction(formData: FormData) {
@@ -190,6 +200,11 @@ export async function createPartnerAction(formData: FormData) {
   // intent=active：从「正式伙伴」页直建，跳过候选直接进入正式经营
   const asActive = String(formData.get("intent") ?? "") === "active";
   const industryCodes = formData.getAll("industries").map(String).filter(Boolean);
+  const parentIdRaw = String(formData.get("parentId") ?? "").trim() || null;
+  if (parentIdRaw) {
+    const check = await assertTwoLevelHierarchy(null, parentIdRaw);
+    if (!check.ok) return { error: check.error };
+  }
   const partner = await db.partner.create({
     data: {
       name,
@@ -198,6 +213,7 @@ export async function createPartnerAction(formData: FormData) {
       city: String(formData.get("city") ?? "") || null,
       country: String(formData.get("country") ?? "") || null,
       coreBusiness: String(formData.get("coreBusiness") ?? "") || null,
+      parentId: parentIdRaw,
       ...(asActive
         ? { ...ACTIVE_PARTNER_DEFAULTS, promotedAt: new Date() }
         : { status: "PROSPECT", poolFlag: "NEW" }),
@@ -227,10 +243,11 @@ export async function createPartnerAction(formData: FormData) {
     targetId: partner.id,
     targetLabel: partner.name,
     summary: asActive ? `新建正式伙伴：${partner.name}` : `新建候选伙伴：${partner.name}`,
-    meta: { status: partner.status },
+    meta: { status: partner.status, parentId: parentIdRaw },
   });
   revalidatePath("/pool");
   revalidatePath("/partners");
+  if (parentIdRaw) revalidatePath(`/partners/${parentIdRaw}`);
   redirect(`/partners/${partner.id}`);
 }
 

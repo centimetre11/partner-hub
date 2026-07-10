@@ -25,7 +25,9 @@ import { AiPanel } from "./ai-panel";
 import { PartnerCustomersSection } from "@/components/partner-customers-section";
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
+import { PartnerHierarchySection } from "@/components/partner-hierarchy-section";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
+import { listDistributorCandidates } from "@/lib/partner-hierarchy";
 import { TodoItemRow } from "@/components/todo-item-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
@@ -72,6 +74,19 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       owner: true,
       salesUser: true,
       presalesUser: true,
+      parent: { select: { id: true, name: true } },
+      children: {
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          tier: true,
+          pipelineStage: true,
+          status: true,
+          salesUser: { select: { name: true } },
+          owner: { select: { name: true } },
+        },
+      },
       solutions: {
         orderBy: { updatedAt: "desc" },
         include: {
@@ -96,6 +111,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
   const contactOptions = p.contacts.map((c) => ({ id: c.id, name: c.name }));
   const completeness = computeCompleteness(p, labels);
   const industryCodes = parseIndustries(p);
+  const networkPartnerIds = [p.id, ...p.children.map((c) => c.id)];
 
   const [
     users,
@@ -112,6 +128,9 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     taxonomyCategory,
     allPartners,
     allCustomers,
+    distributorOptions,
+    rollupOpportunities,
+    rollupProjects,
   ] = await Promise.all([
     db.user.findMany(),
     db.customer.findMany({
@@ -162,6 +181,19 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       where: { status: { in: ["ACTIVE", "PROSPECT"] } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
+    }),
+    listDistributorCandidates(id),
+    db.opportunity.findMany({
+      where: { partnerId: { in: networkPartnerIds } },
+      include: { partner: { select: { id: true, name: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+    }),
+    db.project.findMany({
+      where: { partnerId: { in: networkPartnerIds } },
+      include: { partner: { select: { id: true, name: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
     }),
   ]);
 
@@ -283,7 +315,13 @@ export async function PartnerDetailBody({ id }: { id: string }) {
           <div className="space-y-5">
             <div className="flex items-center justify-end gap-2">
               <AiAddButton scope="profile" partnerId={p.id} label={m.partnerDetail.aiComplete} variant="soft" />
-              <ProfileEditor partner={p} users={users} taxonomy={taxonomy} />
+              <ProfileEditor
+                partner={p}
+                users={users}
+                taxonomy={taxonomy}
+                distributorOptions={distributorOptions}
+                hasChildren={p.children.length > 0}
+              />
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-slate-50/30 p-5">
@@ -364,6 +402,18 @@ export async function PartnerDetailBody({ id }: { id: string }) {
         }
         pipeline={
           <div className="space-y-5">
+            {!p.parentId && (
+              <PartnerHierarchySection
+                partnerId={p.id}
+                children={p.children}
+                opportunities={rollupOpportunities}
+                projects={rollupProjects}
+                m={m}
+                labels={labels}
+                bcp47={bcp47}
+                taxonomy={{ CATEGORY: taxonomyCategory, INDUSTRY: taxonomyIndustry }}
+              />
+            )}
             <PartnerCustomersSection
               partnerId={p.id}
               customers={partnerCustomers.map((cust) => ({

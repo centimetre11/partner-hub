@@ -39,16 +39,41 @@ function pickNextTodo(todos: Pick<TodoItem, "title" | "dueDate" | "priority" | "
 export default async function PartnersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; stage?: string; owner?: string; tier?: string; industry?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    stage?: string;
+    owner?: string;
+    tier?: string;
+    industry?: string;
+    parent?: string;
+    role?: string;
+  }>;
 }) {
   await requireUser();
   const [{ labels, messages: m, bcp47 }, sp] = await Promise.all([getServerI18n(), searchParams]);
 
-  const [labelMaps, industryOptions, categoryOptions, users, partners] = await Promise.all([
+  const roleFilter =
+    sp.role === "distributor"
+      ? { children: { some: {} } }
+      : sp.role === "sub"
+        ? { parentId: { not: null } }
+        : {};
+
+  const [labelMaps, industryOptions, categoryOptions, users, distributors, distributorOptions, partners] = await Promise.all([
     loadTaxonomyLabelMaps(),
     getTaxonomyOptions("INDUSTRY"),
     getTaxonomyOptions("CATEGORY"),
     db.user.findMany({ select: { id: true, name: true } }),
+    db.partner.findMany({
+      where: { parentId: null, status: "ACTIVE", children: { some: {} } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.partner.findMany({
+      where: { parentId: null, status: { in: ["ACTIVE", "PROSPECT"] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
     db.partner.findMany({
       where: {
         status: "ACTIVE",
@@ -69,6 +94,8 @@ export default async function PartnersPage({
               OR: [{ industries: { contains: `"${sp.industry}"` } }],
             }
           : {}),
+        ...(sp.parent ? { parentId: sp.parent } : {}),
+        ...roleFilter,
       },
       include: {
         contacts: { select: { role: true, contactInfo: true } },
@@ -87,7 +114,8 @@ export default async function PartnersPage({
         owner: { select: { name: true } },
         salesUser: { select: { name: true } },
         presalesUser: { select: { name: true } },
-        _count: { select: { contacts: true, opportunities: true, events: true, trainings: true } },
+        parent: { select: { id: true, name: true } },
+        _count: { select: { contacts: true, opportunities: true, events: true, trainings: true, children: true } },
       },
       orderBy: { pipelineStage: "desc" },
     }),
@@ -100,7 +128,12 @@ export default async function PartnersPage({
         desc={m.partners.desc.replace("{count}", String(partners.length))}
         actions={
           <div className="flex gap-2">
-            <AddPartnerForm intent="active" taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }} />
+            <AddPartnerForm
+              intent="active"
+              taxonomy={{ CATEGORY: categoryOptions, INDUSTRY: industryOptions }}
+              distributorOptions={distributorOptions}
+              defaultParentId={sp.parent}
+            />
             <CreateFromCrmButton entity="partner" />
           </div>
         }
@@ -130,6 +163,17 @@ export default async function PartnersPage({
             <option value="">{m.partners.allIndustries}</option>
             {industryOptions.map((o) => (
               <option key={o.code} value={o.code}>{o.label}</option>
+            ))}
+          </select>
+          <select name="role" defaultValue={sp.role ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">{m.partners.roleAll}</option>
+            <option value="distributor">{m.partners.roleDistributor}</option>
+            <option value="sub">{m.partners.roleSub}</option>
+          </select>
+          <select name="parent" defaultValue={sp.parent ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">{m.partners.allParents}</option>
+            {distributors.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
           <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">{m.common.filter}</button>
@@ -171,6 +215,16 @@ export default async function PartnersPage({
                         <span className="font-semibold text-slate-900">{p.name}</span>
                         <TierBadge tier={p.tier} />
                         <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, p.category)}</Badge>
+                        {p._count.children > 0 && (
+                          <Badge tone="purple">
+                            {m.partners.badgeDistributor.replace("{n}", String(p._count.children))}
+                          </Badge>
+                        )}
+                        {p.parent && (
+                          <Badge tone="zinc">
+                            {m.partners.badgeSub.replace("{name}", p.parent.name)}
+                          </Badge>
+                        )}
                         {parseIndustries(p).map((code) => (
                           <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
                         ))}

@@ -19,16 +19,23 @@ export function ProfileEditor({
   partner: p,
   users,
   taxonomy,
+  distributorOptions = [],
+  hasChildren = false,
 }: {
   partner: Partner;
   users: User[];
   taxonomy: TaxonomyOptionsMap;
+  /** Top-level partners that can be selected as parent. */
+  distributorOptions?: { id: string; name: string }[];
+  /** When true, parent selector is disabled (already a distributor). */
+  hasChildren?: boolean;
 }) {
   const m = useMessages();
   const pe = m.profileEditor;
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <>
@@ -44,8 +51,13 @@ export function ProfileEditor({
             <form
               action={async (fd) => {
                 setSaving(true);
+                setError(null);
                 try {
-                  await updatePartnerAction(p.id, fd);
+                  const result = await updatePartnerAction(p.id, fd);
+                  if (result && "error" in result && result.error) {
+                    setError(result.error);
+                    return;
+                  }
                   setOpen(false);
                   router.refresh();
                 } finally {
@@ -66,6 +78,19 @@ export function ProfileEditor({
                   <option value="B">{pe.tierB}</option>
                   <option value="C">{pe.tierC}</option>
                 </select>
+              </label>
+              <label className="space-y-1 col-span-2 md:col-span-3">
+                <span className="text-xs text-slate-500">{pe.parentDistributor}</span>
+                {hasChildren ? (
+                  <p className="text-xs text-amber-700 mt-1">{pe.parentDisabledHint}</p>
+                ) : (
+                  <select name="parentId" defaultValue={p.parentId ?? ""} className={input}>
+                    <option value="">{pe.parentNone}</option>
+                    {distributorOptions.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                )}
               </label>
               <TaxonomySelectField
                 dimension="ARCHETYPE"
@@ -181,6 +206,9 @@ export function ProfileEditor({
                 <span className="text-xs text-slate-500">{pe.notes}</span>
                 <textarea name="notes" defaultValue={p.notes ?? ""} rows={2} className={input} />
               </label>
+              {error && (
+                <p className="col-span-2 md:col-span-3 text-xs text-red-600">{error}</p>
+              )}
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2 pt-2">
                 <button type="button" disabled={saving} onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                   {m.common.cancel}

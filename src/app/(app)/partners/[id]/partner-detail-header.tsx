@@ -27,6 +27,8 @@ export async function PartnerDetailHeader({ id }: { id: string }) {
         owner: { select: { name: true } },
         salesUser: { select: { name: true } },
         presalesUser: { select: { name: true } },
+        parent: { select: { id: true, name: true } },
+        _count: { select: { children: true } },
       },
     }),
   ]);
@@ -50,6 +52,16 @@ export async function PartnerDetailHeader({ id }: { id: string }) {
               </Badge>
               {p.status === "PROSPECT" && <Badge tone="amber">{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>}
               <TierBadge tier={p.tier} />
+              {p._count.children > 0 && (
+                <Badge tone="purple">
+                  {m.partners.badgeDistributor.replace("{n}", String(p._count.children))}
+                </Badge>
+              )}
+              {p.parent && (
+                <Badge tone="zinc">
+                  {m.partners.badgeSub.replace("{name}", p.parent.name)}
+                </Badge>
+              )}
               {p.partnerArchetype && (
                 <Badge tone="indigo">{labelFromMap(labelMaps.ARCHETYPE, p.partnerArchetype)}</Badge>
               )}
@@ -64,6 +76,15 @@ export async function PartnerDetailHeader({ id }: { id: string }) {
               )}
             </div>
             <div className="text-sm text-slate-500 mt-1.5">
+              {p.parent && (
+                <>
+                  {m.partnerDetail.parentDistributor}:{" "}
+                  <a href={`/partners/${p.parent.id}`} className="text-sky-600 hover:underline">
+                    {p.parent.name}
+                  </a>
+                  {" · "}
+                </>
+              )}
               {[p.city, p.country].filter(Boolean).join(" · ") || m.common.unknownRegion}
               {p.website && (
                 <>

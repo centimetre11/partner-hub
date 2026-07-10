@@ -11,29 +11,51 @@ import { useMessages } from "@/lib/i18n/context";
 export function AddPartnerForm({
   intent = "prospect",
   taxonomy,
+  defaultParentId,
+  distributorOptions,
+  compact = false,
 }: {
   intent?: "prospect" | "active";
   taxonomy?: { CATEGORY: TaxonomyOptionRow[]; INDUSTRY: TaxonomyOptionRow[] };
+  /** Prefill parent distributor (e.g. when adding a sub-partner from distributor detail). */
+  defaultParentId?: string;
+  /** Candidates for parent dropdown (top-level partners). */
+  distributorOptions?: { id: string; name: string }[];
+  /** Compact trigger for embedding in card actions. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const isActive = intent === "active";
-  const p = useMessages().pool;
+  const messages = useMessages();
+  const p = messages.pool;
+
+  const triggerClass = compact
+    ? "text-xs text-sky-600 hover:underline"
+    : "rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50";
 
   return (
     <>
-      <div className="flex gap-2">
+      <div className={compact ? "inline-flex" : "flex gap-2"}>
+        {!compact && (
+          <button
+            onClick={() => setAiOpen(true)}
+            className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            {p.aiIntake}
+          </button>
+        )}
         <button
-          onClick={() => setAiOpen(true)}
-          className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:opacity-90"
+          type="button"
+          onClick={() => {
+            setError(null);
+            setOpen(true);
+          }}
+          className={triggerClass}
         >
-          {p.aiIntake}
-        </button>
-        <button
-          onClick={() => setOpen(true)}
-          className="rounded-lg border border-slate-200 bg-white text-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-50"
-        >
-          {p.addManually}
+          {compact ? messages.partnerDetail.addSubPartner : p.addManually}
         </button>
       </div>
 
@@ -42,10 +64,24 @@ export function AddPartnerForm({
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => !saving && setOpen(false)}>
           <div className="bg-white rounded-lg w-full border border-slate-200 max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-semibold mb-4">{isActive ? "Add active partner" : "Add prospect"}</h3>
-            <form action={createPartnerAction} className="space-y-3">
+            <form
+              action={async (fd) => {
+                setSaving(true);
+                setError(null);
+                try {
+                  const result = await createPartnerAction(fd);
+                  if (result && typeof result === "object" && "error" in result && result.error) {
+                    setError(result.error);
+                  }
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="space-y-3"
+            >
               <input type="hidden" name="intent" value={intent} />
               <input name="name" required placeholder="Company name *" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               {taxonomy ? (
@@ -63,11 +99,33 @@ export function AddPartnerForm({
                 <input name="country" placeholder="Country" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               </div>
               <input name="coreBusiness" placeholder="Core business (one line)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              {(defaultParentId || (distributorOptions && distributorOptions.length > 0)) && (
+                <label className="block space-y-1">
+                  <span className="text-xs text-slate-500">{p.parentDistributor}</span>
+                  {distributorOptions ? (
+                    <select
+                      name="parentId"
+                      defaultValue={defaultParentId ?? ""}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    >
+                      <option value="">{p.parentNone}</option>
+                      {distributorOptions.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  ) : defaultParentId ? (
+                    <input type="hidden" name="parentId" value={defaultParentId} />
+                  ) : null}
+                </label>
+              )}
+              {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
+                <button type="button" disabled={saving} onClick={() => setOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">
                   Cancel
                 </button>
-                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">Add</button>
+                <button disabled={saving} className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60">
+                  {saving ? "…" : "Add"}
+                </button>
               </div>
             </form>
             <p className="text-xs text-slate-400 mt-3">

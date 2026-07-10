@@ -105,6 +105,10 @@ model Partner {
   promotedAt       DateTime?
   poolContactedAt  DateTime? // 候选审阅：首次标记「已联络」
   notes            String?
+  // 总代 → 子伙伴（仅两级）：子伙伴挂靠总代；有 children 即视为总代
+  parentId         String?
+  parent           Partner?  @relation("PartnerHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children         Partner[] @relation("PartnerHierarchy")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -126,6 +130,8 @@ model Partner {
   customers     Customer[] // 遗留：旧的一对多绑定，迁移后改用 customerLinks
   customerLinks CustomerPartner[]
   assets        Asset[]
+
+  @@index([parentId])
 }
 
 // 客户：伙伴服务的终端客户（手动维护，可归属到某个伙伴）
