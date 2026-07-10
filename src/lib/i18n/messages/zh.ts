@@ -835,7 +835,7 @@ export const messagesZh: Messages = {
     parentDistributor: "Distributor",
     hierarchyTitle: "Distributor 关系",
     hierarchyIntro:
-      "Distributor 是渠道型伙伴，其下可挂多个子伙伴。子伙伴仍是完整 Partner（独立跟进、商机、项目）；本页汇总该 Distributor 自身与全部子伙伴的商机与项目。",
+      "该伙伴已标记为 Distributor：可挂多个子伙伴。子伙伴仍是完整 Partner（独立跟进、商机、项目）；下方汇总自身与全部子伙伴的商机与项目。",
     subPartners: "子伙伴 ({count})",
     addSubPartner: "+ 添加子伙伴",
     noSubPartners: "暂无子伙伴。可在此新建，或在「编辑档案」中把已有伙伴挂到该 Distributor 下。",
@@ -2203,8 +2203,11 @@ export const messagesZh: Messages = {
     pitch: "话术",
     notes: "备注",
     parentDistributor: "挂靠 Distributor",
-    parentNone: "无（独立伙伴 / 可作为 Distributor）",
-    parentDisabledHint: "该伙伴已是 Distributor（有子伙伴），不能再挂到其他 Distributor 下。",
+    parentNone: "无（独立伙伴）",
+    parentDisabledHint: "该伙伴已是 Distributor，不能再挂到其他 Distributor 下。",
+    isDistributor: "标记为 Distributor",
+    isDistributorHint: "默认普通伙伴。仅渠道型、需挂子伙伴时勾选；勾选后才会出现子伙伴与网络汇总。",
+    isDistributorBlockedByParent: "已挂靠其他 Distributor，不能再标记为 Distributor。",
   },
   integrations: {
     title: "帆软连接",

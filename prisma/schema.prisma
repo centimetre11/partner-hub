@@ -105,7 +105,8 @@ model Partner {
   promotedAt       DateTime?
   poolContactedAt  DateTime? // 候选审阅：首次标记「已联络」
   notes            String?
-  // 总代 → 子伙伴（仅两级）：子伙伴挂靠总代；有 children 即视为总代
+  // Distributor：显式勾选后才可挂子伙伴（仅两级）
+  isDistributor    Boolean  @default(false)
   parentId         String?
   parent           Partner?  @relation("PartnerHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children         Partner[] @relation("PartnerHierarchy")
@@ -132,6 +133,7 @@ model Partner {
   assets        Asset[]
 
   @@index([parentId])
+  @@index([isDistributor])
 }
 
 // 客户：伙伴服务的终端客户（手动维护，可归属到某个伙伴）

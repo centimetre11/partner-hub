@@ -835,7 +835,7 @@ export const messagesEn = {
     parentDistributor: "Distributor",
     hierarchyTitle: "Distributor relationship",
     hierarchyIntro:
-      "A Distributor is a channel partner that can have sub-partners under it. Each sub-partner is still a full Partner (own pipeline, opportunities, projects). This page rolls up deals and projects for the Distributor and all of its sub-partners.",
+      "This partner is marked as a Distributor and can have sub-partners. Each sub-partner remains a full Partner. Below rolls up deals and projects for the Distributor and all sub-partners.",
     subPartners: "Sub-partners ({count})",
     addSubPartner: "+ Add sub-partner",
     noSubPartners: "No sub-partners yet. Add one here, or attach an existing partner under this Distributor in Edit profile.",
@@ -2205,8 +2205,11 @@ export const messagesEn = {
     pitch: "Pitch",
     notes: "Notes",
     parentDistributor: "Under Distributor",
-    parentNone: "None (standalone / can be a Distributor)",
-    parentDisabledHint: "This partner is already a Distributor (has sub-partners) and cannot sit under another Distributor.",
+    parentNone: "None (standalone partner)",
+    parentDisabledHint: "This partner is a Distributor and cannot sit under another.",
+    isDistributor: "Mark as Distributor",
+    isDistributorHint: "Partners are normal by default. Check only for rare channel Distributors that need sub-partners; then the network section appears.",
+    isDistributorBlockedByParent: "Already under a Distributor — cannot also be marked as Distributor.",
   },
   integrations: {
     title: "FanRuan integrations",

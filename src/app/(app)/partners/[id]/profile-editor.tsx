@@ -20,15 +20,12 @@ export function ProfileEditor({
   users,
   taxonomy,
   distributorOptions = [],
-  hasChildren = false,
 }: {
   partner: Partner;
   users: User[];
   taxonomy: TaxonomyOptionsMap;
-  /** Top-level partners that can be selected as parent. */
+  /** Explicit Distributors that can be selected as parent. */
   distributorOptions?: { id: string; name: string }[];
-  /** When true, parent selector is disabled (already a distributor). */
-  hasChildren?: boolean;
 }) {
   const m = useMessages();
   const pe = m.profileEditor;
@@ -36,10 +33,18 @@ export function ProfileEditor({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDistributor, setIsDistributor] = useState(p.isDistributor);
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="text-xs text-sky-600 hover:underline">
+      <button
+        onClick={() => {
+          setIsDistributor(p.isDistributor);
+          setError(null);
+          setOpen(true);
+        }}
+        className="text-xs text-sky-600 hover:underline"
+      >
         {pe.editProfile}
       </button>
       {open && (
@@ -79,19 +84,39 @@ export function ProfileEditor({
                   <option value="C">{pe.tierC}</option>
                 </select>
               </label>
-              <label className="space-y-1 col-span-2 md:col-span-3">
-                <span className="text-xs text-slate-500">{pe.parentDistributor}</span>
-                {hasChildren ? (
-                  <p className="text-xs text-amber-700 mt-1">{pe.parentDisabledHint}</p>
+              <div className="col-span-2 md:col-span-3 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-3 space-y-2">
+                <input type="hidden" name="isDistributorPresent" value="1" />
+                <label className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    name="isDistributor"
+                    checked={isDistributor}
+                    disabled={!!p.parentId}
+                    onChange={(e) => setIsDistributor(e.target.checked)}
+                    className="rounded mt-0.5"
+                  />
+                  <span>
+                    <span className="text-sm text-slate-800 font-medium">{pe.isDistributor}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">{pe.isDistributorHint}</span>
+                  </span>
+                </label>
+                {p.parentId ? (
+                  <p className="text-xs text-amber-700">{pe.isDistributorBlockedByParent}</p>
+                ) : null}
+                {!isDistributor ? (
+                  <label className="block space-y-1 pt-1">
+                    <span className="text-xs text-slate-500">{pe.parentDistributor}</span>
+                    <select name="parentId" defaultValue={p.parentId ?? ""} className={input}>
+                      <option value="">{pe.parentNone}</option>
+                      {distributorOptions.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </label>
                 ) : (
-                  <select name="parentId" defaultValue={p.parentId ?? ""} className={input}>
-                    <option value="">{pe.parentNone}</option>
-                    {distributorOptions.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
+                  <input type="hidden" name="parentId" value="" />
                 )}
-              </label>
+              </div>
               <TaxonomySelectField
                 dimension="ARCHETYPE"
                 name="partnerArchetype"

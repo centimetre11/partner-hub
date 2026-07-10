@@ -183,18 +183,22 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       orderBy: { name: "asc" },
     }),
     listDistributorCandidates(id),
-    db.opportunity.findMany({
-      where: { partnerId: { in: networkPartnerIds } },
-      include: { partner: { select: { id: true, name: true } } },
-      orderBy: { updatedAt: "desc" },
-      take: 50,
-    }),
-    db.project.findMany({
-      where: { partnerId: { in: networkPartnerIds } },
-      include: { partner: { select: { id: true, name: true } } },
-      orderBy: { updatedAt: "desc" },
-      take: 50,
-    }),
+    p.isDistributor
+      ? db.opportunity.findMany({
+          where: { partnerId: { in: networkPartnerIds } },
+          include: { partner: { select: { id: true, name: true } } },
+          orderBy: { updatedAt: "desc" },
+          take: 50,
+        })
+      : Promise.resolve([]),
+    p.isDistributor
+      ? db.project.findMany({
+          where: { partnerId: { in: networkPartnerIds } },
+          include: { partner: { select: { id: true, name: true } } },
+          orderBy: { updatedAt: "desc" },
+          take: 50,
+        })
+      : Promise.resolve([]),
   ]);
 
   const taxonomy = {
@@ -320,7 +324,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                 users={users}
                 taxonomy={taxonomy}
                 distributorOptions={distributorOptions}
-                hasChildren={p.children.length > 0}
               />
             </div>
 
@@ -402,7 +405,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
         }
         pipeline={
           <div className="space-y-5">
-            {!p.parentId && (
+            {p.isDistributor && (
               <PartnerHierarchySection
                 partnerId={p.id}
                 children={p.children}

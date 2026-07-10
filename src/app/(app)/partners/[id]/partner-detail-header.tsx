@@ -52,7 +52,7 @@ export async function PartnerDetailHeader({ id }: { id: string }) {
               </Badge>
               {p.status === "PROSPECT" && <Badge tone="amber">{L.POOL_FLAG_LABELS[p.poolFlag]}</Badge>}
               <TierBadge tier={p.tier} />
-              {p._count.children > 0 && (
+              {p.isDistributor && (
                 <Badge tone="purple">
                   {m.partners.badgeDistributor.replace("{n}", String(p._count.children))}
                 </Badge>

@@ -54,7 +54,7 @@ export default async function PartnersPage({
 
   const roleFilter =
     sp.role === "distributor"
-      ? { children: { some: {} } }
+      ? { isDistributor: true }
       : sp.role === "sub"
         ? { parentId: { not: null } }
         : {};
@@ -65,12 +65,12 @@ export default async function PartnersPage({
     getTaxonomyOptions("CATEGORY"),
     db.user.findMany({ select: { id: true, name: true } }),
     db.partner.findMany({
-      where: { parentId: null, status: "ACTIVE", children: { some: {} } },
+      where: { isDistributor: true, status: "ACTIVE" },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     db.partner.findMany({
-      where: { parentId: null, status: { in: ["ACTIVE", "PROSPECT"] } },
+      where: { isDistributor: true, parentId: null, status: { in: ["ACTIVE", "PROSPECT"] } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -215,7 +215,7 @@ export default async function PartnersPage({
                         <span className="font-semibold text-slate-900">{p.name}</span>
                         <TierBadge tier={p.tier} />
                         <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, p.category)}</Badge>
-                        {p._count.children > 0 && (
+                        {p.isDistributor && (
                           <Badge tone="purple">
                             {m.partners.badgeDistributor.replace("{n}", String(p._count.children))}
                           </Badge>

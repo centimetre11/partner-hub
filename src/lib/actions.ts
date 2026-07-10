@@ -177,12 +177,43 @@ export async function updatePartnerAction(partnerId: string, formData: FormData)
     const codes = formData.getAll("industries").map(String).filter(Boolean);
     data.industries = stringifyIndustries(codes);
   }
-  if (formData.has("parentId")) {
-    const parentId = String(formData.get("parentId") ?? "").trim() || null;
-    const check = await assertTwoLevelHierarchy(partnerId, parentId);
-    if (!check.ok) return { error: check.error };
-    data.parentId = parentId;
+
+  const touchingHierarchy =
+    formData.has("isDistributorPresent") || formData.has("parentId");
+  if (touchingHierarchy) {
+    const existing = await db.partner.findUnique({
+      where: { id: partnerId },
+      select: {
+        parentId: true,
+        isDistributor: true,
+        _count: { select: { children: true } },
+      },
+    });
+    if (!existing) return { error: "Partner not found" };
+
+    let nextIsDistributor = existing.isDistributor;
+    if (formData.has("isDistributorPresent")) {
+      nextIsDistributor = formData.get("isDistributor") === "on";
+      if (nextIsDistributor && (existing.parentId || (formData.has("parentId") && String(formData.get("parentId") ?? "").trim()))) {
+        return { error: "A sub-partner cannot be marked as Distributor; clear the parent first" };
+      }
+      if (!nextIsDistributor && existing._count.children > 0) {
+        return { error: "Remove or reassign sub-partners before unmarking Distributor" };
+      }
+      data.isDistributor = nextIsDistributor;
+    }
+
+    if (formData.has("parentId")) {
+      const parentId = String(formData.get("parentId") ?? "").trim() || null;
+      if (parentId && nextIsDistributor) {
+        return { error: "A Distributor cannot sit under another partner" };
+      }
+      const check = await assertTwoLevelHierarchy(partnerId, parentId);
+      if (!check.ok) return { error: check.error };
+      data.parentId = parentId;
+    }
   }
+
   if (!data.name) delete data.name;
   await db.partner.update({ where: { id: partnerId }, data });
   const parentId = data.parentId as string | null | undefined;

@@ -2,8 +2,8 @@ import { db } from "./db";
 
 /**
  * Enforce two-level partner hierarchy only:
- * - parent must exist and must not itself have a parent
- * - child must not already have children (cannot become a sub if already a distributor)
+ * - parent must be an explicit Distributor (isDistributor) and must not itself have a parent
+ * - child must not be a Distributor / must not already have children
  * - no self-reference
  */
 export async function assertTwoLevelHierarchy(
@@ -17,29 +17,36 @@ export async function assertTwoLevelHierarchy(
 
   const parent = await db.partner.findUnique({
     where: { id: parentId },
-    select: { id: true, parentId: true, name: true },
+    select: { id: true, parentId: true, isDistributor: true, name: true },
   });
   if (!parent) {
     return { ok: false, error: "Parent partner not found" };
   }
+  if (!parent.isDistributor) {
+    return { ok: false, error: "Parent must be marked as Distributor first" };
+  }
   if (parent.parentId) {
-    return { ok: false, error: "Cannot attach under a sub-partner; only top-level distributors are allowed" };
+    return { ok: false, error: "Cannot attach under a sub-partner; only Distributors are allowed" };
   }
 
   if (childId) {
-    const childCount = await db.partner.count({ where: { parentId: childId } });
-    if (childCount > 0) {
-      return { ok: false, error: "This partner already has sub-partners and cannot be attached under another" };
+    const child = await db.partner.findUnique({
+      where: { id: childId },
+      select: { isDistributor: true, _count: { select: { children: true } } },
+    });
+    if (child?.isDistributor || (child?._count.children ?? 0) > 0) {
+      return { ok: false, error: "A Distributor cannot be attached under another partner" };
     }
   }
 
   return { ok: true };
 }
 
-/** Partners that can act as distributors (no parent of their own). */
+/** Explicit Distributors that can receive sub-partners. */
 export async function listDistributorCandidates(excludeId?: string) {
   return db.partner.findMany({
     where: {
+      isDistributor: true,
       parentId: null,
       status: { in: ["ACTIVE", "PROSPECT"] },
       ...(excludeId ? { NOT: { id: excludeId } } : {}),
