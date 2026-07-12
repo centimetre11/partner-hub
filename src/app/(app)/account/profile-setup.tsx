@@ -9,18 +9,26 @@ const input =
 export function ProfileSetup({
   name,
   email,
+  reportLocale,
   labels,
 }: {
   name: string;
   email: string;
+  reportLocale: string | null;
   labels: {
     displayName: string;
     email: string;
     emailHint: string;
+    reportLocale: string;
+    reportLocaleHint: string;
+    reportLocaleDefault: string;
+    reportLocaleZh: string;
+    reportLocaleEn: string;
     save: string;
   };
 }) {
   const [displayName, setDisplayName] = useState(name);
+  const [localeChoice, setLocaleChoice] = useState(reportLocale ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -31,6 +39,7 @@ export function ProfileSetup({
       setError(null);
       const fd = new FormData();
       fd.set("name", displayName.trim());
+      fd.set("reportLocale", localeChoice);
       const res = await updateProfileAction(fd);
       if (res.error) setError(res.error);
       else if (res.message) setMessage(res.message);
@@ -52,6 +61,15 @@ export function ProfileSetup({
         <span className="text-xs text-slate-500">{labels.email}</span>
         <input value={email} readOnly className={`${input} bg-slate-50 text-slate-500`} />
         <p className="text-xs text-slate-400">{labels.emailHint}</p>
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs text-slate-500">{labels.reportLocale}</span>
+        <select value={localeChoice} onChange={(e) => setLocaleChoice(e.target.value)} className={input}>
+          <option value="">{labels.reportLocaleDefault}</option>
+          <option value="zh">{labels.reportLocaleZh}</option>
+          <option value="en">{labels.reportLocaleEn}</option>
+        </select>
+        <p className="text-xs text-slate-400">{labels.reportLocaleHint}</p>
       </label>
       <button
         type="button"

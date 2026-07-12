@@ -14,6 +14,8 @@ export const DEFAULT_WEEKLY_REPORT_MANAGERS = ["saber", "zayne", "sean.song", "l
 export const DEFAULT_WEEKLY_REPORT_CRON = "0 0 * * 5"; // 利雅得周四晚 12 点 = 周五 00:00
 export const DEFAULT_WEEKLY_REPORT_TZ = "Asia/Riyadh";
 
+import type { WeeklyReportLocale } from "./weekly-report-locale";
+
 /** 周报自动化配置，存在 agent.queryConfig（JSON 字符串）里 */
 export type WeeklyReportConfig = {
   source: "weekly_review";
@@ -21,6 +23,12 @@ export type WeeklyReportConfig = {
   roles: string[];
   /** 管理者汇总收件人：用户名 / 显示名 / 邮箱前缀 / 邮箱，运行时解析为邮箱 */
   managers: string[];
+  /** 个人周报使用英文的成员标识（用户名 / 显示名 / 邮箱前缀），优先级高于用户偏好 */
+  englishRecipients?: string[];
+  /** 未单独配置语言时的团队默认（默认 zh） */
+  defaultReportLocale?: WeeklyReportLocale;
+  /** 管理者汇总邮件语言（默认 zh） */
+  managerDigestLocale?: WeeklyReportLocale;
   /** 没有任何活动的人是否也发（默认 false：静默的人不打扰，但仍计入管理者汇总） */
   includeInactive?: boolean;
 };
@@ -48,10 +56,20 @@ export function parseWeeklyReportConfig(raw: unknown): WeeklyReportConfig | null
   const managers = Array.isArray(obj.managers)
     ? (obj.managers as unknown[]).map((m) => String(m).trim()).filter(Boolean)
     : [];
+  const englishRecipients = Array.isArray(obj.englishRecipients)
+    ? (obj.englishRecipients as unknown[]).map((m) => String(m).trim()).filter(Boolean)
+    : [];
+  const defaultReportLocale =
+    obj.defaultReportLocale === "en" || obj.defaultReportLocale === "zh" ? obj.defaultReportLocale : undefined;
+  const managerDigestLocale =
+    obj.managerDigestLocale === "en" || obj.managerDigestLocale === "zh" ? obj.managerDigestLocale : undefined;
   return {
     source: "weekly_review",
     roles: roles.length ? roles : [...DEFAULT_WEEKLY_REPORT_ROLES],
     managers,
+    englishRecipients,
+    defaultReportLocale,
+    managerDigestLocale,
     includeInactive: obj.includeInactive === true,
   };
 }
@@ -61,6 +79,9 @@ export function serializeWeeklyReportConfig(config: WeeklyReportConfig): string 
     source: "weekly_review",
     roles: config.roles,
     managers: config.managers,
+    englishRecipients: config.englishRecipients ?? [],
+    defaultReportLocale: config.defaultReportLocale,
+    managerDigestLocale: config.managerDigestLocale,
     includeInactive: !!config.includeInactive,
   });
 }
@@ -95,13 +116,32 @@ export function computeWorkWeekWindow(now: Date, timeZone: string): WeekWindow {
 
 // ============ 收件人解析 ============
 
-export type ResolvedTargetUser = { id: string; name: string; email: string | null; role: string };
+export type ResolvedTargetUser = {
+  id: string;
+  name: string;
+  email: string | null;
+  role: string;
+  reportLocale: string | null;
+  wecomDisplayName: string | null;
+  crmSalesmanName: string | null;
+};
+
+const USER_LOCALE_SELECT = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  reportLocale: true,
+  wecomDisplayName: true,
+  crmSalesmanName: true,
+} as const;
 
 type UserLookupRow = {
   id: string;
   name: string;
   email: string | null;
   role: string;
+  reportLocale?: string | null;
   wecomDisplayName: string | null;
   crmSalesmanName: string | null;
 };
@@ -122,7 +162,7 @@ function matchUserByToken(users: UserLookupRow[], token: string): UserLookupRow 
 export async function resolveTargetUsers(roles: string[]): Promise<ResolvedTargetUser[]> {
   return db.user.findMany({
     where: { role: { in: roles } },
-    select: { id: true, name: true, email: true, role: true },
+    select: USER_LOCALE_SELECT,
     orderBy: { name: "asc" },
   });
 }
@@ -130,9 +170,7 @@ export async function resolveTargetUsers(roles: string[]): Promise<ResolvedTarge
 /** 把管理者标识解析为 Hub 用户（用于生成其个人周报） */
 export async function resolveManagerUsers(tokens: string[]): Promise<ResolvedTargetUser[]> {
   if (!tokens.length) return [];
-  const users = await db.user.findMany({
-    select: { id: true, name: true, email: true, role: true, wecomDisplayName: true, crmSalesmanName: true },
-  });
+  const users = await db.user.findMany({ select: USER_LOCALE_SELECT });
   const found: ResolvedTargetUser[] = [];
   const seen = new Set<string>();
   for (const tokenRaw of tokens) {
@@ -141,7 +179,7 @@ export async function resolveManagerUsers(tokens: string[]): Promise<ResolvedTar
     const match = matchUserByToken(users, token);
     if (match && !seen.has(match.id)) {
       seen.add(match.id);
-      found.push({ id: match.id, name: match.name, email: match.email, role: match.role });
+      found.push({ ...match, reportLocale: match.reportLocale ?? null });
     }
   }
   return found.sort((a, b) => a.name.localeCompare(b.name));

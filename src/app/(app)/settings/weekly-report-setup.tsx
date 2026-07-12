@@ -36,6 +36,7 @@ export function WeeklyReportSetup({
   const [enabled, setEnabled] = useState(status.enabled || !status.exists);
   const [roles, setRoles] = useState<string[]>(status.roles);
   const [managers, setManagers] = useState(status.managers.join("\n"));
+  const [englishRecipients, setEnglishRecipients] = useState(status.englishRecipients.join("\n"));
   const [includeInactive, setIncludeInactive] = useState(status.includeInactive);
   const [cronExpr, setCronExpr] = useState(status.cronExpr);
   const [timezone, setTimezone] = useState(status.timezone);
@@ -69,6 +70,7 @@ export function WeeklyReportSetup({
       fd.set("enabled", enabled ? "true" : "false");
       fd.set("roles", roles.join(","));
       fd.set("managers", managers);
+      fd.set("englishRecipients", englishRecipients);
       fd.set("includeInactive", includeInactive ? "true" : "false");
       fd.set("cronExpr", cronExpr.trim());
       fd.set("timezone", timezone.trim());
@@ -176,6 +178,20 @@ export function WeeklyReportSetup({
           ))}
         </div>
       )}
+
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-slate-700">英文周报成员</span>
+        <textarea
+          value={englishRecipients}
+          onChange={(e) => setEnglishRecipients(e.target.value)}
+          rows={3}
+          placeholder={"填写需要英文个人周报的成员\n用户名 / 显示名 / 邮箱前缀，每行一个"}
+          className={`${input} font-mono text-xs`}
+        />
+        <span className="text-xs text-slate-400">
+          名单内成员收到英文邮件与英文 AI 小结；优先级高于个人中心语言设置。团队汇总邮件仍为中文。
+        </span>
+      </label>
 
       {/* 调度 */}
       <div className="grid gap-3 sm:grid-cols-2">

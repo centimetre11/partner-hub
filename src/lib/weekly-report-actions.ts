@@ -31,6 +31,7 @@ export type WeeklyReportStatus = {
   lastRunAt: string | null;
   roles: string[];
   managers: string[];
+  englishRecipients: string[];
   includeInactive: boolean;
   resolvedManagers: { token: string; email: string | null; name: string | null }[];
   targetUsers: { id: string; name: string; email: string | null; role: string }[];
@@ -79,6 +80,7 @@ export async function getWeeklyReportStatusAction(): Promise<WeeklyReportStatus>
     lastRunAt: agent?.lastRunAt?.toISOString() ?? null,
     roles: config.roles,
     managers: config.managers,
+    englishRecipients: config.englishRecipients ?? [],
     includeInactive: !!config.includeInactive,
     resolvedManagers: resolved,
     targetUsers,
@@ -91,6 +93,7 @@ export async function saveWeeklyReportConfigAction(formData: FormData) {
 
   const roles = parseList(formData.get("roles")).map((r) => r.toUpperCase());
   const managers = parseList(formData.get("managers"));
+  const englishRecipients = parseList(formData.get("englishRecipients"));
   const includeInactive = formData.get("includeInactive") === "true";
   const enabled = formData.get("enabled") !== "false";
   const cronExpr = String(formData.get("cronExpr") ?? "").trim() || DEFAULT_WEEKLY_REPORT_CRON;
@@ -102,6 +105,7 @@ export async function saveWeeklyReportConfigAction(formData: FormData) {
     source: "weekly_review",
     roles,
     managers,
+    englishRecipients,
     includeInactive,
   };
   const queryConfig = serializeWeeklyReportConfig(config);
@@ -193,6 +197,7 @@ export async function sendWeeklyReportTestAction(formData: FormData) {
       toEmailOverride: emailOverride || undefined,
       timezone,
       creatorId: agent?.createdById ?? null,
+      agentConfig: agent?.queryConfig ?? null,
     });
     return res.ok ? { ok: true, message: res.message } : { error: res.message };
   } catch (e) {

@@ -15,9 +15,14 @@ import {
   mergeWeeklyReportUsers,
   type WeekWindow,
 } from "./weekly-report-config";
-import { labelsZh } from "./i18n/labels/zh";
-
-const FAQ_CATEGORY_LABELS = labelsZh.faqCategoryLabels as Record<string, string>;
+import {
+  buildWeeklyReportLocaleMap,
+  getWeeklyReportCopy,
+  normalizeWeeklyReportLocale,
+  resolveWeeklyReportLocale,
+  type WeeklyReportCopy,
+  type WeeklyReportLocale,
+} from "./weekly-report-locale";
 
 // ============ 单人聚合 ============
 
@@ -40,15 +45,18 @@ function ownerLabel(row: { partner?: { name: string } | null; customer?: { name:
 }
 
 /** 待办的机会/项目归属文本（项目优先） */
-function todoLinkText(row: { project?: { name: string } | null; opportunity?: { name: string } | null }): string {
-  if (row.project) return `项目: ${row.project.name}`;
-  if (row.opportunity) return `商机: ${row.opportunity.name}`;
+function todoLinkText(
+  row: { project?: { name: string } | null; opportunity?: { name: string } | null },
+  copy: WeeklyReportCopy
+): string {
+  if (row.project) return `${copy.projectPrefix}: ${row.project.name}`;
+  if (row.opportunity) return `${copy.opportunityPrefix}: ${row.opportunity.name}`;
   return "";
 }
 
-function dealTypeText(dealType: string | null): string {
-  if (dealType === "PROJECT") return "项目型";
-  if (dealType === "PRODUCT") return "纯产品型";
+function dealTypeText(dealType: string | null, copy: WeeklyReportCopy): string {
+  if (dealType === "PROJECT") return copy.dealTypeProject;
+  if (dealType === "PRODUCT") return copy.dealTypeProduct;
   return "";
 }
 
@@ -56,8 +64,20 @@ export function statsActivityCount(s: WeeklyUserStats): number {
   return s.doneTodos.length + s.businessRecords.length + s.workLogs.length + s.faqEntries.length + s.newCustomers.length;
 }
 
-function faqCategoryLabel(category: string): string {
-  return FAQ_CATEGORY_LABELS[category] ?? category;
+function faqCategoryLabel(category: string, copy: WeeklyReportCopy): string {
+  return copy.faqCategories[category] ?? category;
+}
+
+function faqEntryText(f: WeeklyUserStats["faqEntries"][number], copy: WeeklyReportCopy): string {
+  const actionLabel = f.action === "created" ? copy.faqCreated : copy.faqUpdated;
+  const official = f.verified ? copy.faqVerified : "";
+  const cat = faqCategoryLabel(f.category, copy);
+  if (copy.locale === "en") {
+    const preview = f.answerPreview ? `: ${f.answerPreview}` : "";
+    return `[${cat}] ${f.question} (${actionLabel}, ${ymd(f.at)}${official})${preview}`;
+  }
+  const preview = f.answerPreview ? `：${f.answerPreview}` : "";
+  return `[${cat}] ${f.question}（${actionLabel}，${ymd(f.at)}${official}）${preview}`;
 }
 
 function faqAnswerPreview(answer: string, max = 80): string {
@@ -82,8 +102,10 @@ function classifyFaqEntry(
 
 export async function gatherUserWeekly(
   user: { id: string; name: string; email: string | null },
-  window: WeekWindow
+  window: WeekWindow,
+  locale: WeeklyReportLocale = "zh"
 ): Promise<WeeklyUserStats> {
+  const copy = getWeeklyReportCopy(locale);
   const inWindow = { gte: window.start, lte: window.end };
   const next7 = new Date(window.end.getTime() + 7 * 24 * 3600 * 1000);
 
@@ -192,7 +214,7 @@ export async function gatherUserWeekly(
     userId: user.id,
     name: user.name,
     email: user.email,
-    doneTodos: doneTodos.map((t) => ({ title: t.title, doneAt: t.doneAt, owner: ownerLabel(t), link: todoLinkText(t) })),
+    doneTodos: doneTodos.map((t) => ({ title: t.title, doneAt: t.doneAt, owner: ownerLabel(t), link: todoLinkText(t, copy) })),
     businessRecords: businessRecords.map((r) => ({
       title: r.title,
       category: r.category,
@@ -212,7 +234,7 @@ export async function gatherUserWeekly(
       dueDate: t.dueDate,
       overdue: !!t.dueDate && t.dueDate < now,
       owner: ownerLabel(t),
-      link: todoLinkText(t),
+      link: todoLinkText(t, copy),
     })),
     activeOpportunities: activeOpps.map((o) => ({
       name: o.name,
@@ -238,76 +260,85 @@ function ymd(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : "-";
 }
 
-function faqEntryText(f: WeeklyUserStats["faqEntries"][number]): string {
-  const actionLabel = f.action === "created" ? "新增" : "更新";
-  const official = f.verified ? "，已认证" : "";
-  const preview = f.answerPreview ? `：${f.answerPreview}` : "";
-  return `[${faqCategoryLabel(f.category)}] ${f.question}（${actionLabel}，${ymd(f.at)}${official}）${preview}`;
-}
-
 /** 给 LLM 看的纯文本数据块（数字与明细都是确定的，AI 只负责写小结/建议） */
-export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow): string {
+export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow, copy: WeeklyReportCopy): string {
   const lines: string[] = [];
-  lines.push(`# ${s.name} 本周数据（${window.label}）`);
+  const doneSuffix = copy.locale === "en" ? ", done " : "，完成于 ";
+  const dueSuffix = copy.locale === "en" ? ", due " : "，截止 ";
+  const stageLabel = copy.locale === "en" ? "stage " : "阶段 ";
+  const amountLabel = copy.locale === "en" ? "amount " : "金额 ";
+  const statusLabel = copy.locale === "en" ? "status " : "状态 ";
+  const todosLabel = copy.locale === "en" ? "todos " : "待办 ";
+
+  lines.push(copy.promptStatsHeader(s.name, window.label));
   lines.push("");
-  lines.push(`## 已完成待办（${s.doneTodos.length}）`);
+  lines.push(`## ${copy.sections.doneTodos}（${s.doneTodos.length}）`);
   lines.push(
     s.doneTodos.length
-      ? s.doneTodos.map((t) => `- ${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，完成于 ${ymd(t.doneAt)}）`).join("\n")
-      : "- 无"
+      ? s.doneTodos
+          .map((t) => `- ${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}${doneSuffix}${ymd(t.doneAt)}）`)
+          .join("\n")
+      : `- ${copy.none}`
   );
   lines.push("");
-  lines.push(`## 商务记录（${s.businessRecords.length}）`);
+  lines.push(`## ${copy.sections.businessRecords}（${s.businessRecords.length}）`);
   lines.push(
     s.businessRecords.length
       ? s.businessRecords.map((r) => `- [${r.category}] ${r.title}（${r.owner}，${ymd(r.occurredAt)}）`).join("\n")
-      : "- 无"
+      : `- ${copy.none}`
   );
   lines.push("");
-  lines.push(`## 项目工作记录（${s.workLogs.length}）`);
+  lines.push(`## ${copy.sections.workLogs}（${s.workLogs.length}）`);
   lines.push(
     s.workLogs.length
-      ? s.workLogs
-          .map((w) => `- ${w.projectName}（${w.customerName}，${ymd(w.createdAt)}）：${w.content}`)
-          .join("\n")
-      : "- 无"
+      ? s.workLogs.map((w) => `- ${w.projectName}（${w.customerName}，${ymd(w.createdAt)}）：${w.content}`).join("\n")
+      : `- ${copy.none}`
   );
   lines.push("");
-  lines.push(`## 问答库贡献（${s.faqEntries.length}）`);
+  lines.push(`## ${copy.sections.faqEntries}（${s.faqEntries.length}）`);
   lines.push(
-    s.faqEntries.length ? s.faqEntries.map((f) => `- ${faqEntryText(f)}`).join("\n") : "- 无"
+    s.faqEntries.length ? s.faqEntries.map((f) => `- ${faqEntryText(f, copy)}`).join("\n") : `- ${copy.none}`
   );
   lines.push("");
-  lines.push(`## 新增客户（${s.newCustomers.length}）`);
+  lines.push(`## ${copy.sections.newCustomers}（${s.newCustomers.length}）`);
   lines.push(
-    s.newCustomers.length ? s.newCustomers.map((c) => `- ${c.name}（${c.status}）`).join("\n") : "- 无"
+    s.newCustomers.length ? s.newCustomers.map((c) => `- ${c.name}（${c.status}）`).join("\n") : `- ${copy.none}`
   );
   lines.push("");
-  lines.push(`## 下周待办（OPEN，未来 7 天到期或无期限，含逾期）（${s.upcomingTodos.length}）`);
+  lines.push(`## ${copy.sections.upcomingTodos}（${s.upcomingTodos.length}）`);
   lines.push(
     s.upcomingTodos.length
       ? s.upcomingTodos
-          .map((t) => `- ${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，截止 ${ymd(t.dueDate)}${t.overdue ? "，已逾期" : ""}）`)
+          .map(
+            (t) =>
+              `- ${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}${dueSuffix}${ymd(t.dueDate)}${t.overdue ? copy.overdue : ""}）`
+          )
           .join("\n")
-      : "- 无"
+      : `- ${copy.none}`
   );
   lines.push("");
-  lines.push(`## 活跃商机（${s.activeOpportunities.length}）`);
+  lines.push(`## ${copy.sections.activeOpportunities}（${s.activeOpportunities.length}）`);
   lines.push(
     s.activeOpportunities.length
       ? s.activeOpportunities
-          .map((o) => `- ${o.name}（${o.owner}，阶段 ${o.stage}，金额 ${o.amount ?? "-"}${dealTypeText(o.dealType) ? `，${dealTypeText(o.dealType)}` : ""}）`)
+          .map(
+            (o) =>
+              `- ${o.name}（${o.owner}，${stageLabel}${o.stage}，${amountLabel}${o.amount ?? "-"}${dealTypeText(o.dealType, copy) ? `，${dealTypeText(o.dealType, copy)}` : ""}）`
+          )
           .join("\n")
-      : "- 无"
+      : `- ${copy.none}`
   );
   lines.push("");
-  lines.push(`## 进行中合作项目（${s.activeProjects.length}）`);
+  lines.push(`## ${copy.sections.activeProjects}（${s.activeProjects.length}）`);
   lines.push(
     s.activeProjects.length
       ? s.activeProjects
-          .map((p) => `- ${p.name}（${p.owner}，阶段 ${p.phase}，状态 ${p.status}，待办 ${p.done}/${p.total}）`)
+          .map(
+            (p) =>
+              `- ${p.name}（${p.owner}，${stageLabel}${p.phase}，${statusLabel}${p.status}，${todosLabel}${p.done}/${p.total}）`
+          )
           .join("\n")
-      : "- 无"
+      : `- ${copy.none}`
   );
   return lines.join("\n");
 }
@@ -316,57 +347,72 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function listHtml(items: string[]): string {
-  if (!items.length) return `<p style="color:#888;margin:4px 0">无</p>`;
+function listHtml(items: string[], noneLabel: string): string {
+  if (!items.length) return `<p style="color:#888;margin:4px 0">${esc(noneLabel)}</p>`;
   return `<ul style="margin:4px 0 12px;padding-left:20px">${items
     .map((i) => `<li style="margin:2px 0">${esc(i)}</li>`)
     .join("")}</ul>`;
 }
 
 /** 单人周报 HTML（AI 叙述 + 确定性明细） */
-export function renderUserEmailHtml(s: WeeklyUserStats, window: WeekWindow, narrative: string): string {
+export function renderUserEmailHtml(
+  s: WeeklyUserStats,
+  window: WeekWindow,
+  narrative: string,
+  copy: WeeklyReportCopy
+): string {
   const narrativeHtml = narrative
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:8px 0;line-height:1.7">${esc(p.trim()).replace(/\n/g, "<br/>")}</p>`)
     .join("");
+  const overdue = copy.overdue;
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:680px;margin:0 auto;color:#1f2937">
-  <h2 style="margin:0 0 4px">📊 ${esc(s.name)} 的本周工作周报</h2>
-  <p style="color:#6b7280;margin:0 0 16px">统计周期：${esc(window.label)}（利雅得时间）</p>
+  <h2 style="margin:0 0 4px">${esc(copy.email.personalTitle(s.name))}</h2>
+  <p style="color:#6b7280;margin:0 0 16px">${esc(copy.email.period(window.label))}</p>
   <div style="display:flex;gap:12px;margin:0 0 20px;flex-wrap:wrap">
-    ${statCard("完成待办", s.doneTodos.length)}
-    ${statCard("商务记录", s.businessRecords.length)}
-    ${statCard("项目工作记录", s.workLogs.length)}
-    ${statCard("问答库", s.faqEntries.length)}
-    ${statCard("新增客户", s.newCustomers.length)}
+    ${statCard(copy.statCards.doneTodos, s.doneTodos.length)}
+    ${statCard(copy.statCards.businessRecords, s.businessRecords.length)}
+    ${statCard(copy.statCards.workLogs, s.workLogs.length)}
+    ${statCard(copy.statCards.faqEntries, s.faqEntries.length)}
+    ${statCard(copy.statCards.newCustomers, s.newCustomers.length)}
   </div>
   <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 18px;margin:0 0 20px">
-    <h3 style="margin:0 0 6px;color:#111827">本周小结与下周计划（AI 生成）</h3>
-    ${narrativeHtml || '<p style="color:#888">（暂无内容）</p>'}
+    <h3 style="margin:0 0 6px;color:#111827">${esc(copy.sections.aiNarrative)}</h3>
+    ${narrativeHtml || `<p style="color:#888">${esc(copy.email.noNarrative)}</p>`}
   </div>
-  <h3 style="margin:16px 0 4px">✅ 已完成待办（${s.doneTodos.length}）</h3>
-  ${listHtml(s.doneTodos.map((t) => `${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，${ymd(t.doneAt)}）`))}
-  <h3 style="margin:16px 0 4px">🤝 商务记录（${s.businessRecords.length}）</h3>
-  ${listHtml(s.businessRecords.map((r) => `[${r.category}] ${r.title}（${r.owner}，${ymd(r.occurredAt)}）`))}
-  <h3 style="margin:16px 0 4px">📝 项目工作记录（${s.workLogs.length}）</h3>
-  ${listHtml(s.workLogs.map((w) => `${w.projectName}（${w.customerName}，${ymd(w.createdAt)}）：${w.content}`))}
-  <h3 style="margin:16px 0 4px">💬 问答库贡献（${s.faqEntries.length}）</h3>
-  ${listHtml(s.faqEntries.map(faqEntryText))}
-  <h3 style="margin:16px 0 4px">🆕 新增客户（${s.newCustomers.length}）</h3>
-  ${listHtml(s.newCustomers.map((c) => `${c.name}（${c.status}）`))}
-  <h3 style="margin:16px 0 4px">📅 下周待办（${s.upcomingTodos.length}）</h3>
+  <h3 style="margin:16px 0 4px">✅ ${esc(copy.sections.doneTodos)}（${s.doneTodos.length}）</h3>
+  ${listHtml(s.doneTodos.map((t) => `${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，${ymd(t.doneAt)}）`), copy.none)}
+  <h3 style="margin:16px 0 4px">🤝 ${esc(copy.sections.businessRecords)}（${s.businessRecords.length}）</h3>
+  ${listHtml(s.businessRecords.map((r) => `[${r.category}] ${r.title}（${r.owner}，${ymd(r.occurredAt)}）`), copy.none)}
+  <h3 style="margin:16px 0 4px">📝 ${esc(copy.sections.workLogs)}（${s.workLogs.length}）</h3>
+  ${listHtml(s.workLogs.map((w) => `${w.projectName}（${w.customerName}，${ymd(w.createdAt)}）：${w.content}`), copy.none)}
+  <h3 style="margin:16px 0 4px">💬 ${esc(copy.sections.faqEntries)}（${s.faqEntries.length}）</h3>
+  ${listHtml(s.faqEntries.map((f) => faqEntryText(f, copy)), copy.none)}
+  <h3 style="margin:16px 0 4px">🆕 ${esc(copy.sections.newCustomers)}（${s.newCustomers.length}）</h3>
+  ${listHtml(s.newCustomers.map((c) => `${c.name}（${c.status}）`), copy.none)}
+  <h3 style="margin:16px 0 4px">📅 ${esc(copy.sections.upcomingTodos)}（${s.upcomingTodos.length}）</h3>
   ${listHtml(
-    s.upcomingTodos.map((t) => `${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，截止 ${ymd(t.dueDate)}${t.overdue ? "，已逾期" : ""}）`)
+    s.upcomingTodos.map((t) => `${t.title}（${t.owner}${t.link ? `，${t.link}` : ""}，${ymd(t.dueDate)}${t.overdue ? overdue : ""}）`),
+    copy.none
   )}
-  <h3 style="margin:16px 0 4px">💼 活跃商机（${s.activeOpportunities.length}）</h3>
+  <h3 style="margin:16px 0 4px">💼 ${esc(copy.sections.activeOpportunities)}（${s.activeOpportunities.length}）</h3>
   ${listHtml(
-    s.activeOpportunities.map((o) => `${o.name}（${o.owner}，阶段 ${o.stage}，金额 ${o.amount ?? "-"}${dealTypeText(o.dealType) ? `，${dealTypeText(o.dealType)}` : ""}）`)
+    s.activeOpportunities.map(
+      (o) =>
+        `${o.name}（${o.owner}，${copy.locale === "en" ? "stage " : "阶段 "}${o.stage}，${copy.locale === "en" ? "amount " : "金额 "}${o.amount ?? "-"}${dealTypeText(o.dealType, copy) ? `，${dealTypeText(o.dealType, copy)}` : ""}）`
+    ),
+    copy.none
   )}
-  <h3 style="margin:16px 0 4px">📦 进行中合作项目（${s.activeProjects.length}）</h3>
+  <h3 style="margin:16px 0 4px">📦 ${esc(copy.sections.activeProjects)}（${s.activeProjects.length}）</h3>
   ${listHtml(
-    s.activeProjects.map((p) => `${p.name}（${p.owner}，阶段 ${p.phase}，状态 ${p.status}，待办 ${p.done}/${p.total}）`)
+    s.activeProjects.map(
+      (p) =>
+        `${p.name}（${p.owner}，${copy.locale === "en" ? "phase " : "阶段 "}${p.phase}，${copy.locale === "en" ? "status " : "状态 "}${p.status}，${copy.locale === "en" ? "todos " : "待办 "}${p.done}/${p.total}）`
+    ),
+    copy.none
   )}
   <p style="color:#9ca3af;font-size:12px;margin-top:24px;border-top:1px solid #e5e7eb;padding-top:12px">
-    本邮件由 Partner Hub 周报自动化生成。数据来自系统记录，建议部分由 AI 生成，仅供参考。
+    ${esc(copy.email.footer)}
   </p>
 </div>`;
 }
@@ -379,24 +425,38 @@ function statCard(label: string, value: number): string {
 }
 
 /** 单人周报纯文本兜底 */
-export function renderUserEmailText(s: WeeklyUserStats, window: WeekWindow, narrative: string): string {
-  return `${s.name} 的本周工作周报\n统计周期：${window.label}（利雅得时间）\n\n完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 项目工作记录 ${s.workLogs.length} | 问答库 ${s.faqEntries.length} | 新增客户 ${s.newCustomers.length}\n\n【本周小结与下周计划】\n${narrative}\n\n---\n${renderStatsForPrompt(s, window)}`;
+export function renderUserEmailText(
+  s: WeeklyUserStats,
+  window: WeekWindow,
+  narrative: string,
+  copy: WeeklyReportCopy
+): string {
+  const summary =
+    copy.locale === "en"
+      ? `To-dos ${s.doneTodos.length} | Business ${s.businessRecords.length} | Work logs ${s.workLogs.length} | Q&A ${s.faqEntries.length} | Customers ${s.newCustomers.length}`
+      : `完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 项目工作记录 ${s.workLogs.length} | 问答库 ${s.faqEntries.length} | 新增客户 ${s.newCustomers.length}`;
+  const narrativeTitle = copy.locale === "en" ? "Weekly summary & next week" : "本周小结与下周计划";
+  return `${copy.email.personalTitle(s.name)}\n${copy.email.period(window.label)}\n\n${summary}\n\n【${narrativeTitle}】\n${narrative}\n\n---\n${renderStatsForPrompt(s, window, copy)}`;
 }
 
 // ============ 管理者汇总 ============
 
-export type WeeklyUserReport = { stats: WeeklyUserStats; narrative: string };
+export type WeeklyUserReport = { stats: WeeklyUserStats; narrative: string; locale: WeeklyReportLocale };
 
-function narrativeExcerptHtml(narrative: string): string {
+function narrativeExcerptHtml(narrative: string, emptyLabel: string): string {
   const trimmed = narrative.trim();
-  if (!trimmed) return `<p style="color:#888;margin:0">（暂无 AI 小结）</p>`;
+  if (!trimmed) return `<p style="color:#888;margin:0">${esc(emptyLabel)}</p>`;
   return trimmed
     .split(/\n{2,}/)
     .map((p) => `<p style="margin:4px 0;line-height:1.6;font-size:13px">${esc(p.trim()).replace(/\n/g, "<br/>")}</p>`)
     .join("");
 }
 
-export function renderManagerDigestHtml(reports: WeeklyUserReport[], window: WeekWindow): string {
+export function renderManagerDigestHtml(
+  reports: WeeklyUserReport[],
+  window: WeekWindow,
+  copy: WeeklyReportCopy
+): string {
   const all = reports.map((r) => r.stats);
   const rows = all
     .map((s) => {
@@ -427,51 +487,67 @@ export function renderManagerDigestHtml(reports: WeeklyUserReport[], window: Wee
       const active = statsActivityCount(s) > 0;
       if (!active && !narrative.trim()) return "";
       return `<div style="margin:0 0 14px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:8px;background:${active ? "#fff" : "#fafafa"}">
-        <h4 style="margin:0 0 6px;color:#111827;font-size:14px">${esc(s.name)} <span style="color:#6b7280;font-weight:normal;font-size:12px">（待办 ${s.doneTodos.length} · 商务 ${s.businessRecords.length} · 问答 ${s.faqEntries.length} · 客户 ${s.newCustomers.length}）</span></h4>
-        ${narrativeExcerptHtml(narrative)}
+        <h4 style="margin:0 0 6px;color:#111827;font-size:14px">${esc(s.name)} <span style="color:#6b7280;font-weight:normal;font-size:12px">${esc(copy.managerDigest.memberStats(s.name, s.doneTodos.length, s.businessRecords.length, s.faqEntries.length, s.newCustomers.length))}</span></h4>
+        ${narrativeExcerptHtml(narrative, copy.managerDigest.noNarrative)}
       </div>`;
     })
     .filter(Boolean)
     .join("");
+  const t = copy.managerDigest.table;
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:720px;margin:0 auto;color:#1f2937">
-  <h2 style="margin:0 0 4px">📈 团队周报汇总</h2>
-  <p style="color:#6b7280;margin:0 0 16px">统计周期：${esc(window.label)}（利雅得时间） · 共 ${all.length} 人</p>
-  <p style="margin:0 0 12px">本周合计：完成待办 <b>${totals.done}</b> · 商务记录 <b>${totals.br}</b> · 问答库 <b>${totals.faq}</b> · 新增客户 <b>${totals.cust}</b></p>
+  <h2 style="margin:0 0 4px">${esc(copy.managerDigest.title)}</h2>
+  <p style="color:#6b7280;margin:0 0 16px">${esc(copy.managerDigest.period(window.label, all.length))}</p>
+  <p style="margin:0 0 12px">${copy.managerDigest.totals(totals.done, totals.br, totals.faq, totals.cust)}</p>
   <table style="border-collapse:collapse;width:100%;font-size:14px">
     <thead>
       <tr style="background:#1d4ed8;color:#fff">
-        <th style="padding:8px 10px;text-align:left">成员</th>
-        <th style="padding:8px 10px">完成待办</th>
-        <th style="padding:8px 10px">商务记录</th>
-        <th style="padding:8px 10px">问答库</th>
-        <th style="padding:8px 10px">新增客户</th>
-        <th style="padding:8px 10px">下周待办</th>
-        <th style="padding:8px 10px">活跃商机</th>
+        <th style="padding:8px 10px;text-align:left">${esc(t.member)}</th>
+        <th style="padding:8px 10px">${esc(t.doneTodos)}</th>
+        <th style="padding:8px 10px">${esc(t.businessRecords)}</th>
+        <th style="padding:8px 10px">${esc(t.faqEntries)}</th>
+        <th style="padding:8px 10px">${esc(t.newCustomers)}</th>
+        <th style="padding:8px 10px">${esc(t.upcomingTodos)}</th>
+        <th style="padding:8px 10px">${esc(t.activeOpportunities)}</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  ${highlightBlocks ? `<h3 style="margin:24px 0 12px;font-size:16px">📝 各成员本周要点摘录</h3>${highlightBlocks}` : ""}
+  ${highlightBlocks ? `<h3 style="margin:24px 0 12px;font-size:16px">${esc(copy.managerDigest.highlightsTitle)}</h3>${highlightBlocks}` : ""}
   <p style="color:#9ca3af;font-size:12px;margin-top:24px;border-top:1px solid #e5e7eb;padding-top:12px">
-    本邮件由 Partner Hub 周报自动化生成。灰色行表示本周无统计活动；要点摘录来自各成员 AI 周报正文。
+    ${esc(copy.managerDigest.footer)}
   </p>
 </div>`;
 }
 
-export function renderManagerDigestText(reports: WeeklyUserReport[], window: WeekWindow): string {
-  const tableLines = reports.map(
-    ({ stats: s }) =>
-      `${s.name}: 完成待办 ${s.doneTodos.length} | 商务记录 ${s.businessRecords.length} | 问答库 ${s.faqEntries.length} | 新增客户 ${s.newCustomers.length} | 下周待办 ${s.upcomingTodos.length} | 活跃商机 ${s.activeOpportunities.length}`
+export function renderManagerDigestText(
+  reports: WeeklyUserReport[],
+  window: WeekWindow,
+  copy: WeeklyReportCopy
+): string {
+  const tableLines = reports.map(({ stats: s }) =>
+    copy.managerDigest.rowLine({
+      name: s.name,
+      doneTodos: s.doneTodos.length,
+      businessRecords: s.businessRecords.length,
+      faqEntries: s.faqEntries.length,
+      newCustomers: s.newCustomers.length,
+      upcomingTodos: s.upcomingTodos.length,
+      activeOpportunities: s.activeOpportunities.length,
+    })
   );
   const excerptLines = reports
     .filter(({ stats: s, narrative }) => statsActivityCount(s) > 0 || narrative.trim())
-    .map(({ stats: s, narrative }) => `【${s.name}】\n${narrative.trim() || "（本周无统计活动）"}`);
+    .map(
+      ({ stats: s, narrative }) =>
+        `【${s.name}】\n${narrative.trim() || copy.managerDigest.noActivity}`
+    );
+  const title = copy.managerDigest.subject(window.label);
   return [
-    `团队周报汇总（${window.label}）`,
+    title,
     "",
     ...tableLines,
     "",
-    "--- 各成员本周要点摘录 ---",
+    `--- ${copy.managerDigest.highlightsTitle} ---`,
     "",
     ...excerptLines,
   ].join("\n");
@@ -482,22 +558,16 @@ export function renderManagerDigestText(reports: WeeklyUserReport[], window: Wee
 async function generateNarrative(
   s: WeeklyUserStats,
   window: WeekWindow,
-  userId: string | null
+  userId: string | null,
+  locale: WeeklyReportLocale
 ): Promise<string> {
-  const dataBlock = renderStatsForPrompt(s, window);
+  const copy = getWeeklyReportCopy(locale);
+  const dataBlock = renderStatsForPrompt(s, window, copy);
   const messages: ChatMessage[] = [
-    {
-      role: "system",
-      content:
-        "你是中东 BI 伙伴管理团队的周报助手。根据给定的本周工作数据，用简体中文撰写周报正文。" +
-        "严格分两部分：\n" +
-        "【本周小结】用一段话提炼本周亮点与进展（结合完成待办、商务记录、项目工作记录、问答库贡献、新增客户）。\n" +
-        "【下周计划与建议】基于「下周待办」和「活跃商机」给出 3-5 条具体、可执行的建议，按优先级排列。\n" +
-        "要求：语气专业、简洁、积极；只依据给定数据，绝不编造数字或客户；如某类数据为空可如实指出。不要重复罗列全部明细（明细邮件里已有），重在洞察与建议。",
-    },
+    { role: "system", content: copy.narrative.system },
     {
       role: "user",
-      content: `${dataBlock}\n\n请按上述要求输出周报正文（两部分），不要加额外标题层级，不要使用 Markdown 代码块。`,
+      content: `${dataBlock}\n\n${copy.narrative.user}`,
     },
   ];
   try {
@@ -513,12 +583,17 @@ async function generateNarrative(
   } catch (e) {
     console.warn(`[weekly-report] narrative LLM failed for ${s.name}:`, e instanceof Error ? e.message : e);
   }
-  // 兜底：无 AI 时给确定性提示
   const next =
     s.upcomingTodos.length || s.activeOpportunities.length
-      ? "下周计划：请关注上述「下周待办」与「活跃商机」，优先推进逾期项与高阶段商机。"
-      : "下周计划：本周暂无待办与活跃商机，建议主动开拓新客户与商机。";
-  return `本周小结：完成待办 ${s.doneTodos.length} 项，商务记录 ${s.businessRecords.length} 条，项目工作记录 ${s.workLogs.length} 条，问答库贡献 ${s.faqEntries.length} 条，新增客户 ${s.newCustomers.length} 个。\n\n${next}`;
+      ? copy.narrative.fallbackNextWithWork
+      : copy.narrative.fallbackNextEmpty;
+  return `${copy.narrative.fallbackSummary({
+    doneTodos: s.doneTodos.length,
+    businessRecords: s.businessRecords.length,
+    workLogs: s.workLogs.length,
+    faqEntries: s.faqEntries.length,
+    newCustomers: s.newCustomers.length,
+  })}\n\n${next}`;
 }
 
 // ============ 管道入口 ============
@@ -551,6 +626,7 @@ export async function runWeeklyReportPipeline(
     resolveManagerUsers(config.managers),
   ]);
   const users = mergeWeeklyReportUsers(roleUsers, managerUsers);
+  const localeMap = buildWeeklyReportLocaleMap(users, config);
   toolLog.push({
     tool: "resolve_users",
     args: { roles: config.roles, managers: config.managers },
@@ -560,13 +636,14 @@ export async function runWeeklyReportPipeline(
   // 逐人聚合 + 生成 AI 叙述（个人邮件与管理者汇总共用）
   const allReports: WeeklyUserReport[] = [];
   for (const u of users) {
-    const stats = await gatherUserWeekly(u, window);
+    const locale = localeMap.get(u.id) ?? "zh";
+    const stats = await gatherUserWeekly(u, window, locale);
     const active = statsActivityCount(stats) > 0;
     const narrative =
       active || config.includeInactive
-        ? await generateNarrative(stats, window, agent.createdById)
+        ? await generateNarrative(stats, window, agent.createdById, locale)
         : "";
-    allReports.push({ stats, narrative });
+    allReports.push({ stats, narrative, locale });
   }
 
   const { emails: managerEmails, resolved: managerResolved } = await resolveManagerEmails(config.managers);
@@ -576,7 +653,7 @@ export async function runWeeklyReportPipeline(
   let sentPersonal = 0;
   let skippedNoEmail = 0;
   let skippedInactive = 0;
-  for (const { stats: s, narrative } of allReports) {
+  for (const { stats: s, narrative, locale } of allReports) {
     const active = statsActivityCount(s) > 0;
     if (!active && !config.includeInactive) {
       skippedInactive++;
@@ -587,9 +664,10 @@ export async function runWeeklyReportPipeline(
       toolLog.push({ tool: "send_email", args: { user: s.name }, result: "skipped: no email" });
       continue;
     }
-    const html = renderUserEmailHtml(s, window, narrative);
-    const text = renderUserEmailText(s, window, narrative);
-    const subject = `📊 你的本周工作周报（${window.label}）`;
+    const copy = getWeeklyReportCopy(locale);
+    const html = renderUserEmailHtml(s, window, narrative, copy);
+    const text = renderUserEmailText(s, window, narrative, copy);
+    const subject = copy.email.personalSubject(window.label);
     const cc = managerEmails.filter((e) => e.toLowerCase() !== s.email!.toLowerCase()).join(",");
     const ctx = { actions: [] as string[] };
     const result = await runSendEmailTool(
@@ -612,9 +690,11 @@ export async function runWeeklyReportPipeline(
   let managerOk = false;
   const unresolved = managerResolved.filter((r) => !r.email).map((r) => r.token);
   if (managerEmails.length) {
-    const html = renderManagerDigestHtml(allReports, window);
-    const text = renderManagerDigestText(allReports, window);
-    const subject = `📈 团队周报汇总（${window.label}）`;
+    const digestLocale = config.managerDigestLocale ?? "zh";
+    const digestCopy = getWeeklyReportCopy(digestLocale);
+    const html = renderManagerDigestHtml(allReports, window, digestCopy);
+    const text = renderManagerDigestText(allReports, window, digestCopy);
+    const subject = digestCopy.managerDigest.subject(window.label);
     const ctx = { actions: [] as string[] };
     const result = await runSendEmailTool(
       { to: managerEmails.join(","), subject, body: text, html },
@@ -663,23 +743,39 @@ export async function sendSingleUserReport(opts: {
   toEmailOverride?: string;
   timezone?: string;
   creatorId?: string | null;
+  agentConfig?: string | null;
 }): Promise<{ ok: boolean; message: string }> {
   const user = await db.user.findUnique({
     where: { id: opts.userId },
-    select: { id: true, name: true, email: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      reportLocale: true,
+      wecomDisplayName: true,
+      crmSalesmanName: true,
+    },
   });
   if (!user) return { ok: false, message: "未找到该用户" };
 
   const to = (opts.toEmailOverride?.trim() || user.email || "").trim();
   if (!to) return { ok: false, message: `${user.name} 没有邮箱，且未指定收件邮箱` };
 
+  const agent = opts.agentConfig
+    ? parseWeeklyReportConfig(opts.agentConfig)
+    : null;
+  const locale = agent
+    ? resolveWeeklyReportLocale(user, agent)
+    : normalizeWeeklyReportLocale(user.reportLocale) ?? "zh";
+  const copy = getWeeklyReportCopy(locale);
+
   const tz = resolveAgentTimezone(opts.timezone);
   const window = computeWorkWeekWindow(new Date(), tz);
-  const stats = await gatherUserWeekly(user, window);
-  const narrative = await generateNarrative(stats, window, opts.creatorId ?? null);
-  const html = renderUserEmailHtml(stats, window, narrative);
-  const text = renderUserEmailText(stats, window, narrative);
-  const subject = `📊【试发】${user.name} 的本周工作周报（${window.label}）`;
+  const stats = await gatherUserWeekly(user, window, locale);
+  const narrative = await generateNarrative(stats, window, opts.creatorId ?? null, locale);
+  const html = renderUserEmailHtml(stats, window, narrative, copy);
+  const text = renderUserEmailText(stats, window, narrative, copy);
+  const subject = copy.email.testSubject(user.name, window.label);
 
   const ctx = { actions: [] as string[] };
   const result = await runSendEmailTool({ to, subject, body: text, html }, ctx);

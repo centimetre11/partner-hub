@@ -20,7 +20,7 @@ export default async function AccountPage() {
   const personalKms = await getUserKmsCredential(user.id);
   const freshUser = await db.user.findUnique({
     where: { id: user.id },
-    select: { crmSalesmanName: true, wecomUserId: true, wecomDisplayName: true, name: true },
+    select: { crmSalesmanName: true, wecomUserId: true, wecomDisplayName: true, name: true, reportLocale: true },
   });
   const [salesmen, myFeedback, googleMeet] = await Promise.all([
     getCrmSalesmenAction(),
@@ -53,10 +53,16 @@ export default async function AccountPage() {
             <ProfileSetup
               name={user.name}
               email={user.email}
+              reportLocale={freshUser?.reportLocale ?? null}
               labels={{
                 displayName: am.displayName,
                 email: am.email,
                 emailHint: am.emailHint,
+                reportLocale: am.reportLocale,
+                reportLocaleHint: am.reportLocaleHint,
+                reportLocaleDefault: am.reportLocaleDefault,
+                reportLocaleZh: am.reportLocaleZh,
+                reportLocaleEn: am.reportLocaleEn,
                 save: m.common.save,
               }}
             />

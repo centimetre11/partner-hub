@@ -1908,6 +1908,12 @@ export const messagesEn = {
     displayName: "Display name",
     email: "Login email",
     emailHint: "Contact a team admin to change your email",
+    reportLocale: "Weekly report language",
+    reportLocaleHint:
+      "Language for your personal weekly report and AI summary. Leave as default to follow team settings; admins can also add you to the English list in weekly report settings.",
+    reportLocaleDefault: "Team default",
+    reportLocaleZh: "中文 Chinese",
+    reportLocaleEn: "English",
     password: "Password",
     currentPassword: "Current password",
     newPassword: "New password",

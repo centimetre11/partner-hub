@@ -8,8 +8,10 @@ import { requireUser } from "./session";
 export async function updateProfileAction(formData: FormData) {
   const user = await requireUser();
   const name = String(formData.get("name") ?? "").trim();
+  const reportLocaleRaw = String(formData.get("reportLocale") ?? "").trim();
+  const reportLocale = reportLocaleRaw === "en" || reportLocaleRaw === "zh" ? reportLocaleRaw : null;
   if (!name) return { error: "Display name is required" };
-  await db.user.update({ where: { id: user.id }, data: { name } });
+  await db.user.update({ where: { id: user.id }, data: { name, reportLocale } });
   revalidatePath("/account");
   revalidatePath("/", "layout");
   return { ok: true, message: "Profile updated" };
