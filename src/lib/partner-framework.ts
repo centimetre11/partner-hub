@@ -92,26 +92,25 @@ function stageExitChecks(p: PartnerFrameworkInput): { id: string; label: string;
   const trainingActive = p.trainings.some((t) => t.status !== "PLANNED" || t.targetCert);
 
   const checks: { id: string; label: string; ok: boolean; minStage: number }[] = [
-    { id: "owner", label: "Sales & pre-sales assigned", ok: !!(p.salesUserId || p.ownerId) && !!p.presalesUserId, minStage: 2 },
-    { id: "archetype", label: "Partner type classified", ok: !!p.partnerArchetype && p.partnerArchetype !== "OTHER", minStage: 3 },
-    { id: "data_team", label: "Dedicated data team confirmed (or flagged red to stop)", ok: !!p.dedicatedHeadcount || ["SALES_AGENT", "SHELL_DATA"].includes(p.partnerArchetype ?? ""), minStage: 3 },
-    { id: "contacts", label: "Power map ≥2 people", ok: p.contacts.length >= 2, minStage: 3 },
-    { id: "value_pattern", label: "Joint value pattern selected", ok: hasValuePattern, minStage: 4 },
-    { id: "value_triple", label: "Value triple (partner/FanRuan/customer) documented", ok: hasValueTriple, minStage: 4 },
-    { id: "playbook", label: "Playbook captured", ok: !!p.playbook, minStage: 4 },
-    { id: "candidate_opp", label: "Named candidate opportunity/client", ok: activeOpps.length > 0 || !!p.knownClients, minStage: 4 },
-    { id: "decision_maker", label: "Power map includes decision maker (D)", ok: hasDM, minStage: 4 },
-    { id: "active_opp", label: "At least 1 ACTIVE opportunity (with nextStep)", ok: activeOpps.some((o) => !!o.nextStep), minStage: 5 },
-    { id: "training", label: "Training/certification plan started", ok: p.trainings.length > 0 && trainingActive, minStage: 5 },
-    { id: "solution", label: "At least 1 joint solution", ok: p.solutions.length > 0, minStage: 5 },
-    { id: "sync", label: "Touchpoint logged in last 14 days", ok: hasRecentEvent(p.events, 14), minStage: 6 },
-    { id: "dedicated", label: "Dedicated headcount recorded", ok: !!p.dedicatedHeadcount, minStage: 7 },
-    { id: "first_win", label: "First win or in delivery", ok: wonOpps.length > 0 || stage >= 8, minStage: 8 },
-    { id: "ongoing_opp", label: "Ongoing active opportunities", ok: activeOpps.length > 0, minStage: 9 },
+    { id: "owner", label: "Sales & pre-sales assigned", ok: !!(p.salesUserId || p.ownerId) && !!p.presalesUserId, minStage: 1 },
+    { id: "contacts", label: "Power map started (≥1 contact)", ok: p.contacts.length >= 1, minStage: 1 },
+    { id: "first_touch", label: "First touchpoint logged", ok: p.events.length > 0, minStage: 1 },
+    { id: "archetype", label: "Partner type classified", ok: !!p.partnerArchetype && p.partnerArchetype !== "OTHER", minStage: 1 },
+    { id: "active_opp", label: "At least 1 ACTIVE opportunity (with nextStep)", ok: activeOpps.some((o) => !!o.nextStep), minStage: 2 },
+    { id: "value_pattern", label: "Joint value pattern selected", ok: hasValuePattern, minStage: 2 },
+    { id: "value_triple", label: "Value triple (partner/FanRuan/customer) documented", ok: hasValueTriple, minStage: 2 },
+    { id: "decision_maker", label: "Power map includes decision maker (D)", ok: hasDM, minStage: 2 },
+    { id: "sync", label: "Touchpoint logged in last 14 days", ok: hasRecentEvent(p.events, 14), minStage: 2 },
+    { id: "champion", label: "Internal champion identified", ok: hasChampion, minStage: 2 },
+    { id: "multi_opp", label: "Multiple active opportunities (batch pipeline)", ok: activeOpps.length >= 2 || (activeOpps.length >= 1 && wonOpps.length >= 1), minStage: 3 },
+    { id: "training", label: "Training/certification plan active", ok: p.trainings.length > 0 && trainingActive, minStage: 3 },
+    { id: "solution", label: "At least 1 joint solution", ok: p.solutions.length > 0, minStage: 3 },
+    { id: "dedicated", label: "Dedicated headcount recorded", ok: !!p.dedicatedHeadcount, minStage: 3 },
+    { id: "first_win", label: "At least one win or delivery in progress", ok: wonOpps.length > 0, minStage: 3 },
   ];
 
   const relevant = checks.filter((c) => stage >= c.minStage);
-  const upToStage = relevant.filter((c) => c.minStage <= stage && c.minStage >= stage - 1);
+  const upToStage = relevant.filter((c) => c.minStage === stage);
   return (upToStage.length ? upToStage : relevant.slice(-4)).map(({ id, label, ok }) => ({ id, label, ok }));
 }
 
@@ -119,98 +118,35 @@ export function getStageGuidance(p: PartnerFrameworkInput, ui: LabelsBundle = { 
   const meta = ui.pipelineStages.find((s) => s.stage === p.pipelineStage);
   const stageCards: Record<number, { focus: string; domains: Record<string, string[]> }> = {
     1: {
-      focus: "Quick screen: Are they a data player? Do they have a dedicated data team?",
+      focus: "Initial contact: exchange proposals, screen fit, decide whether to continue",
       domains: {
-        COMMITMENT: ["Assign our Owner", "Book first meeting with business lead"],
-        CAPABILITY: ["Learn existing tools and team structure", "No training scheduled yet"],
-        PIPELINE: ["Ask about last 3 data-related projects", "Don't rush to create opportunities"],
-        RELATIONSHIP: ["Start power map with 1–2 people", "Log first touchpoint"],
+        COMMITMENT: ["Assign our Owner", "Book discovery / proposal meetings"],
+        CAPABILITY: ["Learn tools, team structure, and analytics depth"],
+        PIPELINE: ["Discuss potential industries/clients — don't force opportunities yet"],
+        RELATIONSHIP: ["Start power map with 1–2 people", "Log first touchpoints"],
       },
     },
     2: {
-      focus: "Build rapport; classify partner type and decide whether to continue",
+      focus: "Active progress: real opportunities are running; keep commercial momentum",
       domains: {
-        COMMITMENT: ["Both sides have clear Owners", "Confirm follow-up meeting possible"],
-        CAPABILITY: ["Assess analytics capability vs. dashboard-only"],
-        PIPELINE: ["Learn potential industries/client direction"],
-        RELATIONSHIP: ["Log first meeting on timeline", "Power map 1–2 people"],
+        COMMITMENT: ["Tier A: weekly sync / aim to meet decision maker"],
+        CAPABILITY: ["Demo → POC loop", "Start certification if needed"],
+        PIPELINE: ["Must have ≥1 ACTIVE opportunity with nextStep + followUp"],
+        RELATIONSHIP: ["Confirm champion", "Touchpoint within last 14 days"],
       },
     },
     3: {
-      focus: "Needs diagnosis: classify partner type, start value pattern",
+      focus: "System partnership: batch opportunities, joint GTM / activities — intensity via Tier A/B/C",
       domains: {
-        COMMITMENT: ["Request org chart", "Ask who works full-time on data/FanRuan"],
-        CAPABILITY: ["Assess certification and demo readiness"],
-        PIPELINE: ["Name 1–2 joint target clients from known clients"],
-        RELATIONSHIP: ["Power map ≥3 people", "Find internal champion"],
-      },
-    },
-    4: {
-      focus: "Solution presentation: lock value pattern; demo only this story",
-      domains: {
-        COMMITMENT: ["Tier A: aim to meet D"],
-        CAPABILITY: ["Schedule product demo", "Update playbook + pitch"],
-        PIPELINE: ["Log candidate opportunities in system"],
-        RELATIONSHIP: ["Confirm champion attitude ≥ supportive"],
-      },
-    },
-    5: {
-      focus: "POC: bind opportunity, launch training plan",
-      domains: {
-        COMMITMENT: ["Confirm POC effort from both sides (person-days)"],
-        CAPABILITY: ["≥2 people in certification/training", "Create joint solution"],
-        PIPELINE: ["Must have 1 ACTIVE opportunity", "Document nextStep + followUp"],
-        RELATIONSHIP: ["Agree biweekly opportunity sync"],
-      },
-    },
-    6: {
-      focus: "Commercial negotiation: keep momentum, update opportunities on schedule",
-      domains: {
-        COMMITMENT: ["Tier A: weekly sync"],
-        CAPABILITY: ["Close demo → POC delivery loop"],
-        PIPELINE: ["Negotiate discount/terms/first-deal path"],
-        RELATIONSHIP: ["Must have touchpoint in last 14 days"],
-      },
-    },
-    7: {
-      focus: "Contract onboarding: dedicated team, cert targets, kickoff",
-      domains: {
-        COMMITMENT: ["Confirm PS + Sales handoff", "Record dedicated headcount"],
-        CAPABILITY: ["Set L2/L3 cert targets by Tier"],
-        PIPELINE: ["Document first-deal path"],
-        RELATIONSHIP: ["Log contract kickoff on timeline"],
-      },
-    },
-    8: {
-      focus: "First delivery: validate value pattern",
-      domains: {
-        COMMITMENT: ["Our Owner stays engaged"],
-        CAPABILITY: ["Apply for onsite support/subsidy as needed"],
-        PIPELINE: ["First deal WON or in delivery"],
-        RELATIONSHIP: ["Add delivery contacts to power map"],
-      },
-    },
-    9: {
-      focus: "Deep partnership: rolling opportunity pool + joint GTM",
-      domains: {
-        COMMITMENT: ["Shared pipeline targets"],
-        CAPABILITY: ["Advanced certification, independent presales"],
-        PIPELINE: ["Regular pipeline review"],
-        RELATIONSHIP: ["Quarterly business review"],
-      },
-    },
-    10: {
-      focus: "Strategic partner: exclusive / co-investment level partnership",
-      domains: {
-        COMMITMENT: ["Annual joint plan"],
-        CAPABILITY: ["Joint solution library, ≥2 independent wins"],
-        PIPELINE: ["90-day rolling opportunity pool"],
-        RELATIONSHIP: ["Consider strategic tag upgrade"],
+        COMMITMENT: ["Shared pipeline targets", "Record dedicated headcount"],
+        CAPABILITY: ["Joint solution library", "Independent presales readiness"],
+        PIPELINE: ["Rolling multi-deal opportunity pool", "Regular joint pipeline review"],
+        RELATIONSHIP: ["Joint activities / events", "Quarterly business review"],
       },
     },
   };
 
-  const card = stageCards[p.pipelineStage] ?? stageCards[2];
+  const card = stageCards[p.pipelineStage] ?? stageCards[1];
   return {
     stage: p.pipelineStage,
     name: meta?.name ?? stageNameFromLabels(ui, p.pipelineStage),
@@ -376,7 +312,7 @@ export function buildFrameworkReferenceMap(ui: LabelsBundle = { ...labelsEn, loc
       nodes: [
         { id: "tier", label: "Tier A/B/C", hint: ui.locale === "zh" ? "决定投入强度与接触频率" : "Drives investment intensity and touch frequency" },
         { id: "annual_value", label: ui.locale === "zh" ? "年度价值" : "Annual value", hint: ui.locale === "zh" ? "从他自身营收与年单量判断能为帆软带来多少" : "Estimate FanRuan value from their revenue & deals/year" },
-        { id: "stage", label: "Stage 1–10", hint: ui.locale === "zh" ? "决定本阶段必做动作" : "Drives required actions for this stage" },
+        { id: "stage", label: "Stage 1–3", hint: ui.locale === "zh" ? "决定本阶段必做动作" : "Drives required actions for this stage" },
         { id: "archetype", label: ui.taxonomyMeta.ARCHETYPE.label, hint: ui.taxonomyMeta.ARCHETYPE.hint },
         { id: "category", label: ui.taxonomyMeta.CATEGORY.label, hint: ui.taxonomyMeta.CATEGORY.hint },
         { id: "industry", label: ui.taxonomyMeta.INDUSTRY.label, hint: ui.taxonomyMeta.INDUSTRY.hint },

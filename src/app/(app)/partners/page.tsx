@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Opportunity, TodoItem, Training } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState, fmtDate } from "@/components/ui";
+import { Badge, PageHeader, ScoreBar, StageBadge, TierBadge, EmptyState, fmtDate } from "@/components/ui";
 import { computeCompleteness, staleDays, type PartnerWithRelations } from "@/lib/completeness";
 import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
@@ -131,14 +131,50 @@ export default async function PartnersPage({
         }
       />
       <div className="px-8">
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {[
+            { value: "", label: m.partners.allStages },
+            ...labels.pipelineStages.map((s) => ({ value: String(s.stage), label: s.name })),
+          ].map((tab) => {
+            const active = (sp.stage ?? "") === tab.value;
+            const hrefParams = new URLSearchParams();
+            if (sp.q) hrefParams.set("q", sp.q);
+            if (tab.value) hrefParams.set("stage", tab.value);
+            if (sp.owner) hrefParams.set("owner", sp.owner);
+            if (sp.tier) hrefParams.set("tier", sp.tier);
+            if (sp.industry) hrefParams.set("industry", sp.industry);
+            if (sp.role) hrefParams.set("role", sp.role);
+            const qs = hrefParams.toString();
+            const tone =
+              tab.value === "1"
+                ? active
+                  ? "bg-sky-700 text-white border-sky-700"
+                  : "bg-white text-sky-700 border-sky-200 hover:bg-sky-50"
+                : tab.value === "2"
+                  ? active
+                    ? "bg-amber-600 text-white border-amber-600"
+                    : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
+                  : tab.value === "3"
+                    ? active
+                      ? "bg-emerald-700 text-white border-emerald-700"
+                      : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                    : active
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300";
+            return (
+              <Link
+                key={tab.value || "all"}
+                href={qs ? `/partners?${qs}` : "/partners"}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${tone}`}
+              >
+                {tab.label}
+              </Link>
+            );
+          })}
+        </div>
         <form className="flex flex-wrap gap-2 mb-4" method="get">
+          {sp.stage ? <input type="hidden" name="stage" value={sp.stage} /> : null}
           <input name="q" defaultValue={sp.q} placeholder={m.partners.searchPlaceholder} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44" />
-          <select name="stage" defaultValue={sp.stage ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
-            <option value="">{m.partners.allStages}</option>
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((s) => (
-              <option key={s} value={s}>{s}. {stageName(labels, s)}</option>
-            ))}
-          </select>
           <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{m.partners.allTeamMembers}</option>
             {users.map((u) => (
@@ -221,8 +257,7 @@ export default async function PartnersPage({
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-xs text-slate-400">{m.partners.stageOf.replace("{n}", String(p.pipelineStage))}</div>
-                      <div className="text-sm font-medium text-sky-700">{stageName(labels, p.pipelineStage)}</div>
+                      <StageBadge stage={p.pipelineStage} name={stageName(labels, p.pipelineStage)} />
                     </div>
                   </div>
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">

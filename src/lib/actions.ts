@@ -369,7 +369,7 @@ export async function promotePartnerAction(partnerId: string) {
       status: "ACTIVE",
       promotedAt: new Date(),
       poolFlag: "ADVANCING",
-      pipelineStage: 2,
+      pipelineStage: 1,
       ownerId: undefined,
       ...(existing.status === "PROSPECT" && !existing.poolContactedAt
         ? { poolContactedAt: new Date() }
@@ -439,6 +439,7 @@ export async function deletePartnerAction(partnerId: string) {
 
 export async function setPipelineStageAction(partnerId: string, stage: number) {
   const user = await requireUser();
+  if (!Number.isInteger(stage) || stage < 1 || stage > 3) return;
   const p = await db.partner.findUniqueOrThrow({ where: { id: partnerId } });
   if (p.pipelineStage === stage) return;
   await db.partner.update({ where: { id: partnerId }, data: { pipelineStage: stage } });

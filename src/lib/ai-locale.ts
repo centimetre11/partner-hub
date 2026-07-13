@@ -129,7 +129,7 @@ export function localeOutputRules(locale: Locale, scope?: IntakeScope): string {
   if (scope && !PROFILE_HEAVY_SCOPES.has(scope)) {
     return `[User interface language: ${lang} (${locale})]
 - All user-facing text (reply, questions, clarifications, titles, details, notes, summaries) MUST be in ${lang}.
-- Keep enum codes / IDs canonical: priority HIGH/MEDIUM/LOW, role=DECISION_MAKER, status codes (PLANNED/DRAFT/…), pipelineStage as a number 1–10, traceNature/traceAction as their listed values.
+- Keep enum codes / IDs canonical: priority HIGH/MEDIUM/LOW, role=DECISION_MAKER, status codes (PLANNED/DRAFT/…), pipelineStage as a number 1–3, traceNature/traceAction as their listed values.
 - Person and company names: keep exactly as in the source (English or local language).`;
   }
 
@@ -142,7 +142,7 @@ export function localeOutputRules(locale: Locale, scope?: IntakeScope): string {
 - User-facing text MUST be in ${lang}: reply, questions, clarifications.question, clarifications.options, proposal.summary, todos (title/detail), contact approach/notes/reason, solution descriptions (name/targetCustomer/painPoint/fanruanOffer/partnerOffer/pricingModel/notes/reason), fieldUpdates.reason.
 - Free-text profile fields (${freeTextExamples}, etc.) → write newValue in ${lang}.
 - fieldUpdates.label → use the ${lang} display name from the field list (e.g. valuePartnerOffer → "${fieldLabels.valuePartnerOffer}").
-- JSON property names and stored enum codes stay English: field keys (country, category, …), category=POWER_BI, industries JSON array of BANKING/GOVERNMENT codes, role=DECISION_MAKER, pipelineStage as number 1–10, tier as A/B/C only (never numbers, "Tier 1", P0/P1, or fitScore), training/solution status codes (PLANNED/DRAFT/…).
+- JSON property names and stored enum codes stay English: field keys (country, category, …), category=POWER_BI, industries JSON array of BANKING/GOVERNMENT codes, role=DECISION_MAKER, pipelineStage as number 1–3, tier as A/B/C only (never numbers, "Tier 1", P0/P1, or fitScore), training/solution status codes (PLANNED/DRAFT/…).
 - Person names and company names: keep as found in source material (may be English or local language).`;
 }
 
@@ -410,7 +410,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
 
   switch (scope) {
     case "new_partner":
-      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industries values: ${ind}; pipelineStage 1–10: ${st}); add contacts if people appear in text/research. Do NOT extract opportunities/deals — leave opportunities as empty array. Do NOT extract follow-up todos/next steps from meeting notes — leave todos as empty array. Leave trainings/solutions as empty arrays.`;
+      return `Set partnerName to the company name; fill other profile fields in fields (field names only: ${fl}; category values: ${cat}; industries values: ${ind}; pipelineStage 1–3: ${st}); add contacts if people appear in text/research. Do NOT extract opportunities/deals — leave opportunities as empty array. Do NOT extract follow-up todos/next steps from meeting notes — leave todos as empty array. Leave trainings/solutions as empty arrays.`;
     case "powermap":
       return "Fill contacts only (action=add or update with id). Leave fields/opportunities/todos/trainings/solutions as empty arrays.";
     case "opportunity":
@@ -664,7 +664,7 @@ ${localeOutputRules(locale)}
 
 Rules:
 1. Propose only changes supported by the text; attach reason (quote key phrase). Do not invent.
-2. fieldUpdates only for: ${fl}. newValue always string; pipelineStage 1-10 (${st}); tier must be A, B, or C only.
+2. fieldUpdates only for: ${fl}. newValue always string; pipelineStage 1-3 (${st}); tier must be A, B, or C only.
 3. People in text (power map): action=add if new; action=update with id if existing with new info (title, dept, attitude, reporting, contact). Fields:
    - role: APPROVER/DECISION_MAKER/SUPPORTER/EVALUATOR/INFLUENCER
    - attitude: 3=champion/2=supportive exclusive/1=supportive non-exclusive/0=neutral/-1=opposed

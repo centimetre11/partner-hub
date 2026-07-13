@@ -124,8 +124,8 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
     .filter((x) => x.days > 30)
     .sort((a, b) => b.days - a.days);
 
-  const pocPlusCount = activePartners.filter((p) => p.pipelineStage >= 5).length;
-  const signedPlusCount = activePartners.filter((p) => p.pipelineStage >= 7).length;
+  const pocPlusCount = activePartners.filter((p) => p.pipelineStage >= 2).length;
+  const signedPlusCount = activePartners.filter((p) => p.pipelineStage >= 3).length;
 
   return (
     <>

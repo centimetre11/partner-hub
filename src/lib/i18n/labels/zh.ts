@@ -3,16 +3,9 @@ import type { LabelsBundle } from "./types";
 export const labelsZh: LabelsBundle = {
   locale: "zh",
   pipelineStages: [
-    { stage: 1, name: "线索发现", desc: "知道这家公司，初步评估" },
-    { stage: 2, name: "首次接触", desc: "LinkedIn/展会/引荐，建立联系" },
-    { stage: 3, name: "需求诊断", desc: "了解伙伴痛点、能力、意愿" },
-    { stage: 4, name: "方案呈现", desc: "技术Demo+商务方案展示" },
-    { stage: 5, name: "POC/试用", desc: "2个月免费试用或POC项目" },
-    { stage: 6, name: "商务谈判", desc: "折扣、条款、合同谈判" },
-    { stage: 7, name: "签约Onboarding", desc: "签署合同+认证培训" },
-    { stage: 8, name: "首单交付", desc: "第一个联合项目" },
-    { stage: 9, name: "深度绑定", desc: "持续合作+升级" },
-    { stage: 10, name: "战略伙伴", desc: "独家代理/联合投资" },
+    { stage: 1, name: "初步接触", desc: "互相讲方案、摸底评估" },
+    { stage: 2, name: "实质推进", desc: "有真实机会在跑" },
+    { stage: 3, name: "系统合作", desc: "批量过机会、联合办活动等系统级协作" },
   ],
   categoryLabels: {
     PURE_DATA: "纯数据咨询",

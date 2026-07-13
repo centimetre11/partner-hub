@@ -57,21 +57,31 @@ export function MapNodeQuickEdit({
         {node.id === "stage" ? (
           <>
             <p className="text-xs text-slate-500 mb-3">Select pipeline stage (click to save)</p>
-            <div className="flex flex-wrap gap-1.5 max-h-52 overflow-y-auto">
-              {pipelineStages.map((s) => (
-                <form key={s.stage} action={setPipelineStageAction.bind(null, partner.id, s.stage)}>
-                  <button
-                    type="submit"
-                    className={`rounded-full px-2.5 py-1 text-xs border ${
-                      partner.pipelineStage === s.stage
-                        ? "bg-slate-900 text-white border-slate-900"
-                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-                    }`}
-                  >
-                    {s.stage}. {s.name}
-                  </button>
-                </form>
-              ))}
+            <div className="grid grid-cols-1 gap-2">
+              {pipelineStages.map((s) => {
+                const current = partner.pipelineStage === s.stage;
+                const tone =
+                  s.stage === 1
+                    ? current
+                      ? "bg-sky-700 text-white border-sky-700"
+                      : "bg-white text-sky-700 border-sky-200 hover:bg-sky-50"
+                    : s.stage === 2
+                      ? current
+                        ? "bg-amber-600 text-white border-amber-600"
+                        : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
+                      : current
+                        ? "bg-emerald-700 text-white border-emerald-700"
+                        : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50";
+                return (
+                  <form key={s.stage} action={setPipelineStageAction.bind(null, partner.id, s.stage)}>
+                    <button type="submit" className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm ${tone}`}>
+                      <span className="font-medium">
+                        {s.stage}. {s.name}
+                      </span>
+                    </button>
+                  </form>
+                );
+              })}
             </div>
             <div className="flex justify-end pt-4">
               <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600">

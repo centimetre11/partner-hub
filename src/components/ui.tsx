@@ -41,6 +41,18 @@ export function tierSelectValue(tier?: string | null): PartnerTier | "" {
   return normalizePartnerTier(tier) ?? "";
 }
 
+/** Pipeline stage 1–3 visual tone (aligned with detail stepper). */
+export function stageTone(stage: number): "blue" | "amber" | "green" | "zinc" {
+  if (stage === 1) return "blue";
+  if (stage === 2) return "amber";
+  if (stage === 3) return "green";
+  return "zinc";
+}
+
+export function StageBadge({ stage, name }: { stage: number; name: string }) {
+  return <Badge tone={stageTone(stage)}>{name}</Badge>;
+}
+
 export function ScoreBar({ score }: { score: number }) {
   const color = score >= 70 ? "bg-emerald-500" : score >= 40 ? "bg-amber-500" : "bg-red-500";
   return (

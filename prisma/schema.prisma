@@ -97,7 +97,7 @@ model Partner {
   crmCustomerId    String? // 帆软 CRM 客户 ID
   wecomChatBindCode          String?
   wecomChatBindCodeExpiresAt DateTime?
-  pipelineStage    Int      @default(1) // 1-10 十阶段
+  pipelineStage    Int      @default(1) // 1-3 三类：初步接触 / 实质推进 / 系统合作
   ownerId          String?
   owner            User?    @relation(fields: [ownerId], references: [id])
   salesUserId      String?

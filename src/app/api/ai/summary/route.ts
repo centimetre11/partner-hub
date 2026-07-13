@@ -31,7 +31,7 @@ async function generateSummary(partnerId: string, uid: string, emit?: Parameters
       },
       {
         role: "user",
-        content: `Partner: ${partner.name} (Pipeline stage ${partner.pipelineStage}/10)\nOpportunities: ${opps || "none"}\nOpen todos: ${partner.todos.length}\n\n[Activity timeline (newest first)]\n${timeline || "(no activity)"}`,
+        content: `Partner: ${partner.name} (Pipeline stage ${partner.pipelineStage}/3)\nOpportunities: ${opps || "none"}\nOpen todos: ${partner.todos.length}\n\n[Activity timeline (newest first)]\n${timeline || "(no activity)"}`,
       },
     ],
     { feature: "Partner Activity Summary", userId: uid, emit }

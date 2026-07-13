@@ -348,7 +348,7 @@ const agentTemplates = [
 1. Use search_partners to find status=ACTIVE partners with no activity for 30+ days (staleDaysOver=30).
 2. If none, output "All healthy" and stop.
 3. For each stale partner, use get_partner and suggest one concrete re-engagement action (who to contact, hook, talking points) based on Tier, pipeline stage, and playbook.
-4. For Tier A or pipeline stage >= 4, use create_todo with a high-priority todo (title includes partner name and action).
+4. For Tier A or pipeline stage >= 2, use create_todo with a high-priority todo (title includes partner name and action).
 5. If get_partner shows a WeCom group chatId, use push_wecom to send a short revival summary to that group; if not bound, skip push and note in the brief.
 6. Output a brief: stale list by risk + revival suggestions + todos created + WeCom push status.`,
     skills: ["search_partners", "get_partner", "create_todo", "list_todos", "list_wecom_chats", "push_wecom"],

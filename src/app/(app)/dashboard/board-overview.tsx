@@ -40,15 +40,14 @@ export async function BoardOverview() {
 
   const funnel = [
     { label: b.funnelActive, value: active.length },
-    { label: b.funnelNeedsAssessment, value: active.filter((p) => p.pipelineStage >= 3).length },
-    { label: b.funnelPoc, value: active.filter((p) => p.pipelineStage >= 5).length },
-    { label: b.funnelSigned, value: active.filter((p) => p.pipelineStage >= 7).length },
-    { label: b.funnelFirstDelivery, value: active.filter((p) => p.pipelineStage >= 8).length },
+    { label: b.funnelActiveProgress, value: active.filter((p) => p.pipelineStage >= 2).length },
+    { label: b.funnelSystem, value: active.filter((p) => p.pipelineStage >= 3).length },
   ];
 
   const stageDist = labels.pipelineStages.map((s) => ({
     label: `${s.stage}. ${s.name}`,
     value: active.filter((p) => p.pipelineStage === s.stage).length,
+    tone: s.stage === 1 ? "bg-sky-500" : s.stage === 2 ? "bg-amber-500" : "bg-emerald-500",
   }));
 
   const tierDist = ["A", "B", "C"].map((t) => ({
@@ -80,7 +79,7 @@ export async function BoardOverview() {
   const maxStage = Math.max(...stageDist.map((s) => s.value), 1);
   const maxCat = Math.max(...catDist.map((s) => s.value), 1);
   const maxCountry = Math.max(...countries.map((c) => c[1]), 1);
-  const pocPlus = active.filter((p) => p.pipelineStage >= 5).length;
+  const pocPlus = active.filter((p) => p.pipelineStage >= 2).length;
 
   return (
     <div className="px-8 space-y-5">
@@ -118,7 +117,7 @@ export async function BoardOverview() {
                 label={f.label}
                 value={f.value}
                 max={funnel[0].value || 1}
-                tone={["bg-slate-400", "bg-slate-500", "bg-slate-900", "bg-purple-600", "bg-purple-700"][i]}
+                tone={["bg-slate-400", "bg-amber-500", "bg-emerald-600"][i]}
               />
             ))}
           </div>
@@ -127,7 +126,7 @@ export async function BoardOverview() {
         <Card title={b.pipelineDistTitle}>
           <div className="space-y-2">
             {stageDist.map((s) => (
-              <Bar key={s.label} label={s.label} value={s.value} max={maxStage} />
+              <Bar key={s.label} label={s.label} value={s.value} max={maxStage} tone={s.tone} />
             ))}
           </div>
         </Card>

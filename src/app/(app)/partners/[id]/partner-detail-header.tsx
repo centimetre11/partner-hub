@@ -138,23 +138,43 @@ export async function PartnerDetailHeader({ id }: { id: string }) {
         </div>
       </div>
 
-      <div className="mt-5 flex items-center gap-1 overflow-x-auto pb-1">
+      <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2">
         {labels.pipelineStages.map((s) => {
           const current = p.pipelineStage === s.stage;
           const passed = p.pipelineStage > s.stage;
+          const tone =
+            s.stage === 1
+              ? current
+                ? "bg-sky-700 text-white border-sky-700"
+                : passed
+                  ? "bg-sky-50 text-sky-700 border-sky-200"
+                  : "bg-white text-slate-400 border-slate-200 hover:border-sky-300 hover:text-sky-600"
+              : s.stage === 2
+                ? current
+                  ? "bg-amber-600 text-white border-amber-600"
+                  : passed
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-white text-slate-400 border-slate-200 hover:border-amber-300 hover:text-amber-600"
+                : current
+                  ? "bg-emerald-700 text-white border-emerald-700"
+                  : passed
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-white text-slate-400 border-slate-200 hover:border-emerald-300 hover:text-emerald-600";
           return (
-            <form key={s.stage} action={setPipelineStageAction.bind(null, p.id, s.stage)} className="shrink-0">
+            <form key={s.stage} action={setPipelineStageAction.bind(null, p.id, s.stage)} className="min-w-0">
               <button
                 title={s.desc}
-                className={`rounded-full px-3 py-1.5 text-xs whitespace-nowrap border ${
-                  current
-                    ? "bg-slate-900 text-white border-slate-900 font-medium"
-                    : passed
-                      ? "bg-slate-50 text-sky-600 border-slate-200"
-                      : "bg-white text-slate-400 border-slate-200 hover:border-slate-300 hover:text-sky-600"
+                className={`w-full rounded-lg border px-3 py-2.5 text-left transition-colors ${tone} ${
+                  current ? "ring-2 ring-offset-1 ring-slate-900/10 font-semibold" : ""
                 }`}
               >
-                {s.stage}. {s.name}
+                <div className="text-[11px] opacity-80">
+                  {s.stage}/3
+                </div>
+                <div className="text-sm font-medium mt-0.5">{s.name}</div>
+                <div className={`text-[11px] mt-0.5 line-clamp-1 ${current ? "opacity-90" : "opacity-70"}`}>
+                  {s.desc}
+                </div>
               </button>
             </form>
           );

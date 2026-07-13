@@ -283,12 +283,12 @@ const updatePartner: Skill = {
     type: "function",
     function: {
       name: "update_partner",
-      description: `Update partner profile fields. Available fields: ${Object.entries(PARTNER_FIELD_LABELS).map(([f, l]) => `${f}(${l})`).join(", ")}. pipelineStage is a number 1-10.`,
+      description: `Update partner profile fields. Available fields: ${Object.entries(PARTNER_FIELD_LABELS).map(([f, l]) => `${f}(${l})`).join(", ")}. pipelineStage is a number 1-3.`,
       parameters: {
         type: "object",
         properties: {
           name: { type: "string", description: "Company name" },
-          fields: { type: "object", description: 'Field key-value pairs, e.g. {"pipelineStage": 5, "tier": "A"}' },
+          fields: { type: "object", description: 'Field key-value pairs, e.g. {"pipelineStage": 2, "tier": "A"}' },
         },
         required: ["name", "fields"],
       },

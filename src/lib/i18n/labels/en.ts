@@ -3,16 +3,9 @@ import type { LabelsBundle } from "./types";
 export const labelsEn: LabelsBundle = {
   locale: "en",
   pipelineStages: [
-    { stage: 1, name: "Lead Discovery", desc: "Aware of the company, initial assessment" },
-    { stage: 2, name: "First Contact", desc: "LinkedIn / events / referrals, establish contact" },
-    { stage: 3, name: "Needs Diagnosis", desc: "Understand partner pain points, capabilities, intent" },
-    { stage: 4, name: "Solution Presentation", desc: "Technical demo + commercial proposal" },
-    { stage: 5, name: "POC / Trial", desc: "2-month free trial or POC project" },
-    { stage: 6, name: "Commercial Negotiation", desc: "Discount, terms, contract negotiation" },
-    { stage: 7, name: "Contract & Onboarding", desc: "Sign contract + certification training" },
-    { stage: 8, name: "First Delivery", desc: "First joint project" },
-    { stage: 9, name: "Deep Engagement", desc: "Ongoing collaboration + upgrade" },
-    { stage: 10, name: "Strategic Partner", desc: "Exclusive agency / joint investment" },
+    { stage: 1, name: "Initial Contact", desc: "Exchange proposals, screen fit and mutual interest" },
+    { stage: 2, name: "Active Progress", desc: "Real opportunities are in motion" },
+    { stage: 3, name: "System Partnership", desc: "Batch pipeline, joint activities, system-level collaboration" },
   ],
   categoryLabels: {
     PURE_DATA: "Pure Data Consulting",

@@ -70,7 +70,8 @@ export function partnerFieldValueFromText(field: string, raw: string): unknown |
   if (!value && field !== "tier") return value;
   if (field === "pipelineStage") {
     const n = parseInt(value, 10);
-    return Number.isNaN(n) ? undefined : n;
+    if (Number.isNaN(n) || n < 1 || n > 3) return undefined;
+    return n;
   }
   if (field === "tier") {
     return normalizePartnerTier(value) ?? undefined;

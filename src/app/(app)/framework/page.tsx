@@ -74,18 +74,32 @@ export default async function FrameworkPage() {
         </Card>
 
         <Card title={m.framework.pipelineStages}>
-          <div className="space-y-2">
-            {labels.pipelineStages.map((s) => (
-              <div key={s.stage} className="flex gap-3 text-sm py-2 border-b border-slate-50 last:border-0">
-                <span className="shrink-0 w-8 h-8 rounded-full bg-slate-50 text-sky-700 flex items-center justify-center text-xs font-bold">
-                  {s.stage}
-                </span>
-                <div>
-                  <div className="font-medium text-slate-800">{s.name}</div>
-                  <div className="text-xs text-slate-500 mt-0.5">{s.desc}</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {labels.pipelineStages.map((s) => {
+              const tone =
+                s.stage === 1
+                  ? "border-sky-200 bg-sky-50/60"
+                  : s.stage === 2
+                    ? "border-amber-200 bg-amber-50/60"
+                    : "border-emerald-200 bg-emerald-50/60";
+              const badge =
+                s.stage === 1
+                  ? "bg-sky-700 text-white"
+                  : s.stage === 2
+                    ? "bg-amber-600 text-white"
+                    : "bg-emerald-700 text-white";
+              return (
+                <div key={s.stage} className={`rounded-lg border px-4 py-3 ${tone}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${badge}`}>
+                      {s.stage}
+                    </span>
+                    <div className="font-medium text-slate-800">{s.name}</div>
+                  </div>
+                  <div className="text-xs text-slate-600 mt-2">{s.desc}</div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
 

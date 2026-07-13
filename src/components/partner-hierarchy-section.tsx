@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Card, EmptyState, fmtDate } from "@/components/ui";
+import { Badge, Card, EmptyState, fmtDate, StageBadge } from "@/components/ui";
 import type { Messages } from "@/lib/i18n/messages/en";
 import { stageName, type ServerI18n } from "@/lib/server-i18n";
 import { SubPartnerActions } from "@/components/sub-partner-actions";
@@ -103,8 +103,8 @@ export function PartnerHierarchySection({
                       </Link>
                     </td>
                     <td className="py-2.5 text-slate-600">{c.tier ?? "—"}</td>
-                    <td className="py-2.5 text-slate-600">
-                      {c.pipelineStage}. {stageName(labels, c.pipelineStage)}
+                    <td className="py-2.5">
+                      <StageBadge stage={c.pipelineStage} name={stageName(labels, c.pipelineStage)} />
                     </td>
                     <td className="py-2.5 text-slate-600">
                       {c.salesUser?.name ?? c.owner?.name ?? "—"}

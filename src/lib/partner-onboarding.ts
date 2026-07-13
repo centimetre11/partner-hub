@@ -2,5 +2,5 @@
 export const ACTIVE_PARTNER_DEFAULTS = {
   status: "ACTIVE",
   poolFlag: "ADVANCING",
-  pipelineStage: 2,
+  pipelineStage: 1,
 } as const;
