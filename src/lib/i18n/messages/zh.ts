@@ -372,7 +372,7 @@ export const messagesZh: Messages = {
   },
   partners: {
     title: "正式伙伴",
-    desc: "{count} 家正式伙伴 · 框架驱动行动，10 阶段管线跟踪",
+    desc: "{count} 家正式伙伴 · 三类管线看板，拖拽即可改阶段",
     addPartner: "添加伙伴",
     profileCompleteness: "档案完整度",
     salesOwner: "销售",
@@ -389,6 +389,8 @@ export const messagesZh: Messages = {
     goToPool: "前往候选池 →",
     stalled: "停滞 {days} 天",
     stageOf: "阶段 {n}/3",
+    kanbanEmptyColumn: "暂无伙伴",
+    kanbanDragHint: "拖拽卡片到其他列可更改阶段",
     contactsCount: "联系人 {n}",
     opportunitiesCount: "商机 {n}",
     activitiesCount: "活动 {n}",

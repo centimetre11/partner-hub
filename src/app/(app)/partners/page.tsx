@@ -1,19 +1,15 @@
-import { NavLink } from "@/components/nav-link";
 import Link from "next/link";
 import type { Opportunity, TodoItem, Training } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, ScoreBar, StageBadge, TierBadge, EmptyState, fmtDate } from "@/components/ui";
+import { PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { computeCompleteness, staleDays, type PartnerWithRelations } from "@/lib/completeness";
-import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
+import { getTaxonomyOptions } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
 import { CreateFromCrmButton } from "@/components/create-from-crm-button";
-import { getServerI18n, stageName } from "@/lib/server-i18n";
+import { getServerI18n } from "@/lib/server-i18n";
 import { isTodoOverdue } from "@/lib/todo-dates";
-
-function truncate(text: string, max = 22) {
-  return text.length > max ? `${text.slice(0, max)}…` : text;
-}
+import { PartnerKanbanBoard, type KanbanPartnerCard } from "@/components/partner-kanban";
 
 function lastActivityAt(p: { events: { createdAt: Date }[]; updatedAt: Date }) {
   return p.events.length ? new Date(p.events[0].createdAt) : new Date(p.updatedAt);
@@ -51,6 +47,12 @@ export default async function PartnersPage({
   await requireUser();
   const [{ labels, messages: m, bcp47 }, sp] = await Promise.all([getServerI18n(), searchParams]);
 
+  const filterStageRaw = sp.stage ? parseInt(sp.stage, 10) : NaN;
+  const filterStage =
+    Number.isInteger(filterStageRaw) && filterStageRaw >= 1 && filterStageRaw <= 3
+      ? filterStageRaw
+      : null;
+
   const roleFilter =
     sp.role === "distributor"
       ? { isDistributor: true }
@@ -58,8 +60,7 @@ export default async function PartnersPage({
         ? { parentId: { not: null } }
         : {};
 
-  const [labelMaps, industryOptions, categoryOptions, users, distributorOptions, partners] = await Promise.all([
-    loadTaxonomyLabelMaps(),
+  const [industryOptions, categoryOptions, users, distributorOptions, partners] = await Promise.all([
     getTaxonomyOptions("INDUSTRY"),
     getTaxonomyOptions("CATEGORY"),
     db.user.findMany({ select: { id: true, name: true } }),
@@ -72,7 +73,7 @@ export default async function PartnersPage({
       where: {
         status: "ACTIVE",
         ...(sp.q ? { name: { contains: sp.q } } : {}),
-        ...(sp.stage ? { pipelineStage: parseInt(sp.stage, 10) } : {}),
+        ...(filterStage ? { pipelineStage: filterStage } : {}),
         ...(sp.owner
           ? {
               OR: [
@@ -110,9 +111,40 @@ export default async function PartnersPage({
         parent: { select: { id: true, name: true } },
         _count: { select: { contacts: true, opportunities: true, events: true, trainings: true, children: true } },
       },
-      orderBy: { pipelineStage: "desc" },
+      orderBy: [{ pipelineStage: "asc" }, { name: "asc" }],
     }),
   ]);
+
+  const kanbanCards: KanbanPartnerCard[] = partners.map((p) => {
+    const c = computeCompleteness(
+      {
+        ...p,
+        opportunities: Array.from({ length: p._count.opportunities }, () => ({ id: "_" })) as Opportunity[],
+        trainings: Array.from({ length: p._count.trainings }, () => ({ id: "_" })) as Training[],
+      } as unknown as PartnerWithRelations,
+      labels,
+    );
+    const stale = staleDays(p);
+    const activityAt = lastActivityAt(p);
+    const nextTodo = pickNextTodo(p.todos);
+    const activeOpp = p.opportunities[0] ?? null;
+    return {
+      id: p.id,
+      name: p.name,
+      pipelineStage: p.pipelineStage,
+      tier: p.tier,
+      staleDays: stale,
+      activityLabel:
+        stale === 0
+          ? `${fmtDate(activityAt, bcp47)} · ${m.partners.activityToday}`
+          : `${fmtDate(activityAt, bcp47)} · ${m.partners.activityDaysAgo.replace("{days}", String(stale))}`,
+      activityTone: stale > 30 ? "red" : stale > 14 ? "amber" : "slate",
+      openTodoCount: p.todos.length,
+      nextTodoTitle: nextTodo?.title ?? null,
+      activeOppName: activeOpp?.name ?? null,
+      completeness: c.score,
+    };
+  });
 
   return (
     <div className="pb-16">
@@ -131,179 +163,89 @@ export default async function PartnersPage({
         }
       />
       <div className="px-8">
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {[
-            { value: "", label: m.partners.allStages },
-            ...labels.pipelineStages.map((s) => ({ value: String(s.stage), label: s.name })),
-          ].map((tab) => {
-            const active = (sp.stage ?? "") === tab.value;
-            const hrefParams = new URLSearchParams();
-            if (sp.q) hrefParams.set("q", sp.q);
-            if (tab.value) hrefParams.set("stage", tab.value);
-            if (sp.owner) hrefParams.set("owner", sp.owner);
-            if (sp.tier) hrefParams.set("tier", sp.tier);
-            if (sp.industry) hrefParams.set("industry", sp.industry);
-            if (sp.role) hrefParams.set("role", sp.role);
-            const qs = hrefParams.toString();
-            const tone =
-              tab.value === "1"
-                ? active
-                  ? "bg-sky-700 text-white border-sky-700"
-                  : "bg-white text-sky-700 border-sky-200 hover:bg-sky-50"
-                : tab.value === "2"
-                  ? active
-                    ? "bg-amber-600 text-white border-amber-600"
-                    : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
-                  : tab.value === "3"
-                    ? active
-                      ? "bg-emerald-700 text-white border-emerald-700"
-                      : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                    : active
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-white text-slate-600 border-slate-200 hover:border-slate-300";
-            return (
-              <Link
-                key={tab.value || "all"}
-                href={qs ? `/partners?${qs}` : "/partners"}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${tone}`}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
-        </div>
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          {sp.stage ? <input type="hidden" name="stage" value={sp.stage} /> : null}
-          <input name="q" defaultValue={sp.q} placeholder={m.partners.searchPlaceholder} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44" />
-          <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          {filterStage ? <input type="hidden" name="stage" value={filterStage} /> : null}
+          <input
+            name="q"
+            defaultValue={sp.q}
+            placeholder={m.partners.searchPlaceholder}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44"
+          />
+          <select
+            name="owner"
+            defaultValue={sp.owner ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{m.partners.allTeamMembers}</option>
             {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
             ))}
           </select>
-          <select name="tier" defaultValue={sp.tier ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="tier"
+            defaultValue={sp.tier ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{m.partners.allTiers}</option>
             <option value="A">{m.partners.tierA}</option>
             <option value="B">{m.partners.tierB}</option>
             <option value="C">{m.partners.tierC}</option>
           </select>
-          <select name="industry" defaultValue={sp.industry ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="industry"
+            defaultValue={sp.industry ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{m.partners.allIndustries}</option>
             {industryOptions.map((o) => (
-              <option key={o.code} value={o.code}>{o.label}</option>
+              <option key={o.code} value={o.code}>
+                {o.label}
+              </option>
             ))}
           </select>
-          <select name="role" defaultValue={sp.role ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="role"
+            defaultValue={sp.role ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{m.partners.roleAll}</option>
             <option value="distributor">{m.partners.roleDistributor}</option>
             <option value="sub">{m.partners.roleSub}</option>
           </select>
-          <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">{m.common.filter}</button>
+          <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">
+            {m.common.filter}
+          </button>
         </form>
 
         {partners.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm">
             <EmptyState text={m.partners.empty} />
             <div className="text-center pb-8 -mt-4">
-              <Link href="/pool" className="text-sm text-sky-600 hover:underline">{m.partners.goToPool}</Link>
+              <Link href="/pool" className="text-sm text-sky-600 hover:underline">
+                {m.partners.goToPool}
+              </Link>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {partners.map((p) => {
-              const c = computeCompleteness(
-                {
-                  ...p,
-                  opportunities: Array.from({ length: p._count.opportunities }, () => ({ id: "_" })) as Opportunity[],
-                  trainings: Array.from({ length: p._count.trainings }, () => ({ id: "_" })) as Training[],
-                } as unknown as PartnerWithRelations,
-                labels,
-              );
-              const stale = staleDays(p);
-              const activityAt = lastActivityAt(p);
-              const openTodos = p.todos;
-              const nextTodo = pickNextTodo(p.todos);
-              const activeOpp = p.opportunities[0] ?? null;
-              const activityTone = stale > 30 ? "text-red-600" : stale > 14 ? "text-amber-600" : "text-slate-700";
-              return (
-                <NavLink
-                  key={p.id}
-                  href={`/partners/${p.id}`}
-                  className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300 block"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-slate-900">{p.name}</span>
-                        <TierBadge tier={p.tier} />
-                        <Badge tone="zinc">{labelFromMap(labelMaps.CATEGORY, p.category)}</Badge>
-                        {p.isDistributor && (
-                          <Badge tone="purple">
-                            {m.partners.badgeDistributor.replace("{n}", String(p._count.children))}
-                          </Badge>
-                        )}
-                        {p.parent && (
-                          <Badge tone="zinc">
-                            {m.partners.badgeSub.replace("{name}", p.parent.name)}
-                          </Badge>
-                        )}
-                        {parseIndustries(p).map((code) => (
-                          <Badge key={code} tone="blue">{labelFromMap(labelMaps.INDUSTRY, code)}</Badge>
-                        ))}
-                        {stale > 30 && <Badge tone="red">{m.partners.stalled.replace("{days}", String(stale))}</Badge>}
-                      </div>
-                      <div className="text-xs text-slate-400 mt-1">
-                        {p.city ?? p.country ?? "—"} · {m.partners.salesOwner}: {p.salesUser?.name ?? p.owner?.name ?? "—"} · {m.partners.presalesOwner}: {p.presalesUser?.name ?? "—"}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <StageBadge stage={p.pipelineStage} name={stageName(labels, p.pipelineStage)} />
-                    </div>
-                  </div>
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 min-w-0">
-                      <div className="text-[11px] text-slate-400">{m.partners.lastActivity}</div>
-                      <div className={`text-xs font-medium mt-0.5 truncate ${activityTone}`}>
-                        {fmtDate(activityAt, bcp47)}
-                        {" · "}
-                        {stale === 0 ? m.partners.activityToday : m.partners.activityDaysAgo.replace("{days}", String(stale))}
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 min-w-0">
-                      <div className="text-[11px] text-slate-400">{m.partners.openTodos}</div>
-                      {openTodos.length > 0 ? (
-                        <div className="text-xs text-slate-700 mt-0.5 truncate" title={nextTodo?.title}>
-                          {m.partners.openTodosCount.replace("{n}", String(openTodos.length))}
-                          {nextTodo ? ` · ${truncate(nextTodo.title)}` : ""}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-slate-400 mt-0.5">{m.partners.noOpenTodos}</div>
-                      )}
-                    </div>
-                    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2 min-w-0">
-                      <div className="text-[11px] text-slate-400">{m.partners.activeDeal}</div>
-                      {activeOpp ? (
-                        <div className="text-xs text-slate-700 mt-0.5 truncate" title={activeOpp.name}>
-                          {truncate(activeOpp.name)}
-                          {activeOpp.amount ? ` · ${activeOpp.amount}` : ""}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-slate-400 mt-0.5">{m.partners.noActiveDeal}</div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-                    <span>
-                      {m.partners.contactsCount.replace("{n}", String(p._count.contacts))} · {m.partners.opportunitiesCount.replace("{n}", String(p._count.opportunities))} · {m.partners.activitiesCount.replace("{n}", String(p._count.events))}
-                    </span>
-                    <div className="w-32">
-                      <ScoreBar score={c.score} />
-                    </div>
-                  </div>
-                </NavLink>
-              );
-            })}
-          </div>
+          <PartnerKanbanBoard
+            initialCards={kanbanCards}
+            stages={labels.pipelineStages.map((s) => ({
+              stage: s.stage,
+              name: s.name,
+              desc: s.desc,
+            }))}
+            filterStage={filterStage}
+            copy={{
+              emptyColumn: m.partners.kanbanEmptyColumn,
+              dragHint: m.partners.kanbanDragHint,
+              stalled: m.partners.stalled,
+              openTodosCount: m.partners.openTodosCount,
+              noOpenTodos: m.partners.noOpenTodos,
+              noActiveDeal: m.partners.noActiveDeal,
+            }}
+          />
         )}
       </div>
     </div>

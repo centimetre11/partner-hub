@@ -57,7 +57,7 @@ export function MapNodeQuickEdit({
         {node.id === "stage" ? (
           <>
             <p className="text-xs text-slate-500 mb-3">Select pipeline stage (click to save)</p>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {pipelineStages.map((s) => {
                 const current = partner.pipelineStage === s.stage;
                 const tone =
@@ -74,10 +74,11 @@ export function MapNodeQuickEdit({
                         : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50";
                 return (
                   <form key={s.stage} action={setPipelineStageAction.bind(null, partner.id, s.stage)}>
-                    <button type="submit" className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm ${tone}`}>
-                      <span className="font-medium">
-                        {s.stage}. {s.name}
-                      </span>
+                    <button
+                      type="submit"
+                      className={`rounded-full px-2.5 py-1 text-xs border ${tone}`}
+                    >
+                      {s.stage}. {s.name}
                     </button>
                   </form>
                 );

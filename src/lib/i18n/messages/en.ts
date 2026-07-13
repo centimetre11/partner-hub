@@ -372,7 +372,7 @@ export const messagesEn = {
   },
   partners: {
     title: "Active Partners",
-    desc: "{count} active partners · Framework-driven actions, 10-stage pipeline tracking",
+    desc: "{count} active partners · Three-stage board — drag cards to change stage",
     addPartner: "Add partner",
     profileCompleteness: "Profile completeness",
     salesOwner: "Sales",
@@ -389,6 +389,8 @@ export const messagesEn = {
     goToPool: "Go to prospect pool →",
     stalled: "Stalled {days} days",
     stageOf: "Stage {n}/3",
+    kanbanEmptyColumn: "No partners",
+    kanbanDragHint: "Drag a card to another column to change stage",
     contactsCount: "Contacts {n}",
     opportunitiesCount: "Opportunities {n}",
     activitiesCount: "Activities {n}",
