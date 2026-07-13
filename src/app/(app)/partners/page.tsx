@@ -111,7 +111,7 @@ export default async function PartnersPage({
         parent: { select: { id: true, name: true } },
         _count: { select: { contacts: true, opportunities: true, events: true, trainings: true, children: true } },
       },
-      orderBy: [{ pipelineStage: "asc" }, { name: "asc" }],
+      orderBy: [{ pipelineStage: "desc" }, { name: "asc" }],
     }),
   ]);
 

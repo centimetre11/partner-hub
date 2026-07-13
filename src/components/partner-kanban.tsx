@@ -18,6 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Badge, ScoreBar, TierBadge } from "@/components/ui";
 import { setPipelineStageAction } from "@/lib/actions";
+import { normalizePartnerTier } from "@/lib/tier";
 
 export type KanbanPartnerCard = {
   id: string;
@@ -88,6 +89,23 @@ function headerBadge(stage: number) {
 
 function truncate(text: string, max = 28) {
   return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+/** A → B → C → unset */
+function tierRank(tier: string | null): number {
+  const t = normalizePartnerTier(tier);
+  if (t === "A") return 0;
+  if (t === "B") return 1;
+  if (t === "C") return 2;
+  return 3;
+}
+
+function sortCardsInColumn(list: KanbanPartnerCard[]) {
+  return [...list].sort((a, b) => {
+    const tr = tierRank(a.tier) - tierRank(b.tier);
+    if (tr !== 0) return tr;
+    return a.name.localeCompare(b.name, "zh");
+  });
 }
 
 function CardBody({ card, copy }: { card: KanbanPartnerCard; copy: Copy }) {
@@ -298,10 +316,12 @@ export function PartnerKanbanBoard({
   );
 
   const visibleStages = useMemo(() => {
-    if (filterStage && filterStage >= 1 && filterStage <= 3) {
-      return stages.filter((s) => s.stage === filterStage);
-    }
-    return stages;
+    const list =
+      filterStage && filterStage >= 1 && filterStage <= 3
+        ? stages.filter((s) => s.stage === filterStage)
+        : [...stages];
+    // 3 → 2 → 1
+    return list.sort((a, b) => b.stage - a.stage);
   }, [stages, filterStage]);
 
   const byStage = useMemo(() => {
@@ -310,6 +330,9 @@ export function PartnerKanbanBoard({
     for (const c of cards) {
       const list = map.get(c.pipelineStage);
       if (list) list.push(c);
+    }
+    for (const [stage, list] of map) {
+      map.set(stage, sortCardsInColumn(list));
     }
     return map;
   }, [cards, visibleStages]);
