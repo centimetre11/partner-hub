@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.8";
+  const SCRIPT_VER = "1.1.9";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -56,17 +56,9 @@
       await sleep(700);
     }
 
-    if (fields.sales) {
-      const ok = await fillDropdownByLabel("Sales", [fields.sales], {
-        typeQuery: fields.sales,
-        settleMs: 900,
-        selectFirstMatch: true,
-      });
-      if (!ok) warnings.push(`Sales「${fields.sales}」未匹配，请手选`);
-      await sleep(700);
-    }
+    // Sales：表单默认已带当前登录人，跳过不填
 
-    // Pre-Sales：销售创建 → Zayne.Zhao；售前创建 → 自己
+    // Pre-Sales：销售角色 → Zayne.Zhao；售前角色 → 自己
     if (fields.preSales) {
       const ok = await fillDropdownByLabel("Pre-Sales", [fields.preSales], {
         typeQuery: fields.preSales,
@@ -101,7 +93,6 @@
       if (!(await fillTextByLabel("Company Name", fields.companyName))) warnings.push("Company Name 未找到输入框");
     }
     if (fields.contactName) {
-      // Contact Name 有时是可搜索下拉（显示 Select None）
       const ok =
         (await fillTextByLabel("Contact Name", fields.contactName)) ||
         (await fillDropdownByLabel("Contact Name", [fields.contactName], {
@@ -112,7 +103,6 @@
         }));
       if (!ok) warnings.push("Contact Name 未找到输入框");
     }
-    // 单选/多选先于电话；邮箱放到电话之后（区号下拉会向上盖住邮箱）
     if (fields.contactTitle) {
       if (!(await fillRadioByLabel("Contact Title", fields.contactTitle))) {
         warnings.push(`Contact Title「${fields.contactTitle}」未选中，请手选`);
@@ -130,22 +120,7 @@
       }
     }
 
-    // 电话：区号随便选一项 + 编造本地号码；失败不阻塞收尾
-    try {
-      const ok = await Promise.race([
-        fillPhoneFields(fields),
-        sleep(5000).then(() => false),
-      ]);
-      if (!ok) warnings.push("Phone 未填完整，请手选区号并填号码");
-    } catch (err) {
-      warnings.push(`Phone 填充异常：${String(err && err.message ? err.message : err)}`);
-      await closeOpenDropdowns();
-    }
-
-    await closeOpenDropdowns();
-    await sleep(300);
-
-    // 邮箱放电话之后，避免区号上弹层把 +966 写进邮箱
+    // 邮箱先于电话：绝不碰区号下拉，避免上弹层污染邮箱
     if (fields.email) {
       const ok =
         (await fillTextByLabel("Email", fields.email)) ||
@@ -153,6 +128,22 @@
         (await fillTextByLabel("Contact Email", fields.email)) ||
         (await fillTextByLabel("邮箱", fields.email));
       if (!ok) warnings.push("Email 未找到输入框");
+    }
+
+    await closeOpenDropdowns();
+    await sleep(200);
+
+    // 电话稳妥策略：绝不操作区号（Country 常会带出；下拉会盖住邮箱并卡住）
+    // 只往右侧号码框写本地数字；失败只告警，不阻塞
+    try {
+      const ok = await Promise.race([
+        fillPhoneNumberOnly(fields),
+        sleep(3500).then(() => false),
+      ]);
+      if (!ok) warnings.push("Phone 号码未自动填入，请手选区号并填写号码");
+    } catch (err) {
+      warnings.push(`Phone 填充异常：${String(err && err.message ? err.message : err)}`);
+      await closeOpenDropdowns();
     }
 
 
@@ -506,14 +497,15 @@
   }
 
   /**
-   * 电话：绝不打开区号下拉（会向上盖住邮箱并卡住）。
-   * 只对左侧窄框直写区号、右侧宽框直写号码。
+   * 电话稳妥策略：
+   * - 绝不点击/写入区号（FineReport 区号下拉向上展开会盖住邮箱并卡住）
+   * - 只定位右侧「号码」输入框写入本地数字
+   * - 区号依赖 Country 带出或用户手选
    */
-  async function fillPhoneFields(fields) {
+  async function fillPhoneNumberOnly(fields) {
     const local =
       (fields.phoneLocal && String(fields.phoneLocal).replace(/\D/g, "")) ||
       "500000000";
-    const dialCode = (fields.phoneDialCode && String(fields.phoneDialCode).trim()) || "+966";
 
     const labelEl =
       findLabelCell("Contact phone number") ||
@@ -525,88 +517,80 @@
     const valueCell = findValueCellFromLabel(labelEl);
     if (!valueCell) return false;
 
-    // 先关掉任何已打开的上弹层
-    await closeOpenDropdowns();
-    await sleep(200);
-    await closeOpenDropdowns();
-
-    let { dialInput, numInput } = resolvePhoneInputs(valueCell);
-
-    // 区号：只 setValue，绝不 click 箭头 / focus 触发下拉
-    if (dialInput) {
-      try {
-        dialInput.blur && dialInput.blur();
-      } catch (_) {}
-      setNativeValue(dialInput, dialCode);
-      dialInput.dispatchEvent(new Event("change", { bubbles: true }));
-      await sleep(150);
-      await closeOpenDropdowns();
-    }
-
-    ({ dialInput, numInput } = resolvePhoneInputs(valueCell));
-    if (!numInput || (dialInput && numInput === dialInput)) {
-      const inputs = listPhoneInputs(valueCell);
-      if (inputs.length >= 2) {
-        const byLeft = inputs
-          .slice()
-          .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-        dialInput = byLeft[0];
-        numInput = byLeft[byLeft.length - 1];
-      }
-    }
-
-    // 号码：按 placeholder 再确认一次右侧框
-    if (!numInput) {
-      numInput = listPhoneInputs(valueCell).find((el) =>
-        /area code|mobile|only enter|phone num/i.test(el.getAttribute("placeholder") || ""),
-      ) || null;
-    }
-
-    if (numInput && (!dialInput || numInput !== dialInput)) {
-      try {
-        if (dialInput && dialInput.blur) dialInput.blur();
-      } catch (_) {}
-      await closeOpenDropdowns();
-      await sleep(100);
-      numInput.focus();
-      await sleep(80);
-      setNativeValue(numInput, local);
-      numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
-      numInput.dispatchEvent(new Event("change", { bubbles: true }));
-      await sleep(200);
-      try {
-        numInput.blur && numInput.blur();
-      } catch (_) {}
-    }
-
     await closeOpenDropdowns();
     await sleep(150);
 
-    const numOk = numInput && String(numInput.value || "").replace(/\D/g, "").length >= 6;
-    const dialOk = dialInput && /^\+?\d{1,4}/.test(String(dialInput.value || "").trim());
-    return Boolean(numOk || dialOk);
+    const numInput = findPhoneNumberInput(valueCell);
+    if (!numInput) return false;
+
+    // 确保焦点不在区号框上
+    try {
+      const active = document.activeElement;
+      if (active && active !== numInput && active.blur) active.blur();
+    } catch (_) {}
+    await closeOpenDropdowns();
+
+    numInput.scrollIntoView({ block: "center", inline: "nearest" });
+    numInput.focus();
+    await sleep(80);
+    try {
+      numInput.select && numInput.select();
+    } catch (_) {}
+
+    let wrote = false;
+    try {
+      if (document.execCommand && document.execCommand("insertText", false, local)) {
+        wrote = String(numInput.value || "").replace(/\D/g, "").length >= 6;
+      }
+    } catch (_) {}
+
+    if (!wrote) {
+      setNativeValue(numInput, local);
+      numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
+      numInput.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    await sleep(120);
+    try {
+      numInput.blur && numInput.blur();
+    } catch (_) {}
+    await closeOpenDropdowns();
+
+    return String(numInput.value || "").replace(/\D/g, "").length >= 6;
   }
 
-  function listPhoneInputs(valueCell) {
-    return [...valueCell.querySelectorAll("input:not([type='hidden']):not([type='radio']):not([type='checkbox'])")].filter(isVisible);
-  }
+  function findPhoneNumberInput(valueCell) {
+    const inputs = [...valueCell.querySelectorAll(
+      "input:not([type='hidden']):not([type='radio']):not([type='checkbox'])",
+    )].filter(isVisible);
+    if (!inputs.length) return null;
 
-  function resolvePhoneInputs(valueCell) {
-    const inputs = listPhoneInputs(valueCell);
-    if (!inputs.length) return { dialInput: null, numInput: null };
+    // 优先：placeholder 明确是号码框
+    const byPh = inputs.find((el) =>
+      /area code|mobile|only enter|phone num|手机号|号码/i.test(el.getAttribute("placeholder") || ""),
+    );
+    if (byPh) return byPh;
 
+    // 其次：最宽 / 最靠右的输入框（区号框通常很窄）
     if (inputs.length === 1) {
       const el = inputs[0];
       const r = el.getBoundingClientRect();
       const ph = (el.getAttribute("placeholder") || "").toLowerCase();
-      if (r.width >= 140 || /mobile|only enter|手机号|号码|area code/.test(ph)) {
-        return { dialInput: null, numInput: el };
+      // 单框且像区号（窄、值像 +966）则放弃，避免误写
+      if (r.width < 120 && /^\+?\d{0,4}$/.test(String(el.value || "").trim()) && !/mobile|num/.test(ph)) {
+        return null;
       }
-      return { dialInput: el, numInput: null };
+      return el;
     }
 
-    const byLeft = inputs.slice().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
-    return { dialInput: byLeft[0], numInput: byLeft[byLeft.length - 1] };
+    return inputs
+      .slice()
+      .sort((a, b) => {
+        const ra = a.getBoundingClientRect();
+        const rb = b.getBoundingClientRect();
+        // 优先更宽，其次更靠右
+        return rb.width - ra.width || rb.left - ra.left;
+      })[0];
   }
 
   async function trySelectInCell(cell, aliases, _preferExact) {
