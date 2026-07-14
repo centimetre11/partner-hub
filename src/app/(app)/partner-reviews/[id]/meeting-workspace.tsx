@@ -2,7 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { ConfirmItemPayload, ConfirmedItemSnapshot } from "@/lib/partner-review/types";
+import type {
+  ConfirmItemPayload,
+  ConfirmedItemSnapshot,
+  PartnerPrepBrief,
+} from "@/lib/partner-review/types";
 import {
   discussPartnerAction,
   endPartnerReviewMeetingAction,
@@ -335,49 +339,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                     </div>
                   ) : null}
                   {activeItem.prepBrief ? (
-                    <div className="space-y-3 text-sm">
-                      {activeItem.prepBrief.summaryLine && (
-                        <p className="text-slate-700 leading-relaxed">{activeItem.prepBrief.summaryLine}</p>
-                      )}
-                      <div>
-                        <div className="text-xs font-medium text-slate-500 mb-1">AI 推荐议题</div>
-                        <ul className="list-disc pl-5 space-y-1 text-slate-700">
-                          {activeItem.prepBrief.aiTopics.map((t) => (
-                            <li key={t}>{t}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-slate-500 mb-1">开放待办摘录</div>
-                        {activeItem.prepBrief.openTodos.length ? (
-                          <ul className="space-y-1">
-                            {activeItem.prepBrief.openTodos.slice(0, 8).map((t) => (
-                              <li key={t.id} className="text-xs text-slate-600">
-                                {t.overdue ? <span className="text-red-600 mr-1">逾期</span> : null}
-                                {t.title}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-xs text-slate-400">无开放待办</p>
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-slate-500 mb-1">近两周进展</div>
-                        {activeItem.prepBrief.progress.length ? (
-                          <ul className="space-y-1">
-                            {activeItem.prepBrief.progress.slice(0, 6).map((p, i) => (
-                              <li key={`${p.title}-${i}`} className="text-xs text-slate-600">
-                                [{p.category}] {p.title}
-                                {p.contentPreview ? ` — ${p.contentPreview}` : ""}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-xs text-slate-400">近两周无商务记录</p>
-                        )}
-                      </div>
-                    </div>
+                    <PrepBriefView brief={activeItem.prepBrief} />
                   ) : null}
 
                   {phase === "post" && (
@@ -639,6 +601,134 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
             </div>
           )}
         </section>
+      </div>
+    </div>
+  );
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  VISIT: "拜访",
+  TRAINING: "培训",
+  NEGOTIATION: "谈判",
+  DELIVERY: "交付",
+  RELATIONSHIP: "关系",
+  OTHER: "进展",
+};
+
+function tidyClientText(text: string) {
+  let flat = text.replace(/\s+/g, " ").trim();
+  for (let len = 8; len <= 40; len++) {
+    flat = flat.replace(new RegExp(`(.{${len}})(\\1)+`, "g"), "$1");
+  }
+  return flat.replace(/【联系人\s*[^】]+】\s*/g, "").trim();
+}
+
+function PrepBriefView({ brief }: { brief: PartnerPrepBrief }) {
+  const todos =
+    brief.todos?.length
+      ? brief.todos
+      : (brief.openTodos ?? []).map((t) => ({ ...t, done: false }));
+  const openCount = todos.filter((t) => !t.done).length;
+  const doneCount = todos.filter((t) => t.done).length;
+
+  return (
+    <div className="space-y-4 text-sm">
+      {brief.summaryLine ? (
+        <p className="text-slate-700 leading-relaxed">{brief.summaryLine}</p>
+      ) : null}
+
+      <div>
+        <div className="text-xs font-medium text-slate-500 mb-1.5">AI 推荐议题</div>
+        <ul className="list-disc pl-5 space-y-1 text-slate-700">
+          {brief.aiTopics.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div>
+        <div className="text-xs font-medium text-slate-500 mb-1.5">
+          待办摘录
+          {todos.length ? (
+            <span className="font-normal text-slate-400">
+              {" "}
+              · 待完成 {openCount}
+              {doneCount ? ` · 已完成 ${doneCount}` : ""}
+            </span>
+          ) : null}
+        </div>
+        {todos.length ? (
+          <ul className="space-y-1.5">
+            {todos.slice(0, 12).map((t) => (
+              <li key={t.id} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={t.done}
+                  readOnly
+                  tabIndex={-1}
+                  className="mt-0.5 rounded border-slate-300 text-emerald-600 pointer-events-none"
+                  aria-hidden
+                />
+                <div className="min-w-0 flex-1">
+                  <span
+                    className={
+                      t.done
+                        ? "text-slate-400 line-through decoration-slate-400"
+                        : "text-slate-800"
+                    }
+                  >
+                    {t.title}
+                  </span>
+                  {!t.done && t.overdue ? (
+                    <span className="ml-1.5 text-[11px] text-red-600">逾期</span>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-400">暂无相关待办</p>
+        )}
+      </div>
+
+      <div>
+        <div className="text-xs font-medium text-slate-500 mb-1.5">近两周进展</div>
+        {brief.progress.length ? (
+          <ul className="space-y-2.5">
+            {brief.progress.slice(0, 8).map((p, i) => {
+              const label = p.categoryLabel || CATEGORY_LABEL[p.category] || "进展";
+              const body = tidyClientText(p.contentPreview || "");
+              const dateLabel = p.occurredAt
+                ? new Date(p.occurredAt).toLocaleDateString("zh-CN", {
+                    month: "numeric",
+                    day: "numeric",
+                  })
+                : "";
+              return (
+                <li
+                  key={`${p.title}-${i}`}
+                  className="rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2.5 space-y-1"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-white text-slate-600 border border-slate-200">
+                      {label}
+                    </span>
+                    {dateLabel ? <span className="text-[11px] text-slate-400">{dateLabel}</span> : null}
+                    {p.contactName ? (
+                      <span className="text-[11px] text-sky-700">联系人 {p.contactName}</span>
+                    ) : null}
+                  </div>
+                  <div className="text-sm font-medium text-slate-900 leading-snug">{p.title}</div>
+                  {body && body !== p.title ? (
+                    <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{body}</p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-400">近两周无商务记录</p>
+        )}
       </div>
     </div>
   );

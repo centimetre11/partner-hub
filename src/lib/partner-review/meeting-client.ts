@@ -41,7 +41,27 @@ export type MeetingClient = {
 function parseBrief(raw: string | null): PartnerPrepBrief | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as PartnerPrepBrief;
+    const brief = JSON.parse(raw) as PartnerPrepBrief;
+    if (!brief.todos?.length && brief.openTodos?.length) {
+      brief.todos = brief.openTodos.map((t) => ({ ...t, done: false }));
+    }
+    if (brief.progress?.length) {
+      brief.progress = brief.progress.map((p) => ({
+        ...p,
+        categoryLabel:
+          p.categoryLabel ||
+          ({
+            VISIT: "拜访",
+            TRAINING: "培训",
+            NEGOTIATION: "谈判",
+            DELIVERY: "交付",
+            RELATIONSHIP: "关系",
+            OTHER: "进展",
+          } as Record<string, string>)[p.category] ||
+          "进展",
+      }));
+    }
+    return brief;
   } catch {
     return null;
   }

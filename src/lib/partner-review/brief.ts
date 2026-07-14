@@ -13,20 +13,52 @@ function daysAgo(n: number) {
   return d;
 }
 
-function preview(text: string | null | undefined, max = 120) {
-  const flat = (text ?? "").replace(/\s+/g, " ").trim();
-  if (!flat) return "";
-  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
-}
-
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
+}
+
+const CATEGORY_LABEL: Record<string, string> = {
+  VISIT: "拜访",
+  TRAINING: "培训",
+  NEGOTIATION: "谈判",
+  DELIVERY: "交付",
+  RELATIONSHIP: "关系",
+  OTHER: "进展",
+};
+
+export function categoryLabel(category: string): string {
+  return CATEGORY_LABEL[category] ?? "进展";
+}
+
+/** 去掉重复短句，压缩空白 */
+export function tidyProgressText(text: string | null | undefined, max = 360): string {
+  let flat = (text ?? "").replace(/\s+/g, " ").trim();
+  if (!flat) return "";
+
+  // 连续重复短语（如「上周Mohammed找sheik说又有点问题」连贴三次）
+  for (let len = 8; len <= 40; len++) {
+    const re = new RegExp(`(.{${len}})(\\1)+`, "g");
+    flat = flat.replace(re, "$1");
+  }
+  flat = flat.replace(/([。！？；.!?])\1+/g, "$1").trim();
+
+  if (flat.length > max) return `${flat.slice(0, max)}…`;
+  return flat;
+}
+
+function extractContactName(text: string): string | null {
+  const m = text.match(/【联系人\s*([^】]+)】/);
+  return m?.[1]?.trim() || null;
+}
+
+function stripContactTag(text: string): string {
+  return text.replace(/【联系人\s*[^】]+】\s*/g, "").trim();
 }
 
 /** 确定性聚合：近 2 周该伙伴的进展 / 时间线 / 待办 / 商机 */
 export async function gatherPartnerReviewFacts(partnerId: string, since: Date = daysAgo(14)) {
   const now = new Date();
-  const [partner, businessRecords, events, openTodos, opportunities] = await Promise.all([
+  const [partner, businessRecords, events, openTodos, doneTodos, opportunities] = await Promise.all([
     db.partner.findUnique({
       where: { id: partnerId },
       select: { id: true, name: true, tier: true, pipelineStage: true, notes: true },
@@ -47,7 +79,17 @@ export async function gatherPartnerReviewFacts(partnerId: string, since: Date = 
       where: { partnerId, status: "OPEN" },
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
       take: 30,
-      select: { id: true, title: true, dueDate: true, priority: true, detail: true },
+      select: { id: true, title: true, dueDate: true, priority: true, detail: true, status: true },
+    }),
+    db.todoItem.findMany({
+      where: {
+        partnerId,
+        status: "DONE",
+        OR: [{ doneAt: { gte: since } }, { updatedAt: { gte: since }, doneAt: null }],
+      },
+      orderBy: [{ doneAt: "desc" }, { updatedAt: "desc" }],
+      take: 20,
+      select: { id: true, title: true, dueDate: true, priority: true, detail: true, status: true },
     }),
     db.opportunity.findMany({
       where: { partnerId, status: "ACTIVE" },
@@ -65,6 +107,7 @@ export async function gatherPartnerReviewFacts(partnerId: string, since: Date = 
     businessRecords,
     events,
     openTodos,
+    doneTodos,
     opportunities,
     now,
   };
@@ -78,7 +121,9 @@ function renderFactsForPrompt(facts: NonNullable<Awaited<ReturnType<typeof gathe
   lines.push("## 近两周商务记录");
   if (!facts.businessRecords.length) lines.push("（无）");
   for (const r of facts.businessRecords) {
-    lines.push(`- [${r.category}] ${r.title} (${ymd(r.occurredAt)}) ${preview(r.content)}`);
+    lines.push(
+      `- [${categoryLabel(r.category)}] ${r.title} (${ymd(r.occurredAt)}) ${tidyProgressText(r.content, 160)}`,
+    );
   }
   lines.push("");
   lines.push("## 近两周活动时间线");
@@ -87,12 +132,18 @@ function renderFactsForPrompt(facts: NonNullable<Awaited<ReturnType<typeof gathe
     lines.push(`- [${e.type}] ${e.title} (${ymd(e.createdAt)})`);
   }
   lines.push("");
-  lines.push("## 开放待办");
+  lines.push("## 待办（未完成）");
   if (!facts.openTodos.length) lines.push("（无）");
   for (const t of facts.openTodos) {
     const due = t.dueDate ? ymd(t.dueDate) : "无截止日期";
     const overdue = t.dueDate && t.dueDate < facts.now ? "逾期" : "";
-    lines.push(`- ${t.title} [${t.priority}] ${due} ${overdue} ${preview(t.detail, 80)}`);
+    lines.push(`- [ ] ${t.title} [${t.priority}] ${due} ${overdue} ${tidyProgressText(t.detail, 80)}`);
+  }
+  lines.push("");
+  lines.push("## 待办（近两周已完成）");
+  if (!facts.doneTodos.length) lines.push("（无）");
+  for (const t of facts.doneTodos) {
+    lines.push(`- [x] ${t.title}`);
   }
   lines.push("");
   lines.push("## 活跃商机");
@@ -103,7 +154,7 @@ function renderFactsForPrompt(facts: NonNullable<Awaited<ReturnType<typeof gathe
   if (facts.partner.notes?.trim()) {
     lines.push("");
     lines.push("## 伙伴备注");
-    lines.push(preview(facts.partner.notes, 400));
+    lines.push(tidyProgressText(facts.partner.notes, 400));
   }
   return lines.join("\n");
 }
@@ -115,17 +166,29 @@ export async function buildPartnerPrepBrief(
   const facts = await gatherPartnerReviewFacts(partnerId);
   if (!facts) return null;
 
-  const progress = facts.businessRecords.map((r) => ({
-    title: r.title,
-    category: r.category,
-    occurredAt: r.occurredAt.toISOString(),
-    contentPreview: preview(r.content),
-  }));
+  const progress = facts.businessRecords.map((r) => {
+    const body = tidyProgressText(r.content, 420);
+    const contactName = extractContactName(body);
+    const contentPreview = stripContactTag(body);
+    // 标题若已包含在正文开头，展示时以正文为主
+    const titleLooksLikeBody =
+      !!contentPreview &&
+      (contentPreview.startsWith(r.title.trim()) || r.title.trim().length > 40);
+    return {
+      title: titleLooksLikeBody ? contentPreview.slice(0, 48) || r.title : r.title,
+      category: r.category,
+      categoryLabel: categoryLabel(r.category),
+      occurredAt: r.occurredAt.toISOString(),
+      contentPreview: titleLooksLikeBody ? contentPreview : contentPreview || "",
+      contactName,
+    };
+  });
   const timeline = facts.events.map((e) => ({
     title: e.title,
     type: e.type,
     createdAt: e.createdAt.toISOString(),
   }));
+
   const openTodos = facts.openTodos.map((t) => ({
     id: t.id,
     title: t.title,
@@ -133,6 +196,25 @@ export async function buildPartnerPrepBrief(
     overdue: !!(t.dueDate && t.dueDate < facts.now),
     priority: t.priority,
   }));
+  const todos: PartnerPrepBrief["todos"] = [
+    ...facts.openTodos.map((t) => ({
+      id: t.id,
+      title: t.title,
+      dueDate: t.dueDate?.toISOString() ?? null,
+      overdue: !!(t.dueDate && t.dueDate < facts.now),
+      priority: t.priority,
+      done: false,
+    })),
+    ...facts.doneTodos.map((t) => ({
+      id: t.id,
+      title: t.title,
+      dueDate: t.dueDate?.toISOString() ?? null,
+      overdue: false,
+      priority: t.priority,
+      done: true,
+    })),
+  ];
+
   const opportunities = facts.opportunities.map((o) => ({
     id: o.id,
     name: o.name,
@@ -170,7 +252,7 @@ export async function buildPartnerPrepBrief(
       aiTopics.push("近两周无商务记录，确认是否需要拜访/培训动作");
     }
     if (!aiTopics.length) aiTopics.push("回顾当前合作阶段与下一步动作");
-    summaryLine = `近两周 ${progress.length} 条商务记录，${openTodos.length} 个开放待办，${opportunities.length} 个活跃商机。`;
+    summaryLine = `近两周 ${progress.length} 条进展，${openTodos.length} 个未完成待办，${facts.doneTodos.length} 个已完成，${opportunities.length} 个活跃商机。`;
   }
 
   return {
@@ -179,6 +261,7 @@ export async function buildPartnerPrepBrief(
     windowLabel: facts.windowLabel,
     progress,
     timeline,
+    todos,
     openTodos,
     opportunities,
     aiTopics,

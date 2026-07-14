@@ -3,8 +3,25 @@ export type PartnerPrepBrief = {
   partnerId: string;
   partnerName: string;
   windowLabel: string;
-  progress: { title: string; category: string; occurredAt: string; contentPreview: string }[];
+  progress: {
+    title: string;
+    category: string;
+    categoryLabel: string;
+    occurredAt: string;
+    contentPreview: string;
+    contactName?: string | null;
+  }[];
   timeline: { title: string; type: string; createdAt: string }[];
+  /** 待办摘录：未完成 + 近两周已完成 */
+  todos: {
+    id: string;
+    title: string;
+    dueDate: string | null;
+    overdue: boolean;
+    priority: string;
+    done: boolean;
+  }[];
+  /** @deprecated 兼容旧简报；新数据请用 todos */
   openTodos: { id: string; title: string; dueDate: string | null; overdue: boolean; priority: string }[];
   opportunities: { id: string; name: string; stage: string; amount: string | null }[];
   aiTopics: string[];
