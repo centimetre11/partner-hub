@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.12";
+  const SCRIPT_VER = "1.1.13";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -33,9 +33,42 @@
     await closeOpenDropdowns();
 
     const warnings = [];
+    const phoneLocal =
+      (fields.phoneLocal && String(fields.phoneLocal).replace(/\D/g, "")) ||
+      "500000000";
+    const emailSnapshot = fields.email || "";
 
-    // 下拉通用策略：输入关键词 → 等待过滤 → 选第一个匹配项 → 关闭浮层 → 稍等再填下一项
-    // Region 放慢，避免「太快导致为空」
+    // ========== 1) 先填纯文本（与公司名同一套 focus + setNativeValue）==========
+    // 号码框也是普通 input，不要跟区号下拉绑在一起搞复杂
+    if (fields.companyName) {
+      if (!(await fillTextByLabel("Company Name", fields.companyName))) {
+        warnings.push("Company Name 未找到输入框");
+      }
+    }
+    if (fields.contactName) {
+      const ok =
+        (await fillTextByLabel("Contact Name", fields.contactName)) ||
+        (await fillDropdownByLabel("Contact Name", [fields.contactName], {
+          typeQuery: fields.contactName,
+          settleMs: 700,
+          selectFirstMatch: true,
+          allowTypeOnly: true,
+        }));
+      if (!ok) warnings.push("Contact Name 未找到输入框");
+    }
+    if (emailSnapshot) {
+      const ok =
+        (await fillTextByLabel("Contact Email", emailSnapshot)) ||
+        (await fillTextByLabel("Email", emailSnapshot)) ||
+        (await fillTextByLabel("E-mail", emailSnapshot)) ||
+        (await fillTextByLabel("邮箱", emailSnapshot));
+      if (!ok) warnings.push("Email 未找到输入框");
+    }
+    // 号码：先当普通文本写一次（区号未选时也可能可写；不可写也不妨碍）
+    await fillPhoneLocalLikeText(phoneLocal);
+    await sleep(300);
+
+    // ========== 2) 再处理下拉 ==========
     if (fields.region) {
       const ok = await fillDropdownByLabel("Region", [fields.region, "中东", "ME"], {
         typeQuery: "中东",
@@ -66,7 +99,6 @@
       await sleep(700);
     }
 
-    // Pre-Sales：销售角色 → Zayne.Zhao；售前角色 → 自己
     if (fields.preSales) {
       const ok = await fillDropdownByLabel("Pre-Sales", [fields.preSales], {
         typeQuery: fields.preSales,
@@ -94,40 +126,9 @@
     }
 
     await closeOpenDropdowns();
-    await sleep(400);
+    await sleep(300);
 
-    // 文本 / 单选 / 多选放在下拉之后，避免被浮层打断
-    if (fields.companyName) {
-      if (!(await fillTextByLabel("Company Name", fields.companyName))) warnings.push("Company Name 未找到输入框");
-    }
-    if (fields.contactName) {
-      const ok =
-        (await fillTextByLabel("Contact Name", fields.contactName)) ||
-        (await fillDropdownByLabel("Contact Name", [fields.contactName], {
-          typeQuery: fields.contactName,
-          settleMs: 700,
-          selectFirstMatch: true,
-          allowTypeOnly: true,
-        }));
-      if (!ok) warnings.push("Contact Name 未找到输入框");
-    }
-    // Contact Title / Products / Current demand 放到邮箱之后填（见下）
-
-    // 邮箱
-    if (fields.email) {
-      const ok =
-        (await fillTextByLabel("Email", fields.email)) ||
-        (await fillTextByLabel("E-mail", fields.email)) ||
-        (await fillTextByLabel("Contact Email", fields.email)) ||
-        (await fillTextByLabel("邮箱", fields.email));
-      if (!ok) warnings.push("Email 未找到输入框");
-      await sleep(300);
-    }
-
-    await closeOpenDropdowns();
-    await sleep(200);
-
-    // 邮箱之后补单选/多选（电话上弹层会盖住邮箱，电话放到最后）
+    // ========== 3) 单选 / 多选 ==========
     if (fields.contactTitle) {
       const ok =
         (await fillRadioByLabel("Contact Title", fields.contactTitle)) ||
@@ -150,25 +151,28 @@
       if (!ok) warnings.push("Current demand 未选中，请手选");
     }
 
-    // 电话最后填：区号上弹选第二项 → 关浮层 → 防呆写号码（多次重试）→ 必要时再修邮箱
-    const emailSnapshot = fields.email || "";
+    // ========== 4) 区号下拉（上弹、选第二项）；与号码写入拆开 ==========
     try {
-      const ok = await Promise.race([
-        fillPhoneWithUpwardDial(fields),
-        sleep(16000).then(() => false),
-      ]);
-      if (!ok) warnings.push("Phone 未填完整，请手选区号并填号码");
+      const dialOk = await fillDialCodeOnly(fields);
+      if (!dialOk) warnings.push("电话区号未选中，请手选");
     } catch (err) {
-      warnings.push(`Phone 填充异常：${String(err && err.message ? err.message : err)}`);
+      warnings.push(`区号异常：${String(err && err.message ? err.message : err)}`);
     }
     await closeOpenDropdowns();
-    await sleep(200);
+    await sleep(400);
 
-    // 仅当邮箱被污染/清空时再回写，避免抢焦点导致号码没写上就结束
-    if (emailSnapshot) {
-      await restoreEmailIfNeeded(emailSnapshot);
+    // ========== 5) 区号后再用「普通文本」方式写号码（关键一步）==========
+    const numOk = await fillPhoneLocalLikeText(phoneLocal);
+    if (!numOk) {
+      // 再试一次：短等后同逻辑
+      await sleep(400);
+      if (!(await fillPhoneLocalLikeText(phoneLocal))) {
+        warnings.push("Phone 号码未写入，请手填");
+      }
     }
 
+    await closeOpenDropdowns();
+    if (emailSnapshot) await restoreEmailIfNeeded(emailSnapshot);
 
     if (warnings.length) {
       return { ok: true, warning: warnings.join("；") };
@@ -519,14 +523,39 @@
     await sleep(200);
   }
 
+  /** 号码：与 Company Name 完全同一套 — focus + setNativeValue */
+  async function fillPhoneLocalLikeText(local) {
+    const labelEl =
+      findLabelCell("Contact phone number") ||
+      findLabelCell("Phone") ||
+      findLabelCell("Mobile") ||
+      findLabelCell("电话") ||
+      findLabelCell("手机");
+    if (!labelEl) return false;
+    const valueCell = findValueCellFromLabel(labelEl);
+    if (!valueCell) return false;
+
+    const input = findPhoneNumberInputFresh(valueCell);
+    if (!input) return false;
+
+    // 绝不要写进区号框
+    if (looksLikeDialInput(input)) return false;
+
+    input.focus();
+    setNativeValue(input, local);
+    await sleep(120);
+    const ok = String(input.value || "").replace(/\D/g, "").length >= 6;
+    try {
+      input.blur && input.blur();
+    } catch (_) {}
+    return ok;
+  }
+
   /**
-   * 电话：区号下拉往上展开。
-   * 点开 → 过滤 → 选第二项（跳过 Select None）→ 强制关闭 → 防呆写号码（点击号码框 + 逐字输入 + 校验重试）。
+   * 只选区号：上弹下拉 → 过滤 → 选第二项（跳过 Select None）→ 关闭。
+   * 不写号码。
    */
-  async function fillPhoneWithUpwardDial(fields) {
-    const local =
-      (fields.phoneLocal && String(fields.phoneLocal).replace(/\D/g, "")) ||
-      "500000000";
+  async function fillDialCodeOnly(fields) {
     const dialCode = (fields.phoneDialCode && String(fields.phoneDialCode).trim()) || "+966";
     const dialDigits = dialCode.replace(/\D/g, "") || "966";
 
@@ -546,12 +575,19 @@
     const { dialInput, dialArrow } = resolvePhoneParts(valueCell);
     if (!dialInput && !dialArrow) return false;
 
-    // —— 区号：只点左侧箭头 ——
+    // 若区号已是目标值，跳过
+    if (dialInput) {
+      const cur = String(dialInput.value || "").trim();
+      if (cur === dialCode || cur.replace(/\D/g, "") === dialDigits) {
+        return true;
+      }
+    }
+
     if (dialInput) {
       try {
         dialInput.focus();
       } catch (_) {}
-      await sleep(100);
+      await sleep(80);
     }
     if (dialArrow) {
       dialArrow.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
@@ -568,31 +604,34 @@
 
     let items = findDropdownItemsNear(dialInput || dialArrow || valueCell);
     if (items.length < 1) items = findVisibleDropdownItems();
-
-    if (items.length >= 1) {
-      const pick = pickSecondDialItem(items, dialCode, dialDigits);
-      if (pick) {
-        pick.scrollIntoView({ block: "nearest" });
-        await sleep(120);
-        pick.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-        pick.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
-        pick.click();
-        await sleep(400);
-      }
+    if (items.length < 1) {
+      await closeOpenDropdowns();
+      return Boolean(dialInput && /^\+?\d{1,4}/.test(String(dialInput.value || "").trim()));
     }
 
-    // 关干净上弹层；点电话行右侧空白，不要点上方邮箱
+    const pick = pickSecondDialItem(items, dialCode, dialDigits);
+    if (pick) {
+      pick.scrollIntoView({ block: "nearest" });
+      await sleep(100);
+      pick.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+      pick.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+      pick.click();
+      await sleep(350);
+    }
+
     await closeOpenDropdowns();
     await clickAwayFromEmailNearPhone(valueCell);
     await closeOpenDropdowns();
     try {
       if (dialInput && dialInput.blur) dialInput.blur();
     } catch (_) {}
-    await sleep(400);
+    await sleep(200);
 
-    // 号码：重新定位 + 最多 3 次防呆写入
-    const numOk = await writePhoneLocalRobust(valueCell, local);
-    return numOk;
+    if (dialInput) {
+      const cur = String(dialInput.value || "").trim();
+      return Boolean(cur && !/select\s*none/i.test(cur));
+    }
+    return true;
   }
 
   function pickSecondDialItem(items, dialCode, dialDigits) {
@@ -684,7 +723,6 @@
     return { dialInput, numInput, dialArrow };
   }
 
-  /** 优先用 placeholder 认号码框，避免误写区号 */
   function findPhoneNumberInputFresh(valueCell) {
     const inputs = [...valueCell.querySelectorAll(
       "input:not([type='hidden']):not([type='radio']):not([type='checkbox'])",
@@ -705,13 +743,7 @@
           return rb.width - ra.width || rb.left - ra.left;
         })[0];
     }
-
-    const el = inputs[0];
-    const r = el.getBoundingClientRect();
-    const v = String(el.value || "").trim();
-    // 像区号框则放弃
-    if (r.width < 120 && /^\+?\d{0,4}$/.test(v)) return null;
-    return el;
+    return inputs[0];
   }
 
   function looksLikeDialInput(el) {
@@ -720,99 +752,11 @@
     const v = String(el.value || "").trim();
     const ph = (el.getAttribute("placeholder") || "").toLowerCase();
     if (/area code|mobile|only enter|phone num/.test(ph)) return false;
-    if (r.width < 120 && /^\+?\d{1,4}$/.test(v)) return true;
+    if (r.width < 120 && /^\+?\d{0,4}$/.test(v)) return true;
     if (/^\+\d{1,4}$/.test(v) && r.width < 160) return true;
     return false;
   }
 
-  /**
-   * 号码防呆：重新定位 → 鼠标点进号码框 → 清空 → 逐字输入 → 校验；失败重试 3 次。
-   */
-  async function writePhoneLocalRobust(valueCell, local) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await closeOpenDropdowns();
-      await sleep(180);
-
-      const input = findPhoneNumberInputFresh(valueCell);
-      if (!input || looksLikeDialInput(input)) {
-        await sleep(200);
-        continue;
-      }
-
-      // 先 blur 当前焦点（常停在区号/邮箱）
-      try {
-        const active = document.activeElement;
-        if (active && active !== input && active.blur) active.blur();
-      } catch (_) {}
-      await sleep(80);
-
-      // 点号码框中心，确保焦点真进号码而非邮箱
-      const r = input.getBoundingClientRect();
-      const x = Math.floor(r.left + Math.min(r.width * 0.4, 80));
-      const y = Math.floor(r.top + r.height / 2);
-      input.scrollIntoView({ block: "center", inline: "nearest" });
-      await sleep(80);
-      input.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
-      input.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
-      input.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
-      input.focus();
-      await sleep(150);
-
-      // 焦点仍不在号码框则重试
-      if (document.activeElement !== input) {
-        input.focus();
-        await sleep(120);
-      }
-      if (looksLikeDialInput(document.activeElement)) {
-        continue;
-      }
-
-      try {
-        input.select && input.select();
-      } catch (_) {}
-
-      // 清空
-      setNativeValue(input, "");
-      await sleep(60);
-
-      // 逐字键入，兼容 FineReport
-      let acc = "";
-      for (const ch of local) {
-        acc += ch;
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
-        setNativeValue(input, acc);
-        input.dispatchEvent(new InputEvent("input", { bubbles: true, data: ch, inputType: "insertText" }));
-        input.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true }));
-        await sleep(35);
-      }
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      await sleep(200);
-
-      const digits = String(input.value || "").replace(/\D/g, "");
-      if (digits.length >= 6) {
-        try {
-          input.blur && input.blur();
-        } catch (_) {}
-        await closeOpenDropdowns();
-        return true;
-      }
-
-      // 整段写入兜底
-      setNativeValue(input, local);
-      input.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      await sleep(200);
-      if (String(input.value || "").replace(/\D/g, "").length >= 6) {
-        try {
-          input.blur && input.blur();
-        } catch (_) {}
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** 点电话行右侧空白收起浮层，避免点到上方邮箱 */
   async function clickAwayFromEmailNearPhone(valueCell) {
     try {
       const r = valueCell.getBoundingClientRect();
@@ -837,17 +781,16 @@
     if (!labelEl) return;
     const valueCell = findValueCellFromLabel(labelEl);
     if (!valueCell) return;
-    const input =
-      valueCell.querySelector("input:not([type='hidden']):not([type='radio']):not([type='checkbox'])") ||
-      null;
+    const input = valueCell.querySelector(
+      "input:not([type='hidden']):not([type='radio']):not([type='checkbox'])",
+    );
     if (!input) return;
     const v = String(input.value || "").trim();
     const polluted = !v || !v.includes("@") || /^\+?\d/.test(v) || /select\s*none/i.test(v);
-    if (!polluted && v === email) return;
-    if (!polluted && v.includes("@")) return;
+    if (!polluted) return;
     input.focus();
     setNativeValue(input, email);
-    await sleep(120);
+    await sleep(100);
     try {
       input.blur && input.blur();
     } catch (_) {}
