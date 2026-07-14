@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.10";
+  const SCRIPT_VER = "1.1.11";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -116,13 +116,20 @@
       await sleep(300);
     }
 
-    // 电话：完全不自动填。区号控件一点就上弹并卡住整页；号码请手填。
-    warnings.push("电话请手选区号并填写号码（自动填写会卡住，已跳过）");
-
+    // 电话：区号下拉（向上展开）选第 2 项（第 1 项多为 Select None），再填号码
+    try {
+      const ok = await Promise.race([
+        fillPhoneFields(fields),
+        sleep(8000).then(() => false),
+      ]);
+      if (!ok) warnings.push("Phone 未填完整，请手选区号并填号码");
+    } catch (err) {
+      warnings.push(`Phone 填充异常：${String(err && err.message ? err.message : err)}`);
+    }
     await closeOpenDropdowns();
-    await sleep(200);
+    await sleep(300);
 
-    // 邮箱之后再补一次单选/多选（前面若被浮层挡住可能失败）
+    // 邮箱/电话之后再补单选/多选
     if (fields.contactTitle) {
       const ok =
         (await fillRadioByLabel("Contact Title", fields.contactTitle)) ||
@@ -493,6 +500,151 @@
     }
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, keyCode: 27 }));
     await sleep(200);
+  }
+
+  /**
+   * 电话：打开区号下拉 → 选第 2 项（跳过 Select None）→ 关闭 → 写右侧号码。
+   * 与其它下拉同一套路，只是默认选 index=1 而不是 0。
+   */
+  async function fillPhoneFields(fields) {
+    const local =
+      (fields.phoneLocal && String(fields.phoneLocal).replace(/\D/g, "")) ||
+      "500000000";
+    const dialCode = (fields.phoneDialCode && String(fields.phoneDialCode).trim()) || "+966";
+
+    const labelEl =
+      findLabelCell("Contact phone number") ||
+      findLabelCell("Phone") ||
+      findLabelCell("Mobile") ||
+      findLabelCell("电话") ||
+      findLabelCell("手机");
+    if (!labelEl) return false;
+    const valueCell = findValueCellFromLabel(labelEl);
+    if (!valueCell) return false;
+
+    await closeOpenDropdowns();
+    await sleep(200);
+
+    const inputs = [...valueCell.querySelectorAll(
+      "input:not([type='hidden']):not([type='radio']):not([type='checkbox'])",
+    )].filter(isVisible);
+    if (!inputs.length) return false;
+
+    const byLeft = inputs
+      .slice()
+      .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    const dialInput = byLeft[0];
+    let numInput =
+      inputs.find((el) =>
+        /area code|mobile|only enter|phone num|手机号|号码/i.test(el.getAttribute("placeholder") || ""),
+      ) || (byLeft.length >= 2 ? byLeft[byLeft.length - 1] : null);
+
+    // 只点区号左侧箭头，避免点到号码框
+    const arrows = [
+      ...valueCell.querySelectorAll(
+        "button, .fr-trigger-btn-up, .fr-trigger-btn-down, .fr-trigger-center, span[class*='arrow'], div[class*='trigger']",
+      ),
+    ].filter(isVisible);
+    const dialArrow =
+      arrows
+        .slice()
+        .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0] || null;
+
+    if (dialArrow) {
+      dialArrow.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      dialArrow.click();
+    } else if (dialInput) {
+      dialInput.focus();
+      dialInput.click();
+    } else {
+      return false;
+    }
+    await sleep(500);
+
+    let items = findVisibleDropdownItems();
+    if (!items.length) {
+      if (dialArrow) dialArrow.click();
+      await sleep(500);
+      items = findVisibleDropdownItems();
+    }
+    if (!items.length) {
+      await closeOpenDropdowns();
+      return false;
+    }
+
+    const idx = pickDialCodeItemIndex(items, dialCode);
+    const target = items[idx];
+    target.scrollIntoView({ block: "nearest" });
+    await sleep(120);
+    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+    target.click();
+    await sleep(350);
+    await closeOpenDropdowns();
+    await sleep(250);
+
+    // 号码
+    if (!numInput || numInput === dialInput) {
+      const again = [...valueCell.querySelectorAll(
+        "input:not([type='hidden']):not([type='radio']):not([type='checkbox'])",
+      )].filter(isVisible);
+      numInput =
+        again.find((el) =>
+          /area code|mobile|only enter|phone num|手机号|号码/i.test(el.getAttribute("placeholder") || ""),
+        ) ||
+        (again.length >= 2
+          ? again.slice().sort((a, b) => b.getBoundingClientRect().left - a.getBoundingClientRect().left)[0]
+          : null);
+    }
+
+    if (numInput && numInput !== dialInput) {
+      try {
+        if (dialInput && dialInput.blur) dialInput.blur();
+      } catch (_) {}
+      await closeOpenDropdowns();
+      numInput.focus();
+      await sleep(80);
+      setNativeValue(numInput, local);
+      numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
+      numInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await sleep(200);
+      try {
+        numInput.blur && numInput.blur();
+      } catch (_) {}
+    }
+
+    await closeOpenDropdowns();
+    const numOk = numInput && String(numInput.value || "").replace(/\D/g, "").length >= 6;
+    const dialOk = dialInput && /\d{1,4}/.test(String(dialInput.value || ""));
+    return Boolean(numOk || dialOk);
+  }
+
+  /** 区号列表：优先匹配目标区号；否则选第 2 项（跳过 Select None） */
+  function pickDialCodeItemIndex(items, dialCode) {
+    const texts = items.map((el) => (el.textContent || "").trim());
+    const want = String(dialCode || "").trim();
+    const wantDigits = want.replace(/\D/g, "");
+
+    const isNone = (t) => /select\s*none|请选择|^none$|^无$/i.test(normalizeLabel(t)) || !String(t || "").trim();
+
+    // 1) 精确/包含匹配真实区号
+    for (let i = 0; i < texts.length; i++) {
+      if (isNone(texts[i])) continue;
+      const t = texts[i];
+      const digits = t.replace(/\D/g, "");
+      if (want && (t.includes(want) || (wantDigits && digits === wantDigits))) return i;
+    }
+
+    // 2) 用户经验：往上展开时选「第二个」（index 1），第 0 项常为 Select None
+    if (texts.length >= 2) {
+      if (!isNone(texts[1])) return 1;
+      // 若第 2 项仍是空，取第一个非 None
+    }
+
+    for (let i = 0; i < texts.length; i++) {
+      if (!isNone(texts[i]) && /\d/.test(texts[i])) return i;
+    }
+    return texts.length >= 2 ? 1 : 0;
   }
 
   /** 按可见文案点击单选/多选选项（无左侧标签时兜底） */
