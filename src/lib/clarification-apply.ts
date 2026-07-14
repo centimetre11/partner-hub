@@ -12,6 +12,7 @@ import {
   TODO_PARTNER_NOT_FOUND_ID,
 } from "@/lib/intake-partner-binding";
 import { fieldKey, businessRecordKey, mergeProposalPatch, type ProposalChanges } from "@/lib/proposal-merge";
+import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "@/lib/crm-trace-constants";
 
 export type ClarificationApplyMode = "direct" | "ai";
 
@@ -224,9 +225,16 @@ export function applyProposalEdit(
     const records = [...proposal.businessRecords];
     const row = records[patch.index];
     if (!row) return { proposal, changes: { added: [], updated: [], removed: [], aiReupdates: [] } };
+    const trimmed = patch.value.trim();
+    const normalized =
+      patch.field === "traceNature"
+        ? (normalizeCrmTraceNature(trimmed) ?? trimmed)
+        : patch.field === "traceAction"
+          ? (normalizeCrmTraceAction(trimmed) ?? trimmed)
+          : trimmed;
     records[patch.index] = {
       ...row,
-      [patch.field]: patch.value.trim(),
+      [patch.field]: normalized,
     };
     const key = businessRecordKey(row.title) || `br${patch.index}`;
     return {

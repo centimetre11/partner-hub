@@ -75,6 +75,23 @@ export const labelsZh: LabelsBundle = {
     RELATIONSHIP: "关系经营",
     OTHER: "其他",
   },
+  crmTraceNatureLabels: {
+    现场: "现场",
+    非现场: "非现场",
+  },
+  crmTraceActionLabels: {
+    接待: "接待",
+    培训: "培训",
+    服务: "服务",
+    调研: "调研",
+    方案: "方案",
+    催款: "催款",
+    客情: "客情",
+    其它: "其它",
+    远程会议: "远程会议",
+    "WhatsApp or Line": "WhatsApp or Line",
+    Email: "Email",
+  },
   monitorDimensionLabels: {
     NEWS: "公司动态",
     PEOPLE: "人事变动",

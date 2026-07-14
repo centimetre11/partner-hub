@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useMessages } from "@/lib/i18n/context";
+import { useLabels, useMessages } from "@/lib/i18n/context";
 import { CRM_TRACE_ACTIONS, CRM_TRACE_NATURES } from "@/lib/crm-trace-constants";
 import { inferTraceAction, inferTraceNature } from "@/lib/crm-trace-payload";
 
@@ -29,6 +29,7 @@ export function BusinessRecordDimensions({
 }) {
   const pd = useMessages().partnerDetail;
   const ip = useMessages().intakePanel;
+  const labels = useLabels();
   const cls = compact ? `${input} text-xs px-2.5 py-1.5` : input;
   const userEdited = useRef({ nature: false, action: false });
 
@@ -66,7 +67,7 @@ export function BusinessRecordDimensions({
           <option value="">{ip.selectPlaceholder}</option>
           {CRM_TRACE_NATURES.map((n) => (
             <option key={n} value={n}>
-              {n}
+              {labels.crmTraceNatureLabels[n] ?? n}
             </option>
           ))}
         </select>
@@ -84,7 +85,7 @@ export function BusinessRecordDimensions({
           <option value="">{ip.selectPlaceholder}</option>
           {CRM_TRACE_ACTIONS.map((a) => (
             <option key={a} value={a}>
-              {a}
+              {labels.crmTraceActionLabels[a] ?? a}
             </option>
           ))}
         </select>

@@ -477,7 +477,7 @@ export function LiveProposalDraft({
                           <option value="">{ip.selectPlaceholder}</option>
                           {CRM_TRACE_NATURES.map((n) => (
                             <option key={n} value={n}>
-                              {n}
+                              {labels.crmTraceNatureLabels[n] ?? n}
                             </option>
                           ))}
                         </select>
@@ -494,7 +494,7 @@ export function LiveProposalDraft({
                           <option value="">{ip.selectPlaceholder}</option>
                           {CRM_TRACE_ACTIONS.map((a) => (
                             <option key={a} value={a}>
-                              {a}
+                              {labels.crmTraceActionLabels[a] ?? a}
                             </option>
                           ))}
                         </select>

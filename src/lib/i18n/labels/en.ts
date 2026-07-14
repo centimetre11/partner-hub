@@ -75,6 +75,23 @@ export const labelsEn: LabelsBundle = {
     RELATIONSHIP: "Relationship",
     OTHER: "Other",
   },
+  crmTraceNatureLabels: {
+    现场: "On-site",
+    非现场: "Remote",
+  },
+  crmTraceActionLabels: {
+    接待: "Reception",
+    培训: "Training",
+    服务: "Service",
+    调研: "Research",
+    方案: "Solution",
+    催款: "Payment follow-up",
+    客情: "Relationship",
+    其它: "Other",
+    远程会议: "Remote meeting",
+    "WhatsApp or Line": "WhatsApp or Line",
+    Email: "Email",
+  },
   monitorDimensionLabels: {
     NEWS: "Company News",
     PEOPLE: "People Changes",

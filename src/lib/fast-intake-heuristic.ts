@@ -1,6 +1,7 @@
 import type { ChatMessage } from "./ai";
 import type { IntakeScope } from "./ai-locale";
 import type { Locale } from "./i18n/locale";
+import { getLabels } from "./i18n/labels";
 import type { IntakeClarification, IntakeTurn } from "./ai-intake";
 import { isFastIntakeScope } from "./proposal-scope";
 import { extractPartnerNameFromIntakeText, enrichTodoPartnerBinding } from "./intake-partner-binding";
@@ -479,6 +480,7 @@ export function buildBusinessRecordClarifications(
       blocking: true,
     });
   }
+  const labels = getLabels(locale);
   for (let i = 0; i < records.length; i++) {
     const r = records[i];
     const prefix =
@@ -488,7 +490,7 @@ export function buildBusinessRecordClarifications(
       out.push({
         id: `br-${i}-nature`,
         question: locale === "zh" ? `${prefix}这次是现场还是非现场？` : `${prefix}On-site or off-site?`,
-        options: [...CRM_TRACE_NATURES],
+        options: CRM_TRACE_NATURES.map((n) => labels.crmTraceNatureLabels[n] ?? n),
         multi: false,
         allowOther: false,
         apply: "direct",
@@ -499,7 +501,7 @@ export function buildBusinessRecordClarifications(
       out.push({
         id: `br-${i}-action`,
         question: locale === "zh" ? `${prefix}CRM 商务行为选哪一项？` : `${prefix}Which CRM business action?`,
-        options: [...CRM_TRACE_ACTIONS].slice(0, 8),
+        options: CRM_TRACE_ACTIONS.slice(0, 8).map((a) => labels.crmTraceActionLabels[a] ?? a),
         multi: false,
         allowOther: true,
         apply: "direct",

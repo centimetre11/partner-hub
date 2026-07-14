@@ -16,6 +16,10 @@ export type LabelsBundle = {
   todoPriorityLabels: Record<string, string>;
   eventTypeLabels: Record<string, string>;
   businessRecordCategoryLabels: Record<string, string>;
+  /** CRM KPI: 现场/非现场 — keys are canonical CRM values */
+  crmTraceNatureLabels: Record<string, string>;
+  /** CRM KPI: 商务行为 — keys are canonical CRM values */
+  crmTraceActionLabels: Record<string, string>;
   monitorDimensionLabels: Record<string, string>;
   monitorSentimentLabels: Record<string, string>;
   monitorSourceTypeLabels: Record<string, string>;

@@ -106,7 +106,11 @@ export function BusinessRecordsSection({
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap gap-x-2 gap-y-1 items-center">
                     {r.crmTraceNature && r.crmTraceAction ? (
-                      <span>{r.crmTraceNature} · {r.crmTraceAction}</span>
+                      <span>
+                        {labels.crmTraceNatureLabels[r.crmTraceNature] ?? r.crmTraceNature}
+                        {" · "}
+                        {labels.crmTraceActionLabels[r.crmTraceAction] ?? r.crmTraceAction}
+                      </span>
                     ) : (
                       <span>{labels.businessRecordCategoryLabels[r.category] ?? r.category}</span>
                     )}
