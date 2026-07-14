@@ -78,6 +78,7 @@ export function MeetingWorkspace({
     fileId: initial.dingtalkFileId ?? "",
   });
   const [showDingTalk, setShowDingTalk] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
     setMeeting(initial);
@@ -163,26 +164,6 @@ export function MeetingWorkspace({
             {needsPrep ? "开会准备（拉取近 2 周进展）" : "刷新会前简报"}
           </button>
         )}
-        {phase === "prep" || phase === "live" || phase === "post" ? (
-          <MeetingLocalRecorder
-            meetingId={meeting.id}
-            transcriptStatus={meeting.transcriptStatus}
-            recordingBytes={meeting.recordingBytes}
-            transcriptError={meeting.transcriptError}
-            realtimeEnabled={asrOptions?.realtimeEnabled !== false}
-            chunkSeconds={asrOptions?.chunkSeconds ?? 12}
-            disabled={pending}
-            onFlash={flash}
-            onMeetingLive={() => setMeeting((m) => ({ ...m, status: "LIVE", transcriptStatus: "recording" }))}
-            onLiveTranscript={(plain) => {
-              setTranscript(plain);
-              setMeeting((m) => ({ ...m, transcriptText: plain, transcriptStatus: "recording" }));
-            }}
-            onUploaded={() => {
-              router.refresh();
-            }}
-          />
-        ) : null}
         {phase === "prep" && (
           <button
             type="button"
@@ -309,26 +290,47 @@ export function MeetingWorkspace({
       ) : null}
 
       {(message || error) && (
-        <p className={`text-xs ${error ? "text-red-600" : "text-emerald-700"}`}>{error || message}</p>
+        <div
+          className={`rounded-lg border px-3 py-2 text-sm ${
+            error
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          {error || message}
+        </div>
       )}
 
-      {phase === "prep" ? (
+      {phase === "prep" || phase === "live" || phase === "post" ? (
+        <MeetingLocalRecorder
+          meetingId={meeting.id}
+          transcriptStatus={meeting.transcriptStatus}
+          recordingBytes={meeting.recordingBytes}
+          transcriptError={meeting.transcriptError}
+          realtimeEnabled={asrOptions?.realtimeEnabled !== false}
+          chunkSeconds={asrOptions?.chunkSeconds ?? 12}
+          disabled={pending}
+          onFlash={flash}
+          onRecordingChange={setIsRecording}
+          onMeetingLive={() => setMeeting((m) => ({ ...m, status: "LIVE", transcriptStatus: "recording" }))}
+          onLiveTranscript={(plain) => {
+            setTranscript(plain);
+            setMeeting((m) => ({ ...m, transcriptText: plain, transcriptStatus: "recording" }));
+          }}
+          onUploaded={() => {
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {phase === "prep" && !isRecording ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议流程：开会准备 →{" "}
-          <span className="text-slate-700 font-medium">开始近实时录音</span>
-          → 讨论谁就点左侧谁 → 右侧会陆续出字 → 停止并上传 → 可选精修转写 → AI 拆分。
-          热词/纠偏在{" "}
+          建议：开会准备 → 上方「开始近实时录音」→ 讨论谁点左侧谁 → 停止并上传 → 精修/拆分。
+          热词在{" "}
           <Link href="/settings#integrations" className="text-sky-700 hover:underline">
             团队设置 · 语音识别
           </Link>
           。
-        </p>
-      ) : null}
-      {phase === "live" ? (
-        <p className="text-xs text-slate-500 leading-relaxed">
-          会中：开始聊某个伙伴时再点左侧打标；右侧转写区会近实时更新。记录本写入{" "}
-          <span className="font-mono text-slate-600">[14:32] 开始过 …</span>
-          。勿提前全点完议程。
         </p>
       ) : null}
 
@@ -474,11 +476,19 @@ export function MeetingWorkspace({
             />
           </div>
 
-          {phase === "live" ? (
+          {phase === "live" || isRecording ? (
             <div className="space-y-2 border-t border-slate-100 pt-3">
-              <div className="text-xs font-medium text-slate-500">近实时转写</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-medium text-slate-500">近实时转写</div>
+                {isRecording ? (
+                  <span className="text-[11px] text-rose-700 font-medium">录音中 · 自动刷新</span>
+                ) : null}
+              </div>
               <pre className="w-full max-h-[36vh] overflow-auto rounded-lg border border-violet-100 bg-violet-50/40 px-3 py-2 text-sm font-mono whitespace-pre-wrap text-slate-800">
-                {transcript.trim() || "（开始录音后，约每十数秒出现一截文字…）"}
+                {transcript.trim() ||
+                  (isRecording
+                    ? "（已开录，等待首段识别文字出现…）"
+                    : "（点上方「开始近实时录音」后，这里会陆续出字）")}
               </pre>
             </div>
           ) : null}
