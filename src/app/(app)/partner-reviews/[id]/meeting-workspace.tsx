@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type {
   ConfirmItemPayload,
   ConfirmedItemSnapshot,
@@ -23,6 +24,7 @@ import {
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
 import { isDingTalkClient, startDingTalkA1Recording } from "@/lib/dingtalk/client-record";
+import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 
 export type { MeetingClient, ReviewItemClient };
 
@@ -624,10 +626,24 @@ function tidyClientText(text: string) {
 }
 
 function PrepBriefView({ brief }: { brief: PartnerPrepBrief }) {
-  const todos =
+  const baseTodos =
     brief.todos?.length
       ? brief.todos
       : (brief.openTodos ?? []).map((t) => ({ ...t, done: false }));
+  const [doneMap, setDoneMap] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(baseTodos.map((t) => [t.id, t.done])),
+  );
+
+  useEffect(() => {
+    setDoneMap(Object.fromEntries(baseTodos.map((t) => [t.id, t.done])));
+    // 简报刷新或切换伙伴时重置本地勾选状态
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随简报内容指纹变化
+  }, [brief.partnerId, brief.windowLabel, baseTodos.map((t) => `${t.id}:${t.done}`).join("|")]);
+
+  const todos = baseTodos.map((t) => ({
+    ...t,
+    done: doneMap[t.id] ?? t.done,
+  }));
   const openCount = todos.filter((t) => !t.done).length;
   const doneCount = todos.filter((t) => t.done).length;
 
@@ -647,38 +663,49 @@ function PrepBriefView({ brief }: { brief: PartnerPrepBrief }) {
       </div>
 
       <div>
-        <div className="text-xs font-medium text-slate-500 mb-1.5">
-          待办摘录
-          {todos.length ? (
-            <span className="font-normal text-slate-400">
-              {" "}
-              · 待完成 {openCount}
-              {doneCount ? ` · 已完成 ${doneCount}` : ""}
-            </span>
-          ) : null}
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="text-xs font-medium text-slate-500">
+            待办摘录
+            {todos.length ? (
+              <span className="font-normal text-slate-400">
+                {" "}
+                · 待完成 {openCount}
+                {doneCount ? ` · 已完成 ${doneCount}` : ""}
+              </span>
+            ) : null}
+          </div>
+          <Link
+            href={`/partners/${brief.partnerId}`}
+            className="text-[11px] text-sky-700 hover:underline shrink-0"
+          >
+            在伙伴页处理
+          </Link>
         </div>
         {todos.length ? (
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {todos.slice(0, 12).map((t) => (
-              <li key={t.id} className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={t.done}
-                  readOnly
-                  tabIndex={-1}
-                  className="mt-0.5 rounded border-slate-300 text-emerald-600 pointer-events-none"
-                  aria-hidden
+              <li key={t.id} className="flex items-start gap-2.5 text-sm">
+                <TodoCompleteButton
+                  todoId={t.id}
+                  title={t.title}
+                  status={t.done ? "DONE" : "OPEN"}
+                  partnerId={brief.partnerId}
+                  size="sm"
+                  onStatusChange={(next) =>
+                    setDoneMap((prev) => ({ ...prev, [t.id]: next === "DONE" }))
+                  }
                 />
                 <div className="min-w-0 flex-1">
-                  <span
+                  <Link
+                    href={`/partners/${brief.partnerId}`}
                     className={
                       t.done
-                        ? "text-slate-400 line-through decoration-slate-400"
-                        : "text-slate-800"
+                        ? "text-slate-400 line-through decoration-slate-400 hover:text-slate-500"
+                        : "text-slate-800 hover:text-sky-700"
                     }
                   >
                     {t.title}
-                  </span>
+                  </Link>
                   {!t.done && t.overdue ? (
                     <span className="ml-1.5 text-[11px] text-red-600">逾期</span>
                   ) : null}

@@ -32,6 +32,7 @@ export function TodoCompleteDialog({
   partnerId,
   customerId,
   onClose,
+  onCompleted,
 }: {
   open: boolean;
   todoId: string;
@@ -39,6 +40,7 @@ export function TodoCompleteDialog({
   partnerId?: string | null;
   customerId?: string | null;
   onClose: () => void;
+  onCompleted?: () => void;
 }) {
   const t = useMessages().todos;
   const ip = useMessages().intakePanel;
@@ -139,6 +141,7 @@ export function TodoCompleteDialog({
       if (res.message) setFeedback({ tone: "ok", text: res.message });
       else if (res.warning) setFeedback({ tone: "warn", text: res.warning });
       else if (res.info) setFeedback({ tone: "info", text: res.info });
+      onCompleted?.();
       router.refresh();
       if (!res.warning) onClose();
     } finally {
@@ -281,6 +284,7 @@ export function TodoCompleteButton({
   customerId,
   className,
   size = "md",
+  onStatusChange,
 }: {
   todoId: string;
   title: string;
@@ -289,6 +293,8 @@ export function TodoCompleteButton({
   customerId?: string | null;
   className?: string;
   size?: "sm" | "md";
+  /** 完成/重开后回调（会前简报等快照 UI 可据此本地更新） */
+  onStatusChange?: (nextStatus: "OPEN" | "DONE") => void;
 }) {
   const m = useMessages().common;
   const router = useRouter();
@@ -302,6 +308,7 @@ export function TodoCompleteButton({
     setLoading(true);
     try {
       await toggleTodoAction(todoId);
+      onStatusChange?.("OPEN");
       router.refresh();
     } finally {
       setLoading(false);
@@ -336,6 +343,9 @@ export function TodoCompleteButton({
         partnerId={partnerId}
         customerId={customerId}
         onClose={() => setOpen(false)}
+        onCompleted={() => {
+          onStatusChange?.("DONE");
+        }}
       />
     </>
   );
