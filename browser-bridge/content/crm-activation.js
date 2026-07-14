@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.14";
+  const SCRIPT_VER = "1.1.15";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -546,15 +546,11 @@
     input.scrollIntoView({ block: "center", inline: "nearest" });
     await sleep(80);
 
-    // 鼠标点进号码框（模拟真人，避免焦点还在区号/邮箱）
-    const r = input.getBoundingClientRect();
-    const x = Math.floor(r.left + Math.min(Math.max(r.width * 0.35, 20), r.width - 8));
-    const y = Math.floor(r.top + r.height / 2);
-    input.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
-    input.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
-    input.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    // 号码框很宽：点「右半区中心」，远离左侧区号箭头，避免点偏
+    // x ≈ 左 + 70% 宽度；再兜底 60%、80% 各点一次
+    await clickSafeInsidePhoneNumberBox(input);
     input.focus();
-    await sleep(120);
+    await sleep(150);
 
     // 与公司名相同：原生 value setter + input/change（先不 blur，写完再 blur）
     setNativeValueNoBlur(input, local);
@@ -594,6 +590,43 @@
     setter.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new InputEvent("input", { bubbles: true, data: value, inputType: "insertText" }));
+  }
+
+  /** 在宽号码框内点更靠右的安全点（躲开左侧区号） */
+  async function clickSafeInsidePhoneNumberBox(input) {
+    const r = input.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) return;
+
+    // 优先点右半侧：70% / 60% / 80% 宽度处，垂直居中
+    const ratios = [0.7, 0.6, 0.8];
+    for (const ratio of ratios) {
+      const x = Math.floor(r.left + r.width * ratio);
+      const y = Math.floor(r.top + r.height * 0.5);
+      // 用 elementFromPoint 确认点到的是号码框或其子节点，而不是区号箭头
+      let hit = null;
+      try {
+        hit = document.elementFromPoint(x, y);
+      } catch (_) {}
+      const hitOk =
+        hit &&
+        (hit === input ||
+          input.contains(hit) ||
+          (hit.closest && hit.closest("input, textarea") === input) ||
+          /only enter|mobile phone/i.test((hit.getAttribute && hit.getAttribute("placeholder")) || ""));
+
+      const target = hitOk && hit ? hit : input;
+      const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window };
+      target.dispatchEvent(new MouseEvent("mousemove", opts));
+      target.dispatchEvent(new MouseEvent("mousedown", opts));
+      target.dispatchEvent(new MouseEvent("mouseup", opts));
+      target.dispatchEvent(new MouseEvent("click", opts));
+      await sleep(80);
+
+      // 焦点已进入号码相关控件即可
+      const active = document.activeElement;
+      if (active === input || (active && input.contains(active))) break;
+      if (active && /only enter|mobile phone/i.test(active.getAttribute("placeholder") || "")) break;
+    }
   }
 
   /** 全局按 placeholder 找号码框（截图像：…only enter the mobile phone num…） */
