@@ -182,27 +182,52 @@ export function buildDingTalkSuccessReply(opts: {
 }
 
 /**
- * 是否为录音/转写完成类事件。
- * 官方 A1：dinger_record_finish；同时兼容会议 ASR / 钉盘文件事件。
+ * 是否为录音/转写/听记完成类事件。
+ * 控制台「DingTalkA1听记变更」「小助理总结完成」以及 flash_minutes / dinger_record_finish 等均纳入。
  */
 export function isRecordingCompleteEvent(event: DingTalkEventPayload): boolean {
   const type = String(event.EventType ?? event.eventType ?? event.syncAction ?? "").toLowerCase();
+  const minutesEventType = String(
+    (event as { minutesEventType?: string }).minutesEventType ??
+      (event.data as { minutesEventType?: string } | undefined)?.minutesEventType ??
+      "",
+  ).toLowerCase();
+
   if (!type) {
     // 部分推送把业务字段放在顶层，无 EventType
     return !!(event.recordId || event.fileId || (event.data && typeof event.data === "object"));
   }
+
+  // 设备状态变更等噪音事件跳过
+  if (type.includes("device_status") || type.includes("assistant_status") || type.includes("agent_")) {
+    return false;
+  }
+
+  if (
+    minutesEventType.includes("summary") ||
+    minutesEventType.includes("generated") ||
+    minutesEventType.includes("finish")
+  ) {
+    return true;
+  }
+
   return (
     type === DINGER_RECORD_FINISH ||
     type.includes("dinger_record") ||
     type.includes("dinger") ||
     type.includes("record_finish") ||
-    type.includes("record") ||
+    type.includes("flash_minutes") ||
+    type.includes("listen") || // 听记
+    type.includes("tingji") ||
     type.includes("minutes") ||
+    type.includes("summary") ||
     type.includes("asr") ||
     type.includes("cloud_record") ||
     type.includes("a1") ||
     type.includes("storage_dentry") ||
     type.includes("file_add") ||
-    type.includes("ding_drive")
+    type.includes("ding_drive") ||
+    // 宽匹配「听记变更」类英文名
+    (type.includes("record") && !type.includes("status"))
   );
 }
