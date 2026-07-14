@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
-import { OpsCenterNav } from "@/components/ops-center-nav";
 import { toMeetingClient } from "@/lib/partner-review/meeting-client";
+import { DeleteMeetingButton } from "../delete-meeting-button";
 import { MeetingWorkspace } from "./meeting-workspace";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
@@ -43,9 +43,19 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
       <PageHeader
         title={meeting.title}
         desc={`${meeting.items.length} 个伙伴 · ${meeting.createdBy.name}`}
-        actions={<Badge tone={st.tone}>{st.label}</Badge>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Badge tone={st.tone}>{st.label}</Badge>
+            {meeting.status !== "DONE" ? (
+              <DeleteMeetingButton
+                meetingId={meeting.id}
+                meetingTitle={meeting.title}
+                redirectTo="/partner-reviews"
+              />
+            ) : null}
+          </div>
+        }
       />
-      <OpsCenterNav />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-3 max-w-7xl">
         <div className="text-xs text-slate-500">

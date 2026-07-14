@@ -2,8 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
-import { OpsCenterNav } from "@/components/ops-center-nav";
 import { CreateReviewMeetingForm } from "./create-form";
+import { DeleteMeetingButton } from "./delete-meeting-button";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
   DRAFT: { label: "草稿", tone: "zinc" },
@@ -56,10 +56,9 @@ export default async function PartnerReviewsPage({
     <div className="pb-16 space-y-0">
       <PageHeader
         title="过伙伴会议"
-        desc="选一批伙伴开会：会前准备、会中打标、会后确认摘要；已确认的会议可在历史中回看。"
+        desc="选一批伙伴开会：先开会准备拉取近 2 周进展，再开始开会打标；已确认的可在历史中回看。"
         actions={tab === "active" ? <CreateReviewMeetingForm partners={partners} /> : undefined}
       />
-      <OpsCenterNav />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-4 max-w-7xl">
         <div className="flex gap-1 border-b border-slate-200">
@@ -87,10 +86,10 @@ export default async function PartnerReviewsPage({
                 const partnerNames = m.items.map((i) => i.partner.name).slice(0, 4);
                 const more = m.items.length - partnerNames.length;
                 return (
-                  <li key={m.id}>
+                  <li key={m.id} className="flex flex-wrap items-center gap-3 py-3 px-1">
                     <Link
                       href={`/partner-reviews/${m.id}`}
-                      className="flex flex-wrap items-center gap-3 py-3 hover:bg-slate-50/80 px-1 rounded-lg"
+                      className="min-w-0 flex-1 flex flex-wrap items-center gap-3 hover:bg-slate-50/80 rounded-lg -mx-1 px-1 py-0.5"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-900 truncate">{m.title}</div>
@@ -109,6 +108,9 @@ export default async function PartnerReviewsPage({
                       </div>
                       <Badge tone={st.tone}>{tab === "history" ? "查看摘要" : st.label}</Badge>
                     </Link>
+                    {tab === "active" ? (
+                      <DeleteMeetingButton meetingId={m.id} meetingTitle={m.title} />
+                    ) : null}
                   </li>
                 );
               })}

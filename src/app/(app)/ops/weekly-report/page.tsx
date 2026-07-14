@@ -1,6 +1,5 @@
 import { requireSuperAdmin } from "@/lib/session";
 import { Card, PageHeader } from "@/components/ui";
-import { OpsCenterNav } from "@/components/ops-center-nav";
 import {
   getWeeklyReportSnapshotAction,
   listWeeklyReportSnapshotsAction,
@@ -26,7 +25,6 @@ export default async function OpsWeeklyReportPage({
   return (
     <div className="pb-16">
       <PageHeader title={m.ops.weeklyReport} desc={m.ops.weeklyReportDesc} />
-      <OpsCenterNav />
       <div className="px-4 sm:px-6 lg:px-8 max-w-4xl">
         <Card title={m.ops.weeklyTabHistory}>
           <WeeklyReportHistory

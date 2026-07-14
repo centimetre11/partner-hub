@@ -14,9 +14,11 @@ import {
   startPartnerReviewMeetingAction,
   attachDingTalkRecordingAction,
   confirmMeetingItemsAction,
+  markDingTalkRecordingStartedAction,
 } from "@/lib/partner-review/actions";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
+import { isDingTalkClient, startDingTalkA1Recording } from "@/lib/dingtalk/client-record";
 
 export type { MeetingClient, ReviewItemClient };
 
@@ -79,9 +81,37 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           ? "live"
           : "prep";
 
+  const needsPrep = meeting.items.some((it) => !it.prepBrief);
+  const canRunPrep = phase === "prep" || phase === "live";
+
+  function runPrep() {
+    run(async () => {
+      const res = await runMeetingPrepAction(meeting.id);
+      if (res.error) flash(undefined, res.error);
+      else {
+        flash(res.message ?? "开会准备已完成");
+        setMeeting((m) => ({
+          ...m,
+          status: m.status === "DRAFT" ? "PREP" : m.status,
+        }));
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
+        {canRunPrep && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={runPrep}
+            className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+          >
+            {needsPrep ? "开会准备（拉取近 2 周进展）" : "刷新会前简报"}
+          </button>
+        )}
         {phase === "prep" && (
           <>
             <button
@@ -89,54 +119,111 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               disabled={pending}
               onClick={() =>
                 run(async () => {
-                  const res = await runMeetingPrepAction(meeting.id);
+                  if (needsPrep) {
+                    const prep = await runMeetingPrepAction(meeting.id);
+                    if (prep.error) {
+                      flash(undefined, prep.error);
+                      return;
+                    }
+                  }
+                  const res = await startPartnerReviewMeetingAction(meeting.id);
                   if (res.error) flash(undefined, res.error);
                   else {
-                    flash(res.message);
-                    setMeeting((m) => ({ ...m, status: "PREP" }));
+                    setMeeting((m) => ({ ...m, status: "LIVE" }));
+                    flash(needsPrep ? "已生成简报并开始开会" : "会议已开始，点左侧伙伴可打标");
                     router.refresh();
                   }
                 })
               }
-              className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
             >
-              开会准备
+              开始开会
             </button>
             <button
               type="button"
               disabled={pending}
               onClick={() =>
                 run(async () => {
+                  if (needsPrep) {
+                    const prep = await runMeetingPrepAction(meeting.id);
+                    if (prep.error) {
+                      flash(undefined, prep.error);
+                      return;
+                    }
+                  }
                   const res = await startPartnerReviewMeetingAction(meeting.id);
-                  if (res.error) flash(undefined, res.error);
-                  else setMeeting((m) => ({ ...m, status: "LIVE" }));
+                  if (res.error) {
+                    flash(undefined, res.error);
+                    return;
+                  }
+                  setMeeting((m) => ({ ...m, status: "LIVE" }));
+                  try {
+                    const rec = await startDingTalkA1Recording({ meetingId: meeting.id });
+                    await markDingTalkRecordingStartedAction(meeting.id, { fid: rec.fid });
+                    flash("已开始开会，并已启动钉钉 A1 录音");
+                  } catch (e) {
+                    const tip = e instanceof Error ? e.message : String(e);
+                    flash(
+                      isDingTalkClient()
+                        ? `会议已开始，但自动录音失败：${tip}`
+                        : `会议已开始。${tip}；也可手动按 A1 开录，结束后回调会自动关联。`,
+                    );
+                  }
+                  router.refresh();
                 })
               }
-              className="rounded-lg bg-amber-600 text-white px-3 py-1.5 text-sm hover:bg-amber-700 disabled:opacity-40"
+              className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
             >
-              开始开会
+              录音并开始开会
             </button>
           </>
         )}
         {phase === "live" && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              run(async () => {
-                await saveLiveNotesAction(meeting.id, liveNotes);
-                const res = await endPartnerReviewMeetingAction(meeting.id);
-                if (res.error) flash(undefined, res.error);
-                else {
-                  setMeeting((m) => ({ ...m, status: "PROCESSING", liveNotes }));
-                  flash("会议已结束，可拉取转写或粘贴纪要后拆分");
+          <>
+            {!meeting.dingtalkFileId && !meeting.dingtalkRecordId ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  run(async () => {
+                    try {
+                      const rec = await startDingTalkA1Recording({ meetingId: meeting.id });
+                      await markDingTalkRecordingStartedAction(meeting.id, { fid: rec.fid });
+                      flash("已启动钉钉 A1 录音");
+                      router.refresh();
+                    } catch (e) {
+                      flash(undefined, e instanceof Error ? e.message : String(e));
+                    }
+                  })
                 }
-              })
-            }
-            className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-40"
-          >
-            结束会议
-          </button>
+                className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
+              >
+                启动 A1 录音
+              </button>
+            ) : (
+              <span className="rounded-lg bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1.5 text-xs">
+                A1 录音已关联
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                run(async () => {
+                  await saveLiveNotesAction(meeting.id, liveNotes);
+                  const res = await endPartnerReviewMeetingAction(meeting.id);
+                  if (res.error) flash(undefined, res.error);
+                  else {
+                    setMeeting((m) => ({ ...m, status: "PROCESSING", liveNotes }));
+                    flash("会议已结束，可拉取转写或粘贴纪要后拆分");
+                  }
+                })
+              }
+              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-40"
+            >
+              结束会议
+            </button>
+          </>
         )}
         {(phase === "post" || phase === "live") && (
           <button
@@ -170,10 +257,8 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   type="button"
                   onClick={() => {
                     setActiveItemId(item.id);
-                    if (
-                      phase !== "done" &&
-                      (phase === "live" || meeting.status === "PREP" || meeting.status === "DRAFT")
-                    ) {
+                    // 仅正式开会后点伙伴才打标；准备阶段只切换简报，避免误进 LIVE 导致看不到「开会准备」
+                    if (phase === "live") {
                       run(async () => {
                         const res = await discussPartnerAction(meeting.id, item.id);
                         if (res.error) {
@@ -183,7 +268,6 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                         if (res.liveNotes) setLiveNotes(res.liveNotes);
                         setMeeting((m) => ({
                           ...m,
-                          status: m.status === "DRAFT" || m.status === "PREP" ? "LIVE" : m.status,
                           liveNotes: res.liveNotes ?? m.liveNotes,
                           items: m.items.map((it) =>
                             it.id === item.id ? { ...it, status: it.status === "CONFIRMED" ? it.status : "DISCUSSED" } : it,
@@ -227,7 +311,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                     ? "已确认摘要（历史回看）"
                     : activeItem.prepBrief?.windowLabel
                       ? `简报窗口 ${activeItem.prepBrief.windowLabel}`
-                      : "点击「开会准备」生成近 2 周简报"}
+                      : "尚未拉取近 2 周进展，请点上方「开会准备」"}
                 </p>
               </div>
 
@@ -235,6 +319,21 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                 <ConfirmedHistoryPanel item={activeItem} />
               ) : (
                 <>
+                  {!activeItem.prepBrief && canRunPrep ? (
+                    <div className="rounded-lg border border-sky-100 bg-sky-50/80 px-3 py-3 space-y-2">
+                      <p className="text-sm text-slate-700">
+                        会前简报会汇总该伙伴近 2 周商务记录、时间线、开放待办与活跃商机，并给出讨论议题。
+                      </p>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={runPrep}
+                        className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+                      >
+                        立即生成会前简报
+                      </button>
+                    </div>
+                  ) : null}
                   {activeItem.prepBrief ? (
                     <div className="space-y-3 text-sm">
                       {activeItem.prepBrief.summaryLine && (
@@ -279,9 +378,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                         )}
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-sm text-slate-400">尚未生成会前简报</p>
-                  )}
+                  ) : null}
 
                   {phase === "post" && (
                     <PostConfirmPanel

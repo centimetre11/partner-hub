@@ -182,6 +182,27 @@ export async function attachDingTalkRecordingAction(
   return { ok: true };
 }
 
+/** JSAPI 启动 A1 录音成功后回写 fid，便于回调关联 */
+export async function markDingTalkRecordingStartedAction(
+  meetingId: string,
+  data: { fid?: number | string | null } = {},
+) {
+  await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({ where: { id: meetingId } });
+  if (!meeting) return { error: "会议不存在" };
+  const fid = data.fid != null && String(data.fid).trim() ? String(data.fid).trim() : null;
+  await db.partnerReviewMeeting.update({
+    where: { id: meetingId },
+    data: {
+      ...(fid ? { dingtalkFileId: fid } : {}),
+      status: meeting.status === "DRAFT" || meeting.status === "PREP" ? "LIVE" : meeting.status,
+      startedAt: meeting.startedAt ?? new Date(),
+    },
+  });
+  revalidateMeeting(meetingId);
+  return { ok: true };
+}
+
 export async function pullDingTalkTranscriptAction(meetingId: string) {
   await requireUser();
   const meeting = await db.partnerReviewMeeting.findUnique({ where: { id: meetingId } });
@@ -236,7 +257,16 @@ export async function saveTranscriptTextAction(meetingId: string, transcriptText
 
 export async function deletePartnerReviewMeetingAction(meetingId: string) {
   await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({
+    where: { id: meetingId },
+    select: { id: true, status: true },
+  });
+  if (!meeting) return { error: "会议不存在" };
+  if (meeting.status === "DONE") {
+    return { error: "已完成的历史会议不可删除，请从历史中回看" };
+  }
   await db.partnerReviewMeeting.delete({ where: { id: meetingId } });
   revalidatePath("/partner-reviews");
+  revalidatePath("/ops");
   return { ok: true };
 }
