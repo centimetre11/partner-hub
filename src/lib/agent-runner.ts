@@ -121,7 +121,10 @@ export async function runAgent(
       const { isWeeklyReportAgent } = await import("./weekly-report-config");
       if (isWeeklyReportAgent(agent)) {
         const { runWeeklyReportPipeline } = await import("./weekly-report");
-        const wr = await runWeeklyReportPipeline(agent);
+        const wr = await runWeeklyReportPipeline(agent, {
+          agentRunId: run.id,
+          source: triggeredBy === "manual" ? "MANUAL" : "SCHEDULED",
+        });
         await db.agentRun.update({
           where: { id: run.id },
           data: {

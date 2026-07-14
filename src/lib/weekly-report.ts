@@ -604,8 +604,45 @@ export type WeeklyPipelineResult = {
   runStatus: "SUCCESS" | "PARTIAL_SUCCESS";
 };
 
+async function persistWeeklyReportSnapshot(data: {
+  kind: "PERSONAL" | "MANAGER_DIGEST";
+  weekLabel: string;
+  windowStart: Date;
+  windowEnd: Date;
+  locale: string;
+  subject: string;
+  html: string;
+  text: string;
+  userId?: string | null;
+  userName?: string | null;
+  source: "SCHEDULED" | "MANUAL" | "TEST";
+  agentRunId?: string | null;
+}) {
+  try {
+    await db.weeklyReportSnapshot.create({
+      data: {
+        kind: data.kind,
+        weekLabel: data.weekLabel,
+        windowStart: data.windowStart,
+        windowEnd: data.windowEnd,
+        locale: data.locale,
+        subject: data.subject,
+        html: data.html,
+        text: data.text,
+        userId: data.userId ?? null,
+        userName: data.userName ?? null,
+        source: data.source,
+        agentRunId: data.agentRunId ?? null,
+      },
+    });
+  } catch (e) {
+    console.error("[weekly-report] persist snapshot failed:", e);
+  }
+}
+
 export async function runWeeklyReportPipeline(
-  agent: Pick<Agent, "queryConfig" | "timezone" | "createdById" | "name">
+  agent: Pick<Agent, "queryConfig" | "timezone" | "createdById" | "name">,
+  opts: { agentRunId?: string | null; source?: "SCHEDULED" | "MANUAL" } = {},
 ): Promise<WeeklyPipelineResult> {
   const config = parseWeeklyReportConfig(agent.queryConfig);
   if (!config) {
@@ -681,6 +718,20 @@ export async function runWeeklyReportPipeline(
       args: { to: s.email, cc: cc || undefined, subject },
       result: result.slice(0, 200),
     });
+    await persistWeeklyReportSnapshot({
+      kind: "PERSONAL",
+      weekLabel: window.label,
+      windowStart: window.start,
+      windowEnd: window.end,
+      locale,
+      subject,
+      html,
+      text,
+      userId: s.userId,
+      userName: s.name,
+      source: opts.source ?? "SCHEDULED",
+      agentRunId: opts.agentRunId,
+    });
   }
   pushNotes.push(`个人周报已发 ${sentPersonal} 人${ccManagers ? "（抄送管理者）" : ""}`);
   if (skippedInactive) pushNotes.push(`跳过无活动 ${skippedInactive} 人`);
@@ -703,6 +754,18 @@ export async function runWeeklyReportPipeline(
     managerOk = /Email sent/i.test(result);
     toolLog.push({ tool: "send_email", args: { to: managerEmails, subject }, result: result.slice(0, 200) });
     pushNotes.push(managerOk ? `管理者汇总已发（${managerEmails.length} 人）` : `管理者汇总发送失败`);
+    await persistWeeklyReportSnapshot({
+      kind: "MANAGER_DIGEST",
+      weekLabel: window.label,
+      windowStart: window.start,
+      windowEnd: window.end,
+      locale: digestLocale,
+      subject,
+      html,
+      text,
+      source: opts.source ?? "SCHEDULED",
+      agentRunId: opts.agentRunId,
+    });
   } else {
     pushNotes.push("管理者汇总未发（未解析到收件人）");
   }
@@ -780,6 +843,19 @@ export async function sendSingleUserReport(opts: {
   const ctx = { actions: [] as string[] };
   const result = await runSendEmailTool({ to, subject, body: text, html }, ctx);
   const ok = /Email sent/i.test(result);
+  await persistWeeklyReportSnapshot({
+    kind: "PERSONAL",
+    weekLabel: window.label,
+    windowStart: window.start,
+    windowEnd: window.end,
+    locale,
+    subject,
+    html,
+    text,
+    userId: user.id,
+    userName: user.name,
+    source: "TEST",
+  });
   return {
     ok,
     message: ok

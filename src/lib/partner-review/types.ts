@@ -26,3 +26,28 @@ export type ConfirmItemPayload = {
     include: boolean;
   }[];
 };
+
+/** 确认入库时冻结的摘要，供历史回看 */
+export type ConfirmedItemSnapshot = {
+  confirmedAt: string;
+  coreNotes: string;
+  businessRecordTitle: string;
+  businessRecordContent: string;
+  skipBusinessRecord: boolean;
+  wroteBusinessRecord: boolean;
+  todos: {
+    title: string;
+    detail: string | null;
+    dueDate: string | null;
+    todoItemId?: string | null;
+  }[];
+};
+
+export function parseConfirmedSnapshot(raw: string | null | undefined): ConfirmedItemSnapshot | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ConfirmedItemSnapshot;
+  } catch {
+    return null;
+  }
+}

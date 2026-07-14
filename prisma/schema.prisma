@@ -48,6 +48,7 @@ model User {
   wecomBindCode String? // 企微一键绑定码（6 位，短期有效）
   wecomBindCodeExpiresAt DateTime?
   partnerReviewMeetings PartnerReviewMeeting[]
+  weeklyReportSnapshots WeeklyReportSnapshot[]
 }
 
 model Partner {
@@ -660,6 +661,35 @@ model AgentRun {
   finishedAt DateTime?
   notifications Notification[]
   documents     Document[]
+  weeklyReportSnapshots WeeklyReportSnapshot[]
+}
+
+// 团队周报历史快照（个人邮件 / 管理者汇总）
+model WeeklyReportSnapshot {
+  id          String    @id @default(cuid())
+  // PERSONAL | MANAGER_DIGEST
+  kind        String
+  weekLabel   String
+  windowStart DateTime
+  windowEnd   DateTime
+  locale      String    @default("zh")
+  subject     String
+  html        String
+  text        String?
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName    String?
+  // SCHEDULED | MANUAL | TEST
+  source      String    @default("SCHEDULED")
+  agentRunId  String?
+  agentRun    AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([weekLabel])
+  @@index([kind, createdAt])
+  @@index([userId, createdAt])
+  @@index([agentRunId])
 }
 
 model Notification {
@@ -1131,6 +1161,8 @@ model PartnerReviewItem {
   markerInsertedAt  DateTime?
   prepBrief         String? // JSON：进展 / 待办 / AI 议题
   coreNotes         String? // 会后确认的核心讨论摘要
+  // JSON：确认入库时的完整摘要快照（商务记录标题/正文、待办、是否跳过等）
+  confirmedSnapshot String?
   // PENDING | DISCUSSED | CONFIRMED
   status            String   @default("PENDING")
   createdAt         DateTime @default(now())

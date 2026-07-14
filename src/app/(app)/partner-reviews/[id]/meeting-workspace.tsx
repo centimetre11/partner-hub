@@ -2,7 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { PartnerPrepBrief } from "@/lib/partner-review/types";
+import {
+  parseConfirmedSnapshot,
+  type ConfirmItemPayload,
+  type ConfirmedItemSnapshot,
+  type PartnerPrepBrief,
+} from "@/lib/partner-review/types";
 import {
   discussPartnerAction,
   endPartnerReviewMeetingAction,
@@ -15,7 +20,6 @@ import {
   attachDingTalkRecordingAction,
   confirmMeetingItemsAction,
 } from "@/lib/partner-review/actions";
-import type { ConfirmItemPayload } from "@/lib/partner-review/types";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 
 export type ReviewItemClient = {
@@ -28,6 +32,7 @@ export type ReviewItemClient = {
   discussedAt: string | null;
   prepBrief: PartnerPrepBrief | null;
   coreNotes: string | null;
+  confirmedSnapshot: ConfirmedItemSnapshot | null;
   todoDrafts: {
     id: string;
     title: string;
@@ -210,7 +215,10 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   type="button"
                   onClick={() => {
                     setActiveItemId(item.id);
-                    if (phase === "live" || meeting.status === "PREP" || meeting.status === "DRAFT") {
+                    if (
+                      phase !== "done" &&
+                      (phase === "live" || meeting.status === "PREP" || meeting.status === "DRAFT")
+                    ) {
                       run(async () => {
                         const res = await discussPartnerAction(meeting.id, item.id);
                         if (res.error) {
@@ -260,67 +268,75 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               <div>
                 <h3 className="text-base font-semibold text-slate-900">{activeItem.partnerName}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {activeItem.prepBrief?.windowLabel
-                    ? `简报窗口 ${activeItem.prepBrief.windowLabel}`
-                    : "点击「开会准备」生成近 2 周简报"}
+                  {phase === "done"
+                    ? "已确认摘要（历史回看）"
+                    : activeItem.prepBrief?.windowLabel
+                      ? `简报窗口 ${activeItem.prepBrief.windowLabel}`
+                      : "点击「开会准备」生成近 2 周简报"}
                 </p>
               </div>
 
-              {activeItem.prepBrief ? (
-                <div className="space-y-3 text-sm">
-                  {activeItem.prepBrief.summaryLine && (
-                    <p className="text-slate-700 leading-relaxed">{activeItem.prepBrief.summaryLine}</p>
-                  )}
-                  <div>
-                    <div className="text-xs font-medium text-slate-500 mb-1">AI 推荐议题</div>
-                    <ul className="list-disc pl-5 space-y-1 text-slate-700">
-                      {activeItem.prepBrief.aiTopics.map((t) => (
-                        <li key={t}>{t}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium text-slate-500 mb-1">开放待办摘录</div>
-                    {activeItem.prepBrief.openTodos.length ? (
-                      <ul className="space-y-1">
-                        {activeItem.prepBrief.openTodos.slice(0, 8).map((t) => (
-                          <li key={t.id} className="text-xs text-slate-600">
-                            {t.overdue ? <span className="text-red-600 mr-1">逾期</span> : null}
-                            {t.title}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-slate-400">无开放待办</p>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium text-slate-500 mb-1">近两周进展</div>
-                    {activeItem.prepBrief.progress.length ? (
-                      <ul className="space-y-1">
-                        {activeItem.prepBrief.progress.slice(0, 6).map((p, i) => (
-                          <li key={`${p.title}-${i}`} className="text-xs text-slate-600">
-                            [{p.category}] {p.title}
-                            {p.contentPreview ? ` — ${p.contentPreview}` : ""}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-slate-400">近两周无商务记录</p>
-                    )}
-                  </div>
-                </div>
+              {phase === "done" ? (
+                <ConfirmedHistoryPanel item={activeItem} />
               ) : (
-                <p className="text-sm text-slate-400">尚未生成会前简报</p>
-              )}
+                <>
+                  {activeItem.prepBrief ? (
+                    <div className="space-y-3 text-sm">
+                      {activeItem.prepBrief.summaryLine && (
+                        <p className="text-slate-700 leading-relaxed">{activeItem.prepBrief.summaryLine}</p>
+                      )}
+                      <div>
+                        <div className="text-xs font-medium text-slate-500 mb-1">AI 推荐议题</div>
+                        <ul className="list-disc pl-5 space-y-1 text-slate-700">
+                          {activeItem.prepBrief.aiTopics.map((t) => (
+                            <li key={t}>{t}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-slate-500 mb-1">开放待办摘录</div>
+                        {activeItem.prepBrief.openTodos.length ? (
+                          <ul className="space-y-1">
+                            {activeItem.prepBrief.openTodos.slice(0, 8).map((t) => (
+                              <li key={t.id} className="text-xs text-slate-600">
+                                {t.overdue ? <span className="text-red-600 mr-1">逾期</span> : null}
+                                {t.title}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-slate-400">无开放待办</p>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium text-slate-500 mb-1">近两周进展</div>
+                        {activeItem.prepBrief.progress.length ? (
+                          <ul className="space-y-1">
+                            {activeItem.prepBrief.progress.slice(0, 6).map((p, i) => (
+                              <li key={`${p.title}-${i}`} className="text-xs text-slate-600">
+                                [{p.category}] {p.title}
+                                {p.contentPreview ? ` — ${p.contentPreview}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-slate-400">近两周无商务记录</p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">尚未生成会前简报</p>
+                  )}
 
-              {phase === "post" && (
-                <PostConfirmPanel
-                  item={activeItem}
-                  draft={confirmDrafts[activeItem.id]}
-                  onChange={(d) => setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))}
-                  proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
-                />
+                  {phase === "post" && (
+                    <PostConfirmPanel
+                      item={activeItem}
+                      draft={confirmDrafts[activeItem.id]}
+                      onChange={(d) => setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))}
+                      proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
+                    />
+                  )}
+                </>
               )}
             </>
           )}
@@ -329,17 +345,31 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
         {/* Notes / transcript */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
           <div>
-            <div className="text-xs font-medium text-slate-500 mb-1">会中记录本（含伙伴标记）</div>
+            <div className="text-xs font-medium text-slate-500 mb-1">
+              {phase === "done" ? "会中记录本（只读）" : "会中记录本（含伙伴标记）"}
+            </div>
             <textarea
               value={liveNotes}
               onChange={(e) => setLiveNotes(e.target.value)}
+              readOnly={phase === "done"}
               rows={12}
               placeholder="点左侧伙伴会自动插入 <<<PARTNER:id|name>>> 标记；也可在此手写纪要。"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed"
+              className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed ${
+                phase === "done" ? "bg-slate-50 text-slate-700" : ""
+              }`}
             />
           </div>
 
-          {(phase === "post" || phase === "done" || meeting.status === "PROCESSING") && (
+          {phase === "done" && (
+            <div className="space-y-2 border-t border-slate-100 pt-3">
+              <div className="text-xs font-medium text-slate-500">钉钉转写（只读）</div>
+              <pre className="w-full max-h-[40vh] overflow-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono whitespace-pre-wrap text-slate-700">
+                {transcript.trim() || "（无转写）"}
+              </pre>
+            </div>
+          )}
+
+          {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
             <div className="space-y-3 border-t border-slate-100 pt-3">
               <div className="text-xs font-medium text-slate-500">钉钉转写</div>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -443,7 +473,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                             businessRecordTitle: row.businessRecordTitle,
                             businessRecordContent: row.businessRecordContent,
                             skipBusinessRecord: !row.segmentText.trim(),
-                            todos: row.todos.map((t, i) => ({
+                            todos: row.todos.map((t) => ({
                               id: undefined,
                               title: t.title,
                               detail: t.detail ?? "",
@@ -509,11 +539,36 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                       const res = await confirmMeetingItemsAction(meeting.id, items);
                       if (res.error) flash(undefined, res.error);
                       else {
-                        flash(`已确认入库 ${res.results?.length ?? 0} 个伙伴`);
+                        flash(`已确认入库 ${res.results?.length ?? 0} 个伙伴，已记入历史`);
                         setMeeting((m) => ({
                           ...m,
                           status: "DONE",
-                          items: m.items.map((it) => ({ ...it, status: "CONFIRMED" })),
+                          items: m.items.map((it) => {
+                            const d = confirmDrafts[it.id];
+                            if (!d) return { ...it, status: "CONFIRMED" };
+                            const todos = d.todos
+                              .filter((t) => t.include && t.title.trim())
+                              .map((t) => ({
+                                title: t.title.trim(),
+                                detail: t.detail?.trim() || null,
+                                dueDate: t.dueDate || null,
+                                todoItemId: null,
+                              }));
+                            return {
+                              ...it,
+                              status: "CONFIRMED",
+                              coreNotes: d.coreNotes,
+                              confirmedSnapshot: {
+                                confirmedAt: new Date().toISOString(),
+                                coreNotes: d.coreNotes,
+                                businessRecordTitle: d.businessRecordTitle,
+                                businessRecordContent: d.businessRecordContent,
+                                skipBusinessRecord: d.skipBusinessRecord,
+                                wroteBusinessRecord: !d.skipBusinessRecord && !!d.businessRecordTitle.trim(),
+                                todos,
+                              },
+                            };
+                          }),
                         }));
                       }
                     })
@@ -533,6 +588,77 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function ConfirmedHistoryPanel({ item }: { item: ReviewItemClient }) {
+  const snap =
+    item.confirmedSnapshot ??
+    ({
+      confirmedAt: "",
+      coreNotes: item.coreNotes ?? "",
+      businessRecordTitle: "",
+      businessRecordContent: "",
+      skipBusinessRecord: true,
+      wroteBusinessRecord: false,
+      todos: item.todoDrafts
+        .filter((t) => t.confirmed)
+        .map((t) => ({
+          title: t.title,
+          detail: t.detail,
+          dueDate: t.dueDate?.slice(0, 10) ?? null,
+          todoItemId: null,
+        })),
+    } satisfies ConfirmedItemSnapshot);
+
+  return (
+    <div className="space-y-4 text-sm border-t border-slate-100 pt-3">
+      <div>
+        <div className="text-xs font-medium text-slate-500 mb-1">核心讨论</div>
+        <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
+          {snap.coreNotes.trim() || "（无）"}
+        </p>
+      </div>
+
+      <div>
+        <div className="text-xs font-medium text-slate-500 mb-1">商务记录</div>
+        {snap.skipBusinessRecord || !snap.wroteBusinessRecord ? (
+          <p className="text-xs text-slate-400">确认时未写入商务记录</p>
+        ) : (
+          <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
+            <div className="font-medium text-slate-900">{snap.businessRecordTitle || "（无标题）"}</div>
+            {snap.businessRecordContent ? (
+              <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
+                {snap.businessRecordContent}
+              </p>
+            ) : null}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div className="text-xs font-medium text-slate-500 mb-1">已入库待办</div>
+        {snap.todos.length ? (
+          <ul className="space-y-2">
+            {snap.todos.map((t, i) => (
+              <li key={`${t.title}-${i}`} className="rounded-lg border border-slate-100 px-3 py-2">
+                <div className="font-medium text-slate-800">{t.title}</div>
+                {t.detail ? <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-wrap">{t.detail}</p> : null}
+                {t.dueDate ? <p className="text-[11px] text-slate-400 mt-1">截止日期 {t.dueDate.slice(0, 10)}</p> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-400">无待办</p>
+        )}
+      </div>
+
+      {snap.confirmedAt ? (
+        <p className="text-[11px] text-slate-400">
+          确认于 {new Date(snap.confirmedAt).toLocaleString("zh-CN", { hour12: false })}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -704,6 +830,7 @@ export function toMeetingClient(raw: {
     discussedAt: Date | null;
     prepBrief: string | null;
     coreNotes: string | null;
+    confirmedSnapshot?: string | null;
     partner: { id: string; name: string; tier: string | null };
     todoDrafts: Array<{
       id: string;
@@ -735,6 +862,7 @@ export function toMeetingClient(raw: {
       discussedAt: it.discussedAt?.toISOString() ?? null,
       prepBrief: parseBrief(it.prepBrief),
       coreNotes: it.coreNotes,
+      confirmedSnapshot: parseConfirmedSnapshot(it.confirmedSnapshot),
       todoDrafts: it.todoDrafts.map((t) => ({
         id: t.id,
         title: t.title,

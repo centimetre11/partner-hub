@@ -2,11 +2,11 @@ import "server-only";
 
 import { db } from "../db";
 import { persistBusinessRecord } from "../business-record-core";
-import type { ConfirmItemPayload } from "./types";
+import type { ConfirmItemPayload, ConfirmedItemSnapshot } from "./types";
 
 export type { ConfirmItemPayload } from "./types";
 
-/** 人工确认后写入商务记录、MEETING 时间线、待办 */
+/** 人工确认后写入商务记录、MEETING 时间线、待办，并冻结确认摘要快照 */
 export async function applyPartnerReviewConfirm(opts: {
   meetingId: string;
   userId: string;
@@ -25,6 +25,7 @@ export async function applyPartnerReviewConfirm(opts: {
   for (const payload of opts.items) {
     const item = meeting.items.find((i) => i.id === payload.itemId);
     if (!item) continue;
+    if (item.status === "CONFIRMED") continue;
 
     let wroteRecord = false;
     if (!payload.skipBusinessRecord && payload.businessRecordTitle.trim()) {
@@ -55,6 +56,7 @@ export async function applyPartnerReviewConfirm(opts: {
       },
     });
 
+    const confirmedTodos: ConfirmedItemSnapshot["todos"] = [];
     let todoCount = 0;
     for (const [idx, t] of payload.todos.entries()) {
       if (!t.include || !t.title.trim()) continue;
@@ -71,6 +73,12 @@ export async function applyPartnerReviewConfirm(opts: {
         },
       });
       todoCount += 1;
+      confirmedTodos.push({
+        title: t.title.trim(),
+        detail: t.detail?.trim() || null,
+        dueDate: t.dueDate || null,
+        todoItemId: todo.id,
+      });
 
       if (t.id) {
         await db.partnerReviewTodoDraft.update({
@@ -93,10 +101,21 @@ export async function applyPartnerReviewConfirm(opts: {
       }
     }
 
+    const snapshot: ConfirmedItemSnapshot = {
+      confirmedAt: new Date().toISOString(),
+      coreNotes: payload.coreNotes?.trim() || "",
+      businessRecordTitle: payload.businessRecordTitle?.trim() || "",
+      businessRecordContent: payload.businessRecordContent?.trim() || "",
+      skipBusinessRecord: !!payload.skipBusinessRecord,
+      wroteBusinessRecord: wroteRecord,
+      todos: confirmedTodos,
+    };
+
     await db.partnerReviewItem.update({
       where: { id: item.id },
       data: {
         coreNotes: payload.coreNotes?.trim() || null,
+        confirmedSnapshot: JSON.stringify(snapshot),
         status: "CONFIRMED",
       },
     });

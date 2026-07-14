@@ -203,8 +203,83 @@ export async function sendWeeklyReportTestAction(formData: FormData) {
       creatorId: agent?.createdById ?? null,
       agentConfig: agent?.queryConfig ?? null,
     });
+    revalidatePath("/ops/weekly-report");
     return res.ok ? { ok: true, message: res.message } : { error: res.message };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export type WeeklyReportSnapshotListItem = {
+  id: string;
+  kind: string;
+  weekLabel: string;
+  subject: string;
+  userName: string | null;
+  source: string;
+  locale: string;
+  createdAt: string;
+};
+
+export async function listWeeklyReportSnapshotsAction(opts?: {
+  take?: number;
+}): Promise<WeeklyReportSnapshotListItem[]> {
+  await requireSuperAdmin();
+  const take = Math.min(Math.max(opts?.take ?? 80, 1), 200);
+  const rows = await db.weeklyReportSnapshot.findMany({
+    orderBy: { createdAt: "desc" },
+    take,
+    select: {
+      id: true,
+      kind: true,
+      weekLabel: true,
+      subject: true,
+      userName: true,
+      source: true,
+      locale: true,
+      createdAt: true,
+    },
+  });
+  return rows.map((r) => ({
+    ...r,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+export type WeeklyReportSnapshotDetail = WeeklyReportSnapshotListItem & {
+  html: string;
+  text: string | null;
+  windowStart: string;
+  windowEnd: string;
+};
+
+export async function getWeeklyReportSnapshotAction(
+  id: string,
+): Promise<WeeklyReportSnapshotDetail | null> {
+  await requireSuperAdmin();
+  if (!id) return null;
+  const row = await db.weeklyReportSnapshot.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      kind: true,
+      weekLabel: true,
+      subject: true,
+      userName: true,
+      source: true,
+      locale: true,
+      createdAt: true,
+      html: true,
+      text: true,
+      windowStart: true,
+      windowEnd: true,
+    },
+  });
+  if (!row) return null;
+  return {
+    ...row,
+    createdAt: row.createdAt.toISOString(),
+    windowStart: row.windowStart.toISOString(),
+    windowEnd: row.windowEnd.toISOString(),
+  };
 }
