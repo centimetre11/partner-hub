@@ -16,11 +16,11 @@ export async function GET(req: Request) {
     const customers = await db.crmCustomer.findMany({
       where: {
         OR: [
-          { name: { contains: q } },
-          { id: { contains: q } },
-          { city: { contains: q } },
-          { salesman: { contains: q } },
-          { presales: { contains: q } },
+          { name: { contains: q, mode: "insensitive" } },
+          { id: { contains: q, mode: "insensitive" } },
+          { city: { contains: q, mode: "insensitive" } },
+          { salesman: { contains: q, mode: "insensitive" } },
+          { presales: { contains: q, mode: "insensitive" } },
         ],
       },
       orderBy: { name: "asc" },

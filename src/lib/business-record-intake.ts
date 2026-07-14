@@ -30,13 +30,13 @@ async function findCrmCustomersByName(query: string, limit = 6) {
   const q = query.trim();
   if (!q) return [];
   const exact = await db.crmCustomer.findMany({
-    where: { name: { equals: q } },
+    where: { name: { equals: q, mode: "insensitive" } },
     select: { id: true, name: true },
     take: limit,
   });
   if (exact.length) return exact;
   return db.crmCustomer.findMany({
-    where: { name: { contains: q } },
+    where: { name: { contains: q, mode: "insensitive" } },
     select: { id: true, name: true },
     take: limit,
     orderBy: { name: "asc" },

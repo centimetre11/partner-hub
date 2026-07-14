@@ -57,11 +57,11 @@ export async function searchCrmCustomersAction(query: string, limit = 20) {
   return db.crmCustomer.findMany({
     where: {
       OR: [
-        { name: { contains: q } },
-        { id: { contains: q } },
-        { city: { contains: q } },
-        { salesman: { contains: q } },
-        { presales: { contains: q } },
+        { name: { contains: q, mode: "insensitive" } },
+        { id: { contains: q, mode: "insensitive" } },
+        { city: { contains: q, mode: "insensitive" } },
+        { salesman: { contains: q, mode: "insensitive" } },
+        { presales: { contains: q, mode: "insensitive" } },
       ],
     },
     orderBy: { name: "asc" },
@@ -125,9 +125,9 @@ async function suggestCrmCustomersByEntityName(entityName: string, limit: number
   const rows = await db.crmCustomer.findMany({
     where: {
       OR: [
-        { name: { contains: name } },
-        ...(prefix.length >= 3 ? [{ name: { contains: prefix } }] : []),
-        ...words.map((w) => ({ name: { contains: w } })),
+        { name: { contains: name, mode: "insensitive" } },
+        ...(prefix.length >= 3 ? [{ name: { contains: prefix, mode: "insensitive" as const } }] : []),
+        ...words.map((w) => ({ name: { contains: w, mode: "insensitive" as const } })),
       ],
     },
     take: 60,
