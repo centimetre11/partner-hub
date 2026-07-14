@@ -1124,6 +1124,27 @@ model SystemDingTalkConfig {
   updatedAt DateTime @updatedAt
 }
 
+// 自研录音 / Whisper 识别优化（热词、纠偏、近实时）
+model SystemAsrConfig {
+  id                        String   @id @default("singleton")
+  /// 会中分片近实时转写
+  realtimeEnabled           Boolean  @default(true)
+  /// 分片秒数（8–30）
+  chunkSeconds              Int      @default(12)
+  language                  String   @default("zh")
+  /// 追加到 Whisper initial_prompt 的场景说明
+  basePrompt                String?
+  /// 热词，每行一个
+  hotwords                  String?
+  /// 纠偏规则，每行：错写=>正确
+  correctionRules           String?
+  /// 会后整段转写是否再用 LLM 按伙伴名纠偏
+  llmCorrectEnabled         Boolean  @default(true)
+  /// prompt 是否自动拼入本场伙伴名
+  includePartnerNames       Boolean  @default(true)
+  updatedAt                 DateTime @updatedAt
+}
+
 // 开会过伙伴：一场内部评审会
 model PartnerReviewMeeting {
   id                     String   @id @default(cuid())
@@ -1140,6 +1161,17 @@ model PartnerReviewMeeting {
   dingtalkSpaceId        String?
   dingtalkFileId         String?
   transcriptText         String?
+  /// 带句子 startTime 的结构化转写 JSON（TimedTranscriptDoc）
+  transcriptJson         String?
+  /// 自研录音：本地文件相对路径（uploads/recordings/...）
+  recordingPath          String?
+  recordingMimeType      String?
+  recordingBytes         Int?
+  recordingStartedAt     DateTime?
+  recordingEndedAt       DateTime?
+  /// idle | recording | uploaded | transcribing | ready | error
+  transcriptStatus       String?
+  transcriptError        String?
   liveNotes              String? // 会中侧栏记录本（含 <<<PARTNER:id|name>>> 标记）
   prepGeneratedAt        DateTime?
   createdAt              DateTime @default(now())

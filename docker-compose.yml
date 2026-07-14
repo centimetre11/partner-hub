@@ -17,6 +17,35 @@ services:
     networks:
       - default
 
+  # 开源转写：faster-whisper via whisper-asr-webservice
+  # https://github.com/ahmetoner/whisper-asr-webservice
+  whisper-asr:
+    # 默认 CPU；有 GPU 时可改为 latest-gpu 并启用下方 deploy
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    container_name: partner-hub-whisper-asr-1
+    restart: unless-stopped
+    environment:
+      - ASR_ENGINE=faster_whisper
+      # CPU 建议 medium/small；有 GPU 可改 large-v3
+      - ASR_MODEL=medium
+      - ASR_MODEL_PATH=/root/.cache/whisper
+    volumes:
+      - whisper-cache:/root/.cache/whisper
+    # GPU 示例（需 NVIDIA Container Toolkit）:
+    # image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    # environment ASR_MODEL=large-v3
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    ports:
+      - "9000:9000"
+    networks:
+      - default
+
   partner-hub:
     build: .
     container_name: partner-hub-partner-hub-1
@@ -30,12 +59,17 @@ services:
       - DATABASE_URL=postgresql://partnerhub:ph_pg_3Qx9Lm2Wv7Kc@db:5432/partnerhub
       - WECOM_BOT_ENABLED=false
       - HOSTNAME=0.0.0.0
+      - UPLOAD_DIR=/data/uploads
+      - ASR_BASE_URL=http://whisper-asr:9000
+      - ASR_PROVIDER=whisper_asr_webservice
+      - ASR_LANGUAGE=zh
     volumes:
       - partner-data:/data
       - partner-uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
+      # whisper-asr 可选：未启动时「转写录音」会提示配置 ASR_BASE_URL
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -72,3 +106,4 @@ volumes:
   partner-data:
   partner-uploads:
   pg-data:
+  whisper-cache:

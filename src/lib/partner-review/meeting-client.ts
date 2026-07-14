@@ -12,6 +12,7 @@ export type ReviewItemClient = {
   sortOrder: number;
   status: string;
   discussedAt: string | null;
+  markerInsertedAt: string | null;
   prepBrief: PartnerPrepBrief | null;
   coreNotes: string | null;
   confirmedSnapshot: ConfirmedItemSnapshot | null;
@@ -35,6 +36,12 @@ export type MeetingClient = {
   dingtalkConferenceId: string | null;
   dingtalkSpaceId: string | null;
   dingtalkFileId: string | null;
+  recordingPath: string | null;
+  recordingBytes: number | null;
+  recordingStartedAt: string | null;
+  recordingEndedAt: string | null;
+  transcriptStatus: string | null;
+  transcriptError: string | null;
   items: ReviewItemClient[];
 };
 
@@ -79,12 +86,19 @@ export function toMeetingClient(raw: {
   dingtalkConferenceId: string | null;
   dingtalkSpaceId: string | null;
   dingtalkFileId: string | null;
+  recordingPath?: string | null;
+  recordingBytes?: number | null;
+  recordingStartedAt?: Date | null;
+  recordingEndedAt?: Date | null;
+  transcriptStatus?: string | null;
+  transcriptError?: string | null;
   items: Array<{
     id: string;
     partnerId: string;
     sortOrder: number;
     status: string;
     discussedAt: Date | null;
+    markerInsertedAt?: Date | null;
     prepBrief: string | null;
     coreNotes: string | null;
     confirmedSnapshot?: string | null;
@@ -109,6 +123,12 @@ export function toMeetingClient(raw: {
     dingtalkConferenceId: raw.dingtalkConferenceId,
     dingtalkSpaceId: raw.dingtalkSpaceId,
     dingtalkFileId: raw.dingtalkFileId,
+    recordingPath: raw.recordingPath ?? null,
+    recordingBytes: raw.recordingBytes ?? null,
+    recordingStartedAt: raw.recordingStartedAt?.toISOString() ?? null,
+    recordingEndedAt: raw.recordingEndedAt?.toISOString() ?? null,
+    transcriptStatus: raw.transcriptStatus ?? null,
+    transcriptError: raw.transcriptError ?? null,
     items: raw.items.map((it) => ({
       id: it.id,
       partnerId: it.partnerId,
@@ -117,6 +137,7 @@ export function toMeetingClient(raw: {
       sortOrder: it.sortOrder,
       status: it.status,
       discussedAt: it.discussedAt?.toISOString() ?? null,
+      markerInsertedAt: it.markerInsertedAt?.toISOString() ?? null,
       prepBrief: parseBrief(it.prepBrief),
       coreNotes: it.coreNotes,
       confirmedSnapshot: parseConfirmedSnapshot(it.confirmedSnapshot),

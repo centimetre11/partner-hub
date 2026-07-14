@@ -7,7 +7,13 @@ import { formatPartnerMarker, appendMarkerToNotes } from "./markers";
 import { generateMeetingPrepBriefs } from "./brief";
 import { buildSplitProposal, persistSplitDrafts } from "./split";
 import { applyPartnerReviewConfirm, type ConfirmItemPayload } from "./apply";
-import { downloadDingDriveText, fetchConferenceTranscriptText } from "../dingtalk/drive";
+import { downloadDingDriveTranscript, fetchConferenceTranscript } from "../dingtalk/drive";
+import {
+  parseTranscriptTextToTimedDoc,
+  serializeTimedTranscriptDoc,
+} from "./transcript";
+import { runMeetingAsrPipeline } from "../asr/pipeline";
+import { getAsrConfig } from "../asr/config";
 
 function revalidateMeeting(id: string) {
   revalidatePath("/partner-reviews");
@@ -102,8 +108,11 @@ export async function discussPartnerAction(meetingId: string, itemId: string) {
   if (!item) return { error: "议程项不存在" };
 
   const marker = formatPartnerMarker(item.partner.id, item.partner.name);
-  const liveNotes = appendMarkerToNotes(item.meeting.liveNotes, marker);
   const now = new Date();
+  const liveNotes = appendMarkerToNotes(item.meeting.liveNotes, marker, {
+    partnerName: item.partner.name,
+    at: now,
+  });
 
   await db.$transaction([
     db.partnerReviewMeeting.update({
@@ -125,7 +134,7 @@ export async function discussPartnerAction(meetingId: string, itemId: string) {
   ]);
 
   revalidateMeeting(meetingId);
-  return { ok: true, marker, liveNotes };
+  return { ok: true, marker, liveNotes, partnerName: item.partner.name, discussedAt: now.toISOString() };
 }
 
 export async function runMeetingPrepAction(meetingId: string) {
@@ -182,6 +191,48 @@ export async function attachDingTalkRecordingAction(
   return { ok: true };
 }
 
+/** 浏览器自研录音开始（对齐录音起点与拆分时间轴） */
+export async function markLocalRecordingStartedAction(meetingId: string) {
+  await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({ where: { id: meetingId } });
+  if (!meeting) return { error: "会议不存在" };
+  const now = new Date();
+  await db.partnerReviewMeeting.update({
+    where: { id: meetingId },
+    data: {
+      recordingStartedAt: meeting.recordingStartedAt ?? now,
+      transcriptStatus: "recording",
+      transcriptError: null,
+      status: meeting.status === "DRAFT" || meeting.status === "PREP" ? "LIVE" : meeting.status,
+      startedAt: meeting.startedAt ?? now,
+    },
+  });
+  revalidateMeeting(meetingId);
+  return { ok: true, startedAt: (meeting.recordingStartedAt ?? now).toISOString() };
+}
+
+/** 对已上传的本地录音跑 Whisper ASR + 伙伴名纠偏 */
+export async function runLocalAsrAction(meetingId: string) {
+  const user = await requireUser();
+  if (!getAsrConfig().enabled) {
+    return {
+      error:
+        "未配置 ASR_BASE_URL。请在 docker-compose 启动 whisper-asr（faster-whisper），并设置 ASR_BASE_URL=http://whisper-asr:9000",
+    };
+  }
+  try {
+    const result = await runMeetingAsrPipeline(meetingId, user.id);
+    revalidateMeeting(meetingId);
+    return {
+      ok: true,
+      message: `转写完成（${result.chars} 字 / ${result.sentences} 段），可用 AI 拆分`,
+    };
+  } catch (e) {
+    revalidateMeeting(meetingId);
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** JSAPI 启动 A1 录音成功后回写 fid，便于回调关联 */
 export async function markDingTalkRecordingStartedAction(
   meetingId: string,
@@ -210,33 +261,50 @@ export async function pullDingTalkTranscriptAction(meetingId: string) {
 
   try {
     let text: string | null = null;
+    let transcriptJson: string | null = null;
 
     if (meeting.dingtalkConferenceId) {
-      text = await fetchConferenceTranscriptText({ conferenceId: meeting.dingtalkConferenceId });
+      const timed = await fetchConferenceTranscript({
+        conferenceId: meeting.dingtalkConferenceId,
+        recordingStartedAt: meeting.startedAt,
+      });
+      if (timed) {
+        text = timed.plain;
+        transcriptJson = serializeTimedTranscriptDoc(timed);
+      }
     }
 
     if (!text && meeting.dingtalkFileId) {
-      const file = await downloadDingDriveText({
+      const file = await downloadDingDriveTranscript({
         spaceId: meeting.dingtalkSpaceId ?? undefined,
         fileId: meeting.dingtalkFileId,
+        recordingStartedAt: meeting.startedAt,
       });
       text = file?.text ?? null;
+      if (file?.timed) transcriptJson = serializeTimedTranscriptDoc(file.timed);
     }
 
     if (!text?.trim()) {
       return { error: "未能拉取到转写文本。请确认已绑定录音/会议 ID，或手动粘贴转写。" };
     }
 
+    if (!transcriptJson) {
+      const parsed = parseTranscriptTextToTimedDoc(text, { recordingStartedAt: meeting.startedAt });
+      if (parsed) transcriptJson = serializeTimedTranscriptDoc(parsed);
+    }
+
     await db.partnerReviewMeeting.update({
       where: { id: meetingId },
       data: {
         transcriptText: text,
+        transcriptJson,
         status: "PROCESSING",
         endedAt: meeting.endedAt ?? new Date(),
       },
     });
     revalidateMeeting(meetingId);
-    return { ok: true, message: `已拉取转写（${text.length} 字）` };
+    const timedHint = transcriptJson ? "，已保留句子时间轴" : "";
+    return { ok: true, message: `已拉取转写（${text.length} 字${timedHint}）` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
@@ -244,10 +312,18 @@ export async function pullDingTalkTranscriptAction(meetingId: string) {
 
 export async function saveTranscriptTextAction(meetingId: string, transcriptText: string) {
   await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({
+    where: { id: meetingId },
+    select: { startedAt: true },
+  });
+  const timed = parseTranscriptTextToTimedDoc(transcriptText, {
+    recordingStartedAt: meeting?.startedAt ?? null,
+  });
   await db.partnerReviewMeeting.update({
     where: { id: meetingId },
     data: {
       transcriptText,
+      transcriptJson: timed ? serializeTimedTranscriptDoc(timed) : null,
       status: "PROCESSING",
     },
   });

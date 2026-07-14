@@ -6,7 +6,12 @@ import {
   isRecordingCompleteEvent,
   type DingTalkEventPayload,
 } from "../dingtalk/events";
-import { downloadDingDriveText, fetchConferenceTranscriptText } from "../dingtalk/drive";
+import { downloadDingDriveTranscript, fetchConferenceTranscript } from "../dingtalk/drive";
+import {
+  parseTranscriptTextToTimedDoc,
+  serializeTimedTranscriptDoc,
+  type TimedTranscriptDoc,
+} from "./transcript";
 
 /** 将钉钉录音完成事件关联到进行中的过伙伴会议并写入转写 */
 export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) {
@@ -51,14 +56,26 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
     return { ok: true, skipped: true as const, reason: "no_meeting_matched" };
   }
 
-  let transcript: string | null = meeting.transcriptText;
+  let transcriptText: string | null = meeting.transcriptText;
+  let timed: TimedTranscriptDoc | null = null;
   try {
     if (refs.conferenceId) {
-      transcript = (await fetchConferenceTranscriptText({ conferenceId: refs.conferenceId })) ?? transcript;
+      timed = await fetchConferenceTranscript({
+        conferenceId: refs.conferenceId,
+        recordingStartedAt: meeting.startedAt,
+      });
+      if (timed) transcriptText = timed.plain;
     }
-    if (!transcript && refs.fileId) {
-      const file = await downloadDingDriveText({ spaceId: refs.spaceId, fileId: refs.fileId });
-      transcript = file?.text ?? transcript;
+    if (!transcriptText && refs.fileId) {
+      const file = await downloadDingDriveTranscript({
+        spaceId: refs.spaceId,
+        fileId: refs.fileId,
+        recordingStartedAt: meeting.startedAt,
+      });
+      if (file) {
+        transcriptText = file.text;
+        timed = file.timed ?? timed;
+      }
     }
   } catch (e) {
     console.warn("[dingtalk] transcript pull failed", e);
@@ -67,15 +84,19 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
   // 若事件自带 payload 文本 / Markdown 摘要
   const payload = event.payload as { result?: string; text?: string; content?: string; markdown?: string } | undefined;
   const data = event.data as { text?: string; content?: string; markdown?: string; summary?: string } | undefined;
-  if (!transcript && payload?.markdown) transcript = String(payload.markdown);
-  if (!transcript && payload?.content) transcript = String(payload.content);
-  if (!transcript && payload?.result) transcript = String(payload.result);
-  if (!transcript && payload?.text) transcript = String(payload.text);
-  if (!transcript && data?.markdown) transcript = String(data.markdown);
-  if (!transcript && data?.content) transcript = String(data.content);
-  if (!transcript && data?.summary) transcript = String(data.summary);
-  if (!transcript && data?.text) transcript = String(data.text);
-  if (!transcript && typeof event.text === "string") transcript = event.text;
+  if (!transcriptText && payload?.markdown) transcriptText = String(payload.markdown);
+  if (!transcriptText && payload?.content) transcriptText = String(payload.content);
+  if (!transcriptText && payload?.result) transcriptText = String(payload.result);
+  if (!transcriptText && payload?.text) transcriptText = String(payload.text);
+  if (!transcriptText && data?.markdown) transcriptText = String(data.markdown);
+  if (!transcriptText && data?.content) transcriptText = String(data.content);
+  if (!transcriptText && data?.summary) transcriptText = String(data.summary);
+  if (!transcriptText && data?.text) transcriptText = String(data.text);
+  if (!transcriptText && typeof event.text === "string") transcriptText = event.text;
+
+  if (!timed && transcriptText) {
+    timed = parseTranscriptTextToTimedDoc(transcriptText, { recordingStartedAt: meeting.startedAt });
+  }
 
   await db.partnerReviewMeeting.update({
     where: { id: meeting.id },
@@ -84,7 +105,8 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
       dingtalkConferenceId: refs.conferenceId ?? meeting.dingtalkConferenceId,
       dingtalkSpaceId: refs.spaceId ?? meeting.dingtalkSpaceId,
       dingtalkFileId: refs.fileId ?? meeting.dingtalkFileId,
-      transcriptText: transcript ?? meeting.transcriptText,
+      transcriptText: transcriptText ?? meeting.transcriptText,
+      transcriptJson: timed ? serializeTimedTranscriptDoc(timed) : meeting.transcriptJson,
       status: "PROCESSING",
       endedAt: meeting.endedAt ?? new Date(),
     },
@@ -93,6 +115,6 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
   return {
     ok: true as const,
     meetingId: meeting.id,
-    hasTranscript: !!transcript,
+    hasTranscript: !!transcriptText,
   };
 }

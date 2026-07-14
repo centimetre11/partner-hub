@@ -2,7 +2,17 @@ import "server-only";
 
 import { db } from "../db";
 import { chatJson } from "../ai";
-import { splitTranscriptByMarkers, type TranscriptSegment } from "./markers";
+import {
+  assignSentencesByMarkerTime,
+  splitTranscriptByMarkers,
+  type TranscriptSegment,
+} from "./markers";
+import {
+  parseTimedTranscriptDoc,
+  parseTranscriptTextToTimedDoc,
+  sentenceAbsoluteMs,
+  sentencesToPlain,
+} from "./transcript";
 import type { SplitProposal, SplitProposalItem } from "./split-types";
 
 export type { SplitProposal, SplitProposalItem } from "./split-types";
@@ -79,6 +89,13 @@ function mergeSegmentsForPartner(segments: TranscriptSegment[], partnerId: strin
     .join("\n\n");
 }
 
+function mergePartnerTexts(...parts: string[]): string {
+  return parts
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 /** 按标记拆分转写，并为每个议程项生成 AI 提案（不落库） */
 export async function buildSplitProposal(meetingId: string, userId?: string): Promise<SplitProposal> {
   const meeting = await db.partnerReviewMeeting.findUnique({
@@ -92,9 +109,58 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
   });
   if (!meeting) throw new Error("会议不存在");
 
-  const source = [meeting.liveNotes ?? "", meeting.transcriptText ?? ""].filter(Boolean).join("\n\n");
-  const segments = splitTranscriptByMarkers(source);
-  const unassignedText = segments
+  // 手写记录本：仍按文本标记切段
+  const noteSegments = splitTranscriptByMarkers(meeting.liveNotes ?? "");
+
+  // 转写：优先按标记时刻 × 句子时间对齐
+  const timed =
+    parseTimedTranscriptDoc(meeting.transcriptJson) ??
+    parseTranscriptTextToTimedDoc(meeting.transcriptText ?? "", {
+      recordingStartedAt: meeting.startedAt,
+    });
+
+  let transcriptSegments: TranscriptSegment[] = [];
+  if (timed?.sentences.length) {
+    const boundaries = meeting.items
+      .map((it) => {
+        const at = it.markerInsertedAt ?? it.discussedAt;
+        if (!at) return null;
+        return {
+          partnerId: it.partnerId,
+          partnerName: it.partner.name,
+          atMs: at.getTime(),
+        };
+      })
+      .filter((b): b is { partnerId: string; partnerName: string; atMs: number } => !!b)
+      .sort((a, b) => a.atMs - b.atMs);
+
+    if (boundaries.length) {
+      const sentences = timed.sentences.map((s) => ({
+        absoluteMs: sentenceAbsoluteMs(s, timed, meeting.startedAt),
+        line: s.speaker ? `${s.speaker}: ${s.text}` : s.text,
+      }));
+      transcriptSegments = assignSentencesByMarkerTime(sentences, boundaries);
+    } else {
+      // 有时间轴但无标记时刻：整段未归属，避免误挂到某一伙伴
+      transcriptSegments = [
+        {
+          partnerId: null,
+          partnerName: null,
+          text: timed.plain || sentencesToPlain(timed.sentences),
+        },
+      ];
+    }
+  } else if (meeting.transcriptText?.trim()) {
+    // 无时间轴的旧转写：勿与 liveNotes 拼接后按标记切（会整段落到最后伙伴）
+    // 若转写自身含标记则按标记切，否则全部未归属
+    const hasMarkers = /<<<PARTNER:[^|>]+\|[^>]+>>>/.test(meeting.transcriptText);
+    transcriptSegments = hasMarkers
+      ? splitTranscriptByMarkers(meeting.transcriptText)
+      : [{ partnerId: null, partnerName: null, text: meeting.transcriptText.trim() }];
+  }
+
+  const allSegments = [...noteSegments, ...transcriptSegments];
+  const unassignedText = allSegments
     .filter((s) => !s.partnerId)
     .map((s) => s.text)
     .filter(Boolean)
@@ -102,7 +168,9 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
 
   const items: SplitProposalItem[] = [];
   for (const item of meeting.items) {
-    const segmentText = mergeSegmentsForPartner(segments, item.partnerId);
+    const fromNotes = mergeSegmentsForPartner(noteSegments, item.partnerId);
+    const fromTranscript = mergeSegmentsForPartner(transcriptSegments, item.partnerId);
+    const segmentText = mergePartnerTexts(fromNotes, fromTranscript);
     const summary = await summarizeSegment({
       partnerName: item.partner.name,
       segmentText,

@@ -1,4 +1,9 @@
 import { getDingTalkAccessToken } from "./token";
+import {
+  buildTimedTranscriptDoc,
+  parseTranscriptTextToTimedDoc,
+  type TimedTranscriptDoc,
+} from "../partner-review/transcript";
 
 type DingDriveFileMeta = {
   fileId: string;
@@ -78,13 +83,14 @@ export async function downloadDingDriveText(opts: {
   };
 }
 
-/** 从会议云录制接口拉取转写文本（若有 conferenceId） */
-export async function fetchConferenceTranscriptText(opts: {
+/** 从会议云录制接口拉取带时间轴的转写（若有 conferenceId） */
+export async function fetchConferenceTranscript(opts: {
   conferenceId: string;
   unionId?: string;
-}): Promise<string | null> {
+  recordingStartedAt?: Date | null;
+}): Promise<TimedTranscriptDoc | null> {
   const token = await getDingTalkAccessToken();
-  const sentences: string[] = [];
+  const sentences: Array<{ startTime: number; endTime?: number; speaker?: string; text: string }> = [];
   let nextToken: number | undefined;
 
   for (let page = 0; page < 20; page++) {
@@ -103,16 +109,53 @@ export async function fetchConferenceTranscriptText(opts: {
     const data = (await res.json()) as {
       nextToken?: number;
       hasMore?: boolean;
-      paragraphList?: Array<{ nickName?: string; sentence?: string; startTime?: number }>;
+      paragraphList?: Array<{
+        nickName?: string;
+        sentence?: string;
+        startTime?: number;
+        endTime?: number;
+      }>;
     };
     for (const p of data.paragraphList ?? []) {
-      const who = p.nickName?.trim() || "发言人";
-      const sentence = p.sentence?.trim();
-      if (sentence) sentences.push(`${who}: ${sentence}`);
+      const text = p.sentence?.trim();
+      if (!text) continue;
+      sentences.push({
+        startTime: Number(p.startTime) || 0,
+        endTime: p.endTime != null ? Number(p.endTime) : undefined,
+        speaker: p.nickName?.trim() || "发言人",
+        text,
+      });
     }
     if (!data.hasMore || data.nextToken == null) break;
     nextToken = data.nextToken;
   }
 
-  return sentences.length ? sentences.join("\n") : null;
+  if (!sentences.length) return null;
+  return buildTimedTranscriptDoc({
+    sentences,
+    recordingStartedAt: opts.recordingStartedAt,
+  });
+}
+
+/** @deprecated 优先用 fetchConferenceTranscript；保留纯文本兼容 */
+export async function fetchConferenceTranscriptText(opts: {
+  conferenceId: string;
+  unionId?: string;
+  recordingStartedAt?: Date | null;
+}): Promise<string | null> {
+  const doc = await fetchConferenceTranscript(opts);
+  return doc?.plain ?? null;
+}
+
+/** 钉盘文本：尽量解析时间轴，否则仅返回纯文本 */
+export async function downloadDingDriveTranscript(opts: {
+  spaceId?: string;
+  fileId: string;
+  recordingStartedAt?: Date | null;
+}): Promise<{ text: string; timed: TimedTranscriptDoc | null; meta: DingDriveFileMeta } | null> {
+  const file = await downloadDingDriveText(opts);
+  if (!file) return null;
+  const timed =
+    parseTranscriptTextToTimedDoc(file.text, { recordingStartedAt: opts.recordingStartedAt }) ?? null;
+  return { text: timed?.plain ?? file.text, timed, meta: file.meta };
 }

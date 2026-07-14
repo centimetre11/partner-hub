@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
 import { toMeetingClient } from "@/lib/partner-review/meeting-client";
+import { getAsrConfigForClient } from "@/lib/asr/lexicon";
 import { DeleteMeetingButton } from "../delete-meeting-button";
 import { MeetingWorkspace } from "./meeting-workspace";
 
@@ -37,6 +38,7 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
 
   const st = STATUS_LABEL[meeting.status] ?? STATUS_LABEL.DRAFT!;
   const client = toMeetingClient(meeting);
+  const asrConfig = await getAsrConfigForClient();
 
   return (
     <div className="pb-16">
@@ -68,13 +70,17 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
           </Link>
           <span className="mx-2">·</span>
           <Link href="/settings#integrations" className="hover:text-slate-800">
-            钉钉配置
+            识别 / 钉钉配置
           </Link>
         </div>
 
         <MeetingWorkspace
           key={`${meeting.status}-${meeting.prepGeneratedAt?.toISOString() ?? ""}-${meeting.transcriptText?.length ?? 0}-${meeting.items.map((i) => i.status).join(",")}`}
           meeting={client}
+          asrOptions={{
+            realtimeEnabled: asrConfig.realtimeEnabled,
+            chunkSeconds: asrConfig.chunkSeconds,
+          }}
         />
       </div>
     </div>
