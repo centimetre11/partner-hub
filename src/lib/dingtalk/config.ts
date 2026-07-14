@@ -7,6 +7,7 @@ export type DingTalkConfig = {
   token: string | null;
   aesKey: string | null;
   agentId: string | null;
+  dingerTemplateId: string | null;
   enabled: boolean;
 };
 
@@ -20,6 +21,7 @@ export type DingTalkConfigForClient = {
   token: string;
   hasAesKey: boolean;
   agentId: string;
+  dingerTemplateId: string;
   updatedAt?: string;
   callbackHint: string;
 };
@@ -35,6 +37,7 @@ function configFromEnv(): DingTalkConfig | null {
     token: process.env.DINGTALK_TOKEN?.trim() || null,
     aesKey: process.env.DINGTALK_AES_KEY?.trim() || null,
     agentId: process.env.DINGTALK_AGENT_ID?.trim() || null,
+    dingerTemplateId: process.env.DINGTALK_DINGER_TEMPLATE_ID?.trim() || null,
     enabled: process.env.DINGTALK_ENABLED !== "false",
   };
 }
@@ -49,6 +52,7 @@ export async function resolveDingTalkConfig(): Promise<DingTalkConfig | null> {
       token: row.token?.trim() || null,
       aesKey: row.aesKey?.trim() || null,
       agentId: row.agentId?.trim() || null,
+      dingerTemplateId: row.dingerTemplateId?.trim() || process.env.DINGTALK_DINGER_TEMPLATE_ID?.trim() || null,
       enabled: row.enabled,
     };
   }
@@ -69,6 +73,8 @@ export async function getDingTalkConfigForClient(): Promise<DingTalkConfigForCli
     token: row?.token?.trim() || process.env.DINGTALK_TOKEN?.trim() || "",
     hasAesKey: !!(row?.aesKey?.trim() || process.env.DINGTALK_AES_KEY?.trim()),
     agentId: row?.agentId?.trim() || process.env.DINGTALK_AGENT_ID?.trim() || "",
+    dingerTemplateId:
+      row?.dingerTemplateId?.trim() || process.env.DINGTALK_DINGER_TEMPLATE_ID?.trim() || "",
     updatedAt: row?.updatedAt?.toISOString(),
     callbackHint: baseUrl ? `${baseUrl}/api/dingtalk/callback` : "/api/dingtalk/callback",
   };

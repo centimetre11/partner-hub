@@ -16,8 +16,11 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
 
   const refs = extractRecordingRefs(event);
 
-  // 优先按 recordId / conferenceId 精确匹配
+  // 优先：JSAPI startDingerRecord 的 businessOrder（会议 ID）
   let meeting =
+    (refs.businessOrder
+      ? await db.partnerReviewMeeting.findUnique({ where: { id: refs.businessOrder } })
+      : null) ??
     (refs.recordId
       ? await db.partnerReviewMeeting.findFirst({
           where: { dingtalkRecordId: refs.recordId },

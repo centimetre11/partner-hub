@@ -18,6 +18,7 @@ export function DingTalkSetup({ config }: { config: DingTalkConfigForClient }) {
   const [token, setToken] = useState(config.token);
   const [aesKey, setAesKey] = useState("");
   const [agentId, setAgentId] = useState(config.agentId);
+  const [dingerTemplateId, setDingerTemplateId] = useState(config.dingerTemplateId);
   const [enabled, setEnabled] = useState(config.enabled);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +32,7 @@ export function DingTalkSetup({ config }: { config: DingTalkConfigForClient }) {
     fd.set("token", token.trim());
     if (aesKey.trim()) fd.set("aesKey", aesKey.trim());
     fd.set("agentId", agentId.trim());
+    fd.set("dingerTemplateId", dingerTemplateId.trim());
     fd.set("enabled", enabled ? "true" : "false");
     return fd;
   }
@@ -73,7 +75,7 @@ export function DingTalkSetup({ config }: { config: DingTalkConfigForClient }) {
             </a>
           </li>
           <li>
-            权限：智能硬件设备读取、Dinger(A1) 录音数据读取、钉盘文件读取/下载、事件推送
+            权限：智能硬件设备读取、Dinger(A1) 录音数据读取、钉盘文件读取/下载、事件推送；一键开录还需填写 CorpId / AgentId / A1 录音模板 ID
           </li>
           <li>
             事件订阅勾选 <code className="bg-white px-1 rounded border border-slate-200">dinger_record_finish</code>
@@ -128,8 +130,21 @@ export function DingTalkSetup({ config }: { config: DingTalkConfigForClient }) {
           <input value={corpId} onChange={(e) => setCorpId(e.target.value)} className={input} autoComplete="off" />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-slate-500">AgentId（可选，工作通知）</span>
+          <span className="text-xs text-slate-500">AgentId（一键开录 JSAPI 必填）</span>
           <input value={agentId} onChange={(e) => setAgentId(e.target.value)} className={input} autoComplete="off" />
+        </label>
+        <label className="block space-y-1 sm:col-span-2">
+          <span className="text-xs text-slate-500">A1 录音模板 ID（dingerTemplateId，一键开录必填）</span>
+          <input
+            value={dingerTemplateId}
+            onChange={(e) => setDingerTemplateId(e.target.value)}
+            placeholder="钉钉 A1 / 听记模板 ID"
+            className={input}
+            autoComplete="off"
+          />
+          <span className="text-[11px] text-slate-400">
+            在钉钉客户端打开过伙伴会议页时，「录音并开始开会」会调用 startDingerRecord；CorpId + AgentId + 本模板 ID 均需配置。
+          </span>
         </label>
         <label className="block space-y-1">
           <span className="text-xs text-slate-500">AppKey</span>

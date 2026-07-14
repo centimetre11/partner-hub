@@ -1118,6 +1118,8 @@ model SystemDingTalkConfig {
   token     String?
   aesKey    String?
   agentId   String? // 可选：工作通知 / 互动卡片
+  // A1 JSAPI startDingerRecord 的录音模板 ID（钉钉客户端内一键开录）
+  dingerTemplateId String?
   enabled   Boolean  @default(true)
   updatedAt DateTime @updatedAt
 }

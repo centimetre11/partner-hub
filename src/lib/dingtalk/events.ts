@@ -108,6 +108,8 @@ export function extractRecordingRefs(event: DingTalkEventPayload): {
   fileId?: string;
   fileName?: string;
   userId?: string;
+  /** startDingerRecord 传入的业务单号（我们用会议 ID） */
+  businessOrder?: string;
   eventName: string;
 } {
   const eventName = String(event.EventType ?? event.eventType ?? event.syncAction ?? "").trim();
@@ -146,6 +148,10 @@ export function extractRecordingRefs(event: DingTalkEventPayload): {
       asString(event.fileName) ||
       pickNested(data, ["fileName", "file_name", "name"]) ||
       pickNested(payload, ["fileName", "name"]),
+    businessOrder:
+      pickNested(data, ["businessOrder", "business_order", "bizOrder", "outOrderId", "outBizNo"]) ||
+      pickNested(payload, ["businessOrder", "business_order", "bizOrder", "outOrderId", "outBizNo"]) ||
+      pickNested(biz, ["businessOrder", "business_order", "bizOrder", "outOrderId", "outBizNo"]),
     userId:
       asString(event.userId) ||
       asString(event.userid) ||

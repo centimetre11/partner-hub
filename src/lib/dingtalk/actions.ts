@@ -19,6 +19,7 @@ export async function saveSystemDingTalkConfigAction(formData: FormData) {
   const token = clean(formData.get("token"));
   const aesKey = clean(formData.get("aesKey"));
   const agentId = clean(formData.get("agentId"));
+  const dingerTemplateId = clean(formData.get("dingerTemplateId"));
   const enabled = formData.get("enabled") !== "false";
 
   if (!appKey) return { error: "请填写 AppKey" };
@@ -37,6 +38,7 @@ export async function saveSystemDingTalkConfigAction(formData: FormData) {
       token,
       aesKey,
       agentId,
+      dingerTemplateId,
       enabled,
     },
     update: {
@@ -46,6 +48,7 @@ export async function saveSystemDingTalkConfigAction(formData: FormData) {
       token,
       aesKey,
       agentId,
+      dingerTemplateId,
       enabled,
     },
   });
