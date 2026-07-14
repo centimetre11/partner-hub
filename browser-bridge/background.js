@@ -4,7 +4,7 @@
 //   { type: "composeEmail", to, subject, body, attachments: [{url, filename}] }
 //   { type: "fillCrmActivation", url, fields: { region, country, countryAliases, sales, companyName, partnerType, contactName, contactTitle, email, phone } }
 
-const VERSION = "1.1.11";
+const VERSION = "1.1.12";
 
 const MAIL_TAB_PATTERNS = [
   "https://exmail.qq.com/*",

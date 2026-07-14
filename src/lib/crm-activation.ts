@@ -15,6 +15,8 @@ export const CRM_ACTIVATION_FAKE_PHONE = "+966500000000";
 export const CRM_ACTIVATION_FAKE_DIAL_CODE = "+966";
 export const CRM_ACTIVATION_FAKE_PHONE_LOCAL = "500000000";
 
+/** 创建人是售前时，销售固定填此人 */
+export const CRM_ACTIVATION_DEFAULT_SALES = "chenmin";
 /** 创建人是销售时，售前固定填此人 */
 export const CRM_ACTIVATION_DEFAULT_PRESALES = "Zayne.Zhao";
 
@@ -179,13 +181,18 @@ export function resolveCrmActivationSalesPair(input: {
     .trim()
     .toUpperCase();
 
-  // Sales 登录后表单默认已带，不自动填；只处理 Pre-Sales
+  // Sales / Pre-Sales：售前角色 → Sales=chenmin、Pre-Sales=自己；否则 Sales=自己、Pre-Sales=Zayne.Zhao
   if (role === "PRESALES") {
-    return { sales: "", preSales: self };
+    return {
+      sales: CRM_ACTIVATION_DEFAULT_SALES,
+      preSales: self,
+    };
   }
 
-  // 销售、管理员、其他：售前固定 Zayne.Zhao
-  return { sales: "", preSales: CRM_ACTIVATION_DEFAULT_PRESALES };
+  return {
+    sales: self,
+    preSales: CRM_ACTIVATION_DEFAULT_PRESALES,
+  };
 }
 
 export function buildCrmActivationFields(input: {
