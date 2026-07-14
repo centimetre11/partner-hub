@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  markLocalRecordingStartedAction,
-  runLocalAsrAction,
-} from "@/lib/partner-review/actions";
-import { recordStreamToWav } from "@/lib/asr/wav";
+import { encodeWavMono, rmsLevel, sliceLastSeconds } from "@/lib/asr/wav";
 
 type Props = {
   meetingId: string;
@@ -24,36 +20,10 @@ type Props = {
 
 type Phase = "idle" | "mic" | "recording" | "uploading" | "error";
 
-function pickMimeType(): string {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-  for (const t of candidates) {
-    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return "";
-}
-
 function formatTime(sec: number) {
   const mm = String(Math.floor(sec / 60)).padStart(2, "0");
   const ss = String(sec % 60).padStart(2, "0");
   return `${mm}:${ss}`;
-}
-
-function stopRecorder(recorder: MediaRecorder): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const chunks: Blob[] = [];
-    const type = recorder.mimeType || "audio/webm";
-    recorder.ondataavailable = (e) => {
-      if (e.data.size) chunks.push(e.data);
-    };
-    recorder.onerror = () => reject(new Error("录音器错误"));
-    recorder.onstop = () => resolve(new Blob(chunks, { type }));
-    try {
-      if (recorder.state === "recording") recorder.requestData();
-      recorder.stop();
-    } catch (e) {
-      reject(e instanceof Error ? e : new Error(String(e)));
-    }
-  });
 }
 
 export function MeetingLocalRecorder({
@@ -62,7 +32,7 @@ export function MeetingLocalRecorder({
   recordingBytes,
   transcriptError,
   realtimeEnabled = true,
-  chunkSeconds = 12,
+  chunkSeconds = 8,
   disabled,
   onFlash,
   onUploaded,
@@ -80,9 +50,6 @@ export function MeetingLocalRecorder({
   const [busy, setBusy] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
-  const masterRef = useRef<MediaRecorder | null>(null);
-  const masterChunksRef = useRef<Blob[]>([]);
-  const mimeRef = useRef("");
   const startedAtRef = useRef<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const liveLoopRef = useRef<number | null>(null);
@@ -90,10 +57,13 @@ export function MeetingLocalRecorder({
   const stoppedRef = useRef(false);
   const offsetMsRef = useRef(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmChunksRef = useRef<Float32Array[]>([]);
+  const sampleRateRef = useRef(48000);
+  const levelTimerRef = useRef<number | null>(null);
 
   const recording = phase === "recording";
+  const chunkSec = Math.min(20, Math.max(5, chunkSeconds || 8));
 
   useEffect(() => {
     onRecordingChange?.(recording);
@@ -110,62 +80,84 @@ export function MeetingLocalRecorder({
   function teardown() {
     if (timerRef.current) window.clearInterval(timerRef.current);
     if (liveLoopRef.current) window.clearTimeout(liveLoopRef.current);
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (levelTimerRef.current) window.clearInterval(levelTimerRef.current);
     timerRef.current = null;
     liveLoopRef.current = null;
-    rafRef.current = null;
+    levelTimerRef.current = null;
     try {
-      if (masterRef.current && masterRef.current.state !== "inactive") masterRef.current.stop();
+      processorRef.current?.disconnect();
     } catch {
       /* ignore */
     }
-    masterRef.current = null;
+    processorRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     void audioCtxRef.current?.close().catch(() => undefined);
     audioCtxRef.current = null;
-    analyserRef.current = null;
+    pcmChunksRef.current = [];
   }
 
-  function startLevelMeter(stream: MediaStream) {
-    try {
-      const ctx = new AudioContext();
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      source.connect(analyser);
-      audioCtxRef.current = ctx;
-      analyserRef.current = analyser;
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        if (!analyserRef.current || stoppedRef.current) return;
-        analyserRef.current.getByteTimeDomainData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) {
-          const v = (data[i]! - 128) / 128;
-          sum += v * v;
-        }
-        const rms = Math.sqrt(sum / data.length);
-        setLevel(Math.min(1, rms * 4));
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    } catch {
-      /* 电平仅辅助，失败可忽略 */
+  function flattenPcm(): Float32Array {
+    const chunks = pcmChunksRef.current;
+    let total = 0;
+    for (const c of chunks) total += c.length;
+    const out = new Float32Array(total);
+    let o = 0;
+    for (const c of chunks) {
+      out.set(c, o);
+      o += c.length;
     }
+    return out;
   }
 
-  async function uploadLiveChunk(blob: Blob, offsetMs: number, filename: string) {
-    if (!realtimeEnabled || blob.size < 800) return;
+  function startPcmCapture(stream: MediaStream) {
+    const ctx = new AudioContext();
+    sampleRateRef.current = ctx.sampleRate;
+    const source = ctx.createMediaStreamSource(stream);
+    const processor = ctx.createScriptProcessor(4096, 1, 1);
+    pcmChunksRef.current = [];
+    processor.onaudioprocess = (e) => {
+      if (stoppedRef.current) return;
+      const input = e.inputBuffer.getChannelData(0);
+      pcmChunksRef.current.push(new Float32Array(input));
+      // 限制内存：最多保留约 90 分钟
+      const maxSamples = sampleRateRef.current * 60 * 90;
+      let total = 0;
+      for (const c of pcmChunksRef.current) total += c.length;
+      while (total > maxSamples && pcmChunksRef.current.length > 1) {
+        const dropped = pcmChunksRef.current.shift();
+        total -= dropped?.length ?? 0;
+      }
+    };
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    source.connect(processor);
+    processor.connect(mute);
+    mute.connect(ctx.destination);
+    audioCtxRef.current = ctx;
+    processorRef.current = processor;
+
+    if (levelTimerRef.current) window.clearInterval(levelTimerRef.current);
+    levelTimerRef.current = window.setInterval(() => {
+      const flat = flattenPcm();
+      const recent = sliceLastSeconds(flat, sampleRateRef.current, 0.4);
+      setLevel(Math.min(1, rmsLevel(recent) * 4));
+    }, 200);
+  }
+
+  async function uploadLiveChunk(blob: Blob, offsetMs: number) {
     liveBusyRef.current = true;
-    setStatusLine("分片转写中…");
+    setStatusLine(`正在识别第 ${chunkCount + 1} 段（约 ${chunkSec}s 音频）…`);
+    const ctrl = new AbortController();
+    const timer = window.setTimeout(() => ctrl.abort(), 120_000);
     try {
       const form = new FormData();
-      form.append("file", blob, filename);
+      form.append("file", new File([blob], `chunk-${offsetMs}.wav`, { type: "audio/wav" }));
       form.append("offsetMs", String(offsetMs));
       const res = await fetch(`/api/partner-reviews/${meetingId}/recording/live`, {
         method: "POST",
         body: form,
+        signal: ctrl.signal,
       });
       const data = (await res.json()) as {
         ok?: boolean;
@@ -175,77 +167,88 @@ export function MeetingLocalRecorder({
         skipped?: boolean;
       };
       if (!res.ok) {
-        const tip = (data.error || res.statusText).slice(0, 120);
+        const tip = (data.error || res.statusText).slice(0, 160);
         setLocalError(`实时转写失败：${tip}`);
-        setStatusLine(`实时转写失败：${tip.slice(0, 48)}`);
+        setStatusLine(`实时失败：${tip.slice(0, 60)}`);
         return;
       }
       if (data.skipped) {
-        setStatusLine("录音中 · 分片过短已跳过");
+        setStatusLine("本段过短已跳过，继续录音…");
         return;
       }
       setLocalError(null);
       if (data.plain != null) onLiveTranscript?.(data.plain);
       setChunkCount((n) => n + 1);
       const preview = (data.chunkText || "").trim();
-      setLastChunkPreview(preview ? preview.slice(0, 80) : null);
+      setLastChunkPreview(preview ? preview.slice(0, 100) : "（本段无有效语音）");
       setStatusLine(
         preview
-          ? `已出字 · ${preview.slice(0, 36)}${preview.length > 36 ? "…" : ""}`
-          : "实时转写已更新",
+          ? `实时已更新 · ${preview.slice(0, 40)}${preview.length > 40 ? "…" : ""}`
+          : "实时已更新（本段静音）",
       );
     } catch (e) {
-      setStatusLine(`实时转写网络异常：${e instanceof Error ? e.message : "请检查网络"}`);
+      const msg =
+        e instanceof Error && e.name === "AbortError"
+          ? "识别超时（模型可能仍在加载，请稍后再试或点停止后精修转写）"
+          : e instanceof Error
+            ? e.message
+            : "网络异常";
+      setStatusLine(`实时异常：${msg}`);
+      setLocalError(msg);
     } finally {
+      window.clearTimeout(timer);
       liveBusyRef.current = false;
     }
   }
 
-  /** PCM→WAV 分片给 Whisper（不打断主 WebM 录音；避免坏 WebM 导致 ASR 500） */
   async function captureLiveSegment() {
-    const stream = streamRef.current;
-    if (!stream || stoppedRef.current || !realtimeEnabled) return;
+    if (stoppedRef.current || !realtimeEnabled) return;
     if (liveBusyRef.current) {
-      scheduleLiveLoop();
+      scheduleLiveLoop(1500);
       return;
     }
 
-    const offsetMs = offsetMsRef.current;
-    const sec = Math.min(30, Math.max(8, chunkSeconds || 12));
-    try {
-      const { blob } = await recordStreamToWav(stream, sec * 1000);
-      if (stoppedRef.current) return;
-      offsetMsRef.current = offsetMs + sec * 1000;
-      if (blob.size < 2000) {
-        setStatusLine("录音中 · 本段几乎无声，已跳过");
-      } else {
-        await uploadLiveChunk(blob, offsetMs, `chunk-${offsetMs}.wav`);
-      }
-    } catch (e) {
-      setStatusLine(`分片失败：${e instanceof Error ? e.message : String(e)}`);
+    const flat = flattenPcm();
+    const slice = sliceLastSeconds(flat, sampleRateRef.current, chunkSec);
+    if (slice.length < sampleRateRef.current * 1.5) {
+      setStatusLine("录音中 · 采集不足，继续…");
+      scheduleLiveLoop(1000);
+      return;
     }
-    if (!stoppedRef.current) scheduleLiveLoop();
+
+    const levelNow = rmsLevel(slice);
+    const offsetMs = offsetMsRef.current;
+    offsetMsRef.current = offsetMs + chunkSec * 1000;
+
+    if (levelNow < 0.008) {
+      setStatusLine("录音中 · 本段几乎无声，已跳过（请靠近麦克风）");
+      scheduleLiveLoop(500);
+      return;
+    }
+
+    const blob = encodeWavMono(slice, sampleRateRef.current);
+    await uploadLiveChunk(blob, offsetMs);
+    if (!stoppedRef.current) scheduleLiveLoop(400);
   }
 
-  function scheduleLiveLoop() {
+  function scheduleLiveLoop(delayMs: number) {
     if (liveLoopRef.current) window.clearTimeout(liveLoopRef.current);
-    // 立刻开下一轮（captureLiveSegment 内部已等待 chunkSeconds）
     liveLoopRef.current = window.setTimeout(() => {
       void captureLiveSegment();
-    }, 200);
+    }, delayMs);
   }
 
   async function start() {
     if (busy || recording || disabled) return;
     if (typeof window !== "undefined" && !window.isSecureContext) {
-      const msg = "当前页面不是安全上下文（需 HTTPS），浏览器禁止调用麦克风";
+      const msg = "需要 HTTPS 才能使用麦克风";
       setLocalError(msg);
       setPhase("error");
       onFlash(undefined, msg);
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      const msg = "当前浏览器不支持麦克风录音，请用 Chrome / Edge 桌面版";
+      const msg = "浏览器不支持麦克风，请用 Chrome / Edge";
       setLocalError(msg);
       setPhase("error");
       onFlash(undefined, msg);
@@ -257,7 +260,6 @@ export function MeetingLocalRecorder({
     setLocalError(null);
     setStatusLine("正在请求麦克风权限…");
     stoppedRef.current = false;
-    masterChunksRef.current = [];
     offsetMsRef.current = 0;
     setChunkCount(0);
     setLastChunkPreview(null);
@@ -272,58 +274,46 @@ export function MeetingLocalRecorder({
         },
       });
       streamRef.current = stream;
-      mimeRef.current = pickMimeType();
-      startLevelMeter(stream);
 
-      const mark = await markLocalRecordingStartedAction(meetingId);
-      if (mark.error) {
+      // Route Handler，避免 Server Action 哈希失效
+      const markRes = await fetch(`/api/partner-reviews/${meetingId}/recording/start`, {
+        method: "POST",
+      });
+      const mark = (await markRes.json()) as { ok?: boolean; error?: string; startedAt?: string };
+      if (!markRes.ok || mark.error) {
         stream.getTracks().forEach((t) => t.stop());
-        setLocalError(mark.error);
+        const msg = mark.error || `开录失败 HTTP ${markRes.status}`;
+        setLocalError(msg);
         setPhase("error");
         setStatusLine("开录失败");
-        onFlash(undefined, mark.error);
+        onFlash(undefined, msg);
         return;
       }
       startedAtRef.current = mark.startedAt ?? new Date().toISOString();
       onMeetingLive();
 
-      const mime = mimeRef.current;
-      const master = mime
-        ? new MediaRecorder(stream, { mimeType: mime })
-        : new MediaRecorder(stream);
-      masterChunksRef.current = [];
-      master.ondataavailable = (e) => {
-        if (e.data.size) masterChunksRef.current.push(e.data);
-      };
-      master.onerror = () => {
-        setLocalError("主录音器异常中断");
-        setStatusLine("录音异常");
-      };
-      masterRef.current = master;
-      master.start(1000);
+      startPcmCapture(stream);
 
       setPhase("recording");
       setStatusLine(
         realtimeEnabled
-          ? `录音中 · 约每 ${chunkSeconds}s 出一截字 · 讨论谁就点左侧谁`
-          : "录音中 · 结束后再转写 · 讨论谁就点左侧谁",
+          ? `录音中 · 每 ${chunkSec}s 识别一段（首次可能较慢，需加载模型）`
+          : "录音中 · 结束后再转写",
       );
       if (timerRef.current) window.clearInterval(timerRef.current);
       timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
 
       if (realtimeEnabled) {
-        // 稍等再采第一片，避免开头静音无效请求
-        liveLoopRef.current = window.setTimeout(() => void captureLiveSegment(), 1500);
+        // 先采满一段再识别
+        scheduleLiveLoop(chunkSec * 1000 + 300);
       }
 
-      onFlash("录音已开始。请对着麦克风说话；左侧按讨论顺序点伙伴。");
+      onFlash("录音已开始。请对着麦克风说话；左侧讨论谁点谁。");
     } catch (e) {
       const name = e instanceof Error ? e.name : "";
       let msg = e instanceof Error ? e.message : "无法打开麦克风";
       if (name === "NotAllowedError" || /Permission|NotAllowed/i.test(msg)) {
-        msg = "麦克风权限被拒绝。请在浏览器地址栏允许麦克风后重试。";
-      } else if (name === "NotFoundError") {
-        msg = "未检测到麦克风设备。";
+        msg = "麦克风权限被拒绝，请在地址栏允许后重试";
       }
       setLocalError(msg);
       setPhase("error");
@@ -336,10 +326,10 @@ export function MeetingLocalRecorder({
   }
 
   async function stopAndUpload() {
-    if (!streamRef.current && !masterRef.current) return;
+    if (!streamRef.current && !audioCtxRef.current) return;
     setBusy(true);
     setPhase("uploading");
-    setStatusLine("正在停止并上传录音…");
+    setStatusLine("正在停止并上传整段 WAV…");
     stoppedRef.current = true;
     if (liveLoopRef.current) {
       window.clearTimeout(liveLoopRef.current);
@@ -349,28 +339,27 @@ export function MeetingLocalRecorder({
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+    if (levelTimerRef.current) {
+      window.clearInterval(levelTimerRef.current);
+      levelTimerRef.current = null;
     }
 
     try {
-      const master = masterRef.current;
-      let blob: Blob;
-      if (master && master.state !== "inactive") {
-        blob = await stopRecorder(master);
-      } else {
-        const type = mimeRef.current || "audio/webm";
-        blob = new Blob(masterChunksRef.current, { type });
+      try {
+        processorRef.current?.disconnect();
+      } catch {
+        /* ignore */
       }
-      masterRef.current = null;
+      processorRef.current = null;
+
+      const flat = flattenPcm();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       void audioCtxRef.current?.close().catch(() => undefined);
       audioCtxRef.current = null;
 
-      if (blob.size < 2048) {
-        const msg = `录音文件过短（${blob.size} 字节）。请确认麦克风有声音后重新录。`;
+      if (flat.length < sampleRateRef.current * 1.2) {
+        const msg = "录音过短，请重新录并确保麦克风有声音";
         setLocalError(msg);
         setPhase("error");
         setStatusLine("上传失败");
@@ -378,9 +367,9 @@ export function MeetingLocalRecorder({
         return;
       }
 
+      const blob = encodeWavMono(flat, sampleRateRef.current);
       const form = new FormData();
-      const ext = blob.type.includes("mp4") ? "m4a" : "webm";
-      form.append("file", blob, `meeting-${meetingId}.${ext}`);
+      form.append("file", new File([blob], `meeting-${meetingId}.wav`, { type: "audio/wav" }));
       form.append("startedAt", startedAtRef.current || new Date().toISOString());
       form.append("endedAt", new Date().toISOString());
 
@@ -399,13 +388,11 @@ export function MeetingLocalRecorder({
       }
 
       setPhase("idle");
-      setStatusLine(`录音已保存 ${Math.round((data.bytes ?? blob.size) / 1024)} KB · 可精修转写或直接 AI 拆分`);
       setLevel(0);
-      onFlash(
-        realtimeEnabled
-          ? `录音已上传（${Math.round((data.bytes ?? blob.size) / 1024)} KB）。可点「精修转写」或直接「AI 拆分」。`
-          : `录音已上传（${Math.round((data.bytes ?? blob.size) / 1024)} KB），请点「转写录音」。`,
+      setStatusLine(
+        `录音已保存 ${Math.round((data.bytes ?? blob.size) / 1024)} KB · 实时 ${chunkCount} 段 · 可精修转写`,
       );
+      onFlash(`录音已上传。可点「精修转写」或直接「AI 拆分」。`);
       onUploaded();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "上传失败";
@@ -421,25 +408,32 @@ export function MeetingLocalRecorder({
 
   async function runAsr() {
     setBusy(true);
-    setStatusLine("整段精修转写中，请稍候…");
+    setStatusLine("整段精修转写中（CPU 首次可能需 1–2 分钟）…");
     try {
-      const res = await runLocalAsrAction(meetingId);
-      if (res.error) {
-        setLocalError(res.error);
+      const res = await fetch(`/api/partner-reviews/${meetingId}/recording/transcribe`, {
+        method: "POST",
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; message?: string };
+      if (!res.ok || data.error) {
+        setLocalError(data.error || `转写失败 HTTP ${res.status}`);
         setStatusLine("转写失败");
-        onFlash(undefined, res.error);
+        onFlash(undefined, data.error || `转写失败 HTTP ${res.status}`);
       } else {
         setLocalError(null);
-        setStatusLine(res.message || "转写完成");
-        onFlash(res.message);
+        setStatusLine(data.message || "转写完成");
+        onFlash(data.message);
         onUploaded();
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setLocalError(msg);
+      setStatusLine("转写失败");
+      onFlash(undefined, msg);
     } finally {
       setBusy(false);
     }
   }
 
-  // 仅「已有录音文件/已转写」才显示「重新录音」；勿用 transcriptStatus=recording（开录瞬间服务端会写，但客户端可能已被掐断）
   const hasAudio =
     !!recordingBytes || transcriptStatus === "uploaded" || transcriptStatus === "ready";
   const errText = localError || transcriptError;
@@ -484,7 +478,8 @@ export function MeetingLocalRecorder({
           <p className="text-xs text-slate-600 leading-relaxed">{statusLine}</p>
           {recording ? (
             <p className="text-[11px] text-rose-800/80">
-              请保持本页打开；讨论到哪位伙伴就点左侧哪位。右侧「近实时转写」会陆续出字。
+              请保持本页打开；讨论到谁就点左侧谁。右侧转写区会按段更新（非逐字，约每 {chunkSec}{" "}
+              秒一段）。
             </p>
           ) : null}
         </div>
@@ -497,7 +492,7 @@ export function MeetingLocalRecorder({
               onClick={() => void start()}
               className="rounded-lg bg-rose-700 text-white px-3.5 py-2 text-sm font-medium hover:bg-rose-800 disabled:opacity-40"
             >
-              {hasAudio ? "重新录音" : realtimeEnabled ? "开始近实时录音" : "开始录音"}
+              {hasAudio ? "重新录音" : "开始近实时录音"}
             </button>
           ) : null}
           {recording ? (
@@ -517,11 +512,7 @@ export function MeetingLocalRecorder({
               onClick={() => void runAsr()}
               className="rounded-lg bg-violet-700 text-white px-3.5 py-2 text-sm font-medium hover:bg-violet-800 disabled:opacity-40"
             >
-              {transcriptStatus === "transcribing"
-                ? "转写中…"
-                : realtimeEnabled
-                  ? "精修转写（整段）"
-                  : "转写录音"}
+              {transcriptStatus === "transcribing" ? "转写中…" : "精修转写（整段）"}
             </button>
           ) : null}
         </div>
@@ -542,19 +533,20 @@ export function MeetingLocalRecorder({
             />
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
-            <span>实时分片 {chunkCount} 次</span>
+            <span>
+              已识别 {chunkCount} 段 · 下一段约 {chunkSec}s
+            </span>
             {recordingBytes ? <span>历史文件 {Math.round(recordingBytes / 1024)} KB</span> : null}
           </div>
           {lastChunkPreview ? (
             <p className="text-xs text-violet-900 bg-white/70 border border-violet-100 rounded-lg px-2.5 py-1.5 leading-relaxed">
               最新识别：{lastChunkPreview}
-              {lastChunkPreview.length >= 80 ? "…" : ""}
             </p>
           ) : (
             <p className="text-[11px] text-slate-400">
               {realtimeEnabled
-                ? `等待首段识别（约 ${chunkSeconds} 秒后出现）…`
-                : "已关闭近实时，结束后再转写"}
+                ? `首段约 ${chunkSec} 秒后出现；若首次使用，服务端加载模型可能再等几十秒`
+                : "已关闭近实时"}
             </p>
           )}
         </div>
@@ -568,7 +560,7 @@ export function MeetingLocalRecorder({
 
       {!recording && phase === "idle" && !hasAudio ? (
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          点击「开始近实时录音」后浏览器会申请麦克风。请使用 HTTPS 与 Chrome/Edge；录音时勿关闭或刷新本页。
+          使用 Chrome/Edge + HTTPS。开录后请对着麦克风说话；这是「近实时分段识别」，不是逐字字幕。
         </p>
       ) : null}
     </div>

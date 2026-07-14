@@ -39,45 +39,22 @@ function writeString(view: DataView, offset: number, str: string) {
   }
 }
 
-/** 从 MediaStream 采集一段 PCM 并编码为 WAV */
-export async function recordStreamToWav(
-  stream: MediaStream,
-  durationMs: number,
-): Promise<{ blob: Blob; sampleRate: number }> {
-  const ctx = new AudioContext();
-  const source = ctx.createMediaStreamSource(stream);
-  const sampleRate = ctx.sampleRate;
-  const chunks: Float32Array[] = [];
+export function sliceLastSeconds(
+  samples: Float32Array,
+  sampleRate: number,
+  seconds: number,
+): Float32Array {
+  const n = Math.min(samples.length, Math.floor(sampleRate * seconds));
+  if (n <= 0) return new Float32Array(0);
+  return samples.slice(samples.length - n);
+}
 
-  // ScriptProcessor 虽已废弃，但兼容面最广，适合短分片
-  const bufferSize = 4096;
-  const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
-  processor.onaudioprocess = (e) => {
-    const input = e.inputBuffer.getChannelData(0);
-    chunks.push(new Float32Array(input));
-  };
-  // 接到静音节点，避免回放啸叫，同时保证处理器被调度
-  const mute = ctx.createGain();
-  mute.gain.value = 0;
-  source.connect(processor);
-  processor.connect(mute);
-  mute.connect(ctx.destination);
-
-  await new Promise((r) => window.setTimeout(r, durationMs));
-
-  processor.disconnect();
-  source.disconnect();
-  mute.disconnect();
-  await ctx.close().catch(() => undefined);
-
-  let total = 0;
-  for (const c of chunks) total += c.length;
-  const merged = new Float32Array(total);
-  let o = 0;
-  for (const c of chunks) {
-    merged.set(c, o);
-    o += c.length;
+export function rmsLevel(samples: Float32Array): number {
+  if (!samples.length) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const v = samples[i]!;
+    sum += v * v;
   }
-
-  return { blob: encodeWavMono(merged, sampleRate), sampleRate };
+  return Math.sqrt(sum / samples.length);
 }
