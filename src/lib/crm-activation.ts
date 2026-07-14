@@ -94,6 +94,12 @@ export function fakeEmailForEntity(entityId: string): string {
   return `noreply+${short}@placeholder.local`;
 }
 
+/** 无联系人时伪造一个可识别的占位姓名（稳定可复现）。 */
+export function fakeContactNameForEntity(entityId: string): string {
+  const short = entityId.replace(/[^a-zA-Z0-9]/g, "").slice(-6) || "x";
+  return `Auto Contact ${short}`;
+}
+
 /** 从 Hub country/city 文本展开为 CRM 下拉匹配别名 */
 export function buildCountryAliases(country?: string | null, city?: string | null): string[] {
   const raw = [country, city].filter(Boolean).join(" / ");
