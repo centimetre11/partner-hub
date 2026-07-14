@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { encodeWavMono, rmsLevel, sliceLastSeconds } from "@/lib/asr/wav";
+import { encodeWavMono, meterLevel, rmsLevel, sliceLastSeconds } from "@/lib/asr/wav";
 
 type Props = {
   meetingId: string;
@@ -14,7 +14,8 @@ type Props = {
   onFlash: (ok?: string, err?: string) => void;
   onUploaded: () => void;
   onMeetingLive: () => void;
-  onLiveTranscript?: (plain: string) => void;
+  /** 每一段新识别出的文字（写入会中记录本） */
+  onLiveTranscript?: (chunkText: string) => void;
   onRecordingChange?: (recording: boolean) => void;
 };
 
@@ -48,8 +49,12 @@ export function MeetingLocalRecorder({
   const [chunkCount, setChunkCount] = useState(0);
   const [lastChunkPreview, setLastChunkPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** 默认开启：远程会议居多，开录时会弹共享屏幕以采集会议声音 */
+  const [captureSystemAudio, setCaptureSystemAudio] = useState(true);
+  const [quietHint, setQuietHint] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
+  const displayStreamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef<string | null>(null);
   const timerRef = useRef<number | null>(null);
   const liveLoopRef = useRef<number | null>(null);
@@ -61,6 +66,8 @@ export function MeetingLocalRecorder({
   const pcmChunksRef = useRef<Float32Array[]>([]);
   const sampleRateRef = useRef(48000);
   const levelTimerRef = useRef<number | null>(null);
+  const quietStreakRef = useRef(0);
+  const liveAbortRef = useRef<AbortController | null>(null);
 
   const recording = phase === "recording";
   const chunkSec = Math.min(20, Math.max(5, chunkSeconds || 8));
@@ -92,9 +99,12 @@ export function MeetingLocalRecorder({
     processorRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    displayStreamRef.current?.getTracks().forEach((t) => t.stop());
+    displayStreamRef.current = null;
     void audioCtxRef.current?.close().catch(() => undefined);
     audioCtxRef.current = null;
     pcmChunksRef.current = [];
+    quietStreakRef.current = 0;
   }
 
   function flattenPcm(): Float32Array {
@@ -110,12 +120,18 @@ export function MeetingLocalRecorder({
     return out;
   }
 
-  function startPcmCapture(stream: MediaStream) {
+  function startPcmCapture(streams: MediaStream[]) {
     const ctx = new AudioContext();
     sampleRateRef.current = ctx.sampleRate;
-    const source = ctx.createMediaStreamSource(stream);
+    const mix = ctx.createGain();
+    mix.gain.value = 1;
+    for (const stream of streams) {
+      if (stream.getAudioTracks().length === 0) continue;
+      ctx.createMediaStreamSource(stream).connect(mix);
+    }
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     pcmChunksRef.current = [];
+    quietStreakRef.current = 0;
     processor.onaudioprocess = (e) => {
       if (stoppedRef.current) return;
       const input = e.inputBuffer.getChannelData(0);
@@ -131,7 +147,7 @@ export function MeetingLocalRecorder({
     };
     const mute = ctx.createGain();
     mute.gain.value = 0;
-    source.connect(processor);
+    mix.connect(processor);
     processor.connect(mute);
     mute.connect(ctx.destination);
     audioCtxRef.current = ctx;
@@ -141,14 +157,25 @@ export function MeetingLocalRecorder({
     levelTimerRef.current = window.setInterval(() => {
       const flat = flattenPcm();
       const recent = sliceLastSeconds(flat, sampleRateRef.current, 0.4);
-      setLevel(Math.min(1, rmsLevel(recent) * 4));
+      const m = meterLevel(recent);
+      setLevel(m);
+      // 连续约 4s 才提示「几乎无声」，避免正常说话被误判
+      if (m < 0.04) {
+        quietStreakRef.current += 1;
+        if (quietStreakRef.current >= 20) setQuietHint(true);
+      } else {
+        quietStreakRef.current = 0;
+        setQuietHint(false);
+      }
     }, 200);
   }
 
   async function uploadLiveChunk(blob: Blob, offsetMs: number) {
     liveBusyRef.current = true;
     setStatusLine(`正在识别第 ${chunkCount + 1} 段（约 ${chunkSec}s 音频）…`);
+    liveAbortRef.current?.abort();
     const ctrl = new AbortController();
+    liveAbortRef.current = ctrl;
     const timer = window.setTimeout(() => ctrl.abort(), 120_000);
     try {
       const form = new FormData();
@@ -159,10 +186,10 @@ export function MeetingLocalRecorder({
         body: form,
         signal: ctrl.signal,
       });
+      if (stoppedRef.current) return;
       const data = (await res.json()) as {
         ok?: boolean;
         error?: string;
-        plain?: string;
         chunkText?: string;
         skipped?: boolean;
       };
@@ -177,26 +204,31 @@ export function MeetingLocalRecorder({
         return;
       }
       setLocalError(null);
-      if (data.plain != null) onLiveTranscript?.(data.plain);
-      setChunkCount((n) => n + 1);
       const preview = (data.chunkText || "").trim();
+      if (preview) onLiveTranscript?.(preview);
+      setChunkCount((n) => n + 1);
       setLastChunkPreview(preview ? preview.slice(0, 100) : "（本段无有效语音）");
       setStatusLine(
         preview
-          ? `实时已更新 · ${preview.slice(0, 40)}${preview.length > 40 ? "…" : ""}`
-          : "实时已更新（本段静音）",
+          ? `已写入记录本 · ${preview.slice(0, 40)}${preview.length > 40 ? "…" : ""}`
+          : "本段无有效语音，继续录音…",
       );
     } catch (e) {
+      if (stoppedRef.current) return;
       const msg =
         e instanceof Error && e.name === "AbortError"
-          ? "识别超时（模型可能仍在加载，请稍后再试或点停止后精修转写）"
+          ? "本段识别超时（模型可能仍在加载），将继续下一段"
           : e instanceof Error
             ? e.message
             : "网络异常";
       setStatusLine(`实时异常：${msg}`);
-      setLocalError(msg);
+      // 超时不占大红块，避免与状态行重复；停止上传时也不再刷错误
+      if (!(e instanceof Error && e.name === "AbortError")) {
+        setLocalError(msg);
+      }
     } finally {
       window.clearTimeout(timer);
+      if (liveAbortRef.current === ctrl) liveAbortRef.current = null;
       liveBusyRef.current = false;
     }
   }
@@ -220,8 +252,9 @@ export function MeetingLocalRecorder({
     const offsetMs = offsetMsRef.current;
     offsetMsRef.current = offsetMs + chunkSec * 1000;
 
-    if (levelNow < 0.008) {
-      setStatusLine("录音中 · 本段几乎无声，已跳过（请靠近麦克风）");
+    // 仅跳过真正接近零的空段；阈值放宽，避免大声说话仍被跳过
+    if (levelNow < 0.0015) {
+      setStatusLine("录音中 · 本段接近静音，已跳过");
       scheduleLiveLoop(500);
       return;
     }
@@ -258,7 +291,12 @@ export function MeetingLocalRecorder({
     setBusy(true);
     setPhase("mic");
     setLocalError(null);
-    setStatusLine("正在请求麦克风权限…");
+    setQuietHint(false);
+    setStatusLine(
+      captureSystemAudio
+        ? "正在请求麦克风，并将弹出「共享屏幕」以采集会议声音…"
+        : "正在请求麦克风权限…",
+    );
     stoppedRef.current = false;
     offsetMsRef.current = 0;
     setChunkCount(0);
@@ -266,14 +304,50 @@ export function MeetingLocalRecorder({
     setElapsedSec(0);
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const micStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
+          // 强降噪会把电平压得很低，导致误报「几乎无声」
+          noiseSuppression: false,
+          autoGainControl: true,
           channelCount: 1,
         },
       });
-      streamRef.current = stream;
+      streamRef.current = micStream;
+
+      let displayStream: MediaStream | null = null;
+      if (captureSystemAudio) {
+        try {
+          // 浏览器要求同时申请 video；我们立刻停掉画面轨，只保留音频
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            },
+          });
+          displayStream.getVideoTracks().forEach((t) => t.stop());
+          if (displayStream.getAudioTracks().length === 0) {
+            displayStream.getTracks().forEach((t) => t.stop());
+            displayStream = null;
+            setLocalError(
+              "未勾选「分享音频」。本次只录麦克风。请重新开录，在弹出窗口勾选分享标签页/系统音频。",
+            );
+          } else {
+            displayStreamRef.current = displayStream;
+            displayStream.getAudioTracks().forEach((t) => {
+              t.onended = () => {
+                if (!stoppedRef.current) {
+                  setStatusLine("会议/系统声音共享已结束，仍继续录麦克风…");
+                }
+              };
+            });
+          }
+        } catch {
+          setLocalError("未共享屏幕音频，本次只录麦克风。需要会议声请重新开录并勾选分享音频。");
+        }
+      }
 
       // Route Handler，避免 Server Action 哈希失效
       const markRes = await fetch(`/api/partner-reviews/${meetingId}/recording/start`, {
@@ -281,7 +355,8 @@ export function MeetingLocalRecorder({
       });
       const mark = (await markRes.json()) as { ok?: boolean; error?: string; startedAt?: string };
       if (!markRes.ok || mark.error) {
-        stream.getTracks().forEach((t) => t.stop());
+        micStream.getTracks().forEach((t) => t.stop());
+        displayStream?.getTracks().forEach((t) => t.stop());
         const msg = mark.error || `开录失败 HTTP ${markRes.status}`;
         setLocalError(msg);
         setPhase("error");
@@ -292,23 +367,32 @@ export function MeetingLocalRecorder({
       startedAtRef.current = mark.startedAt ?? new Date().toISOString();
       onMeetingLive();
 
-      startPcmCapture(stream);
+      const sources = [micStream, ...(displayStream ? [displayStream] : [])];
+      startPcmCapture(sources);
 
+      const mixed = Boolean(displayStream?.getAudioTracks().length);
       setPhase("recording");
       setStatusLine(
         realtimeEnabled
-          ? `录音中 · 每 ${chunkSec}s 识别一段（首次可能较慢，需加载模型）`
-          : "录音中 · 结束后再转写",
+          ? mixed
+            ? `录音中（麦克风+会议声）· 每 ${chunkSec}s 识别一段`
+            : `录音中 · 每 ${chunkSec}s 识别一段（首次可能较慢）`
+          : mixed
+            ? "录音中（麦克风+会议声）· 结束后再转写"
+            : "录音中 · 结束后再转写",
       );
       if (timerRef.current) window.clearInterval(timerRef.current);
       timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
 
       if (realtimeEnabled) {
-        // 先采满一段再识别
         scheduleLiveLoop(chunkSec * 1000 + 300);
       }
 
-      onFlash("录音已开始。请对着麦克风说话；左侧讨论谁点谁。");
+      onFlash(
+        mixed
+          ? "已同时录麦克风与会议/标签页声音。左侧讨论谁点谁。"
+          : "录音已开始。请对着麦克风说话；左侧讨论谁点谁。",
+      );
     } catch (e) {
       const name = e instanceof Error ? e.name : "";
       let msg = e instanceof Error ? e.message : "无法打开麦克风";
@@ -329,8 +413,11 @@ export function MeetingLocalRecorder({
     if (!streamRef.current && !audioCtxRef.current) return;
     setBusy(true);
     setPhase("uploading");
+    setLocalError(null);
     setStatusLine("正在停止并上传整段 WAV…");
     stoppedRef.current = true;
+    liveAbortRef.current?.abort();
+    liveAbortRef.current = null;
     if (liveLoopRef.current) {
       window.clearTimeout(liveLoopRef.current);
       liveLoopRef.current = null;
@@ -355,6 +442,8 @@ export function MeetingLocalRecorder({
       const flat = flattenPcm();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+      displayStreamRef.current?.getTracks().forEach((t) => t.stop());
+      displayStreamRef.current = null;
       void audioCtxRef.current?.close().catch(() => undefined);
       audioCtxRef.current = null;
 
@@ -390,9 +479,9 @@ export function MeetingLocalRecorder({
       setPhase("idle");
       setLevel(0);
       setStatusLine(
-        `录音已保存 ${Math.round((data.bytes ?? blob.size) / 1024)} KB · 实时 ${chunkCount} 段 · 可精修转写`,
+        `录音已保存 ${Math.round((data.bytes ?? blob.size) / 1024)} KB · 实时 ${chunkCount} 段已写入记录本`,
       );
-      onFlash(`录音已上传。可点「精修转写」或直接「AI 拆分」。`);
+      onFlash("录音已上传。记录本里的文字可直接用于「AI 拆分」。");
       onUploaded();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "上传失败";
@@ -406,37 +495,11 @@ export function MeetingLocalRecorder({
     }
   }
 
-  async function runAsr() {
-    setBusy(true);
-    setStatusLine("整段精修转写中（CPU 首次可能需 1–2 分钟）…");
-    try {
-      const res = await fetch(`/api/partner-reviews/${meetingId}/recording/transcribe`, {
-        method: "POST",
-      });
-      const data = (await res.json()) as { ok?: boolean; error?: string; message?: string };
-      if (!res.ok || data.error) {
-        setLocalError(data.error || `转写失败 HTTP ${res.status}`);
-        setStatusLine("转写失败");
-        onFlash(undefined, data.error || `转写失败 HTTP ${res.status}`);
-      } else {
-        setLocalError(null);
-        setStatusLine(data.message || "转写完成");
-        onFlash(data.message);
-        onUploaded();
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setLocalError(msg);
-      setStatusLine("转写失败");
-      onFlash(undefined, msg);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const hasAudio =
     !!recordingBytes || transcriptStatus === "uploaded" || transcriptStatus === "ready";
-  const errText = localError || transcriptError;
+  // 上传中忽略过期的实时错误，避免黄条里叠大红块
+  const errText =
+    phase === "uploading" ? null : localError || (phase === "error" ? transcriptError : null);
   const levelPct = Math.round(level * 100);
 
   return (
@@ -478,7 +541,7 @@ export function MeetingLocalRecorder({
           <p className="text-xs text-slate-600 leading-relaxed">{statusLine}</p>
           {recording ? (
             <p className="text-[11px] text-rose-800/80">
-              请保持本页打开；讨论到谁就点左侧谁。右侧转写区会按段更新（非逐字，约每 {chunkSec}{" "}
+              请保持本页打开；讨论到谁就点左侧谁。识别文字会写入右侧记录本（约每 {chunkSec}{" "}
               秒一段）。
             </p>
           ) : null}
@@ -486,14 +549,26 @@ export function MeetingLocalRecorder({
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
           {!recording && phase !== "uploading" && phase !== "mic" ? (
-            <button
-              type="button"
-              disabled={busy || disabled}
-              onClick={() => void start()}
-              className="rounded-lg bg-rose-700 text-white px-3.5 py-2 text-sm font-medium hover:bg-rose-800 disabled:opacity-40"
-            >
-              {hasAudio ? "重新录音" : "开始近实时录音"}
-            </button>
+            <>
+              <label className="flex items-center gap-1.5 text-[11px] text-slate-600 mr-1 max-w-[14rem] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={captureSystemAudio}
+                  disabled={busy || disabled}
+                  onChange={(e) => setCaptureSystemAudio(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                <span>同时录会议/电脑声音</span>
+              </label>
+              <button
+                type="button"
+                disabled={busy || disabled}
+                onClick={() => void start()}
+                className="rounded-lg bg-rose-700 text-white px-3.5 py-2 text-sm font-medium hover:bg-rose-800 disabled:opacity-40"
+              >
+                {hasAudio ? "重新录音" : "开始近实时录音"}
+              </button>
+            </>
           ) : null}
           {recording ? (
             <button
@@ -505,29 +580,21 @@ export function MeetingLocalRecorder({
               停止并上传
             </button>
           ) : null}
-          {hasAudio && !recording && phase !== "uploading" ? (
-            <button
-              type="button"
-              disabled={busy || transcriptStatus === "transcribing"}
-              onClick={() => void runAsr()}
-              className="rounded-lg bg-violet-700 text-white px-3.5 py-2 text-sm font-medium hover:bg-violet-800 disabled:opacity-40"
-            >
-              {transcriptStatus === "transcribing" ? "转写中…" : "精修转写（整段）"}
-            </button>
-          ) : null}
         </div>
       </div>
 
       {recording ? (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span>麦克风电平</span>
-            <span>{levelPct < 3 ? "几乎无声 — 请靠近麦克风说话" : `音量 ${levelPct}%`}</span>
+            <span>输入电平</span>
+            <span>
+              {quietHint ? "持续偏静 — 请确认麦克风/会议音频已开启" : `音量 ${levelPct}%`}
+            </span>
           </div>
           <div className="h-2 rounded-full bg-white/80 border border-rose-100 overflow-hidden">
             <div
               className={`h-full transition-[width] duration-100 ${
-                levelPct < 3 ? "bg-amber-400" : "bg-rose-500"
+                quietHint ? "bg-amber-400" : "bg-rose-500"
               }`}
               style={{ width: `${Math.max(2, levelPct)}%` }}
             />
@@ -558,9 +625,11 @@ export function MeetingLocalRecorder({
         </div>
       ) : null}
 
-      {!recording && phase === "idle" && !hasAudio ? (
+      {!recording && phase === "idle" ? (
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          使用 Chrome/Edge + HTTPS。开录后请对着麦克风说话；这是「近实时分段识别」，不是逐字字幕。
+          默认只录麦克风，电脑扬声器里的会议声录不到。若要录腾讯会议/Zoom
+          等对方声音：勾选「同时录会议/电脑声音」，在弹出窗口选会议所在标签页或窗口，并勾选「分享音频」。Mac
+          上通常只能录浏览器标签页音频，不能直接录整机系统声。
         </p>
       ) : null}
     </div>

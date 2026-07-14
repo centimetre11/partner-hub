@@ -89,13 +89,6 @@ function mergeSegmentsForPartner(segments: TranscriptSegment[], partnerId: strin
     .join("\n\n");
 }
 
-function mergePartnerTexts(...parts: string[]): string {
-  return parts
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .join("\n\n");
-}
-
 /** 按标记拆分转写，并为每个议程项生成 AI 提案（不落库） */
 export async function buildSplitProposal(meetingId: string, userId?: string): Promise<SplitProposal> {
   const meeting = await db.partnerReviewMeeting.findUnique({
@@ -170,7 +163,10 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
   for (const item of meeting.items) {
     const fromNotes = mergeSegmentsForPartner(noteSegments, item.partnerId);
     const fromTranscript = mergeSegmentsForPartner(transcriptSegments, item.partnerId);
-    const segmentText = mergePartnerTexts(fromNotes, fromTranscript);
+    // 记录本已写入实时转写时，不再与 transcriptText 叠一份，避免重复
+    const segmentText = fromNotes.trim()
+      ? fromNotes
+      : fromTranscript;
     const summary = await summarizeSegment({
       partnerName: item.partner.name,
       segmentText,

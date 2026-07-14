@@ -26,6 +26,7 @@ import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeti
 import { isDingTalkClient, startDingTalkA1Recording } from "@/lib/dingtalk/client-record";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { MeetingLocalRecorder } from "@/components/partner-review/meeting-local-recorder";
+import { appendLiveChunkToNotes } from "@/lib/partner-review/markers";
 
 export type { MeetingClient, ReviewItemClient };
 
@@ -59,6 +60,11 @@ export function MeetingWorkspace({
     return discussed[0]?.id ?? null;
   });
   const recentDiscussClicks = useRef<{ itemId: string; at: number }[]>([]);
+  const liveNotesRef = useRef(liveNotes);
+  const saveNotesTimerRef = useRef<number | null>(null);
+  useEffect(() => {
+    liveNotesRef.current = liveNotes;
+  }, [liveNotes]);
   const [confirmDrafts, setConfirmDrafts] = useState<
     Record<
       string,
@@ -327,21 +333,34 @@ export function MeetingWorkspace({
           onFlash={flash}
           onRecordingChange={setIsRecording}
           onMeetingLive={() => setMeeting((m) => ({ ...m, status: "LIVE", transcriptStatus: "recording" }))}
-          onLiveTranscript={(plain) => {
-            setTranscript(plain);
-            setMeeting((m) => ({ ...m, transcriptText: plain, transcriptStatus: "recording" }));
+          onLiveTranscript={(chunkText) => {
+            setLiveNotes((prev) => {
+              const next = appendLiveChunkToNotes(prev, chunkText);
+              liveNotesRef.current = next;
+              if (saveNotesTimerRef.current) window.clearTimeout(saveNotesTimerRef.current);
+              saveNotesTimerRef.current = window.setTimeout(() => {
+                void saveLiveNotesAction(meeting.id, liveNotesRef.current).catch(() => undefined);
+              }, 800);
+              return next;
+            });
+            setMeeting((m) => ({ ...m, transcriptStatus: "recording" }));
           }}
           onUploaded={() => {
-            // 上传完成后再刷新；录音过程中不 refresh
-            router.refresh();
+            if (saveNotesTimerRef.current) {
+              window.clearTimeout(saveNotesTimerRef.current);
+              saveNotesTimerRef.current = null;
+            }
+            void saveLiveNotesAction(meeting.id, liveNotesRef.current)
+              .catch(() => undefined)
+              .finally(() => router.refresh());
           }}
         />
       ) : null}
 
       {phase === "prep" && !isRecording ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：开会准备 → 上方「开始近实时录音」→ 讨论谁点左侧谁 → 停止并上传 → 精修/拆分。
-          热词在{" "}
+          建议：开会准备 → 上方「开始近实时录音」→ 讨论谁点左侧谁 → 文字写入记录本 → 停止并上传 →
+          AI 拆分。热词在{" "}
           <Link href="/settings#integrations" className="text-sky-700 hover:underline">
             团队设置 · 语音识别
           </Link>
@@ -371,7 +390,11 @@ export function MeetingWorkspace({
                       // 录音中切伙伴：不要 router.refresh，否则会重挂组件掐断麦克风
                       run(
                         async () => {
-                          const res = await discussPartnerAction(meeting.id, item.id);
+                          const res = await discussPartnerAction(
+                            meeting.id,
+                            item.id,
+                            liveNotesRef.current,
+                          );
                           if (res.error) {
                             flash(undefined, res.error);
                             return;
@@ -487,39 +510,20 @@ export function MeetingWorkspace({
               value={liveNotes}
               onChange={(e) => setLiveNotes(e.target.value)}
               readOnly={phase === "done"}
-              rows={12}
-              placeholder="讨论谁就点左侧谁：会插入 [时间] 开始过 … 与 <<<PARTNER:id|name>>> 标记；也可手写纪要。"
+              rows={isRecording || phase === "live" ? 18 : 12}
+              placeholder={
+                isRecording || phase === "live"
+                  ? "点左侧伙伴会插入标记；近实时识别的文字会自动追加在当前伙伴下方。也可手改。"
+                  : "讨论谁就点左侧谁：会插入 [时间] 开始过 … 与 <<<PARTNER:id|name>>> 标记；也可手写纪要。"
+              }
               className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed ${
                 phase === "done" ? "bg-slate-50 text-slate-700" : ""
               }`}
             />
+            {isRecording ? (
+              <p className="mt-1 text-[11px] text-rose-700">录音中 · 识别文字写入上方记录本</p>
+            ) : null}
           </div>
-
-          {phase === "live" || isRecording ? (
-            <div className="space-y-2 border-t border-slate-100 pt-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-xs font-medium text-slate-500">近实时转写</div>
-                {isRecording ? (
-                  <span className="text-[11px] text-rose-700 font-medium">录音中 · 自动刷新</span>
-                ) : null}
-              </div>
-              <pre className="w-full max-h-[36vh] overflow-auto rounded-lg border border-violet-100 bg-violet-50/40 px-3 py-2 text-sm font-mono whitespace-pre-wrap text-slate-800">
-                {transcript.trim() ||
-                  (isRecording
-                    ? "（已开录，等待首段识别文字出现…）"
-                    : "（点上方「开始近实时录音」后，这里会陆续出字）")}
-              </pre>
-            </div>
-          ) : null}
-
-          {phase === "done" && (
-            <div className="space-y-2 border-t border-slate-100 pt-3">
-              <div className="text-xs font-medium text-slate-500">会议转写（只读）</div>
-              <pre className="w-full max-h-[40vh] overflow-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono whitespace-pre-wrap text-slate-700">
-                {transcript.trim() || "（无转写）"}
-              </pre>
-            </div>
-          )}
 
           {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
             <div className="space-y-3 border-t border-slate-100 pt-3">

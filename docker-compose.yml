@@ -64,16 +64,17 @@ services:
       - WECOM_BOT_ENABLED=false
       - HOSTNAME=0.0.0.0
       - UPLOAD_DIR=/data/uploads
-      - ASR_BASE_URL=http://whisper-asr:9000
+      # 启用语音时：docker compose --profile asr up -d whisper-asr
+      - ASR_BASE_URL=${ASR_BASE_URL:-http://whisper-asr:9000}
       - ASR_PROVIDER=whisper_asr_webservice
       - ASR_LANGUAGE=zh
+      - NODE_OPTIONS=--max-old-space-size=3072
     volumes:
       - partner-data:/data
       - partner-uploads:/data/uploads
     depends_on:
       db:
         condition: service_healthy
-      # whisper-asr 可选：未启动时「转写录音」会提示配置 ASR_BASE_URL
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s

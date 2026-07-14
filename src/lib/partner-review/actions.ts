@@ -99,7 +99,12 @@ export async function saveLiveNotesAction(meetingId: string, liveNotes: string) 
   return { ok: true };
 }
 
-export async function discussPartnerAction(meetingId: string, itemId: string) {
+export async function discussPartnerAction(
+  meetingId: string,
+  itemId: string,
+  /** 客户端当前记录本（含未落库的实时转写），避免切伙伴时冲掉会中文字 */
+  clientLiveNotes?: string,
+) {
   await requireUser();
   const item = await db.partnerReviewItem.findFirst({
     where: { id: itemId, meetingId },
@@ -109,7 +114,9 @@ export async function discussPartnerAction(meetingId: string, itemId: string) {
 
   const marker = formatPartnerMarker(item.partner.id, item.partner.name);
   const now = new Date();
-  const liveNotes = appendMarkerToNotes(item.meeting.liveNotes, marker, {
+  const baseNotes =
+    typeof clientLiveNotes === "string" ? clientLiveNotes : item.meeting.liveNotes;
+  const liveNotes = appendMarkerToNotes(baseNotes, marker, {
     partnerName: item.partner.name,
     at: now,
   });

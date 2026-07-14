@@ -69,6 +69,17 @@ export function appendMarkerToNotes(
   return base ? `${base}\n\n${header}\n` : `${header}\n`;
 }
 
+/** 将近实时识别的一段文字追加到记录本末尾（落在当前伙伴标记下方） */
+export function appendLiveChunkToNotes(
+  liveNotes: string | null | undefined,
+  chunkText: string,
+): string {
+  const text = chunkText.trim();
+  if (!text) return liveNotes ?? "";
+  const base = (liveNotes ?? "").trimEnd();
+  return base ? `${base}\n${text}` : text;
+}
+
 export type PartnerTimeBoundary = {
   partnerId: string;
   partnerName: string;

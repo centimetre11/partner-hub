@@ -58,3 +58,26 @@ export function rmsLevel(samples: Float32Array): number {
   }
   return Math.sqrt(sum / samples.length);
 }
+
+/** 峰值（0–1），比 RMS 更贴近「听感音量」 */
+export function peakLevel(samples: Float32Array): number {
+  if (!samples.length) return 0;
+  let peak = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const a = Math.abs(samples[i]!);
+    if (a > peak) peak = a;
+  }
+  return peak;
+}
+
+/**
+ * 映射为 UI 电平 0–1。
+ * 正常说话峰值常在 0.05–0.3，旧逻辑用 RMS*4 会长期显示「几乎无声」。
+ */
+export function meterLevel(samples: Float32Array): number {
+  const peak = peakLevel(samples);
+  const rms = rmsLevel(samples);
+  // 峰值主导，略掺 RMS；开方压缩动态范围
+  const raw = Math.max(peak * 1.6, rms * 3.2);
+  return Math.min(1, Math.sqrt(Math.max(0, raw)));
+}
