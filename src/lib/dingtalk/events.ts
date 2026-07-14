@@ -156,11 +156,29 @@ export function extractRecordingRefs(event: DingTalkEventPayload): {
 
 export async function getDingTalkCallbackSecrets() {
   const config = await resolveDingTalkConfig();
+  // 企业内部应用事件推送：OWNER_KEY = Client ID（原 AppKey），不是 CorpId
   return {
     token: config?.token ?? "",
     aesKey: config?.aesKey ?? "",
     corpId: config?.corpId ?? "",
+    appKey: config?.appKey ?? "",
+    ownerKey: config?.appKey?.trim() || config?.corpId?.trim() || "dingtalk",
   };
+}
+
+/** 钉钉事件订阅要求：始终返回加密后的 success JSON */
+export function buildDingTalkSuccessReply(opts: {
+  token: string;
+  aesKey: string;
+  ownerKey: string;
+  timestamp?: string;
+  nonce?: string;
+}) {
+  const timeStamp = opts.timestamp || String(Date.now());
+  const nonce = opts.nonce || Math.random().toString(36).slice(2, 10);
+  const encrypt = encryptDingTalkReply(opts.aesKey, "success", opts.ownerKey);
+  const msg_signature = signDingTalkReply(opts.token, timeStamp, nonce, encrypt);
+  return { msg_signature, timeStamp, nonce, encrypt };
 }
 
 /**

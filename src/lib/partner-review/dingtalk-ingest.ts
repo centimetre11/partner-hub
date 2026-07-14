@@ -2,10 +2,8 @@ import "server-only";
 
 import { db } from "../db";
 import {
-  decryptDingTalkEncrypt,
   extractRecordingRefs,
   isRecordingCompleteEvent,
-  parseDingTalkEventJson,
   type DingTalkEventPayload,
 } from "../dingtalk/events";
 import { downloadDingDriveText, fetchConferenceTranscriptText } from "../dingtalk/drive";
@@ -94,19 +92,4 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
     meetingId: meeting.id,
     hasTranscript: !!transcript,
   };
-}
-
-export async function decryptAndHandleDingTalkBody(opts: {
-  encrypt: string;
-  aesKey: string;
-  corpId?: string | null;
-}) {
-  const plain = decryptDingTalkEncrypt(opts.aesKey, opts.encrypt, opts.corpId);
-  // URL 验证时 plain 可能是 challenge 字符串
-  if (plain.startsWith("{")) {
-    const event = parseDingTalkEventJson(plain);
-    const result = await handleDingTalkRecordingEvent(event);
-    return { plain, event, result };
-  }
-  return { plain, event: null, result: null };
 }
