@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.9";
+  const SCRIPT_VER = "1.1.10";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -103,24 +103,9 @@
         }));
       if (!ok) warnings.push("Contact Name 未找到输入框");
     }
-    if (fields.contactTitle) {
-      if (!(await fillRadioByLabel("Contact Title", fields.contactTitle))) {
-        warnings.push(`Contact Title「${fields.contactTitle}」未选中，请手选`);
-      }
-    }
-    if (fields.productsOfInterest) {
-      const ok =
-        (await fillCheckboxByLabel("Products of interest", fields.productsOfInterest)) ||
-        (await fillCheckboxByLabel("Product of interest", fields.productsOfInterest));
-      if (!ok) warnings.push(`Products of interest「${fields.productsOfInterest}」未勾选，请手选`);
-    }
-    if (fields.currentDemand) {
-      if (!(await fillRadioByLabel("Current demand", fields.currentDemand))) {
-        warnings.push("Current demand 未选中，请手选");
-      }
-    }
+    // Contact Title / Products / Current demand 放到邮箱之后填（见下）
 
-    // 邮箱先于电话：绝不碰区号下拉，避免上弹层污染邮箱
+    // 邮箱
     if (fields.email) {
       const ok =
         (await fillTextByLabel("Email", fields.email)) ||
@@ -128,22 +113,36 @@
         (await fillTextByLabel("Contact Email", fields.email)) ||
         (await fillTextByLabel("邮箱", fields.email));
       if (!ok) warnings.push("Email 未找到输入框");
+      await sleep(300);
     }
+
+    // 电话：完全不自动填。区号控件一点就上弹并卡住整页；号码请手填。
+    warnings.push("电话请手选区号并填写号码（自动填写会卡住，已跳过）");
 
     await closeOpenDropdowns();
     await sleep(200);
 
-    // 电话稳妥策略：绝不操作区号（Country 常会带出；下拉会盖住邮箱并卡住）
-    // 只往右侧号码框写本地数字；失败只告警，不阻塞
-    try {
-      const ok = await Promise.race([
-        fillPhoneNumberOnly(fields),
-        sleep(3500).then(() => false),
-      ]);
-      if (!ok) warnings.push("Phone 号码未自动填入，请手选区号并填写号码");
-    } catch (err) {
-      warnings.push(`Phone 填充异常：${String(err && err.message ? err.message : err)}`);
-      await closeOpenDropdowns();
+    // 邮箱之后再补一次单选/多选（前面若被浮层挡住可能失败）
+    if (fields.contactTitle) {
+      const ok =
+        (await fillRadioByLabel("Contact Title", fields.contactTitle)) ||
+        (await fillRadioByLabel("Job Title", fields.contactTitle)) ||
+        (await fillRadioByLabel("Title", fields.contactTitle)) ||
+        (await clickOptionByText(fields.contactTitle));
+      if (!ok) warnings.push(`Contact Title「${fields.contactTitle}」未选中，请手选`);
+    }
+    if (fields.productsOfInterest) {
+      const ok =
+        (await fillCheckboxByLabel("Products of interest", fields.productsOfInterest)) ||
+        (await fillCheckboxByLabel("Product of interest", fields.productsOfInterest)) ||
+        (await clickOptionByText(fields.productsOfInterest));
+      if (!ok) warnings.push(`Products「${fields.productsOfInterest}」未勾选，请手选`);
+    }
+    if (fields.currentDemand) {
+      const ok =
+        (await fillRadioByLabel("Current demand", fields.currentDemand)) ||
+        (await clickOptionByText(fields.currentDemand, { prefixLen: 40 }));
+      if (!ok) warnings.push("Current demand 未选中，请手选");
     }
 
 
@@ -496,101 +495,34 @@
     await sleep(200);
   }
 
-  /**
-   * 电话稳妥策略：
-   * - 绝不点击/写入区号（FineReport 区号下拉向上展开会盖住邮箱并卡住）
-   * - 只定位右侧「号码」输入框写入本地数字
-   * - 区号依赖 Country 带出或用户手选
-   */
-  async function fillPhoneNumberOnly(fields) {
-    const local =
-      (fields.phoneLocal && String(fields.phoneLocal).replace(/\D/g, "")) ||
-      "500000000";
+  /** 按可见文案点击单选/多选选项（无左侧标签时兜底） */
+  async function clickOptionByText(optionText, opts) {
+    const options = opts || {};
+    const target = normalizeLabel(optionText);
+    if (!target) return false;
+    const prefixLen = options.prefixLen || Math.min(40, target.length);
+    const targetPrefix = target.slice(0, prefixLen);
 
-    const labelEl =
-      findLabelCell("Contact phone number") ||
-      findLabelCell("Phone") ||
-      findLabelCell("Mobile") ||
-      findLabelCell("电话") ||
-      findLabelCell("手机");
-    if (!labelEl) return false;
-    const valueCell = findValueCellFromLabel(labelEl);
-    if (!valueCell) return false;
-
-    await closeOpenDropdowns();
-    await sleep(150);
-
-    const numInput = findPhoneNumberInput(valueCell);
-    if (!numInput) return false;
-
-    // 确保焦点不在区号框上
-    try {
-      const active = document.activeElement;
-      if (active && active !== numInput && active.blur) active.blur();
-    } catch (_) {}
-    await closeOpenDropdowns();
-
-    numInput.scrollIntoView({ block: "center", inline: "nearest" });
-    numInput.focus();
-    await sleep(80);
-    try {
-      numInput.select && numInput.select();
-    } catch (_) {}
-
-    let wrote = false;
-    try {
-      if (document.execCommand && document.execCommand("insertText", false, local)) {
-        wrote = String(numInput.value || "").replace(/\D/g, "").length >= 6;
+    const nodes = queryAll("label, span, div, td, li, a").filter(isVisible);
+    for (const el of nodes) {
+      const raw = (el.textContent || "").trim();
+      if (!raw || raw.length > 220) continue;
+      const t = normalizeLabel(raw);
+      if (t === target || (targetPrefix.length >= 8 && (t === targetPrefix || t.startsWith(targetPrefix)))) {
+        // 优先点内部的 input
+        const input = el.querySelector && el.querySelector('input[type="radio"], input[type="checkbox"]');
+        if (input) {
+          input.click();
+          input.checked = true;
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        } else {
+          el.click();
+        }
+        await sleep(150);
+        return true;
       }
-    } catch (_) {}
-
-    if (!wrote) {
-      setNativeValue(numInput, local);
-      numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
-      numInput.dispatchEvent(new Event("change", { bubbles: true }));
     }
-
-    await sleep(120);
-    try {
-      numInput.blur && numInput.blur();
-    } catch (_) {}
-    await closeOpenDropdowns();
-
-    return String(numInput.value || "").replace(/\D/g, "").length >= 6;
-  }
-
-  function findPhoneNumberInput(valueCell) {
-    const inputs = [...valueCell.querySelectorAll(
-      "input:not([type='hidden']):not([type='radio']):not([type='checkbox'])",
-    )].filter(isVisible);
-    if (!inputs.length) return null;
-
-    // 优先：placeholder 明确是号码框
-    const byPh = inputs.find((el) =>
-      /area code|mobile|only enter|phone num|手机号|号码/i.test(el.getAttribute("placeholder") || ""),
-    );
-    if (byPh) return byPh;
-
-    // 其次：最宽 / 最靠右的输入框（区号框通常很窄）
-    if (inputs.length === 1) {
-      const el = inputs[0];
-      const r = el.getBoundingClientRect();
-      const ph = (el.getAttribute("placeholder") || "").toLowerCase();
-      // 单框且像区号（窄、值像 +966）则放弃，避免误写
-      if (r.width < 120 && /^\+?\d{0,4}$/.test(String(el.value || "").trim()) && !/mobile|num/.test(ph)) {
-        return null;
-      }
-      return el;
-    }
-
-    return inputs
-      .slice()
-      .sort((a, b) => {
-        const ra = a.getBoundingClientRect();
-        const rb = b.getBoundingClientRect();
-        // 优先更宽，其次更靠右
-        return rb.width - ra.width || rb.left - ra.left;
-      })[0];
+    return false;
   }
 
   async function trySelectInCell(cell, aliases, _preferExact) {

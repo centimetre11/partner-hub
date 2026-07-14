@@ -5,7 +5,7 @@ export const CRM_ACTIVATION_URL =
 
 export const CRM_ACTIVATION_REGION = "中东-ME";
 export const CRM_ACTIVATION_PARTNER_TYPE = "经销商伙伴（Reseller）";
-export const CRM_ACTIVATION_CONTACT_TITLE = "IT Manager / Engineer";
+export const CRM_ACTIVATION_CONTACT_TITLE = "IT Manager";
 /** Products of interest 勾选第一项 */
 export const CRM_ACTIVATION_PRODUCT = "FineReport";
 /** Current demand 单选第一项 */
