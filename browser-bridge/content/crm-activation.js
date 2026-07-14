@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.3";
+  const SCRIPT_VER = "1.1.4";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -111,9 +111,8 @@
         (await fillTextByLabel("邮箱", fields.email));
       if (!ok) warnings.push("Email 未找到输入框");
     }
-    if (fields.phoneDialCode || fields.phoneLocal || fields.phone) {
-      if (!(await fillPhoneFields(fields))) warnings.push("Phone 未填完整，请手填区号与号码");
-    }
+
+    // 单选/多选先于电话，避免电话区号卡住导致后面全空
     if (fields.contactTitle) {
       if (!(await fillRadioByLabel("Contact Title", fields.contactTitle))) {
         warnings.push(`Contact Title「${fields.contactTitle}」未选中，请手选`);
@@ -129,6 +128,18 @@
       if (!(await fillRadioByLabel("Current demand", fields.currentDemand))) {
         warnings.push("Current demand 未选中，请手选");
       }
+    }
+
+    // 电话：区号随便选一项 + 编造本地号码；失败不阻塞收尾
+    try {
+      const ok = await Promise.race([
+        fillPhoneFields(fields),
+        sleep(12000).then(() => false),
+      ]);
+      if (!ok) warnings.push("Phone 未填完整，请手选区号并填号码");
+    } catch (err) {
+      warnings.push(`Phone 填充异常：${String(err && err.message ? err.message : err)}`);
+      await closeOpenDropdowns();
     }
 
     await closeOpenDropdowns();
@@ -482,10 +493,14 @@
     await sleep(200);
   }
 
+  /**
+   * 电话：左侧区号下拉随便选第一项，右侧填编造本地号码。
+   * 不调用整行 fillDropdownByLabel，避免卡死。
+   */
   async function fillPhoneFields(fields) {
-    const dial = fields.phoneDialCode || "";
-    const local = fields.phoneLocal || "";
-    const full = fields.phone || `${dial}${local}`;
+    const local =
+      (fields.phoneLocal && String(fields.phoneLocal).replace(/\D/g, "")) ||
+      "500000000";
 
     const labelEl =
       findLabelCell("Contact phone number") ||
@@ -497,49 +512,113 @@
     const valueCell = findValueCellFromLabel(labelEl);
     if (!valueCell) return false;
 
+    await closeOpenDropdowns();
+    await sleep(200);
+
     const inputs = [...valueCell.querySelectorAll("input:not([type='hidden']):not([type='radio']):not([type='checkbox'])")].filter(
       isVisible,
     );
 
-    if (inputs.length >= 2) {
-      const dialInput = inputs[0];
-      const numInput = inputs[1];
-      if (dial) {
-        await fillDropdownByLabel("Contact phone number", [dial, dial.replace("+", "")], {
-          typeQuery: dial,
-          settleMs: 700,
-          selectFirstMatch: true,
-        }).catch(() => false);
-        // 若上面按整行填了，再确保号码
-        await closeOpenDropdowns();
-        if (!(dialInput.value || "").includes(dial.replace("+", "")) && !(dialInput.value || "").includes(dial)) {
-          dialInput.focus();
-          setNativeValue(dialInput, dial);
-        }
-      }
+    let numInput =
+      inputs.find((el) => /area code|mobile|phone|号码|手机/i.test(el.getAttribute("placeholder") || "")) ||
+      (inputs.length >= 2 ? inputs[inputs.length - 1] : null);
+    let dialInput =
+      inputs.length >= 2
+        ? inputs.find((el) => el !== numInput) || inputs[0]
+        : inputs.find((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.width < 120;
+          }) || null;
+
+    if (!numInput && inputs.length === 1) {
+      setNativeValue(inputs[0], `${fields.phoneDialCode || "+966"}${local}`);
+      await sleep(200);
+      return true;
+    }
+
+    const dialOk = await pickFirstDialCode(valueCell, dialInput);
+    await closeOpenDropdowns();
+    await sleep(300);
+
+    if (!numInput) {
+      numInput =
+        [...valueCell.querySelectorAll("input:not([type='hidden'])")].filter(isVisible).pop() || null;
+    }
+    if (numInput) {
       numInput.focus();
-      setNativeValue(numInput, local || full.replace(/^\+\d+/, ""));
-      await sleep(300);
-      return true;
+      await sleep(100);
+      setNativeValue(numInput, local);
+      numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
+      await sleep(250);
+      return dialOk || Boolean((numInput.value || "").trim());
+    }
+    return dialOk;
+  }
+
+  async function pickFirstDialCode(valueCell, dialInput) {
+    const arrowCandidates = [...valueCell.querySelectorAll("button, .fr-trigger-btn-up, .fr-trigger-btn-down, .fr-trigger-center, div[class*='trigger'], span")].filter(
+      (el) => {
+        if (!isVisible(el)) return false;
+        const r = el.getBoundingClientRect();
+        return r.width >= 8 && r.width <= 40 && r.height >= 8 && r.height <= 40;
+      },
+    );
+    let arrow = arrowCandidates[0] || null;
+    if (dialInput && arrowCandidates.length) {
+      const dr = dialInput.getBoundingClientRect();
+      arrow =
+        arrowCandidates
+          .map((el) => ({ el, d: Math.abs(el.getBoundingClientRect().left - dr.right) }))
+          .sort((a, b) => a.d - b.d)[0]?.el || arrow;
     }
 
-    if (inputs.length === 1) {
-      setNativeValue(inputs[0], full);
-      return true;
+    if (dialInput) {
+      dialInput.focus();
+      dialInput.click();
+      await sleep(200);
+    }
+    if (arrow) {
+      arrow.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      arrow.click();
+      await sleep(450);
     }
 
-    if (dial) {
-      await trySelectInCell(valueCell, [dial, dial.replace("+", "")], true);
-      await closeOpenDropdowns();
+    let items = [];
+    const start = Date.now();
+    while (Date.now() - start < 2500) {
+      items = findVisibleDropdownItems().filter((el) => {
+        const t = (el.textContent || "").trim();
+        return t.length > 0 && t.length < 40 && (/^\+?\d/.test(t) || /\+\d/.test(t) || /^\d{1,4}$/.test(t));
+      });
+      if (items.length) break;
+      items = findVisibleDropdownItems().filter((el) => {
+        const t = (el.textContent || "").trim();
+        return t.length > 0 && t.length < 30;
+      });
+      if (items.length) break;
+      await sleep(200);
     }
-    const num =
-      valueCell.querySelector("input[placeholder*='mobile' i], input[placeholder*='phone' i], input[placeholder*='号码']") ||
-      [...valueCell.querySelectorAll("input")].filter(isVisible).pop();
-    if (num && (local || full)) {
-      setNativeValue(num, local || full.replace(/^\+\d+/, ""));
-      return true;
+
+    if (!items.length) {
+      if (dialInput) {
+        setNativeValue(dialInput, "+966");
+        return true;
+      }
+      return false;
     }
-    return Boolean(num);
+
+    const target = items[0];
+    target.scrollIntoView({ block: "nearest" });
+    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+    target.click();
+    await sleep(350);
+
+    if (findVisibleDropdownItems().length > 0) {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, keyCode: 13 }));
+      await sleep(200);
+    }
+    return true;
   }
 
   async function trySelectInCell(cell, aliases, _preferExact) {
@@ -558,7 +637,7 @@
     else return false;
     await sleep(400);
     if (input && aliases[0]) await typeIntoInput(input, aliases[0]);
-    await sleep(600);
+    await sleep(500);
     const items = findVisibleDropdownItems();
     if (!items.length) return false;
     const texts = items.map((el) => (el.textContent || "").trim());
