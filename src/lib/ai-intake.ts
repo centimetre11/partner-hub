@@ -78,6 +78,7 @@ import {
   parseProcessTags,
   serializeProcessTags,
 } from "./opportunity-process-tags";
+import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opportunity-status";
 import {
   businessRecordCrmFieldsComplete,
   inferTraceAction,
@@ -1693,7 +1694,7 @@ export async function applyIntake(opts: {
         amount: o.amount,
         stage,
         nextStep: normalizeNextProcessTag(o.nextStep ?? null),
-        status: o.status ?? "ACTIVE",
+        status: o.status ? normalizeOpportunityStatus(o.status) : DEFAULT_OPPORTUNITY_STATUS,
         notes: o.notes,
         dealType: o.dealType && ["PROJECT", "PRODUCT"].includes(o.dealType) ? o.dealType : undefined,
       };

@@ -1,4 +1,5 @@
 import { formatProcessTagsDisplay } from "@/lib/opportunity-process-tags";
+import { isOpenOpportunityStatus, opportunityStatusLabel, opportunityStatusTone } from "@/lib/opportunity-status";
 import type { Locale } from "@/lib/i18n/locale";
 import Link from "next/link";
 import { Badge, Card, EmptyState, fmtDate, StageBadge } from "@/components/ui";
@@ -63,7 +64,7 @@ export function PartnerHierarchySection({
   taxonomy: { CATEGORY: TaxonomyOptionRow[]; INDUSTRY: TaxonomyOptionRow[] };
 }) {
   const pd = m.partnerDetail;
-  const activeOpps = opportunities.filter((o) => o.status === "ACTIVE").length;
+  const activeOpps = opportunities.filter((o) => isOpenOpportunityStatus(o.status)).length;
   const wonOpps = opportunities.filter((o) => o.status === "WON").length;
   const activeProjects = projects.filter((p) => p.status === "ACTIVE").length;
 
@@ -157,8 +158,8 @@ export function PartnerHierarchySection({
                     {fmtDate(o.updatedAt, bcp47)}
                   </div>
                 </div>
-                <Badge tone={o.status === "WON" ? "green" : o.status === "ACTIVE" ? "blue" : "zinc"}>
-                  {o.status}
+                <Badge tone={opportunityStatusTone(o.status)}>
+                  {opportunityStatusLabel(o.status, locale)}
                 </Badge>
               </li>
             ))}

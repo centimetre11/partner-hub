@@ -14,6 +14,7 @@ import { getMeetingSchedulerContext } from "@/lib/meeting-context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import { getServerI18n, stageName } from "@/lib/server-i18n";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
+import { OPEN_OPPORTUNITY_STATUSES } from "@/lib/opportunity-status";
 
 export default async function HomePage({
   searchParams,
@@ -107,7 +108,7 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
     }),
     db.partner.count({ where: { status: "ACTIVE" } }),
     db.todoItem.count({ where: { status: "OPEN" } }),
-    db.opportunity.count({ where: { status: "ACTIVE", partner: { status: "ACTIVE" } } }),
+    db.opportunity.count({ where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] }, partner: { status: "ACTIVE" } } }),
     INBOX_NAV_ENABLED
       ? db.notification.findMany({
           where: { readAt: null },

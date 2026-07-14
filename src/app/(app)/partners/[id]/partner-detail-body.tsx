@@ -28,6 +28,7 @@ import { PartnerIntegrationsPanel } from "@/components/partner-integrations-pane
 import { PartnerHierarchySection } from "@/components/partner-hierarchy-section";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { OpportunityProcessBadges } from "@/components/opportunity-process-badges";
+import { opportunityStatusLabel, opportunityStatusTone } from "@/lib/opportunity-status";
 import { listDistributorCandidates } from "@/lib/partner-hierarchy";
 import type { Locale } from "@/lib/i18n/locale";
 import { TodoItemRow } from "@/components/todo-item-row";
@@ -559,8 +560,8 @@ function RelatedOpportunityList({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-slate-900">{o.name}</span>
-              <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
-                {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
+              <Badge tone={opportunityStatusTone(o.status)}>
+                {opportunityStatusLabel(o.status, locale)}
               </Badge>
               <OpportunityProcessBadges
                 stage={o.stage}

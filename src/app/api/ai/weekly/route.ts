@@ -6,6 +6,7 @@ import { createSseResponse } from "@/lib/ai-trace";
 import { streamTextCompletion } from "@/lib/ai-stream-text";
 import { staleDays } from "@/lib/completeness";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
+import { isOpenOpportunityStatus } from "@/lib/opportunity-status";
 import {
   buildWeeklyReportSystemPrompt,
   buildWeeklyReportUserContent,
@@ -53,7 +54,7 @@ async function generateWeekly(uid: string, locale: Locale, emit?: Parameters<typ
 
   const partnerLines = active
     .map((p) => {
-      const opps = p.opportunities.filter((o) => o.status === "ACTIVE");
+      const opps = p.opportunities.filter((o) => isOpenOpportunityStatus(o.status));
       return weeklyPartnerStatusLine(locale, labels, {
         name: p.name,
         stage: p.pipelineStage,

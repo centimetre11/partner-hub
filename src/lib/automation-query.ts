@@ -4,7 +4,16 @@ import type { Locale } from "./i18n/locale";
 export type AutomationQuerySource = "todos" | "opportunities" | "ai";
 export type AutomationQueryScope = "all" | "partner" | "customer";
 export type AutomationDueFilter = "all" | "overdue" | "within_days";
-export type AutomationOpportunityStatus = "ALL" | "ACTIVE" | "WON" | "LOST" | "PAUSED";
+export type AutomationOpportunityStatus =
+  | "ALL"
+  | "OPEN"
+  | "P20"
+  | "P50"
+  | "P80"
+  | "ACTIVE"
+  | "WON"
+  | "LOST"
+  | "PAUSED";
 export type AutomationDealType = "ALL" | "PROJECT" | "PRODUCT";
 /** 待办按机会/项目归属过滤 */
 export type AutomationTodoLinkFilter = "all" | "project" | "opportunity" | "unlinked";
@@ -73,7 +82,14 @@ export function parseAutomationQuery(raw: unknown): AutomationQuery | null {
 
   const statusRaw = obj.opportunityStatus;
   const opportunityStatus: AutomationOpportunityStatus =
-    statusRaw === "ACTIVE" || statusRaw === "WON" || statusRaw === "LOST" || statusRaw === "PAUSED"
+    statusRaw === "OPEN" ||
+    statusRaw === "P20" ||
+    statusRaw === "P50" ||
+    statusRaw === "P80" ||
+    statusRaw === "ACTIVE" ||
+    statusRaw === "WON" ||
+    statusRaw === "LOST" ||
+    statusRaw === "PAUSED"
       ? statusRaw
       : "ALL";
 

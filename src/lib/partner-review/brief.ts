@@ -4,6 +4,7 @@ import { db } from "../db";
 import { chatJson } from "../ai";
 import type { PartnerPrepBrief } from "./types";
 import { formatProcessTagsDisplay } from "../opportunity-process-tags";
+import { OPEN_OPPORTUNITY_STATUSES } from "../opportunity-status";
 
 export type { PartnerPrepBrief } from "./types";
 
@@ -93,7 +94,7 @@ export async function gatherPartnerReviewFacts(partnerId: string, since: Date = 
       select: { id: true, title: true, dueDate: true, priority: true, detail: true, status: true },
     }),
     db.opportunity.findMany({
-      where: { partnerId, status: "ACTIVE" },
+      where: { partnerId, status: { in: [...OPEN_OPPORTUNITY_STATUSES] } },
       orderBy: { updatedAt: "desc" },
       take: 10,
       select: { id: true, name: true, stage: true, amount: true },

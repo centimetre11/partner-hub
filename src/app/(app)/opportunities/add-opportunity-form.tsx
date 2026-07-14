@@ -65,6 +65,14 @@ export function AddOpportunityForm({
               <input name="name" required placeholder={c.opportunityName} className={input} />
               <input name="amount" placeholder={m.common.amount} className={input} />
               <OpportunityProcessFields />
+              <select name="status" defaultValue="P20" className={input} aria-label={m.common.status}>
+                <option value="P20">{o.statusP20}</option>
+                <option value="P50">{o.statusP50}</option>
+                <option value="P80">{o.statusP80}</option>
+                <option value="WON">{m.common.won}</option>
+                <option value="LOST">{m.common.lost}</option>
+                <option value="PAUSED">{m.common.paused}</option>
+              </select>
               <input name="followUpAt" type="date" className={input} aria-label={o.followUp} />
               <div className="flex gap-2">
                 <select name="dealType" defaultValue="" className={input} aria-label={o.colDealType}>

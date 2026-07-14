@@ -774,6 +774,10 @@ export const messagesEn = {
     followUp: "Follow-up",
     nextProcessPrefix: "Next: ",
     notesPlaceholder: "Notes / other info (optional)",
+    statusP20: "20% probability",
+    statusP50: "50% probability",
+    statusP80: "80% probability",
+    statusOpen: "In pipeline",
   },
   opportunityProcess: {
     DISCOVERY: "Discovery / Requirements",

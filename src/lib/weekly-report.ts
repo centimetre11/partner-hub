@@ -24,6 +24,7 @@ import {
   type WeeklyReportLocale,
 } from "./weekly-report-locale";
 import { formatProcessTagsDisplay } from "./opportunity-process-tags";
+import { OPEN_OPPORTUNITY_STATUSES } from "./opportunity-status";
 
 // ============ 单人聚合 ============
 
@@ -177,7 +178,7 @@ export async function gatherUserWeekly(
     }),
     db.opportunity.findMany({
       where: {
-        status: "ACTIVE",
+        status: { in: [...OPEN_OPPORTUNITY_STATUSES] },
         OR: [{ customer: { ownerId: user.id } }, { partner: { ownerId: user.id } }],
       },
       include: { partner: { select: { name: true } }, customer: { select: { name: true } } },

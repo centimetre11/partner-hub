@@ -2,6 +2,7 @@ import type { Contact, Opportunity, Partner, Solution, TimelineEvent, Training }
 import { labelsEn, stageNameFromLabels, type LabelsBundle } from "./i18n/labels";
 import { formatTierLabel, normalizePartnerTier } from "./tier";
 import { labelsFromMap, labelFromMap, parseIndustries, type TaxonomyDimension } from "./taxonomy";
+import { isOpenOpportunityStatus } from "./opportunity-status";
 
 export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "relationship";
 
@@ -83,7 +84,7 @@ function hasRecentEvent(events: TimelineEvent[], days: number) {
 
 function stageExitChecks(p: PartnerFrameworkInput): { id: string; label: string; ok: boolean }[] {
   const stage = p.pipelineStage;
-  const activeOpps = p.opportunities.filter((o) => o.status === "ACTIVE");
+  const activeOpps = p.opportunities.filter((o) => isOpenOpportunityStatus(o.status));
   const wonOpps = p.opportunities.filter((o) => o.status === "WON");
   const hasDM = p.contacts.some((c) => c.role === "DECISION_MAKER");
   const hasChampion = p.contacts.some((c) => c.attitude >= 2);
@@ -185,7 +186,7 @@ export function buildPartnerInstanceMap(
   labelMaps?: Partial<Record<TaxonomyDimension, Record<string, string>>>,
   ui: LabelsBundle = { ...labelsEn, locale: "en" },
 ): FrameworkMapNode[] {
-  const activeOpps = p.opportunities.filter((o) => o.status === "ACTIVE");
+  const activeOpps = p.opportunities.filter((o) => isOpenOpportunityStatus(o.status));
   const stage = p.pipelineStage;
   const guidance = getStageGuidance(p, ui);
   const fb = ui.fallbacks;

@@ -5,6 +5,7 @@ import { normalizePartnerTier } from "@/lib/tier";
 import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
+import { OPEN_OPPORTUNITY_STATUSES } from "@/lib/opportunity-status";
 
 function Bar({ label, value, max, tone = "bg-slate-500", suffix }: { label: string; value: number; max: number; tone?: string; suffix?: string }) {
   return (
@@ -32,7 +33,7 @@ export async function BoardOverview() {
   const openTodos = await db.todoItem.count({ where: { status: "OPEN" } });
   const overdueTodos = await db.todoItem.count({ where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } } });
   const activeOppCount = await db.opportunity.count({
-    where: { status: "ACTIVE", partner: { status: "ACTIVE" } },
+    where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] }, partner: { status: "ACTIVE" } },
   });
 
   const active = all.filter((p) => p.status === "ACTIVE");

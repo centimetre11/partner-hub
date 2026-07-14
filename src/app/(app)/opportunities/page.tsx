@@ -12,12 +12,12 @@ import {
   parseProcessTags,
   processTagLabel,
 } from "@/lib/opportunity-process-tags";
-
-function statusTone(status: string): "green" | "indigo" | "zinc" {
-  if (status === "ACTIVE") return "green";
-  if (status === "WON") return "indigo";
-  return "zinc";
-}
+import {
+  OPEN_OPPORTUNITY_STATUSES,
+  OPPORTUNITY_STATUS_CODES,
+  opportunityStatusLabel,
+  opportunityStatusTone,
+} from "@/lib/opportunity-status";
 
 export default async function OpportunitiesPage({
   searchParams,
@@ -36,16 +36,27 @@ export default async function OpportunitiesPage({
   const o = m.opportunities;
   const c = m.customers;
   const sp = await searchParams;
-  // 首次进入默认 ACTIVE；选「全部状态」时 status="" 不按状态过滤
-  const statusFilter = sp.status === undefined ? "ACTIVE" : sp.status;
+  // 首次进入默认「推进中」（P20/P50/P80）；选「全部状态」时 status="" 不按状态过滤
+  const statusFilter = sp.status === undefined ? "open" : sp.status;
   const processFilter =
-    sp.process && isProcessTagCode(sp.process.toUpperCase()) ? (sp.process.toUpperCase() as (typeof PROCESS_TAG_CODES)[number]) : "";
+    sp.process && isProcessTagCode(sp.process.toUpperCase())
+      ? (sp.process.toUpperCase() as (typeof PROCESS_TAG_CODES)[number])
+      : "";
+
+  const statusWhere =
+    statusFilter === "open"
+      ? { status: { in: [...OPEN_OPPORTUNITY_STATUSES] } }
+      : statusFilter === "ACTIVE"
+        ? { status: { in: ["ACTIVE", "P20"] } }
+        : statusFilter
+          ? { status: statusFilter }
+          : {};
 
   const [rawOpportunities, customers, partners] = await Promise.all([
     db.opportunity.findMany({
       where: {
         ...(sp.q ? { name: { contains: sp.q } } : {}),
-        ...(statusFilter ? { status: statusFilter } : {}),
+        ...statusWhere,
         ...(sp.customer ? { customerId: sp.customer } : {}),
         ...(sp.partner ? { partnerId: sp.partner } : {}),
         ...(sp.dealType ? { dealType: sp.dealType } : {}),
@@ -64,9 +75,6 @@ export default async function OpportunitiesPage({
   const opportunities = processFilter
     ? rawOpportunities.filter((opp) => parseProcessTags(opp.stage).includes(processFilter))
     : rawOpportunities;
-
-  const statusLabel = (s: string) =>
-    s === "ACTIVE" ? m.common.active : s === "WON" ? m.common.won : s === "LOST" ? m.common.lost : m.common.paused;
 
   const dealTypeLabel = (dt: string | null) =>
     dt === "PROJECT" ? c.dealTypeProject : dt === "PRODUCT" ? c.dealTypeProduct : "—";
@@ -92,10 +100,12 @@ export default async function OpportunitiesPage({
             className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
           >
             <option value="">{o.allStatuses}</option>
-            <option value="ACTIVE">{m.common.active}</option>
-            <option value="WON">{m.common.won}</option>
-            <option value="LOST">{m.common.lost}</option>
-            <option value="PAUSED">{m.common.paused}</option>
+            <option value="open">{o.statusOpen}</option>
+            {OPPORTUNITY_STATUS_CODES.map((code) => (
+              <option key={code} value={code}>
+                {opportunityStatusLabel(code, locale)}
+              </option>
+            ))}
           </select>
           <select
             name="process"
@@ -188,7 +198,10 @@ export default async function OpportunitiesPage({
                       </td>
                       <td className="px-4 py-3">
                         {opp.customer ? (
-                          <NavLink href={`/customers/${opp.customer.id}?tab=opportunities`} className="text-sky-600 hover:underline">
+                          <NavLink
+                            href={`/customers/${opp.customer.id}?tab=opportunities`}
+                            className="text-sky-600 hover:underline"
+                          >
                             {opp.customer.name}
                           </NavLink>
                         ) : (
@@ -214,7 +227,9 @@ export default async function OpportunitiesPage({
                       </td>
                       <td className="px-4 py-3 text-slate-600">{opp.amount ?? "—"}</td>
                       <td className="px-4 py-3">
-                        <Badge tone={statusTone(opp.status)}>{statusLabel(opp.status)}</Badge>
+                        <Badge tone={opportunityStatusTone(opp.status)}>
+                          {opportunityStatusLabel(opp.status, locale)}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{dealTypeLabel(opp.dealType)}</td>
                       <td className="px-4 py-3 text-slate-600">

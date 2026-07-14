@@ -26,6 +26,11 @@ import {
 import { getLabels } from "./i18n";
 import type { Locale } from "./i18n/locale";
 import { formatNextProcessDisplay, formatProcessTagsDisplay } from "./opportunity-process-tags";
+import {
+  DEFAULT_OPPORTUNITY_STATUS,
+  OPEN_OPPORTUNITY_STATUSES,
+  normalizeOpportunityStatus,
+} from "./opportunity-status";
 
 // ============ Proposal (diff preview) data structures ============
 
@@ -135,7 +140,7 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
     where: { id: customerId },
     include: {
       contacts: { orderBy: { createdAt: "asc" } },
-      opportunities: { where: { status: "ACTIVE" }, orderBy: { updatedAt: "desc" }, take: 20 },
+      opportunities: { where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] } }, orderBy: { updatedAt: "desc" }, take: 20 },
       projects: { where: { status: { not: "CLOSED" } }, orderBy: { updatedAt: "desc" }, take: 20, include: { partner: { select: { name: true } } } },
       todos: {
         where: { status: "OPEN" },
@@ -395,7 +400,7 @@ export async function applyProposal(opts: {
       amount: o.amount,
       stage: o.stage ?? "Needs Discovery",
       nextStep: o.nextStep,
-      status: o.status ?? "ACTIVE",
+      status: o.status ? normalizeOpportunityStatus(o.status) : DEFAULT_OPPORTUNITY_STATUS,
       notes: o.notes,
       dealType: o.dealType && ["PROJECT", "PRODUCT"].includes(o.dealType) ? o.dealType : undefined,
     };

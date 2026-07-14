@@ -774,6 +774,10 @@ export const messagesZh: Messages = {
     followUp: "跟进",
     nextProcessPrefix: "下一步：",
     notesPlaceholder: "备注 / 其他信息（可选）",
+    statusP20: "20%概率",
+    statusP50: "50%概率",
+    statusP80: "80%概率",
+    statusOpen: "推进中",
   },
   opportunityProcess: {
     DISCOVERY: "客户调研 / 需求收敛",

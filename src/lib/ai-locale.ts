@@ -3,6 +3,7 @@ import { getLabels, type LabelsBundle } from "./i18n";
 import type { Locale } from "./i18n/locale";
 import { intakeClarificationHint } from "./ai-clarifications";
 import { processTagListForAi } from "./opportunity-process-tags";
+import { opportunityStatusListForAi } from "./opportunity-status";
 
 export type IntakeScope =
   | "new_partner"
@@ -296,6 +297,7 @@ ${clarificationFooter}`;
 
   if (scope === "opportunity") {
     const processCodes = processTagListForAi(locale);
+    const statusCodes = opportunityStatusListForAi(locale);
     return `Output a single JSON object. User-facing strings in ${lang}:
 {
   "reply": "Your message to the user (${lang}, brief)",
@@ -305,13 +307,14 @@ ${clarificationFooter}`;
   "proposal": {
     "partnerName": "(the customer/account this opportunity belongs to; omit when a customer/partner is pre-bound)",
     "summary": "One-line summary (${lang})",
-    "opportunities": [{"action":"add|update","id":"(when update)","name":"...","client":"...","amount":"...","stage":"comma-separated process codes","nextStep":"single process code or omit","status":"ACTIVE|WON|LOST|PAUSED","reason":"..."}]
+    "opportunities": [{"action":"add|update","id":"(when update)","name":"...","client":"...","amount":"...","stage":"comma-separated process codes","nextStep":"single process code or omit","status":"P20|P50|P80|WON|LOST|PAUSED","reason":"..."}]
   }
 }
 Rules:
 - Fill opportunities only; all other proposal arrays stay empty (omit them).
 - Opportunities are owned by a CUSTOMER (account). When the company is named in an open session, set proposal.partnerName to it; a bound partner books it under that partner's own customer profile.
 - stage = current process tags (multi), nextStep = next process focus (single). Use codes only: ${processCodes}
+- status = win probability or outcome. Codes: ${statusCodes}. Default P20 when unclear.
 - ready=true when at least one opportunity has a name.
 ${clarificationFooter}`;
   }

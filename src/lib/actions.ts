@@ -23,6 +23,7 @@ import {
   normalizeNextProcessTag,
   serializeProcessTags,
 } from "./opportunity-process-tags";
+import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opportunity-status";
 
 // ============ 认证 ============
 
@@ -602,7 +603,7 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     stage: serializeProcessTags(processTagsFromFormData(formData)),
     nextStep: normalizeNextProcessTag(String(formData.get("nextStep") ?? "") || null),
     followUpAt: followUp ? new Date(followUp) : null,
-    status: String(formData.get("status") ?? "ACTIVE"),
+    status: normalizeOpportunityStatus(String(formData.get("status") ?? DEFAULT_OPPORTUNITY_STATUS)),
     notes: String(formData.get("notes") ?? "") || null,
   };
   if (formData.has("dealType")) {

@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { dueWithinDaysRange, overdueDueDateBefore } from "./todo-dates";
 import type { AutomationQuery } from "./automation-query";
+import { OPEN_OPPORTUNITY_STATUSES } from "./opportunity-status";
 
 export type TodoRow = Awaited<ReturnType<typeof queryTodos>>[number];
 export type OpportunityRow = Awaited<ReturnType<typeof queryOpportunities>>[number];
@@ -54,12 +55,17 @@ export async function queryTodos(query: AutomationQuery) {
 
 /** 商机（结构化过滤：范围 + 状态 + 成交类型） */
 export async function queryOpportunities(query: AutomationQuery) {
+  const statusWhere =
+    !query.opportunityStatus || query.opportunityStatus === "ALL"
+      ? {}
+      : query.opportunityStatus === "OPEN" || query.opportunityStatus === "ACTIVE"
+        ? { status: { in: [...OPEN_OPPORTUNITY_STATUSES] } }
+        : { status: query.opportunityStatus };
+
   return db.opportunity.findMany({
     where: {
       ...scopeWhere(query),
-      ...(query.opportunityStatus && query.opportunityStatus !== "ALL"
-        ? { status: query.opportunityStatus }
-        : {}),
+      ...statusWhere,
       ...(query.dealType && query.dealType !== "ALL" ? { dealType: query.dealType } : {}),
     },
     include: { partner: true, customer: true, project: { select: { id: true } } },

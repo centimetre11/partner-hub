@@ -313,7 +313,7 @@ function heuristicOpportunityTurn(userText: string, locale: Locale): IntakeTurn 
       client: fields.client,
       amount: fields.amount,
       stage: fields.stage ?? DEFAULT_STAGE_JSON,
-      status: "ACTIVE",
+      status: "P20",
       reason: text.slice(0, 120),
     },
   ];

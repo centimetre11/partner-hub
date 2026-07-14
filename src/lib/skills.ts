@@ -27,6 +27,13 @@ import {
   isProcessTagCode,
   type ProcessTagCode,
 } from "./opportunity-process-tags";
+import {
+  DEFAULT_OPPORTUNITY_STATUS,
+  OPEN_OPPORTUNITY_STATUSES,
+  OPPORTUNITY_STATUS_CODES,
+  normalizeOpportunityStatus,
+  opportunityStatusListForAi,
+} from "./opportunity-status";
 
 // ============ Skill execution context ============
 
@@ -671,7 +678,11 @@ const listOpportunities: Skill = {
           partnerId: { type: "string", description: "Filter by exact partner id" },
           customerName: { type: "string", description: "Filter by end-customer / account company name" },
           customerId: { type: "string", description: "Filter by exact customer id" },
-          status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
+          status: {
+            type: "string",
+            enum: [...OPPORTUNITY_STATUS_CODES, "ACTIVE"],
+            description: `Opportunity status. Codes: ${opportunityStatusListForAi("en")}. Legacy ACTIVE = P20.`,
+          },
           dealType: { type: "string", enum: ["PROJECT", "PRODUCT"], description: "Filter by deal type: PROJECT=有交付项目 / PRODUCT=纯产品" },
         },
       },
@@ -679,6 +690,11 @@ const listOpportunities: Skill = {
   },
   run: async (args) => {
     const { partnerId, customerId } = await resolveOwnerFilter(args);
+    const statusFilter = args.status
+      ? String(args.status) === "ACTIVE" || String(args.status) === "open"
+        ? { status: { in: [...OPEN_OPPORTUNITY_STATUSES] } }
+        : { status: normalizeOpportunityStatus(String(args.status)) }
+      : {};
     const rows = await db.opportunity.findMany({
       where: {
         ...(partnerId ? { partnerId } : {}),
@@ -689,7 +705,7 @@ const listOpportunities: Skill = {
         ...(args.customerName && !customerId && !partnerId
           ? { customer: { name: { contains: String(args.customerName) }, ...END_CUSTOMER_WHERE } }
           : {}),
-        ...(args.status ? { status: String(args.status) } : {}),
+        ...statusFilter,
         ...(args.dealType && ["PROJECT", "PRODUCT"].includes(String(args.dealType)) ? { dealType: String(args.dealType) } : {}),
       },
       include: { partner: true, customer: true, project: { select: { id: true } } },
@@ -700,7 +716,7 @@ const listOpportunities: Skill = {
       ? rows
           .map(
             (o) =>
-              `[id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Process:${formatProcessTagsDisplay(o.stage, "en")} | Next:${formatNextProcessDisplay(o.nextStep, "en") || "-"} | Amount:${o.amount ?? "-"} | Status:${o.status} | DealType:${o.dealType ?? "-"}${o.project ? " | Converted→Project" : ""}`
+              `[id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Process:${formatProcessTagsDisplay(o.stage, "en")} | Next:${formatNextProcessDisplay(o.nextStep, "en") || "-"} | Amount:${o.amount ?? "-"} | Status:${normalizeOpportunityStatus(o.status)} | DealType:${o.dealType ?? "-"}${o.project ? " | Converted→Project" : ""}`
           )
           .join("\n")
       : "No opportunities found";
@@ -732,7 +748,11 @@ const updateOpportunity: Skill = {
             type: "string",
             description: `Next process focus (single code from the same set as stage)`,
           },
-          status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
+          status: {
+            type: "string",
+            enum: [...OPPORTUNITY_STATUS_CODES],
+            description: `Codes: ${opportunityStatusListForAi("en")}`,
+          },
           dealType: { type: "string", enum: ["PROJECT", "PRODUCT"], description: "PROJECT=有交付项目 / PRODUCT=纯产品成交" },
           notes: { type: "string" },
         },
@@ -747,11 +767,15 @@ const updateOpportunity: Skill = {
 
     const data: Record<string, unknown> = {};
     const changes: string[] = [];
-    for (const key of ["name", "client", "amount", "status", "notes"] as const) {
+    for (const key of ["name", "client", "amount", "notes"] as const) {
       if (args[key] != null) {
         data[key] = String(args[key]);
         changes.push(`${key} → ${data[key]}`);
       }
+    }
+    if (args.status != null) {
+      data.status = normalizeOpportunityStatus(String(args.status));
+      changes.push(`status → ${data.status}`);
     }
     if (args.stage != null) {
       const codes = String(args.stage)

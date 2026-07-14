@@ -400,7 +400,7 @@ model Opportunity {
   // Single process tag code for next focus, e.g. "BID"; same code set as stage
   nextStep   String?
   followUpAt DateTime?
-  status     String    @default("ACTIVE") // ACTIVE / WON / LOST / PAUSED
+  status     String    @default("P20") // P20 / P50 / P80 / WON / LOST / PAUSED（旧 ACTIVE 视为 P20）
   // 成交类型（赢单后区分是否含交付项目）：PROJECT 项目型（可转项目）/ PRODUCT 纯产品型（无项目）。null 未定
   dealType   String?
   notes      String?

@@ -21,6 +21,12 @@ import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
 import { OpportunityProcessFields } from "@/components/opportunity-process-fields";
 import { OpportunityProcessBadges } from "@/components/opportunity-process-badges";
 import {
+  OPPORTUNITY_STATUS_CODES,
+  normalizeOpportunityStatus,
+  opportunityStatusLabel,
+  opportunityStatusTone,
+} from "@/lib/opportunity-status";
+import {
   upsertOpportunityAction,
   deleteOpportunityAction,
   upsertProjectAction,
@@ -229,8 +235,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-slate-900">{o.name}</span>
-                <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
-                  {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
+                <Badge tone={opportunityStatusTone(o.status)}>
+                  {opportunityStatusLabel(o.status, locale)}
                 </Badge>
                 <OpportunityProcessBadges
                   stage={o.stage}
@@ -263,11 +269,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 defaultNextStep={o.nextStep}
               />
               <input name="followUpAt" type="date" defaultValue={o.followUpAt ? new Date(o.followUpAt).toISOString().slice(0, 10) : ""} className={input} />
-              <select name="status" defaultValue={o.status} className={input}>
-                <option value="ACTIVE">{m.common.active}</option>
-                <option value="WON">{m.common.won}</option>
-                <option value="LOST">{m.common.lost}</option>
-                <option value="PAUSED">{m.common.paused}</option>
+              <select name="status" defaultValue={normalizeOpportunityStatus(o.status)} className={input}>
+                {OPPORTUNITY_STATUS_CODES.map((code) => (
+                  <option key={code} value={code}>
+                    {opportunityStatusLabel(code, locale)}
+                  </option>
+                ))}
               </select>
               <select name="dealType" defaultValue={o.dealType ?? ""} className={input}>
                 <option value="">{c.dealTypeNone}</option>
@@ -323,6 +330,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
           <input name="name" required placeholder={c.opportunityName} className={input} />
           <input name="amount" placeholder={m.common.amount} className={input} />
           <OpportunityProcessFields key="add-opp" />
+          <select name="status" defaultValue="P20" className={input} aria-label={m.common.status}>
+            <option value="P20">{m.opportunities.statusP20}</option>
+            <option value="P50">{m.opportunities.statusP50}</option>
+            <option value="P80">{m.opportunities.statusP80}</option>
+            <option value="WON">{m.common.won}</option>
+            <option value="LOST">{m.common.lost}</option>
+            <option value="PAUSED">{m.common.paused}</option>
+          </select>
           <input name="followUpAt" type="date" className={input} />
           <select name="dealType" defaultValue="" className={input}>
             <option value="">{c.dealTypeNone}</option>

@@ -428,7 +428,10 @@ export function AutomationForm({
                           onChange={(e) => setOpportunityStatus(e.target.value as AutomationOpportunityStatus)}
                         >
                           <option value="ALL">{aq.statusAll}</option>
-                          <option value="ACTIVE">ACTIVE</option>
+                          <option value="OPEN">OPEN (P20/P50/P80)</option>
+                          <option value="P20">P20</option>
+                          <option value="P50">P50</option>
+                          <option value="P80">P80</option>
                           <option value="WON">WON</option>
                           <option value="LOST">LOST</option>
                           <option value="PAUSED">PAUSED</option>
