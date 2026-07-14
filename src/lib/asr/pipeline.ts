@@ -4,10 +4,13 @@ import { db } from "../db";
 import { getAsrConfig } from "./config";
 import { correctTranscriptWithLexicon } from "./correct";
 import { resolveAsrLexicon } from "./lexicon";
-import { buildLexiconPrompt } from "./types";
+import { buildLexiconPrompt, isLikelyAsrPromptLeak, stripAsrPromptArtifacts } from "./types";
 import { readMeetingRecording } from "./recording-store";
 import { transcribeWithAsr } from "./transcribe";
-import { serializeTimedTranscriptDoc } from "../partner-review/transcript";
+import {
+  buildTimedTranscriptDoc,
+  serializeTimedTranscriptDoc,
+} from "../partner-review/transcript";
 
 /** 对已上传的会议录音跑 ASR + 伙伴名纠偏，写入 transcript* 字段 */
 export async function runMeetingAsrPipeline(meetingId: string, userId?: string) {
@@ -46,6 +49,16 @@ export async function runMeetingAsrPipeline(meetingId: string, userId?: string) 
       language: lexicon.language || cfg.language,
       initialPrompt: buildLexiconPrompt({ lexicon, partnerNames }),
       recordingStartedAt: meeting.recordingStartedAt ?? meeting.startedAt,
+    });
+    doc = buildTimedTranscriptDoc({
+      sentences: doc.sentences
+        .map((s) => ({
+          ...s,
+          text: stripAsrPromptArtifacts(s.text),
+        }))
+        .filter((s) => s.text.trim() && !isLikelyAsrPromptLeak(s.text)),
+      timeBase: doc.timeBase,
+      recordingStartedAt: doc.recordingStartedAt,
     });
     doc = await correctTranscriptWithLexicon({ doc, partnerNames, lexicon, userId });
 

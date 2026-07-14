@@ -85,7 +85,11 @@ export function AsrSetup({ config }: { config: AsrConfigForClient }) {
         </label>
         <label className="block space-y-1">
           <span className="text-xs text-slate-500">识别语言</span>
-          <input value={language} onChange={(e) => setLanguage(e.target.value)} className={input} placeholder="zh" />
+          <select value={language} onChange={(e) => setLanguage(e.target.value)} className={input}>
+            <option value="auto">自动检测（中英混说推荐）</option>
+            <option value="zh">仅中文</option>
+            <option value="en">仅英文</option>
+          </select>
         </label>
         <label className="flex items-center gap-2 text-xs text-slate-700">
           <input
@@ -93,7 +97,7 @@ export function AsrSetup({ config }: { config: AsrConfigForClient }) {
             checked={includePartnerNames}
             onChange={(e) => setIncludePartnerNames(e.target.checked)}
           />
-          自动把本场议程伙伴名加入提示词
+          自动把本场议程伙伴名加入词汇偏置（勿写指令句）
         </label>
         <label className="flex items-center gap-2 text-xs text-slate-700">
           <input
@@ -106,13 +110,15 @@ export function AsrSetup({ config }: { config: AsrConfigForClient }) {
       </div>
 
       <label className="block space-y-1">
-        <span className="text-xs text-slate-500">场景提示词（写入 Whisper initial_prompt）</span>
+        <span className="text-xs text-slate-500">
+          场景提示词（可选；勿写「请正确书写」等指令，Whisper 会把指令念进正文）
+        </span>
         <textarea
           value={basePrompt}
           onChange={(e) => setBasePrompt(e.target.value)}
           rows={2}
           className={ta}
-          placeholder="这是一场中文商务过伙伴会议的录音转写。"
+          placeholder="可留空。或只写像转写正文的短句，不要写操作指令。"
         />
       </label>
 

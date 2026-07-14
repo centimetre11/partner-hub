@@ -12,15 +12,19 @@ export type { AsrConfigForClient, AsrLexicon } from "./types";
 export {
   applyCorrectionRules,
   buildLexiconPrompt,
+  isLikelyAsrPromptLeak,
   parseCorrectionRules,
   parseHotwords,
+  resolveAsrLanguage,
+  stripAsrPromptArtifacts,
 } from "./types";
 
 const DEFAULTS: AsrLexicon = {
   realtimeEnabled: true,
   chunkSeconds: 12,
-  language: "zh",
-  basePrompt: "这是一场中文商务过伙伴会议的录音转写。",
+  language: "auto",
+  // 勿写「请正确书写」类指令；Whisper 会把指令念进转写
+  basePrompt: "",
   hotwords: [],
   correctionRules: [],
   llmCorrectEnabled: true,
@@ -34,7 +38,7 @@ export async function resolveAsrLexicon(): Promise<AsrLexicon> {
   return {
     realtimeEnabled: row.realtimeEnabled,
     chunkSeconds: chunk,
-    language: row.language?.trim() || "zh",
+    language: row.language?.trim() || "auto",
     basePrompt: row.basePrompt?.trim() || DEFAULTS.basePrompt,
     hotwords: parseHotwords(row.hotwords),
     correctionRules: parseCorrectionRules(row.correctionRules),
@@ -50,7 +54,7 @@ export async function getAsrConfigForClient(): Promise<AsrConfigForClient> {
     configured: !!row,
     realtimeEnabled: row?.realtimeEnabled ?? true,
     chunkSeconds: row?.chunkSeconds ?? 12,
-    language: row?.language ?? "zh",
+    language: row?.language ?? "auto",
     basePrompt: row?.basePrompt ?? DEFAULTS.basePrompt,
     hotwords: row?.hotwords ?? "",
     correctionRules: row?.correctionRules ?? "",

@@ -120,14 +120,17 @@ export function MeetingLocalRecorder({
     return out;
   }
 
-  function startPcmCapture(streams: MediaStream[]) {
+  function startPcmCapture(sources: { stream: MediaStream; gain: number }[]) {
     const ctx = new AudioContext();
     sampleRateRef.current = ctx.sampleRate;
     const mix = ctx.createGain();
     mix.gain.value = 1;
-    for (const stream of streams) {
+    for (const { stream, gain } of sources) {
       if (stream.getAudioTracks().length === 0) continue;
-      ctx.createMediaStreamSource(stream).connect(mix);
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      ctx.createMediaStreamSource(stream).connect(g);
+      g.connect(mix);
     }
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     pcmChunksRef.current = [];
@@ -318,7 +321,8 @@ export function MeetingLocalRecorder({
       let displayStream: MediaStream | null = null;
       if (captureSystemAudio) {
         try {
-          // 浏览器要求同时申请 video；我们立刻停掉画面轨，只保留音频
+          // 浏览器要求同时申请 video；立刻停画面轨，只留音频。
+          // Mac/Chrome：必须选「Chrome 标签页」并勾选「分享音频」；选窗口/整屏通常没有音频轨。
           displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: {
@@ -326,13 +330,17 @@ export function MeetingLocalRecorder({
               noiseSuppression: false,
               autoGainControl: false,
             },
-          });
+            // Chrome 扩展字段：尽量露出「分享音频」
+            preferCurrentTab: false,
+            systemAudio: "include",
+          } as DisplayMediaStreamOptions);
           displayStream.getVideoTracks().forEach((t) => t.stop());
           if (displayStream.getAudioTracks().length === 0) {
             displayStream.getTracks().forEach((t) => t.stop());
             displayStream = null;
+            // 页面勾选≠浏览器弹窗勾选；无音频轨时仅提示，不阻断麦克风录音
             setLocalError(
-              "未勾选「分享音频」。本次只录麦克风。请重新开录，在弹出窗口勾选分享标签页/系统音频。",
+              "浏览器未给出会议音频轨（本次只录麦克风）。Mac 请选「Chrome 标签页」并勾选「分享音频」，不要只选窗口/整屏；会议建议用网页版打开再共享该标签页。",
             );
           } else {
             displayStreamRef.current = displayStream;
@@ -345,7 +353,9 @@ export function MeetingLocalRecorder({
             });
           }
         } catch {
-          setLocalError("未共享屏幕音频，本次只录麦克风。需要会议声请重新开录并勾选分享音频。");
+          setLocalError(
+            "已取消屏幕共享（本次只录麦克风）。要录会议声请重新开录，选会议标签页并勾选「分享音频」。",
+          );
         }
       }
 
@@ -367,8 +377,11 @@ export function MeetingLocalRecorder({
       startedAtRef.current = mark.startedAt ?? new Date().toISOString();
       onMeetingLive();
 
-      const sources = [micStream, ...(displayStream ? [displayStream] : [])];
-      startPcmCapture(sources);
+      // 会议标签页音频往往偏小，略抬增益
+      startPcmCapture([
+        { stream: micStream, gain: 1.15 },
+        ...(displayStream ? [{ stream: displayStream, gain: 1.85 }] : []),
+      ]);
 
       const mixed = Boolean(displayStream?.getAudioTracks().length);
       setPhase("recording");
@@ -627,9 +640,9 @@ export function MeetingLocalRecorder({
 
       {!recording && phase === "idle" ? (
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          默认只录麦克风，电脑扬声器里的会议声录不到。若要录腾讯会议/Zoom
-          等对方声音：勾选「同时录会议/电脑声音」，在弹出窗口选会议所在标签页或窗口，并勾选「分享音频」。Mac
-          上通常只能录浏览器标签页音频，不能直接录整机系统声。
+          默认勾选「同时录会议/电脑声音」。开录后请在弹窗里选会议所在的{" "}
+          <span className="text-slate-600">Chrome 标签页</span>
+          （不要选窗口/整屏），并勾选「分享音频」。Mac 无法直接录系统声；腾讯会议/Zoom 建议开网页版再共享该标签页。
         </p>
       ) : null}
     </div>

@@ -18,7 +18,7 @@ export async function saveSystemAsrConfigAction(formData: FormData) {
     let chunkSeconds = parseInt(clean(formData.get("chunkSeconds")) || "12", 10);
     if (!Number.isFinite(chunkSeconds)) chunkSeconds = 12;
     chunkSeconds = Math.min(30, Math.max(8, chunkSeconds));
-    const language = clean(formData.get("language")) || "zh";
+    const language = clean(formData.get("language")) || "auto";
     const basePrompt = clean(formData.get("basePrompt"));
     const hotwords = clean(formData.get("hotwords"));
     const correctionRules = clean(formData.get("correctionRules"));

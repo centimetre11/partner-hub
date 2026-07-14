@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getAsrConfig } from "./config";
+import { resolveAsrLanguage } from "./types";
 import {
   buildTimedTranscriptDoc,
   type TimedTranscriptDoc,
@@ -57,13 +58,15 @@ async function transcribeWhisperAsrWebservice(
   const params = new URLSearchParams({
     task: "transcribe",
     output: "json",
-    language: input.language?.trim() || cfg.language,
     encode: "true",
     vad_filter: "true",
     word_timestamps: "false",
   });
+  const lang = resolveAsrLanguage(input.language) ?? resolveAsrLanguage(cfg.language);
+  if (lang) params.set("language", lang);
   if (input.initialPrompt?.trim()) {
-    params.set("initial_prompt", input.initialPrompt.trim().slice(0, 800));
+    // 只做词汇偏置；过长更容易被复述
+    params.set("initial_prompt", input.initialPrompt.trim().slice(0, 400));
   }
 
   const form = new FormData();
@@ -134,11 +137,12 @@ async function transcribeOpenAiCompatible(
   });
   form.append("file", file);
   form.append("model", cfg.model);
-  form.append("language", input.language?.trim() || cfg.language);
+  const lang = resolveAsrLanguage(input.language) ?? resolveAsrLanguage(cfg.language);
+  if (lang) form.append("language", lang);
   form.append("response_format", "verbose_json");
   form.append("timestamp_granularities[]", "segment");
   if (input.initialPrompt?.trim()) {
-    form.append("prompt", input.initialPrompt.trim().slice(0, 800));
+    form.append("prompt", input.initialPrompt.trim().slice(0, 400));
   }
 
   const ctrl = new AbortController();

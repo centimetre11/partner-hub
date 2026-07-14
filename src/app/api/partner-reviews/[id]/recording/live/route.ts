@@ -3,7 +3,12 @@ import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
 import { getAsrConfig } from "@/lib/asr/config";
 import { resolveAsrLexicon } from "@/lib/asr/lexicon";
-import { applyCorrectionRules, buildLexiconPrompt } from "@/lib/asr/types";
+import {
+  applyCorrectionRules,
+  buildLexiconPrompt,
+  isLikelyAsrPromptLeak,
+  stripAsrPromptArtifacts,
+} from "@/lib/asr/types";
 import { transcribeWithAsr } from "@/lib/asr/transcribe";
 import {
   buildTimedTranscriptDoc,
@@ -72,12 +77,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       recordingStartedAt: meeting.recordingStartedAt ?? meeting.startedAt,
     });
 
-    const newSentences: TranscriptSentence[] = chunkDoc.sentences.map((s) => ({
-      startTime: offsetMs + (s.startTime || 0),
-      endTime: s.endTime != null ? offsetMs + s.endTime : undefined,
-      speaker: s.speaker,
-      text: applyCorrectionRules(s.text, lexicon.correctionRules),
-    }));
+    const newSentences: TranscriptSentence[] = [];
+    for (const s of chunkDoc.sentences) {
+      const cleaned = stripAsrPromptArtifacts(s.text);
+      if (!cleaned || isLikelyAsrPromptLeak(cleaned)) continue;
+      newSentences.push({
+        startTime: offsetMs + (s.startTime || 0),
+        endTime: s.endTime != null ? offsetMs + s.endTime : undefined,
+        speaker: s.speaker,
+        text: applyCorrectionRules(cleaned, lexicon.correctionRules),
+      });
+    }
 
     const prev = parseTimedTranscriptDoc(meeting.transcriptJson);
     const merged = buildTimedTranscriptDoc({
