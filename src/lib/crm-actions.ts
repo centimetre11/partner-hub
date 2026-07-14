@@ -28,6 +28,7 @@ export async function triggerCrmSyncAction() {
       customerCount: result.customerCount,
       contactCount: result.contactCount,
       durationMs: result.durationMs,
+      newCustomerCount: result.newCustomers.length,
     },
   });
   revalidatePath("/settings");
@@ -38,6 +39,87 @@ export async function triggerCrmSyncAction() {
     message: `Synced ${result.customerCount} customers, ${result.contactCount} contacts (${result.durationMs}ms)`,
   };
 }
+
+export type CrmSyncForBindCustomer = {
+  id: string;
+  name: string;
+  city: string | null;
+  status: string | null;
+  salesman: string | null;
+  presales: string | null;
+  /** 与当前实体名称的匹配分；越高越可能是刚建的 */
+  matchScore: number;
+  likelyMatch: boolean;
+};
+
+export type TriggerCrmSyncForBindResult =
+  | {
+      ok: true;
+      message: string;
+      durationMs: number;
+      newCustomers: CrmSyncForBindCustomer[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * 帆软连接面板：任意登录用户可触发同步，并返回本次新增客户（按实体名排序）供快捷绑定。
+ */
+export async function triggerCrmSyncForBindAction(input: {
+  entityName?: string | null;
+}): Promise<TriggerCrmSyncForBindResult> {
+  const user = await requireUser();
+  const result = await syncCrmData();
+
+  void recordSystemEvent({
+    category: "CRM",
+    action: "crm.sync.bind",
+    actorId: user.id,
+    actorLabel: user.name,
+    summary: result.ok
+      ? `CRM 同步（绑定）：${result.customerCount} 客户，新增 ${result.newCustomers.length}`
+      : "CRM 同步（绑定）失败",
+    status: result.ok ? "SUCCESS" : "FAILED",
+    detail: result.error ?? undefined,
+    meta: {
+      customerCount: result.customerCount,
+      contactCount: result.contactCount,
+      durationMs: result.durationMs,
+      newCustomerCount: result.newCustomers.length,
+    },
+  });
+
+  revalidatePath("/settings");
+  revalidatePath("/partners");
+  revalidatePath("/customers");
+
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "CRM sync failed" };
+  }
+
+  const entityName = (input.entityName ?? "").trim();
+  const ranked = result.newCustomers
+    .map((c) => {
+      const { score } = scoreEntityCrmName(entityName, c.name);
+      return {
+        ...c,
+        matchScore: score,
+        likelyMatch: score >= 55,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.matchScore - a.matchScore || a.name.localeCompare(b.name, "zh"),
+    )
+    .slice(0, 15);
+
+  return {
+    ok: true,
+    message: `Synced ${result.customerCount} customers, ${result.newCustomers.length} new (${result.durationMs}ms)`,
+    durationMs: result.durationMs,
+    newCustomers: ranked,
+  };
+}
+
 
 export async function saveCrmSalesmanMappingAction(formData: FormData) {
   const user = await requireUser();

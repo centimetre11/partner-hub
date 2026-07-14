@@ -7,6 +7,7 @@ import { updateCustomerIntegrationsAction } from "@/lib/customer-actions";
 import { CrmCustomerPicker, type CrmCustomerOption } from "@/components/crm-customer-picker";
 import { WecomChatBindSection } from "@/components/wecom-chat-bind-section";
 import { CrmCreateViaBridgeButton } from "@/components/crm-create-via-bridge-button";
+import { CrmSyncBindSection } from "@/components/crm-sync-bind-section";
 
 type BoundChat = {
   chatId: string;
@@ -97,6 +98,12 @@ export function CustomerIntegrationsPanel({
               customerId={customerId}
               customerName={customerName}
               matchedCustomer={crmCustomer}
+            />
+            <CrmSyncBindSection
+              entityName={customerName}
+              selectedId={crm}
+              onSelect={handleCrmChange}
+              compact={bound}
             />
             {!bound && <CrmCreateViaBridgeButton entityType="customer" entityId={customerId} />}
           </div>

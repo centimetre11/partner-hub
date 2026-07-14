@@ -4,11 +4,22 @@ import { fetchCrmData, normalizeCrmRows } from "./crm";
 const LAST_SYNC_KEY = "crm_last_sync";
 const BATCH = 100;
 
+export type CrmSyncNewCustomer = {
+  id: string;
+  name: string;
+  city: string | null;
+  status: string | null;
+  salesman: string | null;
+  presales: string | null;
+};
+
 export type CrmSyncResult = {
   ok: boolean;
   customerCount: number;
   contactCount: number;
   durationMs: number;
+  /** 本次同步相对库中原先不存在的客户（用于快捷绑定） */
+  newCustomers: CrmSyncNewCustomer[];
   error?: string;
 };
 
@@ -26,8 +37,22 @@ export async function getLatestCrmSyncLog() {
 export async function syncCrmData(): Promise<CrmSyncResult> {
   const started = Date.now();
   try {
+    const existingRows = await db.crmCustomer.findMany({ select: { id: true } });
+    const existingIds = new Set(existingRows.map((r) => r.id));
+
     const rows = await fetchCrmData();
     const { customers, contacts } = normalizeCrmRows(rows);
+
+    const newCustomers: CrmSyncNewCustomer[] = customers
+      .filter((c) => !existingIds.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        city: c.city,
+        status: c.status,
+        salesman: c.salesman,
+        presales: c.presales,
+      }));
 
     for (let i = 0; i < customers.length; i += BATCH) {
       const chunk = customers.slice(i, i + BATCH);
@@ -91,7 +116,7 @@ export async function syncCrmData(): Promise<CrmSyncResult> {
     ]);
 
     console.log(
-      `[crm-sync] OK — ${customers.length} customers, ${contacts.length} contacts in ${durationMs}ms`,
+      `[crm-sync] OK — ${customers.length} customers, ${contacts.length} contacts, ${newCustomers.length} new in ${durationMs}ms`,
     );
 
     return {
@@ -99,6 +124,7 @@ export async function syncCrmData(): Promise<CrmSyncResult> {
       customerCount: customers.length,
       contactCount: contacts.length,
       durationMs,
+      newCustomers,
     };
   } catch (e) {
     const durationMs = Date.now() - started;
@@ -107,7 +133,14 @@ export async function syncCrmData(): Promise<CrmSyncResult> {
       data: { status: "FAILED", durationMs, error },
     });
     console.error("[crm-sync] failed:", error);
-    return { ok: false, customerCount: 0, contactCount: 0, durationMs, error };
+    return {
+      ok: false,
+      customerCount: 0,
+      contactCount: 0,
+      durationMs,
+      newCustomers: [],
+      error,
+    };
   }
 }
 
