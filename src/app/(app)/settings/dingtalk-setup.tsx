@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import {
   deleteSystemDingTalkConfigAction,
   saveSystemDingTalkConfigAction,
@@ -104,14 +103,11 @@ export function DingTalkSetup({ config }: { config: DingTalkConfigForClient }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href="/partner-reviews"
-          className="inline-flex items-center rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800"
-        >
-          进入过伙伴会议
-        </Link>
-        <code className="text-xs bg-slate-100 px-2 py-1 rounded break-all">{config.callbackHint}</code>
+      <div className="space-y-1">
+        <div className="text-xs text-slate-500">
+          过伙伴会议入口在侧栏「经营」；此处仅配置钉钉凭证与回调。
+        </div>
+        <code className="inline-block text-xs bg-slate-100 px-2 py-1 rounded break-all">{config.callbackHint}</code>
       </div>
 
       {config.configured ? (

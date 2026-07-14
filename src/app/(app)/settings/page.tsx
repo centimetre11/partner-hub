@@ -23,8 +23,6 @@ import { getCrmSyncStats } from "@/lib/crm-sync";
 import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { getEmailConfigForClient } from "@/lib/email-config";
 import { EmailSetup } from "./email-setup";
-import { WeeklyReportSetup } from "./weekly-report-setup";
-import { getWeeklyReportStatusAction } from "@/lib/weekly-report-actions";
 import { getServerI18n } from "@/lib/server-i18n";
 import { SettingsShell, SettingsSection } from "./settings-shell";
 import { ActivityLogsCard } from "./activity-logs-card";
@@ -167,9 +165,6 @@ export default async function SettingsPage() {
       const caps = detectedById.get(api.id) ?? { webSearch: false, vision: false };
       return { id: api.id, name: api.name, model: api.model, webSearch: caps.webSearch, vision: caps.vision };
     });
-
-  const weeklyReportStatus = await getWeeklyReportStatusAction();
-  const weeklyReportMembers = users.map((u) => ({ id: u.id, name: u.name, email: u.email }));
 
   const aiConfigured = aiApis.some((api) => api.enabled) || !!process.env.AI_API_KEY;
   const todayTokens = todayUsageEarly.reduce((sum, row) => sum + row.totalTokens, 0);
@@ -375,10 +370,6 @@ export default async function SettingsPage() {
 
           <Card title={m.settings.systemEmailTitle} className="lg:col-span-2">
             <EmailSetup config={emailConfig} />
-          </Card>
-
-          <Card title="📊 每周个人周报" className="lg:col-span-2">
-            <WeeklyReportSetup status={weeklyReportStatus} members={weeklyReportMembers} />
           </Card>
         </SettingsSection>
       </SettingsShell>

@@ -6,7 +6,16 @@ import { useEffect, useRef, useState } from "react";
 import { useMessages } from "@/lib/i18n/context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 
-type Leaf = { href: string; label: string; icon: string; aliases?: string[]; badge?: "unread"; mobileOnly?: boolean };
+type Leaf = {
+  href: string;
+  label: string;
+  icon: string;
+  aliases?: string[];
+  badge?: "unread";
+  mobileOnly?: boolean;
+  /** 仅精确匹配路径（用于 /ops 总览，避免与 /ops/weekly-report 同时高亮） */
+  exact?: boolean;
+};
 type Group = { id: string; label: string; icon: string; children: Leaf[] };
 type Entry = Leaf | Group;
 
@@ -43,6 +52,16 @@ export function NavLinks({
     { href: "/opportunities", label: m.nav.opportunities, icon: "◉" },
     { href: "/projects", label: m.nav.projects, icon: "▤" },
     {
+      id: "ops",
+      label: m.nav.ops,
+      icon: "◎",
+      children: [
+        { href: "/ops", label: m.nav.opsOverview, icon: "▣", exact: true },
+        { href: "/partner-reviews", label: m.nav.partnerReviews, icon: "◫" },
+        { href: "/ops/weekly-report", label: m.nav.weeklyReport, icon: "▤" },
+      ],
+    },
+    {
       id: "resources",
       label: m.nav.resources,
       icon: "▦",
@@ -62,10 +81,11 @@ export function NavLinks({
     { href: "/settings", label: m.nav.teamSettings, icon: "⚙" },
   ];
 
-  const leafActive = (l: Leaf) =>
-    l.href === "/"
-      ? pathname === "/"
-      : pathname.startsWith(l.href) || (l.aliases ?? []).some((href) => pathname.startsWith(href));
+  const leafActive = (l: Leaf) => {
+    if (l.href === "/" || l.exact) return pathname === l.href;
+    if (pathname === l.href || pathname.startsWith(`${l.href}/`)) return true;
+    return (l.aliases ?? []).some((href) => pathname === href || pathname.startsWith(`${href}/`));
+  };
 
   return (
     <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">

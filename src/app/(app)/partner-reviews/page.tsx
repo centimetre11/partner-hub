@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
+import { OpsCenterNav } from "@/components/ops-center-nav";
 import { CreateReviewMeetingForm } from "./create-form";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
@@ -32,13 +33,15 @@ export default async function PartnerReviewsPage() {
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="pb-16 space-y-0">
       <PageHeader
-        title="开会过伙伴"
+        title="过伙伴会议"
         desc="选一批伙伴开会：会前准备进展与议题，会中点伙伴打标，会后把讨论写入商务记录与待办。"
         actions={<CreateReviewMeetingForm partners={partners} />}
       />
+      <OpsCenterNav />
 
+      <div className="px-4 sm:px-6 lg:px-8 space-y-6 max-w-7xl">
       <Card title="会议列表">
         {!meetings.length ? (
           <EmptyState text="还没有过伙伴会议。点击右上角「新建过伙伴会议」，勾选要过的伙伴即可开始。" />
@@ -67,6 +70,7 @@ export default async function PartnerReviewsPage() {
           </ul>
         )}
       </Card>
+      </div>
     </div>
   );
 }

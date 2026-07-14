@@ -154,6 +154,8 @@ export async function saveWeeklyReportConfigAction(formData: FormData) {
   await db.agent.update({ where: { id: agentId }, data: { nextRunAt } });
 
   revalidatePath("/settings");
+  revalidatePath("/ops");
+  revalidatePath("/ops/weekly-report");
   return {
     ok: true,
     message: enabled
@@ -173,6 +175,8 @@ export async function runWeeklyReportNowAction() {
     const { runAgent } = await import("./agent-runner");
     const output = await runAgent(agent.id, "manual");
     revalidatePath("/settings");
+    revalidatePath("/ops");
+    revalidatePath("/ops/weekly-report");
     const tail = output.split("**推送结果：**")[1]?.trim();
     return { ok: true, message: `已运行。${tail ? `推送结果：${tail}` : "详见自动化运行记录。"}` };
   } catch (e) {

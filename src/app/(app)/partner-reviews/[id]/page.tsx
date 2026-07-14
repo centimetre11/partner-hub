@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
+import { OpsCenterNav } from "@/components/ops-center-nav";
 import { MeetingWorkspace, toMeetingClient } from "./meeting-workspace";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
@@ -37,27 +38,34 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
   const client = toMeetingClient(meeting);
 
   return (
-    <div className="space-y-4">
-      <div className="text-xs text-slate-500">
-        <Link href="/partner-reviews" className="hover:text-slate-800">
-          ← 过伙伴会议
-        </Link>
-        <span className="mx-2">·</span>
-        <Link href="/settings#integrations" className="hover:text-slate-800">
-          钉钉配置
-        </Link>
-      </div>
-
+    <div className="pb-16">
       <PageHeader
         title={meeting.title}
         desc={`${meeting.items.length} 个伙伴 · ${meeting.createdBy.name}`}
         actions={<Badge tone={st.tone}>{st.label}</Badge>}
       />
+      <OpsCenterNav />
 
-      <MeetingWorkspace
-        key={`${meeting.status}-${meeting.prepGeneratedAt?.toISOString() ?? ""}-${meeting.transcriptText?.length ?? 0}-${meeting.items.map((i) => i.status).join(",")}`}
-        meeting={client}
-      />
+      <div className="px-4 sm:px-6 lg:px-8 space-y-3 max-w-7xl">
+        <div className="text-xs text-slate-500">
+          <Link href="/ops" className="hover:text-slate-800">
+            经营
+          </Link>
+          <span className="mx-2">·</span>
+          <Link href="/partner-reviews" className="hover:text-slate-800">
+            过伙伴会议
+          </Link>
+          <span className="mx-2">·</span>
+          <Link href="/settings#integrations" className="hover:text-slate-800">
+            钉钉配置
+          </Link>
+        </div>
+
+        <MeetingWorkspace
+          key={`${meeting.status}-${meeting.prepGeneratedAt?.toISOString() ?? ""}-${meeting.transcriptText?.length ?? 0}-${meeting.items.map((i) => i.status).join(",")}`}
+          meeting={client}
+        />
+      </div>
     </div>
   );
 }
