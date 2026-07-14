@@ -62,7 +62,7 @@ function sendToBridge<T>(message: unknown, timeoutMs: number): Promise<T> {
 export type BridgeStatus = {
   available: boolean;
   version: string | null;
-  /** CRM 新建填表需要扩展 ≥ 1.1.1（含 Products / Current demand） */
+  /** CRM 新建填表需要扩展 ≥ 1.1.2（下拉关闭修复） */
   supportsCrmActivation: boolean;
 };
 
@@ -100,7 +100,7 @@ export async function getBridgeStatus(): Promise<BridgeStatus> {
     return {
       available,
       version,
-      supportsCrmActivation: versionGte(version, "1.1.1"),
+      supportsCrmActivation: versionGte(version, "1.1.2"),
     };
   } catch {
     return { available: false, version: null, supportsCrmActivation: false };
@@ -142,6 +142,7 @@ export type CrmActivationBridgeFields = {
   country: string;
   countryAliases: string[];
   sales: string;
+  preSales?: string;
   companyName: string;
   partnerType: string;
   contactName: string;
@@ -150,6 +151,8 @@ export type CrmActivationBridgeFields = {
   currentDemand?: string;
   email: string;
   phone: string;
+  phoneDialCode?: string;
+  phoneLocal?: string;
 };
 
 /** 通过扩展打开 CRM 海外激活填报表并预填字段（不代提交）。 */

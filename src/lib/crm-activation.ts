@@ -12,6 +12,8 @@ export const CRM_ACTIVATION_PRODUCT = "FineReport";
 export const CRM_ACTIVATION_CURRENT_DEMAND =
   "Enterprise demands - quickly build BI/ Reporting or other systems";
 export const CRM_ACTIVATION_FAKE_PHONE = "+971500000000";
+export const CRM_ACTIVATION_FAKE_DIAL_CODE = "+971";
+export const CRM_ACTIVATION_FAKE_PHONE_LOCAL = "500000000";
 
 /** 中东常用国家别名 → 用于匹配 CRM 下拉选项全文 */
 export const COUNTRY_ALIAS_GROUPS: string[][] = [
@@ -69,6 +71,8 @@ export type CrmActivationFields = {
   /** 扩展侧用于匹配下拉的别名列表（含英文正式名等） */
   countryAliases: string[];
   sales: string;
+  /** 售前：表单必填，默认与 Sales 相同 */
+  preSales: string;
   companyName: string;
   /** 伙伴填经销商；客户为空字符串表示不填 */
   partnerType: string;
@@ -79,7 +83,10 @@ export type CrmActivationFields = {
   /** 当前需求（单选） */
   currentDemand: string;
   email: string;
+  /** 完整电话（兼容）；优先用 dialCode + phoneLocal */
   phone: string;
+  phoneDialCode: string;
+  phoneLocal: string;
 };
 
 export type CrmActivationPayload = {
@@ -180,13 +187,32 @@ export function buildCrmActivationFields(input: {
 
   if (!contactName) contactName = fakeContactNameForEntity(entity.id);
   if (!email) email = fakeEmailForEntity(entity.id);
-  if (!phone) phone = CRM_ACTIVATION_FAKE_PHONE;
+
+  let phoneDialCode = "";
+  let phoneLocal = "";
+  if (!phone) {
+    phone = CRM_ACTIVATION_FAKE_PHONE;
+    phoneDialCode = CRM_ACTIVATION_FAKE_DIAL_CODE;
+    phoneLocal = CRM_ACTIVATION_FAKE_PHONE_LOCAL;
+  } else {
+    const m = phone.match(/^(\+\d{1,4})\s*(.*)$/);
+    if (m) {
+      phoneDialCode = m[1];
+      phoneLocal = m[2].replace(/\D/g, "") || phone.replace(/\D/g, "");
+    } else {
+      phoneLocal = phone.replace(/\D/g, "");
+      phoneDialCode = CRM_ACTIVATION_FAKE_DIAL_CODE;
+    }
+  }
+
+  const salesName = salesman.trim();
 
   return {
     region: CRM_ACTIVATION_REGION,
     country: (entity.country || countryAliases[0] || "").trim(),
     countryAliases,
-    sales: salesman.trim(),
+    sales: salesName,
+    preSales: salesName,
     companyName: entity.name.trim(),
     partnerType: entityType === "partner" ? CRM_ACTIVATION_PARTNER_TYPE : "",
     contactName,
@@ -195,6 +221,8 @@ export function buildCrmActivationFields(input: {
     currentDemand: CRM_ACTIVATION_CURRENT_DEMAND,
     email,
     phone,
+    phoneDialCode,
+    phoneLocal,
   };
 }
 

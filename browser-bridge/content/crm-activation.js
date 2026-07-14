@@ -26,91 +26,74 @@
       return { ok: false, error: "请先在本浏览器登录 CRM，再回到 Hub 重试「在 CRM 新建」" };
     }
 
-    // 等待表单标签出现（报表异步渲染）
     await waitFor(() => findLabelCell("Region") || findLabelCell("Company Name"), 25000, "CRM 填报表未加载完成（找不到 Region / Company Name）");
+    await closeOpenDropdowns();
 
     const warnings = [];
 
-    // 1. Region — 固定下拉
-    if (fields.region) {
-      const ok = await fillDropdownByLabel("Region", [fields.region], true);
-      if (!ok) warnings.push("Region 未匹配，请手选");
-    }
-
-    // 2. Country — 别名匹配
-    if (fields.country || (fields.countryAliases && fields.countryAliases.length)) {
-      const aliases = [
-        ...(fields.country ? [fields.country] : []),
-        ...(fields.countryAliases || []),
-      ];
-      const ok = await fillDropdownByLabel("Country", aliases, false);
-      if (!ok) warnings.push("Country 未匹配，请手选");
-    }
-
-    // 3. Sales
-    if (fields.sales) {
-      const ok = await fillDropdownByLabel("Sales", [fields.sales], true);
-      if (!ok) warnings.push(`Sales「${fields.sales}」未匹配，请手选`);
-    }
-
-    // 4. Company Name — 文本
+    // 先填文本 / 单选 / 多选（不受下拉浮层影响），再填下拉
     if (fields.companyName) {
-      const ok = await fillTextByLabel("Company Name", fields.companyName);
-      if (!ok) warnings.push("Company Name 未找到输入框");
+      if (!(await fillTextByLabel("Company Name", fields.companyName))) warnings.push("Company Name 未找到输入框");
     }
-
-    // 5. Partner type — 伙伴才填；客户留空
-    if (fields.partnerType) {
-      const ok = await fillDropdownByLabel("Partner type", [fields.partnerType], false);
-      if (!ok) {
-        // 也尝试中文标签
-        const ok2 = await fillDropdownByLabel("Partner Type", [fields.partnerType], false);
-        if (!ok2) warnings.push("Partner type 未匹配，请手选");
+    if (fields.contactName) {
+      if (!(await fillTextByLabel("Contact Name", fields.contactName))) warnings.push("Contact Name 未找到输入框");
+    }
+    if (fields.email) {
+      const ok =
+        (await fillTextByLabel("Email", fields.email)) ||
+        (await fillTextByLabel("E-mail", fields.email)) ||
+        (await fillTextByLabel("Contact Email", fields.email)) ||
+        (await fillTextByLabel("邮箱", fields.email));
+      if (!ok) warnings.push("Email 未找到输入框");
+    }
+    if (fields.phoneDialCode || fields.phoneLocal || fields.phone) {
+      const ok = await fillPhoneFields(fields);
+      if (!ok) warnings.push("Phone 未填完整，请手填区号与号码");
+    }
+    if (fields.contactTitle) {
+      if (!(await fillRadioByLabel("Contact Title", fields.contactTitle))) {
+        warnings.push(`Contact Title「${fields.contactTitle}」未选中，请手选`);
       }
     }
-
-    // 6. Contact Name
-    if (fields.contactName) {
-      const ok = await fillTextByLabel("Contact Name", fields.contactName);
-      if (!ok) warnings.push("Contact Name 未找到输入框");
-    }
-
-    // 7. Contact Title — 单选第一项
-    if (fields.contactTitle) {
-      const ok = await fillRadioByLabel("Contact Title", fields.contactTitle);
-      if (!ok) warnings.push(`Contact Title「${fields.contactTitle}」未选中，请手选`);
-    }
-
-    // 8. Products of interest — 勾选第一项 FineReport
     if (fields.productsOfInterest) {
       const ok =
         (await fillCheckboxByLabel("Products of interest", fields.productsOfInterest)) ||
         (await fillCheckboxByLabel("Product of interest", fields.productsOfInterest));
       if (!ok) warnings.push(`Products of interest「${fields.productsOfInterest}」未勾选，请手选`);
     }
-
-    // 9. Current demand — 单选第一项
     if (fields.currentDemand) {
-      const ok = await fillRadioByLabel("Current demand", fields.currentDemand);
-      if (!ok) warnings.push("Current demand 未选中，请手选");
+      if (!(await fillRadioByLabel("Current demand", fields.currentDemand))) {
+        warnings.push("Current demand 未选中，请手选");
+      }
     }
 
-    // 10. Email / Phone — 标签可能是 Email / E-mail / Phone / Mobile
-    if (fields.email) {
-      const ok =
-        (await fillTextByLabel("Email", fields.email)) ||
-        (await fillTextByLabel("E-mail", fields.email)) ||
-        (await fillTextByLabel("邮箱", fields.email));
-      if (!ok) warnings.push("Email 未找到输入框");
+    // 下拉：每填一项强制关闭浮层，避免卡住后续字段
+    if (fields.region) {
+      if (!(await fillDropdownByLabel("Region", [fields.region], true))) warnings.push("Region 未匹配，请手选");
     }
-    if (fields.phone) {
-      const ok =
-        (await fillTextByLabel("Phone", fields.phone)) ||
-        (await fillTextByLabel("Mobile", fields.phone)) ||
-        (await fillTextByLabel("电话", fields.phone)) ||
-        (await fillTextByLabel("手机", fields.phone));
-      if (!ok) warnings.push("Phone 未找到输入框");
+    if (fields.country || (fields.countryAliases && fields.countryAliases.length)) {
+      const aliases = [...(fields.country ? [fields.country] : []), ...(fields.countryAliases || [])];
+      if (!(await fillDropdownByLabel("Country", aliases, false))) warnings.push("Country 未匹配，请手选");
     }
+    if (fields.sales) {
+      if (!(await fillDropdownByLabel("Sales", [fields.sales], true))) {
+        warnings.push(`Sales「${fields.sales}」未匹配，请手选`);
+      }
+    }
+    if (fields.preSales) {
+      if (!(await fillDropdownByLabel("Pre-Sales", [fields.preSales], true))) {
+        const ok2 = await fillDropdownByLabel("Pre-Sales", [fields.preSales], false);
+        if (!ok2) warnings.push(`Pre-Sales「${fields.preSales}」未匹配，请手选`);
+      }
+    }
+    if (fields.partnerType) {
+      const ok =
+        (await fillDropdownByLabel("Partner type", [fields.partnerType], false)) ||
+        (await fillDropdownByLabel("Partner Type", [fields.partnerType], false));
+      if (!ok) warnings.push("Partner type 未匹配，请手选");
+    }
+
+    await closeOpenDropdowns();
 
     if (warnings.length) {
       return { ok: true, warning: warnings.join("；") };
@@ -260,14 +243,15 @@
     return true;
   }
 
-  /** 点击下拉箭头并选择匹配项；exact=true 时要求选项全文等于或包含且大小写不敏感精确偏好 */
+  /** 点击下拉箭头并选择匹配项；选完强制关闭浮层，避免卡住后续字段 */
   async function fillDropdownByLabel(label, aliases, preferExact) {
+    await closeOpenDropdowns();
+
     const labelEl = findLabelCell(label);
     if (!labelEl) return false;
     const valueCell = findValueCellFromLabel(labelEl);
     if (!valueCell) return false;
 
-    // 先尝试原生 select
     const select = valueCell.querySelector("select");
     if (select) {
       const opts = [...select.options];
@@ -282,71 +266,215 @@
       return true;
     }
 
-    // FineReport 自定义下拉：点蓝色箭头或输入框
+    const input = valueCell.querySelector("input:not([type='hidden'])");
     const arrow =
-      valueCell.querySelector("button, .fr-trigger-btn-up, .fr-trigger-center, span[class*='arrow'], div[class*='trigger']") ||
+      valueCell.querySelector(
+        "button, .fr-trigger-btn-up, .fr-trigger-btn-down, .fr-trigger-center, span[class*='arrow'], div[class*='trigger']",
+      ) ||
       [...valueCell.querySelectorAll("*")].find((el) => {
         if (!isVisible(el)) return false;
         const r = el.getBoundingClientRect();
-        return r.width <= 28 && r.height <= 28 && r.width >= 12 && /▼|▾|↓/.test(el.textContent || "");
+        return r.width <= 32 && r.height <= 32 && r.width >= 10;
       });
 
-    const input = valueCell.querySelector("input:not([type='hidden'])");
-
+    // 打开下拉
     if (arrow) {
+      arrow.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      arrow.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
       arrow.click();
     } else if (input) {
       input.focus();
       input.click();
-      // 尝试点输入框右侧区域
       const rect = input.getBoundingClientRect();
       const doc = input.ownerDocument;
-      const rightEl = doc.elementFromPoint(rect.right - 8, rect.top + rect.height / 2);
+      const rightEl = doc.elementFromPoint(rect.right - 6, rect.top + rect.height / 2);
       if (rightEl && rightEl !== input) rightEl.click();
     } else {
       return false;
     }
 
-    await sleep(400);
+    await sleep(500);
 
-    // 找可见的下拉列表项
     const items = await waitFor(
       () => {
-        const listItems = queryAll(
-          "li, .fr-combo-list-item, .fr-list-item, div[class*='list-item'], tr[class*='list'], div[role='option']",
-        ).filter(isVisible);
-        // 过滤掉过短或像表头的
-        const texts = listItems.filter((el) => {
-          const t = (el.textContent || "").trim();
-          return t.length > 0 && t.length < 200;
-        });
-        return texts.length >= 1 ? texts : null;
+        const listItems = findVisibleDropdownItems();
+        return listItems.length >= 1 ? listItems : null;
       },
-      5000,
+      6000,
       "dropdown",
     ).catch(() => null);
 
     if (!items || !items.length) {
-      // 退化为直接往 input 里打字
       if (input && aliases[0]) {
         input.focus();
         setNativeValue(input, aliases[0]);
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, keyCode: 13 }));
+        await closeOpenDropdowns();
         return true;
       }
+      await closeOpenDropdowns();
       return false;
     }
 
     const texts = items.map((el) => (el.textContent || "").trim());
     const idx = matchOptionText(texts, aliases, preferExact);
     if (idx == null) {
-      // 关闭下拉：Esc
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      await closeOpenDropdowns();
       return false;
     }
 
+    const target = items[idx];
+    // FineReport 列表项有时要 mousedown 才生效
+    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+    target.click();
+    await sleep(250);
+
+    // 若列表仍开着，再试 Enter / 再点一次
+    if (findVisibleDropdownItems().length > 0) {
+      target.click();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, keyCode: 13 }));
+      await sleep(200);
+    }
+
+    await closeOpenDropdowns();
+
+    // 校验：输入框是否已有接近别名的值
+    if (input) {
+      const v = normalizeLabel(input.value || "");
+      const hit = aliases.some((a) => {
+        const n = normalizeLabel(a);
+        return v && (v === n || v.includes(n) || n.includes(v));
+      });
+      if (hit) return true;
+      // 有些下拉选中后 input 显示完整项，只要非空也算成功
+      if ((input.value || "").trim().length > 0 && preferExact === false) return true;
+      if ((input.value || "").trim().length > 0) return true;
+    }
+    return true;
+  }
+
+  function findVisibleDropdownItems() {
+    return queryAll(
+      "li, .fr-combo-list-item, .fr-list-item, div[class*='list-item'], tr[class*='list'], div[role='option'], .fr-list-container div",
+    ).filter((el) => {
+      if (!isVisible(el)) return false;
+      const t = (el.textContent || "").trim();
+      return t.length > 0 && t.length < 220;
+    });
+  }
+
+  async function closeOpenDropdowns() {
+    for (let i = 0; i < 3; i++) {
+      if (findVisibleDropdownItems().length === 0) break;
+      const docs = allDocuments();
+      for (const doc of docs) {
+        doc.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, keyCode: 27 }));
+        doc.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", bubbles: true, keyCode: 27 }));
+      }
+      // 点一下页面空白处关掉浮层
+      const body = document.body;
+      if (body) {
+        body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 2, clientY: 2 }));
+        body.click();
+      }
+      await sleep(200);
+    }
+    // 仍开着：再 Esc 一次
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, keyCode: 27 }));
+    await sleep(150);
+  }
+
+  async function fillPhoneFields(fields) {
+    const dial = fields.phoneDialCode || "";
+    const local = fields.phoneLocal || "";
+    const full = fields.phone || `${dial}${local}`;
+
+    const labelEl =
+      findLabelCell("Contact phone number") ||
+      findLabelCell("Phone") ||
+      findLabelCell("Mobile") ||
+      findLabelCell("电话") ||
+      findLabelCell("手机");
+    if (!labelEl) return false;
+    const valueCell = findValueCellFromLabel(labelEl);
+    if (!valueCell) return false;
+
+    const inputs = [...valueCell.querySelectorAll("input:not([type='hidden']):not([type='radio']):not([type='checkbox'])")].filter(
+      isVisible,
+    );
+
+    // 常见结构：左侧区号下拉/输入 + 右侧号码输入
+    if (inputs.length >= 2) {
+      const dialInput = inputs[0];
+      const numInput = inputs[1];
+      if (dial) {
+        // 区号也可能是自定义下拉
+        const dialCell = dialInput.closest("td, div") || valueCell;
+        const opened = await trySelectInCell(dialCell, [dial, dial.replace("+", "")], true);
+        if (!opened) {
+          dialInput.focus();
+          setNativeValue(dialInput, dial);
+        }
+        await closeOpenDropdowns();
+      }
+      if (local || full) {
+        numInput.focus();
+        setNativeValue(numInput, local || full.replace(/^\+\d+/, ""));
+      }
+      return true;
+    }
+
+    if (inputs.length === 1) {
+      inputs[0].focus();
+      setNativeValue(inputs[0], full);
+      return true;
+    }
+
+    // 区号是独立下拉（无 input）：在 valueCell 内找 trigger
+    if (dial) {
+      await trySelectInCell(valueCell, [dial, dial.replace("+", ""), `＋${dial.replace("+", "")}`], false);
+      await closeOpenDropdowns();
+    }
+    // 再找号码输入
+    const num =
+      valueCell.querySelector("input[placeholder*='mobile' i], input[placeholder*='phone' i], input[placeholder*='号码']") ||
+      [...valueCell.querySelectorAll("input")].filter(isVisible).pop();
+    if (num && (local || full)) {
+      num.focus();
+      setNativeValue(num, local || full.replace(/^\+\d+/, ""));
+      return true;
+    }
+    return Boolean(num);
+  }
+
+  async function trySelectInCell(cell, aliases, preferExact) {
+    if (!cell) return false;
+    await closeOpenDropdowns();
+    const arrow =
+      cell.querySelector("button, .fr-trigger-btn-up, .fr-trigger-center, div[class*='trigger']") ||
+      [...cell.querySelectorAll("*")].find((el) => {
+        if (!isVisible(el)) return false;
+        const r = el.getBoundingClientRect();
+        return r.width <= 32 && r.height <= 32 && r.width >= 10;
+      });
+    const input = cell.querySelector("input:not([type='hidden'])");
+    if (arrow) arrow.click();
+    else if (input) input.click();
+    else return false;
+    await sleep(400);
+    const items = findVisibleDropdownItems();
+    if (!items.length) return false;
+    const texts = items.map((el) => (el.textContent || "").trim());
+    const idx = matchOptionText(texts, aliases, preferExact);
+    if (idx == null) {
+      await closeOpenDropdowns();
+      return false;
+    }
+    items[idx].dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     items[idx].click();
     await sleep(200);
+    await closeOpenDropdowns();
     return true;
   }
 
