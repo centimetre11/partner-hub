@@ -11,8 +11,8 @@ export const CRM_ACTIVATION_PRODUCT = "FineReport";
 /** Current demand 单选第一项 */
 export const CRM_ACTIVATION_CURRENT_DEMAND =
   "Enterprise demands - quickly build BI/ Reporting or other systems";
-export const CRM_ACTIVATION_FAKE_PHONE = "+971500000000";
-export const CRM_ACTIVATION_FAKE_DIAL_CODE = "+971";
+export const CRM_ACTIVATION_FAKE_PHONE = "+966500000000";
+export const CRM_ACTIVATION_FAKE_DIAL_CODE = "+966";
 export const CRM_ACTIVATION_FAKE_PHONE_LOCAL = "500000000";
 
 /** 创建人是售前时，销售固定填此人 */
@@ -112,7 +112,8 @@ export function parseContactInfo(info: string | null | undefined): { email?: str
 
 export function fakeEmailForEntity(entityId: string): string {
   const short = entityId.replace(/[^a-zA-Z0-9]/g, "").slice(-8) || "x";
-  return `noreply+${short}@placeholder.local`;
+  // 不要用 +（会触发 FineReport 电话区号控件）
+  return `noreply.${short}@placeholder.local`;
 }
 
 /** 无联系人时伪造一个可识别的占位姓名（稳定可复现）。 */

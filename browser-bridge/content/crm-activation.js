@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.7";
+  const SCRIPT_VER = "1.1.8";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -134,7 +134,7 @@
     try {
       const ok = await Promise.race([
         fillPhoneFields(fields),
-        sleep(12000).then(() => false),
+        sleep(5000).then(() => false),
       ]);
       if (!ok) warnings.push("Phone 未填完整，请手选区号并填号码");
     } catch (err) {
@@ -506,8 +506,8 @@
   }
 
   /**
-   * 电话：区号下拉会向上展开盖住邮箱，因此优先「直接写入区号」不打开浮层；
-   * 必须开下拉时，只点「靠近区号框」的 +数字 选项。
+   * 电话：绝不打开区号下拉（会向上盖住邮箱并卡住）。
+   * 只对左侧窄框直写区号、右侧宽框直写号码。
    */
   async function fillPhoneFields(fields) {
     const local =
@@ -525,68 +525,66 @@
     const valueCell = findValueCellFromLabel(labelEl);
     if (!valueCell) return false;
 
+    // 先关掉任何已打开的上弹层
     await closeOpenDropdowns();
     await sleep(200);
+    await closeOpenDropdowns();
 
     let { dialInput, numInput } = resolvePhoneInputs(valueCell);
 
-    // 1) 优先直接写区号，避免上弹层
-    let dialOk = false;
+    // 区号：只 setValue，绝不 click 箭头 / focus 触发下拉
     if (dialInput) {
-      dialInput.focus();
-      await sleep(80);
+      try {
+        dialInput.blur && dialInput.blur();
+      } catch (_) {}
       setNativeValue(dialInput, dialCode);
       dialInput.dispatchEvent(new Event("change", { bubbles: true }));
-      dialInput.dispatchEvent(new Event("blur", { bubbles: true }));
-      if (dialInput.blur) dialInput.blur();
-      await sleep(250);
-      const v = String(dialInput.value || "").trim();
-      dialOk = v.includes(dialCode.replace("+", "")) || v.includes(dialCode) || /^\+\d+/.test(v);
-    }
-
-    // 直接写入失败再开下拉（并按区号框附近过滤选项）
-    if (!dialOk) {
-      dialOk = await pickFirstDialCodeNear(valueCell, dialInput, dialCode);
+      await sleep(150);
       await closeOpenDropdowns();
-      await sleep(300);
     }
 
     ({ dialInput, numInput } = resolvePhoneInputs(valueCell));
-
-    if (dialInput) {
-      const dv = String(dialInput.value || "").replace(/\s/g, "");
-      if (/\d{6,}/.test(dv) || dv.includes(local)) {
-        setNativeValue(dialInput, dialCode);
-      }
-    }
-
     if (!numInput || (dialInput && numInput === dialInput)) {
       const inputs = listPhoneInputs(valueCell);
       if (inputs.length >= 2) {
-        const byLeft = inputs.slice().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+        const byLeft = inputs
+          .slice()
+          .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
         dialInput = byLeft[0];
         numInput = byLeft[byLeft.length - 1];
       }
     }
-    if (!numInput || (dialInput && numInput === dialInput)) return dialOk;
 
-    if (numInput.blur) numInput.blur();
-    await sleep(80);
-    numInput.focus();
-    await sleep(100);
-    setNativeValue(numInput, local);
-    numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
-    numInput.dispatchEvent(new Event("change", { bubbles: true }));
-    await sleep(250);
-
-    if (dialInput) {
-      const dv = String(dialInput.value || "").replace(/\s/g, "");
-      if (dv.includes(local) || /\d{6,}/.test(dv)) {
-        setNativeValue(dialInput, dialCode);
-      }
+    // 号码：按 placeholder 再确认一次右侧框
+    if (!numInput) {
+      numInput = listPhoneInputs(valueCell).find((el) =>
+        /area code|mobile|only enter|phone num/i.test(el.getAttribute("placeholder") || ""),
+      ) || null;
     }
 
-    return Boolean((numInput.value || "").trim()) || dialOk;
+    if (numInput && (!dialInput || numInput !== dialInput)) {
+      try {
+        if (dialInput && dialInput.blur) dialInput.blur();
+      } catch (_) {}
+      await closeOpenDropdowns();
+      await sleep(100);
+      numInput.focus();
+      await sleep(80);
+      setNativeValue(numInput, local);
+      numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
+      numInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await sleep(200);
+      try {
+        numInput.blur && numInput.blur();
+      } catch (_) {}
+    }
+
+    await closeOpenDropdowns();
+    await sleep(150);
+
+    const numOk = numInput && String(numInput.value || "").replace(/\D/g, "").length >= 6;
+    const dialOk = dialInput && /^\+?\d{1,4}/.test(String(dialInput.value || "").trim());
+    return Boolean(numOk || dialOk);
   }
 
   function listPhoneInputs(valueCell) {
@@ -601,102 +599,14 @@
       const el = inputs[0];
       const r = el.getBoundingClientRect();
       const ph = (el.getAttribute("placeholder") || "").toLowerCase();
-      if (r.width >= 140 || /mobile|only enter|手机号|号码/.test(ph)) {
+      if (r.width >= 140 || /mobile|only enter|手机号|号码|area code/.test(ph)) {
         return { dialInput: null, numInput: el };
       }
-      if (r.width < 140) return { dialInput: el, numInput: null };
-      return { dialInput: null, numInput: el };
+      return { dialInput: el, numInput: null };
     }
 
     const byLeft = inputs.slice().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
     return { dialInput: byLeft[0], numInput: byLeft[byLeft.length - 1] };
-  }
-
-  /** 区号列表常向上弹出；只点水平贴近区号框、文案为 +数字 的项，忽略 Select None */
-  async function pickFirstDialCodeNear(valueCell, dialInput, dialCode) {
-    const anchor = dialInput || valueCell;
-    const ar = anchor.getBoundingClientRect();
-
-    const arrowCandidates = [...valueCell.querySelectorAll("button, .fr-trigger-btn-up, .fr-trigger-btn-down, .fr-trigger-center, div[class*='trigger'], span")].filter(
-      (el) => {
-        if (!isVisible(el)) return false;
-        const r = el.getBoundingClientRect();
-        return r.width >= 8 && r.width <= 40 && r.height >= 8 && r.height <= 40;
-      },
-    );
-    let arrow = null;
-    if (dialInput && arrowCandidates.length) {
-      const dr = dialInput.getBoundingClientRect();
-      arrow = arrowCandidates
-        .map((el) => {
-          const er = el.getBoundingClientRect();
-          return { el, score: Math.abs(er.left - dr.right) + Math.abs(er.top - dr.top) };
-        })
-        .sort((a, b) => a.score - b.score)[0]?.el;
-    }
-    if (!arrow && arrowCandidates.length) {
-      arrow = arrowCandidates.slice().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
-    }
-
-    if (arrow) {
-      arrow.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-      arrow.click();
-      await sleep(500);
-    } else if (dialInput) {
-      dialInput.focus();
-      dialInput.click();
-      await sleep(400);
-    } else {
-      return false;
-    }
-
-    let items = [];
-    const start = Date.now();
-    while (Date.now() - start < 2500) {
-      items = findVisibleDropdownItems()
-        .filter((el) => {
-          const t = (el.textContent || "").trim();
-          if (!t || /select\s*none/i.test(t)) return false;
-          if (!/^\+\d{1,4}$/.test(t) && !/^\+\d/.test(t)) return false;
-          const r = el.getBoundingClientRect();
-          // 水平落在区号附近（允许上弹）
-          const horiz = r.left < ar.right + 80 && r.right > ar.left - 40;
-          const vertNear = Math.abs(r.bottom - ar.top) < 320 || Math.abs(r.top - ar.bottom) < 320;
-          return horiz && vertNear;
-        })
-        .sort((a, b) => {
-          // 优先完整匹配 dialCode，再按离区号框的垂直距离
-          const ta = (a.textContent || "").trim();
-          const tb = (b.textContent || "").trim();
-          const sa = ta === dialCode || ta === dialCode.replace("+", "") ? 0 : 1;
-          const sb = tb === dialCode || tb === dialCode.replace("+", "") ? 0 : 1;
-          if (sa !== sb) return sa - sb;
-          const da = Math.min(Math.abs(a.getBoundingClientRect().bottom - ar.top), Math.abs(a.getBoundingClientRect().top - ar.bottom));
-          const db = Math.min(Math.abs(b.getBoundingClientRect().bottom - ar.top), Math.abs(b.getBoundingClientRect().top - ar.bottom));
-          return da - db;
-        });
-      if (items.length) break;
-      await sleep(200);
-    }
-
-    if (!items.length) {
-      if (dialInput) {
-        setNativeValue(dialInput, dialCode);
-        dialInput.dispatchEvent(new Event("change", { bubbles: true }));
-        return true;
-      }
-      return false;
-    }
-
-    const target = items[0];
-    // 不要 scrollIntoView 把页面滚乱；直接点
-    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-    target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
-    target.click();
-    await sleep(400);
-    await closeOpenDropdowns();
-    if (dialInput && dialInput.blur) dialInput.blur();
-    return true;
   }
 
   async function trySelectInCell(cell, aliases, _preferExact) {
