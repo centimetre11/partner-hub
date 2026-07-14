@@ -207,7 +207,7 @@ export async function markLocalRecordingStartedAction(meetingId: string) {
       startedAt: meeting.startedAt ?? now,
     },
   });
-  revalidateMeeting(meetingId);
+  // 不开 revalidate：会触发 RSC refresh，旧 key 逻辑下会重挂组件掐断麦克风
   return { ok: true, startedAt: (meeting.recordingStartedAt ?? now).toISOString() };
 }
 

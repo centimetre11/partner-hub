@@ -81,10 +81,22 @@ export function MeetingWorkspace({
   const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
+    // 录音进行中不要用服务端 props 覆盖本地状态（会误触 UI 重置）
+    if (isRecording) {
+      setMeeting((m) => ({
+        ...m,
+        // 仍合并转写文本（近实时服务端写入后 refresh 才有；录音中一般不 refresh）
+        transcriptText: initial.transcriptText ?? m.transcriptText,
+        transcriptStatus: initial.transcriptStatus ?? m.transcriptStatus,
+        recordingBytes: initial.recordingBytes ?? m.recordingBytes,
+      }));
+      if (initial.transcriptText) setTranscript(initial.transcriptText);
+      return;
+    }
     setMeeting(initial);
     setLiveNotes(initial.liveNotes ?? "");
     setTranscript(initial.transcriptText ?? "");
-  }, [initial]);
+  }, [initial, isRecording]);
 
   const activeItem = useMemo(
     () => meeting.items.find((i) => i.id === activeItemId) ?? null,
@@ -113,11 +125,13 @@ export function MeetingWorkspace({
     }
   }
 
-  function run(fn: () => Promise<void>) {
+  function run(fn: () => Promise<void>, opts?: { refresh?: boolean }) {
+    const shouldRefresh = opts?.refresh !== false;
     startTransition(async () => {
       try {
         await fn();
-        router.refresh();
+        // 会中录音时避免 refresh 打断；切伙伴只改本地状态即可
+        if (shouldRefresh) router.refresh();
       } catch (e) {
         flash(undefined, e instanceof Error ? e.message : String(e));
       }
@@ -318,6 +332,7 @@ export function MeetingWorkspace({
             setMeeting((m) => ({ ...m, transcriptText: plain, transcriptStatus: "recording" }));
           }}
           onUploaded={() => {
+            // 上传完成后再刷新；录音过程中不 refresh
             router.refresh();
           }}
         />
@@ -353,30 +368,34 @@ export function MeetingWorkspace({
                     // 仅正式开会后点伙伴才打标；准备阶段只切换简报，避免误进 LIVE 导致看不到「开会准备」
                     if (phase === "live") {
                       noteRapidDiscussClick(item.id);
-                      run(async () => {
-                        const res = await discussPartnerAction(meeting.id, item.id);
-                        if (res.error) {
-                          flash(undefined, res.error);
-                          return;
-                        }
-                        if (res.liveNotes) setLiveNotes(res.liveNotes);
-                        setCurrentDiscussItemId(item.id);
-                        const discussedAt = res.discussedAt ?? new Date().toISOString();
-                        setMeeting((m) => ({
-                          ...m,
-                          liveNotes: res.liveNotes ?? m.liveNotes,
-                          items: m.items.map((it) =>
-                            it.id === item.id
-                              ? {
-                                  ...it,
-                                  status: it.status === "CONFIRMED" ? it.status : "DISCUSSED",
-                                  discussedAt: it.discussedAt ?? discussedAt,
-                                  markerInsertedAt: it.markerInsertedAt ?? discussedAt,
-                                }
-                              : it,
-                          ),
-                        }));
-                      });
+                      // 录音中切伙伴：不要 router.refresh，否则会重挂组件掐断麦克风
+                      run(
+                        async () => {
+                          const res = await discussPartnerAction(meeting.id, item.id);
+                          if (res.error) {
+                            flash(undefined, res.error);
+                            return;
+                          }
+                          if (res.liveNotes) setLiveNotes(res.liveNotes);
+                          setCurrentDiscussItemId(item.id);
+                          const discussedAt = res.discussedAt ?? new Date().toISOString();
+                          setMeeting((m) => ({
+                            ...m,
+                            liveNotes: res.liveNotes ?? m.liveNotes,
+                            items: m.items.map((it) =>
+                              it.id === item.id
+                                ? {
+                                    ...it,
+                                    status: it.status === "CONFIRMED" ? it.status : "DISCUSSED",
+                                    discussedAt: it.discussedAt ?? discussedAt,
+                                    markerInsertedAt: it.markerInsertedAt ?? discussedAt,
+                                  }
+                                : it,
+                            ),
+                          }));
+                        },
+                        { refresh: !isRecording },
+                      );
                     }
                   }}
                   className={`w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 ${

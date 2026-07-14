@@ -83,7 +83,10 @@ async function transcribeWhisperAsrWebservice(
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      throw new Error(`ASR 失败 ${res.status}: ${errText.slice(0, 400)}`);
+      const hint = /Invalid data|Failed to load audio|ffmpeg/i.test(errText)
+        ? "（音频格式无法解码，请重新录音；近实时已改为 WAV）"
+        : "";
+      throw new Error(`ASR 失败 ${res.status}: ${errText.slice(0, 280)}${hint}`);
     }
     const raw = await res.text();
     let data: {

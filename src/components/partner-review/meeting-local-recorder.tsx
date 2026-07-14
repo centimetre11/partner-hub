@@ -5,6 +5,7 @@ import {
   markLocalRecordingStartedAction,
   runLocalAsrAction,
 } from "@/lib/partner-review/actions";
+import { recordStreamToWav } from "@/lib/asr/wav";
 
 type Props = {
   meetingId: string;
@@ -154,14 +155,13 @@ export function MeetingLocalRecorder({
     }
   }
 
-  async function uploadLiveChunk(blob: Blob, offsetMs: number) {
+  async function uploadLiveChunk(blob: Blob, offsetMs: number, filename: string) {
     if (!realtimeEnabled || blob.size < 800) return;
     liveBusyRef.current = true;
     setStatusLine("分片转写中…");
     try {
       const form = new FormData();
-      const ext = blob.type.includes("mp4") ? "m4a" : "webm";
-      form.append("file", blob, `chunk-${offsetMs}.${ext}`);
+      form.append("file", blob, filename);
       form.append("offsetMs", String(offsetMs));
       const res = await fetch(`/api/partner-reviews/${meetingId}/recording/live`, {
         method: "POST",
@@ -175,18 +175,25 @@ export function MeetingLocalRecorder({
         skipped?: boolean;
       };
       if (!res.ok) {
-        setStatusLine(`实时转写失败：${(data.error || res.statusText).slice(0, 60)}`);
+        const tip = (data.error || res.statusText).slice(0, 120);
+        setLocalError(`实时转写失败：${tip}`);
+        setStatusLine(`实时转写失败：${tip.slice(0, 48)}`);
         return;
       }
       if (data.skipped) {
         setStatusLine("录音中 · 分片过短已跳过");
         return;
       }
+      setLocalError(null);
       if (data.plain != null) onLiveTranscript?.(data.plain);
       setChunkCount((n) => n + 1);
       const preview = (data.chunkText || "").trim();
       setLastChunkPreview(preview ? preview.slice(0, 80) : null);
-      setStatusLine(preview ? `已出字 · ${preview.slice(0, 36)}${preview.length > 36 ? "…" : ""}` : "实时转写已更新");
+      setStatusLine(
+        preview
+          ? `已出字 · ${preview.slice(0, 36)}${preview.length > 36 ? "…" : ""}`
+          : "实时转写已更新",
+      );
     } catch (e) {
       setStatusLine(`实时转写网络异常：${e instanceof Error ? e.message : "请检查网络"}`);
     } finally {
@@ -194,45 +201,26 @@ export function MeetingLocalRecorder({
     }
   }
 
-  /** 并行短录一段完整文件给 Whisper（不打断主录音） */
+  /** PCM→WAV 分片给 Whisper（不打断主 WebM 录音；避免坏 WebM 导致 ASR 500） */
   async function captureLiveSegment() {
     const stream = streamRef.current;
     if (!stream || stoppedRef.current || !realtimeEnabled) return;
     if (liveBusyRef.current) {
-      // 上一片还在转写，跳过本轮，避免堆积打垮机器
-      scheduleLiveLoop();
-      return;
-    }
-
-    const mime = mimeRef.current;
-    let chunkRecorder: MediaRecorder;
-    try {
-      chunkRecorder = mime
-        ? new MediaRecorder(stream, { mimeType: mime })
-        : new MediaRecorder(stream);
-    } catch (e) {
-      setStatusLine(`无法创建分片录音器：${e instanceof Error ? e.message : String(e)}`);
       scheduleLiveLoop();
       return;
     }
 
     const offsetMs = offsetMsRef.current;
     const sec = Math.min(30, Math.max(8, chunkSeconds || 12));
-    chunkRecorder.start(500);
-    await new Promise((r) => window.setTimeout(r, sec * 1000));
-    if (stoppedRef.current) {
-      try {
-        if (chunkRecorder.state !== "inactive") chunkRecorder.stop();
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-
     try {
-      const blob = await stopRecorder(chunkRecorder);
+      const { blob } = await recordStreamToWav(stream, sec * 1000);
+      if (stoppedRef.current) return;
       offsetMsRef.current = offsetMs + sec * 1000;
-      await uploadLiveChunk(blob, offsetMs);
+      if (blob.size < 2000) {
+        setStatusLine("录音中 · 本段几乎无声，已跳过");
+      } else {
+        await uploadLiveChunk(blob, offsetMs, `chunk-${offsetMs}.wav`);
+      }
     } catch (e) {
       setStatusLine(`分片失败：${e instanceof Error ? e.message : String(e)}`);
     }
@@ -451,11 +439,9 @@ export function MeetingLocalRecorder({
     }
   }
 
+  // 仅「已有录音文件/已转写」才显示「重新录音」；勿用 transcriptStatus=recording（开录瞬间服务端会写，但客户端可能已被掐断）
   const hasAudio =
-    !!recordingBytes ||
-    transcriptStatus === "uploaded" ||
-    transcriptStatus === "ready" ||
-    transcriptStatus === "recording";
+    !!recordingBytes || transcriptStatus === "uploaded" || transcriptStatus === "ready";
   const errText = localError || transcriptError;
   const levelPct = Math.round(level * 100);
 

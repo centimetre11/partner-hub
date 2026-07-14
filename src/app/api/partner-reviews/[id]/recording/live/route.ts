@@ -55,10 +55,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const partnerNames = meeting.items.map((it) => it.partner.name);
 
   try {
+    const filename = file.name || "chunk.wav";
+    const mimeType =
+      file.type ||
+      (filename.endsWith(".wav")
+        ? "audio/wav"
+        : filename.endsWith(".webm")
+          ? "audio/webm"
+          : "application/octet-stream");
     const chunkDoc = await transcribeWithAsr({
       audio: buf,
-      filename: file.name || "chunk.webm",
-      mimeType: file.type || "audio/webm",
+      filename,
+      mimeType,
       language: lexicon.language || cfg.language,
       initialPrompt: buildLexiconPrompt({ lexicon, partnerNames }),
       recordingStartedAt: meeting.recordingStartedAt ?? meeting.startedAt,

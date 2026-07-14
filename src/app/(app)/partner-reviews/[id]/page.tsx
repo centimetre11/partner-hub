@@ -74,8 +74,9 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
           </Link>
         </div>
 
+        {/* key 仅用会议 id：切伙伴/开录改 status 时切勿整页重挂，否则会掐断 MediaRecorder */}
         <MeetingWorkspace
-          key={`${meeting.status}-${meeting.prepGeneratedAt?.toISOString() ?? ""}-${meeting.transcriptText?.length ?? 0}-${meeting.items.map((i) => i.status).join(",")}`}
+          key={meeting.id}
           meeting={client}
           asrOptions={{
             realtimeEnabled: asrConfig.realtimeEnabled,
