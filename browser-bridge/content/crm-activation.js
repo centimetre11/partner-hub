@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.13";
+  const SCRIPT_VER = "1.1.14";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -64,9 +64,7 @@
         (await fillTextByLabel("邮箱", emailSnapshot));
       if (!ok) warnings.push("Email 未找到输入框");
     }
-    // 号码：先当普通文本写一次（区号未选时也可能可写；不可写也不妨碍）
-    await fillPhoneLocalLikeText(phoneLocal);
-    await sleep(300);
+    // 号码放到区号选完之后再写（未选区号时框可能拒写）
 
     // ========== 2) 再处理下拉 ==========
     if (fields.region) {
@@ -161,15 +159,18 @@
     await closeOpenDropdowns();
     await sleep(400);
 
-    // ========== 5) 区号后再用「普通文本」方式写号码（关键一步）==========
-    const numOk = await fillPhoneLocalLikeText(phoneLocal);
+    // ========== 5) 区号选完后写号码：按 placeholder 全局定位（不依赖单元格）==========
+    await sleep(500);
+    let numOk = await fillPhoneLocalLikeText(phoneLocal);
     if (!numOk) {
-      // 再试一次：短等后同逻辑
-      await sleep(400);
-      if (!(await fillPhoneLocalLikeText(phoneLocal))) {
-        warnings.push("Phone 号码未写入，请手填");
-      }
+      await sleep(500);
+      numOk = await fillPhoneLocalLikeText(phoneLocal);
     }
+    if (!numOk) {
+      await sleep(400);
+      numOk = await fillPhoneLocalLikeText(phoneLocal);
+    }
+    if (!numOk) warnings.push("Phone 号码未写入，请手填");
 
     await closeOpenDropdowns();
     if (emailSnapshot) await restoreEmailIfNeeded(emailSnapshot);
@@ -523,32 +524,125 @@
     await sleep(200);
   }
 
-  /** 号码：与 Company Name 完全同一套 — focus + setNativeValue */
+  /**
+   * 号码写入：与公司名同属普通文本，但定位必须用 placeholder（「only enter…」），
+   * 不能只靠标签右侧单元格（FineReport 常把区号/号码拆在不同控件里）。
+   */
   async function fillPhoneLocalLikeText(local) {
+    await closeOpenDropdowns();
+    await sleep(100);
+
+    const input = findPhoneNumberInputGlobal();
+    if (!input) return false;
+
+    // 解锁（区号未选时可能 readonly）
+    try {
+      input.removeAttribute("readonly");
+      input.removeAttribute("disabled");
+      input.readOnly = false;
+      input.disabled = false;
+    } catch (_) {}
+
+    input.scrollIntoView({ block: "center", inline: "nearest" });
+    await sleep(80);
+
+    // 鼠标点进号码框（模拟真人，避免焦点还在区号/邮箱）
+    const r = input.getBoundingClientRect();
+    const x = Math.floor(r.left + Math.min(Math.max(r.width * 0.35, 20), r.width - 8));
+    const y = Math.floor(r.top + r.height / 2);
+    input.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    input.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    input.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, clientX: x, clientY: y }));
+    input.focus();
+    await sleep(120);
+
+    // 与公司名相同：原生 value setter + input/change（先不 blur，写完再 blur）
+    setNativeValueNoBlur(input, local);
+    await sleep(150);
+
+    if (String(input.value || "").replace(/\D/g, "").length < 6) {
+      // 同下拉过滤的逐字写入
+      await typeIntoInput(input, local);
+      await sleep(150);
+    }
+
+    if (String(input.value || "").replace(/\D/g, "").length < 6) {
+      try {
+        input.select && input.select();
+        if (document.execCommand) document.execCommand("insertText", false, local);
+      } catch (_) {}
+      await sleep(100);
+    }
+
+    // 最后再 blur + change，对齐公司名收尾
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    try {
+      input.blur && input.blur();
+    } catch (_) {}
+    await sleep(100);
+
+    return String(input.value || "").replace(/\D/g, "").length >= 6;
+  }
+
+  function setNativeValueNoBlur(input, value) {
+    const win = input.ownerDocument.defaultView;
+    const proto =
+      input.tagName === "TEXTAREA"
+        ? win.HTMLTextAreaElement.prototype
+        : win.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+    setter.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new InputEvent("input", { bubbles: true, data: value, inputType: "insertText" }));
+  }
+
+  /** 全局按 placeholder 找号码框（截图像：…only enter the mobile phone num…） */
+  function findPhoneNumberInputGlobal() {
+    const all = queryAll(
+      "input:not([type='hidden']):not([type='radio']):not([type='checkbox']), textarea",
+    ).filter(isVisible);
+
+    // 1) 最稳：placeholder 含 only enter（区号框不会有这句）
+    let el = all.find((i) => /only enter/i.test(i.getAttribute("placeholder") || ""));
+    if (el) return el;
+
+    // 2) mobile phone / 手机号
+    el = all.find((i) => /mobile phone|手机号|only enter the mobile/i.test(i.getAttribute("placeholder") || ""));
+    if (el) return el;
+
+    // 3) 电话标签所在行：取最宽、且不像 +966 的 input
     const labelEl =
       findLabelCell("Contact phone number") ||
       findLabelCell("Phone") ||
       findLabelCell("Mobile") ||
       findLabelCell("电话") ||
       findLabelCell("手机");
-    if (!labelEl) return false;
-    const valueCell = findValueCellFromLabel(labelEl);
-    if (!valueCell) return false;
+    if (labelEl) {
+      const td = labelEl.closest("td, th") || labelEl;
+      const tr = td.closest("tr");
+      const scope = tr || (labelEl.parentElement && labelEl.parentElement.parentElement) || document.body;
+      const rowInputs = [...scope.querySelectorAll(
+        "input:not([type='hidden']):not([type='radio']):not([type='checkbox'])",
+      )].filter(isVisible);
+      const ranked = rowInputs
+        .filter((i) => !looksLikeDialInput(i))
+        .sort((a, b) => b.getBoundingClientRect().width - a.getBoundingClientRect().width);
+      if (ranked[0]) return ranked[0];
+      // 同行最右
+      if (rowInputs.length >= 2) {
+        return rowInputs.slice().sort((a, b) => b.getBoundingClientRect().left - a.getBoundingClientRect().left)[0];
+      }
+    }
 
-    const input = findPhoneNumberInputFresh(valueCell);
-    if (!input) return false;
-
-    // 绝不要写进区号框
-    if (looksLikeDialInput(input)) return false;
-
-    input.focus();
-    setNativeValue(input, local);
-    await sleep(120);
-    const ok = String(input.value || "").replace(/\D/g, "").length >= 6;
-    try {
-      input.blur && input.blur();
-    } catch (_) {}
-    return ok;
+    // 4) 退回 valueCell 旧逻辑
+    if (labelEl) {
+      const valueCell = findValueCellFromLabel(labelEl);
+      if (valueCell) {
+        const fromCell = findPhoneNumberInputFresh(valueCell);
+        if (fromCell && !looksLikeDialInput(fromCell)) return fromCell;
+      }
+    }
+    return null;
   }
 
   /**
@@ -751,9 +845,13 @@
     const r = el.getBoundingClientRect();
     const v = String(el.value || "").trim();
     const ph = (el.getAttribute("placeholder") || "").toLowerCase();
-    if (/area code|mobile|only enter|phone num/.test(ph)) return false;
-    if (r.width < 120 && /^\+?\d{0,4}$/.test(v)) return true;
-    if (/^\+\d{1,4}$/.test(v) && r.width < 160) return true;
+    // 号码框 placeholder 含 only enter / mobile phone
+    if (/only enter|mobile phone|手机号/.test(ph)) return false;
+    // 窄框 + 像区号的值
+    if (r.width < 130 && /^\+?\d{0,4}$/.test(v)) return true;
+    if (/^\+\d{1,4}$/.test(v) && r.width < 160 && !/only enter/.test(ph)) return true;
+    // 无长 placeholder 的窄框，倾向区号
+    if (r.width < 100 && ph.length < 8) return true;
     return false;
   }
 
