@@ -47,6 +47,7 @@ model User {
   reportLocale    String?
   wecomBindCode String? // 企微一键绑定码（6 位，短期有效）
   wecomBindCodeExpiresAt DateTime?
+  partnerReviewMeetings PartnerReviewMeeting[]
 }
 
 model Partner {
@@ -133,6 +134,7 @@ model Partner {
   customers     Customer[] // 遗留：旧的一对多绑定，迁移后改用 customerLinks
   customerLinks CustomerPartner[]
   assets        Asset[]
+  reviewItems   PartnerReviewItem[]
 
   @@index([parentId])
   @@index([isDistributor])
@@ -1074,4 +1076,86 @@ model LeadsSyncLog {
   durationMs Int?
   error      String?
   createdAt  DateTime @default(now())
+}
+
+// 钉钉开放平台凭证（A1 录音 / 钉盘 / 事件回调）
+model SystemDingTalkConfig {
+  id        String   @id @default("singleton")
+  corpId    String?
+  appKey    String
+  appSecret String
+  // 事件订阅加解密（HTTP 回调）
+  token     String?
+  aesKey    String?
+  agentId   String? // 可选：工作通知 / 互动卡片
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+// 开会过伙伴：一场内部评审会
+model PartnerReviewMeeting {
+  id                     String   @id @default(cuid())
+  title                  String
+  // DRAFT | PREP | LIVE | PROCESSING | DONE
+  status                 String   @default("DRAFT")
+  scheduledAt            DateTime?
+  startedAt              DateTime?
+  endedAt                DateTime?
+  createdById            String
+  createdBy              User     @relation(fields: [createdById], references: [id])
+  dingtalkRecordId       String?
+  dingtalkConferenceId   String?
+  dingtalkSpaceId        String?
+  dingtalkFileId         String?
+  transcriptText         String?
+  liveNotes              String? // 会中侧栏记录本（含 <<<PARTNER:id|name>>> 标记）
+  prepGeneratedAt        DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  items                  PartnerReviewItem[]
+
+  @@index([status])
+  @@index([createdById])
+  @@index([dingtalkRecordId])
+}
+
+// 会议中的单个伙伴议程项
+model PartnerReviewItem {
+  id                String   @id @default(cuid())
+  meetingId         String
+  meeting           PartnerReviewMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  partnerId         String
+  partner           Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  sortOrder         Int      @default(0)
+  discussedAt       DateTime?
+  markerInsertedAt  DateTime?
+  prepBrief         String? // JSON：进展 / 待办 / AI 议题
+  coreNotes         String? // 会后确认的核心讨论摘要
+  // PENDING | DISCUSSED | CONFIRMED
+  status            String   @default("PENDING")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  todoDrafts        PartnerReviewTodoDraft[]
+
+  @@unique([meetingId, partnerId])
+  @@index([meetingId, sortOrder])
+  @@index([partnerId])
+}
+
+// 会后待办草案（确认后写入 TodoItem）
+model PartnerReviewTodoDraft {
+  id         String   @id @default(cuid())
+  itemId     String
+  item       PartnerReviewItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  title      String
+  detail     String?
+  assigneeId String?
+  dueDate    DateTime?
+  confirmed  Boolean  @default(false)
+  todoItemId String? // 确认落库后的 TodoItem.id
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([itemId])
 }

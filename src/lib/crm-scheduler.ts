@@ -1,4 +1,4 @@
-import { getCrmLastSyncAt, syncCrmData } from "./crm-sync";
+import { getCrmLastSyncAt, getLatestCrmSyncLog, syncCrmData } from "./crm-sync";
 
 let ticking = false;
 
@@ -6,6 +6,13 @@ function getIntervalMs() {
   const hours = Number(process.env.CRM_SYNC_INTERVAL_HOURS ?? "24");
   if (!Number.isFinite(hours) || hours <= 0) return 24 * 60 * 60 * 1000;
   return hours * 60 * 60 * 1000;
+}
+
+/** After a failed sync (e.g. IP whitelist), wait before retrying instead of every minute. */
+function getFailBackoffMs() {
+  const minutes = Number(process.env.CRM_SYNC_FAIL_BACKOFF_MINUTES ?? "60");
+  if (!Number.isFinite(minutes) || minutes <= 0) return 60 * 60 * 1000;
+  return minutes * 60 * 1000;
 }
 
 export async function crmSchedulerTick() {
@@ -16,6 +23,15 @@ export async function crmSchedulerTick() {
     const lastSync = await getCrmLastSyncAt();
     const due = !lastSync || Date.now() - lastSync.getTime() >= getIntervalMs();
     if (!due) return;
+
+    const latest = await getLatestCrmSyncLog();
+    if (
+      latest?.status === "FAILED" &&
+      Date.now() - latest.createdAt.getTime() < getFailBackoffMs()
+    ) {
+      return;
+    }
+
     await syncCrmData();
   } catch (e) {
     console.error("[crm-scheduler] tick error:", e);

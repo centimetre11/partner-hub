@@ -36,7 +36,8 @@ export type CrmDataRow = {
 
 export type CrmDataResponse = {
   success: boolean;
-  data: CrmDataRow[];
+  data?: CrmDataRow[];
+  error?: string;
 };
 
 export function getCrmDataUrl() {
@@ -50,6 +51,14 @@ function parseCrmDate(raw: string | undefined | null) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function formatCrmDataError(json: CrmDataResponse): string {
+  const detail = json.error?.trim();
+  if (detail) return `CRM data API: ${detail}`;
+  if (!json.success) return "CRM data API returned success=false";
+  if (!Array.isArray(json.data)) return "CRM data API returned invalid payload (data is not an array)";
+  return "CRM data API returned invalid payload";
+}
+
 export async function fetchCrmData(url = getCrmDataUrl()): Promise<CrmDataRow[]> {
   const res = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -58,9 +67,16 @@ export async function fetchCrmData(url = getCrmDataUrl()): Promise<CrmDataRow[]>
   if (!res.ok) {
     throw new Error(`CRM data API HTTP ${res.status}`);
   }
-  const json = (await res.json()) as CrmDataResponse;
+
+  let json: CrmDataResponse;
+  try {
+    json = (await res.json()) as CrmDataResponse;
+  } catch {
+    throw new Error("CRM data API returned non-JSON response");
+  }
+
   if (!json.success || !Array.isArray(json.data)) {
-    throw new Error("CRM data API returned invalid payload");
+    throw new Error(formatCrmDataError(json));
   }
   return json.data;
 }

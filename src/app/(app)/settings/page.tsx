@@ -30,6 +30,8 @@ import { SettingsShell, SettingsSection } from "./settings-shell";
 import { ActivityLogsCard } from "./activity-logs-card";
 import { CollapsibleCard } from "./collapsible-card";
 import { getActivityLogStats } from "@/lib/activity-log";
+import { DingTalkSetup } from "./dingtalk-setup";
+import { getDingTalkConfigForClient } from "@/lib/dingtalk/config";
 
 function maskKey(apiKey: string, notSet: string) {
   if (!apiKey) return notSet;
@@ -48,7 +50,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, salesmen, extraRecorders, feedbackItems, activityStats, sceneModelRows] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, dingtalkConfig, salesmen, extraRecorders, feedbackItems, activityStats, sceneModelRows] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -66,6 +68,7 @@ export default async function SettingsPage() {
     getCrmSyncStats(),
     getAmmoConfigForClient(),
     getEmailConfigForClient(),
+    getDingTalkConfigForClient(),
     getCrmSalesmenAction(),
     getCrmExtraRecordersAction(),
     db.feedbackSubmission.findMany({
@@ -365,6 +368,10 @@ export default async function SettingsPage() {
           </Card>
 
           <WecomChatsCard />
+
+          <Card title={m.settings.dingtalkTitle} className="lg:col-span-2">
+            <DingTalkSetup config={dingtalkConfig} />
+          </Card>
 
           <Card title={m.settings.systemEmailTitle} className="lg:col-span-2">
             <EmailSetup config={emailConfig} />
