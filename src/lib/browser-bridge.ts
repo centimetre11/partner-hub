@@ -98,3 +98,32 @@ export async function composeEmailViaBridge(params: {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+export type CrmActivationBridgeFields = {
+  region: string;
+  country: string;
+  countryAliases: string[];
+  sales: string;
+  companyName: string;
+  partnerType: string;
+  contactName: string;
+  contactTitle: string;
+  email: string;
+  phone: string;
+};
+
+/** 通过扩展打开 CRM 海外激活填报表并预填字段（不代提交）。 */
+export async function fillCrmActivationViaBridge(params: {
+  url: string;
+  fields: CrmActivationBridgeFields;
+}): Promise<ComposeResult> {
+  try {
+    const res = await sendToBridge<ComposeResult>(
+      { type: "fillCrmActivation", url: params.url, fields: params.fields },
+      90_000,
+    );
+    return res ?? { ok: false, error: "no response" };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}

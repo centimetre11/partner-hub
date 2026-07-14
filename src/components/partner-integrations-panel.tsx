@@ -6,6 +6,7 @@ import { useMessages } from "@/lib/i18n/context";
 import { updatePartnerIntegrationsAction } from "@/lib/actions";
 import { CrmCustomerPicker, type CrmCustomerOption } from "@/components/crm-customer-picker";
 import { WecomChatBindSection } from "@/components/wecom-chat-bind-section";
+import { CrmCreateViaBridgeButton } from "@/components/crm-create-via-bridge-button";
 
 type BoundChat = {
   chatId: string;
@@ -60,6 +61,7 @@ export function PartnerIntegrationsPanel({
   }
 
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-slate-400";
+  const bound = Boolean(crmCustomerId);
 
   return (
     <details className="rounded-lg border border-slate-200 bg-white group">
@@ -96,6 +98,7 @@ export function PartnerIntegrationsPanel({
               partnerName={partnerName}
               matchedCustomer={crmCustomer}
             />
+            {!bound && <CrmCreateViaBridgeButton entityType="partner" entityId={partnerId} />}
           </div>
           <button
             type="submit"

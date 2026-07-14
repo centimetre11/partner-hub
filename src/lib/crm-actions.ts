@@ -6,6 +6,10 @@ import { requireSuperAdmin, requireUser } from "./session";
 import { syncCrmData } from "./crm-sync";
 import { getCrmRecorderNames, getCrmExtraRecordersFromSettings, saveCrmExtraRecorders } from "./crm-recorders";
 import { recordSystemEvent } from "./activity-log";
+import {
+  buildCrmActivationPayload,
+  type CrmActivationFields,
+} from "./crm-activation";
 
 export async function triggerCrmSyncAction() {
   const admin = await requireSuperAdmin();
@@ -255,3 +259,83 @@ export async function saveCrmExtraRecordersAction(formData: FormData) {
     message: names.length ? `已保存 ${names.length} 个 CRM 录入人补录` : "已清空 CRM 录入人补录",
   };
 }
+
+export type GetCrmActivationPayloadResult =
+  | { ok: true; url: string; fields: CrmActivationFields }
+  | { ok: false; error: "need_crm_salesman" | "not_found" | "already_bound"; message: string };
+
+/** 为伙伴/客户构造 CRM 海外激活填报表载荷（供 browser-bridge 预填）。 */
+export async function getCrmActivationPayloadAction(
+  entityType: "partner" | "customer",
+  entityId: string,
+): Promise<GetCrmActivationPayloadResult> {
+  const user = await requireUser();
+  const salesman = (user.crmSalesmanName || "").trim();
+  if (!salesman) {
+    return {
+      ok: false,
+      error: "need_crm_salesman",
+      message: "请先在账号页绑定帆软 CRM 销售英文名，再使用「在 CRM 新建」",
+    };
+  }
+
+  if (entityType === "partner") {
+    const partner = await db.partner.findUnique({
+      where: { id: entityId },
+      select: {
+        id: true,
+        name: true,
+        country: true,
+        city: true,
+        crmCustomerId: true,
+        contacts: {
+          select: { name: true, role: true, title: true, contactInfo: true, updatedAt: true },
+          orderBy: { updatedAt: "desc" },
+          take: 20,
+        },
+      },
+    });
+    if (!partner) return { ok: false, error: "not_found", message: "伙伴不存在" };
+    if (partner.crmCustomerId) {
+      return { ok: false, error: "already_bound", message: "已绑定 CRM，无需新建" };
+    }
+    const payload = buildCrmActivationPayload({
+      entityType: "partner",
+      entity: partner,
+      contacts: partner.contacts,
+      salesman,
+    });
+    return { ok: true, ...payload };
+  }
+
+  const customer = await db.customer.findUnique({
+    where: { id: entityId },
+    select: {
+      id: true,
+      name: true,
+      country: true,
+      city: true,
+      contactName: true,
+      contactPhone: true,
+      contactEmail: true,
+      crmCustomerId: true,
+      contacts: {
+        select: { name: true, role: true, title: true, contactInfo: true, updatedAt: true },
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+      },
+    },
+  });
+  if (!customer) return { ok: false, error: "not_found", message: "客户不存在" };
+  if (customer.crmCustomerId) {
+    return { ok: false, error: "already_bound", message: "已绑定 CRM，无需新建" };
+  }
+  const payload = buildCrmActivationPayload({
+    entityType: "customer",
+    entity: customer,
+    contacts: customer.contacts,
+    salesman,
+  });
+  return { ok: true, ...payload };
+}
+

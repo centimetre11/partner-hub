@@ -1,9 +1,10 @@
 // Partner Hub 浏览器操作桥 — Service Worker
-// 接收 Hub 网页（externally_connectable 白名单）的指令并在浏览器中执行。
-// 指令协议：{ type: "ping" } / { type: "composeEmail", to, subject, body, attachments: [{url, filename}] }
-// 协议预留扩展位：openAndFill / click / extract 等后续按需增加。
+// 指令协议：
+//   { type: "ping" }
+//   { type: "composeEmail", to, subject, body, attachments: [{url, filename}] }
+//   { type: "fillCrmActivation", url, fields: { region, country, countryAliases, sales, companyName, partnerType, contactName, contactTitle, email, phone } }
 
-const VERSION = "1.0.6";
+const VERSION = "1.1.0";
 
 const MAIL_TAB_PATTERNS = [
   "https://exmail.qq.com/*",
@@ -30,7 +31,14 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
     handleComposeEmail(message)
       .then((result) => sendResponse(result))
       .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
-    return true; // 异步响应
+    return true;
+  }
+
+  if (message.type === "fillCrmActivation") {
+    handleFillCrmActivation(message)
+      .then((result) => sendResponse(result))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
+    return true;
   }
 
   sendResponse({ ok: false, error: `unknown command: ${message.type}` });
@@ -78,6 +86,55 @@ async function handleComposeEmail(payload) {
   return response || { ok: false, error: "no response from page" };
 }
 
+async function handleFillCrmActivation(payload) {
+  const url = payload.url;
+  const fields = payload.fields || {};
+  if (!url) return { ok: false, error: "missing CRM url" };
+  if (!fields.companyName) return { ok: false, error: "missing companyName" };
+
+  const tab = await chrome.tabs.create({ url });
+  await waitForTabComplete(tab.id, 45000);
+  // FineReport 报表常二次异步渲染，再多等一会
+  await sleep(2500);
+  await chrome.windows.update(tab.windowId, { focused: true });
+  await chrome.tabs.update(tab.id, { active: true });
+
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id, allFrames: true },
+    files: ["content/crm-activation.js"],
+  });
+
+  // allFrames 注入后，向顶层发消息；content script 内部会跨同源 iframe 查找
+  let response;
+  try {
+    response = await chrome.tabs.sendMessage(tab.id, {
+      type: "fillActivation",
+      fields,
+    });
+  } catch (err) {
+    // 部分环境下顶层无 listener（脚本只在 iframe 生效），改为对所有 frame 执行
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
+      func: (fieldsArg) => {
+        if (typeof window.__phBridgeFillActivation === "function") {
+          return window.__phBridgeFillActivation(fieldsArg);
+        }
+        return null;
+      },
+      args: [fields],
+    });
+    response = (results || []).map((r) => r.result).find((r) => r && (r.ok || r.error));
+    if (!response) {
+      return {
+        ok: false,
+        error: `无法与 CRM 页面通信：${err && err.message ? err.message : err}。请确认已登录 CRM 且页面已加载完成。`,
+      };
+    }
+  }
+
+  return response || { ok: false, error: "no response from CRM page" };
+}
+
 async function findOrOpenMailTab() {
   const tabs = await chrome.tabs.query({ url: MAIL_TAB_PATTERNS });
   if (tabs.length > 0) return tabs[0];
@@ -104,6 +161,10 @@ function waitForTabComplete(tabId, timeoutMs) {
       chrome.tabs.onUpdated.addListener(listener);
     });
   });
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function arrayBufferToBase64(buf) {
