@@ -62,7 +62,7 @@ function sendToBridge<T>(message: unknown, timeoutMs: number): Promise<T> {
 export type BridgeStatus = {
   available: boolean;
   version: string | null;
-  /** CRM 新建填表需要扩展 ≥ 1.1.0 */
+  /** CRM 新建填表需要扩展 ≥ 1.1.1（含 Products / Current demand） */
   supportsCrmActivation: boolean;
 };
 
@@ -100,7 +100,7 @@ export async function getBridgeStatus(): Promise<BridgeStatus> {
     return {
       available,
       version,
-      supportsCrmActivation: versionGte(version, "1.1.0"),
+      supportsCrmActivation: versionGte(version, "1.1.1"),
     };
   } catch {
     return { available: false, version: null, supportsCrmActivation: false };
@@ -146,6 +146,8 @@ export type CrmActivationBridgeFields = {
   partnerType: string;
   contactName: string;
   contactTitle: string;
+  productsOfInterest?: string;
+  currentDemand?: string;
   email: string;
   phone: string;
 };

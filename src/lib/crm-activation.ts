@@ -6,6 +6,11 @@ export const CRM_ACTIVATION_URL =
 export const CRM_ACTIVATION_REGION = "中东-ME";
 export const CRM_ACTIVATION_PARTNER_TYPE = "经销商伙伴（Reseller）";
 export const CRM_ACTIVATION_CONTACT_TITLE = "IT Manager / Engineer";
+/** Products of interest 勾选第一项 */
+export const CRM_ACTIVATION_PRODUCT = "FineReport";
+/** Current demand 单选第一项 */
+export const CRM_ACTIVATION_CURRENT_DEMAND =
+  "Enterprise demands - quickly build BI/ Reporting or other systems";
 export const CRM_ACTIVATION_FAKE_PHONE = "+971500000000";
 
 /** 中东常用国家别名 → 用于匹配 CRM 下拉选项全文 */
@@ -69,6 +74,10 @@ export type CrmActivationFields = {
   partnerType: string;
   contactName: string;
   contactTitle: string;
+  /** 感兴趣产品（多选，默认 FineReport） */
+  productsOfInterest: string;
+  /** 当前需求（单选） */
+  currentDemand: string;
   email: string;
   phone: string;
 };
@@ -169,7 +178,7 @@ export function buildCrmActivationFields(input: {
     }
   }
 
-  if (!contactName) contactName = entity.name;
+  if (!contactName) contactName = fakeContactNameForEntity(entity.id);
   if (!email) email = fakeEmailForEntity(entity.id);
   if (!phone) phone = CRM_ACTIVATION_FAKE_PHONE;
 
@@ -182,6 +191,8 @@ export function buildCrmActivationFields(input: {
     partnerType: entityType === "partner" ? CRM_ACTIVATION_PARTNER_TYPE : "",
     contactName,
     contactTitle: CRM_ACTIVATION_CONTACT_TITLE,
+    productsOfInterest: CRM_ACTIVATION_PRODUCT,
+    currentDemand: CRM_ACTIVATION_CURRENT_DEMAND,
     email,
     phone,
   };

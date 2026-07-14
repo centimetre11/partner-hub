@@ -81,7 +81,21 @@
       if (!ok) warnings.push(`Contact Title「${fields.contactTitle}」未选中，请手选`);
     }
 
-    // 8. Email / Phone — 标签可能是 Email / E-mail / Phone / Mobile
+    // 8. Products of interest — 勾选第一项 FineReport
+    if (fields.productsOfInterest) {
+      const ok =
+        (await fillCheckboxByLabel("Products of interest", fields.productsOfInterest)) ||
+        (await fillCheckboxByLabel("Product of interest", fields.productsOfInterest));
+      if (!ok) warnings.push(`Products of interest「${fields.productsOfInterest}」未勾选，请手选`);
+    }
+
+    // 9. Current demand — 单选第一项
+    if (fields.currentDemand) {
+      const ok = await fillRadioByLabel("Current demand", fields.currentDemand);
+      if (!ok) warnings.push("Current demand 未选中，请手选");
+    }
+
+    // 10. Email / Phone — 标签可能是 Email / E-mail / Phone / Mobile
     if (fields.email) {
       const ok =
         (await fillTextByLabel("Email", fields.email)) ||
@@ -375,10 +389,10 @@
 
   async function fillRadioByLabel(label, optionText) {
     const labelEl = findLabelCell(label);
-    // Contact Title 区域可能很大，在整页找 radio + 文案
     const target = normalizeLabel(optionText);
+    // 长文案用前缀匹配（Current demand 等）
+    const targetPrefix = target.slice(0, 40);
 
-    // 优先在标签所在行/后续区域找
     let scope = document;
     if (labelEl) {
       const valueCell = findValueCellFromLabel(labelEl);
@@ -402,7 +416,8 @@
         const parent = radio.parentElement;
         text = (parent && parent.textContent) || "";
       }
-      if (normalizeLabel(text).includes(target) || normalizeLabel(text) === target) {
+      const nt = normalizeLabel(text);
+      if (nt === target || nt.includes(target) || (targetPrefix.length >= 12 && nt.includes(targetPrefix))) {
         radio.click();
         radio.checked = true;
         radio.dispatchEvent(new Event("change", { bubbles: true }));
@@ -410,22 +425,70 @@
       }
     }
 
-    // 无 native radio：点带文案的可点击元素
-    const clickables = [
-      ...scope.querySelectorAll("label, span, div, td, li"),
-    ].filter(isVisible);
+    const clickables = [...scope.querySelectorAll("label, span, div, td, li")].filter(isVisible);
     for (const el of clickables) {
       const t = normalizeLabel(el.textContent);
-      if (t === target || (t.includes(target) && (el.textContent || "").trim().length < 80)) {
+      const rawLen = (el.textContent || "").trim().length;
+      if (t === target || (t.includes(targetPrefix) && rawLen < 220)) {
         el.click();
         return true;
       }
     }
 
-    // 全局再试一次（第一项）
     const global = queryAll("label, span, div").filter(isVisible);
     for (const el of global) {
-      if (normalizeLabel(el.textContent) === target) {
+      const t = normalizeLabel(el.textContent);
+      if (t === target || (targetPrefix.length >= 12 && t.startsWith(targetPrefix))) {
+        el.click();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function fillCheckboxByLabel(label, optionText) {
+    const labelEl = findLabelCell(label);
+    const target = normalizeLabel(optionText);
+
+    let scope = document;
+    if (labelEl) {
+      const valueCell = findValueCellFromLabel(labelEl);
+      if (valueCell) scope = valueCell;
+      else {
+        const tr = labelEl.closest("tr");
+        if (tr && tr.parentElement) scope = tr.parentElement;
+      }
+    }
+
+    const boxes = [...scope.querySelectorAll('input[type="checkbox"]')].filter(isVisible);
+    for (const box of boxes) {
+      const id = box.id;
+      let text = "";
+      if (id) {
+        const safeId = String(id).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        const lab = box.ownerDocument.querySelector(`label[for="${safeId}"]`);
+        if (lab) text = lab.textContent || "";
+      }
+      if (!text) {
+        const parent = box.parentElement;
+        text = (parent && parent.textContent) || "";
+      }
+      const nt = normalizeLabel(text);
+      if (nt === target || nt.includes(target) || target.includes(nt)) {
+        if (!box.checked) {
+          box.click();
+          box.checked = true;
+          box.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        return true;
+      }
+    }
+
+    const clickables = [...scope.querySelectorAll("label, span, div, td, li")].filter(isVisible);
+    for (const el of clickables) {
+      const t = normalizeLabel(el.textContent);
+      const raw = (el.textContent || "").trim();
+      if (t === target || (raw.length < 40 && t.includes(target))) {
         el.click();
         return true;
       }
