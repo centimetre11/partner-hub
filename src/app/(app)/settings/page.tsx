@@ -30,6 +30,8 @@ import { CollapsibleCard } from "./collapsible-card";
 import { getActivityLogStats } from "@/lib/activity-log";
 import { DingTalkSetup } from "./dingtalk-setup";
 import { getDingTalkConfigForClient } from "@/lib/dingtalk/config";
+import { WeeklyReportSetup } from "./weekly-report-setup";
+import { getWeeklyReportStatusAction } from "@/lib/weekly-report-actions";
 
 function maskKey(apiKey: string, notSet: string) {
   if (!apiKey) return notSet;
@@ -165,6 +167,9 @@ export default async function SettingsPage() {
       const caps = detectedById.get(api.id) ?? { webSearch: false, vision: false };
       return { id: api.id, name: api.name, model: api.model, webSearch: caps.webSearch, vision: caps.vision };
     });
+
+  const weeklyReportStatus = await getWeeklyReportStatusAction();
+  const weeklyReportMembers = users.map((u) => ({ id: u.id, name: u.name, email: u.email }));
 
   const aiConfigured = aiApis.some((api) => api.enabled) || !!process.env.AI_API_KEY;
   const todayTokens = todayUsageEarly.reduce((sum, row) => sum + row.totalTokens, 0);
@@ -370,6 +375,10 @@ export default async function SettingsPage() {
 
           <Card title={m.settings.systemEmailTitle} className="lg:col-span-2">
             <EmailSetup config={emailConfig} />
+          </Card>
+
+          <Card title={m.settings.weeklyReportTitle} className="lg:col-span-2">
+            <WeeklyReportSetup status={weeklyReportStatus} members={weeklyReportMembers} />
           </Card>
         </SettingsSection>
       </SettingsShell>

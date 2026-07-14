@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
 import { OpsCenterNav } from "@/components/ops-center-nav";
-import { MeetingWorkspace, toMeetingClient } from "./meeting-workspace";
+import { toMeetingClient } from "@/lib/partner-review/meeting-client";
+import { MeetingWorkspace } from "./meeting-workspace";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
   DRAFT: { label: "草稿", tone: "zinc" },

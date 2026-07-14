@@ -20,9 +20,9 @@ function sourceTone(source: string): "green" | "amber" | "zinc" {
 }
 
 function buildHref(opts: { id?: string | null }) {
+  if (!opts.id) return "/ops/weekly-report";
   const params = new URLSearchParams();
-  params.set("tab", "history");
-  if (opts.id) params.set("id", opts.id);
+  params.set("id", opts.id);
   return `/ops/weekly-report?${params.toString()}`;
 }
 
