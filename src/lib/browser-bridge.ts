@@ -155,6 +155,9 @@ export type CrmActivationBridgeFields = {
   phoneLocal?: string;
 };
 
+/** CRM 填表含多个下拉等待，需比企业邮更长的超时（避免 Hub 超时后再开第二页）。 */
+export const CRM_ACTIVATION_BRIDGE_TIMEOUT_MS = 180_000;
+
 /** 通过扩展打开 CRM 海外激活填报表并预填字段（不代提交）。 */
 export async function fillCrmActivationViaBridge(params: {
   url: string;
@@ -163,7 +166,7 @@ export async function fillCrmActivationViaBridge(params: {
   try {
     const res = await sendToBridge<ComposeResult>(
       { type: "fillCrmActivation", url: params.url, fields: params.fields },
-      90_000,
+      CRM_ACTIVATION_BRIDGE_TIMEOUT_MS,
     );
     return res ?? { ok: false, error: "no response" };
   } catch (err) {

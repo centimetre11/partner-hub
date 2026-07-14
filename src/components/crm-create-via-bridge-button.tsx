@@ -57,11 +57,11 @@ export function CrmCreateViaBridgeButton({
         } else if (result.ok) {
           setNotice({ kind: "ok", text: intg.crmCreateDone });
         } else {
-          // 扩展调用失败时仍打开空白填报表，避免「完全没反应」
-          window.open(payload.url, "_blank", "noopener,noreferrer");
+          // 扩展一调用就会 chrome.tabs.create 打开填报表，此处绝不能再 window.open，
+          // 否则超时/通信失败时会出现第二个空白「添加客户」页。
           setNotice({
             kind: "warn",
-            text: `${intg.crmCreateOpenedManual}（${result.error || intg.crmCreateFailed}）`,
+            text: `${intg.crmCreateOpenedManual}（${result.error || intg.crmCreateFailed}）请查看已打开的 CRM 标签页`,
           });
         }
         return;
