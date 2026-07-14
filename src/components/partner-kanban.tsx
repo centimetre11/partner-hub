@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -156,6 +155,8 @@ function CardPreview({ card, copy, className = "" }: { card: KanbanPartnerCard; 
 }
 
 function PartnerKanbanCard({ card, copy }: { card: KanbanPartnerCard; copy: Copy }) {
+  const router = useRouter();
+  const didDrag = useRef(false);
   const { attributes, listeners, setNodeRef: setDragRef, transform, isDragging } = useDraggable({
     id: card.id,
     data: { stage: card.pipelineStage, type: "partner" },
@@ -173,27 +174,39 @@ function PartnerKanbanCard({ card, copy }: { card: KanbanPartnerCard; copy: Copy
     [setDragRef, setDropRef],
   );
 
+  useEffect(() => {
+    if (isDragging) didDrag.current = true;
+  }, [isDragging]);
+
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border border-slate-200/80 bg-white shadow-sm p-3 touch-none cursor-grab active:cursor-grabbing ${
-        isDragging ? "opacity-30" : "hover:border-slate-300"
+      className={`rounded-lg border border-slate-200/80 bg-white shadow-sm p-3 touch-none cursor-pointer hover:border-slate-300 ${
+        isDragging ? "opacity-30 cursor-grabbing" : ""
       }`}
       {...listeners}
       {...attributes}
+      role="link"
+      tabIndex={0}
+      onClick={() => {
+        if (didDrag.current) {
+          didDrag.current = false;
+          return;
+        }
+        router.push(`/partners/${card.id}`);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/partners/${card.id}`);
+        }
+      }}
     >
       <div className="flex items-start justify-between gap-2">
-        <Link
-          href={`/partners/${card.id}`}
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="font-semibold text-sm text-slate-900 hover:text-sky-700 min-w-0 break-words"
-        >
-          {card.name}
-        </Link>
+        <span className="font-semibold text-sm text-slate-900 min-w-0 break-words">{card.name}</span>
         <div className="flex items-center gap-1 shrink-0">
           <TierBadge tier={card.tier} />
           {card.staleDays > 30 && (

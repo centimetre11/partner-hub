@@ -1,5 +1,5 @@
 import { NavLink } from "@/components/nav-link";
-import Link from "next/link";
+import { ClickableRow } from "@/components/clickable-nav";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
@@ -126,11 +126,9 @@ export default async function CustomersPage({
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {customers.map((cust) => (
-                    <tr key={cust.id} className="hover:bg-slate-50/60">
+                    <ClickableRow key={cust.id} href={`/customers/${cust.id}`} className="hover:bg-slate-50/60">
                       <td className="px-4 py-3">
-                        <NavLink href={`/customers/${cust.id}`} className="font-medium text-slate-900 hover:text-sky-700">
-                          {cust.name}
-                        </NavLink>
+                        <span className="font-medium text-slate-900">{cust.name}</span>
                         <div className="text-[11px] text-slate-400 mt-0.5">{c.createdAt} {fmtDate(cust.createdAt, bcp47)}</div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{cust.industry ?? "—"}</td>
@@ -162,7 +160,7 @@ export default async function CustomersPage({
                       <td className="px-4 py-3 text-slate-600">{cust.owner?.name ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">{cust.presalesUser?.name ?? "—"}</td>
                       <td className="px-4 py-3"><Badge tone={statusTone(cust.status)}>{statusLabel(cust.status)}</Badge></td>
-                    </tr>
+                    </ClickableRow>
                   ))}
                 </tbody>
               </table>

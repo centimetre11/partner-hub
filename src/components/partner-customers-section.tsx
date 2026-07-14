@@ -1,4 +1,4 @@
-import { NavLink } from "@/components/nav-link";
+import { ClickableCard } from "@/components/clickable-nav";
 import Link from "next/link";
 import { Badge, Card, EmptyState } from "@/components/ui";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
@@ -70,10 +70,14 @@ export function PartnerCustomersSection({
 
       <div className="space-y-2">
         {endCustomers.map((cust) => (
-          <div key={cust.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2.5 hover:border-slate-200">
+          <ClickableCard
+            key={cust.id}
+            href={`/customers/${cust.id}`}
+            className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2.5 hover:border-slate-200"
+          >
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <NavLink href={`/customers/${cust.id}`} className="font-medium text-slate-900 hover:text-sky-700">{cust.name}</NavLink>
+                <span className="font-medium text-slate-900">{cust.name}</span>
                 <Badge tone={statusTone(cust.status)}>{statusLabels[cust.status] ?? cust.status}</Badge>
               </div>
               <div className="text-xs text-slate-400 mt-0.5">
@@ -81,12 +85,12 @@ export function PartnerCustomersSection({
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              <NavLink href={`/customers/${cust.id}`} className="text-xs text-sky-600 hover:underline">{copy.viewDetail}</NavLink>
-              <form action={unbindCustomerFromPartnerAction.bind(null, partnerId, cust.id)}>
-                <button className="text-xs text-slate-400 hover:text-red-600">{copy.unbind}</button>
+              <span className="text-xs text-sky-600">{copy.viewDetail}</span>
+              <form action={unbindCustomerFromPartnerAction.bind(null, partnerId, cust.id)} data-no-nav>
+                <button type="submit" className="text-xs text-slate-400 hover:text-red-600">{copy.unbind}</button>
               </form>
             </div>
-          </div>
+          </ClickableCard>
         ))}
         {endCustomers.length === 0 && <EmptyState text={copy.empty} />}
       </div>
