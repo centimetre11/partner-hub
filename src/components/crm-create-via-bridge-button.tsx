@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMessages } from "@/lib/i18n/context";
 import { getCrmActivationPayloadAction } from "@/lib/crm-actions";
-import { fillCrmActivationViaBridge, isBridgeAvailable } from "@/lib/browser-bridge";
+import { fillCrmActivationViaBridge, getBridgeStatus } from "@/lib/browser-bridge";
 
 export function CrmCreateViaBridgeButton({
   entityType,
@@ -15,13 +15,16 @@ export function CrmCreateViaBridgeButton({
 }) {
   const intg = useMessages().integrations;
   const [bridgeReady, setBridgeReady] = useState(false);
+  const [bridgeSupportsCrm, setBridgeSupportsCrm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    isBridgeAvailable().then((ok) => {
-      if (!cancelled) setBridgeReady(ok);
+    getBridgeStatus().then((s) => {
+      if (cancelled) return;
+      setBridgeReady(s.available);
+      setBridgeSupportsCrm(s.supportsCrmActivation);
     });
     return () => {
       cancelled = true;
@@ -33,10 +36,10 @@ export function CrmCreateViaBridgeButton({
     setLoading(true);
     setNotice(null);
     try {
-      if (!bridgeReady) {
-        setNotice({ kind: "error", text: intg.crmCreateNeedBridge });
-        return;
-      }
+      // 每次点击重新探测扩展（避免页面开久了状态过期）
+      const status = await getBridgeStatus();
+      setBridgeReady(status.available);
+      setBridgeSupportsCrm(status.supportsCrmActivation);
 
       const payload = await getCrmActivationPayloadAction(entityType, entityId);
       if (!payload.ok) {
@@ -44,17 +47,35 @@ export function CrmCreateViaBridgeButton({
         return;
       }
 
-      const result = await fillCrmActivationViaBridge({
-        url: payload.url,
-        fields: payload.fields,
-      });
+      if (status.supportsCrmActivation) {
+        const result = await fillCrmActivationViaBridge({
+          url: payload.url,
+          fields: payload.fields,
+        });
+        if (result.ok && result.warning) {
+          setNotice({ kind: "warn", text: `${intg.crmCreateDone} ${result.warning}` });
+        } else if (result.ok) {
+          setNotice({ kind: "ok", text: intg.crmCreateDone });
+        } else {
+          // 扩展调用失败时仍打开空白填报表，避免「完全没反应」
+          window.open(payload.url, "_blank", "noopener,noreferrer");
+          setNotice({
+            kind: "warn",
+            text: `${intg.crmCreateOpenedManual}（${result.error || intg.crmCreateFailed}）`,
+          });
+        }
+        return;
+      }
 
-      if (result.ok && result.warning) {
-        setNotice({ kind: "warn", text: `${intg.crmCreateDone} ${result.warning}` });
-      } else if (result.ok) {
-        setNotice({ kind: "ok", text: intg.crmCreateDone });
+      // 无扩展或版本过旧：至少打开 CRM 填报表，并提示安装/升级
+      window.open(payload.url, "_blank", "noopener,noreferrer");
+      if (!status.available) {
+        setNotice({ kind: "warn", text: intg.crmCreateOpenedNeedBridge });
       } else {
-        setNotice({ kind: "error", text: result.error || intg.crmCreateFailed });
+        setNotice({
+          kind: "warn",
+          text: intg.crmCreateOpenedNeedUpgrade.replace("{version}", status.version || "?"),
+        });
       }
     } catch (err) {
       setNotice({
@@ -77,13 +98,13 @@ export function CrmCreateViaBridgeButton({
         >
           {loading ? intg.crmCreateLoading : intg.crmCreateInCrm}
         </button>
-        {!bridgeReady && (
+        {(!bridgeReady || !bridgeSupportsCrm) && (
           <a
             href="/downloads/browser-bridge.zip"
             download
             className="text-xs text-sky-600 hover:underline"
           >
-            {intg.crmCreateInstallBridge}
+            {bridgeReady ? intg.crmCreateUpgradeBridge : intg.crmCreateInstallBridge}
           </a>
         )}
         <Link href="/account" className="text-xs text-slate-500 hover:underline">
@@ -95,10 +116,10 @@ export function CrmCreateViaBridgeButton({
         <p
           className={
             notice.kind === "ok"
-              ? "text-xs text-emerald-600"
+              ? "rounded-md bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700"
               : notice.kind === "warn"
-                ? "text-xs text-amber-600"
-                : "text-xs text-red-600"
+                ? "rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800"
+                : "rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700"
           }
         >
           {notice.text}

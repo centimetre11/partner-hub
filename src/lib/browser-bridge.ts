@@ -59,13 +59,51 @@ function sendToBridge<T>(message: unknown, timeoutMs: number): Promise<T> {
   });
 }
 
+export type BridgeStatus = {
+  available: boolean;
+  version: string | null;
+  /** CRM 新建填表需要扩展 ≥ 1.1.0 */
+  supportsCrmActivation: boolean;
+};
+
+function parseVersionParts(v: string | null | undefined): number[] {
+  if (!v) return [];
+  return v.split(".").map((p) => Number.parseInt(p, 10) || 0);
+}
+
+function versionGte(version: string | null, min: string): boolean {
+  if (!version) return false;
+  const a = parseVersionParts(version);
+  const b = parseVersionParts(min);
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return true;
+}
+
 /** 检测浏览器助手扩展是否已安装（1.5s 超时视为未安装）。 */
 export async function isBridgeAvailable(): Promise<boolean> {
+  const s = await getBridgeStatus();
+  return s.available;
+}
+
+/** 检测扩展安装状态与版本能力。 */
+export async function getBridgeStatus(): Promise<BridgeStatus> {
   try {
-    const res = await sendToBridge<{ ok?: boolean }>({ type: "ping" }, 1500);
-    return Boolean(res?.ok);
+    const res = await sendToBridge<{ ok?: boolean; version?: string }>({ type: "ping" }, 1500);
+    const available = Boolean(res?.ok);
+    const version = available && res?.version ? String(res.version) : null;
+    return {
+      available,
+      version,
+      supportsCrmActivation: versionGte(version, "1.1.0"),
+    };
   } catch {
-    return false;
+    return { available: false, version: null, supportsCrmActivation: false };
   }
 }
 
