@@ -116,6 +116,22 @@ export function fakeContactNameForEntity(entityId: string): string {
   return `Auto Contact ${short}`;
 }
 
+/** 给 FineReport 下拉输入过滤用的短关键词：优先中文，其次短码 */
+export function pickDropdownTypeQuery(aliases: string[]): string {
+  const list = aliases.map((a) => String(a || "").trim()).filter(Boolean);
+  if (!list.length) return "";
+  const withCn = list.filter((a) => /[\u4e00-\u9fff]/.test(a));
+  if (withCn.length) {
+    const best = withCn.sort((a, b) => a.length - b.length)[0];
+    if (best.includes("沙特")) return "沙特";
+    if (best.includes("阿联酋") || best.includes("迪拜")) return "阿联酋";
+    if (best.length > 6) return best.slice(0, 4);
+    return best;
+  }
+  const short = list.find((a) => a.length <= 4);
+  return short || list[0];
+}
+
 /** 从 Hub country/city 文本展开为 CRM 下拉匹配别名 */
 export function buildCountryAliases(country?: string | null, city?: string | null): string[] {
   const raw = [country, city].filter(Boolean).join(" / ");
@@ -212,7 +228,8 @@ export function buildCrmActivationFields(input: {
     country: (entity.country || countryAliases[0] || "").trim(),
     countryAliases,
     sales: salesName,
-    preSales: salesName,
+    /** 售前先不自动填，避免干扰其它下拉 */
+    preSales: "",
     companyName: entity.name.trim(),
     partnerType: entityType === "partner" ? CRM_ACTIVATION_PARTNER_TYPE : "",
     contactName,
