@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.4";
+  const SCRIPT_VER = "1.1.5";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -494,8 +494,8 @@
   }
 
   /**
-   * 电话：左侧区号下拉随便选第一项，右侧填编造本地号码。
-   * 不调用整行 fillDropdownByLabel，避免卡死。
+   * 电话：左侧窄框=区号（只点下拉选第一项，绝不输入长号码）；
+   * 右侧宽框=手机号（只写入本地号码）。
    */
   async function fillPhoneFields(fields) {
     const local =
@@ -515,47 +515,89 @@
     await closeOpenDropdowns();
     await sleep(200);
 
-    const inputs = [...valueCell.querySelectorAll("input:not([type='hidden']):not([type='radio']):not([type='checkbox'])")].filter(
-      isVisible,
-    );
+    let { dialInput, numInput } = resolvePhoneInputs(valueCell);
 
-    let numInput =
-      inputs.find((el) => /area code|mobile|phone|号码|手机/i.test(el.getAttribute("placeholder") || "")) ||
-      (inputs.length >= 2 ? inputs[inputs.length - 1] : null);
-    let dialInput =
-      inputs.length >= 2
-        ? inputs.find((el) => el !== numInput) || inputs[0]
-        : inputs.find((el) => {
-            const r = el.getBoundingClientRect();
-            return r.width > 0 && r.width < 120;
-          }) || null;
-
-    if (!numInput && inputs.length === 1) {
-      setNativeValue(inputs[0], `${fields.phoneDialCode || "+966"}${local}`);
-      await sleep(200);
-      return true;
-    }
-
+    // 1) 区号：只点箭头 + 选第一项，绝不往区号框敲长数字
     const dialOk = await pickFirstDialCode(valueCell, dialInput);
     await closeOpenDropdowns();
-    await sleep(300);
+    await sleep(350);
 
+    // 选完区号后 DOM 可能重建，重新定位
+    ({ dialInput, numInput } = resolvePhoneInputs(valueCell));
+
+    // 若区号框里被误填了长号码，清掉
+    if (dialInput) {
+      const dv = String(dialInput.value || "").replace(/\s/g, "");
+      if (/\d{6,}/.test(dv)) {
+        setNativeValue(dialInput, "");
+      }
+    }
+
+    // 2) 号码：只写入右侧宽输入框
     if (!numInput) {
-      numInput =
-        [...valueCell.querySelectorAll("input:not([type='hidden'])")].filter(isVisible).pop() || null;
+      // 只有区号没有号码框时，不把号码塞进区号
+      return dialOk;
     }
-    if (numInput) {
-      numInput.focus();
-      await sleep(100);
-      setNativeValue(numInput, local);
-      numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
-      await sleep(250);
-      return dialOk || Boolean((numInput.value || "").trim());
+
+    // 确保不是同一个节点
+    if (dialInput && numInput === dialInput) {
+      const inputs = listPhoneInputs(valueCell);
+      numInput = inputs.length >= 2 ? inputs[inputs.length - 1] : null;
+      dialInput = inputs.length >= 2 ? inputs[0] : dialInput;
     }
-    return dialOk;
+    if (!numInput || (dialInput && numInput === dialInput)) {
+      return dialOk;
+    }
+
+    numInput.blur && numInput.blur();
+    await sleep(80);
+    numInput.focus();
+    await sleep(120);
+    setNativeValue(numInput, local);
+    numInput.dispatchEvent(new InputEvent("input", { bubbles: true, data: local, inputType: "insertText" }));
+    numInput.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(250);
+
+    // 再检查：号码不应出现在区号框
+    if (dialInput) {
+      const dv = String(dialInput.value || "").replace(/\s/g, "");
+      if (dv.includes(local) || /\d{6,}/.test(dv)) {
+        setNativeValue(dialInput, dv.replace(local, "").replace(/\d{6,}/g, "") || "+966");
+      }
+    }
+
+    return Boolean((numInput.value || "").trim()) || dialOk;
+  }
+
+  function listPhoneInputs(valueCell) {
+    return [...valueCell.querySelectorAll("input:not([type='hidden']):not([type='radio']):not([type='checkbox'])")].filter(isVisible);
+  }
+
+  /** 按位置/宽度区分：左边窄=区号，右边宽=号码 */
+  function resolvePhoneInputs(valueCell) {
+    const inputs = listPhoneInputs(valueCell);
+    if (!inputs.length) return { dialInput: null, numInput: null };
+
+    if (inputs.length === 1) {
+      const el = inputs[0];
+      const r = el.getBoundingClientRect();
+      const ph = (el.getAttribute("placeholder") || "").toLowerCase();
+      // 宽框或带「只填手机号」提示 → 号码；窄框 → 区号
+      if (r.width >= 140 || /mobile|only enter|手机号|号码/.test(ph)) {
+        return { dialInput: null, numInput: el };
+      }
+      if (r.width < 140) return { dialInput: el, numInput: null };
+      return { dialInput: null, numInput: el };
+    }
+
+    const byLeft = inputs.slice().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+    const dialInput = byLeft[0];
+    const numInput = byLeft[byLeft.length - 1];
+    return { dialInput, numInput };
   }
 
   async function pickFirstDialCode(valueCell, dialInput) {
+    // 只点左侧区号旁的小箭头，不要 typeIntoInput
     const arrowCandidates = [...valueCell.querySelectorAll("button, .fr-trigger-btn-up, .fr-trigger-btn-down, .fr-trigger-center, div[class*='trigger'], span")].filter(
       (el) => {
         if (!isVisible(el)) return false;
@@ -563,24 +605,35 @@
         return r.width >= 8 && r.width <= 40 && r.height >= 8 && r.height <= 40;
       },
     );
-    let arrow = arrowCandidates[0] || null;
+
+    let arrow = null;
     if (dialInput && arrowCandidates.length) {
       const dr = dialInput.getBoundingClientRect();
-      arrow =
-        arrowCandidates
-          .map((el) => ({ el, d: Math.abs(el.getBoundingClientRect().left - dr.right) }))
-          .sort((a, b) => a.d - b.d)[0]?.el || arrow;
+      arrow = arrowCandidates
+        .map((el) => {
+          const er = el.getBoundingClientRect();
+          // 紧挨区号框右侧的箭头
+          return { el, score: Math.abs(er.left - dr.right) + Math.abs(er.top - dr.top) };
+        })
+        .sort((a, b) => a.score - b.score)[0]?.el;
+    }
+    if (!arrow && arrowCandidates.length) {
+      // 取最靠左的小箭头（区号在左侧）
+      arrow = arrowCandidates.slice().sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)[0];
     }
 
-    if (dialInput) {
-      dialInput.focus();
-      dialInput.click();
-      await sleep(200);
-    }
+    // 打开下拉：优先点箭头；不要往区号框输入任何长文本
     if (arrow) {
       arrow.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      arrow.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
       arrow.click();
-      await sleep(450);
+      await sleep(500);
+    } else if (dialInput) {
+      dialInput.focus();
+      dialInput.click();
+      await sleep(400);
+    } else {
+      return false;
     }
 
     let items = [];
@@ -588,20 +641,22 @@
     while (Date.now() - start < 2500) {
       items = findVisibleDropdownItems().filter((el) => {
         const t = (el.textContent || "").trim();
-        return t.length > 0 && t.length < 40 && (/^\+?\d/.test(t) || /\+\d/.test(t) || /^\d{1,4}$/.test(t));
+        return t.length > 0 && t.length < 40 && (/^\+?\d/.test(t) || /\+\d/.test(t));
       });
       if (items.length) break;
       items = findVisibleDropdownItems().filter((el) => {
         const t = (el.textContent || "").trim();
-        return t.length > 0 && t.length < 30;
+        return t.length > 0 && t.length < 24;
       });
       if (items.length) break;
       await sleep(200);
     }
 
     if (!items.length) {
+      // 仅在完全点不出列表时，往区号框写短区号（绝不是本地手机号）
       if (dialInput) {
         setNativeValue(dialInput, "+966");
+        dialInput.dispatchEvent(new Event("change", { bubbles: true }));
         return true;
       }
       return false;
@@ -612,12 +667,15 @@
     target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
     target.click();
-    await sleep(350);
+    await sleep(400);
 
     if (findVisibleDropdownItems().length > 0) {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, keyCode: 13 }));
       await sleep(200);
     }
+    // 关掉列表，避免焦点留在区号
+    await closeOpenDropdowns();
+    if (dialInput && dialInput.blur) dialInput.blur();
     return true;
   }
 
