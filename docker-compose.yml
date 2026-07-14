@@ -26,11 +26,13 @@ services:
     restart: unless-stopped
     environment:
       - ASR_ENGINE=faster_whisper
-      # CPU 建议 medium/small；有 GPU 可改 large-v3
-      - ASR_MODEL=medium
+      # 8GB 机器用 small；内存 ≥16GB 可改 medium；有 GPU 可改 large-v3
+      - ASR_MODEL=${ASR_MODEL:-small}
       - ASR_MODEL_PATH=/root/.cache/whisper
     volumes:
       - whisper-cache:/root/.cache/whisper
+    # 避免把主站内存打满；识别时再吃满限额
+    mem_limit: 3g
     # GPU 示例（需 NVIDIA Container Toolkit）:
     # image: onerahmet/openai-whisper-asr-webservice:latest-gpu
     # environment ASR_MODEL=large-v3
@@ -45,6 +47,8 @@ services:
       - "9000:9000"
     networks:
       - default
+    profiles:
+      - asr
 
   partner-hub:
     build: .
