@@ -773,6 +773,7 @@ export const messagesEn = {
     colFollowUp: "Follow-up",
     followUp: "Follow-up",
     nextProcessPrefix: "Next: ",
+    notesPlaceholder: "Notes / other info (optional)",
   },
   opportunityProcess: {
     DISCOVERY: "Discovery / Requirements",

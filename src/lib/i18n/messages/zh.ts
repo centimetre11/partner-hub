@@ -773,6 +773,7 @@ export const messagesZh: Messages = {
     colFollowUp: "跟进日",
     followUp: "跟进",
     nextProcessPrefix: "下一步：",
+    notesPlaceholder: "备注 / 其他信息（可选）",
   },
   opportunityProcess: {
     DISCOVERY: "客户调研 / 需求收敛",

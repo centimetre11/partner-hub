@@ -18,6 +18,8 @@ import { CustomerProjectCard } from "@/components/customer-project-card";
 import { CustomerTodoRow } from "@/components/customer-todo-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
+import { OpportunityProcessFields } from "@/components/opportunity-process-fields";
+import { OpportunityProcessBadges } from "@/components/opportunity-process-badges";
 import {
   upsertOpportunityAction,
   deleteOpportunityAction,
@@ -30,7 +32,7 @@ import {
 
 export async function CustomerDetailBody({ id }: { id: string }) {
   const user = await requireUser();
-  const { messages: m, bcp47 } = await getServerI18n();
+  const { messages: m, bcp47, locale } = await getServerI18n();
   const c = m.customers;
   const pd = m.partnerDetail;
 
@@ -230,7 +232,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
                   {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
                 </Badge>
-                <Badge tone="blue">{o.stage}</Badge>
+                <OpportunityProcessBadges
+                  stage={o.stage}
+                  nextStep={o.nextStep}
+                  locale={locale}
+                  nextPrefix={m.opportunities.nextProcessPrefix}
+                />
                 {o.dealType === "PRODUCT" && <Badge tone="amber">{c.dealTypeProduct}</Badge>}
                 {o.dealType === "PROJECT" && <Badge tone="indigo">{c.dealTypeProject}</Badge>}
                 {o.project && <Badge tone="indigo">{c.projectConverted}</Badge>}
@@ -239,6 +246,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 {m.common.amount}: {o.amount ?? "—"}
                 {o.partner && ` · ${c.viaPartner}: ${o.partner.name}`}
                 {o.followUpAt && ` · ${m.partnerDetail.followUp}: ${fmtDate(o.followUpAt, bcp47)}`}
+                {o.notes && ` · ${m.common.note}: ${o.notes.length > 40 ? `${o.notes.slice(0, 40)}…` : o.notes}`}
               </div>
             </div>
             <span className="text-slate-300 group-open:rotate-90">›</span>
@@ -248,8 +256,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               <input type="hidden" name="id" value={o.id} />
               <input name="name" defaultValue={o.name} className={input} />
               <input name="amount" defaultValue={o.amount ?? ""} placeholder={m.common.amount} className={input} />
-              <input name="stage" defaultValue={o.stage} placeholder={m.common.stage} className={input} />
-              <input name="nextStep" defaultValue={o.nextStep ?? ""} placeholder={m.common.nextStep} className={input} />
+              <OpportunityProcessFields
+                key={`edit-${o.id}`}
+                idPrefix={`opp-${o.id}`}
+                defaultStage={o.stage}
+                defaultNextStep={o.nextStep}
+              />
               <input name="followUpAt" type="date" defaultValue={o.followUpAt ? new Date(o.followUpAt).toISOString().slice(0, 10) : ""} className={input} />
               <select name="status" defaultValue={o.status} className={input}>
                 <option value="ACTIVE">{m.common.active}</option>
@@ -268,6 +280,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
+              <textarea
+                name="notes"
+                rows={2}
+                defaultValue={o.notes ?? ""}
+                placeholder={m.opportunities.notesPlaceholder}
+                className={`${input} col-span-2 md:col-span-3`}
+                aria-label={m.common.note}
+              />
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
                 <button formAction={deleteOpportunityAction.bind(null, owner, o.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
                 <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
@@ -302,8 +322,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         <form action={upsertOpportunityAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
           <input name="name" required placeholder={c.opportunityName} className={input} />
           <input name="amount" placeholder={m.common.amount} className={input} />
-          <input name="stage" placeholder={m.common.stage} className={input} />
-          <input name="nextStep" placeholder={m.common.nextStep} className={input} />
+          <OpportunityProcessFields key="add-opp" />
           <input name="followUpAt" type="date" className={input} />
           <select name="dealType" defaultValue="" className={input}>
             <option value="">{c.dealTypeNone}</option>
@@ -316,6 +335,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          <textarea
+            name="notes"
+            rows={2}
+            placeholder={m.opportunities.notesPlaceholder}
+            className={`${input} col-span-2 md:col-span-3`}
+            aria-label={m.common.note}
+          />
           <div className="col-span-2 md:col-span-3 flex justify-end">
             <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
           </div>

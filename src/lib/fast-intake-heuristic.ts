@@ -29,6 +29,7 @@ import {
   normalizeCrmTraceNature,
 } from "./crm-trace-payload";
 import { parseTodoFromText, stripTodoCommandPrefix, normalizeTodoItem, mentionsSelfTodoAssignee, dedupeRepeatedPhrase } from "./todo-intake-parse";
+import { mapFreeTextToProcessTag, DEFAULT_STAGE_JSON, serializeProcessTags } from "./opportunity-process-tags";
 
 function stripIntakeSystemHint(content: string): string {
   const zh = content.indexOf("\n\n（系统提示：");
@@ -204,11 +205,10 @@ function extractOpportunityFields(text: string) {
     name: buildTitle(nameMatch?.[1]?.trim() || text.replace(/^(添加|新建|加)商机[：:,，\s]*/i, "").trim()),
     amount: amountMatch ? `${amountMatch[1]}万` : undefined,
     client: clientMatch?.[1]?.trim(),
-    stage: /proposal|方案|报价/i.test(text)
-      ? "Proposal"
-      : /discovery|需求/i.test(text)
-        ? "Needs Discovery"
-        : undefined,
+    stage: (() => {
+      const code = mapFreeTextToProcessTag(text);
+      return code ? serializeProcessTags([code]) : undefined;
+    })(),
   };
 }
 
@@ -312,7 +312,7 @@ function heuristicOpportunityTurn(userText: string, locale: Locale): IntakeTurn 
       name: fields.name,
       client: fields.client,
       amount: fields.amount,
-      stage: fields.stage ?? "Needs Discovery",
+      stage: fields.stage ?? DEFAULT_STAGE_JSON,
       status: "ACTIVE",
       reason: text.slice(0, 120),
     },

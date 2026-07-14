@@ -17,6 +17,16 @@ import { dueWithinDaysRange, overdueDueDateBefore } from "./todo-dates";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { enqueueWecomPush } from "./wecom-push";
 import { getWecomChatByChatId, listWecomChats } from "./wecom-chats";
+import {
+  formatNextProcessDisplay,
+  formatProcessTagsDisplay,
+  normalizeNextProcessTag,
+  parseProcessTags,
+  processTagListForAi,
+  serializeProcessTags,
+  isProcessTagCode,
+  type ProcessTagCode,
+} from "./opportunity-process-tags";
 
 // ============ Skill execution context ============
 
@@ -690,7 +700,7 @@ const listOpportunities: Skill = {
       ? rows
           .map(
             (o) =>
-              `[id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status} | DealType:${o.dealType ?? "-"}${o.project ? " | Converted→Project" : ""}`
+              `[id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Process:${formatProcessTagsDisplay(o.stage, "en")} | Next:${formatNextProcessDisplay(o.nextStep, "en") || "-"} | Amount:${o.amount ?? "-"} | Status:${o.status} | DealType:${o.dealType ?? "-"}${o.project ? " | Converted→Project" : ""}`
           )
           .join("\n")
       : "No opportunities found";
@@ -714,8 +724,14 @@ const updateOpportunity: Skill = {
           name: { type: "string" },
           client: { type: "string" },
           amount: { type: "string" },
-          stage: { type: "string" },
-          nextStep: { type: "string" },
+          stage: {
+            type: "string",
+            description: `Current process tags (comma-separated codes). Codes: ${processTagListForAi("en")}`,
+          },
+          nextStep: {
+            type: "string",
+            description: `Next process focus (single code from the same set as stage)`,
+          },
           status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "PAUSED"] },
           dealType: { type: "string", enum: ["PROJECT", "PRODUCT"], description: "PROJECT=有交付项目 / PRODUCT=纯产品成交" },
           notes: { type: "string" },
@@ -731,11 +747,24 @@ const updateOpportunity: Skill = {
 
     const data: Record<string, unknown> = {};
     const changes: string[] = [];
-    for (const key of ["name", "client", "amount", "stage", "nextStep", "status", "notes"] as const) {
+    for (const key of ["name", "client", "amount", "status", "notes"] as const) {
       if (args[key] != null) {
         data[key] = String(args[key]);
         changes.push(`${key} → ${data[key]}`);
       }
+    }
+    if (args.stage != null) {
+      const codes = String(args.stage)
+        .split(/[,，、;\s]+/)
+        .map((s) => s.trim().toUpperCase())
+        .filter(isProcessTagCode) as ProcessTagCode[];
+      const fromParse = codes.length ? codes : parseProcessTags(String(args.stage));
+      data.stage = serializeProcessTags(fromParse);
+      changes.push(`stage → ${data.stage}`);
+    }
+    if (args.nextStep != null) {
+      data.nextStep = normalizeNextProcessTag(String(args.nextStep) || null);
+      changes.push(`nextStep → ${data.nextStep ?? "(none)"}`);
     }
     if (args.dealType != null && ["PROJECT", "PRODUCT"].includes(String(args.dealType))) {
       data.dealType = String(args.dealType);

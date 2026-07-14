@@ -2,6 +2,7 @@ import type { IntakeProposal } from "./ai-intake";
 import type { BusinessRecordProposal } from "./ai-intake";
 import type { ContactProposal, FieldUpdate, OpportunityProposal, TodoProposal } from "./proposals";
 import type { ProposalPatchOp } from "./ai-trace";
+import { formatNextProcessDisplay, formatProcessTagsDisplay } from "./opportunity-process-tags";
 
 export type ProposalChangeKind = "added" | "updated" | "removed" | "ai_reupdate";
 
@@ -259,7 +260,9 @@ export function proposalToRows(p: IntakeProposal): NormalizedRow[] {
       key: oppKey(o.name) || `o${i}`,
       tone: "opp",
       label: `${o.action === "update" ? "Update opportunity" : "Opportunity"}: ${o.name}`,
-      detail: [o.client, o.amount, o.stage].filter(Boolean).join(" · "),
+      detail: [o.client, o.amount, o.stage ? formatProcessTagsDisplay(String(o.stage), "en") : null, o.nextStep ? formatNextProcessDisplay(o.nextStep, "en") : null]
+        .filter(Boolean)
+        .join(" · "),
       reason: o.reason,
     });
   });

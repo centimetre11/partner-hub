@@ -5,6 +5,7 @@ import { AIError } from "@/lib/ai";
 import { createSseResponse } from "@/lib/ai-trace";
 import { streamTextCompletion } from "@/lib/ai-stream-text";
 import { EVENT_TYPE_LABELS } from "@/lib/constants";
+import { formatProcessTagsDisplay } from "@/lib/opportunity-process-tags";
 
 async function generateSummary(partnerId: string, uid: string, emit?: Parameters<typeof streamTextCompletion>[1]["emit"]) {
   const partner = await db.partner.findUnique({
@@ -20,7 +21,9 @@ async function generateSummary(partnerId: string, uid: string, emit?: Parameters
   const timeline = partner.events
     .map((e) => `${new Date(e.createdAt).toLocaleDateString("en-US")} [${EVENT_TYPE_LABELS[e.type] ?? e.type}] ${e.title}${e.content ? `: ${e.content.slice(0, 300)}` : ""}`)
     .join("\n");
-  const opps = partner.opportunities.map((o) => `${o.name} (${o.stage}, ${o.amount ?? "amount unknown"}, ${o.status})`).join("; ");
+  const opps = partner.opportunities
+    .map((o) => `${o.name} (${formatProcessTagsDisplay(o.stage, "en")}, ${o.amount ?? "amount unknown"}, ${o.status})`)
+    .join("; ");
 
   const summary = await streamTextCompletion(
     [

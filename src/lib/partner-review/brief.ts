@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "../db";
 import { chatJson } from "../ai";
 import type { PartnerPrepBrief } from "./types";
+import { formatProcessTagsDisplay } from "../opportunity-process-tags";
 
 export type { PartnerPrepBrief } from "./types";
 
@@ -149,7 +150,7 @@ function renderFactsForPrompt(facts: NonNullable<Awaited<ReturnType<typeof gathe
   lines.push("## 活跃商机");
   if (!facts.opportunities.length) lines.push("（无）");
   for (const o of facts.opportunities) {
-    lines.push(`- ${o.name} / ${o.stage}${o.amount ? ` / ${o.amount}` : ""}`);
+    lines.push(`- ${o.name} / ${formatProcessTagsDisplay(o.stage, "zh")}${o.amount ? ` / ${o.amount}` : ""}`);
   }
   if (facts.partner.notes?.trim()) {
     lines.push("");
@@ -218,7 +219,7 @@ export async function buildPartnerPrepBrief(
   const opportunities = facts.opportunities.map((o) => ({
     id: o.id,
     name: o.name,
-    stage: o.stage,
+    stage: formatProcessTagsDisplay(o.stage, "zh"),
     amount: o.amount,
   }));
 

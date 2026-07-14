@@ -13,6 +13,7 @@ import {
 } from "./automation-delivery";
 import { resolveDeliveryRunStatus } from "./automation-run-status";
 import { inferDueWithinDays, isTodoDueGoal } from "./automation-push";
+import { formatNextProcessDisplay, formatProcessTagsDisplay } from "./opportunity-process-tags";
 import {
   type AutomationQuery,
   describeAutomationQuery,
@@ -80,10 +81,12 @@ function formatTodoLine(t: TodoRow, locale: "zh" | "en"): string {
 
 function formatOpportunityLine(o: OpportunityRow, locale: "zh" | "en"): string {
   const dealType = o.dealType ? (o.dealType === "PROJECT" ? (locale === "zh" ? "项目型" : "project") : (locale === "zh" ? "纯产品" : "product")) : "-";
+  const process = formatProcessTagsDisplay(o.stage, locale);
+  const next = formatNextProcessDisplay(o.nextStep, locale) || "-";
   if (locale === "zh") {
-    return `- [id:${o.id}] ${o.name} | 客户:${o.customer?.name ?? "-"} | 伙伴:${o.partner?.name ?? "-"} | 阶段:${o.stage} | 金额:${o.amount ?? "-"} | 状态:${o.status} | 成交类型:${dealType}`;
+    return `- [id:${o.id}] ${o.name} | 客户:${o.customer?.name ?? "-"} | 伙伴:${o.partner?.name ?? "-"} | 过程:${process} | 下一步:${next} | 金额:${o.amount ?? "-"} | 状态:${o.status} | 成交类型:${dealType}`;
   }
-  return `- [id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Stage:${o.stage} | Amount:${o.amount ?? "-"} | Status:${o.status} | DealType:${dealType}`;
+  return `- [id:${o.id}] ${o.name} | Customer:${o.customer?.name ?? "-"} | Partner:${o.partner?.name ?? "-"} | Process:${process} | Next:${next} | Amount:${o.amount ?? "-"} | Status:${o.status} | DealType:${dealType}`;
 }
 
 function emptyText(query: AutomationQuery, locale: "zh" | "en"): string {
@@ -130,11 +133,12 @@ function buildWecomAppCardBody(
     return lines.join("\n");
   }
 
-  const lines = opportunities.slice(0, 4).map((o, i) =>
-    locale === "zh"
-      ? `${i + 1}. ${shortenLine(o.name, 32)}（${o.stage}）`
-      : `${i + 1}. ${shortenLine(o.name, 32)} (${o.stage})`
-  );
+  const lines = opportunities.slice(0, 4).map((o, i) => {
+    const process = formatProcessTagsDisplay(o.stage, locale);
+    return locale === "zh"
+      ? `${i + 1}. ${shortenLine(o.name, 32)}（${process}）`
+      : `${i + 1}. ${shortenLine(o.name, 32)} (${process})`;
+  });
   if (count > 4) {
     lines.push(locale === "zh" ? `…共 ${count} 条，点击下方查看` : `…${count} total — tap below`);
   }

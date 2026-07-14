@@ -2,6 +2,7 @@ import { CUSTOMER_FIELD_LABELS, CUSTOMER_FIELD_LABELS_ZH, PARTNER_FIELD_LABELS, 
 import { getLabels, type LabelsBundle } from "./i18n";
 import type { Locale } from "./i18n/locale";
 import { intakeClarificationHint } from "./ai-clarifications";
+import { processTagListForAi } from "./opportunity-process-tags";
 
 export type IntakeScope =
   | "new_partner"
@@ -294,6 +295,7 @@ ${clarificationFooter}`;
   }
 
   if (scope === "opportunity") {
+    const processCodes = processTagListForAi(locale);
     return `Output a single JSON object. User-facing strings in ${lang}:
 {
   "reply": "Your message to the user (${lang}, brief)",
@@ -303,12 +305,13 @@ ${clarificationFooter}`;
   "proposal": {
     "partnerName": "(the customer/account this opportunity belongs to; omit when a customer/partner is pre-bound)",
     "summary": "One-line summary (${lang})",
-    "opportunities": [{"action":"add|update","id":"(when update)","name":"...","client":"...","amount":"...","stage":"...","nextStep":"...","status":"ACTIVE|WON|LOST|PAUSED","reason":"..."}]
+    "opportunities": [{"action":"add|update","id":"(when update)","name":"...","client":"...","amount":"...","stage":"comma-separated process codes","nextStep":"single process code or omit","status":"ACTIVE|WON|LOST|PAUSED","reason":"..."}]
   }
 }
 Rules:
 - Fill opportunities only; all other proposal arrays stay empty (omit them).
 - Opportunities are owned by a CUSTOMER (account). When the company is named in an open session, set proposal.partnerName to it; a bound partner books it under that partner's own customer profile.
+- stage = current process tags (multi), nextStep = next process focus (single). Use codes only: ${processCodes}
 - ready=true when at least one opportunity has a name.
 ${clarificationFooter}`;
   }
@@ -385,7 +388,7 @@ ${clarificationFooter}`;
     "summary": "One-line summary of what will be saved (${lang})",
     "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
     "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"...","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
-    "opportunities": [{"action":"add|update","id":"...","name":"...","client":"...","amount":"...","stage":"...","nextStep":"...","status":"...","reason":"..."}],
+    "opportunities": [{"action":"add|update","id":"...","name":"...","client":"...","amount":"...","stage":"comma-separated process codes","nextStep":"single process code","status":"...","reason":"..."}],
     "todos": [{"title":"...","dueDate":"YYYY-MM-DD","assigneeName":"...","detail":"..."}],
     "trainings": [{"person":"...","currentSkill":"...","targetCert":"...","deadline":"YYYY-MM-DD","status":"PLANNED|IN_PROGRESS|DONE","reason":"..."}],
     "solutions": [{"name":"...","targetCustomer":"...","painPoint":"...","fanruanOffer":"...","partnerOffer":"...","pricingModel":"...","status":"...","reason":"..."}],
@@ -505,7 +508,8 @@ Decide add (action=add) vs update (action=update with id) against the existing l
     title: "Add opportunity",
     intro:
       "The user wants to add or update an opportunity. Opportunities belong to a CUSTOMER (end-customer/account), not a partner. If a partner is bound and self-selling, it is booked under that partner's own customer profile.",
-    guide: "For each opportunity try: client, amount, stage, nextStep. Ask one question if key info is missing.",
+    guide:
+      "For each opportunity try: client, amount, stage (process tag codes, multi), nextStep (single process code). Use process codes only. Ask one question if key info is missing.",
   },
   profile: {
     title: "Complete partner profile",

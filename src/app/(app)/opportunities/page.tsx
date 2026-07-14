@@ -4,6 +4,14 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddOpportunityForm } from "./add-opportunity-form";
+import { OpportunityProcessBadges } from "@/components/opportunity-process-badges";
+import {
+  PROCESS_TAG_CODES,
+  formatNextProcessDisplay,
+  isProcessTagCode,
+  parseProcessTags,
+  processTagLabel,
+} from "@/lib/opportunity-process-tags";
 
 function statusTone(status: string): "green" | "indigo" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -20,17 +28,20 @@ export default async function OpportunitiesPage({
     customer?: string;
     partner?: string;
     dealType?: string;
+    process?: string;
   }>;
 }) {
   await requireUser();
-  const { messages: m, bcp47 } = await getServerI18n();
+  const { messages: m, bcp47, locale } = await getServerI18n();
   const o = m.opportunities;
   const c = m.customers;
   const sp = await searchParams;
   // 首次进入默认 ACTIVE；选「全部状态」时 status="" 不按状态过滤
   const statusFilter = sp.status === undefined ? "ACTIVE" : sp.status;
+  const processFilter =
+    sp.process && isProcessTagCode(sp.process.toUpperCase()) ? (sp.process.toUpperCase() as (typeof PROCESS_TAG_CODES)[number]) : "";
 
-  const [opportunities, customers, partners] = await Promise.all([
+  const [rawOpportunities, customers, partners] = await Promise.all([
     db.opportunity.findMany({
       where: {
         ...(sp.q ? { name: { contains: sp.q } } : {}),
@@ -49,6 +60,10 @@ export default async function OpportunitiesPage({
     db.customer.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
+
+  const opportunities = processFilter
+    ? rawOpportunities.filter((opp) => parseProcessTags(opp.stage).includes(processFilter))
+    : rawOpportunities;
 
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? m.common.active : s === "WON" ? m.common.won : s === "LOST" ? m.common.lost : m.common.paused;
@@ -81,6 +96,18 @@ export default async function OpportunitiesPage({
             <option value="WON">{m.common.won}</option>
             <option value="LOST">{m.common.lost}</option>
             <option value="PAUSED">{m.common.paused}</option>
+          </select>
+          <select
+            name="process"
+            defaultValue={processFilter}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
+            <option value="">{o.allProcesses}</option>
+            {PROCESS_TAG_CODES.map((code) => (
+              <option key={code} value={code}>
+                {processTagLabel(code, locale)}
+              </option>
+            ))}
           </select>
           <select
             name="customer"
@@ -134,6 +161,7 @@ export default async function OpportunitiesPage({
                     <th className="px-4 py-2.5 font-medium">{o.colCustomer}</th>
                     <th className="px-4 py-2.5 font-medium">{o.colPartner}</th>
                     <th className="px-4 py-2.5 font-medium">{o.colStage}</th>
+                    <th className="px-4 py-2.5 font-medium">{o.colNextProcess}</th>
                     <th className="px-4 py-2.5 font-medium">{o.colAmount}</th>
                     <th className="px-4 py-2.5 font-medium">{o.colStatus}</th>
                     <th className="px-4 py-2.5 font-medium">{o.colDealType}</th>
@@ -176,7 +204,14 @@ export default async function OpportunitiesPage({
                           <span className="text-slate-300">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{opp.stage}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          <OpportunityProcessBadges stage={opp.stage} locale={locale} />
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {formatNextProcessDisplay(opp.nextStep, locale) || "—"}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">{opp.amount ?? "—"}</td>
                       <td className="px-4 py-3">
                         <Badge tone={statusTone(opp.status)}>{statusLabel(opp.status)}</Badge>

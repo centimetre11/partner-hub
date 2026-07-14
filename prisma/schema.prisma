@@ -395,7 +395,9 @@ model Opportunity {
   name       String
   client     String?
   amount     String?
-  stage      String    @default("需求诊断")
+  // JSON array of process tag codes, e.g. ["QUOTE","BID_DOC"]; see opportunity-process-tags.ts
+  stage      String    @default("[\"DISCOVERY\"]")
+  // Single process tag code for next focus, e.g. "BID"; same code set as stage
   nextStep   String?
   followUpAt DateTime?
   status     String    @default("ACTIVE") // ACTIVE / WON / LOST / PAUSED

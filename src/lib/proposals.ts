@@ -25,6 +25,7 @@ import {
 } from "./ai-locale";
 import { getLabels } from "./i18n";
 import type { Locale } from "./i18n/locale";
+import { formatNextProcessDisplay, formatProcessTagsDisplay } from "./opportunity-process-tags";
 
 // ============ Proposal (diff preview) data structures ============
 
@@ -121,7 +122,7 @@ export async function partnerContext(partnerId: string, locale: Locale = "zh"): 
     ? p.opportunities
         .map(
           (o) =>
-            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status} dealType:${o.dealType ?? "-"}`
+            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} process:${formatProcessTagsDisplay(o.stage, locale)} next:${formatNextProcessDisplay(o.nextStep, locale) || "-"} status:${o.status} dealType:${o.dealType ?? "-"}`
         )
         .join("\n")
     : noneLabel(locale);
@@ -177,7 +178,7 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
     ? c.opportunities
         .map(
           (o) =>
-            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} stage:${o.stage} status:${o.status} dealType:${o.dealType ?? "-"}`
+            `- id=${o.id} name:${o.name} client:${o.client ?? "?"} amount:${o.amount ?? "?"} process:${formatProcessTagsDisplay(o.stage, locale)} next:${formatNextProcessDisplay(o.nextStep, locale) || "-"} status:${o.status} dealType:${o.dealType ?? "-"}`
         )
         .join("\n")
     : noneLabel(locale);

@@ -4,6 +4,7 @@ import type { TraceEmitter } from "./ai-trace";
 import { db } from "./db";
 import type { FocusEntity, FocusPatchTarget } from "./focus-entity";
 import type { Locale } from "./i18n/locale";
+import { formatNextProcessDisplay, formatProcessTagsDisplay } from "./opportunity-process-tags";
 import { newSkillContext, runSkill, skillsToTools } from "./skills";
 
 const PATCH_TOOLS: Record<FocusEntity["kind"], string[]> = {
@@ -44,9 +45,9 @@ async function loadFocusContext(focus: FocusEntity, targetId: string): Promise<s
         `Name: ${o.name}`,
         `Client: ${o.client ?? "(none)"}`,
         `Partner: ${o.partner?.name ?? "(none)"}`,
-        `Stage: ${o.stage}`,
+        `Process: ${formatProcessTagsDisplay(o.stage, "en")}`,
         `Amount: ${o.amount ?? "(none)"}`,
-        `Next step: ${o.nextStep ?? "(none)"}`,
+        `Next process: ${formatNextProcessDisplay(o.nextStep, "en") || "(none)"}`,
         `Status: ${o.status}`,
         `Notes: ${o.notes ?? "(none)"}`,
       ].join("\n");

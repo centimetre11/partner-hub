@@ -18,8 +18,9 @@ import { CRM_TRACE_ACTIONS, CRM_TRACE_NATURES } from "@/lib/crm-trace-constants"
 import { businessRecordCrmFieldsComplete } from "@/lib/crm-trace-payload";
 import { type ProposalEditPatch } from "@/lib/clarification-apply";
 import { CrmRecorderPicker, useDefaultCrmRecorderSelection, type CrmRecorderOption } from "@/components/crm-recorder-picker";
-import { useLabels, useMessages } from "@/lib/i18n/context";
+import { useLabels, useLocale, useMessages } from "@/lib/i18n/context";
 import { attitudeLabelFromLabels } from "@/lib/i18n/labels";
+import { formatNextProcessDisplay, formatProcessTagsDisplay } from "@/lib/opportunity-process-tags";
 
 type RowTone = "field" | "contact" | "opp" | "todo" | "training" | "solution" | "business" | "partner";
 
@@ -152,6 +153,7 @@ export function LiveProposalDraft({
   identityBlocked: identityBlockedProp,
 }: Props) {
   const { assistant: am, intakePanel: ip } = useMessages();
+  const locale = useLocale();
   const labels = useLabels();
   const sections = scopeDraftSections(scope);
   const confirmBtn = confirmLabel ?? ip.confirmReady;
@@ -418,7 +420,14 @@ export function LiveProposalDraft({
                     {o.action === "update" ? ip.updateOpportunity : ip.opportunity}: {o.name}
                   </span>
                   <span className="text-slate-500 ml-1.5 text-xs">
-                    {[o.client, o.amount, o.stage].filter(Boolean).join(" · ")}
+                    {[
+                      o.client,
+                      o.amount,
+                      o.stage ? formatProcessTagsDisplay(String(o.stage), locale) : null,
+                      o.nextStep ? formatNextProcessDisplay(o.nextStep, locale) : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </DraftRow>
               );

@@ -27,7 +27,9 @@ import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
 import { PartnerHierarchySection } from "@/components/partner-hierarchy-section";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
+import { OpportunityProcessBadges } from "@/components/opportunity-process-badges";
 import { listDistributorCandidates } from "@/lib/partner-hierarchy";
+import type { Locale } from "@/lib/i18n/locale";
 import { TodoItemRow } from "@/components/todo-item-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
@@ -42,7 +44,7 @@ import type { Messages } from "@/lib/i18n/messages/en";
 
 export async function PartnerDetailBody({ id }: { id: string }) {
   const user = await requireUser();
-  const { labels, messages: m, bcp47 } = await getServerI18n();
+  const { labels, messages: m, bcp47, locale } = await getServerI18n();
   const L = labelConstants(labels);
   const monitorDimensions = SENTIMENT_MONITOR_ENABLED ? Object.keys(L.MONITOR_DIMENSION_LABELS) : [];
   const p = await db.partner.findUnique({
@@ -428,6 +430,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                 m={m}
                 labels={labels}
                 bcp47={bcp47}
+                locale={locale}
                 taxonomy={{ CATEGORY: taxonomyCategory, INDUSTRY: taxonomyIndustry }}
               />
             )}
@@ -447,7 +450,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
               }}
             />
             <Card title={m.partnerDetail.relatedOpportunities.replace("{count}", String(relatedOpportunities.length))}>
-              <RelatedOpportunityList opportunities={relatedOpportunities} m={m} bcp47={bcp47} />
+              <RelatedOpportunityList opportunities={relatedOpportunities} m={m} bcp47={bcp47} locale={locale} />
             </Card>
           </div>
         }
@@ -541,10 +544,12 @@ function RelatedOpportunityList({
   opportunities,
   m,
   bcp47,
+  locale,
 }: {
   opportunities: (Opportunity & { customer: { id: string; name: string } | null })[];
   m: Messages;
   bcp47: string;
+  locale: Locale;
 }) {
   return (
     <div className="space-y-2">
@@ -557,7 +562,12 @@ function RelatedOpportunityList({
               <Badge tone={o.status === "ACTIVE" ? "green" : o.status === "WON" ? "indigo" : "zinc"}>
                 {o.status === "ACTIVE" ? m.common.active : o.status === "WON" ? m.common.won : o.status === "LOST" ? m.common.lost : m.common.paused}
               </Badge>
-              <Badge tone="blue">{o.stage}</Badge>
+              <OpportunityProcessBadges
+                stage={o.stage}
+                nextStep={o.nextStep}
+                locale={locale}
+                nextPrefix={m.opportunities.nextProcessPrefix}
+              />
               {o.dealType === "PRODUCT" && <Badge tone="amber">{m.common.dealTypeProduct}</Badge>}
               {o.dealType === "PROJECT" && <Badge tone="indigo">{m.common.dealTypeProject}</Badge>}
             </div>

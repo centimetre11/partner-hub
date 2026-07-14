@@ -23,6 +23,7 @@ import {
   type WeeklyReportCopy,
   type WeeklyReportLocale,
 } from "./weekly-report-locale";
+import { formatProcessTagsDisplay } from "./opportunity-process-tags";
 
 // ============ 单人聚合 ============
 
@@ -238,7 +239,7 @@ export async function gatherUserWeekly(
     })),
     activeOpportunities: activeOpps.map((o) => ({
       name: o.name,
-      stage: o.stage,
+      stage: formatProcessTagsDisplay(o.stage, copy.locale),
       amount: o.amount,
       owner: ownerLabel(o),
       dealType: o.dealType,
@@ -265,7 +266,7 @@ export function renderStatsForPrompt(s: WeeklyUserStats, window: WeekWindow, cop
   const lines: string[] = [];
   const doneSuffix = copy.locale === "en" ? ", done " : "，完成于 ";
   const dueSuffix = copy.locale === "en" ? ", due " : "，截止 ";
-  const stageLabel = copy.locale === "en" ? "stage " : "阶段 ";
+  const stageLabel = copy.locale === "en" ? "process " : "过程 ";
   const amountLabel = copy.locale === "en" ? "amount " : "金额 ";
   const statusLabel = copy.locale === "en" ? "status " : "状态 ";
   const todosLabel = copy.locale === "en" ? "todos " : "待办 ";
@@ -399,7 +400,7 @@ export function renderUserEmailHtml(
   ${listHtml(
     s.activeOpportunities.map(
       (o) =>
-        `${o.name}（${o.owner}，${copy.locale === "en" ? "stage " : "阶段 "}${o.stage}，${copy.locale === "en" ? "amount " : "金额 "}${o.amount ?? "-"}${dealTypeText(o.dealType, copy) ? `，${dealTypeText(o.dealType, copy)}` : ""}）`
+        `${o.name}（${o.owner}，${copy.locale === "en" ? "process " : "过程 "}${o.stage}，${copy.locale === "en" ? "amount " : "金额 "}${o.amount ?? "-"}${dealTypeText(o.dealType, copy) ? `，${dealTypeText(o.dealType, copy)}` : ""}）`
     ),
     copy.none
   )}

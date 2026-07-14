@@ -18,6 +18,11 @@ import { recordSystemEvent } from "./activity-log";
 import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { assertTwoLevelHierarchy } from "./partner-hierarchy";
+import {
+  processTagsFromFormData,
+  normalizeNextProcessTag,
+  serializeProcessTags,
+} from "./opportunity-process-tags";
 
 // ============ 认证 ============
 
@@ -594,8 +599,8 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     name: String(formData.get("name") ?? "").trim(),
     client: String(formData.get("client") ?? "") || null,
     amount: String(formData.get("amount") ?? "") || null,
-    stage: String(formData.get("stage") ?? "Needs Assessment"),
-    nextStep: String(formData.get("nextStep") ?? "") || null,
+    stage: serializeProcessTags(processTagsFromFormData(formData)),
+    nextStep: normalizeNextProcessTag(String(formData.get("nextStep") ?? "") || null),
     followUpAt: followUp ? new Date(followUp) : null,
     status: String(formData.get("status") ?? "ACTIVE"),
     notes: String(formData.get("notes") ?? "") || null,

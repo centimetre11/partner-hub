@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createOpportunityFromListAction } from "@/lib/actions";
 import { useMessages } from "@/lib/i18n/context";
+import { OpportunityProcessFields } from "@/components/opportunity-process-fields";
 
 type Option = { id: string; name: string };
 
@@ -62,14 +63,9 @@ export function AddOpportunityForm({
                 ))}
               </select>
               <input name="name" required placeholder={c.opportunityName} className={input} />
-              <div className="flex gap-2">
-                <input name="amount" placeholder={m.common.amount} className={input} />
-                <input name="stage" placeholder={m.common.stage} className={input} />
-              </div>
-              <div className="flex gap-2">
-                <input name="nextStep" placeholder={m.common.nextStep} className={input} />
-                <input name="followUpAt" type="date" className={input} aria-label={o.followUp} />
-              </div>
+              <input name="amount" placeholder={m.common.amount} className={input} />
+              <OpportunityProcessFields />
+              <input name="followUpAt" type="date" className={input} aria-label={o.followUp} />
               <div className="flex gap-2">
                 <select name="dealType" defaultValue="" className={input} aria-label={o.colDealType}>
                   <option value="">{c.dealTypeNone}</option>
@@ -85,6 +81,13 @@ export function AddOpportunityForm({
                   ))}
                 </select>
               </div>
+              <textarea
+                name="notes"
+                rows={2}
+                placeholder={o.notesPlaceholder}
+                className={input}
+                aria-label={m.common.note}
+              />
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"

@@ -1,3 +1,5 @@
+import { formatProcessTagsDisplay } from "@/lib/opportunity-process-tags";
+import type { Locale } from "@/lib/i18n/locale";
 import Link from "next/link";
 import { Badge, Card, EmptyState, fmtDate, StageBadge } from "@/components/ui";
 import type { Messages } from "@/lib/i18n/messages/en";
@@ -45,6 +47,7 @@ export function PartnerHierarchySection({
   m,
   labels,
   bcp47,
+  locale = "zh",
   taxonomy,
 }: {
   partnerId: string;
@@ -56,6 +59,7 @@ export function PartnerHierarchySection({
   m: Messages;
   labels: ServerI18n["labels"];
   bcp47: string;
+  locale?: Locale;
   taxonomy: { CATEGORY: TaxonomyOptionRow[]; INDUSTRY: TaxonomyOptionRow[] };
 }) {
   const pd = m.partnerDetail;
@@ -147,7 +151,7 @@ export function PartnerHierarchySection({
                       ? pd.rollupViaPartner.replace("{name}", o.partner.name)
                       : "—"}
                     {" · "}
-                    {o.stage}
+                    {formatProcessTagsDisplay(o.stage, locale)}
                     {o.amount ? ` · ${o.amount}` : ""}
                     {" · "}
                     {fmtDate(o.updatedAt, bcp47)}

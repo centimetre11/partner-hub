@@ -73,6 +73,12 @@ import {
 } from "./fast-intake-heuristic";
 import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
 import {
+  DEFAULT_STAGE_JSON,
+  normalizeNextProcessTag,
+  parseProcessTags,
+  serializeProcessTags,
+} from "./opportunity-process-tags";
+import {
   businessRecordCrmFieldsComplete,
   inferTraceAction,
   inferTraceNature,
@@ -1677,12 +1683,16 @@ export async function applyIntake(opts: {
     const oppOwner: OwnerRef = { kind: "customer", id: oppCustomerId };
     const oppWhere = ownerWhere(oppOwner);
     for (const o of proposal.opportunities) {
+      const stageRaw = o.stage;
+      const stage = stageRaw
+        ? serializeProcessTags(parseProcessTags(Array.isArray(stageRaw) ? JSON.stringify(stageRaw) : String(stageRaw)))
+        : DEFAULT_STAGE_JSON;
       const payload = {
         name: o.name,
         client: o.client,
         amount: o.amount,
-        stage: o.stage ?? "Needs Discovery",
-        nextStep: o.nextStep,
+        stage,
+        nextStep: normalizeNextProcessTag(o.nextStep ?? null),
         status: o.status ?? "ACTIVE",
         notes: o.notes,
         dealType: o.dealType && ["PROJECT", "PRODUCT"].includes(o.dealType) ? o.dealType : undefined,
