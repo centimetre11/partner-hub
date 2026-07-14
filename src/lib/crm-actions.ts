@@ -304,6 +304,7 @@ export async function getCrmActivationPayloadAction(
       entity: partner,
       contacts: partner.contacts,
       salesman,
+      role: user.role,
     });
     return { ok: true, ...payload };
   }
@@ -335,6 +336,7 @@ export async function getCrmActivationPayloadAction(
     entity: customer,
     contacts: customer.contacts,
     salesman,
+    role: user.role,
   });
   return { ok: true, ...payload };
 }

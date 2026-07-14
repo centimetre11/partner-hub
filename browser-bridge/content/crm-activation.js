@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.5";
+  const SCRIPT_VER = "1.1.6";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -66,7 +66,16 @@
       await sleep(700);
     }
 
-    // Pre-Sales 按需求先不填
+    // Pre-Sales：销售创建 → Zayne.Zhao；售前创建 → 自己
+    if (fields.preSales) {
+      const ok = await fillDropdownByLabel("Pre-Sales", [fields.preSales], {
+        typeQuery: fields.preSales,
+        settleMs: 900,
+        selectFirstMatch: true,
+      });
+      if (!ok) warnings.push(`Pre-Sales「${fields.preSales}」未匹配，请手选`);
+      await sleep(700);
+    }
 
     if (fields.partnerType) {
       const ok =

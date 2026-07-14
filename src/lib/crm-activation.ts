@@ -15,6 +15,11 @@ export const CRM_ACTIVATION_FAKE_PHONE = "+971500000000";
 export const CRM_ACTIVATION_FAKE_DIAL_CODE = "+971";
 export const CRM_ACTIVATION_FAKE_PHONE_LOCAL = "500000000";
 
+/** 创建人是售前时，销售固定填此人 */
+export const CRM_ACTIVATION_DEFAULT_SALES = "chenmin";
+/** 创建人是销售时，售前固定填此人 */
+export const CRM_ACTIVATION_DEFAULT_PRESALES = "Zayne.Zhao";
+
 /** 中东常用国家别名 → 用于匹配 CRM 下拉选项全文 */
 export const COUNTRY_ALIAS_GROUPS: string[][] = [
   ["saudi arabia", "ksa", "saudi", "沙特", "沙特阿拉伯", "riyadh", "利雅得", "jeddah", "吉达", "dammam", "达曼"],
@@ -71,7 +76,7 @@ export type CrmActivationFields = {
   /** 扩展侧用于匹配下拉的别名列表（含英文正式名等） */
   countryAliases: string[];
   sales: string;
-  /** 售前：表单必填，默认与 Sales 相同 */
+  /** 售前 CRM 英文名 */
   preSales: string;
   companyName: string;
   /** 伙伴填经销商；客户为空字符串表示不填 */
@@ -164,11 +169,38 @@ function pickPartnerContact(contacts: CrmActivationContactInput[]): CrmActivatio
   return sorted[0] ?? null;
 }
 
+export function resolveCrmActivationSalesPair(input: {
+  /** 当前用户 CRM 英文名（crmSalesmanName） */
+  selfCrmName: string;
+  /** Hub User.role：SALES / PRESALES / ADMIN / OTHER */
+  role?: string | null;
+}): { sales: string; preSales: string } {
+  const self = input.selfCrmName.trim();
+  const role = String(input.role ?? "")
+    .trim()
+    .toUpperCase();
+
+  if (role === "PRESALES") {
+    return {
+      sales: CRM_ACTIVATION_DEFAULT_SALES,
+      preSales: self,
+    };
+  }
+
+  // 销售、管理员、其他：销售填自己，售前填 Zayne.Zhao
+  return {
+    sales: self,
+    preSales: CRM_ACTIVATION_DEFAULT_PRESALES,
+  };
+}
+
 export function buildCrmActivationFields(input: {
   entityType: CrmActivationEntityType;
   entity: CrmActivationEntityInput;
   contacts?: CrmActivationContactInput[];
   salesman: string;
+  /** 当前用户角色，用于分配 Sales / Pre-Sales */
+  role?: string | null;
 }): CrmActivationFields {
   const { entityType, entity, salesman } = input;
   const contacts = input.contacts ?? [];
@@ -221,15 +253,17 @@ export function buildCrmActivationFields(input: {
     }
   }
 
-  const salesName = salesman.trim();
+  const { sales, preSales } = resolveCrmActivationSalesPair({
+    selfCrmName: salesman,
+    role: input.role,
+  });
 
   return {
     region: CRM_ACTIVATION_REGION,
     country: (entity.country || countryAliases[0] || "").trim(),
     countryAliases,
-    sales: salesName,
-    /** 售前先不自动填，避免干扰其它下拉 */
-    preSales: "",
+    sales,
+    preSales,
     companyName: entity.name.trim(),
     partnerType: entityType === "partner" ? CRM_ACTIVATION_PARTNER_TYPE : "",
     contactName,
@@ -248,6 +282,7 @@ export function buildCrmActivationPayload(input: {
   entity: CrmActivationEntityInput;
   contacts?: CrmActivationContactInput[];
   salesman: string;
+  role?: string | null;
 }): CrmActivationPayload {
   return {
     url: CRM_ACTIVATION_URL,
