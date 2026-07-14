@@ -2296,7 +2296,7 @@ export const messagesZh: Messages = {
     crmCreateOpenedNeedBridge:
       "已打开 CRM 填报表（需手动填写）。要自动预填，请安装浏览器助手后刷新本页再试。",
     crmCreateOpenedNeedUpgrade:
-      "已打开 CRM 填报表（需手动填写）。当前助手 v{version} 不支持自动预填，请下载升级到 ≥1.1.0 后在 chrome://extensions 点「重新加载」。",
+      "已打开 CRM 填报表（需手动填写）。当前助手 v{version} 不支持自动预填，请下载升级到 ≥1.1.1 后在 chrome://extensions 点「重新加载」。",
     crmCreateOpenedManual: "已打开 CRM 填报表（自动预填失败，请手动填写或升级助手后重试）",
     save: "保存配置",
     saved: "已保存",
