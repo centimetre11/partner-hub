@@ -688,8 +688,9 @@ export async function runWeeklyReportPipeline(
   const { emails: managerEmails, resolved: managerResolved } = await resolveManagerEmails(config.managers);
   const ccManagers = managerEmails.join(",");
 
-  // 逐人发个人周报（抄送管理者）
+  // 逐人生成个人周报：先落库存档，再发邮件（发信失败也不丢历史）
   let sentPersonal = 0;
+  let archivedPersonal = 0;
   let skippedNoEmail = 0;
   let skippedInactive = 0;
   for (const { stats: s, narrative, locale } of allReports) {
@@ -698,28 +699,10 @@ export async function runWeeklyReportPipeline(
       skippedInactive++;
       continue;
     }
-    if (!s.email) {
-      skippedNoEmail++;
-      toolLog.push({ tool: "send_email", args: { user: s.name }, result: "skipped: no email" });
-      continue;
-    }
     const copy = getWeeklyReportCopy(locale);
     const html = renderUserEmailHtml(s, window, narrative, copy);
     const text = renderUserEmailText(s, window, narrative, copy);
     const subject = copy.email.personalSubject(window.label);
-    const cc = managerEmails.filter((e) => e.toLowerCase() !== s.email!.toLowerCase()).join(",");
-    const ctx = { actions: [] as string[] };
-    const result = await runSendEmailTool(
-      { to: s.email, ...(cc ? { cc } : {}), subject, body: text, html },
-      ctx
-    );
-    const ok = /Email sent/i.test(result);
-    if (ok) sentPersonal++;
-    toolLog.push({
-      tool: "send_email",
-      args: { to: s.email, cc: cc || undefined, subject },
-      result: result.slice(0, 200),
-    });
     await persistWeeklyReportSnapshot({
       kind: "PERSONAL",
       weekLabel: window.label,
@@ -734,28 +717,49 @@ export async function runWeeklyReportPipeline(
       source: opts.source ?? "SCHEDULED",
       agentRunId: opts.agentRunId,
     });
-  }
-  pushNotes.push(`个人周报已发 ${sentPersonal} 人${ccManagers ? "（抄送管理者）" : ""}`);
-  if (skippedInactive) pushNotes.push(`跳过无活动 ${skippedInactive} 人`);
-  if (skippedNoEmail) pushNotes.push(`无邮箱跳过 ${skippedNoEmail} 人`);
+    archivedPersonal++;
 
-  // 管理者汇总
+    if (!s.email) {
+      skippedNoEmail++;
+      toolLog.push({ tool: "send_email", args: { user: s.name }, result: "skipped: no email (archived)" });
+      continue;
+    }
+    const cc = managerEmails.filter((e) => e.toLowerCase() !== s.email!.toLowerCase()).join(",");
+    const ctx = { actions: [] as string[] };
+    try {
+      const result = await runSendEmailTool(
+        { to: s.email, ...(cc ? { cc } : {}), subject, body: text, html },
+        ctx
+      );
+      const ok = /Email sent/i.test(result);
+      if (ok) sentPersonal++;
+      toolLog.push({
+        tool: "send_email",
+        args: { to: s.email, cc: cc || undefined, subject },
+        result: result.slice(0, 200),
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toolLog.push({
+        tool: "send_email",
+        args: { to: s.email, subject },
+        result: `error: ${msg.slice(0, 180)} (archived)`,
+      });
+    }
+  }
+  pushNotes.push(`个人周报已存档 ${archivedPersonal} 人，已发 ${sentPersonal} 人${ccManagers ? "（抄送管理者）" : ""}`);
+  if (skippedInactive) pushNotes.push(`跳过无活动 ${skippedInactive} 人`);
+  if (skippedNoEmail) pushNotes.push(`无邮箱仅存档 ${skippedNoEmail} 人`);
+
+  // 管理者汇总：先存档，再发信
   let managerOk = false;
   const unresolved = managerResolved.filter((r) => !r.email).map((r) => r.token);
-  if (managerEmails.length) {
+  {
     const digestLocale = config.managerDigestLocale ?? "zh";
     const digestCopy = getWeeklyReportCopy(digestLocale);
     const html = renderManagerDigestHtml(allReports, window, digestCopy);
     const text = renderManagerDigestText(allReports, window, digestCopy);
     const subject = digestCopy.managerDigest.subject(window.label);
-    const ctx = { actions: [] as string[] };
-    const result = await runSendEmailTool(
-      { to: managerEmails.join(","), subject, body: text, html },
-      ctx
-    );
-    managerOk = /Email sent/i.test(result);
-    toolLog.push({ tool: "send_email", args: { to: managerEmails, subject }, result: result.slice(0, 200) });
-    pushNotes.push(managerOk ? `管理者汇总已发（${managerEmails.length} 人）` : `管理者汇总发送失败`);
     await persistWeeklyReportSnapshot({
       kind: "MANAGER_DIGEST",
       weekLabel: window.label,
@@ -768,17 +772,38 @@ export async function runWeeklyReportPipeline(
       source: opts.source ?? "SCHEDULED",
       agentRunId: opts.agentRunId,
     });
-  } else {
-    pushNotes.push("管理者汇总未发（未解析到收件人）");
+    if (managerEmails.length) {
+      const ctx = { actions: [] as string[] };
+      try {
+        const result = await runSendEmailTool(
+          { to: managerEmails.join(","), subject, body: text, html },
+          ctx
+        );
+        managerOk = /Email sent/i.test(result);
+        toolLog.push({ tool: "send_email", args: { to: managerEmails, subject }, result: result.slice(0, 200) });
+        pushNotes.push(managerOk ? `管理者汇总已发（${managerEmails.length} 人）` : `管理者汇总发送失败（已存档）`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        toolLog.push({
+          tool: "send_email",
+          args: { to: managerEmails, subject },
+          result: `error: ${msg.slice(0, 180)} (archived)`,
+        });
+        pushNotes.push("管理者汇总发送失败（已存档）");
+      }
+    } else {
+      pushNotes.push("管理者汇总已存档（未解析到收件人，未发信）");
+    }
   }
   if (unresolved.length) pushNotes.push(`未识别管理者：${unresolved.join("、")}`);
 
   // 运行结果
+  const emailTargets = Math.max(0, archivedPersonal - skippedNoEmail);
   const allOk =
-    (sentPersonal > 0 || skippedInactive === allReports.length || allReports.length === 0) &&
+    (archivedPersonal > 0 || skippedInactive === allReports.length || allReports.length === 0) &&
+    (emailTargets === 0 || sentPersonal === emailTargets) &&
     (managerEmails.length === 0 || managerOk) &&
-    unresolved.length === 0 &&
-    skippedNoEmail === 0;
+    unresolved.length === 0;
   const runStatus: "SUCCESS" | "PARTIAL_SUCCESS" = allOk ? "SUCCESS" : "PARTIAL_SUCCESS";
 
   const summaryLines = allReports.map(
@@ -842,9 +867,6 @@ export async function sendSingleUserReport(opts: {
   const text = renderUserEmailText(stats, window, narrative, copy);
   const subject = copy.email.testSubject(user.name, window.label);
 
-  const ctx = { actions: [] as string[] };
-  const result = await runSendEmailTool({ to, subject, body: text, html }, ctx);
-  const ok = /Email sent/i.test(result);
   await persistWeeklyReportSnapshot({
     kind: "PERSONAL",
     weekLabel: window.label,
@@ -858,10 +880,19 @@ export async function sendSingleUserReport(opts: {
     userName: user.name,
     source: "TEST",
   });
-  return {
-    ok,
-    message: ok
-      ? `已试发 ${user.name} 的周报至 ${to}（完成待办 ${stats.doneTodos.length}·商务记录 ${stats.businessRecords.length}·问答库 ${stats.faqEntries.length}·新增客户 ${stats.newCustomers.length}）`
-      : `试发失败：${result.slice(0, 160)}`,
-  };
+
+  const ctx = { actions: [] as string[] };
+  try {
+    const result = await runSendEmailTool({ to, subject, body: text, html }, ctx);
+    const ok = /Email sent/i.test(result);
+    return {
+      ok,
+      message: ok
+        ? `已试发 ${user.name} 的周报至 ${to}（完成待办 ${stats.doneTodos.length}·商务记录 ${stats.businessRecords.length}·问答库 ${stats.faqEntries.length}·新增客户 ${stats.newCustomers.length}；已写入历史周报）`
+        : `已写入历史周报，但试发失败：${result.slice(0, 160)}`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, message: `已写入历史周报，但试发失败：${msg.slice(0, 160)}` };
+  }
 }
