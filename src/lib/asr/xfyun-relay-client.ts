@@ -55,47 +55,45 @@ export class XfyunRelayClient {
 
     this.sendBusy = true;
     try {
-      while (this.pcmQueue.length >= samplesNeeded) {
-        const slice = this.pcmQueue.splice(0, samplesNeeded);
-        const body = pcm16ToBytes(new Int16Array(slice));
-        const res = await fetch(
-          `/api/partner-reviews/${this.meetingId}/recording/xfyun-audio`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/octet-stream",
-              "X-Relay-Session": this.session.relaySessionId,
-            },
-            body: new Blob([Uint8Array.from(body)]),
+      const slice = this.pcmQueue.splice(0, samplesNeeded);
+      const body = pcm16ToBytes(new Int16Array(slice));
+      const res = await fetch(
+        `/api/partner-reviews/${this.meetingId}/recording/xfyun-audio`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "X-Relay-Session": this.session.relaySessionId,
           },
-        );
-        const data = (await res.json()) as {
-          ok?: boolean;
-          error?: string;
-          plain?: string;
-          interim?: string;
-          sentence?: string;
-          startMs?: number;
-          endMs?: number;
-        };
-        if (!res.ok || data.error) {
-          this.onError(data.error || res.statusText);
-          continue;
-        }
-        if (data.interim) {
-          this.onResult({ text: data.interim, isFinal: false, plain: data.plain });
-        }
-        if (data.sentence) {
-          this.onResult({
-            text: data.sentence,
-            isFinal: true,
-            plain: data.plain,
-            startMs: data.startMs,
-            endMs: data.endMs,
-          });
-        } else if (data.plain) {
-          this.onResult({ text: data.plain, isFinal: false, plain: data.plain });
-        }
+          body: new Blob([Uint8Array.from(body)]),
+        },
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        plain?: string;
+        interim?: string;
+        sentence?: string;
+        startMs?: number;
+        endMs?: number;
+      };
+      if (!res.ok || data.error) {
+        this.onError(data.error || res.statusText);
+        return;
+      }
+      if (data.interim) {
+        this.onResult({ text: data.interim, isFinal: false, plain: data.plain });
+      }
+      if (data.sentence) {
+        this.onResult({
+          text: data.sentence,
+          isFinal: true,
+          plain: data.plain,
+          startMs: data.startMs,
+          endMs: data.endMs,
+        });
+      } else if (data.plain) {
+        this.onResult({ text: data.plain, isFinal: false, plain: data.plain });
       }
     } catch (e) {
       if (!this.closed) {

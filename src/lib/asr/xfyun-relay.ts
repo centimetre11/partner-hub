@@ -98,24 +98,45 @@ export async function createXfyunRelaySession(meetingId: string, userId: string)
       error: null,
       closed: false,
     };
+    pool.set(relaySessionId, session);
+
+    let settled = false;
 
     const timer = setTimeout(() => {
       ws.terminate();
-      reject(new Error("连接讯飞超时，请稍后重试"));
+      if (!settled) {
+        settled = true;
+        reject(new Error("连接讯飞超时，请稍后重试"));
+      }
     }, 12_000);
 
     ws.on("open", () => {
-      clearTimeout(timer);
-      pool.set(relaySessionId, session);
-      resolve();
+      // 文档：握手成功后即可上传音频；仍等待 started 以拿到 sessionId
     });
 
     ws.on("message", (data) => {
-      void handleMessage(relaySessionId, data.toString());
+      const raw = data.toString();
+      void handleMessage(relaySessionId, raw);
+      if (!settled) {
+        const parsed = parseXfyunAsrMessage(raw);
+        if (parsed?.error) {
+          clearTimeout(timer);
+          settled = true;
+          reject(new Error(parsed.error));
+          return;
+        }
+        if (parsed?.sessionId) {
+          clearTimeout(timer);
+          settled = true;
+          resolve();
+        }
+      }
     });
 
     ws.on("error", (err) => {
       clearTimeout(timer);
+      if (settled) return;
+      settled = true;
       const msg = err instanceof Error ? err.message : String(err);
       reject(
         new Error(
@@ -127,6 +148,10 @@ export async function createXfyunRelaySession(meetingId: string, userId: string)
     ws.on("close", () => {
       session.closed = true;
       pool.delete(relaySessionId);
+      if (!settled) {
+        settled = true;
+        reject(new Error("讯飞连接在握手完成前断开"));
+      }
     });
   });
 

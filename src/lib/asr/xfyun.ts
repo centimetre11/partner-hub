@@ -23,10 +23,21 @@ export function getXfyunAsrConfig() {
   } as const;
 }
 
+/** 文档要求 utc 为北京时间并带 +0800，与容器时区无关 */
 function formatUtcChina(d = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  // 讯飞要求 +0800 格式
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}+0800`;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}+0800`;
 }
 
 function urlEncode(value: string): string {
@@ -105,6 +116,14 @@ export function parseXfyunAsrMessage(raw: string): XfyunParsedResult | null {
           : typeof j.sid === "string"
             ? j.sid
             : undefined,
+    };
+  }
+  if (msgType === "action" && dataTop?.action === "error") {
+    return {
+      text: "",
+      isFinal: false,
+      isLastFrame: false,
+      error: String(dataTop.desc ?? j.desc ?? j.message ?? "讯飞转写错误"),
     };
   }
   if (action === "started") {
