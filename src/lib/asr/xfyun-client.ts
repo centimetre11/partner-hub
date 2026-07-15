@@ -17,7 +17,23 @@ export type XfyunClientResult = {
 function parseMessage(raw: string): XfyunClientResult | null {
   try {
     const j = JSON.parse(raw) as Record<string, unknown>;
+    const msgType = String(j.msg_type ?? "");
     const action = String(j.action ?? "");
+    const dataObj = j.data as Record<string, unknown> | undefined;
+
+    if (msgType === "action" && dataObj?.action === "started") {
+      return {
+        text: "",
+        isFinal: false,
+        isLastFrame: false,
+        sessionId:
+          typeof dataObj.sessionId === "string"
+            ? dataObj.sessionId
+            : typeof j.sid === "string"
+              ? j.sid
+              : undefined,
+      };
+    }
     if (action === "started") {
       return {
         text: "",
@@ -26,16 +42,15 @@ function parseMessage(raw: string): XfyunClientResult | null {
         sessionId: typeof j.sid === "string" ? j.sid : undefined,
       };
     }
-    if (action === "error") {
+    if (action === "error" || (msgType === "action" && dataObj?.action === "error")) {
       return {
         text: "",
         isFinal: false,
         isLastFrame: false,
-        error: String(j.desc ?? j.message ?? "讯飞转写错误"),
+        error: String(j.desc ?? dataObj?.desc ?? j.message ?? "讯飞转写错误"),
       };
     }
 
-    const msgType = String(j.msg_type ?? "");
     if (msgType === "result" && j.res_type === "frc") {
       const data = j.data as { desc?: string } | undefined;
       return {
@@ -102,12 +117,16 @@ export class XfyunRealtimeClient {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false;
       this.ws = new WebSocket(this.session.wsUrl);
       this.ws.binaryType = "arraybuffer";
 
       this.ws.onopen = () => {
         this.sendTimer = window.setInterval(() => this.flushFrames(), this.session.frameIntervalMs);
-        resolve();
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
       };
 
       this.ws.onmessage = (ev) => {
@@ -125,13 +144,22 @@ export class XfyunRealtimeClient {
       };
 
       this.ws.onerror = () => {
-        if (!this.closed) this.onError("讯飞 WebSocket 连接异常");
-        reject(new Error("WebSocket error"));
+        if (!this.closed) {
+          this.onError("讯飞 WebSocket 连接失败，请检查密钥或控制台 IP 白名单");
+        }
+        if (!settled) {
+          settled = true;
+          reject(new Error("WebSocket error"));
+        }
       };
 
-      this.ws.onclose = () => {
+      this.ws.onclose = (ev) => {
         if (this.sendTimer) window.clearInterval(this.sendTimer);
         this.sendTimer = null;
+        if (!settled && !this.closed) {
+          settled = true;
+          reject(new Error(`讯飞连接已关闭（${ev.code}）`));
+        }
       };
     });
   }

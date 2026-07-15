@@ -23,13 +23,10 @@ export function getXfyunAsrConfig() {
   } as const;
 }
 
-function formatUtc(d = new Date()): string {
+function formatUtcChina(d = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  const offsetMin = -d.getTimezoneOffset();
-  const sign = offsetMin >= 0 ? "+" : "-";
-  const abs = Math.abs(offsetMin);
-  const tz = `${sign}${pad(Math.floor(abs / 60))}${pad(abs % 60)}`;
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${tz}`;
+  // 讯飞要求 +0800 格式
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}+0800`;
 }
 
 function urlEncode(value: string): string {
@@ -49,7 +46,7 @@ export function buildXfyunRealtimeWsUrl(opts: {
     accessKeyId: opts.apiKey,
     appId: opts.appId,
     lang: opts.lang || "autodialect",
-    utc: opts.utc || formatUtc(),
+    utc: opts.utc || formatUtcChina(),
     uuid: opts.uuid,
     audio_encode: "pcm_s16le",
     samplerate: "16000",
@@ -94,6 +91,22 @@ export function parseXfyunAsrMessage(raw: string): XfyunParsedResult | null {
   }
 
   const action = String(j.action ?? "");
+  const msgType = String(j.msg_type ?? "");
+  const dataTop = j.data as Record<string, unknown> | undefined;
+
+  if (msgType === "action" && dataTop?.action === "started") {
+    return {
+      text: "",
+      isFinal: false,
+      isLastFrame: false,
+      sessionId:
+        typeof dataTop.sessionId === "string"
+          ? dataTop.sessionId
+          : typeof j.sid === "string"
+            ? j.sid
+            : undefined,
+    };
+  }
   if (action === "started") {
     return {
       text: "",
@@ -111,7 +124,6 @@ export function parseXfyunAsrMessage(raw: string): XfyunParsedResult | null {
     };
   }
 
-  const msgType = String(j.msg_type ?? "");
   if (msgType === "result" && j.res_type === "frc") {
     const data = j.data as { desc?: string } | undefined;
     return {

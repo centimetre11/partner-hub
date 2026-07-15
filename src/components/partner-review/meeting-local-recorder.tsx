@@ -243,46 +243,25 @@ export function MeetingLocalRecorder({
       });
       streamRef.current = micStream;
 
-      let displayStream: MediaStream | null = null;
-      if (captureSystemAudio) {
-        try {
-          displayStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-            },
-            preferCurrentTab: false,
-            systemAudio: "include",
-          } as DisplayMediaStreamOptions);
-          displayStream.getVideoTracks().forEach((t) => t.stop());
-          if (displayStream.getAudioTracks().length === 0) {
-            displayStream.getTracks().forEach((t) => t.stop());
-            displayStream = null;
-            setLocalError(
-              "浏览器未给出会议音频轨（本次只录麦克风）。Mac 请选「Chrome 标签页」并勾选「分享音频」。",
-            );
-          } else {
-            displayStreamRef.current = displayStream;
-          }
-        } catch {
-          setLocalError("已取消屏幕共享（本次只录麦克风）。");
-        }
-      }
-
       const markRes = await fetch(`/api/partner-reviews/${meetingId}/recording/start`, {
         method: "POST",
       });
-      const mark = (await markRes.json()) as { ok?: boolean; error?: string };
-      if (!markRes.ok || mark.error) {
-        throw new Error(mark.error || `开录失败 HTTP ${markRes.status}`);
+      if (!markRes.ok) {
+        const markErr = (await markRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(markErr.error || `开录失败 HTTP ${markRes.status}`);
       }
+      const mark = (await markRes.json()) as { ok?: boolean; error?: string };
+      if (mark.error) throw new Error(mark.error);
       onMeetingLive();
 
+      setStatusLine("正在连接讯飞实时转写…");
       const sessRes = await fetch(`/api/partner-reviews/${meetingId}/recording/xfyun-session`, {
         method: "POST",
       });
+      if (!sessRes.ok) {
+        const sessErr = (await sessRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(sessErr.error || `讯飞会话失败 HTTP ${sessRes.status}`);
+      }
       const sess = (await sessRes.json()) as {
         ok?: boolean;
         error?: string;
@@ -292,7 +271,7 @@ export function MeetingLocalRecorder({
         frameBytes?: number;
         frameIntervalMs?: number;
       };
-      if (!sessRes.ok || !sess.wsUrl || !sess.sessionId) {
+      if (!sess.wsUrl || !sess.sessionId) {
         throw new Error(sess.error || "讯飞转写未配置或鉴权失败");
       }
 
@@ -328,6 +307,35 @@ export function MeetingLocalRecorder({
       xfyunRef.current = client;
       await client.connect();
 
+      let displayStream: MediaStream | null = null;
+      if (captureSystemAudio) {
+        setStatusLine("讯飞已连接 · 请选择要共享的会议标签页并勾选「分享音频」…");
+        try {
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            },
+            preferCurrentTab: false,
+            systemAudio: "include",
+          } as DisplayMediaStreamOptions);
+          displayStream.getVideoTracks().forEach((t) => t.stop());
+          if (displayStream.getAudioTracks().length === 0) {
+            displayStream.getTracks().forEach((t) => t.stop());
+            displayStream = null;
+            setLocalError(
+              "浏览器未给出会议音频轨（本次只录麦克风）。Mac 请选「Chrome 标签页」并勾选「分享音频」。",
+            );
+          } else {
+            displayStreamRef.current = displayStream;
+          }
+        } catch {
+          setLocalError("已取消屏幕共享（本次只录麦克风）。");
+        }
+      }
+
       startPcmCapture([
         { stream: micStream, gain: 1.15 },
         ...(displayStream ? [{ stream: displayStream, gain: 1.85 }] : []),
@@ -349,7 +357,12 @@ export function MeetingLocalRecorder({
           : "已开始录音与实时转写。请对着麦克风说话；讨论谁点左侧谁。",
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "无法开始录音";
+      const msg =
+        e instanceof TypeError && /fetch/i.test(String(e.message))
+          ? "网络请求失败（Failed to fetch），请刷新页面后重试"
+          : e instanceof Error
+            ? e.message
+            : "无法开始录音";
       setLocalError(msg);
       setPhase("error");
       setStatusLine("开录失败");
