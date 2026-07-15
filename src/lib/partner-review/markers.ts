@@ -107,7 +107,11 @@ export function assignSentencesByRelativeMarkerTime(
   for (const s of sentences) {
     if (!s.line.trim()) continue;
     if (s.atMs == null || !sorted.length) {
-      buckets.get(unassignedKey)!.lines.push(s.line);
+      if (sorted.length) {
+        buckets.get(sorted[0]!.partnerId)!.lines.push(s.line);
+      } else {
+        buckets.get(unassignedKey)!.lines.push(s.line);
+      }
       continue;
     }
     let owner: PartnerTimeBoundary | null = null;
@@ -116,7 +120,8 @@ export function assignSentencesByRelativeMarkerTime(
       else break;
     }
     if (!owner) {
-      buckets.get(unassignedKey)!.lines.push(s.line);
+      // 打标前或时间轴偏早的句子，归第一个已点伙伴
+      buckets.get(sorted[0]!.partnerId)!.lines.push(s.line);
     } else {
       buckets.get(owner.partnerId)!.lines.push(s.line);
     }

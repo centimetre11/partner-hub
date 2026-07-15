@@ -24,6 +24,8 @@ type RelaySession = {
   closed: boolean;
   /** 不足 1280 字节的 PCM 尾帧 */
   pcmRemainder: Buffer;
+  /** 已送入讯飞的音频时长（ms），用于与议程打点对齐 */
+  audioMsSent: number;
 };
 
 const FRAME_BYTES = 1280;
@@ -39,6 +41,7 @@ function flushPcmToXfyun(session: RelaySession, pcm: Buffer) {
   while (offset + FRAME_BYTES <= merged.length) {
     session.ws.send(merged.subarray(offset, offset + FRAME_BYTES));
     offset += FRAME_BYTES;
+    session.audioMsSent += 40;
   }
   session.pcmRemainder =
     offset < merged.length ? merged.subarray(offset) : Buffer.alloc(0);
@@ -69,11 +72,17 @@ async function handleMessage(relaySessionId: string, raw: string) {
 
   if (parsed.isFinal && parsed.text) {
     session.interim = "";
+    const xfyunDur =
+      parsed.endMs != null && parsed.startMs != null
+        ? Math.max(200, parsed.endMs - parsed.startMs)
+        : 2000;
+    const endMs = session.audioMsSent;
+    const startMs = Math.max(0, endMs - xfyunDur);
     try {
       const res = await appendFinalTranscriptSentence(session.meetingId, {
         text: parsed.text,
-        startMs: parsed.startMs,
-        endMs: parsed.endMs,
+        startMs,
+        endMs,
       });
       if (!res.duplicate) {
         session.plain = res.plain;
@@ -98,6 +107,8 @@ export async function createXfyunRelaySession(meetingId: string, userId: string)
     apiKey: cfg.apiKey,
     apiSecret: cfg.apiSecret,
     lang: cfg.lang,
+    pd: cfg.pd,
+    vadMdn: cfg.vadMdn,
     uuid: randomUUID().replace(/-/g, ""),
   });
 
@@ -116,6 +127,7 @@ export async function createXfyunRelaySession(meetingId: string, userId: string)
       error: null,
       closed: false,
       pcmRemainder: Buffer.alloc(0),
+      audioMsSent: 0,
     };
     pool.set(relaySessionId, session);
 

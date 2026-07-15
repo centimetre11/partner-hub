@@ -9,10 +9,9 @@ export function buildLiveNotesFromSegments(segments: TranscriptSegment[]): strin
   const parts: string[] = [];
   for (const seg of segments) {
     const body = seg.text.trim();
-    if (!body) continue;
     if (seg.partnerName) {
-      parts.push(`## ${seg.partnerName}\n${body}`);
-    } else {
+      parts.push(body ? `## ${seg.partnerName}\n${body}` : `## ${seg.partnerName}\n（该时段未识别到有效语音）`);
+    } else if (body) {
       parts.push(`## 未归属\n${body}`);
     }
   }

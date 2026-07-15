@@ -562,8 +562,9 @@ export function MeetingLocalRecorder({
 
       {!recording && phase === "idle" ? (
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          使用科大讯飞实时转写（云端，不占服务器内存）。远程会议请勾选「同时录会议/电脑声音」，并在弹窗中选
-          Chrome 标签页且勾选「分享音频」。
+          使用科大讯飞实时转写。提高准确率：① 远程会议请共享 Chrome 标签页并勾选「分享音频」；②
+          在讯飞控制台上传本场伙伴名/公司名为热词；③ 开始讨论某伙伴时再点左侧打标。Mac
+          纯麦克风识别率会低于共享会议声。
         </p>
       ) : null}
     </div>

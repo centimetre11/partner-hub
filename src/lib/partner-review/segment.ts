@@ -78,5 +78,20 @@ export function computeTranscriptSegments(meeting: MeetingWithItems): Transcript
     line: s.speaker ? `${s.speaker}: ${s.text}` : s.text,
   }));
 
-  return assignSentencesByRelativeMarkerTime(sentences, boundaries);
+  const segments = assignSentencesByRelativeMarkerTime(sentences, boundaries);
+
+  for (const b of boundaries) {
+    if (!segments.some((s) => s.partnerId === b.partnerId)) {
+      segments.push({ partnerId: b.partnerId, partnerName: b.partnerName, text: "" });
+    }
+  }
+
+  const order = new Map(boundaries.map((b, i) => [b.partnerId, i]));
+  segments.sort((a, b) => {
+    if (a.partnerId == null) return -1;
+    if (b.partnerId == null) return 1;
+    return (order.get(a.partnerId) ?? 99) - (order.get(b.partnerId) ?? 99);
+  });
+
+  return segments;
 }

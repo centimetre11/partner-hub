@@ -10,12 +10,16 @@ export function getXfyunAsrConfig() {
   const apiKey = (process.env.XFYUN_API_KEY || "").trim();
   const apiSecret = (process.env.XFYUN_API_SECRET || "").trim();
   const lang = (process.env.XFYUN_LANG || "autodialect").trim() || "autodialect";
+  const pd = (process.env.XFYUN_PD || "com").trim();
+  const vadMdn = (process.env.XFYUN_VAD_MDN || "2").trim();
   return {
     enabled: !!(appId && apiKey && apiSecret),
     appId,
     apiKey,
     apiSecret,
     lang,
+    pd: pd || undefined,
+    vadMdn: vadMdn === "1" || vadMdn === "2" ? vadMdn : undefined,
     wsHost: WS_HOST,
     sampleRate: 16000,
     frameBytes: 1280,
@@ -50,6 +54,8 @@ export function buildXfyunRealtimeWsUrl(opts: {
   apiKey: string;
   apiSecret: string;
   lang?: string;
+  pd?: string;
+  vadMdn?: string;
   uuid: string;
   utc?: string;
 }): string {
@@ -62,6 +68,8 @@ export function buildXfyunRealtimeWsUrl(opts: {
     audio_encode: "pcm_s16le",
     samplerate: "16000",
   };
+  if (opts.pd) params.pd = opts.pd;
+  if (opts.vadMdn === "1" || opts.vadMdn === "2") params.eng_vad_mdn = opts.vadMdn;
 
   const sorted = Object.keys(params).sort();
   const baseString = sorted
@@ -91,6 +99,22 @@ export type XfyunParsedResult = {
   sessionId?: string;
   error?: string;
 };
+
+/** 按 wp 字段拼接词与标点，避免标点单独成行 */
+export function extractXfyunText(st: Record<string, unknown>): string {
+  const rt = st.rt as Array<{ ws?: Array<{ cw?: Array<{ w?: string; wp?: string }> }> }> | undefined;
+  let out = "";
+  for (const block of rt ?? []) {
+    for (const ws of block.ws ?? []) {
+      for (const cw of ws.cw ?? []) {
+        const w = cw.w?.trim();
+        if (!w) continue;
+        out += w;
+      }
+    }
+  }
+  return out.replace(/^[\s。，、？！：；,.?!]+/, "").trim();
+}
 
 /** 解析讯飞实时转写 JSON 消息 */
 export function parseXfyunAsrMessage(raw: string): XfyunParsedResult | null {
@@ -160,17 +184,8 @@ export function parseXfyunAsrMessage(raw: string): XfyunParsedResult | null {
   const st = cn.st;
   if (!st) return null;
 
-  const words: string[] = [];
-  const rt = st.rt as Array<{ ws?: Array<{ cw?: Array<{ w?: string }> }> }> | undefined;
-  for (const block of rt ?? []) {
-    for (const ws of block.ws ?? []) {
-      for (const cw of ws.cw ?? []) {
-        if (cw.w) words.push(cw.w);
-      }
-    }
-  }
-
-  const text = words.join("").trim();
+  const text = extractXfyunText(st);
+  if (!text) return null;
   const typeVal = st.type;
   const isFinal = typeVal === "0" || typeVal === 0;
   const bg = typeof st.bg === "number" ? st.bg : undefined;
@@ -185,3 +200,4 @@ export function parseXfyunAsrMessage(raw: string): XfyunParsedResult | null {
     sessionId: typeof j.sid === "string" ? j.sid : undefined,
   };
 }
+
