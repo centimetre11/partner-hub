@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
-import {
-  buildTimedTranscriptDoc,
-  parseTimedTranscriptDoc,
-  serializeTimedTranscriptDoc,
-  type TranscriptSentence,
-} from "@/lib/partner-review/transcript";
+import { appendFinalTranscriptSentence } from "@/lib/asr/xfyun-stream-writer";
 
 export const runtime = "nodejs";
 
@@ -17,7 +12,7 @@ type StreamBody = {
   final?: boolean;
 };
 
-/** 追加讯飞实时转写句子到会议时间轴 */
+/** 追加讯飞实时转写句子到会议时间轴（备用；主路径由 relay 服务端写入） */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -38,47 +33,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ ok: true, preview: text });
   }
 
-  const startMs = Math.max(0, Number(body.startMs) || 0);
-  const endMs = body.endMs != null ? Math.max(startMs, Number(body.endMs)) : undefined;
-
-  const prev = parseTimedTranscriptDoc(meeting.transcriptJson);
-  const prevSentences = prev?.sentences ?? [];
-
-  // 避免重复追加相同终句
-  const dup = prevSentences.some(
-    (s) => s.text === text && Math.abs((s.startTime || 0) - startMs) < 500,
-  );
-  if (dup) {
-    return NextResponse.json({ ok: true, plain: meeting.transcriptText ?? "", duplicate: true });
-  }
-
-  const newSentence: TranscriptSentence = {
-    startTime: startMs,
-    endTime: endMs,
+  const res = await appendFinalTranscriptSentence(meetingId, {
     text,
-  };
-
-  const merged = buildTimedTranscriptDoc({
-    sentences: [...prevSentences, newSentence],
-    timeBase: "relative_ms",
-    recordingStartedAt: meeting.recordingStartedAt ?? meeting.startedAt,
-  });
-
-  await db.partnerReviewMeeting.update({
-    where: { id: meetingId },
-    data: {
-      transcriptText: merged.plain,
-      transcriptJson: serializeTimedTranscriptDoc(merged),
-      transcriptStatus: "recording",
-      transcriptError: null,
-      status: meeting.status === "DRAFT" || meeting.status === "PREP" ? "LIVE" : meeting.status,
-    },
+    startMs: body.startMs,
+    endMs: body.endMs,
   });
 
   return NextResponse.json({
     ok: true,
-    plain: merged.plain,
-    sentence: text,
-    sentences: merged.sentences.length,
+    plain: res.plain,
+    sentence: res.sentence,
+    duplicate: res.duplicate,
   });
 }

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
 import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
-import { buildXfyunRealtimeWsUrl, getXfyunAsrConfig } from "@/lib/asr/xfyun";
+import { getXfyunAsrConfig } from "@/lib/asr/xfyun";
+import { createXfyunRelaySession } from "@/lib/asr/xfyun-relay";
 
 export const runtime = "nodejs";
 
-/** 获取讯飞实时转写 WebSocket 握手地址（服务端签名，密钥不下发） */
+/** 在服务器侧建立讯飞 WebSocket，浏览器只上传 PCM（绕过 IP 白名单） */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -26,22 +26,21 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     return NextResponse.json({ error: "已完成会议不可开录" }, { status: 400 });
   }
 
-  const uuid = randomUUID().replace(/-/g, "");
-  const sessionId = randomUUID();
-  const wsUrl = buildXfyunRealtimeWsUrl({
-    appId: cfg.appId,
-    apiKey: cfg.apiKey,
-    apiSecret: cfg.apiSecret,
-    lang: cfg.lang,
-    uuid,
-  });
-
-  return NextResponse.json({
-    ok: true,
-    wsUrl,
-    sessionId,
-    sampleRate: cfg.sampleRate,
-    frameBytes: cfg.frameBytes,
-    frameIntervalMs: cfg.frameIntervalMs,
-  });
+  try {
+    const relay = await createXfyunRelaySession(meetingId, uid);
+    return NextResponse.json({
+      ok: true,
+      mode: "relay",
+      relaySessionId: relay.relaySessionId,
+      sessionId: relay.relaySessionId,
+      sampleRate: relay.sampleRate,
+      frameBytes: relay.frameBytes,
+      frameIntervalMs: relay.frameIntervalMs,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e) },
+      { status: 502 },
+    );
+  }
 }

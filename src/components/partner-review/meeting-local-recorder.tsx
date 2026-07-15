@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { meterLevel, sliceLastSeconds } from "@/lib/asr/wav";
-import { XfyunRealtimeClient } from "@/lib/asr/xfyun-client";
+import { XfyunRelayClient } from "@/lib/asr/xfyun-relay-client";
 
 type Props = {
   meetingId: string;
@@ -58,7 +58,7 @@ export function MeetingLocalRecorder({
   const sampleRateRef = useRef(48000);
   const levelTimerRef = useRef<number | null>(null);
   const quietStreakRef = useRef(0);
-  const xfyunRef = useRef<XfyunRealtimeClient | null>(null);
+  const xfyunRef = useRef<XfyunRelayClient | null>(null);
   const interimRef = useRef("");
   const finalPlainRef = useRef("");
 
@@ -125,24 +125,6 @@ export function MeetingLocalRecorder({
       : finalPlain;
     setDisplayPlain(combined);
     onLiveTranscript?.(combined);
-  }
-
-  async function appendFinalSentence(text: string, startMs?: number, endMs?: number) {
-    const res = await fetch(`/api/partner-reviews/${meetingId}/recording/stream`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, startMs, endMs, final: true }),
-    });
-    const data = (await res.json()) as { ok?: boolean; error?: string; plain?: string; duplicate?: boolean };
-    if (!res.ok) throw new Error(data.error || res.statusText);
-    if (data.duplicate) return finalPlainRef.current;
-    const plain = data.plain ?? "";
-    finalPlainRef.current = plain;
-    interimRef.current = "";
-    setSentenceCount((n) => n + 1);
-    setLastPreview(text.slice(0, 120));
-    pushDisplay();
-    return plain;
   }
 
   function startPcmCapture(sources: { stream: MediaStream; gain: number }[]) {
@@ -254,7 +236,7 @@ export function MeetingLocalRecorder({
       if (mark.error) throw new Error(mark.error);
       onMeetingLive();
 
-      setStatusLine("正在连接讯飞实时转写…");
+      setStatusLine("正在连接讯飞实时转写（经服务器）…");
       const sessRes = await fetch(`/api/partner-reviews/${meetingId}/recording/xfyun-session`, {
         method: "POST",
       });
@@ -265,20 +247,19 @@ export function MeetingLocalRecorder({
       const sess = (await sessRes.json()) as {
         ok?: boolean;
         error?: string;
-        wsUrl?: string;
-        sessionId?: string;
+        relaySessionId?: string;
         sampleRate?: number;
         frameBytes?: number;
         frameIntervalMs?: number;
       };
-      if (!sess.wsUrl || !sess.sessionId) {
+      if (!sess.relaySessionId) {
         throw new Error(sess.error || "讯飞转写未配置或鉴权失败");
       }
 
-      const client = new XfyunRealtimeClient(
+      const client = new XfyunRelayClient(
+        meetingId,
         {
-          wsUrl: sess.wsUrl,
-          sessionId: sess.sessionId,
+          relaySessionId: sess.relaySessionId,
           sampleRate: sess.sampleRate ?? 16000,
           frameBytes: sess.frameBytes ?? 1280,
           frameIntervalMs: sess.frameIntervalMs ?? 40,
@@ -290,10 +271,12 @@ export function MeetingLocalRecorder({
             setStatusLine(`讯飞异常：${result.error.slice(0, 60)}`);
             return;
           }
+          if (result.plain) finalPlainRef.current = result.plain;
           if (result.isFinal && result.text) {
-            void appendFinalSentence(result.text, result.startMs, result.endMs).catch((e) => {
-              setLocalError(e instanceof Error ? e.message : String(e));
-            });
+            interimRef.current = "";
+            setSentenceCount((n) => n + 1);
+            setLastPreview(result.text.slice(0, 120));
+            pushDisplay();
             setStatusLine(`已识别：${result.text.slice(0, 36)}${result.text.length > 36 ? "…" : ""}`);
           } else if (result.text) {
             interimRef.current = result.text;
@@ -309,7 +292,7 @@ export function MeetingLocalRecorder({
 
       let displayStream: MediaStream | null = null;
       if (captureSystemAudio) {
-        setStatusLine("讯飞已连接 · 请选择要共享的会议标签页并勾选「分享音频」…");
+        setStatusLine("讯飞已就绪 · 请选择要共享的会议标签页并勾选「分享音频」…");
         try {
           displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
