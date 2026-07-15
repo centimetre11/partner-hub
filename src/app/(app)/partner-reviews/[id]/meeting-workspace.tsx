@@ -167,18 +167,11 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               disabled={pending}
               onClick={() =>
                 run(async () => {
-                  if (needsPrep) {
-                    const prep = await runMeetingPrepAction(meeting.id);
-                    if (prep.error) {
-                      flash(undefined, prep.error);
-                      return;
-                    }
-                  }
                   const res = await startPartnerReviewMeetingAction(meeting.id);
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "LIVE" }));
-                    flash(needsPrep ? "已生成简报并开始开会" : "会议已开始，点左侧伙伴可打标");
+                    flash("会议已开始，点左侧伙伴可打标");
                     router.refresh();
                   }
                 })
@@ -192,13 +185,6 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               disabled={pending}
               onClick={() =>
                 run(async () => {
-                  if (needsPrep) {
-                    const prep = await runMeetingPrepAction(meeting.id);
-                    if (prep.error) {
-                      flash(undefined, prep.error);
-                      return;
-                    }
-                  }
                   const res = await startPartnerReviewMeetingAction(meeting.id);
                   if (res.error) {
                     flash(undefined, res.error);
@@ -317,8 +303,8 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：开会准备 →「录音并开始开会」（钉钉 A1，需在钉钉内打开）→ 讨论谁点左侧谁打标 → 结束会议 →
-          拉取转写 → AI 拆分。钉钉配置见{" "}
+          建议：需要简报时先点「开会准备」→「录音并开始开会」（钉钉 A1，需在钉钉内打开）→ 讨论谁点左侧谁打标 →
+          结束会议 → 拉取转写 → AI 拆分。钉钉配置见{" "}
           <Link href="/settings#integrations" className="text-sky-700 hover:underline">
             团队设置 · 钉钉
           </Link>
