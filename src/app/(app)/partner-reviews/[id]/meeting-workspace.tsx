@@ -412,7 +412,7 @@ export function MeetingWorkspace({
         />
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
         {/* Partner list */}
         <aside className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="px-3 py-2 border-b border-slate-100 text-xs font-medium text-slate-500">
@@ -477,6 +477,14 @@ export function MeetingWorkspace({
             );
             })}
           </ul>
+          {phase === "live" ? (
+            <LiveAgendaPanel
+              items={meeting.items}
+              currentDiscussItemId={currentDiscussItemId}
+              meetingStartedAt={meeting.startedAt}
+              compact
+            />
+          ) : null}
           {(phase === "prep" || phase === "live" || phase === "post") && (
             <AddPartnersPanel
               meetingId={meeting.id}
@@ -493,25 +501,15 @@ export function MeetingWorkspace({
           )}
         </aside>
 
-        {/* Brief / confirm */}
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px]">
+        {/* 伙伴详情 · 左栏：概览与商机 */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
           {!activeItem ? (
-            <p className="text-sm text-slate-400">选择左侧伙伴</p>
+            <p className="text-sm text-slate-400">选择左侧伙伴查看详情</p>
           ) : (
             <>
-              <div>
-                <h3 className="text-base font-semibold text-slate-900">{activeItem.partnerName}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {phase === "done"
-                    ? "已确认摘要（历史回看）"
-                    : activeItem.prepBrief?.windowLabel
-                      ? `简报窗口 ${activeItem.prepBrief.windowLabel}`
-                      : "尚未拉取近 2 周进展，请点上方「开会准备」"}
-                </p>
-              </div>
-
+              <PartnerDetailHeader activeItem={activeItem} phase={phase} />
               {phase === "done" ? (
-                <ConfirmedHistoryPanel item={activeItem} />
+                <ConfirmedHistoryPanel item={activeItem} part="left" />
               ) : (
                 <>
                   {!activeItem.prepBrief && canRunPrep ? (
@@ -530,44 +528,57 @@ export function MeetingWorkspace({
                     </div>
                   ) : null}
                   {activeItem.prepBrief ? (
-                    <PrepBriefView brief={activeItem.prepBrief} />
+                    <PrepBriefOverview brief={activeItem.prepBrief} />
                   ) : null}
-
-                  {phase === "post" && (
+                  {phase === "post" ? (
                     <PostConfirmPanel
                       item={activeItem}
                       draft={confirmDrafts[activeItem.id]}
                       onChange={(d) => setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))}
                       proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
+                      part="left"
                     />
-                  )}
+                  ) : null}
                 </>
               )}
             </>
           )}
         </section>
 
-        {/* 议程 / 腾讯会议总结 / 会前预览 */}
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          {phase === "prep" ? (
-            <PrepPreviewPanel
-              meetingId={meeting.id}
-              previewToken={meeting.previewToken}
-              items={meeting.items}
-              hasBrief={!needsPrep}
-            />
-          ) : null}
-
-          {phase === "live" ? (
-            <LiveAgendaPanel
-              items={meeting.items}
-              currentDiscussItemId={currentDiscussItemId}
-              meetingStartedAt={meeting.startedAt}
-            />
-          ) : null}
-
-          {(phase === "post" || phase === "done") && (
+        {/* 伙伴详情 · 右栏：待办与进展 */}
+        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
+          {!activeItem ? (
+            <p className="text-sm text-slate-400">议题、待办与近两周进展将显示在这里</p>
+          ) : (
             <>
+              {phase === "done" ? (
+                <ConfirmedHistoryPanel item={activeItem} part="right" />
+              ) : (
+                <>
+                  {activeItem.prepBrief ? (
+                    <PrepBriefActivity brief={activeItem.prepBrief} />
+                  ) : (
+                    <p className="text-xs text-slate-400">生成简报后，此处显示待办与近两周进展</p>
+                  )}
+                  {phase === "post" ? (
+                    <PostConfirmPanel
+                      item={activeItem}
+                      draft={confirmDrafts[activeItem.id]}
+                      onChange={(d) => setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))}
+                      proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
+                      part="right"
+                    />
+                  ) : null}
+                </>
+              )}
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* 会后：纪要粘贴 / 匹配 / AI 拆分（全宽） */}
+      {(phase === "post" || phase === "done") && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
               <div>
                 <div className="text-xs font-medium text-slate-500 mb-1">
                   {phase === "done" ? "会议记录（只读）" : "1. 粘贴腾讯会议智能纪要"}
@@ -674,8 +685,6 @@ export function MeetingWorkspace({
                   busy={busy}
                 />
               ) : null}
-            </>
-          )}
 
           {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
             <>
@@ -734,7 +743,7 @@ export function MeetingWorkspace({
                           }
                         }
                         setConfirmDrafts(drafts);
-                        flash("AI 拆分完成，请在中间栏逐个确认摘要与待办");
+                        flash("AI 拆分完成，请在上方两栏逐个确认摘要与待办");
                       }
                     })
                   }
@@ -803,16 +812,16 @@ export function MeetingWorkspace({
                   确认写入商务记录与待办
                 </button>
               </div>
-            {proposal?.unassignedText ? (
-                <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
-                  <div className="font-medium mb-1">未归属片段（请检查会中是否按讨论顺序打标后重新拆分）</div>
-                  {proposal.unassignedText.slice(0, 2000)}
-                </div>
-            ) : null}
+          {proposal?.unassignedText ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
+              <div className="font-medium mb-1">未归属片段（请检查会中是否按讨论顺序打标后重新拆分）</div>
+              {proposal.unassignedText.slice(0, 2000)}
+            </div>
+          ) : null}
             </>
           )}
         </section>
-      </div>
+      )}
     </div>
   );
 }
@@ -1036,47 +1045,27 @@ function MeetingPreviewActions({
   );
 }
 
-function PrepPreviewPanel({
-  meetingId,
-  previewToken,
-  items,
-  hasBrief,
+function PartnerDetailHeader({
+  activeItem,
+  phase,
 }: {
-  meetingId: string;
-  previewToken: string | null;
-  items: ReviewItemClient[];
-  hasBrief: boolean;
+  activeItem: ReviewItemClient;
+  phase: string;
 }) {
   return (
-    <div className="space-y-3">
-      <div>
-        <p className="text-xs font-medium text-slate-700">会前预览（可发给同事）</p>
-        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-          生成简报后，可将预览链接发到群里，让大家提前看今日议程与各伙伴讨论要点。无需登录即可查看。
-        </p>
+    <div className="pb-2 border-b border-slate-100">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-base font-semibold text-slate-900">{activeItem.partnerName}</h3>
+        {activeItem.partnerTier ? (
+          <span className="text-[11px] text-slate-500">Tier {activeItem.partnerTier}</span>
+        ) : null}
       </div>
-      <ol className="space-y-1.5 text-sm">
-        {items.map((it, idx) => (
-          <li key={it.id} className="flex items-center gap-2 text-slate-700">
-            <span className="text-xs text-slate-400 w-4">{idx + 1}</span>
-            <span className="font-medium">{it.partnerName}</span>
-            {it.prepBrief ? (
-              <span className="text-[11px] text-emerald-600">简报已就绪</span>
-            ) : (
-              <span className="text-[11px] text-amber-600">待生成简报</span>
-            )}
-          </li>
-        ))}
-      </ol>
-      {hasBrief ? (
-        <div className="flex flex-wrap gap-2 pt-1">
-          <MeetingPreviewActions meetingId={meetingId} previewToken={previewToken} />
-        </div>
-      ) : (
-        <p className="text-xs text-slate-400">请先点上方「开会准备」生成各伙伴简报，再分享预览链接。</p>
-      )}
-      <p className="text-[11px] text-slate-400 border-t border-slate-100 pt-3">
-        点「开始开会」后，此处会切换为讨论时间轴；本页不录音，仅记录你何时开始过哪位伙伴。
+      <p className="text-xs text-slate-500 mt-0.5">
+        {phase === "done"
+          ? "已确认摘要（历史回看）"
+          : activeItem.prepBrief?.windowLabel
+            ? `简报窗口 ${activeItem.prepBrief.windowLabel}`
+            : "尚未拉取近 2 周进展，请点上方「开会准备」"}
       </p>
     </div>
   );
@@ -1167,10 +1156,12 @@ function LiveAgendaPanel({
   items,
   currentDiscussItemId,
   meetingStartedAt,
+  compact = false,
 }: {
   items: ReviewItemClient[];
   currentDiscussItemId: string | null;
   meetingStartedAt: string | null;
+  compact?: boolean;
 }) {
   const marked = items
     .filter((it) => it.markerInsertedAt || it.discussedAt)
@@ -1181,36 +1172,40 @@ function LiveAgendaPanel({
     });
 
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[200px]">
-      <p className="text-xs font-medium text-slate-700">讨论顺序与时间轴</p>
-      <p className="text-xs text-slate-600 leading-relaxed">
-        腾讯会议中进行实际讨论；此处<strong>只记录</strong>你何时开始过哪位伙伴（相对「开始开会」的时刻）。会后粘贴 AI
-        纪要时，系统优先用打点顺序与「小结」编号匹配，必要时用 AI 按语义对应伙伴。
-      </p>
+    <div
+      className={
+        compact
+          ? "border-t border-slate-100 bg-slate-50/80 px-3 py-2.5 space-y-2"
+          : "rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[200px]"
+      }
+    >
+      <p className="text-xs font-medium text-slate-700">讨论顺序</p>
+      {!compact ? (
+        <p className="text-xs text-slate-600 leading-relaxed">
+          腾讯会议中进行实际讨论；此处<strong>只记录</strong>你何时开始过哪位伙伴（相对「开始开会」的时刻）。
+        </p>
+      ) : null}
       {!marked.length ? (
-        <p className="text-sm text-slate-400">尚未打点 · 点左侧伙伴开始</p>
+        <p className="text-[11px] text-slate-400">尚未打点 · 点上方伙伴开始</p>
       ) : (
-        <ol className="space-y-2">
+        <ol className="space-y-1.5">
           {marked.map((it, idx) => (
             <li
               key={it.id}
-              className={`rounded-lg border px-3 py-2 text-sm ${
+              className={`rounded-md border px-2 py-1.5 text-[11px] ${
                 it.id === currentDiscussItemId
                   ? "border-emerald-200 bg-emerald-50/80"
                   : "border-slate-200 bg-white"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-slate-800">
+                <span className="font-medium text-slate-800 truncate">
                   {idx + 1}. {it.partnerName}
                 </span>
-                <span className="text-[11px] text-slate-500 font-mono shrink-0">
+                <span className="text-slate-500 font-mono shrink-0">
                   {formatAgendaMarkerTime(it.markerInsertedAt ?? it.discussedAt, meetingStartedAt)}
                 </span>
               </div>
-              {it.id === currentDiscussItemId ? (
-                <p className="text-[11px] font-semibold text-emerald-700 mt-0.5">当前正在过</p>
-              ) : null}
             </li>
           ))}
         </ol>
@@ -1294,28 +1289,7 @@ function tidyClientText(text: string) {
   return flat.replace(/【联系人\s*[^】]+】\s*/g, "").trim();
 }
 
-function PrepBriefView({ brief }: { brief: PartnerPrepBrief }) {
-  const baseTodos =
-    brief.todos?.length
-      ? brief.todos
-      : (brief.openTodos ?? []).map((t) => ({ ...t, done: false }));
-  const [doneMap, setDoneMap] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(baseTodos.map((t) => [t.id, t.done])),
-  );
-
-  useEffect(() => {
-    setDoneMap(Object.fromEntries(baseTodos.map((t) => [t.id, t.done])));
-    // 简报刷新或切换伙伴时重置本地勾选状态
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随简报内容指纹变化
-  }, [brief.partnerId, brief.windowLabel, baseTodos.map((t) => `${t.id}:${t.done}`).join("|")]);
-
-  const todos = baseTodos.map((t) => ({
-    ...t,
-    done: doneMap[t.id] ?? t.done,
-  }));
-  const openCount = todos.filter((t) => !t.done).length;
-  const doneCount = todos.filter((t) => t.done).length;
-
+function PrepBriefOverview({ brief }: { brief: PartnerPrepBrief }) {
   return (
     <div className="space-y-4 text-sm">
       {brief.summaryLine ? (
@@ -1393,7 +1367,33 @@ function PrepBriefView({ brief }: { brief: PartnerPrepBrief }) {
           <p className="text-xs text-slate-400">暂无该伙伴关联客户的进行中商机</p>
         )}
       </div>
+    </div>
+  );
+}
 
+function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
+  const baseTodos =
+    brief.todos?.length
+      ? brief.todos
+      : (brief.openTodos ?? []).map((t) => ({ ...t, done: false }));
+  const [doneMap, setDoneMap] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(baseTodos.map((t) => [t.id, t.done])),
+  );
+
+  useEffect(() => {
+    setDoneMap(Object.fromEntries(baseTodos.map((t) => [t.id, t.done])));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随简报内容指纹变化
+  }, [brief.partnerId, brief.windowLabel, baseTodos.map((t) => `${t.id}:${t.done}`).join("|")]);
+
+  const todos = baseTodos.map((t) => ({
+    ...t,
+    done: doneMap[t.id] ?? t.done,
+  }));
+  const openCount = todos.filter((t) => !t.done).length;
+  const doneCount = todos.filter((t) => t.done).length;
+
+  return (
+    <div className="space-y-4 text-sm">
       <div>
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <div className="text-xs font-medium text-slate-500">
@@ -1493,7 +1493,7 @@ function PrepBriefView({ brief }: { brief: PartnerPrepBrief }) {
   );
 }
 
-function ConfirmedHistoryPanel({ item }: { item: ReviewItemClient }) {
+function ConfirmedHistoryPanel({ item, part }: { item: ReviewItemClient; part: "left" | "right" }) {
   const snap =
     item.confirmedSnapshot ??
     ({
@@ -1513,31 +1513,41 @@ function ConfirmedHistoryPanel({ item }: { item: ReviewItemClient }) {
         })),
     } satisfies ConfirmedItemSnapshot);
 
+  if (part === "left") {
+    return (
+      <div className="space-y-4 text-sm">
+        <div>
+          <div className="text-xs font-medium text-slate-500 mb-1">核心讨论</div>
+          <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
+            {snap.coreNotes.trim() || "（无）"}
+          </p>
+        </div>
+        <div>
+          <div className="text-xs font-medium text-slate-500 mb-1">商务记录</div>
+          {snap.skipBusinessRecord || !snap.wroteBusinessRecord ? (
+            <p className="text-xs text-slate-400">确认时未写入商务记录</p>
+          ) : (
+            <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
+              <div className="font-medium text-slate-900">{snap.businessRecordTitle || "（无标题）"}</div>
+              {snap.businessRecordContent ? (
+                <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
+                  {snap.businessRecordContent}
+                </p>
+              ) : null}
+            </div>
+          )}
+        </div>
+        {snap.confirmedAt ? (
+          <p className="text-[11px] text-slate-400">
+            确认于 {new Date(snap.confirmedAt).toLocaleString("zh-CN", { hour12: false })}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4 text-sm border-t border-slate-100 pt-3">
-      <div>
-        <div className="text-xs font-medium text-slate-500 mb-1">核心讨论</div>
-        <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
-          {snap.coreNotes.trim() || "（无）"}
-        </p>
-      </div>
-
-      <div>
-        <div className="text-xs font-medium text-slate-500 mb-1">商务记录</div>
-        {snap.skipBusinessRecord || !snap.wroteBusinessRecord ? (
-          <p className="text-xs text-slate-400">确认时未写入商务记录</p>
-        ) : (
-          <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
-            <div className="font-medium text-slate-900">{snap.businessRecordTitle || "（无标题）"}</div>
-            {snap.businessRecordContent ? (
-              <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
-                {snap.businessRecordContent}
-              </p>
-            ) : null}
-          </div>
-        )}
-      </div>
-
+    <div className="space-y-4 text-sm">
       <div>
         <div className="text-xs font-medium text-slate-500 mb-1">已入库待办</div>
         {snap.todos.length ? (
@@ -1554,12 +1564,6 @@ function ConfirmedHistoryPanel({ item }: { item: ReviewItemClient }) {
           <p className="text-xs text-slate-400">无待办</p>
         )}
       </div>
-
-      {snap.confirmedAt ? (
-        <p className="text-[11px] text-slate-400">
-          确认于 {new Date(snap.confirmedAt).toLocaleString("zh-CN", { hour12: false })}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -1569,6 +1573,7 @@ function PostConfirmPanel({
   draft,
   onChange,
   proposalItem,
+  part = "left",
 }: {
   item: ReviewItemClient;
   draft?: {
@@ -1580,6 +1585,7 @@ function PostConfirmPanel({
   };
   onChange: (d: NonNullable<typeof draft>) => void;
   proposalItem?: SplitProposal["items"][number];
+  part?: "left" | "right";
 }) {
   const d =
     draft ??
@@ -1612,9 +1618,80 @@ function PostConfirmPanel({
   const segmentPreview = segmentText.slice(0, 480);
   const segmentChars = segmentText.length;
 
+  if (part === "right") {
+    return (
+      <div className="border-t border-slate-100 pt-3 space-y-2" onFocus={ensure}>
+        <div className="text-xs font-medium text-slate-500">会后确认 · 待办</div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">待办（可改/删/加）</span>
+            <button
+              type="button"
+              className="text-[11px] text-sky-700"
+              onClick={() =>
+                onChange({
+                  ...d,
+                  todos: [...d.todos, { title: "", detail: "", dueDate: "", include: true }],
+                })
+              }
+            >
+              + 添加待办
+            </button>
+          </div>
+          {d.todos.map((t, idx) => (
+            <div key={t.id ?? idx} className="rounded-lg border border-slate-100 p-2 space-y-1">
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={t.include}
+                  onChange={(e) => {
+                    const todos = [...d.todos];
+                    todos[idx] = { ...t, include: e.target.checked };
+                    onChange({ ...d, todos });
+                  }}
+                />
+                纳入
+              </label>
+              <input
+                value={t.title}
+                onChange={(e) => {
+                  const todos = [...d.todos];
+                  todos[idx] = { ...t, title: e.target.value };
+                  onChange({ ...d, todos });
+                }}
+                placeholder="待办标题"
+                className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+              />
+              <input
+                value={t.detail}
+                onChange={(e) => {
+                  const todos = [...d.todos];
+                  todos[idx] = { ...t, detail: e.target.value };
+                  onChange({ ...d, todos });
+                }}
+                placeholder="详情（可选）"
+                className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+              />
+              <input
+                type="date"
+                value={t.dueDate}
+                onChange={(e) => {
+                  const todos = [...d.todos];
+                  todos[idx] = { ...t, dueDate: e.target.value };
+                  onChange({ ...d, todos });
+                }}
+                className="rounded border border-slate-200 px-2 py-1 text-xs"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="border-t border-slate-100 pt-3 space-y-2" onFocus={ensure}>
-      <div className="text-xs font-medium text-slate-500">会后确认稿</div>
+      <div className="text-xs font-medium text-slate-500">会后确认 · 摘要与记录</div>
       {proposalItem ? (
         <div className="rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2 space-y-1">
           <div className="text-[11px] font-medium text-violet-900">
@@ -1667,69 +1744,6 @@ function PostConfirmPanel({
           />
         </>
       )}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-500">待办（可改/删/加）</span>
-          <button
-            type="button"
-            className="text-[11px] text-sky-700"
-            onClick={() =>
-              onChange({
-                ...d,
-                todos: [...d.todos, { title: "", detail: "", dueDate: "", include: true }],
-              })
-            }
-          >
-            + 添加待办
-          </button>
-        </div>
-        {d.todos.map((t, idx) => (
-          <div key={t.id ?? idx} className="rounded-lg border border-slate-100 p-2 space-y-1">
-            <label className="flex items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={t.include}
-                onChange={(e) => {
-                  const todos = [...d.todos];
-                  todos[idx] = { ...t, include: e.target.checked };
-                  onChange({ ...d, todos });
-                }}
-              />
-              纳入
-            </label>
-            <input
-              value={t.title}
-              onChange={(e) => {
-                const todos = [...d.todos];
-                todos[idx] = { ...t, title: e.target.value };
-                onChange({ ...d, todos });
-              }}
-              placeholder="待办标题"
-              className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
-            />
-            <input
-              value={t.detail}
-              onChange={(e) => {
-                const todos = [...d.todos];
-                todos[idx] = { ...t, detail: e.target.value };
-                onChange({ ...d, todos });
-              }}
-              placeholder="详情（可选）"
-              className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
-            />
-            <input
-              type="date"
-              value={t.dueDate}
-              onChange={(e) => {
-                const todos = [...d.todos];
-                todos[idx] = { ...t, dueDate: e.target.value };
-                onChange({ ...d, todos });
-              }}
-              className="rounded border border-slate-200 px-2 py-1 text-xs"
-            />
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
