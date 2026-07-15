@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "../session";
 import { db } from "../db";
-import { formatPartnerMarker, appendMarkerToNotes } from "./markers";
 import { generateMeetingPrepBriefs } from "./brief";
 import { buildSplitProposal, persistSplitDrafts } from "./split";
 import { applyPartnerReviewConfirm, type ConfirmItemPayload } from "./apply";
@@ -14,6 +13,7 @@ import {
 } from "./transcript";
 import { runMeetingAsrPipeline } from "../asr/pipeline";
 import { getAsrConfig } from "../asr/config";
+import { materializeLiveNotesForMeeting } from "./notes-materialize";
 
 function revalidateMeeting(id: string) {
   revalidatePath("/partner-reviews");
@@ -99,12 +99,7 @@ export async function saveLiveNotesAction(meetingId: string, liveNotes: string) 
   return { ok: true };
 }
 
-export async function discussPartnerAction(
-  meetingId: string,
-  itemId: string,
-  /** 客户端当前记录本（含未落库的实时转写），避免切伙伴时冲掉会中文字 */
-  clientLiveNotes?: string,
-) {
+export async function discussPartnerAction(meetingId: string, itemId: string) {
   await requireUser();
   const item = await db.partnerReviewItem.findFirst({
     where: { id: itemId, meetingId },
@@ -112,21 +107,19 @@ export async function discussPartnerAction(
   });
   if (!item) return { error: "议程项不存在" };
 
-  const marker = formatPartnerMarker(item.partner.id, item.partner.name);
   const now = new Date();
-  const baseNotes =
-    typeof clientLiveNotes === "string" ? clientLiveNotes : item.meeting.liveNotes;
-  const liveNotes = appendMarkerToNotes(baseNotes, marker, {
-    partnerName: item.partner.name,
-    at: now,
-  });
+  const anchor = item.meeting.recordingStartedAt ?? item.meeting.startedAt;
 
   await db.$transaction([
     db.partnerReviewMeeting.update({
       where: { id: meetingId },
       data: {
-        liveNotes,
-        status: item.meeting.status === "LIVE" ? "LIVE" : item.meeting.status === "DRAFT" || item.meeting.status === "PREP" ? "LIVE" : item.meeting.status,
+        status:
+          item.meeting.status === "LIVE"
+            ? "LIVE"
+            : item.meeting.status === "DRAFT" || item.meeting.status === "PREP"
+              ? "LIVE"
+              : item.meeting.status,
         startedAt: item.meeting.startedAt ?? now,
       },
     }),
@@ -141,7 +134,12 @@ export async function discussPartnerAction(
   ]);
 
   revalidateMeeting(meetingId);
-  return { ok: true, marker, liveNotes, partnerName: item.partner.name, discussedAt: now.toISOString() };
+  return {
+    ok: true,
+    partnerName: item.partner.name,
+    discussedAt: now.toISOString(),
+    relativeMs: anchor ? now.getTime() - anchor.getTime() : null,
+  };
 }
 
 export async function runMeetingPrepAction(meetingId: string) {
@@ -249,16 +247,18 @@ export async function markDingTalkRecordingStartedAction(
   const meeting = await db.partnerReviewMeeting.findUnique({ where: { id: meetingId } });
   if (!meeting) return { error: "会议不存在" };
   const fid = data.fid != null && String(data.fid).trim() ? String(data.fid).trim() : null;
+  const now = new Date();
   await db.partnerReviewMeeting.update({
     where: { id: meetingId },
     data: {
       ...(fid ? { dingtalkFileId: fid } : {}),
+      recordingStartedAt: meeting.recordingStartedAt ?? now,
       status: meeting.status === "DRAFT" || meeting.status === "PREP" ? "LIVE" : meeting.status,
-      startedAt: meeting.startedAt ?? new Date(),
+      startedAt: meeting.startedAt ?? now,
     },
   });
   revalidateMeeting(meetingId);
-  return { ok: true };
+  return { ok: true, recordingStartedAt: (meeting.recordingStartedAt ?? now).toISOString() };
 }
 
 export async function pullDingTalkTranscriptAction(meetingId: string) {
@@ -269,11 +269,12 @@ export async function pullDingTalkTranscriptAction(meetingId: string) {
   try {
     let text: string | null = null;
     let transcriptJson: string | null = null;
+    const recordingAnchor = meeting.recordingStartedAt ?? meeting.startedAt;
 
     if (meeting.dingtalkConferenceId) {
       const timed = await fetchConferenceTranscript({
         conferenceId: meeting.dingtalkConferenceId,
-        recordingStartedAt: meeting.startedAt,
+        recordingStartedAt: recordingAnchor,
       });
       if (timed) {
         text = timed.plain;
@@ -285,7 +286,7 @@ export async function pullDingTalkTranscriptAction(meetingId: string) {
       const file = await downloadDingDriveTranscript({
         spaceId: meeting.dingtalkSpaceId ?? undefined,
         fileId: meeting.dingtalkFileId,
-        recordingStartedAt: meeting.startedAt,
+        recordingStartedAt: recordingAnchor,
       });
       text = file?.text ?? null;
       if (file?.timed) transcriptJson = serializeTimedTranscriptDoc(file.timed);
@@ -296,7 +297,7 @@ export async function pullDingTalkTranscriptAction(meetingId: string) {
     }
 
     if (!transcriptJson) {
-      const parsed = parseTranscriptTextToTimedDoc(text, { recordingStartedAt: meeting.startedAt });
+      const parsed = parseTranscriptTextToTimedDoc(text, { recordingStartedAt: recordingAnchor });
       if (parsed) transcriptJson = serializeTimedTranscriptDoc(parsed);
     }
 
@@ -309,9 +310,10 @@ export async function pullDingTalkTranscriptAction(meetingId: string) {
         endedAt: meeting.endedAt ?? new Date(),
       },
     });
+    await materializeLiveNotesForMeeting(meetingId);
     revalidateMeeting(meetingId);
     const timedHint = transcriptJson ? "，已保留句子时间轴" : "";
-    return { ok: true, message: `已拉取转写（${text.length} 字${timedHint}）` };
+    return { ok: true, message: `已拉取转写（${text.length} 字${timedHint}），记录本已自动生成` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
@@ -321,10 +323,11 @@ export async function saveTranscriptTextAction(meetingId: string, transcriptText
   await requireUser();
   const meeting = await db.partnerReviewMeeting.findUnique({
     where: { id: meetingId },
-    select: { startedAt: true },
+    select: { startedAt: true, recordingStartedAt: true },
   });
+  const recordingAnchor = meeting?.recordingStartedAt ?? meeting?.startedAt ?? null;
   const timed = parseTranscriptTextToTimedDoc(transcriptText, {
-    recordingStartedAt: meeting?.startedAt ?? null,
+    recordingStartedAt: recordingAnchor,
   });
   await db.partnerReviewMeeting.update({
     where: { id: meetingId },
@@ -334,6 +337,7 @@ export async function saveTranscriptTextAction(meetingId: string, transcriptText
       status: "PROCESSING",
     },
   });
+  await materializeLiveNotesForMeeting(meetingId);
   revalidateMeeting(meetingId);
   return { ok: true };
 }

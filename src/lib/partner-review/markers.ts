@@ -86,6 +86,59 @@ export type PartnerTimeBoundary = {
   atMs: number;
 };
 
+/** 按相对录音时间（毫秒，起点=A1/录音开始）把句子归到伙伴 */
+export function assignSentencesByRelativeMarkerTime(
+  sentences: Array<{ atMs: number | null; line: string }>,
+  boundaries: PartnerTimeBoundary[],
+): TranscriptSegment[] {
+  const sorted = [...boundaries]
+    .filter((b) => Number.isFinite(b.atMs))
+    .sort((a, b) => a.atMs - b.atMs);
+
+  const buckets = new Map<string, { partnerId: string | null; partnerName: string | null; lines: string[] }>();
+  const unassignedKey = "__unassigned__";
+  buckets.set(unassignedKey, { partnerId: null, partnerName: null, lines: [] });
+  for (const b of sorted) {
+    if (!buckets.has(b.partnerId)) {
+      buckets.set(b.partnerId, { partnerId: b.partnerId, partnerName: b.partnerName, lines: [] });
+    }
+  }
+
+  for (const s of sentences) {
+    if (!s.line.trim()) continue;
+    if (s.atMs == null || !sorted.length) {
+      buckets.get(unassignedKey)!.lines.push(s.line);
+      continue;
+    }
+    let owner: PartnerTimeBoundary | null = null;
+    for (const b of sorted) {
+      if (b.atMs <= s.atMs) owner = b;
+      else break;
+    }
+    if (!owner) {
+      buckets.get(unassignedKey)!.lines.push(s.line);
+    } else {
+      buckets.get(owner.partnerId)!.lines.push(s.line);
+    }
+  }
+
+  const segments: TranscriptSegment[] = [];
+  const un = buckets.get(unassignedKey)!;
+  if (un.lines.length) {
+    segments.push({ partnerId: null, partnerName: null, text: un.lines.join("\n") });
+  }
+  for (const b of sorted) {
+    const bucket = buckets.get(b.partnerId);
+    if (!bucket?.lines.length) continue;
+    segments.push({
+      partnerId: b.partnerId,
+      partnerName: b.partnerName,
+      text: bucket.lines.join("\n"),
+    });
+  }
+  return segments;
+}
+
 /**
  * 按标记时刻把转写句子归到「当前正在过的伙伴」。
  * boundaries 应按时间升序；句子时间用绝对 epoch ms。

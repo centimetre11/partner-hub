@@ -3,16 +3,11 @@ import "server-only";
 import { db } from "../db";
 import { chatJson } from "../ai";
 import {
-  assignSentencesByMarkerTime,
+  PARTNER_MARKER_RE,
   splitTranscriptByMarkers,
   type TranscriptSegment,
 } from "./markers";
-import {
-  parseTimedTranscriptDoc,
-  parseTranscriptTextToTimedDoc,
-  sentenceAbsoluteMs,
-  sentencesToPlain,
-} from "./transcript";
+import { computeTranscriptSegments } from "./segment";
 import type { SplitProposal, SplitProposalItem } from "./split-types";
 
 export type { SplitProposal, SplitProposalItem } from "./split-types";
@@ -102,55 +97,13 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
   });
   if (!meeting) throw new Error("会议不存在");
 
-  // 手写记录本：仍按文本标记切段
-  const noteSegments = splitTranscriptByMarkers(meeting.liveNotes ?? "");
+  // 转写：按 A1 开录起点 + 议程打点的相对时间对齐
+  const transcriptSegments = computeTranscriptSegments(meeting);
 
-  // 转写：优先按标记时刻 × 句子时间对齐
-  const timed =
-    parseTimedTranscriptDoc(meeting.transcriptJson) ??
-    parseTranscriptTextToTimedDoc(meeting.transcriptText ?? "", {
-      recordingStartedAt: meeting.startedAt,
-    });
-
-  let transcriptSegments: TranscriptSegment[] = [];
-  if (timed?.sentences.length) {
-    const boundaries = meeting.items
-      .map((it) => {
-        const at = it.markerInsertedAt ?? it.discussedAt;
-        if (!at) return null;
-        return {
-          partnerId: it.partnerId,
-          partnerName: it.partner.name,
-          atMs: at.getTime(),
-        };
-      })
-      .filter((b): b is { partnerId: string; partnerName: string; atMs: number } => !!b)
-      .sort((a, b) => a.atMs - b.atMs);
-
-    if (boundaries.length) {
-      const sentences = timed.sentences.map((s) => ({
-        absoluteMs: sentenceAbsoluteMs(s, timed, meeting.startedAt),
-        line: s.speaker ? `${s.speaker}: ${s.text}` : s.text,
-      }));
-      transcriptSegments = assignSentencesByMarkerTime(sentences, boundaries);
-    } else {
-      // 有时间轴但无标记时刻：整段未归属，避免误挂到某一伙伴
-      transcriptSegments = [
-        {
-          partnerId: null,
-          partnerName: null,
-          text: timed.plain || sentencesToPlain(timed.sentences),
-        },
-      ];
-    }
-  } else if (meeting.transcriptText?.trim()) {
-    // 无时间轴的旧转写：勿与 liveNotes 拼接后按标记切（会整段落到最后伙伴）
-    // 若转写自身含标记则按标记切，否则全部未归属
-    const hasMarkers = /<<<PARTNER:[^|>]+\|[^>]+>>>/.test(meeting.transcriptText);
-    transcriptSegments = hasMarkers
-      ? splitTranscriptByMarkers(meeting.transcriptText)
-      : [{ partnerId: null, partnerName: null, text: meeting.transcriptText.trim() }];
-  }
+  // 旧版手写记录本含 <<<PARTNER>>> 标记时仍兼容
+  const noteSegments = PARTNER_MARKER_RE.test(meeting.liveNotes ?? "")
+    ? splitTranscriptByMarkers(meeting.liveNotes ?? "")
+    : [];
 
   const allSegments = [...noteSegments, ...transcriptSegments];
   const unassignedText = allSegments

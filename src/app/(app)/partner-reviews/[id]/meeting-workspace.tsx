@@ -14,7 +14,6 @@ import {
   pullDingTalkTranscriptAction,
   runMeetingPrepAction,
   runMeetingSplitAction,
-  saveLiveNotesAction,
   saveTranscriptTextAction,
   startPartnerReviewMeetingAction,
   attachDingTalkRecordingAction,
@@ -52,10 +51,6 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
     return discussed[0]?.id ?? null;
   });
   const recentDiscussClicks = useRef<{ itemId: string; at: number }[]>([]);
-  const liveNotesRef = useRef(liveNotes);
-  useEffect(() => {
-    liveNotesRef.current = liveNotes;
-  }, [liveNotes]);
   const [confirmDrafts, setConfirmDrafts] = useState<
     Record<
       string,
@@ -263,11 +258,10 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               disabled={pending}
               onClick={() =>
                 run(async () => {
-                  await saveLiveNotesAction(meeting.id, liveNotes);
                   const res = await endPartnerReviewMeetingAction(meeting.id);
                   if (res.error) flash(undefined, res.error);
                   else {
-                    setMeeting((m) => ({ ...m, status: "PROCESSING", liveNotes }));
+                    setMeeting((m) => ({ ...m, status: "PROCESSING" }));
                     flash("会议已结束。可拉取钉钉转写或粘贴纪要后 AI 拆分");
                   }
                 })
@@ -277,21 +271,6 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               结束会议
             </button>
           </>
-        )}
-        {(phase === "post" || phase === "live") && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              run(async () => {
-                await saveLiveNotesAction(meeting.id, liveNotes);
-                flash("记录本已保存");
-              })
-            }
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
-          >
-            保存记录本
-          </button>
         )}
       </div>
 
@@ -310,7 +289,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
           建议：需要简报时先点「开会准备」→「录音并开始开会」（钉钉 A1，需在钉钉内打开）→ 讨论谁点左侧谁打标 →
-          结束会议 → 拉取转写 → AI 拆分。钉钉配置见{" "}
+          结束会议 → 拉取转写（记录本自动生成）→ AI 拆分。钉钉 A1 不支持会中实时转写写入。钉钉配置见{" "}
           <Link href="/settings#integrations" className="text-sky-700 hover:underline">
             团队设置 · 钉钉
           </Link>
@@ -339,21 +318,15 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                       noteRapidDiscussClick(item.id);
                       run(
                         async () => {
-                          const res = await discussPartnerAction(
-                            meeting.id,
-                            item.id,
-                            liveNotesRef.current,
-                          );
+                          const res = await discussPartnerAction(meeting.id, item.id);
                           if (res.error) {
                             flash(undefined, res.error);
                             return;
                           }
-                          if (res.liveNotes) setLiveNotes(res.liveNotes);
                           setCurrentDiscussItemId(item.id);
                           const discussedAt = res.discussedAt ?? new Date().toISOString();
                           setMeeting((m) => ({
                             ...m,
-                            liveNotes: res.liveNotes ?? m.liveNotes,
                             items: m.items.map((it) =>
                               it.id === item.id
                                 ? {
@@ -452,22 +425,27 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
           <div>
             <div className="text-xs font-medium text-slate-500 mb-1">
-              {phase === "done" ? "会中记录本（只读）" : "会中记录本（含伙伴标记）"}
+              {phase === "live"
+                ? "议程打点"
+                : phase === "done"
+                  ? "会议记录（只读）"
+                  : "会议记录（转写到位后自动生成）"}
             </div>
-            <textarea
-              value={liveNotes}
-              onChange={(e) => setLiveNotes(e.target.value)}
-              readOnly={phase === "done"}
-              rows={phase === "live" ? 18 : 12}
-              placeholder={
-                phase === "live"
-                  ? "点左侧伙伴会插入标记；可手写纪要。转写请在会后拉取钉钉听记。"
-                  : "讨论谁就点左侧谁：会插入 [时间] 开始过 … 与 <<<PARTNER:id|name>>> 标记；也可手写纪要。"
-              }
-              className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed ${
-                phase === "done" ? "bg-slate-50 text-slate-700" : ""
-              }`}
-            />
+            {phase === "live" ? (
+              <LiveAgendaPanel
+                items={meeting.items}
+                currentDiscussItemId={currentDiscussItemId}
+                recordingStartedAt={meeting.recordingStartedAt}
+              />
+            ) : (
+              <textarea
+                value={liveNotes}
+                readOnly
+                rows={phase === "post" ? 12 : 18}
+                placeholder="结束会议并拉取钉钉转写后，将按议程打点自动填入各伙伴讨论内容。"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
+              />
+            )}
           </div>
 
           {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
@@ -562,7 +540,6 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   disabled={pending}
                   onClick={() =>
                     run(async () => {
-                      await saveLiveNotesAction(meeting.id, liveNotes);
                       await saveTranscriptTextAction(meeting.id, transcript);
                       const res = await runMeetingSplitAction(meeting.id);
                       if (res.error) {
@@ -685,7 +662,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               </div>
               {proposal?.unassignedText ? (
                 <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
-                  <div className="font-medium mb-1">未归属片段（可手工补进记录本标记后重新拆分）</div>
+                  <div className="font-medium mb-1">未归属片段（请检查会中是否按讨论顺序打标后重新拆分）</div>
                   {proposal.unassignedText.slice(0, 2000)}
                 </div>
               ) : null}
@@ -693,6 +670,89 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function formatAgendaMarkerTime(
+  markerInsertedAt: string | null,
+  recordingStartedAt: string | null,
+): string {
+  if (!markerInsertedAt) return "—";
+  const at = Date.parse(markerInsertedAt);
+  if (Number.isNaN(at)) return "—";
+  if (recordingStartedAt) {
+    const anchor = Date.parse(recordingStartedAt);
+    if (!Number.isNaN(anchor)) {
+      const relSec = Math.max(0, Math.round((at - anchor) / 1000));
+      const m = Math.floor(relSec / 60);
+      const s = relSec % 60;
+      return `录音 +${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+  }
+  return new Date(at).toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function LiveAgendaPanel({
+  items,
+  currentDiscussItemId,
+  recordingStartedAt,
+}: {
+  items: ReviewItemClient[];
+  currentDiscussItemId: string | null;
+  recordingStartedAt: string | null;
+}) {
+  const marked = items
+    .filter((it) => it.markerInsertedAt || it.discussedAt)
+    .sort((a, b) => {
+      const ta = Date.parse(a.markerInsertedAt || a.discussedAt || "") || 0;
+      const tb = Date.parse(b.markerInsertedAt || b.discussedAt || "") || 0;
+      return ta - tb;
+    });
+
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[280px]">
+      <p className="text-xs text-slate-600 leading-relaxed">
+        讨论谁就点左侧伙伴，系统记录<strong>相对 A1 开录</strong>的时间点，用于会后把钉钉转写切到各伙伴。
+        无需手写；钉钉 A1 暂不支持会中实时转写写入此处。
+      </p>
+      {!recordingStartedAt ? (
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
+          尚未记录 A1 开录时间。请先点「启动 A1 录音」或「录音并开始开会」，否则只能按讨论顺序做 AI 拆分。
+        </p>
+      ) : null}
+      {marked.length ? (
+        <ol className="space-y-2">
+          {marked.map((it, idx) => (
+            <li
+              key={it.id}
+              className={`rounded-lg border px-3 py-2 text-sm ${
+                it.id === currentDiscussItemId
+                  ? "border-sky-200 bg-sky-50/80"
+                  : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-slate-800">
+                  {idx + 1}. {it.partnerName}
+                </span>
+                <span className="text-[11px] text-slate-500 font-mono shrink-0">
+                  {formatAgendaMarkerTime(it.markerInsertedAt ?? it.discussedAt, recordingStartedAt)}
+                </span>
+              </div>
+              {it.id === currentDiscussItemId ? (
+                <p className="text-[11px] text-sky-700 mt-0.5">当前正在过</p>
+              ) : null}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-slate-400">尚未打点 · 点左侧伙伴开始</p>
+      )}
     </div>
   );
 }

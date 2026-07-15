@@ -12,6 +12,7 @@ import {
   serializeTimedTranscriptDoc,
   type TimedTranscriptDoc,
 } from "./transcript";
+import { materializeLiveNotesForMeeting } from "./notes-materialize";
 
 /** 将钉钉录音完成事件关联到进行中的过伙伴会议并写入转写 */
 export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) {
@@ -56,13 +57,15 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
     return { ok: true, skipped: true as const, reason: "no_meeting_matched" };
   }
 
+  const recordingAnchor = meeting.recordingStartedAt ?? meeting.startedAt;
+
   let transcriptText: string | null = meeting.transcriptText;
   let timed: TimedTranscriptDoc | null = null;
   try {
     if (refs.conferenceId) {
       timed = await fetchConferenceTranscript({
         conferenceId: refs.conferenceId,
-        recordingStartedAt: meeting.startedAt,
+        recordingStartedAt: recordingAnchor,
       });
       if (timed) transcriptText = timed.plain;
     }
@@ -70,7 +73,7 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
       const file = await downloadDingDriveTranscript({
         spaceId: refs.spaceId,
         fileId: refs.fileId,
-        recordingStartedAt: meeting.startedAt,
+        recordingStartedAt: recordingAnchor,
       });
       if (file) {
         transcriptText = file.text;
@@ -95,7 +98,7 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
   if (!transcriptText && typeof event.text === "string") transcriptText = event.text;
 
   if (!timed && transcriptText) {
-    timed = parseTranscriptTextToTimedDoc(transcriptText, { recordingStartedAt: meeting.startedAt });
+    timed = parseTranscriptTextToTimedDoc(transcriptText, { recordingStartedAt: recordingAnchor });
   }
 
   await db.partnerReviewMeeting.update({
@@ -111,6 +114,10 @@ export async function handleDingTalkRecordingEvent(event: DingTalkEventPayload) 
       endedAt: meeting.endedAt ?? new Date(),
     },
   });
+
+  if (transcriptText?.trim()) {
+    await materializeLiveNotesForMeeting(meeting.id);
+  }
 
   return {
     ok: true as const,
