@@ -7,6 +7,7 @@ import { getServerI18n } from "@/lib/server-i18n";
 import { AddCustomerForm } from "./add-customer-form";
 import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
+import { nameContainsWhere } from "@/lib/name-search";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -23,12 +24,13 @@ export default async function CustomersPage({
   const { messages: m, bcp47 } = await getServerI18n();
   const c = m.customers;
   const sp = await searchParams;
+  const nameFilter = nameContainsWhere(sp.q);
 
   const [customers, partners, users] = await Promise.all([
     db.customer.findMany({
       where: {
         ...END_CUSTOMER_WHERE,
-        ...(sp.q ? { name: { contains: sp.q } } : {}),
+        ...(nameFilter ? { name: nameFilter } : {}),
         ...(sp.status ? { status: sp.status } : {}),
         ...(sp.owner ? { ownerId: sp.owner } : {}),
         ...(sp.presales ? { presalesUserId: sp.presales } : {}),

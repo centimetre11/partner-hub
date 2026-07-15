@@ -14,6 +14,7 @@ import {
   indexOpenOpportunitiesByPartner,
   partnersRelatedOpportunityWhere,
 } from "@/lib/partner-opportunities";
+import { nameContainsWhere } from "@/lib/name-search";
 
 function lastActivityAt(p: { events: { createdAt: Date }[]; updatedAt: Date }) {
   return p.events.length ? new Date(p.events[0].createdAt) : new Date(p.updatedAt);
@@ -56,6 +57,7 @@ export default async function PartnersPage({
     Number.isInteger(filterStageRaw) && filterStageRaw >= 1 && filterStageRaw <= 3
       ? filterStageRaw
       : null;
+  const nameFilter = nameContainsWhere(sp.q);
 
   const roleFilter =
     sp.role === "distributor"
@@ -76,7 +78,7 @@ export default async function PartnersPage({
     db.partner.findMany({
       where: {
         status: "ACTIVE",
-        ...(sp.q ? { name: { contains: sp.q } } : {}),
+        ...(nameFilter ? { name: nameFilter } : {}),
         ...(filterStage ? { pipelineStage: filterStage } : {}),
         ...(sp.owner
           ? {

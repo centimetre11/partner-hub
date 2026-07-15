@@ -10,6 +10,7 @@ import { getPoolReviewCounts, poolReviewListFilter } from "@/lib/pool-review";
 import { AddPartnerForm } from "./add-partner-form";
 import { DeletePartnerButton } from "./delete-partner-button";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
+import { nameContainsWhere } from "@/lib/name-search";
 
 export default async function PoolPage({
   searchParams,
@@ -35,11 +36,12 @@ export default async function PoolPage({
     view === "archived" ? "ARCHIVED" : view === "all" ? { in: ["PROSPECT", "ARCHIVED"] } : "PROSPECT";
 
   const reviewFilter = view !== "archived" ? poolReviewListFilter(sp.review, view as "prospect" | "all") : null;
+  const nameFilter = nameContainsWhere(sp.q);
 
   const partners = await db.partner.findMany({
     where: {
       ...(reviewFilter ?? { status: statusWhere as never }),
-      ...(sp.q ? { name: { contains: sp.q } } : {}),
+      ...(nameFilter ? { name: nameFilter } : {}),
       ...(sp.category ? { category: sp.category } : {}),
       ...(sp.tier ? { tier: sp.tier } : {}),
       ...(sp.flag && view !== "archived" && !reviewFilter ? { poolFlag: sp.flag } : {}),
