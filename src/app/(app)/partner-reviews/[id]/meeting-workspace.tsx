@@ -27,6 +27,7 @@ import {
   type TranscriptSegment,
 } from "@/lib/partner-review/markers";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 export type { MeetingClient, ReviewItemClient };
 
@@ -752,42 +753,85 @@ function MeetingPreviewActions({
   previewToken: string | null;
 }) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [manualUrl, setManualUrl] = useState<string | null>(null);
+
+  async function resolvePreviewPath(): Promise<string | null> {
+    if (previewToken) return `/partner-reviews/preview/${previewToken}`;
+    const res = await getMeetingPreviewPathAction(meetingId);
+    if (!res.ok || !res.path) return null;
+    return res.path;
+  }
 
   async function openPreview() {
-    const res = await getMeetingPreviewPathAction(meetingId);
-    if (!res.ok || !res.path) return;
-    window.open(res.path, "_blank", "noopener,noreferrer");
+    setCopyError(null);
+    try {
+      const path = await resolvePreviewPath();
+      if (!path) {
+        setCopyError("无法获取预览链接，请刷新页面后重试");
+        return;
+      }
+      window.open(path, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : "打开预览失败");
+    }
   }
 
   async function copyLink() {
-    const res = await getMeetingPreviewPathAction(meetingId);
-    if (!res.ok || !res.path) return;
-    const url = `${window.location.origin}${res.path}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopyError(null);
+    setManualUrl(null);
+    try {
+      const path = await resolvePreviewPath();
+      if (!path) {
+        setCopyError("无法获取预览链接，请刷新页面后重试");
+        return;
+      }
+      const url = `${window.location.origin}${path}`;
+      const ok = await copyTextToClipboard(url);
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      }
+      setManualUrl(url);
+      setCopyError("浏览器不允许自动复制，请手动选中下方链接复制");
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : "复制失败");
+    }
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => void openPreview()}
-        className="rounded-lg border border-sky-200 bg-sky-50 text-sky-800 px-3 py-1.5 text-sm hover:bg-sky-100"
-      >
-        打开会前预览
-      </button>
-      <button
-        type="button"
-        onClick={() => void copyLink()}
-        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
-      >
-        {copied ? "已复制链接" : "复制预览链接"}
-      </button>
-      {previewToken ? null : (
-        <span className="text-[11px] text-slate-400 self-center">首次打开会生成分享链接</span>
-      )}
-    </>
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void openPreview()}
+          className="rounded-lg border border-sky-200 bg-sky-50 text-sky-800 px-3 py-1.5 text-sm hover:bg-sky-100"
+        >
+          打开会前预览
+        </button>
+        <button
+          type="button"
+          onClick={() => void copyLink()}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
+        >
+          {copied ? "已复制链接" : "复制预览链接"}
+        </button>
+        {previewToken ? null : (
+          <span className="text-[11px] text-slate-400 self-center">首次复制会生成分享链接</span>
+        )}
+      </div>
+      {copyError ? <p className="text-xs text-amber-700">{copyError}</p> : null}
+      {manualUrl ? (
+        <input
+          type="text"
+          readOnly
+          value={manualUrl}
+          onFocus={(e) => e.currentTarget.select()}
+          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono text-slate-700 bg-slate-50"
+        />
+      ) : null}
+    </div>
   );
 }
 
