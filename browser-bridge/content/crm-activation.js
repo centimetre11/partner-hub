@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.15";
+  const SCRIPT_VER = "1.1.16";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -120,6 +120,22 @@
           selectFirstMatch: true,
         }));
       if (!ok) warnings.push("Partner type 未匹配，请手选");
+      await sleep(500);
+    }
+
+    if (fields.customerSource) {
+      const ok =
+        (await fillDropdownByLabel("Customer Source", [fields.customerSource, "partner_referral", "Partner/Customer introduction"], {
+          typeQuery: "partner_referral",
+          settleMs: 900,
+          selectFirstMatch: true,
+        })) ||
+        (await fillDropdownByLabel("Customer source", [fields.customerSource, "partner_referral"], {
+          typeQuery: "partner_referral",
+          settleMs: 900,
+          selectFirstMatch: true,
+        }));
+      if (!ok) warnings.push("Customer Source 未匹配，请手选");
       await sleep(500);
     }
 

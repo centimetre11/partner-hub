@@ -2307,17 +2307,17 @@ export const messagesZh: Messages = {
     crmCreateInCrm: "在 CRM 新建",
     crmCreateLoading: "正在打开 CRM…",
     crmCreateHint:
-      "未绑定 CRM 时：可搜索绑定已有客户，或点「在 CRM 新建」预填并提交；提交后在本面板点「同步 CRM」，从本次新增里选中再保存绑定（需浏览器助手 ≥1.1.15，且账号已绑定 CRM 销售名）。",
+      "未绑定 CRM 时：可搜索绑定已有客户，或点「在 CRM 新建」预填并提交；提交后在本面板点「同步 CRM」，从本次新增里选中再保存绑定（需浏览器助手 ≥1.1.16，且账号已绑定 CRM 销售名）。",
     crmCreateDone: "已在 CRM 打开填报表并预填，请核对后自行提交；提交后等 CRM 同步再回来绑定。",
     crmCreateFailed: "打开 CRM 填报表失败，请重试",
     crmCreateNeedBridge: "请先安装浏览器助手，再使用「在 CRM 新建」",
     crmCreateInstallBridge: "安装浏览器助手",
-    crmCreateUpgradeBridge: "升级浏览器助手（需 ≥1.1.15）",
+    crmCreateUpgradeBridge: "升级浏览器助手（需 ≥1.1.16）",
     crmCreateBindSalesman: "账号页绑定 CRM 销售名",
     crmCreateOpenedNeedBridge:
       "已打开 CRM 填报表（需手动填写）。要自动预填，请安装浏览器助手后刷新本页再试。",
     crmCreateOpenedNeedUpgrade:
-      "已打开 CRM 填报表（需手动填写）。当前助手 v{version} 不支持自动预填，请下载升级到 ≥1.1.15 后在 chrome://extensions 点「重新加载」。",
+      "已打开 CRM 填报表（需手动填写）。当前助手 v{version} 不支持自动预填，请下载升级到 ≥1.1.16 后在 chrome://extensions 点「重新加载」。",
     crmCreateOpenedManual: "已打开 CRM 填报表（自动预填失败，请手动填写或升级助手后重试）",
     crmSyncNow: "同步 CRM",
     crmSyncing: "同步中…",

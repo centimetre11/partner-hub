@@ -6,6 +6,9 @@ export const CRM_ACTIVATION_URL =
 export const CRM_ACTIVATION_REGION = "中东-ME";
 export const CRM_ACTIVATION_PARTNER_TYPE = "经销商伙伴（Reseller）";
 export const CRM_ACTIVATION_CONTACT_TITLE = "IT Manager";
+/** Customer Source 固定：伙伴/客户介绍 */
+export const CRM_ACTIVATION_CUSTOMER_SOURCE =
+  "partner_referral-Partner/Customer introduction";
 /** Products of interest 勾选第一项 */
 export const CRM_ACTIVATION_PRODUCT = "FineReport";
 /** Current demand 单选第一项 */
@@ -81,6 +84,8 @@ export type CrmActivationFields = {
   companyName: string;
   /** 伙伴填经销商；客户为空字符串表示不填 */
   partnerType: string;
+  /** Customer Source */
+  customerSource: string;
   contactName: string;
   contactTitle: string;
   /** 感兴趣产品（多选，默认 FineReport） */
@@ -267,6 +272,7 @@ export function buildCrmActivationFields(input: {
     preSales,
     companyName: entity.name.trim(),
     partnerType: entityType === "partner" ? CRM_ACTIVATION_PARTNER_TYPE : "",
+    customerSource: CRM_ACTIVATION_CUSTOMER_SOURCE,
     contactName,
     contactTitle: CRM_ACTIVATION_CONTACT_TITLE,
     productsOfInterest: CRM_ACTIVATION_PRODUCT,
