@@ -9,19 +9,22 @@ import type {
   PartnerPrepBrief,
 } from "@/lib/partner-review/types";
 import {
-  discussPartnerAction,
   endPartnerReviewMeetingAction,
-  pullDingTalkTranscriptAction,
+  previewMeetingMatchAction,
   runMeetingPrepAction,
   runMeetingSplitAction,
+  saveMatchedNotesAction,
   saveTranscriptTextAction,
   startPartnerReviewMeetingAction,
-  attachDingTalkRecordingAction,
   confirmMeetingItemsAction,
 } from "@/lib/partner-review/actions";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
-import { MeetingLocalRecorder } from "@/components/partner-review/meeting-local-recorder";
+import {
+  buildLiveNotesFromSegments,
+  parsePartnerSectionsFromLiveNotes,
+  type TranscriptSegment,
+} from "@/lib/partner-review/markers";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 
 export type { MeetingClient, ReviewItemClient };
@@ -62,25 +65,30 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
       }
     >
   >({});
-  const [isRecording, setIsRecording] = useState(false);
-  const [dingForm, setDingForm] = useState({
-    recordId: initial.dingtalkRecordId ?? "",
-    conferenceId: initial.dingtalkConferenceId ?? "",
-    spaceId: initial.dingtalkSpaceId ?? "",
-    fileId: initial.dingtalkFileId ?? "",
-  });
+  const [markJustAt, setMarkJustAt] = useState(0);
+  const [matchDrafts, setMatchDrafts] = useState<Record<string, string>>({});
+  const [unassignedDraft, setUnassignedDraft] = useState("");
+  const [matchReady, setMatchReady] = useState(!!initial.transcriptText?.trim());
 
   useEffect(() => {
     setMeeting(initial);
     setLiveNotes(initial.liveNotes ?? "");
     setTranscript(initial.transcriptText ?? "");
-    setDingForm({
-      recordId: initial.dingtalkRecordId ?? "",
-      conferenceId: initial.dingtalkConferenceId ?? "",
-      spaceId: initial.dingtalkSpaceId ?? "",
-      fileId: initial.dingtalkFileId ?? "",
-    });
+    setMatchReady(!!initial.transcriptText?.trim());
   }, [initial]);
+
+  useEffect(() => {
+    if (!matchReady && !initial.liveNotes?.trim()) return;
+    const segments = parsePartnerSectionsFromLiveNotes(initial.liveNotes ?? "", initial.items);
+    const drafts: Record<string, string> = {};
+    let unassigned = "";
+    for (const seg of segments) {
+      if (seg.partnerId) drafts[seg.partnerId] = seg.text;
+      else if (seg.text.trim()) unassigned = seg.text;
+    }
+    setMatchDrafts(drafts);
+    setUnassignedDraft(unassigned);
+  }, [initial.liveNotes, initial.items, matchReady]);
 
   const activeItem = useMemo(
     () => meeting.items.find((i) => i.id === activeItemId) ?? null,
@@ -95,6 +103,75 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
   function flash(ok?: string, err?: string) {
     setMessage(ok ?? null);
     setError(err ?? null);
+  }
+
+  function markPartnerDiscuss(itemId: string, partnerName: string) {
+    if (phase !== "live") return;
+
+    noteRapidDiscussClick(itemId);
+    const nowIso = new Date().toISOString();
+    const anchor = meeting.startedAt;
+    setActiveItemId(itemId);
+    setCurrentDiscussItemId(itemId);
+    setMarkJustAt(Date.now());
+    setMeeting((m) => ({
+      ...m,
+      items: m.items.map((it) => {
+        if (it.id !== itemId) return it;
+        const prevMarker = it.markerInsertedAt ? Date.parse(it.markerInsertedAt) : NaN;
+        const anchorMs = anchor ? Date.parse(anchor) : NaN;
+        const keepMarker =
+          Number.isFinite(prevMarker) &&
+          Number.isFinite(anchorMs) &&
+          prevMarker >= anchorMs;
+        return {
+          ...it,
+          status: it.status === "CONFIRMED" ? it.status : "DISCUSSED",
+          discussedAt: it.discussedAt ?? nowIso,
+          markerInsertedAt: keepMarker ? it.markerInsertedAt : nowIso,
+        };
+      }),
+    }));
+
+    const relLabel = formatRelativeMeetingTime(nowIso, anchor);
+    flash(`✓ 已开始过 ${partnerName}${relLabel ? ` · ${relLabel}` : ""}`);
+
+    void (async () => {
+      try {
+        const res = await fetch(`/api/partner-reviews/${meeting.id}/discuss-partner`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ itemId }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          markerInsertedAt?: string;
+          discussedAt?: string;
+          partnerName?: string;
+          relativeMs?: number | null;
+        };
+        if (!res.ok || data.error) {
+          flash(undefined, data.error || `伙伴打点失败 HTTP ${res.status}`);
+          return;
+        }
+        if (data.markerInsertedAt || data.discussedAt) {
+          setMeeting((m) => ({
+            ...m,
+            items: m.items.map((it) =>
+              it.id === itemId
+                ? {
+                    ...it,
+                    markerInsertedAt: data.markerInsertedAt ?? it.markerInsertedAt,
+                    discussedAt: data.discussedAt ?? it.discussedAt,
+                  }
+                : it,
+            ),
+          }));
+        }
+      } catch (e) {
+        flash(undefined, e instanceof Error ? e.message : String(e));
+      }
+    })();
   }
 
   function noteRapidDiscussClick(itemId: string) {
@@ -171,8 +248,8 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   const res = await startPartnerReviewMeetingAction(meeting.id);
                   if (res.error) flash(undefined, res.error);
                   else {
-                    setMeeting((m) => ({ ...m, status: "LIVE" }));
-                    flash("会议已开始，请在右侧点「开始录音与转写」");
+                    setMeeting((m) => ({ ...m, status: "LIVE", startedAt: new Date().toISOString() }));
+                    flash("会议已开始 · 讨论谁点左侧谁，会后在右侧粘贴腾讯会议总结");
                     router.refresh();
                   }
                 })
@@ -203,7 +280,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "PROCESSING" }));
-                    flash("会议已结束。若已停止录音，可直接 AI 拆分");
+                    flash("会议已结束 · 请粘贴腾讯会议智能纪要并匹配伙伴");
                   }
                 })
               }
@@ -229,9 +306,17 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：需要简报时先点「开会准备」→「开始开会」→ 右侧「开始录音与转写」→ 讨论谁点左侧谁 →
-          停止录音 → 结束会议 → AI 拆分。转写走科大讯飞云端 API，不占服务器内存。
+          建议：开会准备（可选）→ 开始开会 → 在腾讯会议进行讨论；本页仅记录<strong>各伙伴的讨论顺序与时间</strong>（不与腾讯会议同步录音）→
+          结束会议 → 粘贴腾讯会议智能纪要 → 用时间轴自动匹配 → AI 拆分 → 确认入库。
         </p>
+      ) : null}
+
+      {phase === "live" ? (
+        <DiscussingNowBanner
+          currentDiscussItem={currentDiscussItem}
+          meetingStartedAt={meeting.startedAt}
+          markJustAt={markJustAt}
+        />
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_minmax(0,1.1fr)]">
@@ -244,63 +329,60 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
             ) : null}
           </div>
           <ul className="divide-y divide-slate-50 max-h-[70vh] overflow-y-auto">
-            {meeting.items.map((item, idx) => (
+            {meeting.items.map((item, idx) => {
+              const isDiscussing =
+                currentDiscussItemId === item.id && phase === "live";
+              const justMarked =
+                isDiscussing && markJustAt > 0 && Date.now() - markJustAt < 2500;
+              return (
               <li key={item.id}>
                 <button
                   type="button"
                   onClick={() => {
                     setActiveItemId(item.id);
-                    // 仅正式开会后点伙伴才打标；准备阶段只切换简报，避免误进 LIVE 导致看不到「开会准备」
                     if (phase === "live") {
-                      noteRapidDiscussClick(item.id);
-                      run(
-                        async () => {
-                          const res = await discussPartnerAction(meeting.id, item.id);
-                          if (res.error) {
-                            flash(undefined, res.error);
-                            return;
-                          }
-                          setCurrentDiscussItemId(item.id);
-                          const discussedAt = res.discussedAt ?? new Date().toISOString();
-                          setMeeting((m) => ({
-                            ...m,
-                            items: m.items.map((it) =>
-                              it.id === item.id
-                                ? {
-                                    ...it,
-                                    status: it.status === "CONFIRMED" ? it.status : "DISCUSSED",
-                                    discussedAt: it.discussedAt ?? discussedAt,
-                                    markerInsertedAt: it.markerInsertedAt ?? discussedAt,
-                                  }
-                                : it,
-                            ),
-                          }));
-                        },
-                      );
+                      markPartnerDiscuss(item.id, item.partnerName);
                     }
                   }}
-                  className={`w-full text-left px-3 py-2.5 text-sm hover:bg-slate-50 ${
-                    activeItemId === item.id ? "bg-sky-50/80" : ""
-                  } ${currentDiscussItemId === item.id && phase === "live" ? "ring-1 ring-inset ring-sky-200" : ""}`}
+                  className={`w-full text-left py-2.5 pr-3 text-sm transition-colors ${
+                    isDiscussing
+                      ? "pl-2 border-l-4 border-emerald-500 bg-emerald-50/90 hover:bg-emerald-50"
+                      : activeItemId === item.id
+                        ? "pl-3 bg-sky-50/80 hover:bg-sky-50"
+                        : "pl-3 hover:bg-slate-50"
+                  } ${justMarked ? "ring-2 ring-emerald-400 ring-inset" : ""}`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400 w-4">{idx + 1}</span>
                     <span className="font-medium text-slate-800 truncate">{item.partnerName}</span>
-                    {currentDiscussItemId === item.id && phase === "live" ? (
-                      <span className="text-[10px] text-sky-700 shrink-0">当前</span>
+                    {isDiscussing ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5">
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        讨论中
+                      </span>
                     ) : null}
                   </div>
                   <div className="mt-0.5 text-[11px] text-slate-400 pl-6">
                     {item.status === "CONFIRMED"
                       ? "已确认入库"
                       : item.status === "DISCUSSED"
-                        ? "已讨论"
-                        : "待讨论"}
+                        ? isDiscussing
+                          ? "当前正在过"
+                          : "已讨论"
+                        : phase === "live"
+                          ? "待讨论 · 点击开始"
+                          : "待讨论"}
                     {item.partnerTier ? ` · Tier ${item.partnerTier}` : ""}
+                    {isDiscussing && item.markerInsertedAt && meeting.startedAt ? (
+                      <span className="ml-1 font-mono text-emerald-700">
+                        · {formatRelativeMeetingTime(item.markerInsertedAt, meeting.startedAt)}
+                      </span>
+                    ) : null}
                   </div>
                 </button>
               </li>
-            ))}
+            );
+            })}
           </ul>
         </aside>
 
@@ -328,7 +410,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   {!activeItem.prepBrief && canRunPrep ? (
                     <div className="rounded-lg border border-sky-100 bg-sky-50/80 px-3 py-3 space-y-2">
                       <p className="text-sm text-slate-700">
-                        会前简报会汇总该伙伴近 2 周商务记录、时间线、开放待办与活跃商机，并给出讨论议题。
+                        会前简报会汇总该伙伴近 2 周商务记录、待办，并按<strong>终端客户</strong>列出进行中商机，同时给出讨论议题。
                       </p>
                       <button
                         type="button"
@@ -358,161 +440,133 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           )}
         </section>
 
-        {/* Notes / transcript */}
+        {/* 议程 / 腾讯会议总结 */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
           {phase === "live" ? (
-            <MeetingLocalRecorder
-              meetingId={meeting.id}
-              transcriptStatus={meeting.transcriptStatus}
-              transcriptError={meeting.transcriptError}
-              onFlash={flash}
-              onMeetingLive={(recordingStartedAt) =>
-                setMeeting((m) => ({
-                  ...m,
-                  status: "LIVE",
-                  recordingStartedAt: recordingStartedAt ?? m.recordingStartedAt ?? new Date().toISOString(),
-                }))
-              }
-              onLiveTranscript={(plain) => {
-                setLiveNotes(plain);
-                setTranscript(plain);
-              }}
-              onRecordingChange={setIsRecording}
-              onUploaded={() => router.refresh()}
+            <LiveAgendaPanel
+              items={meeting.items}
+              currentDiscussItemId={currentDiscussItemId}
+              meetingStartedAt={meeting.startedAt}
             />
           ) : null}
 
-          <div>
-            <div className="text-xs font-medium text-slate-500 mb-1">
-              {phase === "live"
-                ? "实时转写 / 议程"
-                : phase === "done"
-                  ? "会议记录（只读）"
-                  : "会议记录（停止录音后按伙伴自动生成）"}
-            </div>
-            {phase === "live" ? (
-              <div className="space-y-3">
-                <LiveAgendaPanel
-                  items={meeting.items}
-                  currentDiscussItemId={currentDiscussItemId}
-                  recordingStartedAt={meeting.recordingStartedAt}
-                  isRecording={isRecording}
-                />
-                <textarea
-                  value={liveNotes}
-                  readOnly
-                  rows={10}
-                  placeholder="开始录音后，讯飞转写会实时出现在这里…"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
-                />
+          {(phase === "post" || phase === "done") && (
+            <>
+              <div>
+                <div className="text-xs font-medium text-slate-500 mb-1">
+                  {phase === "done" ? "会议记录（只读）" : "1. 粘贴腾讯会议智能纪要"}
+                </div>
+                {phase === "post" ? (
+                  <>
+                    <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                      从腾讯会议复制「智能纪要 / 转写」粘贴到下方。本系统<strong>不录音</strong>，仅根据会中记录的伙伴打点时间（如
+                      会议 +02:32）与纪要里的时间戳自动匹配；也可在下方手动调整各伙伴内容。
+                    </p>
+                    <textarea
+                      value={transcript}
+                      onChange={(e) => setTranscript(e.target.value)}
+                      rows={10}
+                      placeholder="粘贴腾讯会议智能纪要全文…"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed"
+                    />
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        type="button"
+                        disabled={pending || !transcript.trim()}
+                        onClick={() =>
+                          run(async () => {
+                            const res = await saveTranscriptTextAction(meeting.id, transcript);
+                            if (res.liveNotes) setLiveNotes(res.liveNotes);
+                            setMatchReady(true);
+                            flash("纪要已保存，已按打点时间自动匹配到各伙伴");
+                            router.refresh();
+                          })
+                        }
+                        className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+                      >
+                        保存并自动匹配
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          run(async () => {
+                            const res = await previewMeetingMatchAction(meeting.id);
+                            if (res.error) {
+                              flash(undefined, res.error);
+                              return;
+                            }
+                            if (res.segments) {
+                              const drafts: Record<string, string> = {};
+                              let unassigned = "";
+                              for (const seg of res.segments) {
+                                if (seg.partnerId) drafts[seg.partnerId] = seg.text;
+                                else if (seg.text.trim()) unassigned = seg.text;
+                              }
+                              setMatchDrafts(drafts);
+                              setUnassignedDraft(unassigned);
+                              setMatchReady(true);
+                            }
+                            flash("已刷新匹配预览");
+                          }, { refresh: false })
+                        }
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
+                      >
+                        重新匹配
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <textarea
+                    value={liveNotes}
+                    readOnly
+                    rows={12}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
+                  />
+                )}
               </div>
-            ) : (
-              <textarea
-                value={liveNotes}
-                readOnly
-                rows={phase === "post" ? 12 : 18}
-                placeholder="结束会议并拉取钉钉转写后，将按议程打点自动填入各伙伴讨论内容。"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
-              />
-            )}
-          </div>
+
+              {phase === "post" && matchReady ? (
+                <MatchEditorPanel
+                  items={meeting.items}
+                  matchDrafts={matchDrafts}
+                  unassignedDraft={unassignedDraft}
+                  onChangePartner={(partnerId, text) =>
+                    setMatchDrafts((prev) => ({ ...prev, [partnerId]: text }))
+                  }
+                  onChangeUnassigned={setUnassignedDraft}
+                  onSave={() =>
+                    run(async () => {
+                      const segments: TranscriptSegment[] = meeting.items.map((it) => ({
+                        partnerId: it.partnerId,
+                        partnerName: it.partnerName,
+                        text: matchDrafts[it.partnerId] ?? "",
+                      }));
+                      if (unassignedDraft.trim()) {
+                        segments.unshift({
+                          partnerId: null,
+                          partnerName: null,
+                          text: unassignedDraft,
+                        });
+                      }
+                      const notes = buildLiveNotesFromSegments(segments);
+                      await saveMatchedNotesAction(meeting.id, notes);
+                      setLiveNotes(notes);
+                      flash("匹配结果已保存");
+                    })
+                  }
+                  pending={pending}
+                />
+              ) : null}
+            </>
+          )}
 
           {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
             <>
-            <details className="space-y-3 border-t border-slate-100 pt-3">
-              <summary className="text-xs font-medium text-slate-500 cursor-pointer">
-                钉钉听记（备用，可选）
-              </summary>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                正常流程：A1 录完 → 钉钉推送回调（约 1–5 分钟）→ 下方 ID 与转写自动填入 → 点「拉取转写」。若一直为空，请到
-                团队设置 · 钉钉 核对回调地址与事件订阅，或从听记详情复制 ID 手动绑定。
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input
-                  placeholder="Record ID"
-                  value={dingForm.recordId}
-                  onChange={(e) => setDingForm((f) => ({ ...f, recordId: e.target.value }))}
-                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                />
-                <input
-                  placeholder="Conference ID"
-                  value={dingForm.conferenceId}
-                  onChange={(e) => setDingForm((f) => ({ ...f, conferenceId: e.target.value }))}
-                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                />
-                <input
-                  placeholder="钉盘 Space ID"
-                  value={dingForm.spaceId}
-                  onChange={(e) => setDingForm((f) => ({ ...f, spaceId: e.target.value }))}
-                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                />
-                <input
-                  placeholder="钉盘 File ID"
-                  value={dingForm.fileId}
-                  onChange={(e) => setDingForm((f) => ({ ...f, fileId: e.target.value }))}
-                  className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() =>
-                    run(async () => {
-                      await attachDingTalkRecordingAction(meeting.id, dingForm);
-                      flash("已绑定钉钉录音信息");
-                    })
-                  }
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
-                >
-                  绑定录音
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() =>
-                    run(async () => {
-                      await attachDingTalkRecordingAction(meeting.id, dingForm);
-                      const res = await pullDingTalkTranscriptAction(meeting.id);
-                      if (res.error) flash(undefined, res.error);
-                      else {
-                        flash(res.message);
-                        router.refresh();
-                      }
-                    })
-                  }
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
-                >
-                  拉取转写
-                </button>
-              </div>
-              <textarea
-                value={transcript}
-                onChange={(e) => setTranscript(e.target.value)}
-                rows={8}
-                placeholder="粘贴钉钉 Markdown 转写，或等待回调自动填入"
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"
-              />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() =>
-                    run(async () => {
-                      await saveTranscriptTextAction(meeting.id, transcript);
-                      flash("转写已保存");
-                    })
-                  }
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
-                >
-                  保存转写
-                </button>
-              </div>
-            </details>
               <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                 <button
                   type="button"
-                  disabled={pending}
+                  disabled={pending || !matchReady}
                   onClick={() =>
                     run(async () => {
                       const res = await runMeetingSplitAction(meeting.id);
@@ -538,7 +592,6 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                             })),
                           };
                         }
-                        // merge server drafts if any
                         for (const item of meeting.items) {
                           if (!drafts[item.id] && item.todoDrafts.length) {
                             drafts[item.id] = {
@@ -565,13 +618,13 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                           }
                         }
                         setConfirmDrafts(drafts);
-                        flash("AI 拆分完成，请在左侧逐个确认");
+                        flash("AI 拆分完成，请在中间栏逐个确认摘要与待办");
                       }
                     })
                   }
                   className="rounded-lg bg-violet-700 text-white px-3 py-1.5 text-xs hover:bg-violet-800 disabled:opacity-40"
                 >
-                  AI 拆分讨论
+                  2. AI 拆分讨论
                 </button>
                 <button
                   type="button"
@@ -648,22 +701,80 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
   );
 }
 
+function formatRelativeMeetingTime(
+  markerInsertedAt: string | null,
+  meetingStartedAt: string | null,
+): string {
+  if (!markerInsertedAt || !meetingStartedAt) return "";
+  const at = Date.parse(markerInsertedAt);
+  const anchor = Date.parse(meetingStartedAt);
+  if (Number.isNaN(at) || Number.isNaN(anchor)) return "";
+  const relSec = Math.max(0, Math.round((at - anchor) / 1000));
+  const m = Math.floor(relSec / 60);
+  const s = relSec % 60;
+  return `会议 +${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function DiscussingNowBanner({
+  currentDiscussItem,
+  meetingStartedAt,
+  markJustAt,
+}: {
+  currentDiscussItem: ReviewItemClient | null;
+  meetingStartedAt: string | null;
+  markJustAt: number;
+}) {
+  const justMarked = markJustAt > 0 && Date.now() - markJustAt < 3000;
+  if (currentDiscussItem) {
+    const rel = formatRelativeMeetingTime(
+      currentDiscussItem.markerInsertedAt ?? null,
+      meetingStartedAt,
+    );
+    return (
+      <div
+        className={`rounded-xl border-2 px-4 py-3 transition-colors ${
+          justMarked
+            ? "border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-100"
+            : "border-emerald-300 bg-emerald-50/80"
+        }`}
+      >
+        <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">
+          当前讨论伙伴
+        </p>
+        <p className="text-xl font-bold text-emerald-950 mt-0.5">
+          {currentDiscussItem.partnerName}
+        </p>
+        <p className="text-xs text-emerald-800 mt-1">
+          实际讨论在腾讯会议进行 · 此处仅记时间线 · {rel || "刚刚打点"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-amber-800">
+        会议进行中 · 尚未选定伙伴
+      </p>
+      <p className="text-base font-semibold text-amber-950 mt-0.5">
+        开始过某位伙伴时，请点左侧该伙伴名称
+      </p>
+      <p className="text-xs text-amber-800 mt-1">
+        实际讨论在腾讯会议进行；本页只记录讨论顺序与时间线，便于会后与腾讯纪要匹配
+      </p>
+    </div>
+  );
+}
+
 function formatAgendaMarkerTime(
   markerInsertedAt: string | null,
-  recordingStartedAt: string | null,
+  meetingStartedAt: string | null,
 ): string {
   if (!markerInsertedAt) return "—";
+  const rel = formatRelativeMeetingTime(markerInsertedAt, meetingStartedAt);
+  if (rel) return rel;
   const at = Date.parse(markerInsertedAt);
   if (Number.isNaN(at)) return "—";
-  if (recordingStartedAt) {
-    const anchor = Date.parse(recordingStartedAt);
-    if (!Number.isNaN(anchor)) {
-      const relSec = Math.max(0, Math.round((at - anchor) / 1000));
-      const m = Math.floor(relSec / 60);
-      const s = relSec % 60;
-      return `录音 +${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    }
-  }
   return new Date(at).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
@@ -674,13 +785,11 @@ function formatAgendaMarkerTime(
 function LiveAgendaPanel({
   items,
   currentDiscussItemId,
-  recordingStartedAt,
-  isRecording,
+  meetingStartedAt,
 }: {
   items: ReviewItemClient[];
   currentDiscussItemId: string | null;
-  recordingStartedAt: string | null;
-  isRecording: boolean;
+  meetingStartedAt: string | null;
 }) {
   const marked = items
     .filter((it) => it.markerInsertedAt || it.discussedAt)
@@ -691,28 +800,21 @@ function LiveAgendaPanel({
     });
 
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[280px]">
+    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[200px]">
+      <p className="text-xs font-medium text-slate-700">讨论顺序与时间轴</p>
       <p className="text-xs text-slate-600 leading-relaxed">
-        正常流程：先点「开始录音与转写」，可以说开场白；<strong>开始过某位伙伴时再点左侧该伙伴</strong>。
-        开录后、第一位伙伴打标前的语音，会归到第一位伙伴。转写由科大讯飞实时写入下方文本框。
+        腾讯会议中进行实际讨论；此处<strong>只记录</strong>你何时开始过哪位伙伴（相对「开始开会」的时刻），会后用于与腾讯会议智能纪要的时间戳对齐匹配。
       </p>
-      {!recordingStartedAt && !isRecording ? (
-        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
-          尚未开录。请先在上方点「开始录音与转写」。
-        </p>
-      ) : isRecording && !marked.length ? (
-        <p className="text-xs text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-2.5 py-2">
-          已开录 · 可以先说开场白，开始过第一位伙伴时再点左侧。
-        </p>
-      ) : null}
-      {marked.length ? (
+      {!marked.length ? (
+        <p className="text-sm text-slate-400">尚未打点 · 点左侧伙伴开始</p>
+      ) : (
         <ol className="space-y-2">
           {marked.map((it, idx) => (
             <li
               key={it.id}
               className={`rounded-lg border px-3 py-2 text-sm ${
                 it.id === currentDiscussItemId
-                  ? "border-sky-200 bg-sky-50/80"
+                  ? "border-emerald-200 bg-emerald-50/80"
                   : "border-slate-200 bg-white"
               }`}
             >
@@ -721,18 +823,74 @@ function LiveAgendaPanel({
                   {idx + 1}. {it.partnerName}
                 </span>
                 <span className="text-[11px] text-slate-500 font-mono shrink-0">
-                  {formatAgendaMarkerTime(it.markerInsertedAt ?? it.discussedAt, recordingStartedAt)}
+                  {formatAgendaMarkerTime(it.markerInsertedAt ?? it.discussedAt, meetingStartedAt)}
                 </span>
               </div>
               {it.id === currentDiscussItemId ? (
-                <p className="text-[11px] text-sky-700 mt-0.5">当前正在过</p>
+                <p className="text-[11px] font-semibold text-emerald-700 mt-0.5">当前正在过</p>
               ) : null}
             </li>
           ))}
         </ol>
-      ) : (
-        <p className="text-sm text-slate-400">尚未打点 · 点左侧伙伴开始</p>
       )}
+    </div>
+  );
+}
+
+function MatchEditorPanel({
+  items,
+  matchDrafts,
+  unassignedDraft,
+  onChangePartner,
+  onChangeUnassigned,
+  onSave,
+  pending,
+}: {
+  items: ReviewItemClient[];
+  matchDrafts: Record<string, string>;
+  unassignedDraft: string;
+  onChangePartner: (partnerId: string, text: string) => void;
+  onChangeUnassigned: (text: string) => void;
+  onSave: () => void;
+  pending: boolean;
+}) {
+  return (
+    <div className="space-y-3 border-t border-slate-100 pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-slate-700">2. 核对 / 调整各伙伴匹配内容</p>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onSave}
+          className="rounded-lg border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
+        >
+          保存匹配
+        </button>
+      </div>
+      {unassignedDraft.trim() || items.every((it) => !matchDrafts[it.partnerId]?.trim()) ? (
+        <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-1">
+          <p className="text-xs font-medium text-amber-900">未归属 / 开场</p>
+          <textarea
+            value={unassignedDraft}
+            onChange={(e) => onChangeUnassigned(e.target.value)}
+            rows={3}
+            className="w-full rounded border border-amber-100 px-2 py-1.5 text-xs font-mono bg-white"
+            placeholder="打第一个伙伴之前的纪要内容…"
+          />
+        </div>
+      ) : null}
+      {items.map((it) => (
+        <div key={it.id} className="rounded-lg border border-slate-200 p-3 space-y-1">
+          <p className="text-xs font-semibold text-slate-800">{it.partnerName}</p>
+          <textarea
+            value={matchDrafts[it.partnerId] ?? ""}
+            onChange={(e) => onChangePartner(it.partnerId, e.target.value)}
+            rows={5}
+            className="w-full rounded border border-slate-100 px-2 py-1.5 text-xs font-mono leading-relaxed"
+            placeholder="自动匹配的内容会出现在这里，可手动增删…"
+          />
+        </div>
+      ))}
     </div>
   );
 }
@@ -789,6 +947,69 @@ function PrepBriefView({ brief }: { brief: PartnerPrepBrief }) {
             <li key={t}>{t}</li>
           ))}
         </ul>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="text-xs font-semibold text-slate-700">
+            该伙伴下客户商机
+            {brief.customerOpportunities?.length ? (
+              <span className="font-normal text-slate-400">
+                {" "}
+                · {brief.customerOpportunities.reduce((n, g) => n + g.opportunities.length, 0)} 个进行中
+              </span>
+            ) : null}
+          </div>
+          <Link
+            href={`/partners/${brief.partnerId}`}
+            className="text-[11px] text-sky-700 hover:underline shrink-0"
+          >
+            在伙伴页查看
+          </Link>
+        </div>
+        {brief.customerOpportunities?.length ? (
+          <div className="space-y-3">
+            {brief.customerOpportunities.map((group) => (
+              <div
+                key={group.customerId}
+                className="rounded-lg border border-violet-100 bg-violet-50/40 px-3 py-2.5 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  {group.customerId !== "__unassigned__" ? (
+                    <Link
+                      href={`/customers/${group.customerId}`}
+                      className="text-sm font-semibold text-slate-900 hover:text-violet-800"
+                    >
+                      {group.customerName}
+                    </Link>
+                  ) : (
+                    <span className="text-sm font-semibold text-slate-900">{group.customerName}</span>
+                  )}
+                  <span className="text-[11px] text-slate-500">{group.opportunities.length} 个商机</span>
+                </div>
+                <ul className="space-y-1.5">
+                  {group.opportunities.map((o) => (
+                    <li
+                      key={o.id}
+                      className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm rounded-md bg-white/80 border border-violet-50 px-2.5 py-1.5"
+                    >
+                      <span className="font-medium text-slate-800">{o.name}</span>
+                      <span className="text-[11px] text-violet-700">{o.statusLabel}</span>
+                      {o.stage ? (
+                        <span className="text-[11px] text-slate-500">{o.stage}</span>
+                      ) : null}
+                      {o.amount ? (
+                        <span className="text-[11px] text-slate-600 font-mono">{o.amount}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">暂无该伙伴关联客户的进行中商机</p>
+        )}
       </div>
 
       <div>

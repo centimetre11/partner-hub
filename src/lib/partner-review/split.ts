@@ -8,6 +8,7 @@ import {
   type TranscriptSegment,
 } from "./markers";
 import { computeTranscriptSegments } from "./segment";
+import { parsePartnerSectionsFromLiveNotes } from "./markers";
 import type { SplitProposal, SplitProposalItem } from "./split-types";
 
 export type { SplitProposal, SplitProposalItem } from "./split-types";
@@ -97,13 +98,19 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
   });
   if (!meeting) throw new Error("会议不存在");
 
-  // 转写：按 A1 开录起点 + 议程打点的相对时间对齐
+  // 转写：按开会起点 + 议程打点的相对时间对齐腾讯会议纪要
   const transcriptSegments = computeTranscriptSegments(meeting);
 
-  // 旧版手写记录本含 <<<PARTNER>>> 标记时仍兼容
-  const noteSegments = PARTNER_MARKER_RE.test(meeting.liveNotes ?? "")
-    ? splitTranscriptByMarkers(meeting.liveNotes ?? "")
-    : [];
+  const headerNoteSegments = parsePartnerSectionsFromLiveNotes(
+    meeting.liveNotes,
+    meeting.items.map((it) => ({ partnerId: it.partnerId, partnerName: it.partner.name })),
+  ).filter((s) => s.partnerId || s.text.trim());
+
+  const noteSegments = headerNoteSegments.length
+    ? headerNoteSegments
+    : PARTNER_MARKER_RE.test(meeting.liveNotes ?? "")
+      ? splitTranscriptByMarkers(meeting.liveNotes ?? "")
+      : [];
 
   const allSegments = [...noteSegments, ...transcriptSegments];
   const unassignedText = allSegments

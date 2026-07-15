@@ -23,7 +23,29 @@ export type PartnerPrepBrief = {
   }[];
   /** @deprecated 兼容旧简报；新数据请用 todos */
   openTodos: { id: string; title: string; dueDate: string | null; overdue: boolean; priority: string }[];
-  opportunities: { id: string; name: string; stage: string; amount: string | null }[];
+  opportunities: {
+    id: string;
+    name: string;
+    stage: string;
+    amount: string | null;
+    customerId?: string | null;
+    customerName?: string | null;
+    status?: string;
+    statusLabel?: string;
+  }[];
+  /** 按终端客户分组的进行中商机 */
+  customerOpportunities: {
+    customerId: string;
+    customerName: string;
+    opportunities: {
+      id: string;
+      name: string;
+      stage: string;
+      amount: string | null;
+      status: string;
+      statusLabel: string;
+    }[];
+  }[];
   aiTopics: string[];
   summaryLine: string;
 };

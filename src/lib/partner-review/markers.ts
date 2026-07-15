@@ -107,11 +107,7 @@ export function assignSentencesByRelativeMarkerTime(
   for (const s of sentences) {
     if (!s.line.trim()) continue;
     if (s.atMs == null || !sorted.length) {
-      if (sorted.length) {
-        buckets.get(sorted[0]!.partnerId)!.lines.push(s.line);
-      } else {
-        buckets.get(unassignedKey)!.lines.push(s.line);
-      }
+      buckets.get(unassignedKey)!.lines.push(s.line);
       continue;
     }
     let owner: PartnerTimeBoundary | null = null;
@@ -120,8 +116,8 @@ export function assignSentencesByRelativeMarkerTime(
       else break;
     }
     if (!owner) {
-      // 打标前或时间轴偏早的句子，归第一个已点伙伴
-      buckets.get(sorted[0]!.partnerId)!.lines.push(s.line);
+      // 开录后、第一位伙伴打标前的开场白
+      buckets.get(unassignedKey)!.lines.push(s.line);
     } else {
       buckets.get(owner.partnerId)!.lines.push(s.line);
     }
@@ -197,5 +193,70 @@ export function assignSentencesByMarkerTime(
       text: bucket.lines.join("\n"),
     });
   }
+  return segments;
+}
+
+/** 将拆分后的伙伴段落渲染为 ## 伙伴名 格式记录本 */
+export function buildLiveNotesFromSegments(segments: TranscriptSegment[]): string {
+  const parts: string[] = [];
+  for (const seg of segments) {
+    const body = seg.text.trim();
+    if (seg.partnerName) {
+      parts.push(
+        body ? `## ${seg.partnerName}\n${body}` : `## ${seg.partnerName}\n（该时段未匹配到纪要内容）`,
+      );
+    } else if (body) {
+      parts.push(`## 未归属\n${body}`);
+    }
+  }
+  return parts.join("\n\n");
+}
+
+/** 从 ## 伙伴名 格式的记录本解析回段落（供人工校对后 AI 拆分） */
+export function parsePartnerSectionsFromLiveNotes(
+  liveNotes: string | null | undefined,
+  items: { partnerId: string; partnerName: string }[],
+): TranscriptSegment[] {
+  const raw = (liveNotes ?? "").trim();
+  if (!raw) return [];
+
+  const nameToPartner = new Map(items.map((it) => [it.partnerName.trim().toLowerCase(), it]));
+  const segments: TranscriptSegment[] = [];
+  const re = /^##\s+(.+)\s*$/gm;
+  const matches = [...raw.matchAll(re)];
+
+  if (!matches.length) {
+    return [{ partnerId: null, partnerName: null, text: raw }];
+  }
+
+  const first = matches[0]!;
+  const before = raw.slice(0, first.index).trim();
+  if (before) {
+    segments.push({ partnerId: null, partnerName: null, text: before });
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i]!;
+    const heading = m[1]!.trim();
+    const start = (m.index ?? 0) + m[0].length;
+    const end = i + 1 < matches.length ? matches[i + 1]!.index! : raw.length;
+    let body = raw.slice(start, end).trim();
+    if (body === "（该时段未匹配到纪要内容）" || body === "（该时段未识别到有效语音）") {
+      body = "";
+    }
+
+    if (heading === "未归属" || heading === "转写全文") {
+      if (body) segments.push({ partnerId: null, partnerName: null, text: body });
+      continue;
+    }
+
+    const partner = nameToPartner.get(heading.toLowerCase());
+    segments.push({
+      partnerId: partner?.partnerId ?? null,
+      partnerName: partner?.partnerName ?? heading,
+      text: body,
+    });
+  }
+
   return segments;
 }

@@ -4,7 +4,11 @@ import { db } from "../db";
 import { chatJson } from "../ai";
 import type { PartnerPrepBrief } from "./types";
 import { formatProcessTagsDisplay } from "../opportunity-process-tags";
-import { OPEN_OPPORTUNITY_STATUSES } from "../opportunity-status";
+import {
+  normalizeOpportunityStatus,
+  OPPORTUNITY_STATUS_LABELS_ZH,
+} from "../opportunity-status";
+import { partnerRelatedOpportunityWhere } from "../partner-opportunities";
 
 export type { PartnerPrepBrief } from "./types";
 
@@ -37,7 +41,6 @@ export function tidyProgressText(text: string | null | undefined, max = 360): st
   let flat = (text ?? "").replace(/\s+/g, " ").trim();
   if (!flat) return "";
 
-  // 连续重复短语（如「上周Mohammed找sheik说又有点问题」连贴三次）
   for (let len = 8; len <= 40; len++) {
     const re = new RegExp(`(.{${len}})(\\1)+`, "g");
     flat = flat.replace(re, "$1");
@@ -57,7 +60,48 @@ function stripContactTag(text: string): string {
   return text.replace(/【联系人\s*[^】]+】\s*/g, "").trim();
 }
 
-/** 确定性聚合：近 2 周该伙伴的进展 / 时间线 / 待办 / 商机 */
+function opportunityStatusLabel(status: string): string {
+  const code = normalizeOpportunityStatus(status);
+  return OPPORTUNITY_STATUS_LABELS_ZH[code];
+}
+
+type RawOpportunity = {
+  id: string;
+  name: string;
+  stage: string;
+  amount: string | null;
+  status: string;
+  customer: { id: string; name: string } | null;
+};
+
+function groupOpportunitiesByCustomer(opportunities: RawOpportunity[]): PartnerPrepBrief["customerOpportunities"] {
+  const map = new Map<string, PartnerPrepBrief["customerOpportunities"][number]>();
+
+  for (const o of opportunities) {
+    const customerId = o.customer?.id ?? "__unassigned__";
+    const customerName = o.customer?.name ?? "未关联客户";
+    if (!map.has(customerId)) {
+      map.set(customerId, { customerId, customerName, opportunities: [] });
+    }
+    const status = normalizeOpportunityStatus(o.status);
+    map.get(customerId)!.opportunities.push({
+      id: o.id,
+      name: o.name,
+      stage: formatProcessTagsDisplay(o.stage, "zh"),
+      amount: o.amount,
+      status,
+      statusLabel: opportunityStatusLabel(o.status),
+    });
+  }
+
+  return [...map.values()].sort((a, b) => {
+    if (a.customerId === "__unassigned__") return 1;
+    if (b.customerId === "__unassigned__") return -1;
+    return a.customerName.localeCompare(b.customerName, "zh-CN");
+  });
+}
+
+/** 确定性聚合：近 2 周该伙伴的进展 / 时间线 / 待办 / 客户商机 */
 export async function gatherPartnerReviewFacts(partnerId: string, since: Date = daysAgo(14)) {
   const now = new Date();
   const [partner, businessRecords, events, openTodos, doneTodos, opportunities] = await Promise.all([
@@ -94,10 +138,17 @@ export async function gatherPartnerReviewFacts(partnerId: string, since: Date = 
       select: { id: true, title: true, dueDate: true, priority: true, detail: true, status: true },
     }),
     db.opportunity.findMany({
-      where: { partnerId, status: { in: [...OPEN_OPPORTUNITY_STATUSES] } },
+      where: partnerRelatedOpportunityWhere(partnerId),
       orderBy: { updatedAt: "desc" },
-      take: 10,
-      select: { id: true, name: true, stage: true, amount: true },
+      take: 40,
+      select: {
+        id: true,
+        name: true,
+        stage: true,
+        amount: true,
+        status: true,
+        customer: { select: { id: true, name: true } },
+      },
     }),
   ]);
 
@@ -148,10 +199,16 @@ function renderFactsForPrompt(facts: NonNullable<Awaited<ReturnType<typeof gathe
     lines.push(`- [x] ${t.title}`);
   }
   lines.push("");
-  lines.push("## 活跃商机");
+  lines.push("## 该伙伴下客户的进行中商机");
   if (!facts.opportunities.length) lines.push("（无）");
-  for (const o of facts.opportunities) {
-    lines.push(`- ${o.name} / ${formatProcessTagsDisplay(o.stage, "zh")}${o.amount ? ` / ${o.amount}` : ""}`);
+  const grouped = groupOpportunitiesByCustomer(facts.opportunities);
+  for (const g of grouped) {
+    lines.push(`### ${g.customerName}`);
+    for (const o of g.opportunities) {
+      lines.push(
+        `- ${o.name} / ${o.stage} / ${o.statusLabel}${o.amount ? ` / ${o.amount}` : ""}`,
+      );
+    }
   }
   if (facts.partner.notes?.trim()) {
     lines.push("");
@@ -172,7 +229,6 @@ export async function buildPartnerPrepBrief(
     const body = tidyProgressText(r.content, 420);
     const contactName = extractContactName(body);
     const contentPreview = stripContactTag(body);
-    // 标题若已包含在正文开头，展示时以正文为主
     const titleLooksLikeBody =
       !!contentPreview &&
       (contentPreview.startsWith(r.title.trim()) || r.title.trim().length > 40);
@@ -217,11 +273,16 @@ export async function buildPartnerPrepBrief(
     })),
   ];
 
+  const customerOpportunities = groupOpportunitiesByCustomer(facts.opportunities);
   const opportunities = facts.opportunities.map((o) => ({
     id: o.id,
     name: o.name,
     stage: formatProcessTagsDisplay(o.stage, "zh"),
     amount: o.amount,
+    customerId: o.customer?.id ?? null,
+    customerName: o.customer?.name ?? null,
+    status: normalizeOpportunityStatus(o.status),
+    statusLabel: opportunityStatusLabel(o.status),
   }));
 
   let aiTopics: string[] = [];
@@ -231,7 +292,7 @@ export async function buildPartnerPrepBrief(
     const ai = await chatJson<{ topics?: string[]; summary?: string }>(
       `你是伙伴经营教练。根据给定的确定性事实，为内部「过伙伴」会议推荐 3～5 条值得讨论的议题。
 只输出 JSON：{"topics":["..."],"summary":"一句话进展综述"}
-议题要具体、可行动，不要空话。事实已给定，不要编造不存在的进展。`,
+议题要具体、可行动，不要空话。事实已给定，不要编造不存在的进展。若有多条客户商机，可结合客户维度给出推进建议。`,
       renderFactsForPrompt(facts),
       {
         feature: "partner_review_prep",
@@ -248,13 +309,13 @@ export async function buildPartnerPrepBrief(
       aiTopics.push("跟进逾期待办，明确责任人与截止日期");
     }
     if (opportunities.length) {
-      aiTopics.push(`盘点活跃商机推进卡点（共 ${opportunities.length} 个）`);
+      aiTopics.push(`盘点各客户商机推进卡点（共 ${opportunities.length} 个进行中）`);
     }
     if (!progress.length) {
       aiTopics.push("近两周无商务记录，确认是否需要拜访/培训动作");
     }
     if (!aiTopics.length) aiTopics.push("回顾当前合作阶段与下一步动作");
-    summaryLine = `近两周 ${progress.length} 条进展，${openTodos.length} 个未完成待办，${facts.doneTodos.length} 个已完成，${opportunities.length} 个活跃商机。`;
+    summaryLine = `近两周 ${progress.length} 条进展，${openTodos.length} 个未完成待办，${facts.doneTodos.length} 个已完成，${opportunities.length} 个客户商机进行中。`;
   }
 
   return {
@@ -266,6 +327,7 @@ export async function buildPartnerPrepBrief(
     todos,
     openTodos,
     opportunities,
+    customerOpportunities,
     aiTopics,
     summaryLine,
   };

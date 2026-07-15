@@ -33,12 +33,13 @@ function sentenceRelativeMs(
   return null;
 }
 
-/** 根据转写 + 议程打点（相对 A1 开录时间）拆成伙伴段落 */
+/** 根据腾讯会议纪要 + 议程打点（相对开会时间）拆成伙伴段落 */
 export function computeTranscriptSegments(meeting: MeetingWithItems): TranscriptSegment[] {
+  const anchor = meeting.startedAt ?? meeting.recordingStartedAt;
   const timed =
     parseTimedTranscriptDoc(meeting.transcriptJson) ??
     parseTranscriptTextToTimedDoc(meeting.transcriptText ?? "", {
-      recordingStartedAt: meeting.recordingStartedAt ?? meeting.startedAt,
+      recordingStartedAt: anchor,
     });
 
   if (!timed?.sentences.length) {
@@ -49,7 +50,6 @@ export function computeTranscriptSegments(meeting: MeetingWithItems): Transcript
       : [{ partnerId: null, partnerName: null, text: meeting.transcriptText.trim() }];
   }
 
-  const anchor = meeting.recordingStartedAt ?? meeting.startedAt;
   const boundaries = meeting.items
     .map((it) => {
       const at = it.markerInsertedAt ?? it.discussedAt;

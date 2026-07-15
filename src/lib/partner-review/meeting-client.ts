@@ -29,6 +29,8 @@ export type MeetingClient = {
   id: string;
   title: string;
   status: string;
+  startedAt: string | null;
+  endedAt: string | null;
   liveNotes: string | null;
   transcriptText: string | null;
   prepGeneratedAt: string | null;
@@ -68,6 +70,24 @@ function parseBrief(raw: string | null): PartnerPrepBrief | null {
           "进展",
       }));
     }
+    if (!brief.customerOpportunities?.length && brief.opportunities?.length) {
+      const map = new Map<string, PartnerPrepBrief["customerOpportunities"][number]>();
+      for (const o of brief.opportunities) {
+        const cid = o.customerId ?? "__unassigned__";
+        const cname = o.customerName ?? "未关联客户";
+        if (!map.has(cid)) map.set(cid, { customerId: cid, customerName: cname, opportunities: [] });
+        map.get(cid)!.opportunities.push({
+          id: o.id,
+          name: o.name,
+          stage: o.stage,
+          amount: o.amount,
+          status: o.status ?? "P20",
+          statusLabel: o.statusLabel ?? o.status ?? "进行中",
+        });
+      }
+      brief.customerOpportunities = [...map.values()];
+    }
+    brief.customerOpportunities = brief.customerOpportunities ?? [];
     return brief;
   } catch {
     return null;
@@ -79,6 +99,8 @@ export function toMeetingClient(raw: {
   id: string;
   title: string;
   status: string;
+  startedAt?: Date | null;
+  endedAt?: Date | null;
   liveNotes: string | null;
   transcriptText: string | null;
   prepGeneratedAt: Date | null;
@@ -116,6 +138,8 @@ export function toMeetingClient(raw: {
     id: raw.id,
     title: raw.title,
     status: raw.status,
+    startedAt: raw.startedAt?.toISOString() ?? null,
+    endedAt: raw.endedAt?.toISOString() ?? null,
     liveNotes: raw.liveNotes,
     transcriptText: raw.transcriptText,
     prepGeneratedAt: raw.prepGeneratedAt?.toISOString() ?? null,
