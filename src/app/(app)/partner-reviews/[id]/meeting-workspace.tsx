@@ -9,6 +9,7 @@ import type {
   PartnerPrepBrief,
 } from "@/lib/partner-review/types";
 import {
+  addPartnersToMeetingAction,
   endPartnerReviewMeetingAction,
   getMeetingPreviewPathAction,
   previewMeetingMatchAction,
@@ -64,7 +65,13 @@ function applySegmentsToDrafts(
   setUnassignedDraft(unassigned);
 }
 
-export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient }) {
+export function MeetingWorkspace({
+  meeting: initial,
+  allPartners,
+}: {
+  meeting: MeetingClient;
+  allPartners: { id: string; name: string; tier: string | null }[];
+}) {
   const router = useRouter();
   const [meeting, setMeeting] = useState(initial);
   const [activeItemId, setActiveItemId] = useState<string | null>(initial.items[0]?.id ?? null);
@@ -419,6 +426,20 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
             );
             })}
           </ul>
+          {(phase === "prep" || phase === "live" || phase === "post") && (
+            <AddPartnersPanel
+              meetingId={meeting.id}
+              allPartners={allPartners}
+              existingPartnerIds={meeting.items.map((it) => it.partnerId)}
+              busy={busy}
+              onAdded={(items) => {
+                setMeeting((m) => ({ ...m, items: [...m.items, ...items] }));
+                if (items[0]) setActiveItemId(items[0].id);
+                flash(`已追加 ${items.length} 个伙伴 · 点左侧开始讨论`);
+              }}
+              onError={(err) => flash(undefined, err)}
+            />
+          )}
         </aside>
 
         {/* Brief / confirm */}
@@ -741,6 +762,135 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function AddPartnersPanel({
+  meetingId,
+  allPartners,
+  existingPartnerIds,
+  busy,
+  onAdded,
+  onError,
+}: {
+  meetingId: string;
+  allPartners: { id: string; name: string; tier: string | null }[];
+  existingPartnerIds: string[];
+  busy: boolean;
+  onAdded: (items: ReviewItemClient[]) => void;
+  onError: (message: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
+
+  const existing = useMemo(() => new Set(existingPartnerIds), [existingPartnerIds]);
+  const candidates = useMemo(
+    () => allPartners.filter((p) => !existing.has(p.id)),
+    [allPartners, existing],
+  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return candidates;
+    return candidates.filter((p) => p.name.toLowerCase().includes(q));
+  }, [candidates, query]);
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function submit() {
+    if (!selected.length || adding) return;
+    void (async () => {
+      setAdding(true);
+      try {
+        const res = await addPartnersToMeetingAction(meetingId, selected);
+        if (res.error) {
+          onError(res.error);
+          return;
+        }
+        if (res.items?.length) {
+          onAdded(res.items);
+          setSelected([]);
+          setQuery("");
+          setOpen(false);
+        }
+      } catch (e) {
+        onError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setAdding(false);
+      }
+    })();
+  }
+
+  if (!candidates.length) return null;
+
+  return (
+    <div className="border-t border-slate-100 px-3 py-2 bg-slate-50/60">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="w-full rounded-lg border border-dashed border-slate-300 px-2 py-2 text-xs text-slate-600 hover:border-sky-300 hover:text-sky-800 hover:bg-white"
+        >
+          + 追加讨论伙伴
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-slate-700">追加讨论伙伴</span>
+            <button
+              type="button"
+              className="text-[11px] text-slate-400 hover:text-slate-700"
+              onClick={() => {
+                setOpen(false);
+                setSelected([]);
+                setQuery("");
+              }}
+            >
+              收起
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            临时决定多过几个伙伴时使用；会自动拉取近 2 周简报，加入后点左侧即可打标。
+          </p>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索伙伴…"
+            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs"
+          />
+          <div className="max-h-36 overflow-y-auto rounded-md border border-slate-100 bg-white divide-y divide-slate-50">
+            {filtered.map((p) => (
+              <label
+                key={p.id}
+                className="flex items-center gap-2 px-2 py-1.5 text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(p.id)}
+                  onChange={() => toggle(p.id)}
+                />
+                <span className="flex-1 truncate text-slate-800">{p.name}</span>
+                {p.tier ? <span className="text-slate-400">T{p.tier}</span> : null}
+              </label>
+            ))}
+            {!filtered.length ? (
+              <p className="px-2 py-3 text-[11px] text-slate-400">没有可追加的伙伴</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            disabled={adding || busy || !selected.length}
+            onClick={submit}
+            className="w-full rounded-lg bg-sky-700 text-white px-2 py-1.5 text-xs hover:bg-sky-800 disabled:opacity-40"
+          >
+            {adding ? `正在加入并拉取简报（${selected.length}）…` : `加入议程（${selected.length || 0}）`}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

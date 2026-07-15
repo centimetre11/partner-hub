@@ -96,6 +96,47 @@ function parseBrief(raw: string | null): PartnerPrepBrief | null {
 }
 
 /** 服务端 / 客户端均可调用的会议序列化（勿放进 "use client" 模块） */
+export function toReviewItemClient(raw: {
+  id: string;
+  partnerId: string;
+  sortOrder: number;
+  status: string;
+  discussedAt?: Date | null;
+  markerInsertedAt?: Date | null;
+  prepBrief: string | null;
+  coreNotes: string | null;
+  confirmedSnapshot?: string | null;
+  partner: { id: string; name: string; tier: string | null };
+  todoDrafts?: Array<{
+    id: string;
+    title: string;
+    detail: string | null;
+    dueDate: Date | null;
+    confirmed: boolean;
+  }>;
+}): ReviewItemClient {
+  return {
+    id: raw.id,
+    partnerId: raw.partnerId,
+    partnerName: raw.partner.name,
+    partnerTier: raw.partner.tier,
+    sortOrder: raw.sortOrder,
+    status: raw.status,
+    discussedAt: raw.discussedAt?.toISOString() ?? null,
+    markerInsertedAt: raw.markerInsertedAt?.toISOString() ?? null,
+    prepBrief: parseBrief(raw.prepBrief),
+    coreNotes: raw.coreNotes,
+    confirmedSnapshot: parseConfirmedSnapshot(raw.confirmedSnapshot),
+    todoDrafts: (raw.todoDrafts ?? []).map((t) => ({
+      id: t.id,
+      title: t.title,
+      detail: t.detail,
+      dueDate: t.dueDate?.toISOString() ?? null,
+      confirmed: t.confirmed,
+    })),
+  };
+}
+
 export function toMeetingClient(raw: {
   id: string;
   title: string;
@@ -156,25 +197,6 @@ export function toMeetingClient(raw: {
     recordingEndedAt: raw.recordingEndedAt?.toISOString() ?? null,
     transcriptStatus: raw.transcriptStatus ?? null,
     transcriptError: raw.transcriptError ?? null,
-    items: raw.items.map((it) => ({
-      id: it.id,
-      partnerId: it.partnerId,
-      partnerName: it.partner.name,
-      partnerTier: it.partner.tier,
-      sortOrder: it.sortOrder,
-      status: it.status,
-      discussedAt: it.discussedAt?.toISOString() ?? null,
-      markerInsertedAt: it.markerInsertedAt?.toISOString() ?? null,
-      prepBrief: parseBrief(it.prepBrief),
-      coreNotes: it.coreNotes,
-      confirmedSnapshot: parseConfirmedSnapshot(it.confirmedSnapshot),
-      todoDrafts: it.todoDrafts.map((t) => ({
-        id: t.id,
-        title: t.title,
-        detail: t.detail,
-        dueDate: t.dueDate?.toISOString() ?? null,
-        confirmed: t.confirmed,
-      })),
-    })),
+    items: raw.items.map((it) => toReviewItemClient(it)),
   };
 }

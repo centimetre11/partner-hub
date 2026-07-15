@@ -37,6 +37,11 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
 
   const st = STATUS_LABEL[meeting.status] ?? STATUS_LABEL.DRAFT!;
   const client = toMeetingClient(meeting);
+  const allPartners = await db.partner.findMany({
+    where: { status: "ACTIVE" },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, tier: true },
+  });
 
   return (
     <div className="pb-16">
@@ -73,7 +78,7 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
         </div>
 
         {/* key 仅用会议 id：切伙伴/改 status 时切勿整页重挂 */}
-        <MeetingWorkspace key={meeting.id} meeting={client} />
+        <MeetingWorkspace key={meeting.id} meeting={client} allPartners={allPartners} />
       </div>
     </div>
   );

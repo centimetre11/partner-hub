@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "../session";
 import { db } from "../db";
-import { generateMeetingPrepBriefs } from "./brief";
+import { generateMeetingPrepBriefs, buildPartnerPrepBrief } from "./brief";
 import { buildSplitProposal, persistSplitDrafts } from "./split";
 import { applyPartnerReviewConfirm, type ConfirmItemPayload } from "./apply";
 import { downloadDingDriveTranscript, fetchConferenceTranscript } from "../dingtalk/drive";
@@ -15,6 +15,7 @@ import { materializeLiveNotesForMeeting } from "./notes-materialize";
 import { ensureMeetingPreviewToken, newPreviewToken } from "./preview-token";
 import { markPartnerDiscussed } from "./discuss-partner";
 import { matchMinutesToPartners } from "./minutes-match";
+import { toReviewItemClient, type ReviewItemClient } from "./meeting-client";
 
 function revalidateMeeting(id: string) {
   revalidatePath("/partner-reviews");
@@ -129,6 +130,68 @@ export async function getMeetingPreviewPathAction(meetingId: string) {
   await requireUser();
   const token = await ensureMeetingPreviewToken(meetingId);
   return { ok: true as const, path: `/partner-reviews/preview/${token}` };
+}
+
+/** 会中 / 会后处理阶段追加议程伙伴（复用创建会议选人 + 简报逻辑） */
+export async function addPartnersToMeetingAction(meetingId: string, partnerIds: string[]) {
+  const user = await requireUser();
+  const ids = [...new Set(partnerIds.map((id) => id.trim()).filter(Boolean))];
+  if (!ids.length) return { error: "请至少选择一个伙伴" };
+
+  const meeting = await db.partnerReviewMeeting.findUnique({
+    where: { id: meetingId },
+    select: {
+      status: true,
+      prepGeneratedAt: true,
+      items: { orderBy: { sortOrder: "asc" }, select: { partnerId: true, sortOrder: true } },
+    },
+  });
+  if (!meeting) return { error: "会议不存在" };
+  if (!["PREP", "LIVE", "PROCESSING"].includes(meeting.status)) {
+    return { error: "当前状态无法追加伙伴" };
+  }
+
+  const existing = new Set(meeting.items.map((it) => it.partnerId));
+  const newIds = ids.filter((id) => !existing.has(id));
+  if (!newIds.length) return { error: "所选伙伴已在议程中" };
+
+  const partners = await db.partner.findMany({
+    where: { id: { in: newIds }, status: "ACTIVE" },
+    select: { id: true, name: true, tier: true },
+  });
+  if (!partners.length) return { error: "未找到有效的正式伙伴" };
+
+  const orderedIds = newIds.filter((id) => partners.some((p) => p.id === id));
+  const maxSort = meeting.items.reduce((m, it) => Math.max(m, it.sortOrder), -1);
+
+  const createdItems: ReviewItemClient[] = [];
+  for (let i = 0; i < orderedIds.length; i++) {
+    const partnerId = orderedIds[i]!;
+    const brief = await buildPartnerPrepBrief(partnerId, { userId: user.id });
+    const row = await db.partnerReviewItem.create({
+      data: {
+        meetingId,
+        partnerId,
+        sortOrder: maxSort + 1 + i,
+        prepBrief: brief ? JSON.stringify(brief) : null,
+      },
+      include: {
+        partner: { select: { id: true, name: true, tier: true } },
+        todoDrafts: { orderBy: { sortOrder: "asc" } },
+      },
+    });
+    createdItems.push(toReviewItemClient(row));
+  }
+
+  if (!meeting.prepGeneratedAt && createdItems.some((it) => it.prepBrief)) {
+    await db.partnerReviewMeeting.update({
+      where: { id: meetingId },
+      data: { prepGeneratedAt: new Date() },
+    });
+  }
+
+  revalidateMeeting(meetingId);
+  return { ok: true as const, items: createdItems };
 }
 
 export async function runMeetingSplitAction(meetingId: string) {
