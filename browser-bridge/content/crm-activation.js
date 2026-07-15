@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.17";
+  const SCRIPT_VER = "1.1.18";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -35,7 +35,7 @@
     const warnings = [];
     const phoneLocal =
       (fields.phoneLocal && String(fields.phoneLocal).replace(/\D/g, "")) ||
-      "500000000";
+      `5${String(Date.now()).slice(-8)}`;
     const emailSnapshot = fields.email || "";
 
     // ========== 1) 先填纯文本（与公司名同一套 focus + setNativeValue）==========

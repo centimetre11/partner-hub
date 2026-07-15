@@ -16,7 +16,35 @@ export const CRM_ACTIVATION_CURRENT_DEMAND =
   "Enterprise demands - quickly build BI/ Reporting or other systems";
 export const CRM_ACTIVATION_FAKE_PHONE = "+966500000000";
 export const CRM_ACTIVATION_FAKE_DIAL_CODE = "+966";
+/** @deprecated 勿再用固定本地号；请用 fakePhoneLocalRandom()，避免 CRM 电话查重 */
 export const CRM_ACTIVATION_FAKE_PHONE_LOCAL = "500000000";
+
+/** 伪造沙特手机本地号：5 + 8 位随机数字（每次新建不同，避开 CRM 查重） */
+export function fakePhoneLocalRandom(): string {
+  const bytes = new Uint8Array(8);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < 8; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  let tail = "";
+  for (let i = 0; i < 8; i++) tail += String(bytes[i] % 10);
+  return `5${tail}`;
+}
+
+export function fakePhoneParts(): {
+  phone: string;
+  phoneDialCode: string;
+  phoneLocal: string;
+} {
+  const phoneLocal = fakePhoneLocalRandom();
+  const phoneDialCode = CRM_ACTIVATION_FAKE_DIAL_CODE;
+  return {
+    phone: `${phoneDialCode}${phoneLocal}`,
+    phoneDialCode,
+    phoneLocal,
+  };
+}
 
 /** 创建人是售前时，销售固定填此人 */
 export const CRM_ACTIVATION_DEFAULT_SALES = "chenmin";
@@ -245,9 +273,10 @@ export function buildCrmActivationFields(input: {
   let phoneDialCode = "";
   let phoneLocal = "";
   if (!phone) {
-    phone = CRM_ACTIVATION_FAKE_PHONE;
-    phoneDialCode = CRM_ACTIVATION_FAKE_DIAL_CODE;
-    phoneLocal = CRM_ACTIVATION_FAKE_PHONE_LOCAL;
+    const fake = fakePhoneParts();
+    phone = fake.phone;
+    phoneDialCode = fake.phoneDialCode;
+    phoneLocal = fake.phoneLocal;
   } else {
     const m = phone.match(/^(\+\d{1,4})\s*(.*)$/);
     if (m) {
