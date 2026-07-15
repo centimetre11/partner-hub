@@ -18,11 +18,10 @@ import {
   startPartnerReviewMeetingAction,
   attachDingTalkRecordingAction,
   confirmMeetingItemsAction,
-  markDingTalkRecordingStartedAction,
 } from "@/lib/partner-review/actions";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
-import { isDingTalkClient, startDingTalkA1Recording } from "@/lib/dingtalk/client-record";
+import { MeetingLocalRecorder } from "@/components/partner-review/meeting-local-recorder";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 
 export type { MeetingClient, ReviewItemClient };
@@ -172,44 +171,14 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "LIVE" }));
-                    flash("会议已开始，点左侧伙伴可打标");
+                    flash("会议已开始，请在右侧点「开始录音与转写」");
                     router.refresh();
                   }
                 })
               }
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
-            >
-              开始开会
-            </button>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={() =>
-                run(async () => {
-                  const res = await startPartnerReviewMeetingAction(meeting.id);
-                  if (res.error) {
-                    flash(undefined, res.error);
-                    return;
-                  }
-                  setMeeting((m) => ({ ...m, status: "LIVE" }));
-                  try {
-                    const rec = await startDingTalkA1Recording({ meetingId: meeting.id });
-                    await markDingTalkRecordingStartedAction(meeting.id, { fid: rec.fid });
-                    flash("已开始开会，并已启动钉钉 A1 录音");
-                  } catch (e) {
-                    const tip = e instanceof Error ? e.message : String(e);
-                    flash(
-                      isDingTalkClient()
-                        ? `会议已开始，但自动录音失败：${tip}`
-                        : `会议已开始。${tip}；也可手动按 A1 开录，结束后回调会自动关联。`,
-                    );
-                  }
-                  router.refresh();
-                })
-              }
               className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
             >
-              录音并开始开会
+              开始开会
             </button>
           </>
         )}
@@ -224,35 +193,6 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                 尚未打标 · 讨论谁就点左侧谁
               </span>
             )}
-            {!meeting.dingtalkFileId && !meeting.dingtalkRecordId ? (
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() =>
-                  run(async () => {
-                    try {
-                      const rec = await startDingTalkA1Recording({ meetingId: meeting.id });
-                      await markDingTalkRecordingStartedAction(meeting.id, { fid: rec.fid });
-                      flash("已启动钉钉 A1 录音");
-                      router.refresh();
-                    } catch (e) {
-                      const tip = e instanceof Error ? e.message : String(e);
-                      flash(
-                        undefined,
-                        isDingTalkClient() ? tip : `请在钉钉客户端内打开本页。${tip}`,
-                      );
-                    }
-                  })
-                }
-                className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
-              >
-                启动 A1 录音
-              </button>
-            ) : (
-              <span className="rounded-lg bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1.5 text-xs">
-                A1 录音已关联
-              </span>
-            )}
             <button
               type="button"
               disabled={pending}
@@ -262,7 +202,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "PROCESSING" }));
-                    flash("会议已结束。可拉取钉钉转写或粘贴纪要后 AI 拆分");
+                    flash("会议已结束。若已停止录音，可直接 AI 拆分");
                   }
                 })
               }
@@ -288,12 +228,8 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：需要简报时先点「开会准备」→「录音并开始开会」（钉钉 A1，需在钉钉内打开）→ 讨论谁点左侧谁打标 →
-          结束会议 → 拉取转写（记录本自动生成）→ AI 拆分。钉钉 A1 不支持会中实时转写写入。钉钉配置见{" "}
-          <Link href="/settings#integrations" className="text-sky-700 hover:underline">
-            团队设置 · 钉钉
-          </Link>
-          。
+          建议：需要简报时先点「开会准备」→「开始开会」→ 右侧「开始录音与转写」→ 讨论谁点左侧谁 →
+          停止录音 → 结束会议 → AI 拆分。转写走科大讯飞云端 API，不占服务器内存。
         </p>
       ) : null}
 
@@ -423,20 +359,44 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
 
         {/* Notes / transcript */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          {phase === "live" ? (
+            <MeetingLocalRecorder
+              meetingId={meeting.id}
+              transcriptStatus={meeting.transcriptStatus}
+              transcriptError={meeting.transcriptError}
+              onFlash={flash}
+              onMeetingLive={() => setMeeting((m) => ({ ...m, status: "LIVE" }))}
+              onLiveTranscript={(plain) => {
+                setLiveNotes(plain);
+                setTranscript(plain);
+              }}
+              onUploaded={() => router.refresh()}
+            />
+          ) : null}
+
           <div>
             <div className="text-xs font-medium text-slate-500 mb-1">
               {phase === "live"
-                ? "议程打点"
+                ? "实时转写 / 议程"
                 : phase === "done"
                   ? "会议记录（只读）"
-                  : "会议记录（转写到位后自动生成）"}
+                  : "会议记录（停止录音后按伙伴自动生成）"}
             </div>
             {phase === "live" ? (
-              <LiveAgendaPanel
-                items={meeting.items}
-                currentDiscussItemId={currentDiscussItemId}
-                recordingStartedAt={meeting.recordingStartedAt}
-              />
+              <div className="space-y-3">
+                <LiveAgendaPanel
+                  items={meeting.items}
+                  currentDiscussItemId={currentDiscussItemId}
+                  recordingStartedAt={meeting.recordingStartedAt}
+                />
+                <textarea
+                  value={liveNotes}
+                  readOnly
+                  rows={10}
+                  placeholder="开始录音后，讯飞转写会实时出现在这里…"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
+                />
+              </div>
             ) : (
               <textarea
                 value={liveNotes}
@@ -449,8 +409,11 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           </div>
 
           {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
-            <div className="space-y-3 border-t border-slate-100 pt-3">
-              <div className="text-xs font-medium text-slate-500">钉钉听记 · 会议转写</div>
+            <>
+            <details className="space-y-3 border-t border-slate-100 pt-3">
+              <summary className="text-xs font-medium text-slate-500 cursor-pointer">
+                钉钉听记（备用，可选）
+              </summary>
               <p className="text-[11px] text-slate-500 leading-relaxed">
                 正常流程：A1 录完 → 钉钉推送回调（约 1–5 分钟）→ 下方 ID 与转写自动填入 → 点「拉取转写」。若一直为空，请到
                 团队设置 · 钉钉 核对回调地址与事件订阅，或从听记详情复制 ID 手动绑定。
@@ -535,12 +498,14 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                 >
                   保存转写
                 </button>
+              </div>
+            </details>
+              <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                 <button
                   type="button"
                   disabled={pending}
                   onClick={() =>
                     run(async () => {
-                      await saveTranscriptTextAction(meeting.id, transcript);
                       const res = await runMeetingSplitAction(meeting.id);
                       if (res.error) {
                         flash(undefined, res.error);
@@ -660,13 +625,13 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   确认写入商务记录与待办
                 </button>
               </div>
-              {proposal?.unassignedText ? (
+            {proposal?.unassignedText ? (
                 <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
                   <div className="font-medium mb-1">未归属片段（请检查会中是否按讨论顺序打标后重新拆分）</div>
                   {proposal.unassignedText.slice(0, 2000)}
                 </div>
-              ) : null}
-            </div>
+            ) : null}
+            </>
           )}
         </section>
       </div>
@@ -717,12 +682,12 @@ function LiveAgendaPanel({
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[280px]">
       <p className="text-xs text-slate-600 leading-relaxed">
-        讨论谁就点左侧伙伴，系统记录<strong>相对 A1 开录</strong>的时间点，用于会后把钉钉转写切到各伙伴。
-        无需手写；钉钉 A1 暂不支持会中实时转写写入此处。
+        讨论谁就点左侧伙伴，系统记录<strong>相对开录</strong>的时间点，用于把转写切到各伙伴。
+        无需手写；转写由科大讯飞实时写入右侧文本框。
       </p>
       {!recordingStartedAt ? (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
-          尚未记录 A1 开录时间。请先点「启动 A1 录音」或「录音并开始开会」，否则只能按讨论顺序做 AI 拆分。
+          尚未开录。请先在上方点「开始录音与转写」，否则只能按讨论顺序做 AI 拆分。
         </p>
       ) : null}
       {marked.length ? (

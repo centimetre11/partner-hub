@@ -74,6 +74,45 @@ export function peakLevel(samples: Float32Array): number {
  * 映射为 UI 电平 0–1。
  * 正常说话峰值常在 0.05–0.3，旧逻辑用 RMS*4 会长期显示「几乎无声」。
  */
+/** 降采样到目标采样率（线性插值） */
+export function downsampleFloat32(
+  input: Float32Array,
+  fromRate: number,
+  toRate: number,
+): Float32Array {
+  if (fromRate === toRate || !input.length) return input;
+  const ratio = fromRate / toRate;
+  const outLen = Math.floor(input.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio;
+    const idx = Math.floor(pos);
+    const frac = pos - idx;
+    const a = input[idx] ?? 0;
+    const b = input[idx + 1] ?? a;
+    out[i] = a + (b - a) * frac;
+  }
+  return out;
+}
+
+export function floatToPcm16(samples: Float32Array): Int16Array {
+  const out = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]!));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out;
+}
+
+export function pcm16ToBytes(pcm: Int16Array): Uint8Array {
+  const buf = new Uint8Array(pcm.length * 2);
+  const view = new DataView(buf.buffer);
+  for (let i = 0; i < pcm.length; i++) {
+    view.setInt16(i * 2, pcm[i]!, true);
+  }
+  return buf;
+}
+
 export function meterLevel(samples: Float32Array): number {
   const peak = peakLevel(samples);
   const rms = rmsLevel(samples);
