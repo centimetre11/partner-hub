@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPartnerReviewMeetingAction } from "@/lib/partner-review/actions";
 
@@ -13,7 +13,7 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
 
   const filtered = useMemo(() => {
@@ -27,19 +27,29 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
   }
 
   function submit() {
-    startTransition(async () => {
+    void (async () => {
+      setBusy(true);
       setError(null);
-      const fd = new FormData();
-      fd.set("title", title.trim());
-      if (scheduledAt) fd.set("scheduledAt", scheduledAt);
-      for (const id of selected) fd.append("partnerIds", id);
-      const res = await createPartnerReviewMeetingAction(fd);
-      if (res.error) {
-        setError(res.error);
-        return;
+      try {
+        const fd = new FormData();
+        fd.set("title", title.trim());
+        if (scheduledAt) fd.set("scheduledAt", scheduledAt);
+        for (const id of selected) fd.append("partnerIds", id);
+        const res = await createPartnerReviewMeetingAction(fd);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        if (res.id) {
+          setOpen(false);
+          router.push(`/partner-reviews/${res.id}`);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
       }
-      if (res.id) router.push(`/partner-reviews/${res.id}`);
-    });
+    })();
   }
 
   if (!open) {
@@ -112,11 +122,11 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
 
       <button
         type="button"
-        disabled={pending || !selected.length}
+        disabled={busy || !selected.length}
         onClick={submit}
         className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
       >
-        {pending ? "创建中…" : "创建并进入工作台"}
+        {busy ? "创建中…" : "创建并进入工作台"}
       </button>
     </div>
   );

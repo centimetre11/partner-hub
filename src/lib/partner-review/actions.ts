@@ -54,7 +54,6 @@ export async function createPartnerReviewMeetingAction(formData: FormData) {
     },
   });
 
-  revalidateMeeting(meeting.id);
   return { ok: true, id: meeting.id };
 }
 
