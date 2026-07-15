@@ -114,9 +114,14 @@ export async function createXfyunRelaySession(meetingId: string, userId: string)
       void handleMessage(relaySessionId, data.toString());
     });
 
-    ws.on("error", () => {
+    ws.on("error", (err) => {
       clearTimeout(timer);
-      reject(new Error("服务器连接讯飞失败，请检查密钥与 IP 白名单"));
+      const msg = err instanceof Error ? err.message : String(err);
+      reject(
+        new Error(
+          `服务器连接讯飞失败（${msg}）。请在讯飞控制台「实时语音转写大模型」服务页关闭 IP 白名单，或将服务器出口 IP 43.164.65.54 加入白名单后重试。`,
+        ),
+      );
     });
 
     ws.on("close", () => {
