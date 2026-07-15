@@ -10,6 +10,10 @@ import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { getServerI18n } from "@/lib/server-i18n";
 import { isTodoOverdue } from "@/lib/todo-dates";
 import { PartnerKanbanBoard, type KanbanPartnerCard } from "@/components/partner-kanban";
+import {
+  indexOpenOpportunitiesByPartner,
+  partnersRelatedOpportunityWhere,
+} from "@/lib/partner-opportunities";
 
 function lastActivityAt(p: { events: { createdAt: Date }[]; updatedAt: Date }) {
   return p.events.length ? new Date(p.events[0].createdAt) : new Date(p.updatedAt);
@@ -93,12 +97,6 @@ export default async function PartnersPage({
       },
       include: {
         contacts: { select: { role: true, contactInfo: true } },
-        opportunities: {
-          where: { status: "ACTIVE" },
-          select: { name: true, amount: true, updatedAt: true },
-          orderBy: { updatedAt: "desc" },
-          take: 1,
-        },
         todos: {
           where: { status: "OPEN" },
           select: { title: true, dueDate: true, priority: true, status: true },
@@ -115,6 +113,22 @@ export default async function PartnersPage({
     }),
   ]);
 
+  const partnerIds = partners.map((p) => p.id);
+  const relatedOpps =
+    partnerIds.length > 0
+      ? await db.opportunity.findMany({
+          where: partnersRelatedOpportunityWhere(partnerIds),
+          select: {
+            name: true,
+            updatedAt: true,
+            partnerId: true,
+            customer: { select: { partnerLinks: { select: { partnerId: true } } } },
+          },
+          orderBy: { updatedAt: "desc" },
+        })
+      : [];
+  const oppsByPartner = indexOpenOpportunitiesByPartner(relatedOpps, partnerIds);
+
   const kanbanCards: KanbanPartnerCard[] = partners.map((p) => {
     const c = computeCompleteness(
       {
@@ -127,7 +141,7 @@ export default async function PartnersPage({
     const stale = staleDays(p);
     const activityAt = lastActivityAt(p);
     const nextTodo = pickNextTodo(p.todos);
-    const activeOpp = p.opportunities[0] ?? null;
+    const activeOpp = oppsByPartner.get(p.id)?.[0] ?? null;
     return {
       id: p.id,
       name: p.name,

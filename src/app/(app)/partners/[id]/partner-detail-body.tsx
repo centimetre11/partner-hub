@@ -1,9 +1,8 @@
 import { notFound } from "next/navigation";
-import type { Opportunity, TimelineEvent, TodoItem, User } from "@prisma/client";
+import type { TimelineEvent, TodoItem, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, Card, EmptyState, ScoreBar, fmtDate, fmtDateTime } from "@/components/ui";
-import { NavLink } from "@/components/nav-link";
+import { Badge, Card, EmptyState, ScoreBar, fmtDateTime } from "@/components/ui";
 import { formatTierLabel, normalizePartnerTier } from "@/lib/tier";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness } from "@/lib/completeness";
@@ -27,10 +26,7 @@ import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
 import { PartnerHierarchySection } from "@/components/partner-hierarchy-section";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
-import { OpportunityProcessBadges } from "@/components/opportunity-process-badges";
-import { opportunityStatusLabel, opportunityStatusTone } from "@/lib/opportunity-status";
 import { listDistributorCandidates } from "@/lib/partner-hierarchy";
-import type { Locale } from "@/lib/i18n/locale";
 import { TodoItemRow } from "@/components/todo-item-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
@@ -443,16 +439,29 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                 partnerRelation: cust.partnerRelation,
               }))}
               unboundCustomers={unboundCustomers}
+              opportunities={relatedOpportunities.map((o) => ({
+                id: o.id,
+                name: o.name,
+                status: o.status,
+                stage: o.stage,
+                nextStep: o.nextStep,
+                dealType: o.dealType,
+                amount: o.amount,
+                followUpAt: o.followUpAt,
+                client: o.client,
+                customerId: o.customerId,
+                customer: o.customer,
+              }))}
               copy={m.partnerDetail.customersSection}
               statusLabels={{
                 ACTIVE: m.customers.statusActive,
                 PROSPECT: m.customers.statusProspect,
                 INACTIVE: m.customers.statusInactive,
               }}
+              m={m}
+              bcp47={bcp47}
+              locale={locale}
             />
-            <Card title={m.partnerDetail.relatedOpportunities.replace("{count}", String(relatedOpportunities.length))}>
-              <RelatedOpportunityList opportunities={relatedOpportunities} m={m} bcp47={bcp47} locale={locale} />
-            </Card>
           </div>
         }
         relationship={
@@ -537,57 +546,6 @@ function TodoList({
         </details>
       )}
       {todos.length === 0 && <EmptyState text={m.partnerDetail.noTodos} />}
-    </div>
-  );
-}
-
-function RelatedOpportunityList({
-  opportunities,
-  m,
-  bcp47,
-  locale,
-}: {
-  opportunities: (Opportunity & { customer: { id: string; name: string } | null })[];
-  m: Messages;
-  bcp47: string;
-  locale: Locale;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-slate-400">{m.partnerDetail.relatedOpportunitiesHint}</p>
-      {opportunities.map((o) => (
-        <div key={o.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-4 py-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-slate-900">{o.name}</span>
-              <Badge tone={opportunityStatusTone(o.status)}>
-                {opportunityStatusLabel(o.status, locale)}
-              </Badge>
-              <OpportunityProcessBadges
-                stage={o.stage}
-                nextStep={o.nextStep}
-                locale={locale}
-                nextPrefix={m.opportunities.nextProcessPrefix}
-              />
-              {o.dealType === "PRODUCT" && <Badge tone="amber">{m.common.dealTypeProduct}</Badge>}
-              {o.dealType === "PROJECT" && <Badge tone="indigo">{m.common.dealTypeProject}</Badge>}
-            </div>
-            <div className="text-xs text-slate-400 mt-0.5">
-              {o.customer ? (
-                <NavLink href={`/customers/${o.customer.id}`} className="text-sky-600 hover:underline">{o.customer.name}</NavLink>
-              ) : (o.client ?? "—")}
-              {" · "}{m.common.amount}: {o.amount ?? "—"}
-              {o.followUpAt && ` · ${m.partnerDetail.followUp}: ${fmtDate(o.followUpAt, bcp47)}`}
-            </div>
-          </div>
-          {o.customer && (
-            <NavLink href={`/customers/${o.customer.id}`} className="text-xs text-sky-600 hover:underline shrink-0">
-              {m.partnerDetail.customersSection.viewDetail}
-            </NavLink>
-          )}
-        </div>
-      ))}
-      {opportunities.length === 0 && <EmptyState text={m.partnerDetail.noOpportunities} />}
     </div>
   );
 }
