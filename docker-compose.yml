@@ -17,38 +17,6 @@ services:
     networks:
       - default
 
-  # 自研 Whisper 已下架；如需恢复：docker compose --profile asr up -d whisper-asr
-  whisper-asr:
-    # 默认 CPU；有 GPU 时可改为 latest-gpu 并启用下方 deploy
-    image: onerahmet/openai-whisper-asr-webservice:latest
-    container_name: partner-hub-whisper-asr-1
-    restart: unless-stopped
-    environment:
-      - ASR_ENGINE=faster_whisper
-      # 8GB 机器用 small；内存 ≥16GB 可改 medium；有 GPU 可改 large-v3
-      - ASR_MODEL=${ASR_MODEL:-small}
-      - ASR_MODEL_PATH=/root/.cache/whisper
-    volumes:
-      - whisper-cache:/root/.cache/whisper
-    # 避免把主站内存打满；识别时再吃满限额
-    mem_limit: 3g
-    # GPU 示例（需 NVIDIA Container Toolkit）:
-    # image: onerahmet/openai-whisper-asr-webservice:latest-gpu
-    # environment ASR_MODEL=large-v3
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-    ports:
-      - "9000:9000"
-    networks:
-      - default
-    profiles:
-      - asr
-
   partner-hub:
     build: .
     container_name: partner-hub-partner-hub-1
@@ -63,8 +31,6 @@ services:
       - WECOM_BOT_ENABLED=false
       - HOSTNAME=0.0.0.0
       - UPLOAD_DIR=/data/uploads
-      # 转写走钉钉 A1 听记；不再默认连自托管 Whisper
-      # - ASR_BASE_URL=http://whisper-asr:9000
       - NODE_OPTIONS=--max-old-space-size=3072
     volumes:
       - partner-data:/data
@@ -108,4 +74,3 @@ volumes:
   partner-data:
   partner-uploads:
   pg-data:
-  whisper-cache:
