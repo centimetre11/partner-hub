@@ -619,6 +619,7 @@ async function persistWeeklyReportSnapshot(data: {
   userName?: string | null;
   source: "SCHEDULED" | "MANUAL" | "TEST";
   agentRunId?: string | null;
+  createdAt?: Date;
 }) {
   try {
     await db.weeklyReportSnapshot.create({
@@ -635,11 +636,133 @@ async function persistWeeklyReportSnapshot(data: {
         userName: data.userName ?? null,
         source: data.source,
         agentRunId: data.agentRunId ?? null,
+        ...(data.createdAt ? { createdAt: data.createdAt } : {}),
       },
     });
   } catch (e) {
     console.error("[weekly-report] persist snapshot failed:", e);
   }
+}
+
+/**
+ * 仅生成并落库存档（不发邮件）。用于历史回填或补档个人周报。
+ */
+export async function archiveWeeklyReportsOnly(
+  agent: Pick<Agent, "queryConfig" | "timezone" | "createdById" | "name">,
+  opts: {
+    windowEnd: Date;
+    agentRunId?: string | null;
+    source?: "SCHEDULED" | "MANUAL";
+    createdAt?: Date;
+    /** true 时用确定性兜底叙述，跳过 LLM（回填更快） */
+    skipLlm?: boolean;
+    /** 若该 agentRun 已有个人快照则跳过 */
+    skipIfPersonalExists?: boolean;
+  }
+): Promise<{ personal: number; digest: number; skipped: boolean; weekLabel: string }> {
+  const config = parseWeeklyReportConfig(agent.queryConfig);
+  if (!config) return { personal: 0, digest: 0, skipped: true, weekLabel: "" };
+
+  if (opts.skipIfPersonalExists && opts.agentRunId) {
+    const existing = await db.weeklyReportSnapshot.count({
+      where: { agentRunId: opts.agentRunId, kind: "PERSONAL" },
+    });
+    if (existing > 0) {
+      return { personal: 0, digest: 0, skipped: true, weekLabel: "" };
+    }
+  }
+
+  const tz = resolveAgentTimezone(agent.timezone);
+  const window = computeWorkWeekWindow(opts.windowEnd, tz);
+  const [roleUsers, managerUsers] = await Promise.all([
+    resolveTargetUsers(config.roles),
+    resolveManagerUsers(config.managers),
+  ]);
+  const users = mergeWeeklyReportUsers(roleUsers, managerUsers);
+  const localeMap = buildWeeklyReportLocaleMap(users, config);
+  const stamp = opts.createdAt ?? opts.windowEnd;
+  const source = opts.source ?? "SCHEDULED";
+
+  const allReports: WeeklyUserReport[] = [];
+  for (const u of users) {
+    const locale = localeMap.get(u.id) ?? "zh";
+    const stats = await gatherUserWeekly(u, window, locale);
+    const active = statsActivityCount(stats) > 0;
+    let narrative = "";
+    if (active || config.includeInactive) {
+      if (opts.skipLlm) {
+        const copy = getWeeklyReportCopy(locale);
+        narrative = `${copy.narrative.fallbackSummary({
+          doneTodos: stats.doneTodos.length,
+          businessRecords: stats.businessRecords.length,
+          workLogs: stats.workLogs.length,
+          faqEntries: stats.faqEntries.length,
+          newCustomers: stats.newCustomers.length,
+        })}\n\n${
+          stats.upcomingTodos.length || stats.activeOpportunities.length
+            ? copy.narrative.fallbackNextWithWork
+            : copy.narrative.fallbackNextEmpty
+        }`;
+      } else {
+        narrative = await generateNarrative(stats, window, agent.createdById, locale);
+      }
+    }
+    allReports.push({ stats, narrative, locale });
+  }
+
+  let personal = 0;
+  for (const { stats: s, narrative, locale } of allReports) {
+    const active = statsActivityCount(s) > 0;
+    if (!active && !config.includeInactive) continue;
+    const copy = getWeeklyReportCopy(locale);
+    const html = renderUserEmailHtml(s, window, narrative, copy);
+    const text = renderUserEmailText(s, window, narrative, copy);
+    const subject = copy.email.personalSubject(window.label);
+    await persistWeeklyReportSnapshot({
+      kind: "PERSONAL",
+      weekLabel: window.label,
+      windowStart: window.start,
+      windowEnd: window.end,
+      locale,
+      subject,
+      html,
+      text,
+      userId: s.userId,
+      userName: s.name,
+      source,
+      agentRunId: opts.agentRunId,
+      createdAt: stamp,
+    });
+    personal++;
+  }
+
+  const digestLocale = config.managerDigestLocale ?? "zh";
+  const digestCopy = getWeeklyReportCopy(digestLocale);
+  const digestHtml = renderManagerDigestHtml(allReports, window, digestCopy);
+  const digestText = renderManagerDigestText(allReports, window, digestCopy);
+  const digestSubject = digestCopy.managerDigest.subject(window.label);
+
+  // 替换同一次运行的简陋回填汇总（若有）
+  if (opts.agentRunId) {
+    await db.weeklyReportSnapshot.deleteMany({
+      where: { agentRunId: opts.agentRunId, kind: "MANAGER_DIGEST" },
+    });
+  }
+  await persistWeeklyReportSnapshot({
+    kind: "MANAGER_DIGEST",
+    weekLabel: window.label,
+    windowStart: window.start,
+    windowEnd: window.end,
+    locale: digestLocale,
+    subject: digestSubject,
+    html: digestHtml,
+    text: digestText,
+    source,
+    agentRunId: opts.agentRunId,
+    createdAt: stamp,
+  });
+
+  return { personal, digest: 1, skipped: false, weekLabel: window.label };
 }
 
 export async function runWeeklyReportPipeline(

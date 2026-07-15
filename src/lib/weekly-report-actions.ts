@@ -225,7 +225,7 @@ export async function listWeeklyReportSnapshotsAction(opts?: {
   take?: number;
 }): Promise<WeeklyReportSnapshotListItem[]> {
   await requireSuperAdmin();
-  const take = Math.min(Math.max(opts?.take ?? 80, 1), 200);
+  const take = Math.min(Math.max(opts?.take ?? 200, 1), 500);
   const rows = await db.weeklyReportSnapshot.findMany({
     orderBy: { createdAt: "desc" },
     take,

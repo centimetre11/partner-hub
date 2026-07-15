@@ -25,7 +25,7 @@ export default async function OpsWeeklyReportPage({
   return (
     <div className="pb-16">
       <PageHeader title={m.ops.weeklyReport} desc={m.ops.weeklyReportDesc} />
-      <div className="px-4 sm:px-6 lg:px-8 max-w-4xl">
+      <div className="px-4 sm:px-6 lg:px-8 max-w-5xl">
         <Card title={m.ops.weeklyTabHistory}>
           <WeeklyReportHistory
             items={historyItems}
@@ -42,6 +42,11 @@ export default async function OpsWeeklyReportPage({
               week: m.ops.weeklyHistoryWeek,
               generatedAt: m.ops.weeklyHistoryGeneratedAt,
               open: m.ops.weeklyHistoryOpen,
+              personalSection: m.ops.weeklyHistoryPersonalSection,
+              membersCount: m.ops.weeklyHistoryMembersCount,
+              localeEn: m.ops.weeklyHistoryLocaleEn,
+              localeZh: m.ops.weeklyHistoryLocaleZh,
+              sameWeek: m.ops.weeklyHistorySameWeek,
             }}
           />
         </Card>

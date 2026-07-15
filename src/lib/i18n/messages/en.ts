@@ -68,6 +68,11 @@ export const messagesEn = {
     weeklyHistoryWeek: "Week",
     weeklyHistoryGeneratedAt: "Generated",
     weeklyHistoryOpen: "View",
+    weeklyHistoryPersonalSection: "Personal reports",
+    weeklyHistoryMembersCount: "{n} personal report(s)",
+    weeklyHistoryLocaleEn: "EN",
+    weeklyHistoryLocaleZh: "ZH",
+    weeklyHistorySameWeek: "Other reports in this week",
   },
   shell: {
     signOut: "Sign out",

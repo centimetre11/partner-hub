@@ -68,6 +68,11 @@ export const messagesZh: Messages = {
     weeklyHistoryWeek: "周期",
     weeklyHistoryGeneratedAt: "生成于",
     weeklyHistoryOpen: "查看",
+    weeklyHistoryPersonalSection: "个人周报",
+    weeklyHistoryMembersCount: "{n} 人个人周报",
+    weeklyHistoryLocaleEn: "EN",
+    weeklyHistoryLocaleZh: "中文",
+    weeklyHistorySameWeek: "同周期其他周报",
   },
   shell: {
     signOut: "退出登录",
