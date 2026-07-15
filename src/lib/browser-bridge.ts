@@ -62,7 +62,7 @@ function sendToBridge<T>(message: unknown, timeoutMs: number): Promise<T> {
 export type BridgeStatus = {
   available: boolean;
   version: string | null;
-  /** CRM 新建填表需要扩展 ≥ 1.1.16（下拉输入过滤后选第一项） */
+  /** CRM 新建填表需要扩展 ≥ 1.1.17（下拉输入过滤后选第一项） */
   supportsCrmActivation: boolean;
 };
 
@@ -100,7 +100,7 @@ export async function getBridgeStatus(): Promise<BridgeStatus> {
     return {
       available,
       version,
-      supportsCrmActivation: versionGte(version, "1.1.16"),
+      supportsCrmActivation: versionGte(version, "1.1.17"),
     };
   } catch {
     return { available: false, version: null, supportsCrmActivation: false };

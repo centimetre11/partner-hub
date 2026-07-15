@@ -3,7 +3,7 @@
 
 (() => {
   // 允许扩展升级后重新注入覆盖旧逻辑
-  const SCRIPT_VER = "1.1.16";
+  const SCRIPT_VER = "1.1.17";
   if (window.__phBridgeCrmActivationVer === SCRIPT_VER) return;
   window.__phBridgeCrmActivationVer = SCRIPT_VER;
   window.__phBridgeCrmActivationLoaded = true;
@@ -325,6 +325,7 @@
     return null;
   }
 
+  /** 只改 value + input，不 blur（中途 blur 会导致 FineReport 用空模型盖掉显示值） */
   function setNativeValue(input, value) {
     const win = input.ownerDocument.defaultView;
     const proto =
@@ -334,8 +335,79 @@
     const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
     setter.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    try {
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, data: String(value), inputType: "insertText" }));
+    } catch (_) {}
+  }
+
+  /**
+   * FineReport 文本框要真正进模型：点击进入 → 写入 → change → 再 blur。
+   * 原先只 set value 再立刻 blur，看起来有字，一点击就被控件用空值刷掉。
+   */
+  async function commitTextInput(input, value) {
+    if (!input || value == null) return false;
+    const text = String(value);
+
+    input.scrollIntoView({ block: "center", inline: "nearest" });
+    await sleep(60);
+
+    const r = input.getBoundingClientRect();
+    const x = Math.floor(r.left + Math.min(Math.max(r.width * 0.45, 16), Math.max(r.width - 12, 16)));
+    const y = Math.floor(r.top + r.height / 2);
+    const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window };
+    input.dispatchEvent(new MouseEvent("mousedown", opts));
+    input.dispatchEvent(new MouseEvent("mouseup", opts));
+    input.dispatchEvent(new MouseEvent("click", opts));
+    input.focus();
+    await sleep(100);
+
+    try {
+      input.select && input.select();
+    } catch (_) {}
+    setNativeValue(input, "");
+    await sleep(50);
+
+    let committed = false;
+    try {
+      if (document.execCommand && document.execCommand("insertText", false, text)) {
+        const v = String(input.value || "");
+        committed = v === text || (text.length >= 4 && v.includes(text.slice(0, 4)));
+      }
+    } catch (_) {}
+
+    if (!committed) {
+      setNativeValue(input, text);
+      await sleep(80);
+      committed = String(input.value || "") === text;
+    }
+
+    if (!committed || String(input.value || "") !== text) {
+      setNativeValue(input, "");
+      let acc = "";
+      for (const ch of text) {
+        acc += ch;
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true }));
+        setNativeValue(input, acc);
+        try {
+          input.dispatchEvent(new InputEvent("input", { bubbles: true, data: ch, inputType: "insertText" }));
+        } catch (_) {}
+        input.dispatchEvent(new KeyboardEvent("keypress", { key: ch, bubbles: true, charCode: ch.charCodeAt(0) }));
+        input.dispatchEvent(new KeyboardEvent("keyup", { key: ch, bubbles: true }));
+        await sleep(20);
+      }
+    }
+
     input.dispatchEvent(new Event("change", { bubbles: true }));
+    await sleep(120);
+    try {
+      input.blur && input.blur();
+    } catch (_) {}
     input.dispatchEvent(new Event("blur", { bubbles: true }));
+    await sleep(150);
+
+    // blur 后值仍在，才算真正写入模型
+    const final = String(input.value || "").trim();
+    return final === text.trim() || (text.trim().length >= 4 && final.includes(text.trim().slice(0, 4)));
   }
 
   async function fillTextByLabel(label, value) {
@@ -349,9 +421,7 @@
       [...valueCell.querySelectorAll("input, textarea")].find(isVisible);
     if (!input) return false;
 
-    input.focus();
-    setNativeValue(input, value);
-    return true;
+    return await commitTextInput(input, value);
   }
 
   /**
@@ -597,15 +667,7 @@
   }
 
   function setNativeValueNoBlur(input, value) {
-    const win = input.ownerDocument.defaultView;
-    const proto =
-      input.tagName === "TEXTAREA"
-        ? win.HTMLTextAreaElement.prototype
-        : win.HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
-    setter.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new InputEvent("input", { bubbles: true, data: value, inputType: "insertText" }));
+    setNativeValue(input, value);
   }
 
   /** 在宽号码框内点更靠右的安全点（躲开左侧区号） */

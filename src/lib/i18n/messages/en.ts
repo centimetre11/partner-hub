@@ -2310,17 +2310,17 @@ export const messagesEn = {
     crmCreateInCrm: "Create in CRM",
     crmCreateLoading: "Opening CRM…",
     crmCreateHint:
-      "If unbound: search to link an existing CRM customer, or Create in CRM (prefill + submit there). Then Sync CRM here, pick from newly synced, and save (requires browser helper ≥1.1.16 + CRM salesman name).",
+      "If unbound: search to link an existing CRM customer, or Create in CRM (prefill + submit there). Then Sync CRM here, pick from newly synced, and save (requires browser helper ≥1.1.17 + CRM salesman name).",
     crmCreateDone: "CRM form opened and prefilled — review and submit there; after CRM sync, bind it back here.",
     crmCreateFailed: "Failed to open CRM form — please retry",
     crmCreateNeedBridge: "Install the browser helper first to use Create in CRM",
     crmCreateInstallBridge: "Install browser helper",
-    crmCreateUpgradeBridge: "Upgrade browser helper (≥1.1.16)",
+    crmCreateUpgradeBridge: "Upgrade browser helper (≥1.1.17)",
     crmCreateBindSalesman: "Bind CRM salesman on Account",
     crmCreateOpenedNeedBridge:
       "Opened CRM form (fill manually). Install the browser helper, refresh, and retry for autofill.",
     crmCreateOpenedNeedUpgrade:
-      "Opened CRM form (fill manually). Helper v{version} cannot autofill — download ≥1.1.16 and click Reload on chrome://extensions.",
+      "Opened CRM form (fill manually). Helper v{version} cannot autofill — download ≥1.1.17 and click Reload on chrome://extensions.",
     crmCreateOpenedManual: "Opened CRM form (autofill failed — fill manually or upgrade the helper)",
     crmSyncNow: "Sync CRM",
     crmSyncing: "Syncing…",
