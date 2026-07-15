@@ -290,9 +290,16 @@ export function MeetingLocalRecorder({
       xfyunRef.current = client;
       await client.connect();
 
+      // 先开麦克风采集，避免等「共享屏幕」弹窗期间完全无音频
+      startPcmCapture([{ stream: micStream, gain: 1.15 }]);
+      setPhase("recording");
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
+      setStatusLine("讯飞实时转写中 · 文字将写入右侧记录本");
+
       let displayStream: MediaStream | null = null;
       if (captureSystemAudio) {
-        setStatusLine("讯飞已就绪 · 请选择要共享的会议标签页并勾选「分享音频」…");
+        setStatusLine("转写已开始 · 可选：共享会议标签页并勾选「分享音频」…");
         try {
           displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
@@ -313,26 +320,30 @@ export function MeetingLocalRecorder({
             );
           } else {
             displayStreamRef.current = displayStream;
+            try {
+              processorRef.current?.disconnect();
+            } catch {
+              /* ignore */
+            }
+            void audioCtxRef.current?.close().catch(() => undefined);
+            audioCtxRef.current = null;
+            processorRef.current = null;
+            startPcmCapture([
+              { stream: micStream, gain: 1.15 },
+              { stream: displayStream, gain: 1.85 },
+            ]);
           }
         } catch {
           setLocalError("已取消屏幕共享（本次只录麦克风）。");
         }
       }
 
-      startPcmCapture([
-        { stream: micStream, gain: 1.15 },
-        ...(displayStream ? [{ stream: displayStream, gain: 1.85 }] : []),
-      ]);
-
       const mixed = Boolean(displayStream?.getAudioTracks().length);
-      setPhase("recording");
       setStatusLine(
         mixed
           ? "讯飞实时转写中（麦克风 + 会议声）"
           : "讯飞实时转写中 · 文字将写入右侧记录本",
       );
-      if (timerRef.current) window.clearInterval(timerRef.current);
-      timerRef.current = window.setInterval(() => setElapsedSec((s) => s + 1), 1000);
 
       onFlash(
         mixed
@@ -361,12 +372,38 @@ export function MeetingLocalRecorder({
     setBusy(true);
     setPhase("stopping");
     setLocalError(null);
-    setStatusLine("正在结束转写…");
-    stoppedRef.current = true;
+    setStatusLine("正在上传剩余音频…");
 
     try {
-      await teardown();
+      // 先停采集，再 flush 讯飞（避免 stoppedRef 阻断 UI 更新）
+      try {
+        processorRef.current?.disconnect();
+      } catch {
+        /* ignore */
+      }
+      processorRef.current = null;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      displayStreamRef.current?.getTracks().forEach((t) => t.stop());
+      displayStreamRef.current = null;
+      if (timerRef.current) window.clearInterval(timerRef.current);
+      if (levelTimerRef.current) window.clearInterval(levelTimerRef.current);
+      timerRef.current = null;
+      levelTimerRef.current = null;
+      void audioCtxRef.current?.close().catch(() => undefined);
+      audioCtxRef.current = null;
 
+      setStatusLine("正在结束讯飞转写…");
+      await Promise.race([
+        xfyunRef.current?.close(),
+        new Promise((r) => setTimeout(r, 5000)),
+      ]);
+      xfyunRef.current = null;
+      stoppedRef.current = true;
+      pcmChunksRef.current = [];
+      interimRef.current = "";
+
+      setStatusLine("正在生成记录本…");
       const finRes = await fetch(`/api/partner-reviews/${meetingId}/recording/finalize`, {
         method: "POST",
       });

@@ -22,9 +22,27 @@ type RelaySession = {
   lastSentence: string | null;
   error: string | null;
   closed: boolean;
+  /** 不足 1280 字节的 PCM 尾帧 */
+  pcmRemainder: Buffer;
 };
 
+const FRAME_BYTES = 1280;
+
 const pool = new Map<string, RelaySession>();
+
+function flushPcmToXfyun(session: RelaySession, pcm: Buffer) {
+  if (!pcm.length) return;
+  const merged = session.pcmRemainder.length
+    ? Buffer.concat([session.pcmRemainder, pcm])
+    : pcm;
+  let offset = 0;
+  while (offset + FRAME_BYTES <= merged.length) {
+    session.ws.send(merged.subarray(offset, offset + FRAME_BYTES));
+    offset += FRAME_BYTES;
+  }
+  session.pcmRemainder =
+    offset < merged.length ? merged.subarray(offset) : Buffer.alloc(0);
+}
 
 function snapshot(s: RelaySession): RelaySessionSnapshot {
   return {
@@ -97,6 +115,7 @@ export async function createXfyunRelaySession(meetingId: string, userId: string)
       lastSentence: null,
       error: null,
       closed: false,
+      pcmRemainder: Buffer.alloc(0),
     };
     pool.set(relaySessionId, session);
 
@@ -175,7 +194,7 @@ export function sendRelayAudio(relaySessionId: string, meetingId: string, userId
   if (session.closed || session.ws.readyState !== WebSocket.OPEN) {
     throw new Error("讯飞连接已断开");
   }
-  if (pcm.length) session.ws.send(pcm);
+  if (pcm.length) flushPcmToXfyun(session, pcm);
   const out = snapshot(session);
   if (session.lastSentence) session.lastSentence = null;
   return out;
@@ -191,9 +210,16 @@ export async function closeXfyunRelaySession(
   session.closed = true;
   try {
     if (session.ws.readyState === WebSocket.OPEN) {
+      // 尾帧不足 1280 字节时补零，避免讯飞漏识别最后一段
+      if (session.pcmRemainder.length) {
+        const tail = Buffer.alloc(FRAME_BYTES);
+        session.pcmRemainder.copy(tail);
+        session.ws.send(tail);
+        session.pcmRemainder = Buffer.alloc(0);
+      }
       const sid = session.xfyunSessionId ?? relaySessionId;
       session.ws.send(JSON.stringify({ end: true, sessionId: sid }));
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 500));
       session.ws.close();
     }
   } catch {

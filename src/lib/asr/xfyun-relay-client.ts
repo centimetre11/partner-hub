@@ -20,10 +20,13 @@ export type XfyunRelaySessionInfo = {
   frameIntervalMs: number;
 };
 
+/** 每次 HTTP 上传的音频帧数（1280B/帧），减少往返次数 */
+const FRAMES_PER_UPLOAD = 12;
+
 export class XfyunRelayClient {
   private pcmQueue: number[] = [];
   private sendTimer: number | null = null;
-  private sendBusy = false;
+  private sendChain: Promise<void> = Promise.resolve();
   private closed = false;
 
   constructor(
@@ -36,7 +39,7 @@ export class XfyunRelayClient {
   /** 服务端 relay 已在开录时建立，此处仅启动发送循环 */
   connect(): Promise<void> {
     this.sendTimer = window.setInterval(() => {
-      void this.flushFrames();
+      this.sendChain = this.sendChain.then(() => this.flushFrames());
     }, this.session.frameIntervalMs);
     return Promise.resolve();
   }
@@ -48,59 +51,79 @@ export class XfyunRelayClient {
     for (let i = 0; i < pcm.length; i++) this.pcmQueue.push(pcm[i]!);
   }
 
+  private samplesPerFrame() {
+    return this.session.frameBytes / 2;
+  }
+
+  private async postPcm(body: Uint8Array) {
+    const res = await fetch(
+      `/api/partner-reviews/${this.meetingId}/recording/xfyun-audio`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Relay-Session": this.session.relaySessionId,
+        },
+        body: new Blob([Uint8Array.from(body)]),
+      },
+    );
+    const data = (await res.json()) as {
+      ok?: boolean;
+      error?: string;
+      plain?: string;
+      interim?: string;
+      sentence?: string;
+      startMs?: number;
+      endMs?: number;
+    };
+    if (!res.ok || data.error) {
+      this.onError(data.error || res.statusText);
+      return;
+    }
+    this.applyResult(data);
+  }
+
+  private applyResult(data: {
+    plain?: string;
+    interim?: string;
+    sentence?: string;
+    startMs?: number;
+    endMs?: number;
+  }) {
+    if (data.interim) {
+      this.onResult({ text: data.interim, isFinal: false, plain: data.plain });
+    }
+    if (data.sentence) {
+      this.onResult({
+        text: data.sentence,
+        isFinal: true,
+        plain: data.plain,
+        startMs: data.startMs,
+        endMs: data.endMs,
+      });
+    } else if (data.plain && !data.interim) {
+      this.onResult({ text: data.plain, isFinal: false, plain: data.plain });
+    }
+  }
+
   private async flushFrames() {
-    if (this.closed || this.sendBusy) return;
-    const samplesNeeded = this.session.frameBytes / 2;
+    if (this.closed) return;
+    const samplesNeeded = this.samplesPerFrame();
+    const maxSamples = samplesNeeded * FRAMES_PER_UPLOAD;
     if (this.pcmQueue.length < samplesNeeded) return;
 
-    this.sendBusy = true;
+    const take = Math.min(this.pcmQueue.length, maxSamples);
+    const takeAligned = Math.floor(take / samplesNeeded) * samplesNeeded;
+    if (takeAligned < samplesNeeded) return;
+
+    const slice = this.pcmQueue.splice(0, takeAligned);
+    const body = pcm16ToBytes(new Int16Array(slice));
     try {
-      const slice = this.pcmQueue.splice(0, samplesNeeded);
-      const body = pcm16ToBytes(new Int16Array(slice));
-      const res = await fetch(
-        `/api/partner-reviews/${this.meetingId}/recording/xfyun-audio`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/octet-stream",
-            "X-Relay-Session": this.session.relaySessionId,
-          },
-          body: new Blob([Uint8Array.from(body)]),
-        },
-      );
-      const data = (await res.json()) as {
-        ok?: boolean;
-        error?: string;
-        plain?: string;
-        interim?: string;
-        sentence?: string;
-        startMs?: number;
-        endMs?: number;
-      };
-      if (!res.ok || data.error) {
-        this.onError(data.error || res.statusText);
-        return;
-      }
-      if (data.interim) {
-        this.onResult({ text: data.interim, isFinal: false, plain: data.plain });
-      }
-      if (data.sentence) {
-        this.onResult({
-          text: data.sentence,
-          isFinal: true,
-          plain: data.plain,
-          startMs: data.startMs,
-          endMs: data.endMs,
-        });
-      } else if (data.plain) {
-        this.onResult({ text: data.plain, isFinal: false, plain: data.plain });
-      }
+      await this.postPcm(body);
     } catch (e) {
       if (!this.closed) {
         this.onError(e instanceof Error ? e.message : "音频上传失败");
       }
-    } finally {
-      this.sendBusy = false;
     }
   }
 
@@ -110,23 +133,25 @@ export class XfyunRelayClient {
       window.clearInterval(this.sendTimer);
       this.sendTimer = null;
     }
-    // 发送剩余音频
-    if (this.pcmQueue.length) {
-      const pcm = new Int16Array(this.pcmQueue);
-      this.pcmQueue = [];
+
+    await this.sendChain.catch(() => undefined);
+
+    const samplesNeeded = this.samplesPerFrame();
+    const deadline = Date.now() + 4000;
+    while (this.pcmQueue.length >= samplesNeeded && Date.now() < deadline) {
+      const take = Math.min(
+        this.pcmQueue.length,
+        samplesNeeded * FRAMES_PER_UPLOAD,
+      );
+      const takeAligned = Math.floor(take / samplesNeeded) * samplesNeeded;
+      const slice = this.pcmQueue.splice(0, takeAligned);
       try {
-        await fetch(`/api/partner-reviews/${this.meetingId}/recording/xfyun-audio`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/octet-stream",
-            "X-Relay-Session": this.session.relaySessionId,
-          },
-          body: new Blob([Uint8Array.from(pcm16ToBytes(pcm))]),
-        });
+        await this.postPcm(pcm16ToBytes(new Int16Array(slice)));
       } catch {
-        /* ignore */
+        break;
       }
     }
+
     try {
       await fetch(`/api/partner-reviews/${this.meetingId}/recording/xfyun-close`, {
         method: "POST",
@@ -136,5 +161,6 @@ export class XfyunRelayClient {
     } catch {
       /* ignore */
     }
+    this.pcmQueue = [];
   }
 }
