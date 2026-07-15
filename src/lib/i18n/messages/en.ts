@@ -225,6 +225,9 @@ export const messagesEn = {
     select: "Select…",
     taxonomyPlus: "Taxonomy +",
     multiSelect: "multi-select",
+    rename: "Rename",
+    nameRequired: "Name is required",
+    duplicateName: 'Name "{name}" is already used by another partner',
   },
   greeting: {
     morning: "Good morning",

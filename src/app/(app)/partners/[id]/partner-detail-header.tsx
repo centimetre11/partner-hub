@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { Badge, TierBadge } from "@/components/ui";
 import { BackButton } from "@/components/back-button";
+import { EntityNameEditor } from "@/components/entity-name-editor";
 import { computeCompleteness, staleDays, type PartnerWithRelations } from "@/lib/completeness";
 import { labelFromMap, loadTaxonomyLabelMaps, parseIndustries } from "@/lib/taxonomy";
 import {
@@ -9,6 +10,7 @@ import {
   promotePartnerAction,
   restorePartnerAction,
   setPipelineStageAction,
+  updatePartnerAction,
 } from "@/lib/actions";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import { buildCrmCustomerViewUrl } from "@/lib/crm";
@@ -46,7 +48,7 @@ export async function PartnerDetailHeader({ id }: { id: string }) {
           <BackButton fallbackHref={p.status === "PROSPECT" ? "/pool" : "/partners"} className="mt-1" />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{p.name}</h1>
+              <EntityNameEditor entityId={p.id} name={p.name} updateAction={updatePartnerAction} />
               <Badge tone={p.status === "ACTIVE" ? "green" : p.status === "ARCHIVED" ? "zinc" : "blue"}>
                 {L.STATUS_LABELS[p.status]}
               </Badge>

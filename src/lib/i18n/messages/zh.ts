@@ -225,6 +225,9 @@ export const messagesZh: Messages = {
     select: "请选择…",
     taxonomyPlus: "维度库 +",
     multiSelect: "多选",
+    rename: "重命名",
+    nameRequired: "名称不能为空",
+    duplicateName: "名称「{name}」已被其他伙伴使用",
   },
   greeting: {
     morning: "早上好",

@@ -18,6 +18,7 @@ import { recordSystemEvent } from "./activity-log";
 import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { assertTwoLevelHierarchy } from "./partner-hierarchy";
+import { Prisma } from "@prisma/client";
 import {
   processTagsFromFormData,
   normalizeNextProcessTag,
@@ -220,8 +221,21 @@ export async function updatePartnerAction(partnerId: string, formData: FormData)
     }
   }
 
-  if (!data.name) delete data.name;
-  await db.partner.update({ where: { id: partnerId }, data });
+  if (formData.has("name")) {
+    const nameVal = String(formData.get("name") ?? "").trim();
+    if (!nameVal) return { error: "NAME_REQUIRED" };
+    data.name = nameVal;
+  } else {
+    delete data.name;
+  }
+  try {
+    await db.partner.update({ where: { id: partnerId }, data });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return { error: "DUPLICATE_NAME" };
+    }
+    throw e;
+  }
   const parentId = data.parentId as string | null | undefined;
   revalidatePath(`/partners/${partnerId}`);
   if (parentId) revalidatePath(`/partners/${parentId}`);

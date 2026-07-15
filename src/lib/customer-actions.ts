@@ -92,16 +92,29 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
     where: { id: customerId },
     select: { partnerLinks: { select: { partnerId: true } } },
   });
-  if (!existing) return;
-  const name = String(formData.get("name") ?? "").trim();
-  const data: Record<string, unknown> = {
-    status: normalizeStatus(formData.get("status") as string | null),
-    ...readCustomerFields(formData),
-  };
-  if (name) data.name = name;
+  if (!existing) return { error: "Customer not found" };
+
+  const data: Record<string, unknown> = {};
+  if (formData.has("name")) {
+    const name = String(formData.get("name") ?? "").trim();
+    if (!name) return { error: "NAME_REQUIRED" };
+    data.name = name;
+  }
+  if (formData.has("status")) {
+    data.status = normalizeStatus(formData.get("status") as string | null);
+  }
+  for (const key of [
+    "industry", "city", "country", "website", "scale",
+    "contactName", "contactTitle", "contactPhone", "contactEmail",
+    "notes", "ownerId", "presalesUserId",
+  ] as const) {
+    if (formData.has(key)) data[key] = str(formData, key);
+  }
+  if (!Object.keys(data).length) return { ok: true as const };
 
   await db.customer.update({ where: { id: customerId }, data });
   revalidateCustomerPaths(customerId, existing.partnerLinks.map((l) => l.partnerId));
+  return { ok: true as const };
 }
 
 // ============ 跟单五问（STOCK） ============

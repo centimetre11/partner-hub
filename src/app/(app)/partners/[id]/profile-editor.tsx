@@ -60,7 +60,13 @@ export function ProfileEditor({
                 try {
                   const result = await updatePartnerAction(p.id, fd);
                   if (result && "error" in result && result.error) {
-                    setError(result.error);
+                    setError(
+                      result.error === "DUPLICATE_NAME"
+                        ? m.common.duplicateName.replace("{name}", String(fd.get("name") ?? "").trim())
+                        : result.error === "NAME_REQUIRED"
+                          ? m.common.nameRequired
+                          : result.error
+                    );
                     return;
                   }
                   setOpen(false);
@@ -73,7 +79,7 @@ export function ProfileEditor({
             >
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{pe.fullName}</span>
-                <input name="name" defaultValue={p.name} className={input} />
+                <input name="name" defaultValue={p.name} required className={input} />
               </label>
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{m.common.tier}</span>

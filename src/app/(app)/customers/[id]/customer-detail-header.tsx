@@ -2,9 +2,10 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { Badge, fmtDate } from "@/components/ui";
 import { BackButton } from "@/components/back-button";
+import { EntityNameEditor } from "@/components/entity-name-editor";
 import { getServerI18n } from "@/lib/server-i18n";
 import { buildCrmCustomerViewUrl } from "@/lib/crm";
-import { deleteCustomerAction } from "@/lib/customer-actions";
+import { deleteCustomerAction, updateCustomerAction } from "@/lib/customer-actions";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -45,7 +46,7 @@ export async function CustomerDetailHeader({ id }: { id: string }) {
           <BackButton fallbackHref="/customers" className="mt-1" />
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 break-words">{customer.name}</h1>
+              <EntityNameEditor entityId={customer.id} name={customer.name} updateAction={updateCustomerAction} />
               <Badge tone={statusTone(customer.status)}>{statusLabel(customer.status)}</Badge>
               {customer.partnerRelation === "SELF" ? (
                 <Badge tone="indigo">{c.selfBadge}</Badge>

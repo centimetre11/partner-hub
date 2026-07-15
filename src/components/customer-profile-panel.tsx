@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
 import { useMessages } from "@/lib/i18n/context";
@@ -41,7 +42,10 @@ export function CustomerProfilePanel({
 }) {
   const m = useMessages();
   const c = m.customers;
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const salesUsers = users.filter((u) => u.role === "SALES" || u.role === "ADMIN");
   const presalesUsers = users.filter((u) => u.role === "PRESALES" || u.role === "ADMIN");
@@ -69,7 +73,7 @@ export function CustomerProfilePanel({
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
       <div className="xl:col-span-2 space-y-4">
         <div className="flex justify-end">
-          <button type="button" onClick={() => setOpen(true)} className="text-xs text-sky-600 hover:underline">
+          <button type="button" onClick={() => { setError(null); setOpen(true); }} className="text-xs text-sky-600 hover:underline">
             {c.editProfile}
           </button>
         </div>
@@ -155,8 +159,23 @@ export function CustomerProfilePanel({
             <h3 className="text-base font-semibold mb-4">{c.editProfileTitle.replace("{name}", customer.name)}</h3>
             <form
               action={async (fd) => {
-                await updateCustomerAction(customer.id, fd);
-                setOpen(false);
+                setSaving(true);
+                setError(null);
+                try {
+                  const result = await updateCustomerAction(customer.id, fd);
+                  if (result && "error" in result && result.error) {
+                    setError(
+                      result.error === "NAME_REQUIRED"
+                        ? m.common.nameRequired
+                        : result.error
+                    );
+                    return;
+                  }
+                  setOpen(false);
+                  router.refresh();
+                } finally {
+                  setSaving(false);
+                }
               }}
               className="grid grid-cols-1 sm:grid-cols-2 gap-3"
             >
@@ -219,14 +238,18 @@ export function CustomerProfilePanel({
                 <textarea name="notes" defaultValue={customer.notes ?? ""} rows={3} className={input} />
               </label>
               <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
+                {error && <p className="flex-1 text-xs text-red-600 self-center">{error}</p>}
                 <button
                   type="button"
+                  disabled={saving}
                   onClick={() => setOpen(false)}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600"
                 >
                   {m.common.cancel}
                 </button>
-                <button className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800">{c.save}</button>
+                <button disabled={saving} className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-60">
+                  {saving ? m.common.loading : c.save}
+                </button>
               </div>
             </form>
           </div>
