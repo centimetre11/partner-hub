@@ -91,6 +91,55 @@ export async function endPartnerReviewMeetingAction(meetingId: string) {
   }
 }
 
+/** 结束会议后回到会前：清空打标、纪要、拆分草案，保留议程与会前简报 */
+export async function resetMeetingToPrepAction(meetingId: string) {
+  await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({
+    where: { id: meetingId },
+    select: { status: true },
+  });
+  if (!meeting) return { error: "会议不存在" };
+  if (meeting.status === "DONE") return { error: "已完成的历史会议不可重置" };
+  if (meeting.status !== "PROCESSING" && meeting.status !== "LIVE") {
+    return { error: "仅进行中或会后处理阶段可回到会前" };
+  }
+
+  await db.$transaction([
+    db.partnerReviewTodoDraft.deleteMany({ where: { item: { meetingId } } }),
+    db.partnerReviewItem.updateMany({
+      where: { meetingId },
+      data: {
+        discussedAt: null,
+        markerInsertedAt: null,
+        status: "PENDING",
+        coreNotes: null,
+        confirmedSnapshot: null,
+      },
+    }),
+    db.partnerReviewMeeting.update({
+      where: { id: meetingId },
+      data: {
+        status: "PREP",
+        startedAt: null,
+        endedAt: null,
+        transcriptText: null,
+        transcriptJson: null,
+        transcriptStatus: null,
+        transcriptError: null,
+        liveNotes: null,
+        recordingPath: null,
+        recordingMimeType: null,
+        recordingBytes: null,
+        recordingStartedAt: null,
+        recordingEndedAt: null,
+      },
+    }),
+  ]);
+
+  revalidateMeeting(meetingId);
+  return { ok: true as const };
+}
+
 export async function saveLiveNotesAction(meetingId: string, liveNotes: string) {
   await requireUser();
   await db.partnerReviewMeeting.update({

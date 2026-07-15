@@ -11,6 +11,7 @@ import type {
 import {
   addPartnersToMeetingAction,
   endPartnerReviewMeetingAction,
+  resetMeetingToPrepAction,
   getMeetingPreviewPathAction,
   previewMeetingMatchAction,
   runMeetingPrepAction,
@@ -331,6 +332,56 @@ export function MeetingWorkspace({
               结束会议
             </button>
           </>
+        )}
+        {phase === "post" && meeting.status === "PROCESSING" && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "确定回到会前？将清空本次打点时间、粘贴的纪要、匹配结果与 AI 拆分草案；议程与会前简报会保留。",
+                )
+              ) {
+                return;
+              }
+              run(async () => {
+                const res = await resetMeetingToPrepAction(meeting.id);
+                if (res.error) flash(undefined, res.error);
+                else {
+                  setMeeting((m) => ({
+                    ...m,
+                    status: "PREP",
+                    startedAt: null,
+                    endedAt: null,
+                    liveNotes: null,
+                    transcriptText: null,
+                    items: m.items.map((it) => ({
+                      ...it,
+                      status: "PENDING",
+                      discussedAt: null,
+                      markerInsertedAt: null,
+                      coreNotes: null,
+                      confirmedSnapshot: null,
+                      todoDrafts: [],
+                    })),
+                  }));
+                  setLiveNotes("");
+                  setTranscript("");
+                  setProposal(null);
+                  setMatchDrafts({});
+                  setUnassignedDraft("");
+                  setMatchReady(false);
+                  setCurrentDiscussItemId(null);
+                  setConfirmDrafts({});
+                  flash("已回到会前 · 可重新开始开会");
+                }
+              }, { refresh: false });
+            }}
+            className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-3 py-1.5 text-sm hover:bg-amber-100 disabled:opacity-40"
+          >
+            回到会前
+          </button>
         )}
       </div>
 
