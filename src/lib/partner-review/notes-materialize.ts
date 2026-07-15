@@ -1,13 +1,16 @@
 import "server-only";
 
 import { buildLiveNotesFromSegments } from "./markers";
-import { computeTranscriptSegments } from "./segment";
+import { matchMinutesToPartners } from "./minutes-match";
 import { db } from "../db";
 
 export { buildLiveNotesFromSegments, parsePartnerSectionsFromLiveNotes } from "./markers";
 
-/** 转写到位后，按议程打点 + 句子时间轴自动生成记录本 */
-export async function materializeLiveNotesForMeeting(meetingId: string): Promise<string | null> {
+/** 粘贴腾讯纪要后，按时间轴 / AI 语义匹配到各伙伴并生成记录本 */
+export async function materializeLiveNotesForMeeting(
+  meetingId: string,
+  userId?: string,
+): Promise<{ liveNotes: string | null; matchMethod?: string }> {
   const meeting = await db.partnerReviewMeeting.findUnique({
     where: { id: meetingId },
     include: {
@@ -17,16 +20,16 @@ export async function materializeLiveNotesForMeeting(meetingId: string): Promise
       },
     },
   });
-  if (!meeting) return null;
-  if (!meeting.transcriptText?.trim() && !meeting.transcriptJson) return null;
+  if (!meeting) return { liveNotes: null };
+  if (!meeting.transcriptText?.trim() && !meeting.transcriptJson) return { liveNotes: null };
 
-  const segments = computeTranscriptSegments(meeting);
-  if (!segments.some((s) => s.text.trim())) return null;
+  const { segments, method } = await matchMinutesToPartners(meeting, userId);
+  if (!segments.some((s) => s.text.trim())) return { liveNotes: null, matchMethod: method };
 
   const liveNotes = buildLiveNotesFromSegments(segments);
   await db.partnerReviewMeeting.update({
     where: { id: meetingId },
     data: { liveNotes },
   });
-  return liveNotes;
+  return { liveNotes, matchMethod: method };
 }

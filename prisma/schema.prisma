@@ -1176,6 +1176,8 @@ model PartnerReviewMeeting {
   transcriptError        String?
   liveNotes              String? // 会中侧栏记录本（含 <<<PARTNER:id|name>>> 标记）
   prepGeneratedAt        DateTime?
+  /// 会前预览分享 token（无需登录即可查看议程与简报）
+  previewToken           String?  @unique
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
   items                  PartnerReviewItem[]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type {
@@ -10,6 +10,7 @@ import type {
 } from "@/lib/partner-review/types";
 import {
   endPartnerReviewMeetingAction,
+  getMeetingPreviewPathAction,
   previewMeetingMatchAction,
   runMeetingPrepAction,
   runMeetingSplitAction,
@@ -32,6 +33,36 @@ export type { MeetingClient, ReviewItemClient };
 const RAPID_CLICK_WINDOW_MS = 12_000;
 const RAPID_CLICK_WARN_COUNT = 3;
 
+function matchMethodFlash(method?: string): string {
+  switch (method) {
+    case "timeline":
+      return "纪要已保存，已按打点时间轴匹配到各伙伴";
+    case "summary_sections":
+      return "纪要已保存，已按「小结」与打点顺序匹配到各伙伴";
+    case "ai":
+      return "纪要已保存，已用 AI 按伙伴语义匹配，请核对";
+    case "name":
+      return "纪要已保存，已按伙伴名称匹配，请核对";
+    default:
+      return "纪要已保存，已匹配到各伙伴，请核对";
+  }
+}
+
+function applySegmentsToDrafts(
+  segments: TranscriptSegment[],
+  setMatchDrafts: (v: Record<string, string>) => void,
+  setUnassignedDraft: (v: string) => void,
+) {
+  const drafts: Record<string, string> = {};
+  let unassigned = "";
+  for (const seg of segments) {
+    if (seg.partnerId) drafts[seg.partnerId] = seg.text;
+    else if (seg.text.trim()) unassigned = seg.text;
+  }
+  setMatchDrafts(drafts);
+  setUnassignedDraft(unassigned);
+}
+
 export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient }) {
   const router = useRouter();
   const [meeting, setMeeting] = useState(initial);
@@ -40,7 +71,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
   const [transcript, setTranscript] = useState(initial.transcriptText ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState<SplitProposal | null>(null);
   const [currentDiscussItemId, setCurrentDiscussItemId] = useState<string | null>(() => {
     const discussed = [...initial.items]
@@ -188,14 +219,17 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
 
   function run(fn: () => Promise<void>, opts?: { refresh?: boolean }) {
     const shouldRefresh = opts?.refresh !== false;
-    startTransition(async () => {
+    void (async () => {
+      setBusy(true);
       try {
         await fn();
         if (shouldRefresh) router.refresh();
       } catch (e) {
         flash(undefined, e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
       }
-    });
+    })();
   }
 
   const phase =
@@ -231,7 +265,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
         {canRunPrep && (
           <button
             type="button"
-            disabled={pending}
+            disabled={busy}
             onClick={runPrep}
             className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
           >
@@ -240,9 +274,10 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
         )}
         {phase === "prep" && (
           <>
+            <MeetingPreviewActions meetingId={meeting.id} previewToken={meeting.previewToken} />
             <button
               type="button"
-              disabled={pending}
+              disabled={busy}
               onClick={() =>
                 run(async () => {
                   const res = await startPartnerReviewMeetingAction(meeting.id);
@@ -250,9 +285,8 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   else {
                     setMeeting((m) => ({ ...m, status: "LIVE", startedAt: new Date().toISOString() }));
                     flash("会议已开始 · 讨论谁点左侧谁，会后在右侧粘贴腾讯会议总结");
-                    router.refresh();
                   }
-                })
+                }, { refresh: false })
               }
               className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
             >
@@ -273,16 +307,16 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
             )}
             <button
               type="button"
-              disabled={pending}
+              disabled={busy}
               onClick={() =>
                 run(async () => {
                   const res = await endPartnerReviewMeetingAction(meeting.id);
                   if (res.error) flash(undefined, res.error);
                   else {
-                    setMeeting((m) => ({ ...m, status: "PROCESSING" }));
+                    setMeeting((m) => ({ ...m, status: "PROCESSING", endedAt: new Date().toISOString() }));
                     flash("会议已结束 · 请粘贴腾讯会议智能纪要并匹配伙伴");
                   }
-                })
+                }, { refresh: false })
               }
               className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-40"
             >
@@ -307,7 +341,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
           建议：开会准备（可选）→ 开始开会 → 在腾讯会议进行讨论；本页仅记录<strong>各伙伴的讨论顺序与时间</strong>（不与腾讯会议同步录音）→
-          结束会议 → 粘贴腾讯会议智能纪要 → 用时间轴自动匹配 → AI 拆分 → 确认入库。
+          结束会议 → 粘贴腾讯会议 AI 纪要（元宝/智能纪要）→ 自动匹配议程伙伴 → 核对 → AI 拆分待办与记录 → 确认入库。
         </p>
       ) : null}
 
@@ -414,7 +448,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                       </p>
                       <button
                         type="button"
-                        disabled={pending}
+                        disabled={busy}
                         onClick={runPrep}
                         className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
                       >
@@ -440,8 +474,17 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           )}
         </section>
 
-        {/* 议程 / 腾讯会议总结 */}
+        {/* 议程 / 腾讯会议总结 / 会前预览 */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+          {phase === "prep" ? (
+            <PrepPreviewPanel
+              meetingId={meeting.id}
+              previewToken={meeting.previewToken}
+              items={meeting.items}
+              hasBrief={!needsPrep}
+            />
+          ) : null}
+
           {phase === "live" ? (
             <LiveAgendaPanel
               items={meeting.items}
@@ -459,8 +502,8 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                 {phase === "post" ? (
                   <>
                     <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
-                      从腾讯会议复制「智能纪要 / 转写」粘贴到下方。本系统<strong>不录音</strong>，仅根据会中记录的伙伴打点时间（如
-                      会议 +02:32）与纪要里的时间戳自动匹配；也可在下方手动调整各伙伴内容。
+                      从腾讯会议复制「AI 纪要 / 智能纪要 / 元宝纪要」粘贴到下方。常见格式含「会议概览」「小结」、14:28
+                      等叙述，不一定有 [00:12:34] 转写时间戳。系统会结合会中打点顺序、小结编号与 AI 语义，匹配到左侧议程伙伴；可在下方手动调整。
                     </p>
                     <textarea
                       value={transcript}
@@ -472,13 +515,20 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                     <div className="flex flex-wrap gap-2 mt-2">
                       <button
                         type="button"
-                        disabled={pending || !transcript.trim()}
+                        disabled={busy || !transcript.trim()}
                         onClick={() =>
                           run(async () => {
                             const res = await saveTranscriptTextAction(meeting.id, transcript);
-                            if (res.liveNotes) setLiveNotes(res.liveNotes);
+                            if (res.liveNotes) {
+                              setLiveNotes(res.liveNotes);
+                              const segments = parsePartnerSectionsFromLiveNotes(
+                                res.liveNotes,
+                                meeting.items,
+                              );
+                              applySegmentsToDrafts(segments, setMatchDrafts, setUnassignedDraft);
+                            }
                             setMatchReady(true);
-                            flash("纪要已保存，已按打点时间自动匹配到各伙伴");
+                            flash(matchMethodFlash(res.matchMethod));
                             router.refresh();
                           })
                         }
@@ -488,7 +538,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                       </button>
                       <button
                         type="button"
-                        disabled={pending}
+                        disabled={busy}
                         onClick={() =>
                           run(async () => {
                             const res = await previewMeetingMatchAction(meeting.id);
@@ -497,17 +547,10 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                               return;
                             }
                             if (res.segments) {
-                              const drafts: Record<string, string> = {};
-                              let unassigned = "";
-                              for (const seg of res.segments) {
-                                if (seg.partnerId) drafts[seg.partnerId] = seg.text;
-                                else if (seg.text.trim()) unassigned = seg.text;
-                              }
-                              setMatchDrafts(drafts);
-                              setUnassignedDraft(unassigned);
+                              applySegmentsToDrafts(res.segments, setMatchDrafts, setUnassignedDraft);
                               setMatchReady(true);
                             }
-                            flash("已刷新匹配预览");
+                            flash(matchMethodFlash(res.matchMethod) || "已刷新匹配预览");
                           }, { refresh: false })
                         }
                         className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
@@ -555,7 +598,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                       flash("匹配结果已保存");
                     })
                   }
-                  pending={pending}
+                  busy={busy}
                 />
               ) : null}
             </>
@@ -566,7 +609,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                 <button
                   type="button"
-                  disabled={pending || !matchReady}
+                  disabled={busy || !matchReady}
                   onClick={() =>
                     run(async () => {
                       const res = await runMeetingSplitAction(meeting.id);
@@ -628,7 +671,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                 </button>
                 <button
                   type="button"
-                  disabled={pending || !Object.keys(confirmDrafts).length}
+                  disabled={busy || !Object.keys(confirmDrafts).length}
                   onClick={() =>
                     run(async () => {
                       const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(([itemId, d]) => ({
@@ -697,6 +740,99 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+function MeetingPreviewActions({
+  meetingId,
+  previewToken,
+}: {
+  meetingId: string;
+  previewToken: string | null;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function openPreview() {
+    const res = await getMeetingPreviewPathAction(meetingId);
+    if (!res.ok || !res.path) return;
+    window.open(res.path, "_blank", "noopener,noreferrer");
+  }
+
+  async function copyLink() {
+    const res = await getMeetingPreviewPathAction(meetingId);
+    if (!res.ok || !res.path) return;
+    const url = `${window.location.origin}${res.path}`;
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void openPreview()}
+        className="rounded-lg border border-sky-200 bg-sky-50 text-sky-800 px-3 py-1.5 text-sm hover:bg-sky-100"
+      >
+        打开会前预览
+      </button>
+      <button
+        type="button"
+        onClick={() => void copyLink()}
+        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
+      >
+        {copied ? "已复制链接" : "复制预览链接"}
+      </button>
+      {previewToken ? null : (
+        <span className="text-[11px] text-slate-400 self-center">首次打开会生成分享链接</span>
+      )}
+    </>
+  );
+}
+
+function PrepPreviewPanel({
+  meetingId,
+  previewToken,
+  items,
+  hasBrief,
+}: {
+  meetingId: string;
+  previewToken: string | null;
+  items: ReviewItemClient[];
+  hasBrief: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-xs font-medium text-slate-700">会前预览（可发给同事）</p>
+        <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+          生成简报后，可将预览链接发到群里，让大家提前看今日议程与各伙伴讨论要点。无需登录即可查看。
+        </p>
+      </div>
+      <ol className="space-y-1.5 text-sm">
+        {items.map((it, idx) => (
+          <li key={it.id} className="flex items-center gap-2 text-slate-700">
+            <span className="text-xs text-slate-400 w-4">{idx + 1}</span>
+            <span className="font-medium">{it.partnerName}</span>
+            {it.prepBrief ? (
+              <span className="text-[11px] text-emerald-600">简报已就绪</span>
+            ) : (
+              <span className="text-[11px] text-amber-600">待生成简报</span>
+            )}
+          </li>
+        ))}
+      </ol>
+      {hasBrief ? (
+        <div className="flex flex-wrap gap-2 pt-1">
+          <MeetingPreviewActions meetingId={meetingId} previewToken={previewToken} />
+        </div>
+      ) : (
+        <p className="text-xs text-slate-400">请先点上方「开会准备」生成各伙伴简报，再分享预览链接。</p>
+      )}
+      <p className="text-[11px] text-slate-400 border-t border-slate-100 pt-3">
+        点「开始开会」后，此处会切换为讨论时间轴；本页不录音，仅记录你何时开始过哪位伙伴。
+      </p>
     </div>
   );
 }
@@ -803,7 +939,8 @@ function LiveAgendaPanel({
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[200px]">
       <p className="text-xs font-medium text-slate-700">讨论顺序与时间轴</p>
       <p className="text-xs text-slate-600 leading-relaxed">
-        腾讯会议中进行实际讨论；此处<strong>只记录</strong>你何时开始过哪位伙伴（相对「开始开会」的时刻），会后用于与腾讯会议智能纪要的时间戳对齐匹配。
+        腾讯会议中进行实际讨论；此处<strong>只记录</strong>你何时开始过哪位伙伴（相对「开始开会」的时刻）。会后粘贴 AI
+        纪要时，系统优先用打点顺序与「小结」编号匹配，必要时用 AI 按语义对应伙伴。
       </p>
       {!marked.length ? (
         <p className="text-sm text-slate-400">尚未打点 · 点左侧伙伴开始</p>
@@ -844,7 +981,7 @@ function MatchEditorPanel({
   onChangePartner,
   onChangeUnassigned,
   onSave,
-  pending,
+  busy,
 }: {
   items: ReviewItemClient[];
   matchDrafts: Record<string, string>;
@@ -852,7 +989,7 @@ function MatchEditorPanel({
   onChangePartner: (partnerId: string, text: string) => void;
   onChangeUnassigned: (text: string) => void;
   onSave: () => void;
-  pending: boolean;
+  busy: boolean;
 }) {
   return (
     <div className="space-y-3 border-t border-slate-100 pt-3">
@@ -860,7 +997,7 @@ function MatchEditorPanel({
         <p className="text-xs font-medium text-slate-700">2. 核对 / 调整各伙伴匹配内容</p>
         <button
           type="button"
-          disabled={pending}
+          disabled={busy}
           onClick={onSave}
           className="rounded-lg border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
         >

@@ -12,8 +12,9 @@ import {
   serializeTimedTranscriptDoc,
 } from "./transcript";
 import { materializeLiveNotesForMeeting } from "./notes-materialize";
+import { ensureMeetingPreviewToken, newPreviewToken } from "./preview-token";
 import { markPartnerDiscussed } from "./discuss-partner";
-import { computeTranscriptSegments } from "./segment";
+import { matchMinutesToPartners } from "./minutes-match";
 
 function revalidateMeeting(id: string) {
   revalidatePath("/partner-reviews");
@@ -46,6 +47,7 @@ export async function createPartnerReviewMeetingAction(formData: FormData) {
       status: "DRAFT",
       scheduledAt: scheduledRaw ? new Date(scheduledRaw) : null,
       createdById: user.id,
+      previewToken: newPreviewToken(),
       items: {
         create: orderedIds.map((partnerId, sortOrder) => ({ partnerId, sortOrder })),
       },
@@ -116,11 +118,18 @@ export async function runMeetingPrepAction(meetingId: string) {
   const user = await requireUser();
   try {
     await generateMeetingPrepBriefs(meetingId, user.id);
+    await ensureMeetingPreviewToken(meetingId);
     revalidateMeeting(meetingId);
     return { ok: true, message: "开会准备已完成" };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export async function getMeetingPreviewPathAction(meetingId: string) {
+  await requireUser();
+  const token = await ensureMeetingPreviewToken(meetingId);
+  return { ok: true as const, path: `/partner-reviews/preview/${token}` };
 }
 
 export async function runMeetingSplitAction(meetingId: string) {
@@ -167,7 +176,7 @@ export async function attachDingTalkRecordingAction(
 }
 
 export async function previewMeetingMatchAction(meetingId: string) {
-  await requireUser();
+  const user = await requireUser();
   const meeting = await db.partnerReviewMeeting.findUnique({
     where: { id: meetingId },
     include: {
@@ -179,7 +188,7 @@ export async function previewMeetingMatchAction(meetingId: string) {
   });
   if (!meeting) return { error: "会议不存在" };
 
-  const segments = computeTranscriptSegments(meeting);
+  const { segments, method } = await matchMinutesToPartners(meeting, user.id);
   return {
     ok: true as const,
     segments: segments.map((s) => ({
@@ -187,6 +196,7 @@ export async function previewMeetingMatchAction(meetingId: string) {
       partnerName: s.partnerName,
       text: s.text,
     })),
+    matchMethod: method,
     liveNotes: meeting.liveNotes,
   };
 }
@@ -260,7 +270,7 @@ export async function pullDingTalkTranscriptAction(meetingId: string) {
 }
 
 export async function saveTranscriptTextAction(meetingId: string, transcriptText: string) {
-  await requireUser();
+  const user = await requireUser();
   const meeting = await db.partnerReviewMeeting.findUnique({
     where: { id: meetingId },
     select: { startedAt: true, recordingStartedAt: true },
@@ -278,9 +288,9 @@ export async function saveTranscriptTextAction(meetingId: string, transcriptText
       status: "PROCESSING",
     },
   });
-  const liveNotes = await materializeLiveNotesForMeeting(meetingId);
+  const { liveNotes, matchMethod } = await materializeLiveNotesForMeeting(meetingId, user.id);
   revalidateMeeting(meetingId);
-  return { ok: true as const, liveNotes };
+  return { ok: true as const, liveNotes, matchMethod };
 }
 
 export async function deletePartnerReviewMeetingAction(meetingId: string) {

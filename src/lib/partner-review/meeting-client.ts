@@ -34,6 +34,7 @@ export type MeetingClient = {
   liveNotes: string | null;
   transcriptText: string | null;
   prepGeneratedAt: string | null;
+  previewToken: string | null;
   dingtalkRecordId: string | null;
   dingtalkConferenceId: string | null;
   dingtalkSpaceId: string | null;
@@ -104,6 +105,7 @@ export function toMeetingClient(raw: {
   liveNotes: string | null;
   transcriptText: string | null;
   prepGeneratedAt: Date | null;
+  previewToken?: string | null;
   dingtalkRecordId: string | null;
   dingtalkConferenceId: string | null;
   dingtalkSpaceId: string | null;
@@ -143,6 +145,7 @@ export function toMeetingClient(raw: {
     liveNotes: raw.liveNotes,
     transcriptText: raw.transcriptText,
     prepGeneratedAt: raw.prepGeneratedAt?.toISOString() ?? null,
+    previewToken: raw.previewToken ?? null,
     dingtalkRecordId: raw.dingtalkRecordId,
     dingtalkConferenceId: raw.dingtalkConferenceId,
     dingtalkSpaceId: raw.dingtalkSpaceId,

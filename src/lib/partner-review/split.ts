@@ -2,13 +2,8 @@ import "server-only";
 
 import { db } from "../db";
 import { chatJson } from "../ai";
-import {
-  PARTNER_MARKER_RE,
-  splitTranscriptByMarkers,
-  type TranscriptSegment,
-} from "./markers";
-import { computeTranscriptSegments } from "./segment";
-import { parsePartnerSectionsFromLiveNotes } from "./markers";
+import { parsePartnerSectionsFromLiveNotes, type TranscriptSegment } from "./markers";
+import { matchMinutesToPartners } from "./minutes-match";
 import type { SplitProposal, SplitProposalItem } from "./split-types";
 
 export type { SplitProposal, SplitProposalItem } from "./split-types";
@@ -98,9 +93,6 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
   });
   if (!meeting) throw new Error("会议不存在");
 
-  // 转写：按开会起点 + 议程打点的相对时间对齐腾讯会议纪要
-  const transcriptSegments = computeTranscriptSegments(meeting);
-
   const headerNoteSegments = parsePartnerSectionsFromLiveNotes(
     meeting.liveNotes,
     meeting.items.map((it) => ({ partnerId: it.partnerId, partnerName: it.partner.name })),
@@ -108,12 +100,9 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
 
   const noteSegments = headerNoteSegments.length
     ? headerNoteSegments
-    : PARTNER_MARKER_RE.test(meeting.liveNotes ?? "")
-      ? splitTranscriptByMarkers(meeting.liveNotes ?? "")
-      : [];
+    : (await matchMinutesToPartners(meeting, userId)).segments;
 
-  const allSegments = [...noteSegments, ...transcriptSegments];
-  const unassignedText = allSegments
+  const unassignedText = noteSegments
     .filter((s) => !s.partnerId)
     .map((s) => s.text)
     .filter(Boolean)
@@ -121,12 +110,7 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
 
   const items: SplitProposalItem[] = [];
   for (const item of meeting.items) {
-    const fromNotes = mergeSegmentsForPartner(noteSegments, item.partnerId);
-    const fromTranscript = mergeSegmentsForPartner(transcriptSegments, item.partnerId);
-    // 记录本已写入实时转写时，不再与 transcriptText 叠一份，避免重复
-    const segmentText = fromNotes.trim()
-      ? fromNotes
-      : fromTranscript;
+    const segmentText = mergeSegmentsForPartner(noteSegments, item.partnerId);
     const summary = await summarizeSegment({
       partnerName: item.partner.name,
       segmentText,

@@ -170,25 +170,50 @@ export function parseTranscriptTextToTimedDoc(
 
   const lineRe =
     /^\[(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]\s*(?:([^:：\n]{1,40})[:：]\s*)?(.+)$/;
+  const wallClockRe = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s+(.+)$/;
   const sentences: TranscriptSentence[] = [];
+  const anchor = opts?.recordingStartedAt ?? null;
+
   for (const line of raw.split(/\r?\n/)) {
-    const m = line.trim().match(lineRe);
-    if (!m) continue;
-    const hours = m[1] != null ? Number(m[1]) : 0;
-    const mins = Number(m[2]);
-    const secs = Number(m[3]);
-    const ms = m[4] != null ? Number(m[4].padEnd(3, "0")) : 0;
-    const startTime = ((hours * 60 + mins) * 60 + secs) * 1000 + ms;
-    sentences.push({
-      startTime,
-      speaker: m[5]?.trim() || undefined,
-      text: m[6]!.trim(),
-    });
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const m = trimmed.match(lineRe);
+    if (m) {
+      const hours = m[1] != null ? Number(m[1]) : 0;
+      const mins = Number(m[2]);
+      const secs = Number(m[3]);
+      const ms = m[4] != null ? Number(m[4].padEnd(3, "0")) : 0;
+      const startTime = ((hours * 60 + mins) * 60 + secs) * 1000 + ms;
+      sentences.push({
+        startTime,
+        speaker: m[5]?.trim() || undefined,
+        text: m[6]!.trim(),
+      });
+      continue;
+    }
+
+    const wc = trimmed.match(wallClockRe);
+    if (wc && anchor) {
+      const h = Number(wc[1]);
+      const mins = Number(wc[2]);
+      const secs = wc[3] != null ? Number(wc[3]) : 0;
+      const body = wc[4]!.trim();
+      if (/会议助手|元宝|AI/i.test(body) && body.length < 40) continue;
+      const d = new Date(anchor);
+      d.setHours(h, mins, secs, 0);
+      sentences.push({
+        startTime: d.getTime(),
+        text: body,
+      });
+    }
   }
+
   if (!sentences.length) return null;
+  const hasAbsolute = sentences.some((s) => s.startTime >= ABSOLUTE_MS_FLOOR);
   return buildTimedTranscriptDoc({
     sentences,
-    timeBase: "relative_ms",
+    timeBase: hasAbsolute ? "absolute_ms" : "relative_ms",
     recordingStartedAt: opts?.recordingStartedAt,
   });
 }
