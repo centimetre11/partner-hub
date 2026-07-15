@@ -79,6 +79,12 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
     setMeeting(initial);
     setLiveNotes(initial.liveNotes ?? "");
     setTranscript(initial.transcriptText ?? "");
+    setDingForm({
+      recordId: initial.dingtalkRecordId ?? "",
+      conferenceId: initial.dingtalkConferenceId ?? "",
+      spaceId: initial.dingtalkSpaceId ?? "",
+      fileId: initial.dingtalkFileId ?? "",
+    });
   }, [initial]);
 
   const activeItem = useMemo(
@@ -466,7 +472,11 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
 
           {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
             <div className="space-y-3 border-t border-slate-100 pt-3">
-              <div className="text-xs font-medium text-slate-500">会议转写</div>
+              <div className="text-xs font-medium text-slate-500">钉钉听记 · 会议转写</div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                正常流程：A1 录完 → 钉钉推送回调（约 1–5 分钟）→ 下方 ID 与转写自动填入 → 点「拉取转写」。若一直为空，请到
+                团队设置 · 钉钉 核对回调地址与事件订阅，或从听记详情复制 ID 手动绑定。
+              </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
                   placeholder="Record ID"
