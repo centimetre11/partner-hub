@@ -233,6 +233,33 @@ export function heuristicMatchByPartnerName(
   return segments;
 }
 
+function markedItems(meeting: MeetingWithItems) {
+  return [...meeting.items]
+    .filter((it) => it.markerInsertedAt || it.discussedAt)
+    .sort((a, b) => {
+      const ta = (a.markerInsertedAt ?? a.discussedAt)!.getTime();
+      const tb = (b.markerInsertedAt ?? b.discussedAt)!.getTime();
+      return ta - tb;
+    });
+}
+
+function countPartnersWithText(segments: TranscriptSegment[]): number {
+  return segments.filter((s) => s.partnerId && s.text.trim()).length;
+}
+
+/** 时间轴结果是否可信：多名已打点伙伴时，不能几乎全归到一家 */
+function isStrongTimelineMatch(
+  segments: TranscriptSegment[],
+  partnerIds: string[],
+  markedCount: number,
+): boolean {
+  const assigned = countAssignedPartners(segments, partnerIds);
+  const withText = countPartnersWithText(segments);
+  if (assigned === 0 || isMostlyUnassigned(segments, partnerIds.length)) return false;
+  if (markedCount >= 2 && withText <= 1) return false;
+  return assigned >= Math.max(1, Math.min(partnerIds.length, 2));
+}
+
 async function aiMatchMinutesToPartners(
   meeting: MeetingWithItems,
   userId?: string,
@@ -240,6 +267,7 @@ async function aiMatchMinutesToPartners(
   const text = meeting.transcriptText?.trim();
   if (!text) return null;
 
+  const discussed = markedItems(meeting);
   const agenda = [...meeting.items]
     .map((it, idx) => {
       const marker = it.markerInsertedAt ?? it.discussedAt;
@@ -249,18 +277,30 @@ async function aiMatchMinutesToPartners(
     })
     .join("\n");
 
+  const processHint = discussed.length
+    ? `会中实际讨论顺序（按打点时间，最重要）：\n${discussed
+        .map((it, i) => {
+          const marker = it.markerInsertedAt ?? it.discussedAt;
+          return `${i + 1}. 「${it.partner.name}」${formatRelativeMarker(marker, meeting.startedAt)} partnerId=${it.partnerId}`;
+        })
+        .join("\n")}\n\n请优先按该讨论时间线切分：从某伙伴打点起，到下一位打点前的内容，归该伙伴；最后一位打点之后的内容归最后一位。若文本为逐字稿且含 00:mm:ss，请对齐相对时间。`
+    : "会中未打点：按语义/名称把段落归属到伙伴。";
+
   try {
     const ai = await chatJson<{
       segments?: { partnerId?: string; text?: string }[];
       unassigned?: string;
     }>(
-      `你是会议记录助手。用户粘贴的是腾讯会议「AI纪要 / 智能纪要 / 元宝纪要」类文本，不是逐字转写。
-请根据议程伙伴列表，把纪要中与每位伙伴相关的段落切分出来。
-纪要里可能用国家、项目、简称、英文缩写指代伙伴（如 GLB COM 对应 GlobCom），请结合议程顺序与语义对应，不要编造。
+      `你是过伙伴会议记录助手。用户粘贴腾讯会议纪要（可能是 AI 智能纪要，也可能是「发言人 N HH:MM:SS」逐字稿）。
+任务：按会中讨论进程，把全文切分到各位伙伴。
+规则：
+1. 必须优先遵循「会中实际讨论顺序」与相对时间（会议 +mm:ss），不要只看名字出现次数。
+2. 纪要可能用国家、项目、简称指代伙伴，结合语义对应。
+3. 每位议程伙伴都要有一条 segments（未讨论则 text 为空字符串）。
+4. 不要编造原文没有的内容；可压缩重复寒暄，但保留事实。
 只输出 JSON：
-{"segments":[{"partnerId":"...","text":"..."}],"unassigned":"未能归属到任何伙伴的开场/串场（可空字符串）"}
-每位 agenda 伙伴都要有一条 segments（未被提及则 text 为空字符串）。`,
-      `议程伙伴（按顺序）：\n${agenda}\n\n---\n腾讯会议纪要全文：\n${text.slice(0, 14000)}`,
+{"segments":[{"partnerId":"...","text":"..."}],"unassigned":"开场/串场未归属内容"}`,
+      `${processHint}\n\n议程伙伴：\n${agenda}\n\n---\n纪要全文：\n${text.slice(0, 28000)}`,
       {
         feature: "partner_review_match",
         userId,
@@ -325,7 +365,8 @@ function isMostlyUnassigned(segments: TranscriptSegment[], partnerCount: number)
 }
 
 /**
- * 将粘贴的腾讯纪要匹配到议程伙伴：先时间轴，再小结编号顺序，再 AI 语义，最后按名称兜底。
+ * 将粘贴的腾讯纪要匹配到议程伙伴：
+ * 有可靠时间轴（打点 + 带时间戳转写）→ 小结编号 → AI（按讨论进程）→ 名称兜底。
  */
 export async function matchMinutesToPartners(
   meeting: MeetingWithItems,
@@ -333,6 +374,7 @@ export async function matchMinutesToPartners(
 ): Promise<{ segments: TranscriptSegment[]; method: string }> {
   const text = meeting.transcriptText?.trim() ?? "";
   const partnerIds = meeting.items.map((it) => it.partnerId);
+  const markedCount = markedItems(meeting).length;
 
   if (!text) {
     return { segments: [], method: "empty" };
@@ -340,41 +382,41 @@ export async function matchMinutesToPartners(
 
   const timeSegments = computeTranscriptSegments(meeting);
   const timeAssigned = countAssignedPartners(timeSegments, partnerIds);
+  const timeWithText = countPartnersWithText(timeSegments);
 
-  if (
-    timeAssigned >= Math.max(1, Math.min(partnerIds.length, 2)) &&
-    !isMostlyUnassigned(timeSegments, partnerIds.length)
-  ) {
+  if (isStrongTimelineMatch(timeSegments, partnerIds, markedCount)) {
     return { segments: timeSegments, method: "timeline" };
   }
 
   const byOrder = matchSectionsByMarkerOrder(text, meeting.items, meeting.startedAt);
   if (byOrder) {
-    const orderAssigned = countAssignedPartners(byOrder, partnerIds);
-    if (orderAssigned >= timeAssigned) {
+    const orderWithText = countPartnersWithText(byOrder);
+    if (orderWithText > timeWithText || (orderWithText >= 2 && timeWithText <= 1)) {
       return { segments: byOrder, method: "summary_sections" };
     }
   }
 
   const aiSegments = await aiMatchMinutesToPartners(meeting, userId);
   if (aiSegments) {
-    const aiAssigned = countAssignedPartners(aiSegments, partnerIds);
-    if (aiAssigned >= timeAssigned) {
+    const aiWithText = countPartnersWithText(aiSegments);
+    if (aiWithText > timeWithText || aiWithText >= Math.min(2, Math.max(1, markedCount))) {
       return { segments: aiSegments, method: "ai" };
     }
   }
 
   const heur = heuristicMatchByPartnerName(text, meeting.items);
-  const heurAssigned = countAssignedPartners(heur, partnerIds);
-  if (heurAssigned > timeAssigned) {
+  const heurWithText = countPartnersWithText(heur);
+  if (heurWithText > timeWithText) {
     return { segments: heur, method: "name" };
+  }
+
+  if (aiSegments && countPartnersWithText(aiSegments) > 0) {
+    return { segments: aiSegments, method: "ai_fallback" };
   }
 
   if (timeSegments.some((s) => s.text.trim())) {
     return { segments: timeSegments, method: "timeline_fallback" };
   }
-
-  if (aiSegments?.length) return { segments: aiSegments, method: "ai_fallback" };
 
   return {
     segments: [{ partnerId: null, partnerName: null, text }],

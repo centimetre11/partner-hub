@@ -171,12 +171,54 @@ export function parseTranscriptTextToTimedDoc(
   const lineRe =
     /^\[(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]\s*(?:([^:：\n]{1,40})[:：]\s*)?(.+)$/;
   const wallClockRe = /^(\d{1,2}):(\d{2})(?::(\d{2}))?\s+(.+)$/;
+  /** 腾讯会议逐字稿：发言人 1 00:15:57 / Speaker 3 00:16:10，正文可在同行或下一行 */
+  const speakerHeaderRe =
+    /^(?:发言人|Speaker)\s*(\d+)\s+(\d{1,2}):(\d{2}):(\d{2})\s*(.*)$/i;
   const sentences: TranscriptSentence[] = [];
   const anchor = opts?.recordingStartedAt ?? null;
+  let pendingSpeaker: { startTime: number; speaker: string; lines: string[] } | null = null;
+
+  const flushPending = () => {
+    if (!pendingSpeaker) return;
+    const text = pendingSpeaker.lines.join("\n").trim();
+    if (text) {
+      sentences.push({
+        startTime: pendingSpeaker.startTime,
+        speaker: pendingSpeaker.speaker,
+        text,
+      });
+    }
+    pendingSpeaker = null;
+  };
 
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+
+    const sp = trimmed.match(speakerHeaderRe);
+    if (sp) {
+      flushPending();
+      const hours = Number(sp[2]);
+      const mins = Number(sp[3]);
+      const secs = Number(sp[4]);
+      const startTime = ((hours * 60 + mins) * 60 + secs) * 1000;
+      const sameLine = (sp[5] ?? "").trim();
+      pendingSpeaker = {
+        startTime,
+        speaker: `发言人 ${sp[1]}`,
+        lines: sameLine ? [sameLine] : [],
+      };
+      continue;
+    }
+
+    if (pendingSpeaker) {
+      // 下一句发言人前的正文行归入当前发言人
+      if (!lineRe.test(trimmed) && !wallClockRe.test(trimmed)) {
+        pendingSpeaker.lines.push(trimmed);
+        continue;
+      }
+      flushPending();
+    }
 
     const m = trimmed.match(lineRe);
     if (m) {
@@ -208,6 +250,7 @@ export function parseTranscriptTextToTimedDoc(
       });
     }
   }
+  flushPending();
 
   if (!sentences.length) return null;
   const hasAbsolute = sentences.some((s) => s.startTime >= ABSOLUTE_MS_FLOOR);

@@ -20,6 +20,11 @@ import {
 } from "@/lib/partner-review/actions";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
+import {
+  buildFinalReportMarkdown,
+  reportRowFromBriefAndDraft,
+  reportRowFromConfirmed,
+} from "@/lib/partner-review/final-report";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
@@ -28,18 +33,39 @@ export type { MeetingClient, ReviewItemClient };
 const RAPID_CLICK_WINDOW_MS = 12_000;
 const RAPID_CLICK_WARN_COUNT = 3;
 
+type ParseStage = "idle" | "saving" | "matching" | "extracting" | "done";
+
 function matchMethodFlash(method?: string): string {
   switch (method) {
     case "timeline":
-      return "已按打点时间轴拆分，请在上方两栏确认各伙伴进展与待办";
+      return "已按会中打点时间轴拆分到各伙伴，请逐家确认进展与待办";
     case "summary_sections":
-      return "已按「小结」与打点顺序拆分，请在上方两栏确认各伙伴进展与待办";
+      return "已按「小结」与打点顺序拆分，请逐家确认进展与待办";
     case "ai":
-      return "已用 AI 按伙伴语义拆分，请在上方两栏确认各伙伴进展与待办";
+      return "已按会中讨论进程用 AI 拆分到各伙伴，请逐家确认进展与待办";
     case "name":
-      return "已按伙伴名称拆分，请在上方两栏确认各伙伴进展与待办";
+      return "已按伙伴名称拆分，请逐家确认进展与待办";
+    case "timeline_fallback":
+      return "时间轴部分匹配，请核对各伙伴进展与待办";
+    case "ai_fallback":
+      return "AI 按讨论进程拆分完成，请逐家确认";
     default:
-      return "纪要已解析拆分，请在上方两栏逐伙伴确认修改";
+      return "纪要已解析拆分，请逐伙伴确认修改后查看会议报告";
+  }
+}
+
+function parseStageLabel(stage: ParseStage): string {
+  switch (stage) {
+    case "saving":
+      return "正在保存纪要…";
+    case "matching":
+      return "正在按会中讨论进程拆分到各伙伴…";
+    case "extracting":
+      return "正在提炼近两周进展与后续待办…";
+    case "done":
+      return "拆分完成";
+    default:
+      return "";
   }
 }
 
@@ -124,6 +150,7 @@ export function MeetingWorkspace({
     !!initial.transcriptText?.trim() &&
       (initial.status === "PROCESSING" || initial.items.some((it) => it.coreNotes || it.todoDrafts.length)),
   );
+  const [parseStage, setParseStage] = useState<ParseStage>("idle");
 
   useEffect(() => {
     setMeeting(initial);
@@ -382,6 +409,7 @@ export function MeetingWorkspace({
                   setTranscript("");
                   setProposal(null);
                   setParsed(false);
+                  setParseStage("idle");
                   setCurrentDiscussItemId(null);
                   setConfirmDrafts({});
                   flash("已回到会前 · 可重新开始开会");
@@ -410,7 +438,7 @@ export function MeetingWorkspace({
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
           建议：开会准备（可选）→ 开始开会 → 在腾讯会议进行讨论；本页仅记录<strong>各伙伴的讨论顺序与时间</strong>（不与腾讯会议同步录音）→
-          结束会议 → 粘贴腾讯会议 AI 纪要 → 解析并拆分（进展总结 + 待办）→ 上方两栏确认修改 → 入库。
+          结束会议 → 顶部粘贴纪要 → 按会中讨论进程拆分（进展 + 待办）→ 两栏确认 → 会议报告入库与分享。
         </p>
       ) : null}
 
@@ -421,6 +449,52 @@ export function MeetingWorkspace({
           markJustAt={markJustAt}
         />
       ) : null}
+
+      {/* 会后：粘贴框置顶 + 解析进度 */}
+      {(phase === "post" || phase === "done") && (
+        <MinutesPastePanel
+          phase={phase}
+          transcript={transcript}
+          liveNotes={liveNotes}
+          busy={busy}
+          parsed={parsed}
+          parseStage={parseStage}
+          onTranscriptChange={setTranscript}
+          onParse={() =>
+            run(async () => {
+              setParseStage("saving");
+              const timers = [
+                window.setTimeout(() => setParseStage("matching"), 500),
+                window.setTimeout(() => setParseStage("extracting"), 2200),
+              ];
+              try {
+                const res = await parseMeetingMinutesAction(meeting.id, transcript);
+                if (res.error) {
+                  setParseStage("idle");
+                  flash(undefined, res.error);
+                  return;
+                }
+                setParseStage("extracting");
+                if (res.liveNotes) setLiveNotes(res.liveNotes);
+                if (res.proposal) {
+                  setProposal(res.proposal);
+                  setConfirmDrafts(draftsFromProposal(res.proposal));
+                  setParsed(true);
+                  const firstWithContent =
+                    res.proposal.items.find((it) => it.coreNotes.trim() || it.todos.length) ??
+                    res.proposal.items[0];
+                  if (firstWithContent) setActiveItemId(firstWithContent.itemId);
+                }
+                setParseStage("done");
+                flash(matchMethodFlash(res.matchMethod));
+                router.refresh();
+              } finally {
+                for (const t of timers) window.clearTimeout(t);
+              }
+            })
+          }
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
         {/* Partner list */}
@@ -548,7 +622,7 @@ export function MeetingWorkspace({
                   ) : activeItem.prepBrief ? (
                     <PrepBriefOverview brief={activeItem.prepBrief} />
                   ) : phase === "post" ? (
-                    <p className="text-xs text-slate-400">粘贴纪要并解析后，此处显示待确认的进展总结</p>
+                    <p className="text-xs text-slate-400">在顶部粘贴纪要并解析后，此处确认该伙伴进展总结</p>
                   ) : null}
                 </>
               )}
@@ -577,7 +651,7 @@ export function MeetingWorkspace({
                   ) : activeItem.prepBrief ? (
                     <PrepBriefActivity brief={activeItem.prepBrief} />
                   ) : phase === "post" ? (
-                    <p className="text-xs text-slate-400">粘贴纪要并解析后，此处显示待确认的待办</p>
+                    <p className="text-xs text-slate-400">在顶部粘贴纪要并解析后，此处确认该伙伴后续待办</p>
                   ) : (
                     <p className="text-xs text-slate-400">生成简报后，此处显示待办与近两周进展</p>
                   )}
@@ -588,146 +662,398 @@ export function MeetingWorkspace({
         </section>
       </div>
 
-      {/* 会后：粘贴纪要 → 解析拆分 → 上方两栏确认 */}
-      {(phase === "post" || phase === "done") && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-          <div>
-            <div className="text-xs font-medium text-slate-500 mb-1">
-              {phase === "done" ? "会议记录（只读）" : "粘贴会议智能纪要"}
+      {/* 会后：未归属提示 + 会议报告 + 入库 */}
+      {phase === "post" && parsed ? (
+        <section className="space-y-3">
+          {proposal?.unassignedText ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
+              <div className="font-medium mb-1">未归属片段（开场或未匹配内容）</div>
+              {proposal.unassignedText.slice(0, 2000)}
             </div>
-            {phase === "post" ? (
-              <>
-                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
-                  粘贴腾讯会议「AI 纪要 / 智能纪要 / 元宝纪要」全文。系统会结合会中讨论顺序压缩文本、拆分到各伙伴，并提炼<strong>近两周进展总结</strong>与<strong>后续待办</strong>；请在上方两栏逐伙伴确认修改后入库。
-                </p>
-                <textarea
-                  value={transcript}
-                  onChange={(e) => setTranscript(e.target.value)}
-                  rows={8}
-                  placeholder="粘贴腾讯会议智能纪要全文…"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed"
-                />
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <button
-                    type="button"
-                    disabled={busy || !transcript.trim()}
-                    onClick={() =>
-                      run(async () => {
-                        const res = await parseMeetingMinutesAction(meeting.id, transcript);
-                        if (res.error) {
-                          flash(undefined, res.error);
-                          return;
-                        }
-                        if (res.liveNotes) setLiveNotes(res.liveNotes);
-                        if (res.proposal) {
-                          setProposal(res.proposal);
-                          setConfirmDrafts(draftsFromProposal(res.proposal));
-                          setParsed(true);
-                          if (res.proposal.items[0]) setActiveItemId(res.proposal.items[0].itemId);
-                        }
-                        flash(matchMethodFlash(res.matchMethod));
-                        router.refresh();
-                      })
-                    }
-                    className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
-                  >
-                    {parsed ? "重新解析并拆分" : "解析并拆分"}
-                  </button>
-                  {parsed ? (
-                    <span className="text-[11px] text-emerald-700">已拆分 · 请在上方两栏确认各伙伴</span>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <textarea
-                value={liveNotes}
-                readOnly
-                rows={12}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
-              />
-            )}
-          </div>
-
-          {phase === "post" && parsed ? (
-            <>
-              {proposal?.unassignedText ? (
-                <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
-                  <div className="font-medium mb-1">未归属片段（开场或未匹配内容）</div>
-                  {proposal.unassignedText.slice(0, 2000)}
-                </div>
-              ) : null}
-              <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                <button
-                  type="button"
-                  disabled={busy || !Object.keys(confirmDrafts).length}
-                  onClick={() =>
-                    run(async () => {
-                      const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
-                        ([itemId, d]) => ({
-                          itemId,
+          ) : null}
+          <FinalReportPanel
+            meeting={meeting}
+            confirmDrafts={confirmDrafts}
+            proposal={proposal}
+            busy={busy}
+            onConfirmAll={() =>
+              run(async () => {
+                const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
+                  ([itemId, d]) => ({
+                    itemId,
+                    coreNotes: d.coreNotes,
+                    businessRecordTitle: d.businessRecordTitle,
+                    businessRecordContent: d.skipBusinessRecord
+                      ? d.coreNotes
+                      : d.businessRecordContent || d.coreNotes,
+                    skipBusinessRecord: d.skipBusinessRecord,
+                    todos: d.todos.map((t) => ({
+                      id: t.id,
+                      title: t.title,
+                      detail: t.detail,
+                      dueDate: t.dueDate || null,
+                      include: t.include,
+                    })),
+                  }),
+                );
+                const res = await confirmMeetingItemsAction(meeting.id, items);
+                if (res.error) flash(undefined, res.error);
+                else {
+                  flash(`已确认入库 ${res.results?.length ?? 0} 个伙伴 · 会议报告已记入历史`);
+                  setMeeting((m) => ({
+                    ...m,
+                    status: "DONE",
+                    items: m.items.map((it) => {
+                      const d = confirmDrafts[it.id];
+                      if (!d) return { ...it, status: "CONFIRMED" };
+                      const todos = d.todos
+                        .filter((t) => t.include && t.title.trim())
+                        .map((t) => ({
+                          title: t.title.trim(),
+                          detail: t.detail?.trim() || null,
+                          dueDate: t.dueDate || null,
+                          todoItemId: null,
+                        }));
+                      return {
+                        ...it,
+                        status: "CONFIRMED",
+                        coreNotes: d.coreNotes,
+                        confirmedSnapshot: {
+                          confirmedAt: new Date().toISOString(),
                           coreNotes: d.coreNotes,
                           businessRecordTitle: d.businessRecordTitle,
-                          businessRecordContent: d.skipBusinessRecord
-                            ? d.coreNotes
-                            : d.businessRecordContent || d.coreNotes,
+                          businessRecordContent: d.businessRecordContent,
                           skipBusinessRecord: d.skipBusinessRecord,
-                          todos: d.todos.map((t) => ({
-                            id: t.id,
-                            title: t.title,
-                            detail: t.detail,
-                            dueDate: t.dueDate || null,
-                            include: t.include,
-                          })),
-                        }),
-                      );
-                      const res = await confirmMeetingItemsAction(meeting.id, items);
-                      if (res.error) flash(undefined, res.error);
-                      else {
-                        flash(`已确认入库 ${res.results?.length ?? 0} 个伙伴，已记入历史`);
-                        setMeeting((m) => ({
-                          ...m,
-                          status: "DONE",
-                          items: m.items.map((it) => {
-                            const d = confirmDrafts[it.id];
-                            if (!d) return { ...it, status: "CONFIRMED" };
-                            const todos = d.todos
-                              .filter((t) => t.include && t.title.trim())
-                              .map((t) => ({
-                                title: t.title.trim(),
-                                detail: t.detail?.trim() || null,
-                                dueDate: t.dueDate || null,
-                                todoItemId: null,
-                              }));
-                            return {
-                              ...it,
-                              status: "CONFIRMED",
-                              coreNotes: d.coreNotes,
-                              confirmedSnapshot: {
-                                confirmedAt: new Date().toISOString(),
-                                coreNotes: d.coreNotes,
-                                businessRecordTitle: d.businessRecordTitle,
-                                businessRecordContent: d.businessRecordContent,
-                                skipBusinessRecord: d.skipBusinessRecord,
-                                wroteBusinessRecord:
-                                  !d.skipBusinessRecord && !!d.businessRecordTitle.trim(),
-                                todos,
-                              },
-                            };
-                          }),
-                        }));
-                      }
-                    })
-                  }
-                  className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm hover:bg-emerald-800 disabled:opacity-40"
-                >
-                  确认全部入库
-                </button>
-              </div>
-            </>
-          ) : null}
+                          wroteBusinessRecord:
+                            !d.skipBusinessRecord && !!d.businessRecordTitle.trim(),
+                          todos,
+                        },
+                      };
+                    }),
+                  }));
+                }
+              })
+            }
+            onFlash={flash}
+          />
         </section>
-      )}
+      ) : null}
+
+      {phase === "done" ? (
+        <FinalReportPanel
+          meeting={meeting}
+          confirmDrafts={confirmDrafts}
+          proposal={proposal}
+          busy={busy}
+          readonly
+          onFlash={flash}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function MinutesPastePanel({
+  phase,
+  transcript,
+  liveNotes,
+  busy,
+  parsed,
+  parseStage,
+  onTranscriptChange,
+  onParse,
+}: {
+  phase: string;
+  transcript: string;
+  liveNotes: string;
+  busy: boolean;
+  parsed: boolean;
+  parseStage: ParseStage;
+  onTranscriptChange: (v: string) => void;
+  onParse: () => void;
+}) {
+  const parsing = busy && parseStage !== "idle" && parseStage !== "done";
+
+  return (
+    <section className="rounded-xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">
+            {phase === "done" ? "会议纪要（只读）" : "1. 粘贴会议纪要"}
+          </div>
+          {phase === "post" ? (
+            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+              粘贴腾讯会议「AI 纪要 / 智能纪要」或「发言人 + 时间戳」逐字稿。系统会按<strong>会中打点讨论顺序</strong>
+              拆到各伙伴，并提炼<strong>近两周进展</strong>与<strong>后续待办</strong>；再在下方两栏确认。
+            </p>
+          ) : null}
+        </div>
+        {parsing ? (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-800">
+            <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
+            {parseStageLabel(parseStage)}
+          </span>
+        ) : parsed && phase === "post" ? (
+          <span className="text-xs font-medium text-emerald-700">已拆分 · 请在下方两栏确认</span>
+        ) : null}
+      </div>
+
+      {phase === "post" ? (
+        <>
+          <textarea
+            value={transcript}
+            onChange={(e) => onTranscriptChange(e.target.value)}
+            rows={6}
+            disabled={parsing}
+            placeholder="粘贴腾讯会议纪要全文（智能纪要或发言人逐字稿）…"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono leading-relaxed disabled:opacity-60"
+          />
+          {parsing ? (
+            <ol className="flex flex-wrap gap-2 text-[11px]">
+              {(
+                [
+                  ["saving", "① 保存"],
+                  ["matching", "② 按讨论进程拆分"],
+                  ["extracting", "③ 提炼进展与待办"],
+                ] as const
+              ).map(([key, label], idx) => {
+                const order = { saving: 0, matching: 1, extracting: 2, done: 3, idle: -1 } as const;
+                const cur = order[parseStage];
+                const active = key === parseStage;
+                const done = idx < cur;
+                return (
+                  <li
+                    key={key}
+                    className={`rounded-full px-2.5 py-1 border ${
+                      active
+                        ? "border-sky-400 bg-sky-100 text-sky-900 font-medium"
+                        : done
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                          : "border-slate-200 bg-white text-slate-400"
+                    }`}
+                  >
+                    {label}
+                  </li>
+                );
+              })}
+            </ol>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={busy || !transcript.trim()}
+              onClick={onParse}
+              className="rounded-lg bg-sky-700 text-white px-4 py-2 text-sm font-medium hover:bg-sky-800 disabled:opacity-40"
+            >
+              {parsing ? parseStageLabel(parseStage) : parsed ? "重新解析并拆分" : "解析并拆分"}
+            </button>
+            {!parsing && !parsed ? (
+              <span className="text-[11px] text-slate-500">会中讨论过几位伙伴，就会尽量拆成几段</span>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <textarea
+          value={liveNotes || transcript}
+          readOnly
+          rows={5}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-white text-slate-700"
+        />
+      )}
+    </section>
+  );
+}
+
+function FinalReportPanel({
+  meeting,
+  confirmDrafts,
+  proposal,
+  busy,
+  readonly,
+  onConfirmAll,
+  onFlash,
+}: {
+  meeting: MeetingClient;
+  confirmDrafts: Record<string, ConfirmDraft>;
+  proposal: SplitProposal | null;
+  busy: boolean;
+  readonly?: boolean;
+  onConfirmAll?: () => void;
+  onFlash: (ok?: string, err?: string) => void;
+}) {
+  const [sharing, setSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+
+  const reportMd = useMemo(() => {
+    const partners = meeting.items.map((it) => {
+      if (readonly || meeting.status === "DONE") {
+        return reportRowFromConfirmed({
+          partnerName: it.partnerName,
+          partnerTier: it.partnerTier,
+          prepBrief: it.prepBrief,
+          snapshot: it.confirmedSnapshot,
+          coreNotes: it.coreNotes,
+        });
+      }
+      const d = confirmDrafts[it.id];
+      const prop = proposal?.items.find((p) => p.itemId === it.id);
+      return reportRowFromBriefAndDraft({
+        partnerName: it.partnerName,
+        partnerTier: it.partnerTier,
+        prepBrief: it.prepBrief,
+        progressSummary: d?.coreNotes || prop?.coreNotes || it.coreNotes || "",
+        todos:
+          d?.todos.map((t) => ({
+            title: t.title,
+            detail: t.detail,
+            dueDate: t.dueDate,
+            include: t.include,
+          })) ||
+          prop?.todos.map((t) => ({
+            title: t.title,
+            detail: t.detail,
+            dueDate: t.dueDate,
+            include: true,
+          })) ||
+          [],
+      });
+    });
+    return buildFinalReportMarkdown({
+      title: meeting.title,
+      endedAt: meeting.endedAt,
+      partners,
+    });
+  }, [meeting, confirmDrafts, proposal, readonly]);
+
+  async function copyReport() {
+    const ok = await copyTextToClipboard(reportMd);
+    onFlash(ok ? "会议报告已复制" : undefined, ok ? undefined : "复制失败，请手动选择文本");
+  }
+
+  async function shareReport() {
+    setSharing(true);
+    try {
+      const res = await getMeetingPreviewPathAction(meeting.id);
+      if (!res.path) {
+        onFlash(undefined, "无法生成分享链接");
+        return;
+      }
+      const url = `${window.location.origin}${res.path}`;
+      setShareUrl(url);
+      const ok = await copyTextToClipboard(url);
+      onFlash(ok ? "分享链接已复制" : undefined, ok ? undefined : "链接已生成，请手动复制");
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">
+            {readonly ? "会议报告（已入库）" : "2. 会议报告 · 确认入库"}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            含会前摘要、近两周进展总结与后续待办；入库后写入历史，并可分享链接。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void copyReport()}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
+          >
+            复制报告
+          </button>
+          <button
+            type="button"
+            disabled={sharing}
+            onClick={() => void shareReport()}
+            className="rounded-lg border border-sky-200 bg-sky-50 text-sky-900 px-3 py-1.5 text-xs hover:bg-sky-100 disabled:opacity-40"
+          >
+            {sharing ? "生成中…" : "分享报告链接"}
+          </button>
+          {!readonly && onConfirmAll ? (
+            <button
+              type="button"
+              disabled={busy || !Object.keys(confirmDrafts).length}
+              onClick={onConfirmAll}
+              className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium hover:bg-emerald-800 disabled:opacity-40"
+            >
+              确认入库到历史
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {shareUrl ? (
+        <input
+          type="text"
+          readOnly
+          value={shareUrl}
+          onFocus={(e) => e.currentTarget.select()}
+          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono text-slate-700 bg-slate-50"
+        />
+      ) : null}
+      <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 max-h-[420px] overflow-y-auto space-y-4 text-sm">
+        {meeting.items.map((it, idx) => {
+          const d = confirmDrafts[it.id];
+          const progress =
+            d?.coreNotes ||
+            it.confirmedSnapshot?.coreNotes ||
+            it.coreNotes ||
+            proposal?.items.find((p) => p.itemId === it.id)?.coreNotes ||
+            "";
+          const todos =
+            d?.todos.filter((t) => t.include && t.title.trim()) ||
+            it.confirmedSnapshot?.todos ||
+            proposal?.items.find((p) => p.itemId === it.id)?.todos ||
+            [];
+          return (
+            <article key={it.id} className="border-b border-slate-100 last:border-0 pb-3 last:pb-0">
+              <h3 className="font-semibold text-slate-900">
+                {idx + 1}. {it.partnerName}
+                {it.partnerTier ? (
+                  <span className="text-xs font-normal text-slate-400 ml-2">Tier {it.partnerTier}</span>
+                ) : null}
+              </h3>
+              {it.prepBrief?.summaryLine ? (
+                <div className="mt-2">
+                  <div className="text-[11px] font-medium text-slate-400">会前摘要</div>
+                  <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{it.prepBrief.summaryLine}</p>
+                </div>
+              ) : null}
+              <div className="mt-2">
+                <div className="text-[11px] font-medium text-slate-400">近两周进展总结</div>
+                <p className="text-xs text-slate-800 mt-0.5 leading-relaxed whitespace-pre-wrap">
+                  {progress.trim() || "（暂无）"}
+                </p>
+              </div>
+              <div className="mt-2">
+                <div className="text-[11px] font-medium text-slate-400">后续待办</div>
+                {todos.length ? (
+                  <ul className="mt-0.5 space-y-1">
+                    {todos.map((t, i) => (
+                      <li key={`${"title" in t ? t.title : ""}-${i}`} className="text-xs text-slate-700">
+                        · {"title" in t ? t.title : ""}
+                        {"dueDate" in t && t.dueDate ? (
+                          <span className="text-slate-400">
+                            {" "}
+                            （{String(t.dueDate).slice(0, 10)}）
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-400 mt-0.5">（无）</p>
+                )}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
