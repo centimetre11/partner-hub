@@ -62,6 +62,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
       }
     >
   >({});
+  const [isRecording, setIsRecording] = useState(false);
   const [dingForm, setDingForm] = useState({
     recordId: initial.dingtalkRecordId ?? "",
     conferenceId: initial.dingtalkConferenceId ?? "",
@@ -365,11 +366,18 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
               transcriptStatus={meeting.transcriptStatus}
               transcriptError={meeting.transcriptError}
               onFlash={flash}
-              onMeetingLive={() => setMeeting((m) => ({ ...m, status: "LIVE" }))}
+              onMeetingLive={(recordingStartedAt) =>
+                setMeeting((m) => ({
+                  ...m,
+                  status: "LIVE",
+                  recordingStartedAt: recordingStartedAt ?? m.recordingStartedAt ?? new Date().toISOString(),
+                }))
+              }
               onLiveTranscript={(plain) => {
                 setLiveNotes(plain);
                 setTranscript(plain);
               }}
+              onRecordingChange={setIsRecording}
               onUploaded={() => router.refresh()}
             />
           ) : null}
@@ -388,6 +396,7 @@ export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient 
                   items={meeting.items}
                   currentDiscussItemId={currentDiscussItemId}
                   recordingStartedAt={meeting.recordingStartedAt}
+                  isRecording={isRecording}
                 />
                 <textarea
                   value={liveNotes}
@@ -666,10 +675,12 @@ function LiveAgendaPanel({
   items,
   currentDiscussItemId,
   recordingStartedAt,
+  isRecording,
 }: {
   items: ReviewItemClient[];
   currentDiscussItemId: string | null;
   recordingStartedAt: string | null;
+  isRecording: boolean;
 }) {
   const marked = items
     .filter((it) => it.markerInsertedAt || it.discussedAt)
@@ -682,12 +693,16 @@ function LiveAgendaPanel({
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[280px]">
       <p className="text-xs text-slate-600 leading-relaxed">
-        讨论谁就点左侧伙伴，系统记录<strong>相对开录</strong>的时间点，用于把转写切到各伙伴。
-        无需手写；转写由科大讯飞实时写入右侧文本框。
+        正常流程：先点「开始录音与转写」，可以说开场白；<strong>开始过某位伙伴时再点左侧该伙伴</strong>。
+        开录后、第一位伙伴打标前的语音，会归到第一位伙伴。转写由科大讯飞实时写入下方文本框。
       </p>
-      {!recordingStartedAt ? (
+      {!recordingStartedAt && !isRecording ? (
         <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2">
-          尚未开录。请先在上方点「开始录音与转写」，否则只能按讨论顺序做 AI 拆分。
+          尚未开录。请先在上方点「开始录音与转写」。
+        </p>
+      ) : isRecording && !marked.length ? (
+        <p className="text-xs text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-2.5 py-2">
+          已开录 · 可以先说开场白，开始过第一位伙伴时再点左侧。
         </p>
       ) : null}
       {marked.length ? (

@@ -202,11 +202,15 @@ export function getRelaySession(relaySessionId: string, meetingId: string, userI
 
 export function sendRelayAudio(relaySessionId: string, meetingId: string, userId: string, pcm: Buffer) {
   const session = getRelaySession(relaySessionId, meetingId, userId);
-  if (!session) throw new Error("转写会话已过期，请重新开始录音");
+  if (!session) throw new Error("转写会话已过期，请刷新页面后重新开始录音");
   if (session.closed || session.ws.readyState !== WebSocket.OPEN) {
-    throw new Error("讯飞连接已断开");
+    throw new Error("讯飞连接已断开，请停止后重新开始录音");
   }
-  if (pcm.length) flushPcmToXfyun(session, pcm);
+  try {
+    if (pcm.length) flushPcmToXfyun(session, pcm);
+  } catch (e) {
+    throw new Error(e instanceof Error ? e.message : "音频转发失败");
+  }
   const out = snapshot(session);
   if (session.lastSentence) session.lastSentence = null;
   return out;

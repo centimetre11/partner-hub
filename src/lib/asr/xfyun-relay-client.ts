@@ -67,7 +67,8 @@ export class XfyunRelayClient {
         body: new Blob([Uint8Array.from(body)]),
       },
     );
-    const data = (await res.json()) as {
+    const raw = await res.text();
+    let data: {
       ok?: boolean;
       error?: string;
       plain?: string;
@@ -76,6 +77,18 @@ export class XfyunRelayClient {
       startMs?: number;
       endMs?: number;
     };
+    try {
+      data = JSON.parse(raw) as typeof data;
+    } catch {
+      const hint =
+        res.status === 502 || res.status === 504
+          ? "服务器网关超时，请刷新页面后重新开始录音"
+          : raw.includes("Server Action")
+            ? "页面版本过旧，请强制刷新（Cmd+Shift+R）后重试"
+            : `服务器返回异常（HTTP ${res.status}），请刷新后重试`;
+      this.onError(hint);
+      return;
+    }
     if (!res.ok || data.error) {
       this.onError(data.error || res.statusText);
       return;

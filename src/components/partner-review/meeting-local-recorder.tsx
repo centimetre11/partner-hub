@@ -11,7 +11,7 @@ type Props = {
   disabled?: boolean;
   onFlash: (ok?: string, err?: string) => void;
   onUploaded: () => void;
-  onMeetingLive: () => void;
+  onMeetingLive: (recordingStartedAt?: string) => void;
   /** 实时转写全文预览（含中间结果） */
   onLiveTranscript?: (plain: string) => void;
   onRecordingChange?: (recording: boolean) => void;
@@ -232,9 +232,9 @@ export function MeetingLocalRecorder({
         const markErr = (await markRes.json().catch(() => ({}))) as { error?: string };
         throw new Error(markErr.error || `开录失败 HTTP ${markRes.status}`);
       }
-      const mark = (await markRes.json()) as { ok?: boolean; error?: string };
+      const mark = (await markRes.json()) as { ok?: boolean; error?: string; startedAt?: string };
       if (mark.error) throw new Error(mark.error);
-      onMeetingLive();
+      onMeetingLive(mark.startedAt);
 
       setStatusLine("正在连接讯飞实时转写（经服务器）…");
       const sessRes = await fetch(`/api/partner-reviews/${meetingId}/recording/xfyun-session`, {
