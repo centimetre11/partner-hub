@@ -243,6 +243,40 @@ export async function addPartnersToMeetingAction(meetingId: string, partnerIds: 
   return { ok: true as const, items: createdItems };
 }
 
+export async function parseMeetingMinutesAction(meetingId: string, transcriptText: string) {
+  const user = await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({
+    where: { id: meetingId },
+    select: { startedAt: true, recordingStartedAt: true },
+  });
+  if (!meeting) return { error: "会议不存在" };
+
+  const anchor = meeting.startedAt ?? meeting.recordingStartedAt ?? null;
+  const timed = parseTranscriptTextToTimedDoc(transcriptText, {
+    recordingStartedAt: anchor,
+  });
+  await db.partnerReviewMeeting.update({
+    where: { id: meetingId },
+    data: {
+      transcriptText,
+      transcriptJson: timed ? serializeTimedTranscriptDoc(timed) : null,
+      transcriptStatus: transcriptText.trim() ? "ready" : "idle",
+      status: "PROCESSING",
+    },
+  });
+
+  const { liveNotes, matchMethod } = await materializeLiveNotesForMeeting(meetingId, user.id);
+
+  try {
+    const proposal = await buildSplitProposal(meetingId, user.id);
+    await persistSplitDrafts(proposal);
+    revalidateMeeting(meetingId);
+    return { ok: true as const, proposal, liveNotes, matchMethod };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export async function runMeetingSplitAction(meetingId: string) {
   const user = await requireUser();
   try {

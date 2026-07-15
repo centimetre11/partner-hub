@@ -13,21 +13,13 @@ import {
   endPartnerReviewMeetingAction,
   resetMeetingToPrepAction,
   getMeetingPreviewPathAction,
-  previewMeetingMatchAction,
+  parseMeetingMinutesAction,
   runMeetingPrepAction,
-  runMeetingSplitAction,
-  saveMatchedNotesAction,
-  saveTranscriptTextAction,
   startPartnerReviewMeetingAction,
   confirmMeetingItemsAction,
 } from "@/lib/partner-review/actions";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
-import {
-  buildLiveNotesFromSegments,
-  parsePartnerSectionsFromLiveNotes,
-  type TranscriptSegment,
-} from "@/lib/partner-review/markers";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
@@ -39,31 +31,64 @@ const RAPID_CLICK_WARN_COUNT = 3;
 function matchMethodFlash(method?: string): string {
   switch (method) {
     case "timeline":
-      return "纪要已保存，已按打点时间轴匹配到各伙伴";
+      return "已按打点时间轴拆分，请在上方两栏确认各伙伴进展与待办";
     case "summary_sections":
-      return "纪要已保存，已按「小结」与打点顺序匹配到各伙伴";
+      return "已按「小结」与打点顺序拆分，请在上方两栏确认各伙伴进展与待办";
     case "ai":
-      return "纪要已保存，已用 AI 按伙伴语义匹配，请核对";
+      return "已用 AI 按伙伴语义拆分，请在上方两栏确认各伙伴进展与待办";
     case "name":
-      return "纪要已保存，已按伙伴名称匹配，请核对";
+      return "已按伙伴名称拆分，请在上方两栏确认各伙伴进展与待办";
     default:
-      return "纪要已保存，已匹配到各伙伴，请核对";
+      return "纪要已解析拆分，请在上方两栏逐伙伴确认修改";
   }
 }
 
-function applySegmentsToDrafts(
-  segments: TranscriptSegment[],
-  setMatchDrafts: (v: Record<string, string>) => void,
-  setUnassignedDraft: (v: string) => void,
-) {
-  const drafts: Record<string, string> = {};
-  let unassigned = "";
-  for (const seg of segments) {
-    if (seg.partnerId) drafts[seg.partnerId] = seg.text;
-    else if (seg.text.trim()) unassigned = seg.text;
+type ConfirmDraft = {
+  coreNotes: string;
+  businessRecordTitle: string;
+  businessRecordContent: string;
+  skipBusinessRecord: boolean;
+  todos: { id?: string; title: string; detail: string; dueDate: string; include: boolean }[];
+};
+
+function draftsFromProposal(proposal: SplitProposal): Record<string, ConfirmDraft> {
+  const drafts: Record<string, ConfirmDraft> = {};
+  for (const row of proposal.items) {
+    drafts[row.itemId] = {
+      coreNotes: row.coreNotes,
+      businessRecordTitle: row.businessRecordTitle,
+      businessRecordContent: row.businessRecordContent,
+      skipBusinessRecord: !row.segmentText.trim(),
+      todos: row.todos.map((t) => ({
+        title: t.title,
+        detail: t.detail ?? "",
+        dueDate: t.dueDate ?? "",
+        include: true,
+      })),
+    };
   }
-  setMatchDrafts(drafts);
-  setUnassignedDraft(unassigned);
+  return drafts;
+}
+
+function draftsFromItems(items: ReviewItemClient[]): Record<string, ConfirmDraft> {
+  const drafts: Record<string, ConfirmDraft> = {};
+  for (const item of items) {
+    if (!item.coreNotes && !item.todoDrafts.length) continue;
+    drafts[item.id] = {
+      coreNotes: item.coreNotes ?? "",
+      businessRecordTitle: `${item.partnerName} 过伙伴讨论`,
+      businessRecordContent: item.coreNotes ?? "",
+      skipBusinessRecord: false,
+      todos: item.todoDrafts.map((t) => ({
+        id: t.id,
+        title: t.title,
+        detail: t.detail ?? "",
+        dueDate: t.dueDate?.slice(0, 10) ?? "",
+        include: !t.confirmed,
+      })),
+    };
+  }
+  return drafts;
 }
 
 export function MeetingWorkspace({
@@ -93,42 +118,22 @@ export function MeetingWorkspace({
     return discussed[0]?.id ?? null;
   });
   const recentDiscussClicks = useRef<{ itemId: string; at: number }[]>([]);
-  const [confirmDrafts, setConfirmDrafts] = useState<
-    Record<
-      string,
-      {
-        coreNotes: string;
-        businessRecordTitle: string;
-        businessRecordContent: string;
-        skipBusinessRecord: boolean;
-        todos: { id?: string; title: string; detail: string; dueDate: string; include: boolean }[];
-      }
-    >
-  >({});
+  const [confirmDrafts, setConfirmDrafts] = useState<Record<string, ConfirmDraft>>({});
   const [markJustAt, setMarkJustAt] = useState(0);
-  const [matchDrafts, setMatchDrafts] = useState<Record<string, string>>({});
-  const [unassignedDraft, setUnassignedDraft] = useState("");
-  const [matchReady, setMatchReady] = useState(!!initial.transcriptText?.trim());
+  const [parsed, setParsed] = useState(
+    !!initial.transcriptText?.trim() &&
+      (initial.status === "PROCESSING" || initial.items.some((it) => it.coreNotes || it.todoDrafts.length)),
+  );
 
   useEffect(() => {
     setMeeting(initial);
     setLiveNotes(initial.liveNotes ?? "");
     setTranscript(initial.transcriptText ?? "");
-    setMatchReady(!!initial.transcriptText?.trim());
+    setParsed(
+      !!initial.transcriptText?.trim() &&
+        (initial.status === "PROCESSING" || initial.items.some((it) => it.coreNotes || it.todoDrafts.length)),
+    );
   }, [initial]);
-
-  useEffect(() => {
-    if (!matchReady && !initial.liveNotes?.trim()) return;
-    const segments = parsePartnerSectionsFromLiveNotes(initial.liveNotes ?? "", initial.items);
-    const drafts: Record<string, string> = {};
-    let unassigned = "";
-    for (const seg of segments) {
-      if (seg.partnerId) drafts[seg.partnerId] = seg.text;
-      else if (seg.text.trim()) unassigned = seg.text;
-    }
-    setMatchDrafts(drafts);
-    setUnassignedDraft(unassigned);
-  }, [initial.liveNotes, initial.items, matchReady]);
 
   const activeItem = useMemo(
     () => meeting.items.find((i) => i.id === activeItemId) ?? null,
@@ -252,6 +257,13 @@ export function MeetingWorkspace({
 
   const needsPrep = meeting.items.some((it) => !it.prepBrief);
   const canRunPrep = phase === "prep" || phase === "live";
+  const postConfirmReady = phase === "post" && (parsed || Object.keys(confirmDrafts).length > 0);
+
+  useEffect(() => {
+    if (phase !== "post" || Object.keys(confirmDrafts).length) return;
+    const hydrated = draftsFromItems(meeting.items);
+    if (Object.keys(hydrated).length) setConfirmDrafts(hydrated);
+  }, [phase, meeting.items, confirmDrafts]);
 
   function runPrep() {
     run(async () => {
@@ -323,7 +335,7 @@ export function MeetingWorkspace({
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "PROCESSING", endedAt: new Date().toISOString() }));
-                    flash("会议已结束 · 请粘贴腾讯会议智能纪要并匹配伙伴");
+                    flash("会议已结束 · 请粘贴腾讯会议智能纪要并解析拆分");
                   }
                 }, { refresh: false })
               }
@@ -340,7 +352,7 @@ export function MeetingWorkspace({
             onClick={() => {
               if (
                 !window.confirm(
-                  "确定回到会前？将清空本次打点时间、粘贴的纪要、匹配结果与 AI 拆分草案；议程与会前简报会保留。",
+                  "确定回到会前？将清空本次打点时间、粘贴的纪要、解析结果与待确认草案；议程与会前简报会保留。",
                 )
               ) {
                 return;
@@ -369,9 +381,7 @@ export function MeetingWorkspace({
                   setLiveNotes("");
                   setTranscript("");
                   setProposal(null);
-                  setMatchDrafts({});
-                  setUnassignedDraft("");
-                  setMatchReady(false);
+                  setParsed(false);
                   setCurrentDiscussItemId(null);
                   setConfirmDrafts({});
                   flash("已回到会前 · 可重新开始开会");
@@ -400,7 +410,7 @@ export function MeetingWorkspace({
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
           建议：开会准备（可选）→ 开始开会 → 在腾讯会议进行讨论；本页仅记录<strong>各伙伴的讨论顺序与时间</strong>（不与腾讯会议同步录音）→
-          结束会议 → 粘贴腾讯会议 AI 纪要（元宝/智能纪要）→ 自动匹配议程伙伴 → 核对 → AI 拆分待办与记录 → 确认入库。
+          结束会议 → 粘贴腾讯会议 AI 纪要 → 解析并拆分（进展总结 + 待办）→ 上方两栏确认修改 → 入库。
         </p>
       ) : null}
 
@@ -527,10 +537,7 @@ export function MeetingWorkspace({
                       </button>
                     </div>
                   ) : null}
-                  {activeItem.prepBrief ? (
-                    <PrepBriefOverview brief={activeItem.prepBrief} />
-                  ) : null}
-                  {phase === "post" ? (
+                  {postConfirmReady ? (
                     <PostConfirmPanel
                       item={activeItem}
                       draft={confirmDrafts[activeItem.id]}
@@ -538,6 +545,10 @@ export function MeetingWorkspace({
                       proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
                       part="left"
                     />
+                  ) : activeItem.prepBrief ? (
+                    <PrepBriefOverview brief={activeItem.prepBrief} />
+                  ) : phase === "post" ? (
+                    <p className="text-xs text-slate-400">粘贴纪要并解析后，此处显示待确认的进展总结</p>
                   ) : null}
                 </>
               )}
@@ -555,12 +566,7 @@ export function MeetingWorkspace({
                 <ConfirmedHistoryPanel item={activeItem} part="right" />
               ) : (
                 <>
-                  {activeItem.prepBrief ? (
-                    <PrepBriefActivity brief={activeItem.prepBrief} />
-                  ) : (
-                    <p className="text-xs text-slate-400">生成简报后，此处显示待办与近两周进展</p>
-                  )}
-                  {phase === "post" ? (
+                  {postConfirmReady ? (
                     <PostConfirmPanel
                       item={activeItem}
                       draft={confirmDrafts[activeItem.id]}
@@ -568,7 +574,13 @@ export function MeetingWorkspace({
                       proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
                       part="right"
                     />
-                  ) : null}
+                  ) : activeItem.prepBrief ? (
+                    <PrepBriefActivity brief={activeItem.prepBrief} />
+                  ) : phase === "post" ? (
+                    <p className="text-xs text-slate-400">粘贴纪要并解析后，此处显示待确认的待办</p>
+                  ) : (
+                    <p className="text-xs text-slate-400">生成简报后，此处显示待办与近两周进展</p>
+                  )}
                 </>
               )}
             </>
@@ -576,200 +588,98 @@ export function MeetingWorkspace({
         </section>
       </div>
 
-      {/* 会后：纪要粘贴 / 匹配 / AI 拆分（全宽） */}
+      {/* 会后：粘贴纪要 → 解析拆分 → 上方两栏确认 */}
       {(phase === "post" || phase === "done") && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-              <div>
-                <div className="text-xs font-medium text-slate-500 mb-1">
-                  {phase === "done" ? "会议记录（只读）" : "1. 粘贴腾讯会议智能纪要"}
-                </div>
-                {phase === "post" ? (
-                  <>
-                    <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
-                      从腾讯会议复制「AI 纪要 / 智能纪要 / 元宝纪要」粘贴到下方。常见格式含「会议概览」「小结」、14:28
-                      等叙述，不一定有 [00:12:34] 转写时间戳。系统会结合会中打点顺序、小结编号与 AI 语义，匹配到左侧议程伙伴；可在下方手动调整。
-                    </p>
-                    <textarea
-                      value={transcript}
-                      onChange={(e) => setTranscript(e.target.value)}
-                      rows={10}
-                      placeholder="粘贴腾讯会议智能纪要全文…"
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed"
-                    />
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <button
-                        type="button"
-                        disabled={busy || !transcript.trim()}
-                        onClick={() =>
-                          run(async () => {
-                            const res = await saveTranscriptTextAction(meeting.id, transcript);
-                            if (res.liveNotes) {
-                              setLiveNotes(res.liveNotes);
-                              const segments = parsePartnerSectionsFromLiveNotes(
-                                res.liveNotes,
-                                meeting.items,
-                              );
-                              applySegmentsToDrafts(segments, setMatchDrafts, setUnassignedDraft);
-                            }
-                            setMatchReady(true);
-                            flash(matchMethodFlash(res.matchMethod));
-                            router.refresh();
-                          })
-                        }
-                        className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
-                      >
-                        保存并自动匹配
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          run(async () => {
-                            const res = await previewMeetingMatchAction(meeting.id);
-                            if (res.error) {
-                              flash(undefined, res.error);
-                              return;
-                            }
-                            if (res.segments) {
-                              applySegmentsToDrafts(res.segments, setMatchDrafts, setUnassignedDraft);
-                              setMatchReady(true);
-                            }
-                            flash(matchMethodFlash(res.matchMethod) || "已刷新匹配预览");
-                          }, { refresh: false })
-                        }
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
-                      >
-                        重新匹配
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <textarea
-                    value={liveNotes}
-                    readOnly
-                    rows={12}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
-                  />
-                )}
-              </div>
-
-              {phase === "post" && matchReady ? (
-                <MatchEditorPanel
-                  items={meeting.items}
-                  matchDrafts={matchDrafts}
-                  unassignedDraft={unassignedDraft}
-                  onChangePartner={(partnerId, text) =>
-                    setMatchDrafts((prev) => ({ ...prev, [partnerId]: text }))
-                  }
-                  onChangeUnassigned={setUnassignedDraft}
-                  onSave={() =>
-                    run(async () => {
-                      const segments: TranscriptSegment[] = meeting.items.map((it) => ({
-                        partnerId: it.partnerId,
-                        partnerName: it.partnerName,
-                        text: matchDrafts[it.partnerId] ?? "",
-                      }));
-                      if (unassignedDraft.trim()) {
-                        segments.unshift({
-                          partnerId: null,
-                          partnerName: null,
-                          text: unassignedDraft,
-                        });
-                      }
-                      const notes = buildLiveNotesFromSegments(segments);
-                      await saveMatchedNotesAction(meeting.id, notes);
-                      setLiveNotes(notes);
-                      flash("匹配结果已保存");
-                    })
-                  }
-                  busy={busy}
+          <div>
+            <div className="text-xs font-medium text-slate-500 mb-1">
+              {phase === "done" ? "会议记录（只读）" : "粘贴会议智能纪要"}
+            </div>
+            {phase === "post" ? (
+              <>
+                <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">
+                  粘贴腾讯会议「AI 纪要 / 智能纪要 / 元宝纪要」全文。系统会结合会中讨论顺序压缩文本、拆分到各伙伴，并提炼<strong>近两周进展总结</strong>与<strong>后续待办</strong>；请在上方两栏逐伙伴确认修改后入库。
+                </p>
+                <textarea
+                  value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  rows={8}
+                  placeholder="粘贴腾讯会议智能纪要全文…"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed"
                 />
-              ) : null}
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    disabled={busy || !transcript.trim()}
+                    onClick={() =>
+                      run(async () => {
+                        const res = await parseMeetingMinutesAction(meeting.id, transcript);
+                        if (res.error) {
+                          flash(undefined, res.error);
+                          return;
+                        }
+                        if (res.liveNotes) setLiveNotes(res.liveNotes);
+                        if (res.proposal) {
+                          setProposal(res.proposal);
+                          setConfirmDrafts(draftsFromProposal(res.proposal));
+                          setParsed(true);
+                          if (res.proposal.items[0]) setActiveItemId(res.proposal.items[0].itemId);
+                        }
+                        flash(matchMethodFlash(res.matchMethod));
+                        router.refresh();
+                      })
+                    }
+                    className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+                  >
+                    {parsed ? "重新解析并拆分" : "解析并拆分"}
+                  </button>
+                  {parsed ? (
+                    <span className="text-[11px] text-emerald-700">已拆分 · 请在上方两栏确认各伙伴</span>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <textarea
+                value={liveNotes}
+                readOnly
+                rows={12}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-slate-50 text-slate-700"
+              />
+            )}
+          </div>
 
-          {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (
+          {phase === "post" && parsed ? (
             <>
+              {proposal?.unassignedText ? (
+                <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
+                  <div className="font-medium mb-1">未归属片段（开场或未匹配内容）</div>
+                  {proposal.unassignedText.slice(0, 2000)}
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                <button
-                  type="button"
-                  disabled={busy || !matchReady}
-                  onClick={() =>
-                    run(async () => {
-                      const res = await runMeetingSplitAction(meeting.id);
-                      if (res.error) {
-                        flash(undefined, res.error);
-                        return;
-                      }
-                      if (res.proposal) {
-                        setProposal(res.proposal);
-                        const drafts: typeof confirmDrafts = {};
-                        for (const row of res.proposal.items) {
-                          drafts[row.itemId] = {
-                            coreNotes: row.coreNotes,
-                            businessRecordTitle: row.businessRecordTitle,
-                            businessRecordContent: row.businessRecordContent,
-                            skipBusinessRecord: !row.segmentText.trim(),
-                            todos: row.todos.map((t) => ({
-                              id: undefined,
-                              title: t.title,
-                              detail: t.detail ?? "",
-                              dueDate: t.dueDate ?? "",
-                              include: true,
-                            })),
-                          };
-                        }
-                        for (const item of meeting.items) {
-                          if (!drafts[item.id] && item.todoDrafts.length) {
-                            drafts[item.id] = {
-                              coreNotes: item.coreNotes ?? "",
-                              businessRecordTitle: `${item.partnerName} 过伙伴讨论`,
-                              businessRecordContent: item.coreNotes ?? "",
-                              skipBusinessRecord: false,
-                              todos: item.todoDrafts.map((t) => ({
-                                id: t.id,
-                                title: t.title,
-                                detail: t.detail ?? "",
-                                dueDate: t.dueDate?.slice(0, 10) ?? "",
-                                include: !t.confirmed,
-                              })),
-                            };
-                          } else if (drafts[item.id] && item.todoDrafts.length) {
-                            drafts[item.id]!.todos = item.todoDrafts.map((t, i) => ({
-                              id: t.id,
-                              title: drafts[item.id]!.todos[i]?.title || t.title,
-                              detail: drafts[item.id]!.todos[i]?.detail || t.detail || "",
-                              dueDate: drafts[item.id]!.todos[i]?.dueDate || t.dueDate?.slice(0, 10) || "",
-                              include: !t.confirmed,
-                            }));
-                          }
-                        }
-                        setConfirmDrafts(drafts);
-                        flash("AI 拆分完成，请在上方两栏逐个确认摘要与待办");
-                      }
-                    })
-                  }
-                  className="rounded-lg bg-violet-700 text-white px-3 py-1.5 text-xs hover:bg-violet-800 disabled:opacity-40"
-                >
-                  2. AI 拆分讨论
-                </button>
                 <button
                   type="button"
                   disabled={busy || !Object.keys(confirmDrafts).length}
                   onClick={() =>
                     run(async () => {
-                      const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(([itemId, d]) => ({
-                        itemId,
-                        coreNotes: d.coreNotes,
-                        businessRecordTitle: d.businessRecordTitle,
-                        businessRecordContent: d.businessRecordContent,
-                        skipBusinessRecord: d.skipBusinessRecord,
-                        todos: d.todos.map((t) => ({
-                          id: t.id,
-                          title: t.title,
-                          detail: t.detail,
-                          dueDate: t.dueDate || null,
-                          include: t.include,
-                        })),
-                      }));
+                      const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
+                        ([itemId, d]) => ({
+                          itemId,
+                          coreNotes: d.coreNotes,
+                          businessRecordTitle: d.businessRecordTitle,
+                          businessRecordContent: d.skipBusinessRecord
+                            ? d.coreNotes
+                            : d.businessRecordContent || d.coreNotes,
+                          skipBusinessRecord: d.skipBusinessRecord,
+                          todos: d.todos.map((t) => ({
+                            id: t.id,
+                            title: t.title,
+                            detail: t.detail,
+                            dueDate: t.dueDate || null,
+                            include: t.include,
+                          })),
+                        }),
+                      );
                       const res = await confirmMeetingItemsAction(meeting.id, items);
                       if (res.error) flash(undefined, res.error);
                       else {
@@ -798,7 +708,8 @@ export function MeetingWorkspace({
                                 businessRecordTitle: d.businessRecordTitle,
                                 businessRecordContent: d.businessRecordContent,
                                 skipBusinessRecord: d.skipBusinessRecord,
-                                wroteBusinessRecord: !d.skipBusinessRecord && !!d.businessRecordTitle.trim(),
+                                wroteBusinessRecord:
+                                  !d.skipBusinessRecord && !!d.businessRecordTitle.trim(),
                                 todos,
                               },
                             };
@@ -807,19 +718,13 @@ export function MeetingWorkspace({
                       }
                     })
                   }
-                  className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs hover:bg-emerald-800 disabled:opacity-40"
+                  className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm hover:bg-emerald-800 disabled:opacity-40"
                 >
-                  确认写入商务记录与待办
+                  确认全部入库
                 </button>
               </div>
-          {proposal?.unassignedText ? (
-            <div className="rounded-lg bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-900 whitespace-pre-wrap">
-              <div className="font-medium mb-1">未归属片段（请检查会中是否按讨论顺序打标后重新拆分）</div>
-              {proposal.unassignedText.slice(0, 2000)}
-            </div>
-          ) : null}
             </>
-          )}
+          ) : null}
         </section>
       )}
     </div>
@@ -1214,64 +1119,6 @@ function LiveAgendaPanel({
   );
 }
 
-function MatchEditorPanel({
-  items,
-  matchDrafts,
-  unassignedDraft,
-  onChangePartner,
-  onChangeUnassigned,
-  onSave,
-  busy,
-}: {
-  items: ReviewItemClient[];
-  matchDrafts: Record<string, string>;
-  unassignedDraft: string;
-  onChangePartner: (partnerId: string, text: string) => void;
-  onChangeUnassigned: (text: string) => void;
-  onSave: () => void;
-  busy: boolean;
-}) {
-  return (
-    <div className="space-y-3 border-t border-slate-100 pt-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-slate-700">2. 核对 / 调整各伙伴匹配内容</p>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onSave}
-          className="rounded-lg border border-slate-200 px-3 py-1 text-xs hover:bg-slate-50 disabled:opacity-40"
-        >
-          保存匹配
-        </button>
-      </div>
-      {unassignedDraft.trim() || items.every((it) => !matchDrafts[it.partnerId]?.trim()) ? (
-        <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-1">
-          <p className="text-xs font-medium text-amber-900">未归属 / 开场</p>
-          <textarea
-            value={unassignedDraft}
-            onChange={(e) => onChangeUnassigned(e.target.value)}
-            rows={3}
-            className="w-full rounded border border-amber-100 px-2 py-1.5 text-xs font-mono bg-white"
-            placeholder="打第一个伙伴之前的纪要内容…"
-          />
-        </div>
-      ) : null}
-      {items.map((it) => (
-        <div key={it.id} className="rounded-lg border border-slate-200 p-3 space-y-1">
-          <p className="text-xs font-semibold text-slate-800">{it.partnerName}</p>
-          <textarea
-            value={matchDrafts[it.partnerId] ?? ""}
-            onChange={(e) => onChangePartner(it.partnerId, e.target.value)}
-            rows={5}
-            className="w-full rounded border border-slate-100 px-2 py-1.5 text-xs font-mono leading-relaxed"
-            placeholder="自动匹配的内容会出现在这里，可手动增删…"
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
 const CATEGORY_LABEL: Record<string, string> = {
   VISIT: "拜访",
   TRAINING: "培训",
@@ -1517,7 +1364,7 @@ function ConfirmedHistoryPanel({ item, part }: { item: ReviewItemClient; part: "
     return (
       <div className="space-y-4 text-sm">
         <div>
-          <div className="text-xs font-medium text-slate-500 mb-1">核心讨论</div>
+          <div className="text-xs font-medium text-slate-500 mb-1">进展总结</div>
           <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
             {snap.coreNotes.trim() || "（无）"}
           </p>
@@ -1620,11 +1467,11 @@ function PostConfirmPanel({
 
   if (part === "right") {
     return (
-      <div className="border-t border-slate-100 pt-3 space-y-2" onFocus={ensure}>
-        <div className="text-xs font-medium text-slate-500">会后确认 · 待办</div>
+      <div className="space-y-2" onFocus={ensure}>
+        <div className="text-xs font-medium text-slate-700">后续待办 · 确认修改</div>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">待办（可改/删/加）</span>
+            <span className="text-[11px] text-slate-500">勾选纳入 · 可改/删/加</span>
             <button
               type="button"
               className="text-[11px] text-sky-700"
@@ -1690,60 +1537,57 @@ function PostConfirmPanel({
   }
 
   return (
-    <div className="border-t border-slate-100 pt-3 space-y-2" onFocus={ensure}>
-      <div className="text-xs font-medium text-slate-500">会后确认 · 摘要与记录</div>
+    <div className="space-y-2" onFocus={ensure}>
+      <div className="text-xs font-medium text-slate-700">近两周进展总结 · 确认修改</div>
       {proposalItem ? (
-        <div className="rounded-lg border border-violet-100 bg-violet-50/60 px-3 py-2 space-y-1">
-          <div className="text-[11px] font-medium text-violet-900">
-            本段转写摘录
-            <span className="font-normal text-violet-700/80"> · {segmentChars} 字</span>
-          </div>
+        <details className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
+          <summary className="text-[11px] font-medium text-slate-600 cursor-pointer">
+            查看原始匹配片段
+            <span className="font-normal text-slate-400"> · {segmentChars} 字</span>
+          </summary>
           {segmentChars ? (
-            <p className="text-xs text-violet-950/80 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">
+            <p className="mt-2 text-xs text-slate-600 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">
               {segmentPreview}
               {segmentChars > segmentPreview.length ? "…" : ""}
             </p>
           ) : (
-            <p className="text-xs text-amber-800">
-              本段暂无归属内容。若转写落在「未归属」或别的伙伴，请检查会中是否按讨论顺序打标后重新拆分。
+            <p className="mt-2 text-xs text-amber-800">
+              本段暂无归属内容。请检查会中是否按讨论顺序打标，或重新解析纪要。
             </p>
           )}
-        </div>
+        </details>
       ) : null}
       <label className="block space-y-1">
-        <span className="text-[11px] text-slate-400">核心讨论</span>
+        <span className="text-[11px] text-slate-400">进展总结（将写入商务记录）</span>
         <textarea
           value={d.coreNotes}
-          onChange={(e) => onChange({ ...d, coreNotes: e.target.value })}
-          rows={3}
-          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
+          onChange={(e) => {
+            const v = e.target.value;
+            onChange({
+              ...d,
+              coreNotes: v,
+              businessRecordContent: d.skipBusinessRecord ? d.businessRecordContent : v,
+            });
+          }}
+          rows={6}
+          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm leading-relaxed"
+          placeholder="AI 提炼的进展总结，可在此修改…"
         />
       </label>
       <label className="flex items-center gap-2 text-xs text-slate-600">
         <input
           type="checkbox"
           checked={!d.skipBusinessRecord}
-          onChange={(e) => onChange({ ...d, skipBusinessRecord: !e.target.checked })}
+          onChange={(e) =>
+            onChange({
+              ...d,
+              skipBusinessRecord: !e.target.checked,
+              businessRecordContent: e.target.checked ? d.coreNotes : d.businessRecordContent,
+            })
+          }
         />
-        写入商务记录
+        确认后写入商务记录
       </label>
-      {!d.skipBusinessRecord && (
-        <>
-          <input
-            value={d.businessRecordTitle}
-            onChange={(e) => onChange({ ...d, businessRecordTitle: e.target.value })}
-            className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            placeholder="商务记录标题"
-          />
-          <textarea
-            value={d.businessRecordContent}
-            onChange={(e) => onChange({ ...d, businessRecordContent: e.target.value })}
-            rows={4}
-            className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm"
-            placeholder="商务记录正文"
-          />
-        </>
-      )}
     </div>
   );
 }

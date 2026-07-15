@@ -8,6 +8,34 @@ import type { SplitProposal, SplitProposalItem } from "./split-types";
 
 export type { SplitProposal, SplitProposalItem } from "./split-types";
 
+async function compressSegmentText(opts: {
+  partnerName: string;
+  segmentText: string;
+  userId?: string;
+}): Promise<string> {
+  const raw = opts.segmentText.trim();
+  if (!raw) return "";
+  if (raw.length <= 1800) return raw;
+
+  try {
+    const ai = await chatJson<{ compressed?: string }>(
+      `你是商务助理。把过伙伴会议中关于某伙伴的长纪要压缩为要点列表（保留事实、数字、人名、日期；去掉重复与寒暄）。输出 JSON：{ compressed: string }`,
+      `伙伴：${opts.partnerName}\n\n原文（${raw.length} 字）：\n${raw.slice(0, 24000)}`,
+      {
+        feature: "partner_review_split",
+        userId: opts.userId,
+        scene: "default",
+        taskTier: "fast",
+        temperature: 0.1,
+      },
+    );
+    const compressed = String(ai.compressed ?? "").trim();
+    return compressed || raw.slice(0, 1800);
+  } catch {
+    return raw.slice(0, 1800);
+  }
+}
+
 async function summarizeSegment(opts: {
   partnerName: string;
   segmentText: string;
@@ -27,20 +55,19 @@ async function summarizeSegment(opts: {
     };
   }
 
+  const compressed = await compressSegmentText(opts);
+
   try {
     const ai = await chatJson<{
-      coreNotes?: string;
-      businessRecordTitle?: string;
-      businessRecordContent?: string;
+      progressSummary?: string;
       todos?: { title?: string; detail?: string; dueDate?: string | null }[];
     }>(
-      `你是商务助理。根据「过伙伴」会议中关于某个伙伴的讨论片段，整理：
-1. coreNotes：核心讨论内容（200字内）
-2. businessRecordTitle：商务记录标题
-3. businessRecordContent：可写入商务记录的正文（Markdown 短文）
-4. todos：抽出的待办数组 {title, detail?, dueDate?}，dueDate 用 YYYY-MM-DD 或 null
-只输出 JSON。不要编造片段中未提及的事实。`,
-      `伙伴：${opts.partnerName}\n\n讨论片段：\n${opts.segmentText.slice(0, 12000)}`,
+      `你是商务助理。过伙伴会议已按议程顺序把纪要片段归属到某伙伴。请从讨论片段中提炼：
+1. progressSummary：该伙伴本次会议讨论的「近两周进展与关键结论」（200-400字，适合写入商务记录；只写片段中提及的内容，不要编造）
+2. todos：明确后续待办数组 {title, detail?, dueDate?}，dueDate 用 YYYY-MM-DD 或 null
+
+只输出 JSON：{ progressSummary, todos }`,
+      `伙伴：${opts.partnerName}\n\n讨论片段：\n${compressed.slice(0, 12000)}`,
       {
         feature: "partner_review_split",
         userId: opts.userId,
@@ -50,10 +77,11 @@ async function summarizeSegment(opts: {
       },
     );
 
+    const progressSummary = String(ai.progressSummary ?? "").trim();
     return {
-      coreNotes: String(ai.coreNotes ?? "").trim(),
-      businessRecordTitle: String(ai.businessRecordTitle ?? "").trim() || `${opts.partnerName} 过伙伴讨论`,
-      businessRecordContent: String(ai.businessRecordContent ?? "").trim() || opts.segmentText.slice(0, 2000),
+      coreNotes: progressSummary,
+      businessRecordTitle: `${opts.partnerName} 过伙伴讨论`,
+      businessRecordContent: progressSummary || compressed.slice(0, 2000),
       todos: (ai.todos ?? [])
         .map((t) => ({
           title: String(t.title ?? "").trim(),
@@ -64,9 +92,9 @@ async function summarizeSegment(opts: {
     };
   } catch {
     return {
-      coreNotes: opts.segmentText.slice(0, 400),
+      coreNotes: compressed.slice(0, 400),
       businessRecordTitle: `${opts.partnerName} 过伙伴讨论`,
-      businessRecordContent: opts.segmentText.slice(0, 2000),
+      businessRecordContent: compressed.slice(0, 2000),
       todos: [],
     };
   }
