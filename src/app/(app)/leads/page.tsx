@@ -12,6 +12,7 @@ import {
   resolveSalesmanFilter,
 } from "@/lib/leads-query";
 import { compareKpiDeadline, isKpiDeadlineUrgent } from "@/lib/leads";
+import { InstantSearchInput } from "@/components/instant-search-input";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -82,9 +83,7 @@ export default async function LeadsPage({
 
         <form className="flex flex-wrap gap-2 mb-4" method="get">
           {view === "nurture" && <input type="hidden" name="view" value="nurture" />}
-          <input
-            name="q"
-            defaultValue={sp.q}
+          <InstantSearchInput
             placeholder={l.searchPlaceholder}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-56"
           />

@@ -15,6 +15,7 @@ import {
   partnersRelatedOpportunityWhere,
 } from "@/lib/partner-opportunities";
 import { nameContainsWhere } from "@/lib/name-search";
+import { InstantSearchInput } from "@/components/instant-search-input";
 
 function lastActivityAt(p: { events: { createdAt: Date }[]; updatedAt: Date }) {
   return p.events.length ? new Date(p.events[0].createdAt) : new Date(p.updatedAt);
@@ -181,9 +182,7 @@ export default async function PartnersPage({
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
           {filterStage ? <input type="hidden" name="stage" value={filterStage} /> : null}
-          <input
-            name="q"
-            defaultValue={sp.q}
+          <InstantSearchInput
             placeholder={m.partners.searchPlaceholder}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44"
           />

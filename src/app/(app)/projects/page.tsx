@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddProjectForm } from "./add-project-form";
+import { InstantSearchInput } from "@/components/instant-search-input";
+import { nameContainsWhere } from "@/lib/name-search";
 
 function statusTone(status: string): "green" | "indigo" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -29,11 +31,12 @@ export default async function ProjectsPage({
   const c = m.customers;
   const sp = await searchParams;
   const statusFilter = sp.status === undefined ? "ACTIVE" : sp.status;
+  const nameFilter = nameContainsWhere(sp.q);
 
   const [projects, customers, partners, users] = await Promise.all([
     db.project.findMany({
       where: {
-        ...(sp.q ? { name: { contains: sp.q } } : {}),
+        ...(nameFilter ? { name: nameFilter } : {}),
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(sp.phase ? { phase: sp.phase } : {}),
         ...(sp.customer ? { customerId: sp.customer } : {}),
@@ -83,9 +86,7 @@ export default async function ProjectsPage({
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          <input
-            name="q"
-            defaultValue={sp.q}
+          <InstantSearchInput
             placeholder={p.searchPlaceholder}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-48"
           />

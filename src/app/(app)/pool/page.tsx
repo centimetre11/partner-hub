@@ -11,6 +11,7 @@ import { AddPartnerForm } from "./add-partner-form";
 import { DeletePartnerButton } from "./delete-partner-button";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import { nameContainsWhere } from "@/lib/name-search";
+import { InstantSearchInput } from "@/components/instant-search-input";
 
 export default async function PoolPage({
   searchParams,
@@ -126,9 +127,7 @@ export default async function PoolPage({
 
         <form className="flex flex-wrap gap-2 mb-4" method="get">
           <input type="hidden" name="view" value={view} />
-          <input
-            name="q"
-            defaultValue={sp.q}
+          <InstantSearchInput
             placeholder={m.pool.searchPlaceholder}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-44 focus:outline-none focus:ring-2 focus:ring-slate-400"
           />

@@ -18,6 +18,8 @@ import {
   opportunityStatusLabel,
   opportunityStatusTone,
 } from "@/lib/opportunity-status";
+import { InstantSearchInput } from "@/components/instant-search-input";
+import { nameContainsWhere } from "@/lib/name-search";
 
 export default async function OpportunitiesPage({
   searchParams,
@@ -42,6 +44,7 @@ export default async function OpportunitiesPage({
     sp.process && isProcessTagCode(sp.process.toUpperCase())
       ? (sp.process.toUpperCase() as (typeof PROCESS_TAG_CODES)[number])
       : "";
+  const nameFilter = nameContainsWhere(sp.q);
 
   const statusWhere =
     statusFilter === "open"
@@ -55,7 +58,7 @@ export default async function OpportunitiesPage({
   const [rawOpportunities, customers, partners] = await Promise.all([
     db.opportunity.findMany({
       where: {
-        ...(sp.q ? { name: { contains: sp.q } } : {}),
+        ...(nameFilter ? { name: nameFilter } : {}),
         ...statusWhere,
         ...(sp.customer ? { customerId: sp.customer } : {}),
         ...(sp.partner ? { partnerId: sp.partner } : {}),
@@ -88,9 +91,7 @@ export default async function OpportunitiesPage({
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          <input
-            name="q"
-            defaultValue={sp.q}
+          <InstantSearchInput
             placeholder={o.searchPlaceholder}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-48"
           />

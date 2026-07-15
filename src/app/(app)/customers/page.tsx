@@ -8,6 +8,7 @@ import { AddCustomerForm } from "./add-customer-form";
 import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { nameContainsWhere } from "@/lib/name-search";
+import { InstantSearchInput } from "@/components/instant-search-input";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -74,7 +75,7 @@ export default async function CustomersPage({
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          <input name="q" defaultValue={sp.q} placeholder={c.searchPlaceholder} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-48" />
+          <InstantSearchInput placeholder={c.searchPlaceholder} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-48" />
           <select name="status" defaultValue={sp.status ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{c.allStatuses}</option>
             <option value="ACTIVE">{c.statusActive}</option>

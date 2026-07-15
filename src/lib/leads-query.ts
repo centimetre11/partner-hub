@@ -1,6 +1,7 @@
 import type { LeadView } from "./leads";
 import { leadViewWhere } from "./leads";
 import { db } from "./db";
+import { nameContainsWhere } from "./name-search";
 
 export type LeadsListParams = {
   q?: string;
@@ -32,14 +33,15 @@ export function buildLeadsWhere(
 
   const and: Record<string, unknown>[] = [leadViewWhere(view)];
 
-  if (sp.q) {
+  const qFilter = nameContainsWhere(sp.q);
+  if (qFilter) {
     and.push({
       OR: [
-        { name: { contains: sp.q } },
-        { phone: { contains: sp.q } },
-        { contName: { contains: sp.q } },
-        { contEmail: { contains: sp.q } },
-        { salesman: { contains: sp.q } },
+        { name: qFilter },
+        { phone: qFilter },
+        { contName: qFilter },
+        { contEmail: qFilter },
+        { salesman: qFilter },
       ],
     });
   }
