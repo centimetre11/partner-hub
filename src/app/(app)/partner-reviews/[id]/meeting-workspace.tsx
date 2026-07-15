@@ -25,21 +25,13 @@ import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
 import { isDingTalkClient, startDingTalkA1Recording } from "@/lib/dingtalk/client-record";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
-import { MeetingLocalRecorder } from "@/components/partner-review/meeting-local-recorder";
-import { appendLiveChunkToNotes } from "@/lib/partner-review/markers";
 
 export type { MeetingClient, ReviewItemClient };
 
 const RAPID_CLICK_WINDOW_MS = 12_000;
 const RAPID_CLICK_WARN_COUNT = 3;
 
-export function MeetingWorkspace({
-  meeting: initial,
-  asrOptions,
-}: {
-  meeting: MeetingClient;
-  asrOptions?: { realtimeEnabled?: boolean; chunkSeconds?: number };
-}) {
+export function MeetingWorkspace({ meeting: initial }: { meeting: MeetingClient }) {
   const router = useRouter();
   const [meeting, setMeeting] = useState(initial);
   const [activeItemId, setActiveItemId] = useState<string | null>(initial.items[0]?.id ?? null);
@@ -61,7 +53,6 @@ export function MeetingWorkspace({
   });
   const recentDiscussClicks = useRef<{ itemId: string; at: number }[]>([]);
   const liveNotesRef = useRef(liveNotes);
-  const saveNotesTimerRef = useRef<number | null>(null);
   useEffect(() => {
     liveNotesRef.current = liveNotes;
   }, [liveNotes]);
@@ -83,26 +74,12 @@ export function MeetingWorkspace({
     spaceId: initial.dingtalkSpaceId ?? "",
     fileId: initial.dingtalkFileId ?? "",
   });
-  const [showDingTalk, setShowDingTalk] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
 
   useEffect(() => {
-    // 录音进行中不要用服务端 props 覆盖本地状态（会误触 UI 重置）
-    if (isRecording) {
-      setMeeting((m) => ({
-        ...m,
-        // 仍合并转写文本（近实时服务端写入后 refresh 才有；录音中一般不 refresh）
-        transcriptText: initial.transcriptText ?? m.transcriptText,
-        transcriptStatus: initial.transcriptStatus ?? m.transcriptStatus,
-        recordingBytes: initial.recordingBytes ?? m.recordingBytes,
-      }));
-      if (initial.transcriptText) setTranscript(initial.transcriptText);
-      return;
-    }
     setMeeting(initial);
     setLiveNotes(initial.liveNotes ?? "");
     setTranscript(initial.transcriptText ?? "");
-  }, [initial, isRecording]);
+  }, [initial]);
 
   const activeItem = useMemo(
     () => meeting.items.find((i) => i.id === activeItemId) ?? null,
@@ -136,7 +113,6 @@ export function MeetingWorkspace({
     startTransition(async () => {
       try {
         await fn();
-        // 会中录音时避免 refresh 打断；切伙伴只改本地状态即可
         if (shouldRefresh) router.refresh();
       } catch (e) {
         flash(undefined, e instanceof Error ? e.message : String(e));
@@ -185,31 +161,70 @@ export function MeetingWorkspace({
           </button>
         )}
         {phase === "prep" && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              run(async () => {
-                if (needsPrep) {
-                  const prep = await runMeetingPrepAction(meeting.id);
-                  if (prep.error) {
-                    flash(undefined, prep.error);
+          <>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                run(async () => {
+                  if (needsPrep) {
+                    const prep = await runMeetingPrepAction(meeting.id);
+                    if (prep.error) {
+                      flash(undefined, prep.error);
+                      return;
+                    }
+                  }
+                  const res = await startPartnerReviewMeetingAction(meeting.id);
+                  if (res.error) flash(undefined, res.error);
+                  else {
+                    setMeeting((m) => ({ ...m, status: "LIVE" }));
+                    flash(needsPrep ? "已生成简报并开始开会" : "会议已开始，点左侧伙伴可打标");
+                    router.refresh();
+                  }
+                })
+              }
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
+            >
+              开始开会
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                run(async () => {
+                  if (needsPrep) {
+                    const prep = await runMeetingPrepAction(meeting.id);
+                    if (prep.error) {
+                      flash(undefined, prep.error);
+                      return;
+                    }
+                  }
+                  const res = await startPartnerReviewMeetingAction(meeting.id);
+                  if (res.error) {
+                    flash(undefined, res.error);
                     return;
                   }
-                }
-                const res = await startPartnerReviewMeetingAction(meeting.id);
-                if (res.error) flash(undefined, res.error);
-                else {
                   setMeeting((m) => ({ ...m, status: "LIVE" }));
-                  flash("会议已开始（未录音）。讨论谁就点左侧谁；也可点「开始录音并开会」。");
+                  try {
+                    const rec = await startDingTalkA1Recording({ meetingId: meeting.id });
+                    await markDingTalkRecordingStartedAction(meeting.id, { fid: rec.fid });
+                    flash("已开始开会，并已启动钉钉 A1 录音");
+                  } catch (e) {
+                    const tip = e instanceof Error ? e.message : String(e);
+                    flash(
+                      isDingTalkClient()
+                        ? `会议已开始，但自动录音失败：${tip}`
+                        : `会议已开始。${tip}；也可手动按 A1 开录，结束后回调会自动关联。`,
+                    );
+                  }
                   router.refresh();
-                }
-              })
-            }
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
-          >
-            仅开始开会（不录音）
-          </button>
+                })
+              }
+              className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
+            >
+              录音并开始开会
+            </button>
+          </>
         )}
         {phase === "live" && (
           <>
@@ -222,6 +237,35 @@ export function MeetingWorkspace({
                 尚未打标 · 讨论谁就点左侧谁
               </span>
             )}
+            {!meeting.dingtalkFileId && !meeting.dingtalkRecordId ? (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() =>
+                  run(async () => {
+                    try {
+                      const rec = await startDingTalkA1Recording({ meetingId: meeting.id });
+                      await markDingTalkRecordingStartedAction(meeting.id, { fid: rec.fid });
+                      flash("已启动钉钉 A1 录音");
+                      router.refresh();
+                    } catch (e) {
+                      const tip = e instanceof Error ? e.message : String(e);
+                      flash(
+                        undefined,
+                        isDingTalkClient() ? tip : `请在钉钉客户端内打开本页。${tip}`,
+                      );
+                    }
+                  })
+                }
+                className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
+              >
+                启动 A1 录音
+              </button>
+            ) : (
+              <span className="rounded-lg bg-rose-50 text-rose-700 border border-rose-100 px-3 py-1.5 text-xs">
+                A1 录音已关联
+              </span>
+            )}
             <button
               type="button"
               disabled={pending}
@@ -232,11 +276,7 @@ export function MeetingWorkspace({
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "PROCESSING", liveNotes }));
-                    if (meeting.recordingPath || meeting.transcriptStatus === "uploaded") {
-                      flash("会议已结束。可点「转写录音」，再 AI 拆分");
-                    } else {
-                      flash("会议已结束。若已录音请先上传并转写；也可粘贴转写后拆分");
-                    }
+                    flash("会议已结束。可拉取钉钉转写或粘贴纪要后 AI 拆分");
                   }
                 })
               }
@@ -261,53 +301,7 @@ export function MeetingWorkspace({
             保存记录本
           </button>
         )}
-        {phase !== "done" ? (
-          <button
-            type="button"
-            className="rounded-lg border border-dashed border-slate-200 px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-50"
-            onClick={() => setShowDingTalk((v) => !v)}
-          >
-            {showDingTalk ? "收起钉钉 A1（备用）" : "钉钉 A1（备用）"}
-          </button>
-        ) : null}
       </div>
-
-      {showDingTalk && phase !== "done" ? (
-        <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() =>
-              run(async () => {
-                if (meeting.status !== "LIVE") {
-                  const res = await startPartnerReviewMeetingAction(meeting.id);
-                  if (res.error) {
-                    flash(undefined, res.error);
-                    return;
-                  }
-                  setMeeting((m) => ({ ...m, status: "LIVE" }));
-                }
-                try {
-                  const rec = await startDingTalkA1Recording({ meetingId: meeting.id });
-                  await markDingTalkRecordingStartedAction(meeting.id, { fid: rec.fid });
-                  flash("已启动钉钉 A1 录音（备用路径）");
-                } catch (e) {
-                  const tip = e instanceof Error ? e.message : String(e);
-                  flash(
-                    undefined,
-                    isDingTalkClient() ? tip : `请在钉钉客户端内打开本页。${tip}`,
-                  );
-                }
-                router.refresh();
-              })
-            }
-            className="rounded-lg border border-rose-200 bg-white text-rose-800 px-3 py-1.5 text-xs hover:bg-rose-50"
-          >
-            钉钉内启动 A1
-          </button>
-          <span className="text-[11px] text-slate-500">主路径已改为本页麦克风 + 自托管 Whisper 转写</span>
-        </div>
-      ) : null}
 
       {(message || error) && (
         <div
@@ -321,48 +315,12 @@ export function MeetingWorkspace({
         </div>
       )}
 
-      {phase === "prep" || phase === "live" || phase === "post" ? (
-        <MeetingLocalRecorder
-          meetingId={meeting.id}
-          transcriptStatus={meeting.transcriptStatus}
-          recordingBytes={meeting.recordingBytes}
-          transcriptError={meeting.transcriptError}
-          realtimeEnabled={asrOptions?.realtimeEnabled !== false}
-          chunkSeconds={asrOptions?.chunkSeconds ?? 12}
-          disabled={pending}
-          onFlash={flash}
-          onRecordingChange={setIsRecording}
-          onMeetingLive={() => setMeeting((m) => ({ ...m, status: "LIVE", transcriptStatus: "recording" }))}
-          onLiveTranscript={(chunkText) => {
-            setLiveNotes((prev) => {
-              const next = appendLiveChunkToNotes(prev, chunkText);
-              liveNotesRef.current = next;
-              if (saveNotesTimerRef.current) window.clearTimeout(saveNotesTimerRef.current);
-              saveNotesTimerRef.current = window.setTimeout(() => {
-                void saveLiveNotesAction(meeting.id, liveNotesRef.current).catch(() => undefined);
-              }, 800);
-              return next;
-            });
-            setMeeting((m) => ({ ...m, transcriptStatus: "recording" }));
-          }}
-          onUploaded={() => {
-            if (saveNotesTimerRef.current) {
-              window.clearTimeout(saveNotesTimerRef.current);
-              saveNotesTimerRef.current = null;
-            }
-            void saveLiveNotesAction(meeting.id, liveNotesRef.current)
-              .catch(() => undefined)
-              .finally(() => router.refresh());
-          }}
-        />
-      ) : null}
-
-      {phase === "prep" && !isRecording ? (
+      {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：开会准备 → 上方「开始近实时录音」→ 讨论谁点左侧谁 → 文字写入记录本 → 停止并上传 →
-          AI 拆分。热词在{" "}
+          建议：开会准备 →「录音并开始开会」（钉钉 A1，需在钉钉内打开）→ 讨论谁点左侧谁打标 → 结束会议 →
+          拉取转写 → AI 拆分。钉钉配置见{" "}
           <Link href="/settings#integrations" className="text-sky-700 hover:underline">
-            团队设置 · 语音识别
+            团队设置 · 钉钉
           </Link>
           。
         </p>
@@ -387,7 +345,6 @@ export function MeetingWorkspace({
                     // 仅正式开会后点伙伴才打标；准备阶段只切换简报，避免误进 LIVE 导致看不到「开会准备」
                     if (phase === "live") {
                       noteRapidDiscussClick(item.id);
-                      // 录音中切伙伴：不要 router.refresh，否则会重挂组件掐断麦克风
                       run(
                         async () => {
                           const res = await discussPartnerAction(
@@ -417,7 +374,6 @@ export function MeetingWorkspace({
                             ),
                           }));
                         },
-                        { refresh: !isRecording },
                       );
                     }
                   }}
@@ -510,19 +466,16 @@ export function MeetingWorkspace({
               value={liveNotes}
               onChange={(e) => setLiveNotes(e.target.value)}
               readOnly={phase === "done"}
-              rows={isRecording || phase === "live" ? 18 : 12}
+              rows={phase === "live" ? 18 : 12}
               placeholder={
-                isRecording || phase === "live"
-                  ? "点左侧伙伴会插入标记；近实时识别的文字会自动追加在当前伙伴下方。也可手改。"
+                phase === "live"
+                  ? "点左侧伙伴会插入标记；可手写纪要。转写请在会后拉取钉钉听记。"
                   : "讨论谁就点左侧谁：会插入 [时间] 开始过 … 与 <<<PARTNER:id|name>>> 标记；也可手写纪要。"
               }
               className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed ${
                 phase === "done" ? "bg-slate-50 text-slate-700" : ""
               }`}
             />
-            {isRecording ? (
-              <p className="mt-1 text-[11px] text-rose-700">录音中 · 识别文字写入上方记录本</p>
-            ) : null}
           </div>
 
           {(phase === "post" || meeting.status === "PROCESSING") && phase !== "done" && (

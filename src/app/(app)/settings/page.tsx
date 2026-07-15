@@ -30,8 +30,6 @@ import { CollapsibleCard } from "./collapsible-card";
 import { getActivityLogStats } from "@/lib/activity-log";
 import { DingTalkSetup } from "./dingtalk-setup";
 import { getDingTalkConfigForClient } from "@/lib/dingtalk/config";
-import { AsrSetup } from "./asr-setup";
-import { getAsrConfigForClient } from "@/lib/asr/lexicon";
 import { WeeklyReportSetup } from "./weekly-report-setup";
 import { getWeeklyReportStatusAction } from "@/lib/weekly-report-actions";
 
@@ -52,7 +50,7 @@ export default async function SettingsPage() {
   since.setDate(since.getDate() - 13);
   const sinceDay = since.toISOString().slice(0, 10);
 
-  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, dingtalkConfig, asrConfig, salesmen, extraRecorders, feedbackItems, activityStats, sceneModelRows] = await Promise.all([
+  const [users, aiApis, dailyUsage, recentUsage, systemKms, systemKnowhow, crmStats, ammoConfig, emailConfig, dingtalkConfig, salesmen, extraRecorders, feedbackItems, activityStats, sceneModelRows] = await Promise.all([
     db.user.findMany({ orderBy: { createdAt: "asc" } }),
     db.aiApiConfig.findMany({ orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }] }),
     db.aiDailyTokenUsage.findMany({
@@ -71,7 +69,6 @@ export default async function SettingsPage() {
     getAmmoConfigForClient(),
     getEmailConfigForClient(),
     getDingTalkConfigForClient(),
-    getAsrConfigForClient(),
     getCrmSalesmenAction(),
     getCrmExtraRecordersAction(),
     db.feedbackSubmission.findMany({
@@ -371,10 +368,6 @@ export default async function SettingsPage() {
           </Card>
 
           <WecomChatsCard />
-
-          <Card title="语音识别 · 过伙伴录音" className="lg:col-span-2">
-            <AsrSetup config={asrConfig} />
-          </Card>
 
           <Card title={m.settings.dingtalkTitle} className="lg:col-span-2">
             <DingTalkSetup config={dingtalkConfig} />

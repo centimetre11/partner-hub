@@ -4,7 +4,6 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader } from "@/components/ui";
 import { toMeetingClient } from "@/lib/partner-review/meeting-client";
-import { getAsrConfigForClient } from "@/lib/asr/lexicon";
 import { DeleteMeetingButton } from "../delete-meeting-button";
 import { MeetingWorkspace } from "./meeting-workspace";
 
@@ -38,7 +37,6 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
 
   const st = STATUS_LABEL[meeting.status] ?? STATUS_LABEL.DRAFT!;
   const client = toMeetingClient(meeting);
-  const asrConfig = await getAsrConfigForClient();
 
   return (
     <div className="pb-16">
@@ -70,19 +68,12 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
           </Link>
           <span className="mx-2">·</span>
           <Link href="/settings#integrations" className="hover:text-slate-800">
-            识别 / 钉钉配置
+            钉钉 / 集成配置
           </Link>
         </div>
 
-        {/* key 仅用会议 id：切伙伴/开录改 status 时切勿整页重挂，否则会掐断 MediaRecorder */}
-        <MeetingWorkspace
-          key={meeting.id}
-          meeting={client}
-          asrOptions={{
-            realtimeEnabled: asrConfig.realtimeEnabled,
-            chunkSeconds: asrConfig.chunkSeconds,
-          }}
-        />
+        {/* key 仅用会议 id：切伙伴/改 status 时切勿整页重挂 */}
+        <MeetingWorkspace key={meeting.id} meeting={client} />
       </div>
     </div>
   );
