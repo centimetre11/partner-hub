@@ -549,7 +549,7 @@ export function MeetingWorkspace({
 
       {(message || error) && (
         <div
-          className={`rounded-lg border px-3 py-2 text-sm ${
+          className={`sticky top-0 z-30 rounded-lg border px-3 py-2 text-sm shadow-sm ${
             error
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-emerald-200 bg-emerald-50 text-emerald-800"
@@ -644,6 +644,8 @@ export function MeetingWorkspace({
           unassignedDraft={unassignedDraft}
           busy={busy}
           workStage={workStage}
+          statusMessage={error || message}
+          statusIsError={!!error}
           onChangePartner={(partnerId, text) =>
             setMatchDrafts((prev) => ({ ...prev, [partnerId]: text }))
           }
@@ -723,19 +725,20 @@ export function MeetingWorkspace({
           onSave={() =>
             run(async () => {
               const notes = buildLiveNotesFromSegments(
-                segmentsFromDrafts(meeting.items, matchDrafts, unassignedDraft),
+                segmentsFromDrafts(orderedForTimeline, matchDrafts, unassignedDraft),
               );
               await saveMatchedNotesAction(meeting.id, notes);
               setLiveNotes(notes);
               flash("归属已保存（尚未提炼）");
-            })
+            }, { refresh: false })
           }
           onConfirmExtract={() =>
             run(async () => {
               setWorkStage("extracting");
+              flash("正在提炼各伙伴进展与待办，请稍候（伙伴多时约 1–2 分钟）…");
               try {
                 const notes = buildLiveNotesFromSegments(
-                  segmentsFromDrafts(meeting.items, matchDrafts, unassignedDraft),
+                  segmentsFromDrafts(orderedForTimeline, matchDrafts, unassignedDraft),
                 );
                 await saveMatchedNotesAction(meeting.id, notes);
                 setLiveNotes(notes);
@@ -746,29 +749,65 @@ export function MeetingWorkspace({
                   return;
                 }
                 if (res.proposal) {
-                  setProposal(res.proposal);
-                  setConfirmDrafts(draftsFromProposal(res.proposal));
+                  const proposal = res.proposal;
+                  setProposal(proposal);
+                  setConfirmDrafts(draftsFromProposal(proposal));
+                  // 立即反映已写入的草案，避免 refresh 前看起来「没生效」
+                  setMeeting((m) => ({
+                    ...m,
+                    status: "PROCESSING",
+                    items: m.items.map((it) => {
+                      const row = proposal.items.find((p) => p.itemId === it.id);
+                      if (!row) return it;
+                      return {
+                        ...it,
+                        coreNotes: row.coreNotes || null,
+                        todoDrafts: row.todos.map((t, i) => ({
+                          id: `local-${it.id}-${i}`,
+                          title: t.title,
+                          detail: t.detail ?? null,
+                          dueDate: t.dueDate ?? null,
+                          confirmed: false,
+                        })),
+                      };
+                    }),
+                  }));
                   lockAssignStep.current = false;
                   setPostStep("extract");
                   const first =
-                    res.proposal.items.find((it) => it.coreNotes.trim() || it.todos.length) ??
-                    res.proposal.items[0];
+                    proposal.items.find((it) => it.coreNotes.trim() || it.todos.length) ??
+                    proposal.items[0];
                   if (first) setActiveItemId(first.itemId);
                 }
                 setWorkStage("done");
-                flash("已提炼进展与待办 · 请在下方两栏逐伙伴确认修改后入库");
+                flash("已写入各伙伴进展与待办草案 · 请在两栏中确认后入库");
+                requestAnimationFrame(() => {
+                  document.getElementById("post-extract-workspace")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                });
                 router.refresh();
               } catch (e) {
                 setWorkStage("idle");
                 flash(undefined, e instanceof Error ? e.message : String(e));
               }
-            })
+            }, { refresh: false })
           }
         />
       ) : null}
 
       {/* 归属确认阶段隐藏三栏，避免干扰 */}
       {phase === "post" && postStep === "assign" ? null : (
+      <div id="post-extract-workspace" className="space-y-3">
+      {phase === "post" && postStep === "extract" ? (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3">
+          <p className="text-sm font-semibold text-violet-950">3. 确认进展与待办</p>
+          <p className="mt-1 text-[11px] text-violet-900/80 leading-relaxed">
+            提炼结果已写入各伙伴草案。左侧选伙伴，中间/右侧改进展与待办，确认无误后在下方入库。
+          </p>
+        </div>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
         {/* Partner list */}
         <aside className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -937,6 +976,7 @@ export function MeetingWorkspace({
             </>
           )}
         </section>
+      </div>
       </div>
       )}
 
@@ -1227,6 +1267,8 @@ function AssignmentTimelinePanel({
   unassignedDraft,
   busy,
   workStage,
+  statusMessage,
+  statusIsError,
   onChangePartner,
   onChangeUnassigned,
   onMoveToPartner,
@@ -1240,6 +1282,8 @@ function AssignmentTimelinePanel({
   unassignedDraft: string;
   busy: boolean;
   workStage: WorkStage;
+  statusMessage?: string | null;
+  statusIsError?: boolean;
   onChangePartner: (partnerId: string, text: string) => void;
   onChangeUnassigned: (text: string) => void;
   onMoveToPartner: (fromPartnerId: string, toPartnerId: string) => void;
@@ -1257,6 +1301,13 @@ function AssignmentTimelinePanel({
   const extracting = busy && workStage === "extracting";
   const [editRaw, setEditRaw] = useState<Record<string, boolean>>({});
   const unassignedTurns = splitTranscriptTurns(unassignedDraft);
+
+  function jumpToPartner(itemId: string) {
+    document.getElementById(`assign-partner-${itemId}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
 
   return (
     <section
@@ -1283,6 +1334,39 @@ function AssignmentTimelinePanel({
           </span>
         )}
       </div>
+
+      <nav
+        className="sticky top-2 z-20 -mx-1 rounded-lg border border-amber-200/80 bg-amber-50/95 px-2 py-2 shadow-sm backdrop-blur"
+        aria-label="快速跳转伙伴"
+      >
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="text-[11px] font-medium text-amber-900">快速跳转</p>
+          <span className="text-[10px] text-amber-800/70">{items.length} 位伙伴</span>
+        </div>
+        <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
+          {items.map((it, idx) => {
+            const hasText = !!(matchDrafts[it.partnerId] ?? "").trim();
+            return (
+              <button
+                key={it.id}
+                type="button"
+                onClick={() => jumpToPartner(it.id)}
+                className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
+                  hasText
+                    ? "border-sky-200 bg-white text-slate-800 hover:bg-sky-50"
+                    : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-white"
+                }`}
+                title={it.partnerName}
+              >
+                <span className="font-semibold text-sky-700">{idx + 1}</span>{" "}
+                {it.partnerName.length > 16
+                  ? `${it.partnerName.slice(0, 14)}…`
+                  : it.partnerName}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1332,7 +1416,11 @@ function AssignmentTimelinePanel({
           const rawKey = it.partnerId;
           const showRaw = !!editRaw[rawKey];
           return (
-            <li key={it.id} className="relative flex gap-3 pb-5 last:pb-0">
+            <li
+              key={it.id}
+              id={`assign-partner-${it.id}`}
+              className="relative flex scroll-mt-28 gap-3 pb-5 last:pb-0"
+            >
               {idx < items.length - 1 ? (
                 <span
                   className="absolute left-[11px] top-7 bottom-0 w-px bg-slate-200"
@@ -1431,24 +1519,38 @@ function AssignmentTimelinePanel({
         })}
       </ol>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-amber-200/80 pt-3">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onConfirmExtract}
-          className="rounded-lg bg-violet-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-violet-800 disabled:opacity-40"
-        >
-          {extracting ? workStageLabel("extracting") : "确认归属无误，开始提炼"}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onSave}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-40"
-        >
-          仅保存归属
-        </button>
-        <span className="text-[11px] text-slate-500">提炼后才会生成进展总结与待办</span>
+      <div className="sticky bottom-0 z-20 -mx-4 -mb-4 mt-2 space-y-2 border-t border-amber-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)] backdrop-blur">
+        {statusMessage ? (
+          <p
+            className={`text-xs ${statusIsError ? "text-red-600" : extracting ? "text-violet-700" : "text-emerald-700"}`}
+          >
+            {extracting ? (
+              <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500 align-middle" />
+            ) : null}
+            {statusMessage}
+          </p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirmExtract}
+            className="rounded-lg bg-violet-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-violet-800 disabled:opacity-40"
+          >
+            {extracting ? workStageLabel("extracting") : "确认归属无误，开始提炼"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onSave}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-40"
+          >
+            仅保存归属
+          </button>
+          <span className="text-[11px] text-slate-500">
+            提炼会写入各伙伴「进展总结 / 待办草案」，再在两栏确认入库
+          </span>
+        </div>
       </div>
     </section>
   );

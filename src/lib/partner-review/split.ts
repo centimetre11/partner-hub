@@ -145,22 +145,33 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
     .filter(Boolean)
     .join("\n\n");
 
-  const items: SplitProposalItem[] = [];
-  for (const item of meeting.items) {
-    const segmentText = mergeSegmentsForPartner(noteSegments, item.partnerId);
-    const summary = await summarizeSegment({
-      partnerName: item.partner.name,
-      segmentText,
-      userId,
-    });
-    items.push({
-      itemId: item.id,
-      partnerId: item.partnerId,
-      partnerName: item.partner.name,
-      segmentText,
-      ...summary,
-    });
+  // 并行提炼（限并发），避免十几个伙伴串行超时导致「点了没生效」
+  const agendaItems = meeting.items;
+  const concurrency = 4;
+  const items: SplitProposalItem[] = new Array(agendaItems.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < agendaItems.length) {
+      const i = cursor++;
+      const item = agendaItems[i]!;
+      const segmentText = mergeSegmentsForPartner(noteSegments, item.partnerId);
+      const summary = await summarizeSegment({
+        partnerName: item.partner.name,
+        segmentText,
+        userId,
+      });
+      items[i] = {
+        itemId: item.id,
+        partnerId: item.partnerId,
+        partnerName: item.partner.name,
+        segmentText,
+        ...summary,
+      };
+    }
   }
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, agendaItems.length) }, () => worker()),
+  );
 
   return { meetingId, items, unassignedText };
 }

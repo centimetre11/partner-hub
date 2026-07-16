@@ -7,6 +7,9 @@ import { toMeetingClient } from "@/lib/partner-review/meeting-client";
 import { DeleteMeetingButton } from "../delete-meeting-button";
 import { MeetingWorkspace } from "./meeting-workspace";
 
+/** 会后提炼会并行调多次 AI，避免默认超时导致「点了没写入」 */
+export const maxDuration = 300;
+
 const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
   DRAFT: { label: "草稿", tone: "zinc" },
   PREP: { label: "已准备", tone: "blue" },
