@@ -49,9 +49,9 @@ function matchMethodFlash(method?: string): string {
     case "summary_sections":
       return "已按「小结」整段对齐讨论顺序 · 请核对切点后提炼";
     case "sequential":
-      return "已按讨论顺序整段切分 · 请用「并入上/下一段」微调切点后提炼";
+      return "已按讨论顺序+next/下一个换话题整段切分 · 请微调切点后提炼";
     case "ai":
-      return "已按讨论顺序整段切分 · 请核对切点后提炼";
+      return "已按讨论顺序+换话题口令整段切分 · 请核对切点后提炼";
     case "name":
       return "名称匹配可能打散段落 · 请按顺序整段核对切点后再提炼";
     case "timeline":

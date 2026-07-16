@@ -256,14 +256,72 @@ function findNameOffset(hay: string, partnerName: string): number {
   const direct = lower.indexOf(name.toLowerCase());
   if (direct >= 0) return direct;
   let best = -1;
-  for (const part of name.split(/[\s,/|]+/).filter((x) => x.length >= 3)) {
+  // 含括号简称：Industrial … (IICS) → 也能匹配文中的 IICS / global com
+  for (const part of name.split(/[\s,/|()]+/).filter((x) => x.length >= 3)) {
     const i = lower.indexOf(part.toLowerCase());
     if (i >= 0 && (best < 0 || i < best)) best = i;
   }
   return best;
 }
 
-/** 按讨论顺序，用伙伴名首次出现作锚点，切成连续整段（不打散） */
+function lineStartAt(text: string, index: number): number {
+  if (index <= 0) return 0;
+  const prev = text.lastIndexOf("\n", index - 1);
+  return prev < 0 ? 0 : prev + 1;
+}
+
+/**
+ * 主持人换话题口令：Okay next / Next is / 接下来 / 下一个 …
+ * 过伙伴会议里这类句子几乎就是下一位伙伴的切点。
+ */
+const TOPIC_TRANSITION_RE =
+  /(?:okay[,.]?\s+|alright[,.]?\s+|all\s+right[,.]?\s+|so[,.]?\s+|well[,.]?\s+|right[,.]?\s+|好的?[，,.\s]+|嗯[，,.\s]+|好[，,.\s]+)?(?:next(?:\s+is|\s+up|\s*:)?|moving\s+on(?:\s+to)?|let'?s\s+(?:move|go|look)\s+(?:on\s+)?(?:to\s+)?|接下来(?:是|看|讨论|过)?|下一个(?:是|伙伴|客户|公司)?|下一位|下面(?:一个|是|看|过)?|下一(?:家|个伙伴)?)/gi;
+
+function isFalsePositiveTransition(ctx: string): boolean {
+  const s = ctx.toLowerCase();
+  if (/\bnext\s+(week|year|time|month|day|steps?|level|phase|quarter|sprint)\b/.test(s)) {
+    return true;
+  }
+  if (/下一次|下一周|下一年|下个月|下一步|下一阶段/.test(ctx)) return true;
+  return false;
+}
+
+/** 全文中话题切换口令的行首位置（已去重、滤误报） */
+export function findTopicTransitionOffsets(text: string): number[] {
+  const re = new RegExp(TOPIC_TRANSITION_RE.source, "gi");
+  const raw: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const ctx = text.slice(m.index, m.index + 96);
+    if (isFalsePositiveTransition(ctx)) continue;
+    raw.push(lineStartAt(text, m.index));
+  }
+  const deduped: number[] = [];
+  for (const at of raw) {
+    if (!deduped.length || at - deduped[deduped.length - 1]! > 40) deduped.push(at);
+  }
+  return deduped;
+}
+
+/** 在 searchFrom 之后，找「切换口令 + 附近出现伙伴名」的切点（优先口令行首） */
+function findTransitionCutForPartner(
+  text: string,
+  searchFrom: number,
+  partnerName: string,
+  windowAfterCue = 280,
+): number {
+  const transitions = findTopicTransitionOffsets(text).filter((at) => at >= searchFrom);
+  for (const at of transitions) {
+    const after = text.slice(at, at + windowAfterCue);
+    if (findNameOffset(after, partnerName) >= 0) return at;
+  }
+  return -1;
+}
+
+/**
+ * 按讨论顺序切成连续整段。
+ * 切点优先：主持人 next/下一个 等换话题口令（常带上下一位伙伴名）→ 伙伴名首次出现。
+ */
 export function sequentialPartitionByDiscussOrder(
   text: string,
   ordered: { partnerId: string; partnerName: string }[],
@@ -274,14 +332,52 @@ export function sequentialPartitionByDiscussOrder(
   type Anchor = { at: number; partnerId: string; partnerName: string };
   const anchors: Anchor[] = [];
   let searchFrom = 0;
+  const transitions = findTopicTransitionOffsets(raw);
+  let transitionCursor = 0;
 
-  for (const p of ordered) {
-    const rel = findNameOffset(raw.slice(searchFrom), p.partnerName);
-    if (rel < 0) continue;
-    const at = searchFrom + rel;
+  for (let i = 0; i < ordered.length; i++) {
+    const p = ordered[i]!;
+    let at = -1;
+
+    if (i === 0) {
+      // 第一位：名称锚点；若名称在开场很后，仍可用名称，开场归未归属
+      at = findNameOffset(raw, p.partnerName);
+      if (at < 0) at = 0;
+    } else {
+      // 1) 切换口令附近点名该伙伴（最强）
+      at = findTransitionCutForPartner(raw, searchFrom, p.partnerName);
+      // 2) 按讨论顺序对齐第 N 次「next」（无点名时仍可用）
+      if (at < 0) {
+        while (
+          transitionCursor < transitions.length &&
+          transitions[transitionCursor]! < searchFrom
+        ) {
+          transitionCursor += 1;
+        }
+        if (transitionCursor < transitions.length) {
+          at = transitions[transitionCursor]!;
+          transitionCursor += 1;
+        }
+      } else {
+        // 已用到的口令推进游标，避免下一位重复占用
+        while (
+          transitionCursor < transitions.length &&
+          transitions[transitionCursor]! <= at
+        ) {
+          transitionCursor += 1;
+        }
+      }
+      // 3) 名称首次出现
+      if (at < 0) {
+        const rel = findNameOffset(raw.slice(searchFrom), p.partnerName);
+        if (rel >= 0) at = searchFrom + rel;
+      }
+    }
+
+    if (at < 0) continue;
     if (anchors.length && at <= anchors[anchors.length - 1]!.at) continue;
     anchors.push({ at, partnerId: p.partnerId, partnerName: p.partnerName });
-    searchFrom = at + Math.max(1, p.partnerName.trim().length);
+    searchFrom = at + 1;
   }
 
   if (anchors.length < 2) return null;
@@ -353,17 +449,26 @@ async function aiMatchMinutesToPartners(
 过伙伴会议大概率是【顺序整段】进行的：先完整讨论伙伴 A，再完整讨论伙伴 B，再 C……
 请把全文切成若干【连续、互不交叉】的整段，按「讨论顺序」依次归属。
 
+【最强切点信号 — 必须重点关注】
+主持人换话题时常说（中英皆可），这类句子几乎就是下一位伙伴的起点，请优先在此切开：
+- "Okay, next …" / "Next is …" / "Next up …" / "Alright, next …"
+- "Moving on to …" / "Let's move to …"
+- 「接下来」「下一个」「下一位」「下面是」「好，下一个」
+例："Okay, next global com, Jackie." → 从这句起归下一位（Global Com），前面整段仍归上一位。
+注意：next week / next steps / 下一步 / 下一次 等不是换伙伴，不要当切点。
+
 规则：
 1. 纪要对象是议程伙伴封闭集合；实质内容尽量都挂到某位伙伴。
 2. 禁止按偶发提到的名字把内容打散到多段；后半场话题不要塞给前面的伙伴。
 3. 时间戳（00:mm:ss）与开会打点常不同步，只能极弱参考，禁止按绝对时间硬切。
-4. 切段依据：讨论顺序 + 话题切换（换伙伴/换项目）；每位讨论顺序中的伙伴对应原文里的一块连续文本。
-5. 每位议程伙伴都要有一条 segments（未讨论则 text 为空）。
-6. 不要编造；开场寒暄可放 unassigned。
+4. 切段依据优先级：换话题口令（next/下一个）> 讨论顺序 > 伙伴名；每位讨论顺序中的伙伴对应一块连续文本。
+5. 切点从换话题那句开始归新伙伴（口令句本身归下一段）。
+6. 每位议程伙伴都要有一条 segments（未讨论则 text 为空）。
+7. 不要编造；开场寒暄可放 unassigned。
 
 只输出 JSON：
 {"segments":[{"partnerId":"...","text":"..."}],"unassigned":"开场寒暄（尽量短）"}`,
-      `讨论顺序（整段切分的主依据，从前到后）：\n${orderList}\n\n议程伙伴：\n${agenda}\n\n---\n纪要全文：\n${text.slice(0, 28000)}`,
+      `讨论顺序（整段切分的主依据，从前到后）：\n${orderList}\n\n议程伙伴：\n${agenda}\n\n请特别扫描文中的 next / 下一个 等换话题句，按讨论顺序对齐切段。\n\n---\n纪要全文：\n${text.slice(0, 28000)}`,
       {
         feature: "partner_review_match",
         userId,
@@ -409,9 +514,9 @@ export function matchMethodLabel(method?: string): string {
     case "summary_sections":
       return "已按「小结」编号整段对齐讨论顺序";
     case "sequential":
-      return "已按讨论顺序整段切分（连续段落），请核对切点";
+      return "已按讨论顺序整段切分（重点对齐 next/下一个 换话题），请核对切点";
     case "ai":
-      return "已按讨论顺序整段语义切分，请核对切点";
+      return "已按讨论顺序+换话题口令整段切分，请核对切点";
     case "name":
       return "已按名称关键词匹配（可能打散，请优先按顺序整段核对）";
     case "timeline_fallback":
