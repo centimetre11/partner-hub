@@ -47,18 +47,20 @@ type WorkStage = "idle" | "saving" | "matching" | "extracting" | "done";
 function matchMethodFlash(method?: string): string {
   switch (method) {
     case "summary_sections":
-      return "已按「小结」与讨论顺序匹配，请在时间线确认归属后再提炼";
+      return "已按「小结」整段对齐讨论顺序 · 请核对切点后提炼";
+    case "sequential":
+      return "已按讨论顺序整段切分 · 请用「并入上/下一段」微调切点后提炼";
     case "ai":
-      return "已按议程伙伴与讨论顺序匹配，请在时间线确认归属后再提炼";
+      return "已按讨论顺序整段切分 · 请核对切点后提炼";
     case "name":
-      return "已按伙伴名称匹配，请在时间线确认归属后再提炼";
+      return "名称匹配可能打散段落 · 请按顺序整段核对切点后再提炼";
     case "timeline":
     case "timeline_fallback":
-      return "时间戳仅弱参考，请在时间线逐家核对归属后再提炼";
+      return "时间戳仅弱参考 · 请按顺序整段核对切点后再提炼";
     case "ai_fallback":
-      return "已初步匹配，请在时间线确认归属后再提炼";
+      return "已初步整段切分 · 请核对切点后提炼";
     default:
-      return "已匹配到各伙伴，请确认归属后再提炼进展与待办";
+      return "已按顺序整段匹配 · 请在时间线核对切点后再提炼";
   }
 }
 
@@ -567,7 +569,7 @@ export function MeetingWorkspace({
                 lockAssignStep.current = true;
                 setPostStep("assign");
                 setWorkStage("done");
-                flash("已匹配到各伙伴 · 请在下方时间线核对「哪段对应谁」，再点紫色按钮提炼");
+                flash("已按讨论顺序整段切分 · 请在下方核对切点（可用并入上/下一段），再点紫色按钮提炼");
                 requestAnimationFrame(() => {
                   document.getElementById("assignment-timeline")?.scrollIntoView({
                     behavior: "smooth",
@@ -618,6 +620,26 @@ export function MeetingWorkspace({
               [fromPartnerId]: "",
               [toPartnerId]: [prev[toPartnerId]?.trim(), text].filter(Boolean).join("\n\n"),
             }));
+          }}
+          onMergeAdjacent={(fromIdx, direction) => {
+            const ordered = orderedForTimeline;
+            const toIdx = direction === "up" ? fromIdx - 1 : fromIdx + 1;
+            if (toIdx < 0 || toIdx >= ordered.length) return;
+            const from = ordered[fromIdx]!;
+            const to = ordered[toIdx]!;
+            const text = (matchDrafts[from.partnerId] ?? "").trim();
+            if (!text) return;
+            setMatchDrafts((prev) => {
+              const merged =
+                direction === "up"
+                  ? [prev[to.partnerId]?.trim(), text].filter(Boolean).join("\n\n")
+                  : [text, prev[to.partnerId]?.trim()].filter(Boolean).join("\n\n");
+              return {
+                ...prev,
+                [from.partnerId]: "",
+                [to.partnerId]: merged,
+              };
+            });
           }}
           onSave={() =>
             run(async () => {
@@ -1129,6 +1151,7 @@ function AssignmentTimelinePanel({
   onChangePartner,
   onChangeUnassigned,
   onMoveToPartner,
+  onMergeAdjacent,
   onSave,
   onConfirmExtract,
 }: {
@@ -1140,6 +1163,7 @@ function AssignmentTimelinePanel({
   onChangePartner: (partnerId: string, text: string) => void;
   onChangeUnassigned: (text: string) => void;
   onMoveToPartner: (fromPartnerId: string, toPartnerId: string) => void;
+  onMergeAdjacent: (fromIdx: number, direction: "up" | "down") => void;
   onSave: () => void;
   onConfirmExtract: () => void;
 }) {
@@ -1152,10 +1176,10 @@ function AssignmentTimelinePanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-slate-900">2. 确认归属 · 讨论顺序时间线</div>
+          <div className="text-sm font-semibold text-slate-900">2. 确认归属 · 按顺序整段切分</div>
           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            <strong>在这里确认「哪段纪要属于哪个伙伴」</strong>：按讨论顺序从上到下核对文本，可直接改内容，或用「整段改挂到」换伙伴。
-            核对完点下方紫色按钮才会开始提炼进展与待办。
+            过伙伴会议<strong>大概率按顺序整段讨论</strong>（先 A 再 B 再 C）。下方按讨论顺序排列连续段落；
+            切点不对时用「并入上一段 / 并入下一段」调整边界，也可整段改挂。核对完再点紫色按钮提炼。
           </p>
         </div>
         {extracting ? (
@@ -1211,29 +1235,49 @@ function AssignmentTimelinePanel({
                       {hasText ? "" : " · 暂无内容"}
                     </p>
                   </div>
-                  <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                    整段改挂到
-                    <select
-                      disabled={extracting || !hasText}
-                      className="rounded border border-slate-200 bg-white px-1.5 py-1 text-xs disabled:opacity-40"
-                      defaultValue=""
-                      onChange={(e) => {
-                        const to = e.target.value;
-                        e.target.value = "";
-                        if (!to) return;
-                        onMoveToPartner(it.partnerId, to);
-                      }}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={extracting || !hasText || idx === 0}
+                      onClick={() => onMergeAdjacent(idx, "up")}
+                      className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+                      title="整段并入上一位伙伴（上移切点）"
                     >
-                      <option value="">选择伙伴…</option>
-                      {items
-                        .filter((p) => p.partnerId !== it.partnerId)
-                        .map((p) => (
-                          <option key={p.partnerId} value={p.partnerId}>
-                            {p.partnerName}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
+                      并入上一段
+                    </button>
+                    <button
+                      type="button"
+                      disabled={extracting || !hasText || idx === items.length - 1}
+                      onClick={() => onMergeAdjacent(idx, "down")}
+                      className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+                      title="整段并入下一位伙伴（下移切点）"
+                    >
+                      并入下一段
+                    </button>
+                    <label className="flex items-center gap-1 text-[11px] text-slate-500">
+                      改挂
+                      <select
+                        disabled={extracting || !hasText}
+                        className="rounded border border-slate-200 bg-white px-1.5 py-1 text-xs disabled:opacity-40"
+                        defaultValue=""
+                        onChange={(e) => {
+                          const to = e.target.value;
+                          e.target.value = "";
+                          if (!to) return;
+                          onMoveToPartner(it.partnerId, to);
+                        }}
+                      >
+                        <option value="">…</option>
+                        {items
+                          .filter((p) => p.partnerId !== it.partnerId)
+                          .map((p) => (
+                            <option key={p.partnerId} value={p.partnerId}>
+                              {p.partnerName}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  </div>
                 </div>
                 <textarea
                   value={matchDrafts[it.partnerId] ?? ""}
