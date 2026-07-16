@@ -214,22 +214,33 @@ export function MeetingWorkspace({
     return "paste";
   });
   const [workStage, setWorkStage] = useState<WorkStage>("idle");
+  /** 用户主动停留在归属确认时，禁止 refresh 用旧 coreNotes 把步骤打回 extract */
+  const lockAssignStep = useRef(false);
 
   useEffect(() => {
     setMeeting(initial);
     setLiveNotes(initial.liveNotes ?? "");
     setTranscript(initial.transcriptText ?? "");
-    if (initial.status === "DONE") setPostStep("extract");
-    else if (initial.items.some((it) => it.coreNotes || it.todoDrafts.length)) setPostStep("extract");
-    else if (initial.liveNotes?.trim() || initial.transcriptText?.trim()) {
+    if (initial.status === "DONE") {
+      setPostStep("extract");
+      lockAssignStep.current = false;
+      return;
+    }
+    if (lockAssignStep.current) return;
+    if (initial.items.some((it) => it.coreNotes || it.todoDrafts.length)) {
+      setPostStep("extract");
+    } else if (initial.liveNotes?.trim() || initial.transcriptText?.trim()) {
       setPostStep((s) => (s === "extract" ? s : "assign"));
     }
   }, [initial]);
 
   useEffect(() => {
     if (!initial.liveNotes?.trim()) return;
+    if (postStep === "extract" && Object.keys(matchDrafts).length) return;
     const segments = parsePartnerSectionsFromLiveNotes(initial.liveNotes, initial.items);
     applySegmentsToDrafts(segments, setMatchDrafts, setUnassignedDraft);
+    // 仅在 liveNotes / items 变化时同步；避免覆盖用户正在编辑的归属
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial.liveNotes, initial.items]);
 
   const activeItem = useMemo(
@@ -482,6 +493,7 @@ export function MeetingWorkspace({
                   setProposal(null);
                   setPostStep("paste");
                   setWorkStage("idle");
+                  lockAssignStep.current = false;
                   setMatchDrafts({});
                   setUnassignedDraft("");
                   setCurrentDiscussItemId(null);
@@ -552,26 +564,41 @@ export function MeetingWorkspace({
                 }
                 setProposal(null);
                 setConfirmDrafts({});
+                lockAssignStep.current = true;
                 setPostStep("assign");
                 setWorkStage("done");
-                flash(matchMethodFlash(res.matchMethod));
-                router.refresh();
+                flash("已匹配到各伙伴 · 请在下方时间线核对「哪段对应谁」，再点紫色按钮提炼");
+                requestAnimationFrame(() => {
+                  document.getElementById("assignment-timeline")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                });
               } finally {
                 window.clearTimeout(t);
               }
             })
           }
           onRematch={() => {
+            lockAssignStep.current = true;
             setPostStep("assign");
             setProposal(null);
             setConfirmDrafts({});
             setWorkStage("idle");
-            flash("已回到归属确认 · 调整后可再次提炼");
+            flash("请在下方时间线核对各伙伴段落，改完后点紫色按钮提炼");
+            requestAnimationFrame(() => {
+              document.getElementById("assignment-timeline")?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            });
           }}
         />
       )}
 
-      {/* 会后第一步：归属时间线确认 */}
+      {phase === "post" ? <PostStepIndicator step={postStep} /> : null}
+
+      {/* 会后第一步：归属时间线确认（主交互） */}
       {phase === "post" && postStep === "assign" ? (
         <AssignmentTimelinePanel
           items={orderedForTimeline}
@@ -599,7 +626,7 @@ export function MeetingWorkspace({
               );
               await saveMatchedNotesAction(meeting.id, notes);
               setLiveNotes(notes);
-              flash("归属已保存");
+              flash("归属已保存（尚未提炼）");
             })
           }
           onConfirmExtract={() =>
@@ -620,6 +647,7 @@ export function MeetingWorkspace({
                 if (res.proposal) {
                   setProposal(res.proposal);
                   setConfirmDrafts(draftsFromProposal(res.proposal));
+                  lockAssignStep.current = false;
                   setPostStep("extract");
                   const first =
                     res.proposal.items.find((it) => it.coreNotes.trim() || it.todos.length) ??
@@ -627,7 +655,7 @@ export function MeetingWorkspace({
                   if (first) setActiveItemId(first.itemId);
                 }
                 setWorkStage("done");
-                flash("已提炼进展与待办，请在下方两栏逐伙伴确认");
+                flash("已提炼进展与待办 · 请在下方两栏逐伙伴确认修改后入库");
                 router.refresh();
               } catch (e) {
                 setWorkStage("idle");
@@ -638,6 +666,8 @@ export function MeetingWorkspace({
         />
       ) : null}
 
+      {/* 归属确认阶段隐藏三栏，避免干扰 */}
+      {phase === "post" && postStep === "assign" ? null : (
       <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
         {/* Partner list */}
         <aside className="rounded-xl border border-slate-200 bg-white overflow-hidden">
@@ -807,6 +837,7 @@ export function MeetingWorkspace({
           )}
         </section>
       </div>
+      )}
 
       {/* 会后第二步：会议报告 + 入库 */}
       {phase === "post" && postStep === "extract" ? (
@@ -891,6 +922,38 @@ export function MeetingWorkspace({
   );
 }
 
+function PostStepIndicator({ step }: { step: PostStep }) {
+  const steps: { id: PostStep; label: string }[] = [
+    { id: "paste", label: "① 粘贴纪要" },
+    { id: "assign", label: "② 确认归属" },
+    { id: "extract", label: "③ 提炼入库" },
+  ];
+  const order = { paste: 0, assign: 1, extract: 2 } as const;
+  const cur = order[step];
+  return (
+    <ol className="flex flex-wrap gap-2 text-xs">
+      {steps.map((s, idx) => {
+        const active = s.id === step;
+        const done = idx < cur;
+        return (
+          <li
+            key={s.id}
+            className={`rounded-full px-3 py-1.5 border font-medium ${
+              active
+                ? "border-sky-500 bg-sky-100 text-sky-900"
+                : done
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-slate-200 bg-white text-slate-400"
+            }`}
+          >
+            {s.label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function MinutesPastePanel({
   phase,
   postStep,
@@ -913,18 +976,28 @@ function MinutesPastePanel({
   onRematch: () => void;
 }) {
   const matching = busy && (workStage === "saving" || workStage === "matching");
+  const collapsed = postStep === "assign";
 
   return (
     <section className="rounded-xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <div className="text-sm font-semibold text-slate-900">
-            {phase === "done" ? "会议纪要（只读）" : "1. 粘贴会议纪要 · 匹配归属"}
+            {phase === "done"
+              ? "会议纪要（只读）"
+              : collapsed
+                ? "1. 会议纪要（已匹配）"
+                : "1. 粘贴会议纪要"}
           </div>
-          {phase === "post" ? (
+          {phase === "post" && !collapsed ? (
             <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-              粘贴腾讯会议纪要。系统先把内容匹配到<strong>本场议程伙伴</strong>（讨论顺序作软提示，时间戳仅弱参考）；
-              请在下一步时间线确认归属后，再提炼进展与待办。
+              粘贴全文后点「自动匹配归属」。系统把内容粗分到议程伙伴；
+              <strong>真正确认归属</strong>在下一步的时间线里完成。
+            </p>
+          ) : null}
+          {phase === "post" && collapsed ? (
+            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+              请向下查看<strong>讨论顺序时间线</strong>：核对每段是否挂对伙伴，改完后点紫色按钮「确认归属并提炼」。
             </p>
           ) : null}
         </div>
@@ -934,22 +1007,39 @@ function MinutesPastePanel({
             {workStageLabel(workStage)}
           </span>
         ) : postStep === "assign" ? (
-          <span className="text-xs font-medium text-emerald-700">已匹配 · 请确认归属</span>
+          <span className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+            当前：请确认归属
+          </span>
         ) : postStep === "extract" ? (
-          <span className="text-xs font-medium text-emerald-700">已提炼 · 可重新匹配归属</span>
+          <span className="text-xs font-medium text-emerald-700">已提炼 · 可改归属后重来</span>
         ) : null}
       </div>
 
       {phase === "post" ? (
         <>
-          <textarea
-            value={transcript}
-            onChange={(e) => onTranscriptChange(e.target.value)}
-            rows={postStep === "paste" ? 7 : 4}
-            disabled={matching}
-            placeholder="粘贴腾讯会议纪要全文（智能纪要或发言人逐字稿）…"
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono leading-relaxed disabled:opacity-60"
-          />
+          {!collapsed ? (
+            <textarea
+              value={transcript}
+              onChange={(e) => onTranscriptChange(e.target.value)}
+              rows={7}
+              disabled={matching}
+              placeholder="粘贴腾讯会议纪要全文（智能纪要或发言人逐字稿）…"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono leading-relaxed disabled:opacity-60"
+            />
+          ) : (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
+                展开查看已粘贴纪要（{transcript.length} 字）
+              </summary>
+              <textarea
+                value={transcript}
+                onChange={(e) => onTranscriptChange(e.target.value)}
+                rows={4}
+                disabled={matching}
+                className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono leading-relaxed disabled:opacity-60"
+              />
+            </details>
+          )}
           {matching ? (
             <ol className="flex flex-wrap gap-2 text-[11px]">
               {(
@@ -980,30 +1070,41 @@ function MinutesPastePanel({
             </ol>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={busy || !transcript.trim()}
-              onClick={onMatch}
-              className="rounded-lg bg-sky-700 text-white px-4 py-2 text-sm font-medium hover:bg-sky-800 disabled:opacity-40"
-            >
-              {matching
-                ? workStageLabel(workStage)
-                : postStep === "paste"
-                  ? "自动匹配归属"
-                  : "重新匹配归属"}
-            </button>
+            {postStep !== "assign" ? (
+              <button
+                type="button"
+                disabled={busy || !transcript.trim()}
+                onClick={onMatch}
+                className="rounded-lg bg-sky-700 text-white px-4 py-2 text-sm font-medium hover:bg-sky-800 disabled:opacity-40"
+              >
+                {matching
+                  ? workStageLabel(workStage)
+                  : postStep === "paste"
+                    ? "自动匹配归属"
+                    : "重新匹配归属"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={busy || !transcript.trim()}
+                onClick={onMatch}
+                className="rounded-lg border border-sky-300 bg-white text-sky-800 px-3 py-1.5 text-xs hover:bg-sky-50 disabled:opacity-40"
+              >
+                {matching ? workStageLabel(workStage) : "重新跑匹配"}
+              </button>
+            )}
             {postStep === "extract" ? (
               <button
                 type="button"
                 disabled={busy}
                 onClick={onRematch}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs hover:bg-slate-50 disabled:opacity-40"
+                className="rounded-lg bg-amber-600 text-white px-4 py-2 text-sm font-medium hover:bg-amber-700 disabled:opacity-40"
               >
-                回到归属确认
+                打开归属时间线
               </button>
             ) : null}
             {postStep === "paste" && !matching ? (
-              <span className="text-[11px] text-slate-500">先确认哪段对应哪个伙伴，再提炼</span>
+              <span className="text-[11px] text-slate-500">下一步：在时间线上确认每段属于谁</span>
             ) : null}
           </div>
         </>
@@ -1045,12 +1146,16 @@ function AssignmentTimelinePanel({
   const extracting = busy && workStage === "extracting";
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+    <section
+      id="assignment-timeline"
+      className="rounded-xl border-2 border-amber-300 bg-amber-50/30 p-4 space-y-4 shadow-sm"
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="text-sm font-semibold text-slate-900">2. 确认归属 · 讨论顺序时间线</div>
-          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-            按会中点过的先后排列。核对并修改各伙伴对应段落；确认无误后再提炼进展与待办。
+          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+            <strong>在这里确认「哪段纪要属于哪个伙伴」</strong>：按讨论顺序从上到下核对文本，可直接改内容，或用「整段改挂到」换伙伴。
+            核对完点下方紫色按钮才会开始提炼进展与待办。
           </p>
         </div>
         {extracting ? (
@@ -1058,7 +1163,11 @@ function AssignmentTimelinePanel({
             <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
             {workStageLabel("extracting")}
           </span>
-        ) : null}
+        ) : (
+          <span className="text-[11px] font-medium text-amber-900 bg-amber-100 border border-amber-200 rounded-full px-2.5 py-1">
+            必做步骤
+          </span>
+        )}
       </div>
 
       <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-1.5">
@@ -1140,23 +1249,24 @@ function AssignmentTimelinePanel({
         })}
       </ol>
 
-      <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onSave}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
-        >
-          保存归属
-        </button>
+      <div className="flex flex-wrap items-center gap-2 border-t border-amber-200/80 pt-3">
         <button
           type="button"
           disabled={busy}
           onClick={onConfirmExtract}
-          className="rounded-lg bg-violet-700 text-white px-4 py-1.5 text-sm font-medium hover:bg-violet-800 disabled:opacity-40"
+          className="rounded-lg bg-violet-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-violet-800 disabled:opacity-40"
         >
-          {extracting ? workStageLabel("extracting") : "确认归属并提炼"}
+          {extracting ? workStageLabel("extracting") : "确认归属无误，开始提炼"}
         </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onSave}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-40"
+        >
+          仅保存归属
+        </button>
+        <span className="text-[11px] text-slate-500">提炼后才会生成进展总结与待办</span>
       </div>
     </section>
   );
