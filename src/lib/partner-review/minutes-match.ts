@@ -318,6 +318,169 @@ function findTransitionCutForPartner(
   return -1;
 }
 
+export type MarkerDurationSpan = {
+  partnerId: string;
+  partnerName: string;
+  /** 该伙伴讨论时长（相邻打点间隔）；绝对时钟可对不齐，间隔可信 */
+  durationMs: number;
+};
+
+/** 由会中打点间隔得到各伙伴讨论时长（忽略与录音的绝对对齐） */
+export function buildMarkerDurationPlan(meeting: MeetingWithItems): MarkerDurationSpan[] | null {
+  const marked = markedItems(meeting);
+  if (marked.length < 2) return null;
+
+  const times = marked.map((it) => (it.markerInsertedAt ?? it.discussedAt)!.getTime());
+  const gaps: number[] = [];
+  for (let i = 0; i < times.length - 1; i++) {
+    gaps.push(Math.max(5_000, times[i + 1]! - times[i]!));
+  }
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const median = sortedGaps[Math.floor(sortedGaps.length / 2)] ?? 120_000;
+
+  let lastDur: number;
+  if (meeting.endedAt) {
+    lastDur = Math.max(5_000, meeting.endedAt.getTime() - times[times.length - 1]!);
+    // 结束会议忘点时会拉很长，封顶避免末段吞掉全文
+    lastDur = Math.min(lastDur, Math.max(median * 3, 10 * 60_000));
+  } else {
+    lastDur = median;
+  }
+
+  return marked.map((it, i) => ({
+    partnerId: it.partnerId,
+    partnerName: it.partner.name,
+    durationMs: i < gaps.length ? gaps[i]! : lastDur,
+  }));
+}
+
+function formatDurationHint(ms: number): string {
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return s ? `${m}分${s}秒` : `${m}分钟`;
+}
+
+/** 在 [lo,hi) 内找最像「下一位伙伴起点」的切点 */
+function findBestCutInWindow(text: string, lo: number, hi: number, partnerName: string): number {
+  const start = Math.max(0, Math.min(lo, hi));
+  const end = Math.min(text.length, Math.max(lo, hi));
+  if (end - start < 8) return -1;
+  const slice = text.slice(start, end);
+  const localTransitions = findTopicTransitionOffsets(slice).map((at) => start + at);
+
+  for (const at of localTransitions) {
+    const after = text.slice(at, Math.min(text.length, at + 280));
+    if (findNameOffset(after, partnerName) >= 0) return at;
+  }
+  if (localTransitions.length) {
+    const mid = (start + end) / 2;
+    localTransitions.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
+    return localTransitions[0]!;
+  }
+  const nameRel = findNameOffset(slice, partnerName);
+  if (nameRel >= 0) return lineStartAt(text, start + nameRel);
+  return -1;
+}
+
+/**
+ * 用打点间隔（讨论时长）按比例收窄切点，再在窗口内对齐 next/名字。
+ * 绝对时间可能对不齐（忘开录、中途开录），但伙伴间时长比例可信；第一位起点放宽。
+ */
+export function sequentialPartitionByMarkerDurations(
+  text: string,
+  meeting: MeetingWithItems,
+): TranscriptSegment[] | null {
+  const plan = buildMarkerDurationPlan(meeting);
+  const raw = text.trim();
+  if (!plan || plan.length < 2 || !raw) return null;
+
+  const totalDur = plan.reduce((s, p) => s + p.durationMs, 0);
+  if (totalDur <= 0) return null;
+
+  // 期望切点：按时长比例落在全文；第一刀窗口更宽（开录偏差）
+  const expectedCuts: number[] = [0];
+  let acc = 0;
+  for (let i = 0; i < plan.length - 1; i++) {
+    acc += plan[i]!.durationMs;
+    expectedCuts.push(Math.round((acc / totalDur) * raw.length));
+  }
+
+  type Anchor = { at: number; partnerId: string; partnerName: string };
+  const anchors: Anchor[] = [
+    { at: 0, partnerId: plan[0]!.partnerId, partnerName: plan[0]!.partnerName },
+  ];
+
+  for (let i = 1; i < plan.length; i++) {
+    const p = plan[i]!;
+    const expected = expectedCuts[i]!;
+    // 第一刀（P1→P2）窗口更大；后续按相邻时长收窄
+    const frac = i === 1 ? 0.16 : 0.07;
+    const neighborMs = Math.min(plan[i - 1]!.durationMs, p.durationMs);
+    const neighborFrac = Math.min(0.12, neighborMs / totalDur);
+    const window = Math.max(
+      400,
+      Math.round(raw.length * Math.max(frac, neighborFrac)),
+    );
+    const lo = Math.max(anchors[i - 1]!.at + 20, expected - window);
+    const hi = Math.min(raw.length, expected + window);
+
+    let at = findBestCutInWindow(raw, lo, hi, p.partnerName);
+    if (at < 0) {
+      // 窗口外再弱扩一圈找 next+名
+      const loose = findBestCutInWindow(
+        raw,
+        Math.max(anchors[i - 1]!.at + 20, expected - window * 2),
+        Math.min(raw.length, expected + window * 2),
+        p.partnerName,
+      );
+      at = loose >= 0 ? loose : expected;
+    }
+    if (at <= anchors[i - 1]!.at) at = Math.min(raw.length - 1, anchors[i - 1]!.at + 40);
+    anchors.push({ at, partnerId: p.partnerId, partnerName: p.partnerName });
+  }
+
+  // 第一位起点软处理：若开场很长且中段才出现其名字，开场归未归属
+  // （中途开录时前缀可能是别的内容；有名字则从名字附近起算）
+  const firstEnd = anchors[1]?.at ?? raw.length;
+  const firstNameAt = findNameOffset(raw.slice(0, firstEnd), plan[0]!.partnerName);
+  if (firstNameAt > Math.min(500, Math.floor(firstEnd * 0.25))) {
+    anchors[0] = {
+      at: lineStartAt(raw, firstNameAt),
+      partnerId: plan[0]!.partnerId,
+      partnerName: plan[0]!.partnerName,
+    };
+  }
+
+  const segments: TranscriptSegment[] = [];
+  const head = raw.slice(0, anchors[0]!.at).trim();
+  if (head) segments.push({ partnerId: null, partnerName: null, text: head });
+
+  for (let i = 0; i < anchors.length; i++) {
+    const cur = anchors[i]!;
+    const end = i + 1 < anchors.length ? anchors[i + 1]!.at : raw.length;
+    segments.push({
+      partnerId: cur.partnerId,
+      partnerName: cur.partnerName,
+      text: raw.slice(cur.at, end).trim(),
+    });
+  }
+
+  for (const p of plan) {
+    if (!segments.some((s) => s.partnerId === p.partnerId)) {
+      segments.push({ partnerId: p.partnerId, partnerName: p.partnerName, text: "" });
+    }
+  }
+  for (const it of meeting.items) {
+    if (!segments.some((s) => s.partnerId === it.partnerId)) {
+      segments.push({ partnerId: it.partnerId, partnerName: it.partner.name, text: "" });
+    }
+  }
+
+  return segments;
+}
+
 /**
  * 按讨论顺序切成连续整段。
  * 切点优先：主持人 next/下一个 等换话题口令（常带上下一位伙伴名）→ 伙伴名首次出现。
@@ -438,6 +601,18 @@ async function aiMatchMinutesToPartners(
     .map((it, i) => `${i + 1}. 「${it.partnerName}」(partnerId=${it.partnerId})`)
     .join("\n");
 
+  const durationPlan = buildMarkerDurationPlan(meeting);
+  const durationTotalMs = durationPlan?.reduce((s, x) => s + x.durationMs, 0) ?? 0;
+  const durationHint =
+    durationPlan && durationTotalMs > 0
+      ? durationPlan
+          .map(
+            (p, i) =>
+              `${i + 1}. 「${p.partnerName}」约讨论 ${formatDurationHint(p.durationMs)}（占 ${Math.round((p.durationMs / durationTotalMs) * 100)}%）`,
+          )
+          .join("\n")
+      : "";
+
   try {
     const ai = await chatJson<{
       segments?: { partnerId?: string; text?: string }[];
@@ -457,18 +632,27 @@ async function aiMatchMinutesToPartners(
 例："Okay, next global com, Jackie." → 从这句起归下一位（Global Com），前面整段仍归上一位。
 注意：next week / next steps / 下一步 / 下一次 等不是换伙伴，不要当切点。
 
+【讨论时长比例 — 强约束】
+会中每过一个伙伴会打点。打点的绝对时钟常与录音对不齐（忘开录、中途开录），
+但【相邻打点的间隔 = 该伙伴讨论多久】是可信的。请按给出的时长比例分配各段篇幅：
+谈得久的段落应明显更长。第一位伙伴的起点允许偏差（录音可能从中途开始），其后切点应尽量符合时长比例。
+
 规则：
 1. 纪要对象是议程伙伴封闭集合；实质内容尽量都挂到某位伙伴。
 2. 禁止按偶发提到的名字把内容打散到多段；后半场话题不要塞给前面的伙伴。
-3. 时间戳（00:mm:ss）与开会打点常不同步，只能极弱参考，禁止按绝对时间硬切。
-4. 切段依据优先级：换话题口令（next/下一个）> 讨论顺序 > 伙伴名；每位讨论顺序中的伙伴对应一块连续文本。
+3. 时间戳（00:mm:ss）禁止按绝对时间硬切；可用时长比例 + 换话题口令联合判断。
+4. 切段依据优先级：换话题口令 > 讨论时长比例 > 讨论顺序 > 伙伴名。
 5. 切点从换话题那句开始归新伙伴（口令句本身归下一段）。
 6. 每位议程伙伴都要有一条 segments（未讨论则 text 为空）。
 7. 不要编造；开场寒暄可放 unassigned。
 
 只输出 JSON：
 {"segments":[{"partnerId":"...","text":"..."}],"unassigned":"开场寒暄（尽量短）"}`,
-      `讨论顺序（整段切分的主依据，从前到后）：\n${orderList}\n\n议程伙伴：\n${agenda}\n\n请特别扫描文中的 next / 下一个 等换话题句，按讨论顺序对齐切段。\n\n---\n纪要全文：\n${text.slice(0, 28000)}`,
+      `讨论顺序（整段切分的主依据，从前到后）：\n${orderList}\n\n${
+        durationHint
+          ? `各伙伴讨论时长（来自会中打点间隔，请按比例切段）：\n${durationHint}\n\n`
+          : ""
+      }议程伙伴：\n${agenda}\n\n请特别扫描 next / 下一个，并结合时长比例对齐切段。\n\n---\n纪要全文：\n${text.slice(0, 28000)}`,
       {
         feature: "partner_review_match",
         userId,
@@ -513,10 +697,12 @@ export function matchMethodLabel(method?: string): string {
       return "已按时间戳弱参考匹配（请核对）";
     case "summary_sections":
       return "已按「小结」编号整段对齐讨论顺序";
+    case "duration":
+      return "已按打点讨论时长比例收窄切点（绝对时间可对不齐），请核对";
     case "sequential":
       return "已按讨论顺序整段切分（重点对齐 next/下一个 换话题），请核对切点";
     case "ai":
-      return "已按讨论顺序+换话题口令整段切分，请核对切点";
+      return "已按讨论顺序+时长比例+换话题口令整段切分，请核对切点";
     case "name":
       return "已按名称关键词匹配（可能打散，请优先按顺序整段核对）";
     case "timeline_fallback":
@@ -539,8 +725,9 @@ function isMostlyUnassigned(segments: TranscriptSegment[], partnerCount: number)
  *
  * 原则：
  * - 纪要内容一定对应议程上的伙伴（封闭集合）
- * - 会议大概率按讨论顺序【整段连续】进行，优先顺序整段切分
- * - 时间戳只能弱参考：开会打点 ≠ 腾讯录音起点
+ * - 会议大概率按讨论顺序【整段连续】进行
+ * - 打点绝对时间常对不齐，但【打点间隔≈讨论时长】可信，用来收窄切点
+ * - 第一位起点允许偏差（忘开录 / 中途开录）
  */
 export async function matchMinutesToPartners(
   meeting: MeetingWithItems,
@@ -565,25 +752,31 @@ export async function matchMinutesToPartners(
     }
   }
 
-  // 2) 讨论顺序 + 名称锚点 → 连续整段切分（不打散）
+  // 2) 打点讨论时长比例收窄切点 + 窗口内对齐 next/名字（优先于纯名称锚点）
+  const byDuration = sequentialPartitionByMarkerDurations(text, meeting);
+  if (byDuration && countPartnersWithText(byDuration) >= 2) {
+    return { segments: byDuration, method: "duration" };
+  }
+
+  // 3) 讨论顺序 + 换话题/名称锚点 → 连续整段切分
   const sequential = sequentialPartitionByDiscussOrder(text, orderPartners);
   if (sequential && countPartnersWithText(sequential) >= 2) {
     return { segments: sequential, method: "sequential" };
   }
 
-  // 3) AI：强制按讨论顺序整段切
+  // 4) AI：讨论顺序 + 时长比例 + 换话题口令
   const aiSegments = await aiMatchMinutesToPartners(meeting, userId);
   if (aiSegments && countPartnersWithText(aiSegments) > 0) {
     return { segments: aiSegments, method: "ai" };
   }
 
-  // 4) 名称关键词（易打散，仅兜底）
+  // 5) 名称关键词（易打散，仅兜底）
   const heur = heuristicMatchByPartnerName(text, meeting.items);
   if (countPartnersWithText(heur) > 0) {
     return { segments: heur, method: "name" };
   }
 
-  // 5) 时间轴仅最后兜底
+  // 6) 时间轴仅最后兜底（绝对对齐常错）
   const timeSegments = computeTranscriptSegments(meeting);
   if (isUsableTimelineFallback(timeSegments, partnerIds, markedCount)) {
     return { segments: timeSegments, method: "timeline_fallback" };
