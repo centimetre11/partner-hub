@@ -13,6 +13,7 @@ import {
 } from "@/lib/leads-query";
 import { compareKpiDeadline, isKpiDeadlineUrgent } from "@/lib/leads";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { LeadsSyncButton } from "@/components/leads/leads-sync-button";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -64,6 +65,7 @@ export default async function LeadsPage({
       <PageHeader
         title={l.title}
         desc={`${l.desc.replace("{count}", String(leads.length))} · ${syncedLabel}`}
+        actions={<LeadsSyncButton />}
       />
       <div className="px-8">
         <div className="flex gap-1 border-b border-slate-200 mb-4">

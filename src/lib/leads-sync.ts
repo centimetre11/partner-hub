@@ -11,6 +11,7 @@ import {
 const LAST_SYNC_KEY = "leads_last_sync";
 const BATCH = 100;
 const NURTURE_STATUS = "销售培育中";
+let syncing = false;
 const CRM_ACTION_ALIASES: Record<string, CrmLeadAction | "fullSync"> = {
   toNurture: "toNurture",
   to_nurture: "toNurture",
@@ -154,6 +155,10 @@ export async function getLatestLeadsSyncLog() {
 
 /** 全量拉取后清空旧数据再写入（整表替换） */
 export async function syncLeadsData(): Promise<LeadsSyncResult> {
+  if (syncing) {
+    return { ok: false, leadCount: 0, durationMs: 0, error: "SYNC_IN_PROGRESS" };
+  }
+  syncing = true;
   const started = Date.now();
   try {
     invalidateLeadsDataCache();
@@ -196,6 +201,8 @@ export async function syncLeadsData(): Promise<LeadsSyncResult> {
     });
     console.error("[leads-sync] failed:", error);
     return { ok: false, leadCount: 0, durationMs, error };
+  } finally {
+    syncing = false;
   }
 }
 
