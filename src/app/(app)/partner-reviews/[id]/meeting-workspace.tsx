@@ -116,6 +116,42 @@ function segmentsFromDrafts(
   return segments;
 }
 
+/** 按发言人抬头 / 时间戳行切成可挪动的小段 */
+function splitTranscriptTurns(text: string): string[] {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized) return [];
+  const speakerRe = /^(?:发言人|Speaker)\s*\d+\s+\d{1,2}:\d{2}:\d{2}\b/i;
+  const bracketRe = /^\[(?:\d{1,2}:)?\d{1,2}:\d{2}/;
+  const wallClockRe = /^\d{1,2}:\d{2}(?::\d{2})?\s+\S/;
+  const isTurnStart = (line: string) => {
+    const t = line.trim();
+    return speakerRe.test(t) || bracketRe.test(t) || wallClockRe.test(t);
+  };
+  const turns: string[] = [];
+  let buf: string[] = [];
+  for (const line of normalized.split("\n")) {
+    if (isTurnStart(line) && buf.some((l) => l.trim())) {
+      turns.push(buf.join("\n").trimEnd());
+      buf = [line];
+    } else {
+      buf.push(line);
+    }
+  }
+  if (buf.length) {
+    const t = buf.join("\n").trim();
+    if (t) turns.push(t);
+  }
+  if (turns.length <= 1) {
+    const paras = normalized.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+    if (paras.length > 1) return paras;
+  }
+  return turns;
+}
+
+function joinTranscriptTurns(turns: string[]): string {
+  return turns.map((t) => t.trim()).filter(Boolean).join("\n\n");
+}
+
 /** 讨论顺序：已打点按时间，其余按议程顺序接在后面 */
 function discussOrderItems(items: ReviewItemClient[]): ReviewItemClient[] {
   const marked = [...items]
@@ -641,6 +677,49 @@ export function MeetingWorkspace({
               };
             });
           }}
+          onMoveTurns={(fromIdx, turnFrom, turnTo, direction) => {
+            // fromIdx: -1 = 未归属；伙伴按 orderedForTimeline 下标
+            const ordered = orderedForTimeline;
+            const readTurns = (idx: number) => {
+              if (idx === -1) return splitTranscriptTurns(unassignedDraft);
+              const id = ordered[idx]?.partnerId;
+              return id ? splitTranscriptTurns(matchDrafts[id] ?? "") : [];
+            };
+            const applyTurns = (
+              idx: number,
+              turns: string[],
+              drafts: Record<string, string>,
+              unassigned: string,
+            ) => {
+              const text = joinTranscriptTurns(turns);
+              if (idx === -1) return { drafts, unassigned: text };
+              const id = ordered[idx]!.partnerId;
+              return { drafts: { ...drafts, [id]: text }, unassigned };
+            };
+
+            const toIdx = direction === "up" ? fromIdx - 1 : fromIdx + 1;
+            const maxIdx = ordered.length - 1;
+            if (fromIdx < -1 || fromIdx > maxIdx) return;
+            if (toIdx < -1 || toIdx > maxIdx) return;
+
+            const source = readTurns(fromIdx);
+            if (!source.length) return;
+            const lo = Math.max(0, Math.min(turnFrom, turnTo));
+            const hi = Math.min(source.length - 1, Math.max(turnFrom, turnTo));
+            const moving = source.slice(lo, hi + 1);
+            if (!moving.length) return;
+            const remaining = [...source.slice(0, lo), ...source.slice(hi + 1)];
+            const target = readTurns(toIdx);
+            const nextTarget =
+              direction === "up" ? [...target, ...moving] : [...moving, ...target];
+
+            let drafts = { ...matchDrafts };
+            let unassigned = unassignedDraft;
+            ({ drafts, unassigned } = applyTurns(fromIdx, remaining, drafts, unassigned));
+            ({ drafts, unassigned } = applyTurns(toIdx, nextTarget, drafts, unassigned));
+            setMatchDrafts(drafts);
+            setUnassignedDraft(unassigned);
+          }}
           onSave={() =>
             run(async () => {
               const notes = buildLiveNotesFromSegments(
@@ -1152,6 +1231,7 @@ function AssignmentTimelinePanel({
   onChangeUnassigned,
   onMoveToPartner,
   onMergeAdjacent,
+  onMoveTurns,
   onSave,
   onConfirmExtract,
 }: {
@@ -1164,10 +1244,19 @@ function AssignmentTimelinePanel({
   onChangeUnassigned: (text: string) => void;
   onMoveToPartner: (fromPartnerId: string, toPartnerId: string) => void;
   onMergeAdjacent: (fromIdx: number, direction: "up" | "down") => void;
+  /** segmentIdx -1=未归属；移动 [turnFrom..turnTo] 到相邻段 */
+  onMoveTurns: (
+    segmentIdx: number,
+    turnFrom: number,
+    turnTo: number,
+    direction: "up" | "down",
+  ) => void;
   onSave: () => void;
   onConfirmExtract: () => void;
 }) {
   const extracting = busy && workStage === "extracting";
+  const [editRaw, setEditRaw] = useState<Record<string, boolean>>({});
+  const unassignedTurns = splitTranscriptTurns(unassignedDraft);
 
   return (
     <section
@@ -1178,8 +1267,8 @@ function AssignmentTimelinePanel({
         <div>
           <div className="text-sm font-semibold text-slate-900">2. 确认归属 · 按顺序整段切分</div>
           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            过伙伴会议<strong>大概率按顺序整段讨论</strong>（先 A 再 B 再 C）。下方按讨论顺序排列连续段落；
-            切点不对时用「并入上一段 / 并入下一段」调整边界，也可整段改挂。核对完再点紫色按钮提炼。
+            过伙伴会议按顺序整段讨论。切点偏了时，在<strong>中间某条发言</strong>上点「放到上一段 / 放到下一段」，
+            或用「以上归上 / 以下归下」整块挪边界；也可整段改挂。核对完再提炼。
           </p>
         </div>
         {extracting ? (
@@ -1194,26 +1283,53 @@ function AssignmentTimelinePanel({
         )}
       </div>
 
-      <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-900">
-            —
-          </span>
-          <p className="text-xs font-medium text-amber-900">未归属 / 开场</p>
+      <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-900">
+              —
+            </span>
+            <p className="text-xs font-medium text-amber-900">未归属 / 开场</p>
+          </div>
+          <button
+            type="button"
+            disabled={extracting}
+            onClick={() => setEditRaw((p) => ({ ...p, __unassigned: !p.__unassigned }))}
+            className="text-[11px] text-slate-500 underline-offset-2 hover:underline disabled:opacity-40"
+          >
+            {editRaw.__unassigned ? "按条调整" : "编辑全文"}
+          </button>
         </div>
-        <textarea
-          value={unassignedDraft}
-          onChange={(e) => onChangeUnassigned(e.target.value)}
-          rows={3}
-          disabled={extracting}
-          placeholder="无法归属到具体伙伴的开场或串场…"
-          className="w-full rounded border border-amber-100 bg-white px-2 py-1.5 text-xs font-mono leading-relaxed disabled:opacity-50"
-        />
+        {editRaw.__unassigned ? (
+          <textarea
+            value={unassignedDraft}
+            onChange={(e) => onChangeUnassigned(e.target.value)}
+            rows={3}
+            disabled={extracting}
+            placeholder="无法归属到具体伙伴的开场或串场…"
+            className="w-full rounded border border-amber-100 bg-white px-2 py-1.5 text-xs font-mono leading-relaxed disabled:opacity-50"
+          />
+        ) : unassignedTurns.length ? (
+          <TurnAdjustList
+            turns={unassignedTurns}
+            segmentIdx={-1}
+            canMoveUp={false}
+            canMoveDown={items.length > 0}
+            disabled={extracting}
+            onMoveTurns={onMoveTurns}
+          />
+        ) : (
+          <p className="text-[11px] text-amber-800/70 px-1">无开场内容（可点「编辑全文」补充）</p>
+        )}
       </div>
 
       <ol className="relative space-y-0 pl-2">
         {items.map((it, idx) => {
-          const hasText = !!(matchDrafts[it.partnerId] ?? "").trim();
+          const text = matchDrafts[it.partnerId] ?? "";
+          const hasText = !!text.trim();
+          const turns = splitTranscriptTurns(text);
+          const rawKey = it.partnerId;
+          const showRaw = !!editRaw[rawKey];
           return (
             <li key={it.id} className="relative flex gap-3 pb-5 last:pb-0">
               {idx < items.length - 1 ? (
@@ -1225,14 +1341,14 @@ function AssignmentTimelinePanel({
               <div className="relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-sky-500 bg-white text-[11px] font-semibold text-sky-800">
                 {idx + 1}
               </div>
-              <div className="min-w-0 flex-1 rounded-lg border border-slate-200 p-3 space-y-2">
+              <div className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white p-3 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{it.partnerName}</p>
                     <p className="text-[11px] text-slate-400">
                       讨论顺序第 {idx + 1}
                       {it.partnerTier ? ` · Tier ${it.partnerTier}` : ""}
-                      {hasText ? "" : " · 暂无内容"}
+                      {hasText ? ` · ${turns.length || 1} 条` : " · 暂无内容"}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -1241,18 +1357,18 @@ function AssignmentTimelinePanel({
                       disabled={extracting || !hasText || idx === 0}
                       onClick={() => onMergeAdjacent(idx, "up")}
                       className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                      title="整段并入上一位伙伴（上移切点）"
+                      title="整段并入上一位伙伴"
                     >
-                      并入上一段
+                      整段↑
                     </button>
                     <button
                       type="button"
                       disabled={extracting || !hasText || idx === items.length - 1}
                       onClick={() => onMergeAdjacent(idx, "down")}
                       className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                      title="整段并入下一位伙伴（下移切点）"
+                      title="整段并入下一位伙伴"
                     >
-                      并入下一段
+                      整段↓
                     </button>
                     <label className="flex items-center gap-1 text-[11px] text-slate-500">
                       改挂
@@ -1277,16 +1393,37 @@ function AssignmentTimelinePanel({
                           ))}
                       </select>
                     </label>
+                    <button
+                      type="button"
+                      disabled={extracting}
+                      onClick={() => setEditRaw((p) => ({ ...p, [rawKey]: !p[rawKey] }))}
+                      className="text-[11px] text-slate-500 underline-offset-2 hover:underline disabled:opacity-40"
+                    >
+                      {showRaw ? "按条调整" : "编辑全文"}
+                    </button>
                   </div>
                 </div>
-                <textarea
-                  value={matchDrafts[it.partnerId] ?? ""}
-                  onChange={(e) => onChangePartner(it.partnerId, e.target.value)}
-                  rows={5}
-                  disabled={extracting}
-                  placeholder="该伙伴对应的纪要段落，可手动增删…"
-                  className="w-full rounded border border-slate-100 px-2 py-1.5 text-xs font-mono leading-relaxed disabled:opacity-50"
-                />
+                {showRaw ? (
+                  <textarea
+                    value={text}
+                    onChange={(e) => onChangePartner(it.partnerId, e.target.value)}
+                    rows={5}
+                    disabled={extracting}
+                    placeholder="该伙伴对应的纪要段落，可手动增删…"
+                    className="w-full rounded border border-slate-100 px-2 py-1.5 text-xs font-mono leading-relaxed disabled:opacity-50"
+                  />
+                ) : hasText ? (
+                  <TurnAdjustList
+                    turns={turns.length ? turns : [text.trim()]}
+                    segmentIdx={idx}
+                    canMoveUp
+                    canMoveDown={idx < items.length - 1}
+                    disabled={extracting}
+                    onMoveTurns={onMoveTurns}
+                  />
+                ) : (
+                  <p className="text-[11px] text-slate-400 px-1">暂无内容 · 可从相邻段把发言挪过来</p>
+                )}
               </div>
             </li>
           );
@@ -1313,6 +1450,84 @@ function AssignmentTimelinePanel({
         <span className="text-[11px] text-slate-500">提炼后才会生成进展总结与待办</span>
       </div>
     </section>
+  );
+}
+
+function TurnAdjustList({
+  turns,
+  segmentIdx,
+  canMoveUp,
+  canMoveDown,
+  disabled,
+  onMoveTurns,
+}: {
+  turns: string[];
+  segmentIdx: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  disabled: boolean;
+  onMoveTurns: (
+    segmentIdx: number,
+    turnFrom: number,
+    turnTo: number,
+    direction: "up" | "down",
+  ) => void;
+}) {
+  return (
+    <ul className="space-y-1.5">
+      {turns.map((turn, ti) => (
+        <li
+          key={`${segmentIdx}-${ti}-${turn.slice(0, 24)}`}
+          className="group relative rounded-md border border-sky-100 bg-sky-50/40 px-2.5 py-2"
+        >
+          <div className="mb-1.5 flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              disabled={disabled || !canMoveUp}
+              onClick={() => onMoveTurns(segmentIdx, ti, ti, "up")}
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 hover:bg-slate-50 disabled:opacity-25"
+              title="把这条发言放到上一段末尾"
+            >
+              ↑ 放到上一段
+            </button>
+            <button
+              type="button"
+              disabled={disabled || !canMoveDown}
+              onClick={() => onMoveTurns(segmentIdx, ti, ti, "down")}
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 hover:bg-slate-50 disabled:opacity-25"
+              title="把这条发言放到下一段开头"
+            >
+              ↓ 放到下一段
+            </button>
+            {ti > 0 && canMoveUp ? (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onMoveTurns(segmentIdx, 0, ti, "up")}
+                className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-white/80 disabled:opacity-25"
+                title="本条及以上全部并入上一段"
+              >
+                以上归上
+              </button>
+            ) : null}
+            {ti < turns.length - 1 && canMoveDown ? (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onMoveTurns(segmentIdx, ti, turns.length - 1, "down")}
+                className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-white/80 disabled:opacity-25"
+                title="本条及以下全部并入下一段"
+              >
+                以下归下
+              </button>
+            ) : null}
+          </div>
+          <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-800">
+            {turn}
+          </pre>
+        </li>
+      ))}
+    </ul>
   );
 }
 
