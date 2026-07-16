@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "../db";
 import { chatJson } from "../ai";
-import type { TranscriptSegment } from "./markers";
+import { parsePartnerSectionsFromLiveNotes, type TranscriptSegment } from "./markers";
 import { matchMinutesToPartners } from "./minutes-match";
 import type { SplitProposal, SplitProposalItem } from "./split-types";
 
@@ -109,8 +109,8 @@ function mergeSegmentsForPartner(segments: TranscriptSegment[], partnerId: strin
 }
 
 /**
- * 按会中讨论进程匹配纪要，并为每个议程项生成进展总结 + 待办（不落库）。
- * 始终从 transcript 重新匹配，不依赖可能过期的 liveNotes。
+ * 为每个议程项生成进展总结 + 待办（不落库）。
+ * 优先使用已确认的 liveNotes 归属，避免覆盖人工调整；无 liveNotes 时才回退自动匹配。
  */
 export async function buildSplitProposal(meetingId: string, userId?: string): Promise<SplitProposal> {
   const meeting = await db.partnerReviewMeeting.findUnique({
@@ -124,7 +124,20 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
   });
   if (!meeting) throw new Error("会议不存在");
 
-  const { segments: noteSegments } = await matchMinutesToPartners(meeting, userId);
+  const agenda = meeting.items.map((it) => ({
+    partnerId: it.partnerId,
+    partnerName: it.partner.name,
+  }));
+
+  const fromNotes = meeting.liveNotes?.trim()
+    ? parsePartnerSectionsFromLiveNotes(meeting.liveNotes, agenda).filter(
+        (s) => s.partnerId || s.text.trim(),
+      )
+    : [];
+
+  const noteSegments = fromNotes.length
+    ? fromNotes
+    : (await matchMinutesToPartners(meeting, userId)).segments;
 
   const unassignedText = noteSegments
     .filter((s) => !s.partnerId)

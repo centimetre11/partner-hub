@@ -243,7 +243,8 @@ export async function addPartnersToMeetingAction(meetingId: string, partnerIds: 
   return { ok: true as const, items: createdItems };
 }
 
-export async function parseMeetingMinutesAction(meetingId: string, transcriptText: string) {
+/** 第一步：保存纪要并匹配归属到各伙伴（不提炼） */
+export async function matchMeetingMinutesAction(meetingId: string, transcriptText: string) {
   const user = await requireUser();
   const meeting = await db.partnerReviewMeeting.findUnique({
     where: { id: meetingId },
@@ -266,27 +267,39 @@ export async function parseMeetingMinutesAction(meetingId: string, transcriptTex
   });
 
   const { liveNotes, matchMethod } = await materializeLiveNotesForMeeting(meetingId, user.id);
-
-  try {
-    const proposal = await buildSplitProposal(meetingId, user.id);
-    await persistSplitDrafts(proposal);
-    revalidateMeeting(meetingId);
-    return { ok: true as const, proposal, liveNotes, matchMethod };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : String(e) };
-  }
+  revalidateMeeting(meetingId);
+  return { ok: true as const, liveNotes, matchMethod };
 }
 
-export async function runMeetingSplitAction(meetingId: string) {
+/** 第二步：基于已确认的 liveNotes 归属提炼进展与待办 */
+export async function extractMeetingOutcomesAction(meetingId: string) {
   const user = await requireUser();
   try {
     const proposal = await buildSplitProposal(meetingId, user.id);
     await persistSplitDrafts(proposal);
     revalidateMeeting(meetingId);
-    return { ok: true, proposal };
+    return { ok: true as const, proposal };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** @deprecated 使用 matchMeetingMinutesAction + extractMeetingOutcomesAction */
+export async function parseMeetingMinutesAction(meetingId: string, transcriptText: string) {
+  const matched = await matchMeetingMinutesAction(meetingId, transcriptText);
+  if ("error" in matched && matched.error) return { error: matched.error };
+  const extracted = await extractMeetingOutcomesAction(meetingId);
+  if ("error" in extracted && extracted.error) return { error: extracted.error };
+  return {
+    ok: true as const,
+    proposal: "proposal" in extracted ? extracted.proposal : undefined,
+    liveNotes: "liveNotes" in matched ? matched.liveNotes : null,
+    matchMethod: "matchMethod" in matched ? matched.matchMethod : undefined,
+  };
+}
+
+export async function runMeetingSplitAction(meetingId: string) {
+  return extractMeetingOutcomesAction(meetingId);
 }
 
 export async function confirmMeetingItemsAction(meetingId: string, items: ConfirmItemPayload[]) {
