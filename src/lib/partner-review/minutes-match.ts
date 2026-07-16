@@ -13,6 +13,12 @@ export function isAiStyleMinutes(text: string): boolean {
   return /会议概览|智能纪要|AI纪要|元宝|会议助手|小结|会议概览/i.test(text);
 }
 
+function countAssignedPartners(segments: TranscriptSegment[], partnerIds: string[]): number {
+  return partnerIds.filter((pid) =>
+    segments.some((s) => s.partnerId === pid && s.text.trim()),
+  ).length;
+}
+
 /** 解析「小结」里 1. 标题 + 正文 的结构（腾讯 AI 纪要常见） */
 export function parseNumberedSummarySections(text: string): { title: string; body: string }[] {
   const sections: { title: string; body: string }[] = [];
@@ -230,6 +236,19 @@ function countPartnersWithText(segments: TranscriptSegment[]): number {
   return segments.filter((s) => s.partnerId && s.text.trim()).length;
 }
 
+/** 时间轴仅作弱参考：开会打点与腾讯录音起点常不同步，绝不当主依据 */
+function isUsableTimelineFallback(
+  segments: TranscriptSegment[],
+  partnerIds: string[],
+  markedCount: number,
+): boolean {
+  const withText = countPartnersWithText(segments);
+  if (withText === 0 || isMostlyUnassigned(segments, partnerIds.length)) return false;
+  // 多名已讨论伙伴却只落到一家 → 典型偏移错误，不可用
+  if (markedCount >= 2 && withText <= 1) return false;
+  return withText >= 2;
+}
+
 async function aiMatchMinutesToPartners(
   meeting: MeetingWithItems,
   userId?: string,
@@ -241,39 +260,39 @@ async function aiMatchMinutesToPartners(
   const agenda = [...meeting.items]
     .map((it, idx) => {
       const marker = it.markerInsertedAt ?? it.discussedAt;
-      const marked = marker ? "已讨论" : "未讨论";
+      const marked = marker ? "会中已点过" : "议程上但未点过";
       const orderHint = discussed.findIndex((d) => d.partnerId === it.partnerId);
-      const orderLabel = orderHint >= 0 ? `讨论序 ${orderHint + 1}` : "未进入讨论";
-      return `${idx + 1}. partnerId=${it.partnerId} 名称「${it.partner.name}」${marked}（${orderLabel}）`;
+      const order =
+        orderHint >= 0 ? `讨论顺序第 ${orderHint + 1}` : "未出现在讨论顺序";
+      return `${idx + 1}. partnerId=${it.partnerId} 名称「${it.partner.name}」· ${marked} · ${order}`;
     })
     .join("\n");
 
-  const processHint = discussed.length
-    ? `会中实际讨论顺序（主依据，按点击「开始过」的先后，不是录音绝对时间）：\n${discussed
-        .map((it, i) => `${i + 1}. 「${it.partner.name}」 partnerId=${it.partnerId}`)
-        .join("\n")}
-
-重要：本页「开始开会 / 开始过某某」的时间戳，与腾讯会议「开始录音」时间通常不同步，二者不能硬对齐。
-纪要里的 00:mm:ss 只可作录音内部先后的弱参考，不能用「会议 +mm:ss」去卡切点。
-请按：① 讨论顺序（谁先谁后）② 话题/名称/国家/项目语义，把段落切到各伙伴；大致按讨论顺序覆盖全文，勿把后半段全塞给最后一位。`
-    : "会中未标记讨论顺序：按语义/名称把段落归属到伙伴。";
+  const orderList = discussed.length
+    ? discussed.map((it, i) => `${i + 1}. 「${it.partner.name}」(partnerId=${it.partnerId})`).join("\n")
+    : [...meeting.items]
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((it, i) => `${i + 1}. 「${it.partner.name}」(partnerId=${it.partnerId})`)
+        .join("\n");
 
   try {
     const ai = await chatJson<{
       segments?: { partnerId?: string; text?: string }[];
       unassigned?: string;
     }>(
-      `你是过伙伴会议记录助手。用户粘贴腾讯会议纪要（可能是 AI 智能纪要，也可能是「发言人 N HH:MM:SS」逐字稿）。
-任务：按会中讨论顺序与语义，把全文切分到各位伙伴。
-规则：
-1. 主依据是「讨论顺序」（谁先被点开始过）+ 话题语义/伙伴名称指代；不要依赖绝对时间戳对齐。
-2. 录音时间戳与会中打点时间不可靠同步，禁止按 mm:ss 与「会议 +mm:ss」硬切割。
-3. 纪要可能用国家、项目、简称指代伙伴，结合语义对应。
-4. 每位议程伙伴都要有一条 segments（未讨论则 text 为空字符串）。
-5. 不要编造原文没有的内容；可压缩重复寒暄，但保留事实。
+      `你是过伙伴会议记录助手。用户粘贴的是本场「过伙伴」会议的腾讯纪要（智能纪要或「发言人 N HH:MM:SS」逐字稿）。
+
+【最重要】
+1. 这份纪要讨论的对象，一定是议程上的这些伙伴（封闭集合）。几乎所有实质内容都应归属到某位议程伙伴，不要轻易丢进 unassigned。
+2. 纪要里的时间戳（00:mm:ss）与系统「开始开会 / 点伙伴」时间往往对不齐（录音与开会不同步），只能作极弱参考，禁止按绝对时间硬切。
+3. 主要依据：伙伴名称/简称/国家/项目语义 + 「讨论顺序」（谁先过、谁后过）判断话题段落属于谁。
+4. 可用讨论顺序猜测结构（先过的伙伴对应纪要前段话题，后过的对应后段），但若语义明显指向另一位伙伴，以语义为准。
+5. 每位议程伙伴都要有一条 segments；该伙伴确实未出现则 text 为空字符串。
+6. 不要编造原文没有的事实；可去掉纯寒暄。
+
 只输出 JSON：
-{"segments":[{"partnerId":"...","text":"..."}],"unassigned":"开场/串场未归属内容"}`,
-      `${processHint}\n\n议程伙伴：\n${agenda}\n\n---\n纪要全文：\n${text.slice(0, 28000)}`,
+{"segments":[{"partnerId":"...","text":"..."}],"unassigned":"仅开场寒暄/无法判断的串场（尽量短）"}`,
+      `讨论顺序（软提示，非时间戳）：\n${orderList}\n\n议程伙伴（封闭集合，内容必属其中）：\n${agenda}\n\n---\n纪要全文：\n${text.slice(0, 28000)}`,
       {
         feature: "partner_review_match",
         userId,
@@ -315,47 +334,59 @@ async function aiMatchMinutesToPartners(
 export function matchMethodLabel(method?: string): string {
   switch (method) {
     case "timeline":
-      return "已按录音时间弱参考匹配（请核对）";
+      return "已按时间戳弱参考匹配（请核对）";
     case "summary_sections":
-      return "已按「小结」编号与讨论顺序匹配";
+      return "已按「小结」与讨论顺序匹配";
     case "ai":
-      return "已按讨论顺序与语义拆分";
+      return "已按议程伙伴与讨论顺序语义拆分";
     case "name":
       return "已按伙伴名称关键词匹配";
     case "timeline_fallback":
-      return "时间戳仅作弱参考，请核对";
+      return "时间戳弱参考（开会与录音可能不同步），请核对";
     case "ai_fallback":
-      return "AI 按讨论顺序拆分（部分），请核对";
+      return "AI 按议程伙伴拆分完成，请核对";
     default:
       return "已匹配到各伙伴，请核对";
   }
 }
 
+function isMostlyUnassigned(segments: TranscriptSegment[], partnerCount: number): boolean {
+  const assigned = countAssignedPartners(segments, segments.map((s) => s.partnerId!).filter(Boolean));
+  if (partnerCount <= 0) return true;
+  return assigned === 0 || (segments.length === 1 && !segments[0]?.partnerId);
+}
+
 /**
  * 将粘贴的腾讯纪要匹配到议程伙伴。
- * 主依据：会中讨论顺序 + 语义；时间戳（开会打点 vs 录音）不同步，仅作弱参考，不作硬切点。
+ *
+ * 原则：
+ * - 纪要内容一定对应议程上的伙伴（封闭集合）
+ * - 讨论顺序（谁先点、谁后点）是软结构提示
+ * - 时间戳只能弱参考：开会打点 ≠ 腾讯录音起点，禁止硬对齐时间轴
  */
 export async function matchMinutesToPartners(
   meeting: MeetingWithItems,
   userId?: string,
 ): Promise<{ segments: TranscriptSegment[]; method: string }> {
   const text = meeting.transcriptText?.trim() ?? "";
+  const partnerIds = meeting.items.map((it) => it.partnerId);
   const markedCount = markedItems(meeting).length;
 
   if (!text) {
     return { segments: [], method: "empty" };
   }
 
-  // 1) 小结编号 ↔ 讨论顺序（不依赖绝对时间）
+  // 1) 智能纪要「小结」编号 ↔ 讨论顺序（不依赖绝对时间戳）
   const byOrder = matchSectionsByMarkerOrder(text, meeting.items, meeting.startedAt);
   if (byOrder) {
     const orderWithText = countPartnersWithText(byOrder);
-    if (orderWithText >= Math.min(2, Math.max(1, markedCount))) {
+    const expect = Math.max(2, Math.min(markedCount || meeting.items.length, 3));
+    if (orderWithText >= expect || (orderWithText >= 2 && isAiStyleMinutes(text))) {
       return { segments: byOrder, method: "summary_sections" };
     }
   }
 
-  // 2) AI：讨论顺序 + 语义（主路径；明确不信任绝对时间戳对齐）
+  // 2) AI：议程封闭集合 + 讨论顺序语义（主路径）
   const aiSegments = await aiMatchMinutesToPartners(meeting, userId);
   if (aiSegments && countPartnersWithText(aiSegments) > 0) {
     return { segments: aiSegments, method: "ai" };
@@ -367,17 +398,26 @@ export async function matchMinutesToPartners(
     return { segments: heur, method: "name" };
   }
 
-  // 4) 时间轴仅作最后弱参考（开会点与录音起点常不同步）
+  // 4) 时间轴仅最后兜底，且要求能拆到多家
   const timeSegments = computeTranscriptSegments(meeting);
-  if (countPartnersWithText(timeSegments) > 0) {
+  if (isUsableTimelineFallback(timeSegments, partnerIds, markedCount)) {
     return { segments: timeSegments, method: "timeline_fallback" };
   }
 
-  if (aiSegments?.length) return { segments: aiSegments, method: "ai_fallback" };
-  if (byOrder?.length) return { segments: byOrder, method: "summary_sections" };
+  if (aiSegments?.length) {
+    return { segments: aiSegments, method: "ai_fallback" };
+  }
 
+  // 封闭集合兜底：全文先挂到「未归属」，避免误绑到单一伙伴
   return {
-    segments: [{ partnerId: null, partnerName: null, text }],
+    segments: [
+      { partnerId: null, partnerName: null, text },
+      ...meeting.items.map((it) => ({
+        partnerId: it.partnerId,
+        partnerName: it.partner.name,
+        text: "",
+      })),
+    ],
     method: "unassigned",
   };
 }
