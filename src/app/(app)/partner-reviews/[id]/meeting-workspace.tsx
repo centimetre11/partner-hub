@@ -49,7 +49,7 @@ function matchMethodFlash(method?: string): string {
     case "summary_sections":
       return "已按「小结」整段对齐讨论顺序 · 请核对切点后提炼";
     case "duration":
-      return "已按会中打点讨论时长比例切分（绝对时间可对不齐）· 请微调切点后提炼";
+      return "已按会中打点讨论时长（从后向前）整段切分 · 请微调切点后提炼";
     case "sequential":
       return "已按讨论顺序+next/下一个换话题整段切分 · 请微调切点后提炼";
     case "ai":
