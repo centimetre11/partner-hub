@@ -38,17 +38,16 @@ type ParseStage = "idle" | "saving" | "matching" | "extracting" | "done";
 function matchMethodFlash(method?: string): string {
   switch (method) {
     case "timeline":
-      return "已按会中打点时间轴拆分到各伙伴，请逐家确认进展与待办";
+    case "timeline_fallback":
+      return "时间戳仅作弱参考（开会点与录音不同步），已尽量按讨论顺序拆分，请逐家核对";
     case "summary_sections":
-      return "已按「小结」与打点顺序拆分，请逐家确认进展与待办";
+      return "已按「小结」与讨论顺序拆分，请逐家确认进展与待办";
     case "ai":
-      return "已按会中讨论进程用 AI 拆分到各伙伴，请逐家确认进展与待办";
+      return "已按讨论顺序与话题语义拆分（不依赖时间戳对齐），请逐家确认";
     case "name":
       return "已按伙伴名称拆分，请逐家确认进展与待办";
-    case "timeline_fallback":
-      return "时间轴部分匹配，请核对各伙伴进展与待办";
     case "ai_fallback":
-      return "AI 按讨论进程拆分完成，请逐家确认";
+      return "已按讨论顺序拆分，请逐家确认";
     default:
       return "纪要已解析拆分，请逐伙伴确认修改后查看会议报告";
   }
@@ -59,7 +58,7 @@ function parseStageLabel(stage: ParseStage): string {
     case "saving":
       return "正在保存纪要…";
     case "matching":
-      return "正在按会中讨论进程拆分到各伙伴…";
+      return "正在按讨论顺序与语义拆分到各伙伴…";
     case "extracting":
       return "正在提炼近两周进展与后续待办…";
     case "done":
@@ -437,8 +436,8 @@ export function MeetingWorkspace({
 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：开会准备（可选）→ 开始开会 → 在腾讯会议进行讨论；本页仅记录<strong>各伙伴的讨论顺序与时间</strong>（不与腾讯会议同步录音）→
-          结束会议 → 顶部粘贴纪要 → 按会中讨论进程拆分（进展 + 待办）→ 两栏确认 → 会议报告入库与分享。
+          建议：开会准备（可选）→ 开始开会 → 腾讯会议讨论；本页只记<strong>讨论顺序</strong>（点过谁），时间戳与录音不同步、仅作弱参考 →
+          结束会议 → 顶部粘贴纪要 → 按讨论顺序+语义拆分（进展 + 待办）→ 两栏确认 → 会议报告入库与分享。
         </p>
       ) : null}
 
@@ -783,8 +782,8 @@ function MinutesPastePanel({
           </div>
           {phase === "post" ? (
             <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-              粘贴腾讯会议「AI 纪要 / 智能纪要」或「发言人 + 时间戳」逐字稿。系统会按<strong>会中打点讨论顺序</strong>
-              拆到各伙伴，并提炼<strong>近两周进展</strong>与<strong>后续待办</strong>；再在下方两栏确认。
+              粘贴腾讯会议「AI 纪要 / 智能纪要」或逐字稿。系统按<strong>会中讨论顺序</strong>（点过谁的先后）与话题语义拆到各伙伴；
+              时间戳仅作弱参考（开会点与录音起点常不同步）。并提炼<strong>近两周进展</strong>与<strong>后续待办</strong>，再在下方两栏确认。
             </p>
           ) : null}
         </div>
@@ -813,7 +812,7 @@ function MinutesPastePanel({
               {(
                 [
                   ["saving", "① 保存"],
-                  ["matching", "② 按讨论进程拆分"],
+                  ["matching", "② 按讨论顺序拆分"],
                   ["extracting", "③ 提炼进展与待办"],
                 ] as const
               ).map(([key, label], idx) => {
@@ -1361,7 +1360,7 @@ function DiscussingNowBanner({
         开始过某位伙伴时，请点左侧该伙伴名称
       </p>
       <p className="text-xs text-amber-800 mt-1">
-        实际讨论在腾讯会议进行；本页只记录讨论顺序与时间线，便于会后与腾讯纪要匹配
+        实际讨论在腾讯会议进行；本页只记讨论顺序（谁先谁后）。时间戳与录音不同步，会后拆分以顺序+语义为主
       </p>
     </div>
   );
