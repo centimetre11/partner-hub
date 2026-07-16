@@ -1300,19 +1300,90 @@ function AssignmentTimelinePanel({
 }) {
   const extracting = busy && workStage === "extracting";
   const [editRaw, setEditRaw] = useState<Record<string, boolean>>({});
+  const [activeNavId, setActiveNavId] = useState<string | null>(items[0]?.id ?? null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const unassignedTurns = splitTranscriptTurns(unassignedDraft);
 
   function jumpToPartner(itemId: string) {
+    setActiveNavId(itemId);
+    setMobileNavOpen(false);
     document.getElementById(`assign-partner-${itemId}`)?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
   }
 
+  // 滚动时高亮侧栏当前伙伴（fixed 侧栏不受页面 overflow 影响）
+  useEffect(() => {
+    const nodes = items
+      .map((it) => document.getElementById(`assign-partner-${it.id}`))
+      .filter((el): el is HTMLElement => !!el);
+    if (!nodes.length) return;
+    const ratios = new Map<string, number>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          ratios.set(e.target.id.replace("assign-partner-", ""), e.intersectionRatio);
+        }
+        let bestId: string | null = null;
+        let best = 0;
+        for (const [id, r] of ratios) {
+          if (r > best) {
+            best = r;
+            bestId = id;
+          }
+        }
+        if (bestId) setActiveNavId(bestId);
+      },
+      { root: null, rootMargin: "-15% 0px -55% 0px", threshold: [0, 0.15, 0.35, 0.55, 0.75] },
+    );
+    for (const n of nodes) io.observe(n);
+    return () => io.disconnect();
+  }, [items]);
+
+  const navList = (
+    <ul className="space-y-0.5">
+      {items.map((it, idx) => {
+        const hasText = !!(matchDrafts[it.partnerId] ?? "").trim();
+        const active = activeNavId === it.id;
+        return (
+          <li key={it.id}>
+            <button
+              type="button"
+              onClick={() => jumpToPartner(it.id)}
+              className={`flex w-full items-start gap-1.5 rounded-md px-2 py-1.5 text-left text-[11px] leading-snug transition-colors ${
+                active
+                  ? "bg-sky-100 text-sky-950 ring-1 ring-sky-300"
+                  : hasText
+                    ? "text-slate-800 hover:bg-slate-50"
+                    : "text-slate-400 hover:bg-slate-50"
+              }`}
+              title={it.partnerName}
+            >
+              <span
+                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                  active ? "bg-sky-600 text-white" : hasText ? "bg-sky-100 text-sky-800" : "bg-slate-100 text-slate-400"
+                }`}
+              >
+                {idx + 1}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="line-clamp-2 font-medium">{it.partnerName}</span>
+                {!hasText ? (
+                  <span className="mt-0.5 block text-[10px] text-slate-400">暂无内容</span>
+                ) : null}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+
   return (
     <section
       id="assignment-timeline"
-      className="rounded-xl border-2 border-amber-300 bg-amber-50/30 p-4 space-y-4 shadow-sm"
+      className="rounded-xl border-2 border-amber-300 bg-amber-50/30 p-4 pb-28 space-y-4 shadow-sm lg:pr-52"
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
@@ -1335,38 +1406,35 @@ function AssignmentTimelinePanel({
         )}
       </div>
 
-      <nav
-        className="sticky top-2 z-20 -mx-1 rounded-lg border border-amber-200/80 bg-amber-50/95 px-2 py-2 shadow-sm backdrop-blur"
-        aria-label="快速跳转伙伴"
+      {/* 桌面：视口固定侧栏（不受页面 overflow 影响） */}
+      <aside
+        className="fixed right-3 top-20 z-40 hidden w-44 flex-col rounded-xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur lg:flex"
+        style={{ maxHeight: "calc(100vh - 9.5rem)" }}
+        aria-label="伙伴目录"
       >
-        <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-[11px] font-medium text-amber-900">快速跳转</p>
-          <span className="text-[10px] text-amber-800/70">{items.length} 位伙伴</span>
+        <div className="shrink-0 border-b border-slate-100 px-3 py-2">
+          <p className="text-[11px] font-semibold text-slate-800">伙伴目录</p>
+          <p className="text-[10px] text-slate-400">滚动时保持可见 · {items.length} 位</p>
         </div>
-        <div className="flex max-h-24 flex-wrap gap-1 overflow-y-auto">
-          {items.map((it, idx) => {
-            const hasText = !!(matchDrafts[it.partnerId] ?? "").trim();
-            return (
-              <button
-                key={it.id}
-                type="button"
-                onClick={() => jumpToPartner(it.id)}
-                className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
-                  hasText
-                    ? "border-sky-200 bg-white text-slate-800 hover:bg-sky-50"
-                    : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-white"
-                }`}
-                title={it.partnerName}
-              >
-                <span className="font-semibold text-sky-700">{idx + 1}</span>{" "}
-                {it.partnerName.length > 16
-                  ? `${it.partnerName.slice(0, 14)}…`
-                  : it.partnerName}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+        <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">{navList}</div>
+      </aside>
+
+      {/* 移动：底部唤起目录 */}
+      <div className="lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen((v) => !v)}
+          className="fixed bottom-[4.75rem] right-3 z-40 rounded-full border border-sky-200 bg-white px-3 py-2 text-xs font-semibold text-sky-800 shadow-lg"
+        >
+          {mobileNavOpen ? "收起目录" : "伙伴目录"}
+        </button>
+        {mobileNavOpen ? (
+          <div className="fixed inset-x-3 bottom-[7.5rem] z-40 max-h-[50vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+            <p className="px-2 py-1 text-[11px] font-semibold text-slate-700">跳转到伙伴</p>
+            {navList}
+          </div>
+        ) : null}
+      </div>
 
       <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1519,10 +1587,10 @@ function AssignmentTimelinePanel({
         })}
       </ol>
 
-      <div className="sticky bottom-0 z-20 -mx-4 -mb-4 mt-2 space-y-2 border-t border-amber-200 bg-white/95 px-4 py-3 shadow-[0_-4px_12px_rgba(15,23,42,0.06)] backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-amber-200 bg-white/95 px-4 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur lg:left-56">
         {statusMessage ? (
           <p
-            className={`text-xs ${statusIsError ? "text-red-600" : extracting ? "text-violet-700" : "text-emerald-700"}`}
+            className={`mb-2 text-xs ${statusIsError ? "text-red-600" : extracting ? "text-violet-700" : "text-emerald-700"}`}
           >
             {extracting ? (
               <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500 align-middle" />
@@ -1530,7 +1598,7 @@ function AssignmentTimelinePanel({
             {statusMessage}
           </p>
         ) : null}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={busy}
