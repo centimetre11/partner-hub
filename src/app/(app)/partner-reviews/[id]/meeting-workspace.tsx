@@ -1267,8 +1267,9 @@ function AssignmentTimelinePanel({
         <div>
           <div className="text-sm font-semibold text-slate-900">2. 确认归属 · 按顺序整段切分</div>
           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            过伙伴会议按顺序整段讨论。切点偏了时，在<strong>中间某条发言</strong>上点「放到上一段 / 放到下一段」，
-            或用「以上归上 / 以下归下」整块挪边界；也可整段改挂。核对完再提炼。
+            过伙伴会议按顺序整段讨论。切点偏了时，在分界处那条发言上点：
+            <strong>↑ 放到上一段</strong>（本条及以上整块上移）、
+            <strong>↓ 放到下一段</strong>（本条及以下整块下移）；也可整段改挂。核对完再提炼。
           </p>
         </div>
         {extracting ? (
@@ -1484,43 +1485,21 @@ function TurnAdjustList({
             <button
               type="button"
               disabled={disabled || !canMoveUp}
-              onClick={() => onMoveTurns(segmentIdx, ti, ti, "up")}
+              onClick={() => onMoveTurns(segmentIdx, 0, ti, "up")}
               className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 hover:bg-slate-50 disabled:opacity-25"
-              title="把这条发言放到上一段末尾"
+              title="本条及以上整块并入上一段"
             >
               ↑ 放到上一段
             </button>
             <button
               type="button"
               disabled={disabled || !canMoveDown}
-              onClick={() => onMoveTurns(segmentIdx, ti, ti, "down")}
+              onClick={() => onMoveTurns(segmentIdx, ti, turns.length - 1, "down")}
               className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 hover:bg-slate-50 disabled:opacity-25"
-              title="把这条发言放到下一段开头"
+              title="本条及以下整块并入下一段"
             >
               ↓ 放到下一段
             </button>
-            {ti > 0 && canMoveUp ? (
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => onMoveTurns(segmentIdx, 0, ti, "up")}
-                className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-white/80 disabled:opacity-25"
-                title="本条及以上全部并入上一段"
-              >
-                以上归上
-              </button>
-            ) : null}
-            {ti < turns.length - 1 && canMoveDown ? (
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => onMoveTurns(segmentIdx, ti, turns.length - 1, "down")}
-                className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-white/80 disabled:opacity-25"
-                title="本条及以下全部并入下一段"
-              >
-                以下归下
-              </button>
-            ) : null}
           </div>
           <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-800">
             {turn}
