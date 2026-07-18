@@ -109,6 +109,11 @@ export async function getBridgeStatus(): Promise<BridgeStatus> {
 
 export type ComposeResult = { ok: boolean; warning?: string; error?: string };
 
+/** 会议邀约（无附件）超时；企业邮加载+填表通常 <45s */
+export function bridgeMeetingComposeTimeoutMs(): number {
+  return 55_000;
+}
+
 /** 按附件数量估算超时（大文件 base64 编码较慢，需多等一会儿）。 */
 export function bridgeComposeTimeoutMs(attachmentCount: number): number {
   const base = 90_000;
@@ -136,10 +141,14 @@ export async function composeEmailViaBridge(params: {
   timeZone?: string;
 }): Promise<ComposeResult> {
   const attachments = params.attachments ?? [];
+  const timeoutMs =
+    params.mode === "meeting" && attachments.length === 0
+      ? bridgeMeetingComposeTimeoutMs()
+      : bridgeComposeTimeoutMs(attachments.length);
   try {
     const res = await sendToBridge<ComposeResult>(
       { type: "composeEmail", ...params, attachments },
-      bridgeComposeTimeoutMs(attachments.length),
+      timeoutMs,
     );
     return res ?? { ok: false, error: "no response" };
   } catch (err) {

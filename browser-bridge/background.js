@@ -4,7 +4,7 @@
 //   { type: "composeEmail", to, subject, body, attachments: [{url, filename}] }
 //   { type: "fillCrmActivation", url, fields: { region, country, countryAliases, sales, companyName, partnerType, contactName, contactTitle, email, phone } }
 
-const VERSION = "1.1.21";
+const VERSION = "1.1.22";
 
 const MAIL_TAB_PATTERNS = [
   "https://exmail.qq.com/*",
@@ -75,7 +75,7 @@ async function handleComposeEmail(payload) {
     files: ["content/exmail-compose.js"],
   });
 
-  const response = await chrome.tabs.sendMessage(tab.id, {
+  const response = await sendTabMessageWithTimeout(tab.id, {
     type: "fillCompose",
     to,
     cc: cc || "",
@@ -89,8 +89,17 @@ async function handleComposeEmail(payload) {
     startAt: payload.startAt || "",
     endAt: payload.endAt || "",
     timeZone: payload.timeZone || "",
-  });
+  }, payload.mode === "meeting" ? 50000 : 85000);
   return response || { ok: false, error: "no response from page" };
+}
+
+function sendTabMessageWithTimeout(tabId, message, timeoutMs) {
+  return Promise.race([
+    chrome.tabs.sendMessage(tabId, message),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("企业邮页面响应超时，请确认已登录企业邮后重试")), timeoutMs),
+    ),
+  ]);
 }
 
 async function handleFillCrmActivation(payload) {

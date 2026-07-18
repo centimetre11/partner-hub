@@ -91,9 +91,12 @@ export function MeetingCustomerInviteForm({
   const [extractError, setExtractError] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [extractText, setExtractText] = useState("");
+  const [pendingExtract, setPendingExtract] = useState<MeetingExtractResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractBusyRef = useRef(false);
-  const handleImageExtractRef = useRef<(file: File) => Promise<void>>(async () => {});
+  const imagePreviewUrlRef = useRef<string | null>(null);
   const pendingFormRef = useRef<FormData | null>(null);
 
   const [result, setResult] = useState<Extract<CreateMeetingResult, { ok: true }> | null>(null);
@@ -108,6 +111,7 @@ export function MeetingCustomerInviteForm({
   const [reopeningCompose, setReopeningCompose] = useState(false);
   const [composeOpened, setComposeOpened] = useState(false);
   const [confirmingCompose, setConfirmingCompose] = useState(false);
+  const [composePhase, setComposePhase] = useState<"idle" | "creating" | "opening">("idle");
 
   const timeZone = useMemo(() => getBrowserTimeZone(), []);
 
@@ -172,6 +176,23 @@ export function MeetingCustomerInviteForm({
     });
   }
 
+  function setImageFile(file: File | null) {
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+      imagePreviewUrlRef.current = null;
+    }
+    setPendingImageFile(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      imagePreviewUrlRef.current = url;
+      setImagePreview(url);
+    } else {
+      setImagePreview(null);
+    }
+    setPendingExtract(null);
+    setExtractError(null);
+  }
+
   function applyExtract(data: MeetingExtractResult) {
     if (data.subject?.trim()) setEmailSubject(data.subject.trim());
     else if (data.contactName?.trim()) {
@@ -199,71 +220,102 @@ export function MeetingCustomerInviteForm({
     }
   }
 
-  async function handleImageExtract(file: File) {
+  function confirmPendingExtract() {
+    if (!pendingExtract) return;
+    applyExtract(pendingExtract);
+    setPendingExtract(null);
+    setInputMode("manual");
+  }
+
+  function cancelPendingExtract() {
+    setPendingExtract(null);
+    setExtractError(null);
+  }
+
+  async function runExtract(source: "image" | "text") {
     if (extractBusyRef.current) return;
+    if (source === "image" && !pendingImageFile) {
+      setExtractError(invite.imageRequired);
+      return;
+    }
+    if (source === "text" && !extractText.trim()) {
+      setExtractError(invite.textRequired);
+      return;
+    }
     extractBusyRef.current = true;
     setExtractError(null);
+    setPendingExtract(null);
     setExtracting(true);
     try {
-      const preview = URL.createObjectURL(file);
-      setImagePreview(preview);
-      const images = await prepareChatImagesFromFiles([file], { maxSide: 896, quality: 0.75 });
       const now = new Date();
       const weekday = now.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
         weekday: "long",
         timeZone,
       });
+      const payload: Record<string, unknown> = {
+        timeZone,
+        nowLocal: toDateTimeLocalInput(now, timeZone),
+        weekday,
+      };
+      if (source === "image" && pendingImageFile) {
+        payload.images = await prepareChatImagesFromFiles([pendingImageFile], { maxSide: 896, quality: 0.75 });
+      } else {
+        payload.text = extractText.trim();
+      }
       const res = await fetch("/api/ai/meeting/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          images,
-          timeZone,
-          nowLocal: toDateTimeLocalInput(now, timeZone),
-          weekday,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = (await res.json()) as { ok?: boolean; result?: MeetingExtractResult; error?: string };
       if (!res.ok || !data.result) {
         throw new Error(data.error || invite.extractFailed);
       }
-      applyExtract(data.result);
-      setInputMode("manual");
+      setPendingExtract(data.result);
     } catch (e) {
       setExtractError(e instanceof Error ? e.message : invite.extractFailed);
-      setImagePreview(null);
     } finally {
       setExtracting(false);
       extractBusyRef.current = false;
     }
   }
 
-  handleImageExtractRef.current = handleImageExtract;
+  const extractPreview = useMemo(() => {
+    if (!pendingExtract) return null;
+    const startLocal = pendingExtract.startAt ? isoToDateTimeLocal(pendingExtract.startAt, timeZone) : null;
+    const endLocal = pendingExtract.endAt ? isoToDateTimeLocal(pendingExtract.endAt, timeZone) : null;
+    return {
+      subject: pendingExtract.subject?.trim() || "—",
+      startLocal: startLocal || "—",
+      endLocal: endLocal || "—",
+      customerEmails: pendingExtract.customerEmails?.length
+        ? pendingExtract.customerEmails.join(", ")
+        : "—",
+      colleagueEmails: pendingExtract.colleagueEmails?.length
+        ? pendingExtract.colleagueEmails.join(", ")
+        : "—",
+      contactName: pendingExtract.contactName?.trim() || "—",
+    };
+  }, [pendingExtract, timeZone]);
 
   useEffect(() => {
-    if (inputMode !== "auto") return;
-    const onPaste = (e: ClipboardEvent) => {
-      const files = imageFilesFromClipboard(e.clipboardData);
-      if (!files.length || extractBusyRef.current) return;
-      e.preventDefault();
-      void handleImageExtractRef.current(files[0]);
+    return () => {
+      if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
     };
-    document.addEventListener("paste", onPaste);
-    return () => document.removeEventListener("paste", onPaste);
-  }, [inputMode]);
+  }, []);
 
   const onPasteImage = useCallback((e: React.ClipboardEvent) => {
     const files = imageFilesFromClipboard(e.clipboardData);
     if (!files.length) return;
     e.preventDefault();
-    void handleImageExtractRef.current(files[0]);
+    setImageFile(files[0]);
   }, []);
 
   const onDropImage = useCallback((e: React.DragEvent) => {
     const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
     if (!files.length) return;
     e.preventDefault();
-    void handleImageExtractRef.current(files[0]);
+    setImageFile(files[0]);
   }, []);
 
   async function openInviteCompose(meetLink: string, snapshot: InviteSnapshot) {
@@ -384,6 +436,7 @@ export function MeetingCustomerInviteForm({
       return;
     }
     setConfirmingCompose(true);
+    setComposePhase("creating");
     setError(null);
     setComposeNotice(null);
     try {
@@ -393,10 +446,13 @@ export function MeetingCustomerInviteForm({
         return;
       }
       setResult(res);
+      setComposePhase("opening");
+      setComposeNotice({ kind: "ok", text: invite.creatingDoneOpeningExmail });
       await openInviteCompose(res.meetLink, inviteSnapshot);
       setComposeOpened(true);
     } finally {
       setConfirmingCompose(false);
+      setComposePhase("idle");
     }
   }
 
@@ -509,9 +565,17 @@ export function MeetingCustomerInviteForm({
                   onClick={() => void confirmAndCreateAndOpen()}
                   className="flex-1 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
                 >
-                  {confirmingCompose ? invite.confirmCreating : invite.confirmCreateAndOpen}
+                  {confirmingCompose
+                    ? composePhase === "opening"
+                      ? invite.confirmOpeningExmail
+                      : invite.confirmCreating
+                    : invite.confirmCreateAndOpen}
                 </button>
               </div>
+            ) : confirmingCompose ? (
+              <p className="text-center text-xs text-sky-700 py-1">
+                {composePhase === "opening" ? invite.confirmOpeningExmail : invite.confirmCreating}
+              </p>
             ) : !composeOpened ? (
               <button
                 type="button"
@@ -557,7 +621,9 @@ export function MeetingCustomerInviteForm({
             onClick={() => {
               cancelPreview();
               setEmailSubject("");
-              setImagePreview(null);
+              setImageFile(null);
+              setExtractText("");
+              setPendingExtract(null);
             }}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
           >
@@ -606,42 +672,140 @@ export function MeetingCustomerInviteForm({
       </div>
 
       {inputMode === "auto" && (
-        <div
-          tabIndex={0}
-          role="region"
-          aria-label={invite.uploadScreenshot}
-          onPaste={onPasteImage}
-          onDrop={onDropImage}
-          onDragOver={(e) => {
-            if ([...e.dataTransfer.types].includes("Files")) e.preventDefault();
-          }}
-          className="rounded-xl border border-dashed border-sky-200 bg-sky-50/40 p-4 space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
-        >
-          <p className="text-xs text-sky-900">{invite.autoHint}</p>
-          <p className="text-xs text-sky-700">{invite.pasteHint}</p>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) void handleImageExtract(file);
+        <div className="space-y-4">
+          <div
+            tabIndex={0}
+            role="region"
+            aria-label={invite.uploadScreenshot}
+            onPaste={onPasteImage}
+            onDrop={onDropImage}
+            onDragOver={(e) => {
+              if ([...e.dataTransfer.types].includes("Files")) e.preventDefault();
             }}
-          />
-          {imagePreview && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={imagePreview} alt="" className="max-h-40 rounded-lg border border-slate-200 object-contain" />
-          )}
-          <button
-            type="button"
-            disabled={extracting}
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full rounded-xl border border-sky-300 bg-white px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-50"
+            className="rounded-xl border border-dashed border-sky-200 bg-sky-50/40 p-4 space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
           >
-            {extracting ? invite.extracting : invite.uploadScreenshot}
-          </button>
+            <p className="text-xs text-sky-900">{invite.autoHint}</p>
+            <p className="text-xs text-sky-700">{invite.pasteHint}</p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) setImageFile(file);
+              }}
+            />
+            {imagePreview && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imagePreview} alt="" className="max-h-40 rounded-lg border border-slate-200 object-contain" />
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                disabled={extracting}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex-1 rounded-xl border border-sky-300 bg-white px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-50 disabled:opacity-50"
+              >
+                {invite.chooseScreenshot}
+              </button>
+              <button
+                type="button"
+                disabled={extracting || !pendingImageFile}
+                onClick={() => void runExtract("image")}
+                className="flex-1 rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {extracting ? invite.extracting : invite.recognizeScreenshot}
+              </button>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center" aria-hidden>
+              <div className="w-full border-t border-slate-200" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-white px-2 text-slate-400">{invite.orDivider}</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+            <p className="text-xs text-slate-700">{invite.textHint}</p>
+            <textarea
+              value={extractText}
+              onChange={(e) => {
+                setExtractText(e.target.value);
+                setPendingExtract(null);
+                setExtractError(null);
+              }}
+              rows={4}
+              placeholder={invite.textPlaceholder}
+              className={`${input} resize-y min-h-[5rem]`}
+            />
+            <button
+              type="button"
+              disabled={extracting || !extractText.trim()}
+              onClick={() => void runExtract("text")}
+              className="w-full rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            >
+              {extracting ? invite.extracting : invite.recognizeText}
+            </button>
+          </div>
+
+          {extractPreview && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-3">
+              <div className="text-xs font-medium text-emerald-900">{invite.extractPreviewTitle}</div>
+              <p className="text-xs text-emerald-800">{invite.extractPreviewHint}</p>
+              <div className="rounded-lg border border-emerald-200 bg-white p-3 text-xs space-y-2 text-slate-700">
+                <div>
+                  <span className="text-slate-400">{invite.emailSubject}: </span>
+                  {extractPreview.subject}
+                </div>
+                <div>
+                  <span className="text-slate-400">{s.startAt}: </span>
+                  {extractPreview.startLocal}
+                </div>
+                <div>
+                  <span className="text-slate-400">{s.endAt}: </span>
+                  {extractPreview.endLocal}
+                </div>
+                <div>
+                  <span className="text-slate-400">{invite.customerEmail}: </span>
+                  {extractPreview.customerEmails}
+                </div>
+                {extractPreview.colleagueEmails !== "—" && (
+                  <div>
+                    <span className="text-slate-400">{invite.colleagueEmails}: </span>
+                    {extractPreview.colleagueEmails}
+                  </div>
+                )}
+                {extractPreview.contactName !== "—" && (
+                  <div>
+                    <span className="text-slate-400">{invite.contactName}: </span>
+                    {extractPreview.contactName}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={cancelPendingExtract}
+                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
+                >
+                  {invite.cancelExtract}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmPendingExtract}
+                  className="flex-1 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                >
+                  {invite.confirmExtract}
+                </button>
+              </div>
+            </div>
+          )}
+
           {extractError && <p className="text-xs text-red-600">{extractError}</p>}
         </div>
       )}

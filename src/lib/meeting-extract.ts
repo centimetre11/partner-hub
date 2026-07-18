@@ -31,30 +31,38 @@ export type MeetingExtractContext = {
  */
 const MEETING_EXTRACT_MAX_TOKENS = 1536;
 
-function buildPrompt(ctx: MeetingExtractContext): string {
+function buildPrompt(ctx: MeetingExtractContext, source: "image" | "text"): string {
   const { locale, timeZone, nowLocal, weekday } = ctx;
   const datePart = nowLocal.slice(0, 10);
+  const sourceHint =
+    source === "image"
+      ? locale === "zh"
+        ? "必须阅读图片中的文字，禁止猜测。"
+        : "READ the image text; do not guess."
+      : locale === "zh"
+        ? "必须阅读用户提供的会议邀约文字，禁止猜测。"
+        : "READ the user's meeting invite text; do not guess.";
 
   if (locale === "zh") {
-    return `你是会议邀约截图 OCR + 结构化助手。必须阅读图片中的文字，禁止猜测。
+    return `你是会议邀约 ${source === "image" ? "截图 OCR + " : ""}结构化助手。${sourceHint}
 
 当前时间：${weekday} ${nowLocal}（${timeZone}）
 只输出 JSON（startAt/endAt 为用户时区 ${timeZone} 墙钟 YYYY-MM-DDTHH:mm）：
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
 日期：「周二/Tuesday」= ${datePart} 之后最近的一个周二；其他时区（如 Riyadh 4pm）先换算到 ${timeZone}。
-主题：无标题时用「与 {contactName} 的会议」；contactName=截图里外部联系人姓名（如 LinkedIn 对话对方）。
+主题：无标题时用「与 {contactName} 的会议」；contactName=外部联系人姓名。
 邮箱小写；仅结束时间缺失时 endAt = startAt + 1h。`;
   }
 
-  return `Meeting invite screenshot OCR + extraction. READ the image text; do not guess.
+  return `Meeting invite ${source === "image" ? "screenshot OCR + " : ""}extraction. ${sourceHint}
 
 Now: ${weekday} ${nowLocal} (${timeZone})
 JSON only (startAt/endAt wall-clock in ${timeZone}, YYYY-MM-DDTHH:mm):
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
 Dates: "Tuesday" = nearest Tuesday on/after ${datePart}; convert other TZ (e.g. "4pm Riyadh") to ${timeZone}.
-Subject: if missing use "Meeting with {contactName}"; contactName = external person in screenshot (e.g. LinkedIn chat partner).
+Subject: if missing use "Meeting with {contactName}"; contactName = external person.
 Lowercase emails; endAt = startAt + 1h only when end missing.`;
 }
 
@@ -147,7 +155,7 @@ export async function extractMeetingFromImages(
 ): Promise<MeetingExtractResult> {
   if (!images.length) throw new AIError("请上传截图");
 
-  const system = buildPrompt(ctx);
+  const system = buildPrompt(ctx, "image");
   const userMsg: ChatMessage = {
     role: "user",
     content:
@@ -156,6 +164,33 @@ export async function extractMeetingFromImages(
         : "Read the meeting invite text in the screenshot and output JSON.",
     images,
   };
+  return runMeetingExtractChat(system, userMsg, ctx, "image");
+}
+
+export async function extractMeetingFromText(
+  text: string,
+  ctx: MeetingExtractContext,
+): Promise<MeetingExtractResult> {
+  const trimmed = text.trim();
+  if (!trimmed) throw new AIError(ctx.locale === "zh" ? "请粘贴或输入会议邀约文字" : "Paste or type meeting invite text");
+
+  const system = buildPrompt(ctx, "text");
+  const userMsg: ChatMessage = {
+    role: "user",
+    content:
+      ctx.locale === "zh"
+        ? `请从以下会议邀约文字中提取信息并输出 JSON：\n\n${trimmed}`
+        : `Extract meeting info from the following text and output JSON:\n\n${trimmed}`,
+  };
+  return runMeetingExtractChat(system, userMsg, ctx, "text");
+}
+
+async function runMeetingExtractChat(
+  system: string,
+  userMsg: ChatMessage,
+  ctx: MeetingExtractContext,
+  source: "image" | "text",
+): Promise<MeetingExtractResult> {
   const chat: ChatMessage[] = [
     { role: "system", content: system },
     userMsg,
@@ -165,7 +200,7 @@ export async function extractMeetingFromImages(
   const { content } = await chatCompletion(chat, {
     jsonMode: true,
     temperature: 0,
-    feature: "Meeting invite: extract",
+    feature: source === "image" ? "Meeting invite: extract" : "Meeting invite: extract text",
     userId: ctx.userId,
     maxTokens: MEETING_EXTRACT_MAX_TOKENS,
     toolChoice: "none",
@@ -177,8 +212,12 @@ export async function extractMeetingFromImages(
   if (!hasUsefulMeetingExtract(result)) {
     throw new AIError(
       ctx.locale === "zh"
-        ? "未能从截图识别到会议信息。请确认：① 截图含清晰的时间/联系人文字；② 设置 → 场景模型分配 →「图片识别」已配置视觉模型（名称含 vl/vision/seed/4o 等）。"
-        : "Could not extract meeting info from the screenshot. Ensure readable time/contact text, and assign a vision-capable model under Settings → Scene models → Vision.",
+        ? source === "image"
+          ? "未能从截图识别到会议信息。请确认：① 截图含清晰的时间/联系人文字；② 设置 → 场景模型分配 →「图片识别」已配置视觉模型（名称含 vl/vision/seed/4o 等）。"
+          : "未能从文字识别到会议信息。请补充时间、联系人或邮箱后再试。"
+        : source === "image"
+          ? "Could not extract meeting info from the screenshot. Ensure readable time/contact text, and assign a vision-capable model under Settings → Scene models → Vision."
+          : "Could not extract meeting info from the text. Add time, contact, or email and try again.",
     );
   }
 
