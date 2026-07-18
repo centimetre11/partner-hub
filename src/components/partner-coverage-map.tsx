@@ -350,6 +350,47 @@ export function PartnerCoverageMap({
         </div>
 
         <aside className="space-y-3">
+          <div
+            className={`bg-white rounded-lg border shadow-sm p-3 ${
+              selected ? "border-slate-900 ring-1 ring-slate-900/10" : "border-slate-200/80"
+            }`}
+          >
+            {selected ? (
+              <>
+                <p className="text-xs font-medium text-slate-700 mb-1">
+                  {matrix.rowLabels[selected.rowKey]} × {matrix.colLabels[selected.colKey]}
+                </p>
+                <p className="text-[11px] text-slate-400 mb-2">
+                  {selected.isGap
+                    ? copy.noPartnersInCell
+                    : copy.partnersInCell.replace("{n}", String(selected.count))}
+                  {selected.bestStage != null && !selected.isGap
+                    ? ` · ${stageName(selected.bestStage)}`
+                    : ""}
+                </p>
+                <ul className="space-y-1.5 max-h-56 overflow-y-auto">
+                  {selected.partners.map((p) => (
+                    <li key={p.id} className="flex items-center justify-between gap-2">
+                      <Link href={`/partners/${p.id}`} className="text-sm text-sky-700 hover:underline truncate">
+                        {p.name}
+                      </Link>
+                      <span className="flex items-center gap-1 shrink-0">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stageBadgeTone(p.pipelineStage)}`}
+                        >
+                          {stageName(p.pipelineStage)}
+                        </span>
+                        {p.tier ? <TierBadge tier={p.tier} /> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-xs text-slate-400">{copy.clickCellHint}</p>
+            )}
+          </div>
+
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-3">
             <p className="text-xs font-medium text-slate-700 mb-2">{copy.legendTitle}</p>
             <ul className="space-y-1.5 text-xs text-slate-600">
@@ -427,43 +468,6 @@ export function PartnerCoverageMap({
                   </li>
                 ))}
               </ul>
-            )}
-          </div>
-
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-3">
-            {selected ? (
-              <>
-                <p className="text-xs font-medium text-slate-700 mb-1">
-                  {matrix.rowLabels[selected.rowKey]} × {matrix.colLabels[selected.colKey]}
-                </p>
-                <p className="text-[11px] text-slate-400 mb-2">
-                  {selected.isGap
-                    ? copy.noPartnersInCell
-                    : copy.partnersInCell.replace("{n}", String(selected.count))}
-                  {selected.bestStage != null && !selected.isGap
-                    ? ` · ${stageName(selected.bestStage)}`
-                    : ""}
-                </p>
-                <ul className="space-y-1.5 max-h-56 overflow-y-auto">
-                  {selected.partners.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-2">
-                      <Link href={`/partners/${p.id}`} className="text-sm text-sky-700 hover:underline truncate">
-                        {p.name}
-                      </Link>
-                      <span className="flex items-center gap-1 shrink-0">
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stageBadgeTone(p.pipelineStage)}`}
-                        >
-                          {stageName(p.pipelineStage)}
-                        </span>
-                        {p.tier ? <TierBadge tier={p.tier} /> : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="text-xs text-slate-400">{copy.clickCellHint}</p>
             )}
           </div>
         </aside>
