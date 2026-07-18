@@ -570,6 +570,10 @@ export const messagesEn = {
     refreshedUpdated: "This lead has been updated from CRM.",
     refreshedUpdatedPending: "Local data updated; reconciling with CRM in the background.",
     refreshedRemoved: "This lead is no longer in the 2026 lead set in CRM; removed from the list.",
+    leadNotFoundTitle: "Lead no longer in list",
+    leadNotFoundDesc:
+      "This lead may have been converted in CRM (e.g. to channel or customer), or is no longer in the 2026 lead set. Partner Hub has synced automatically.",
+    leadNotFoundBack: "Back to leads",
     refreshFailed: "Refresh failed, please try again later.",
     refreshSlowHint: "Edit/transfer requires a full CRM fetch to verify (~1 min), please wait…",
     noClueIdHint: "This lead has no CRM clue_id, CRM actions are unavailable.",

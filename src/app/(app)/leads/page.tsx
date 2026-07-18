@@ -14,6 +14,7 @@ import {
 import { compareKpiDeadline, isKpiDeadlineUrgent } from "@/lib/leads";
 import { InstantSearchInput } from "@/components/instant-search-input";
 import { LeadsSyncButton } from "@/components/leads/leads-sync-button";
+import { LeadsRemovedNotice } from "@/components/leads/leads-removed-notice";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -26,7 +27,7 @@ function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; rank?: string; salesman?: string; view?: string }>;
+  searchParams: Promise<{ q?: string; rank?: string; salesman?: string; view?: string; removed?: string }>;
 }) {
   const user = await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
@@ -68,6 +69,7 @@ export default async function LeadsPage({
         actions={<LeadsSyncButton />}
       />
       <div className="px-8">
+        <LeadsRemovedNotice show={sp.removed === "1"} />
         <div className="flex gap-1 border-b border-slate-200 mb-4">
           <Link
             href={`/leads${buildLeadsSearchParams(sp, { view: "new" })}`}

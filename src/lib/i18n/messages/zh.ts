@@ -570,6 +570,10 @@ export const messagesZh: Messages = {
     refreshedUpdated: "已按 CRM 更新此线索。",
     refreshedUpdatedPending: "已更新本地数据，后台正在与 CRM 校准。",
     refreshedRemoved: "该线索在 CRM 已不在 2026 线索集，已从列表移除。",
+    leadNotFoundTitle: "线索已不在列表中",
+    leadNotFoundDesc:
+      "该线索可能已在 CRM 完成转 channel、转客户等操作，或已不在 2026 线索集。Partner Hub 已自动同步，无需手动刷新。",
+    leadNotFoundBack: "返回线索列表",
     refreshFailed: "刷新失败，请稍后重试。",
     refreshSlowHint: "编辑/责任转移需从 CRM 拉取全量数据校验，约需 1 分钟，请稍候…",
     noClueIdHint: "该线索无 CRM clue_id，无法跳转 CRM 操作。",

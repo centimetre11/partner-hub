@@ -1,4 +1,5 @@
 /**
+ * @deprecated 已改用 Java 自定义提交，见 docs/crm-migrate-js-to-java.md
  * 提交入库成功回调 — 转培育 (cclue_to_public.cpt, type=培育)
  * 参考: https://help.fanruan.com/finereport/doc-view-1219.html
  *

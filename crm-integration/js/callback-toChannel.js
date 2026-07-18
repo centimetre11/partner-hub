@@ -1,4 +1,5 @@
 /**
+ * @deprecated 已改用 Java 自定义提交 PartnerHubLeadNotifyJob，见 docs/crm-migrate-js-to-java.md
  * 提交入库成功回调 — 转 channel (cclue_to_public.cpt, type=channel)
  */
 var CLUE_ID = "${clueid}";

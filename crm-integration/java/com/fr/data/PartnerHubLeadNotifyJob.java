@@ -55,14 +55,24 @@ public class PartnerHubLeadNotifyJob extends TotalSubmitJob {
         }
 
         String json = buildJson(id, act, syncAll, secret);
-        int httpCode = postJson(url, secret, json);
+        HttpResult result = postJson(url, secret, json);
 
         FineLoggerFactory.getLogger().info(
-                "PartnerHub callback clueId={} action={} fullSync={} http={}",
-                id, act, syncAll, httpCode);
+                "PartnerHub callback clueId={} action={} fullSync={} http={} body={}",
+                id, act, syncAll, result.code, result.body);
 
-        if (httpCode < 200 || httpCode >= 300) {
-            throw new Exception("PartnerHub callback HTTP " + httpCode);
+        if (result.code < 200 || result.code >= 300) {
+            throw new Exception("PartnerHub callback HTTP " + result.code + ": " + result.body);
+        }
+    }
+
+    private static final class HttpResult {
+        final int code;
+        final String body;
+
+        HttpResult(int code, String body) {
+            this.code = code;
+            this.body = body;
         }
     }
 
@@ -94,7 +104,7 @@ public class PartnerHubLeadNotifyJob extends TotalSubmitJob {
         return sb.toString();
     }
 
-    private static int postJson(String urlStr, String secret, String json) throws Exception {
+    private static HttpResult postJson(String urlStr, String secret, String json) throws Exception {
         URL url = new URL(urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setConnectTimeout(15000);
@@ -103,6 +113,7 @@ public class PartnerHubLeadNotifyJob extends TotalSubmitJob {
         conn.setDoOutput(true);
         conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
         conn.setRequestProperty("X-CRM-Callback-Secret", secret);
+        conn.setRequestProperty("Accept", "application/json");
 
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         conn.setRequestProperty("Content-Length", String.valueOf(bytes.length));
@@ -113,10 +124,21 @@ public class PartnerHubLeadNotifyJob extends TotalSubmitJob {
 
         int code = conn.getResponseCode();
         InputStream stream = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
-        if (stream != null) {
-            stream.close();
-        }
+        String body = readStream(stream);
         conn.disconnect();
-        return code;
+        return new HttpResult(code, body);
+    }
+
+    private static String readStream(InputStream in) throws Exception {
+        if (in == null) return "";
+        try (InputStream stream = in) {
+            byte[] buf = new byte[4096];
+            StringBuilder sb = new StringBuilder();
+            int n;
+            while ((n = stream.read(buf)) >= 0) {
+                sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+            }
+            return sb.toString();
+        }
     }
 }

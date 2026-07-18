@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, fmtDate, fmtDateTime } from "@/components/ui";
@@ -10,6 +9,8 @@ import { LeadActions } from "@/components/leads/lead-actions";
 import { LeadResearchPanel } from "@/components/leads/lead-research-panel";
 import { LeadEmail } from "@/components/leads/lead-email";
 import { LeadWhatsApp } from "@/components/leads/lead-whatsapp";
+import { LeadDetailGuard } from "@/components/leads/lead-detail-guard";
+import { LeadRemovedState } from "@/components/leads/lead-removed-state";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -41,7 +42,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
 
   const lead = await db.crmLead.findUnique({ where: { id } });
-  if (!lead) notFound();
+  if (!lead) return <LeadRemovedState leadId={id} />;
 
   const nurturing = isNurturingLead(lead.status);
   const tagsText = formatMultiline(lead.tags);
@@ -51,6 +52,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="pb-16">
+      <LeadDetailGuard leadId={lead.id} />
       <div className="px-4 sm:px-6 lg:px-8 pt-5 sm:pt-7 pb-4 flex items-start gap-3">
         <BackButton fallbackHref="/leads" />
         <div className="min-w-0 flex-1">
