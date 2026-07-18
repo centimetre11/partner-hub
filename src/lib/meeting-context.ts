@@ -7,7 +7,7 @@ export type MeetingSchedulerContext = {
   googleEmail: string | null;
   googleClientConfigured: boolean;
   wecomScheduleConfigured: boolean;
-  boundUsers: { id: string; name: string }[];
+  boundUsers: { id: string; name: string; email: string }[];
 };
 
 export async function getMeetingSchedulerContext(userId: string): Promise<MeetingSchedulerContext> {
@@ -15,7 +15,7 @@ export async function getMeetingSchedulerContext(userId: string): Promise<Meetin
     getUserGoogleMeetStatus(userId),
     db.user.findMany({
       where: { wecomUserId: { not: null } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
   ]);

@@ -119,6 +119,7 @@ export function bridgeComposeTimeoutMs(attachmentCount: number): number {
 /** 通过扩展打开企业邮写信页并填充内容与附件。 */
 export async function composeEmailViaBridge(params: {
   to: string;
+  cc?: string;
   subject: string;
   body: string;
   /** 富文本 HTML；有值时优先注入企业邮编辑器 */

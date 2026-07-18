@@ -46,7 +46,7 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
 });
 
 async function handleComposeEmail(payload) {
-  const { to, subject, body, attachments } = payload;
+  const { to, cc, subject, body, attachments } = payload;
   if (!to) return { ok: false, error: "missing recipient" };
 
   const files = [];
@@ -78,6 +78,7 @@ async function handleComposeEmail(payload) {
   const response = await chrome.tabs.sendMessage(tab.id, {
     type: "fillCompose",
     to,
+    cc: cc || "",
     subject: subject || "",
     body: body || "",
     bodyHtml: payload.bodyHtml || "",

@@ -186,6 +186,7 @@ export default async function MobileDeskPage({
           >
             <MeetingScheduler
               currentUserId={user.id}
+              organizerName={user.name}
               googleMeetConnected={meetingCtx.googleMeetConnected}
               wecomScheduleConfigured={meetingCtx.wecomScheduleConfigured}
               boundUsers={meetingCtx.boundUsers}

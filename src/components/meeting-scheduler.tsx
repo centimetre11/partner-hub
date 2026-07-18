@@ -4,6 +4,13 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useMessages } from "@/lib/i18n/context";
 import { createMeetingAction, type CreateMeetingResult } from "@/lib/meeting-actions";
+import {
+  MeetingCustomerInviteForm,
+  type BoundUserWithEmail,
+  type MeetingCustomerOption,
+} from "@/components/meeting-customer-invite-form";
+
+export type { MeetingCustomerOption };
 
 type BoundUser = { id: string; name: string };
 
@@ -307,6 +314,7 @@ function MeetingForm({
 
 export function MeetingScheduler({
   currentUserId,
+  organizerName: _organizerName,
   googleMeetConnected,
   wecomScheduleConfigured,
   boundUsers,
@@ -315,6 +323,7 @@ export function MeetingScheduler({
   buttonClassName,
 }: {
   currentUserId: string;
+  organizerName: string;
   googleMeetConnected: boolean;
   wecomScheduleConfigured: boolean;
   boundUsers: BoundUser[];
@@ -332,7 +341,6 @@ export function MeetingScheduler({
       googleMeetConnected={googleMeetConnected}
       wecomScheduleConfigured={wecomScheduleConfigured}
       boundUsers={boundUsers}
-      onSuccess={variant === "drawer" ? undefined : undefined}
     />
   );
 
@@ -366,6 +374,59 @@ export function MeetingScheduler({
         cancelLabel={m.common.cancel}
       >
         {form}
+      </MobileDrawer>
+    </>
+  );
+}
+
+export function MeetingCustomerInviteScheduler({
+  currentUserId,
+  organizerName,
+  googleMeetConnected,
+  wecomScheduleConfigured,
+  boundUsers,
+  customers,
+  buttonClassName,
+}: {
+  currentUserId: string;
+  organizerName: string;
+  googleMeetConnected: boolean;
+  wecomScheduleConfigured: boolean;
+  boundUsers: BoundUserWithEmail[];
+  customers: MeetingCustomerOption[];
+  buttonClassName?: string;
+}) {
+  const m = useMessages();
+  const s = m.meetingCustomerInvite;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={
+          buttonClassName ??
+          "inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+        }
+      >
+        {s.openButton}
+      </button>
+      <MobileDrawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title={s.drawerTitle}
+        titleId="meeting-customer-invite-title"
+        cancelLabel={m.common.cancel}
+      >
+        <MeetingCustomerInviteForm
+          currentUserId={currentUserId}
+          organizerName={organizerName}
+          googleMeetConnected={googleMeetConnected}
+          wecomScheduleConfigured={wecomScheduleConfigured}
+          boundUsers={boundUsers}
+          customers={customers}
+        />
       </MobileDrawer>
     </>
   );

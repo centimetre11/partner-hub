@@ -4,10 +4,15 @@ import { useMessages } from "@/lib/i18n/context";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
-import { MeetingScheduler } from "@/components/meeting-scheduler";
+import {
+  MeetingCustomerInviteScheduler,
+  MeetingScheduler,
+  type MeetingCustomerOption,
+} from "@/components/meeting-scheduler";
+import type { BoundUserWithEmail } from "@/components/meeting-customer-invite-form";
 
 type Option = { id: string; name: string };
-type BoundUser = { id: string; name: string };
+type BoundUser = BoundUserWithEmail;
 
 const cardActionBtn =
   "w-full inline-flex justify-center rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800";
@@ -32,16 +37,20 @@ function QuickActionCard({
 
 export function DashboardQuickActions({
   userId,
+  userName,
   partners,
   customers,
+  inviteCustomers,
   users,
   googleMeetConnected,
   wecomScheduleConfigured,
   boundUsers,
 }: {
   userId: string;
+  userName: string;
   partners: Option[];
   customers: Option[];
+  inviteCustomers: MeetingCustomerOption[];
   users: Option[];
   googleMeetConnected: boolean;
   wecomScheduleConfigured: boolean;
@@ -50,9 +59,10 @@ export function DashboardQuickActions({
   const m = useMessages();
   const q = m.dashboard.quickActions;
   const meeting = m.dashboard.scheduleMeeting;
+  const meetingInvite = m.dashboard.scheduleMeetingInvite;
 
   return (
-    <div className="mb-6 grid grid-cols-1 gap-3 px-8 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="mb-6 grid grid-cols-1 gap-3 px-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <QuickActionCard title={m.dashboard.createTodo} desc={q.createTodoDesc}>
         <CreateTodoDrawer
           userId={userId}
@@ -83,10 +93,23 @@ export function DashboardQuickActions({
       <QuickActionCard title={meeting.title} desc={meeting.desc}>
         <MeetingScheduler
           currentUserId={userId}
+          organizerName={userName}
           googleMeetConnected={googleMeetConnected}
           wecomScheduleConfigured={wecomScheduleConfigured}
           boundUsers={boundUsers}
           variant="drawer"
+          buttonClassName={cardActionBtn}
+        />
+      </QuickActionCard>
+
+      <QuickActionCard title={meetingInvite.title} desc={meetingInvite.desc}>
+        <MeetingCustomerInviteScheduler
+          currentUserId={userId}
+          organizerName={userName}
+          googleMeetConnected={googleMeetConnected}
+          wecomScheduleConfigured={wecomScheduleConfigured}
+          boundUsers={boundUsers}
+          customers={inviteCustomers}
           buttonClassName={cardActionBtn}
         />
       </QuickActionCard>

@@ -69,7 +69,7 @@ export default async function HomePage({
       {isBoard ? (
         <BoardOverview />
       ) : (
-        <WorkOverview userId={user.id} now={now} todoView={todoView} m={m} bcp47={bcp47} labels={labels} />
+        <WorkOverview userId={user.id} userName={user.name} now={now} todoView={todoView} m={m} bcp47={bcp47} labels={labels} />
       )}
     </div>
   );
@@ -77,6 +77,7 @@ export default async function HomePage({
 
 type WorkProps = {
   userId: string;
+  userName: string;
   now: Date;
   todoView: "mine" | "all";
   m: Awaited<ReturnType<typeof getServerI18n>>["messages"];
@@ -84,7 +85,7 @@ type WorkProps = {
   labels: Awaited<ReturnType<typeof getServerI18n>>["labels"];
 };
 
-async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkProps) {
+async function WorkOverview({ userId, userName, now, todoView, m, bcp47, labels }: WorkProps) {
   const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications, meetingCtx, partners, customers, users] =
     await Promise.all([
     db.todoItem.findMany({
@@ -122,7 +123,7 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
     }),
     db.customer.findMany({
       where: { status: { in: ["ACTIVE", "PROSPECT"] } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, contactEmail: true, contactName: true },
       orderBy: { name: "asc" },
     }),
     db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -154,8 +155,10 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
 
       <DashboardQuickActions
         userId={userId}
+        userName={userName}
         partners={partners}
         customers={customers}
+        inviteCustomers={customers}
         users={users}
         googleMeetConnected={meetingCtx.googleMeetConnected}
         wecomScheduleConfigured={meetingCtx.wecomScheduleConfigured}

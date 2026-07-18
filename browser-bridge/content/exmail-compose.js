@@ -19,7 +19,7 @@
     return true;
   });
 
-  async function runFillCompose({ to, subject, body, bodyHtml, files }) {
+  async function runFillCompose({ to, cc, subject, body, bodyHtml, files }) {
     // 1. 写信表单未打开时，点击「写信」入口
     if (!findEditorBody()) {
       const btn = await waitFor(() => findComposeButton(), 15000, "找不到「写信」按钮，请确认已登录企业邮");
@@ -41,6 +41,16 @@
         if (!filled) problems.push("收件人填充失败");
       } else {
         problems.push("收件人输入框未找到");
+      }
+    }
+
+    if (cc) {
+      const ccField = findCcField(composeDoc);
+      if (ccField) {
+        const filled = await fillRecipient(ccField, cc);
+        if (!filled) problems.push("抄送人填充失败");
+      } else {
+        problems.push("抄送输入框未找到");
       }
     }
 
@@ -217,6 +227,25 @@
       () =>
         Array.from(doc.querySelectorAll("#toAreaCtrl [contenteditable='true']")).find(isVisible),
       () => Array.from(doc.querySelectorAll("input[placeholder*='收件人']")).find(isVisible),
+    ];
+    for (const s of strategies) {
+      const el = s();
+      if (el && isVisible(el)) return el;
+    }
+    return null;
+  }
+
+  function findCcField(doc) {
+    const strategies = [
+      () => doc.querySelector("#ccAreaCtrl .addr_text input"),
+      () => doc.querySelector("#ccAreaCtrl .addr_input input"),
+      () => doc.querySelector("#ccAreaCtrl input:not([type='hidden'])"),
+      () => doc.querySelector("#ccAreaCtrl textarea"),
+      () => doc.querySelector("#cc"),
+      () => doc.querySelector("textarea[name='cc']"),
+      () => Array.from(doc.querySelectorAll("#ccAreaCtrl input")).find(isVisible),
+      () => findInputByRowLabel(doc, /^抄\s*送/),
+      () => Array.from(doc.querySelectorAll("input[placeholder*='抄送']")).find(isVisible),
     ];
     for (const s of strategies) {
       const el = s();
