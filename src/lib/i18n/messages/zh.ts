@@ -270,6 +270,13 @@ export const messagesZh: Messages = {
     quickLinks: "快捷入口",
     quickActions: {
       createTodoDesc: "为伙伴或客户创建跟进待办，关联商机或项目",
+      businessRecordTitle: "录商务记录",
+      businessRecordDesc: "选择伙伴或客户，记录拜访、谈判与跟进进展",
+      businessRecordSelectTarget: "记录对象",
+      businessRecordNone: "请选择伙伴或客户",
+      businessRecordPartnersGroup: "正式伙伴",
+      businessRecordCustomersGroup: "客户",
+      businessRecordPickTarget: "请先选择要记录的伙伴或客户",
       partnerAiTitle: "伙伴 AI 建档",
       customerAiTitle: "客户 AI 建档",
     },

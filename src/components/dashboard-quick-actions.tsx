@@ -2,6 +2,7 @@
 
 import { useMessages } from "@/lib/i18n/context";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
+import { CreateBusinessRecordDrawer } from "@/components/create-business-record-drawer";
 import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import {
@@ -62,13 +63,21 @@ export function DashboardQuickActions({
   const meetingInvite = m.dashboard.scheduleMeetingInvite;
 
   return (
-    <div className="mb-6 grid grid-cols-1 gap-3 px-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="mb-6 grid grid-cols-1 gap-3 px-8 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
       <QuickActionCard title={m.dashboard.createTodo} desc={q.createTodoDesc}>
         <CreateTodoDrawer
           userId={userId}
           partners={partners}
           customers={customers}
           users={users}
+          buttonClassName={cardActionBtn}
+        />
+      </QuickActionCard>
+
+      <QuickActionCard title={q.businessRecordTitle} desc={q.businessRecordDesc}>
+        <CreateBusinessRecordDrawer
+          partners={partners}
+          customers={customers}
           buttonClassName={cardActionBtn}
         />
       </QuickActionCard>

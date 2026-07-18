@@ -270,6 +270,13 @@ export const messagesEn = {
     quickLinks: "Quick Links",
     quickActions: {
       createTodoDesc: "Create follow-up todos for partners or customers, linked to opportunities or projects",
+      businessRecordTitle: "Log business record",
+      businessRecordDesc: "Pick a partner or customer and log a visit, negotiation, or follow-up",
+      businessRecordSelectTarget: "Record for",
+      businessRecordNone: "Choose a partner or customer",
+      businessRecordPartnersGroup: "Active partners",
+      businessRecordCustomersGroup: "Customers",
+      businessRecordPickTarget: "Choose a partner or customer first",
       partnerAiTitle: "Partner AI onboarding",
       customerAiTitle: "Customer AI onboarding",
     },
