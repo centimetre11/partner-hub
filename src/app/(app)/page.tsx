@@ -219,7 +219,6 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
             now={now}
             m={m}
             bcp47={bcp47}
-            labels={labels}
           />
 
           <Card title={m.dashboard.staleAlertsTitle}>
