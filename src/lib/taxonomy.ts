@@ -4,7 +4,7 @@ import { getLabels, type LabelsBundle } from "./i18n/labels";
 import { getLocale } from "./i18n/locale-server";
 import { type Locale } from "./i18n/locale";
 
-export type TaxonomyDimension = "ARCHETYPE" | "INDUSTRY" | "VALUE_PATTERN" | "CATEGORY";
+export type TaxonomyDimension = "ARCHETYPE" | "INDUSTRY" | "VALUE_PATTERN" | "CATEGORY" | "CAPABILITY";
 
 export type TaxonomyOptionRow = {
   code: string;
@@ -19,6 +19,7 @@ const BUILTIN_EN: Record<TaxonomyDimension, Record<string, string>> = {
   INDUSTRY: labelsEn.industryLabels,
   VALUE_PATTERN: labelsEn.valuePatternLabels,
   CATEGORY: labelsEn.categoryLabels,
+  CAPABILITY: labelsEn.capabilityLabels,
 };
 
 function builtinMapForLocale(ui: LabelsBundle): Record<TaxonomyDimension, Record<string, string>> {
@@ -27,6 +28,7 @@ function builtinMapForLocale(ui: LabelsBundle): Record<TaxonomyDimension, Record
     INDUSTRY: ui.industryLabels,
     VALUE_PATTERN: ui.valuePatternLabels,
     CATEGORY: ui.categoryLabels,
+    CAPABILITY: ui.capabilityLabels,
   };
 }
 
@@ -53,10 +55,10 @@ export function slugTaxonomyCode(label: string) {
   return s || `CUSTOM_${Date.now()}`;
 }
 
-export function parseIndustries(p: { industries?: string | null }): string[] {
-  if (!p.industries) return [];
+function parseJsonCodeArray(raw?: string | null): string[] {
+  if (!raw) return [];
   try {
-    const parsed = JSON.parse(p.industries);
+    const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
   } catch {
     /* invalid JSON */
@@ -64,31 +66,55 @@ export function parseIndustries(p: { industries?: string | null }): string[] {
   return [];
 }
 
-export function stringifyIndustries(codes: string[]) {
+function stringifyCodeArray(codes: string[]) {
   const uniq = [...new Set(codes.filter(Boolean))];
   return uniq.length ? JSON.stringify(uniq) : null;
 }
 
-export function normalizeIndustriesInput(raw: unknown): { industries: string | null } {
+function normalizeCodeArrayInput(raw: unknown): string | null {
   if (Array.isArray(raw)) {
     const codes = raw.map(String).map((s) => s.trim()).filter(Boolean);
-    return { industries: stringifyIndustries(codes) };
+    return stringifyCodeArray(codes);
   }
   const trimmed = String(raw ?? "").trim();
-  if (!trimmed) return { industries: null };
+  if (!trimmed) return null;
   if (trimmed.startsWith("[")) {
     try {
       const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) {
         const codes = parsed.map(String).filter(Boolean);
-        return { industries: stringifyIndustries(codes) };
+        return stringifyCodeArray(codes);
       }
     } catch {
       /* fall through */
     }
   }
   const codes = trimmed.includes(",") ? trimmed.split(",").map((s) => s.trim()).filter(Boolean) : [trimmed];
-  return { industries: stringifyIndustries(codes) };
+  return stringifyCodeArray(codes);
+}
+
+export function parseIndustries(p: { industries?: string | null }): string[] {
+  return parseJsonCodeArray(p.industries);
+}
+
+export function stringifyIndustries(codes: string[]) {
+  return stringifyCodeArray(codes);
+}
+
+export function normalizeIndustriesInput(raw: unknown): { industries: string | null } {
+  return { industries: normalizeCodeArrayInput(raw) };
+}
+
+export function parseCapabilities(p: { capabilities?: string | null }): string[] {
+  return parseJsonCodeArray(p.capabilities);
+}
+
+export function stringifyCapabilities(codes: string[]) {
+  return stringifyCodeArray(codes);
+}
+
+export function normalizeCapabilitiesInput(raw: unknown): { capabilities: string | null } {
+  return { capabilities: normalizeCodeArrayInput(raw) };
 }
 
 let builtinLabelsSynced = false;
@@ -118,11 +144,22 @@ async function syncBuiltinTaxonomyLabels() {
   if (builtinLabelsSynced) return;
   await ensureTaxonomySeed();
   for (const [dimension, map] of Object.entries(BUILTIN_EN) as [TaxonomyDimension, Record<string, string>][]) {
+    let sortOrder = 0;
     for (const [code, label] of Object.entries(map)) {
-      await db.taxonomyOption.updateMany({
-        where: { dimension, code, isBuiltin: true },
-        data: { label },
+      const existing = await db.taxonomyOption.findUnique({
+        where: { dimension_code: { dimension, code } },
       });
+      if (!existing) {
+        await db.taxonomyOption.create({
+          data: { dimension, code, label, sortOrder, isBuiltin: true },
+        });
+      } else if (existing.isBuiltin) {
+        await db.taxonomyOption.update({
+          where: { id: existing.id },
+          data: { label },
+        });
+      }
+      sortOrder += 1;
     }
   }
   builtinLabelsSynced = true;

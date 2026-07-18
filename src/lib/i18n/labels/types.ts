@@ -2,13 +2,14 @@ import type { Locale } from "../locale";
 
 export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "relationship";
 
-export type TaxonomyDimension = "ARCHETYPE" | "INDUSTRY" | "VALUE_PATTERN" | "CATEGORY";
+export type TaxonomyDimension = "ARCHETYPE" | "INDUSTRY" | "VALUE_PATTERN" | "CATEGORY" | "CAPABILITY";
 
 export type LabelsBundle = {
   locale: Locale;
   pipelineStages: { stage: number; name: string; desc: string }[];
   categoryLabels: Record<string, string>;
   industryLabels: Record<string, string>;
+  capabilityLabels: Record<string, string>;
   poolFlagLabels: Record<string, string>;
   statusLabels: Record<string, string>;
   contactRoleLabels: Record<string, string>;

@@ -31,6 +31,14 @@ export const labelsEn: LabelsBundle = {
     CROSS: "Cross-industry",
     OTHER: "Other / TBD",
   },
+  capabilityLabels: {
+    CONSULTING: "Consulting",
+    IMPLEMENTATION: "Implementation",
+    RELATIONSHIP: "Relationship",
+    SALES: "Sales / Channel",
+    TRAINING: "Training",
+    INTEGRATION: "Integration",
+  },
   poolFlagLabels: {
     NEW: "New Candidate",
     ADVANCING: "Advancing",
@@ -158,6 +166,7 @@ export const labelsEn: LabelsBundle = {
     name: "Company Name",
     category: "Competitor Category",
     industries: "Primary Industries",
+    capabilities: "Capability Tags",
     tier: "Tier",
     partnerArchetype: "Partner Archetype",
     valuePattern: "Joint Value Pattern",
@@ -251,6 +260,7 @@ export const labelsEn: LabelsBundle = {
     INDUSTRY: { label: "Target industries", hint: "Which verticals (multi-select)" },
     VALUE_PATTERN: { label: "Joint value pattern", hint: "What to sell together" },
     CATEGORY: { label: "Competitive DNA", hint: "Background" },
+    CAPABILITY: { label: "Capability tags", hint: "What they can do (multi-select)" },
   },
   fallbacks: {
     stage: "Stage {n}",

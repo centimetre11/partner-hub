@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { createSession, destroySession, getCurrentUser, requireUser, requireSuperAdmin } from "./session";
 import { stageName } from "./constants";
-import { stringifyIndustries } from "./taxonomy";
+import { stringifyCapabilities, stringifyIndustries } from "./taxonomy";
 import { ACTIVE_PARTNER_DEFAULTS } from "./partner-onboarding";
 import { normalizeUserRole } from "./user-roles";
 import { getLocale } from "./i18n/locale-server";
@@ -184,6 +184,10 @@ export async function updatePartnerAction(partnerId: string, formData: FormData)
     const codes = formData.getAll("industries").map(String).filter(Boolean);
     data.industries = stringifyIndustries(codes);
   }
+  if (formData.has("capabilities")) {
+    const codes = formData.getAll("capabilities").map(String).filter(Boolean);
+    data.capabilities = stringifyCapabilities(codes);
+  }
 
   const touchingHierarchy =
     formData.has("isDistributorPresent") || formData.has("parentId");
@@ -251,6 +255,7 @@ export async function createPartnerAction(formData: FormData) {
   // intent=active：从「正式伙伴」页直建，跳过候选直接进入正式经营
   const asActive = String(formData.get("intent") ?? "") === "active";
   const industryCodes = formData.getAll("industries").map(String).filter(Boolean);
+  const capabilityCodes = formData.getAll("capabilities").map(String).filter(Boolean);
   const parentIdRaw = String(formData.get("parentId") ?? "").trim() || null;
   if (parentIdRaw) {
     const check = await assertTwoLevelHierarchy(null, parentIdRaw);
@@ -261,6 +266,7 @@ export async function createPartnerAction(formData: FormData) {
       name,
       category: String(formData.get("category") ?? "OTHER"),
       industries: stringifyIndustries(industryCodes),
+      capabilities: stringifyCapabilities(capabilityCodes),
       city: String(formData.get("city") ?? "") || null,
       country: String(formData.get("country") ?? "") || null,
       coreBusiness: String(formData.get("coreBusiness") ?? "") || null,

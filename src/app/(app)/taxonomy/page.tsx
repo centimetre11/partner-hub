@@ -13,7 +13,7 @@ import {
 import { db } from "@/lib/db";
 import { getServerI18n } from "@/lib/server-i18n";
 
-const DIMS: TaxonomyDimension[] = ["ARCHETYPE", "INDUSTRY", "VALUE_PATTERN", "CATEGORY"];
+const DIMS: TaxonomyDimension[] = ["ARCHETYPE", "INDUSTRY", "VALUE_PATTERN", "CATEGORY", "CAPABILITY"];
 
 export default async function TaxonomyPage({
   searchParams,

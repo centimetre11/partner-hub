@@ -18,7 +18,7 @@ export async function createTaxonomyOptionAction(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || null;
   let code = String(formData.get("code") ?? "").trim().toUpperCase();
 
-  if (!label || !["ARCHETYPE", "INDUSTRY", "VALUE_PATTERN", "CATEGORY"].includes(dimension)) {
+  if (!label || !["ARCHETYPE", "INDUSTRY", "VALUE_PATTERN", "CATEGORY", "CAPABILITY"].includes(dimension)) {
     return;
   }
   if (!code) code = slugTaxonomyCode(label);

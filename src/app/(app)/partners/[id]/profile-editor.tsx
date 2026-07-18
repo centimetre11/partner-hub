@@ -8,7 +8,12 @@ import { tierSelectValue } from "@/components/ui";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
 import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { ModalPortal } from "@/components/modal-portal";
-import { parseIndustries, type TaxonomyDimension, type TaxonomyOptionRow } from "@/lib/taxonomy";
+import {
+  parseCapabilities,
+  parseIndustries,
+  type TaxonomyDimension,
+  type TaxonomyOptionRow,
+} from "@/lib/taxonomy";
 import { useMessages } from "@/lib/i18n/context";
 
 const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
@@ -142,6 +147,14 @@ export function ProfileEditor({
                   name="industries"
                   selected={parseIndustries(p)}
                   options={taxonomy.INDUSTRY}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <TaxonomyMultiField
+                  dimension="CAPABILITY"
+                  name="capabilities"
+                  selected={parseCapabilities(p)}
+                  options={taxonomy.CAPABILITY}
                 />
               </div>
               <TaxonomySelectField

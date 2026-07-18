@@ -125,6 +125,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     taxonomyIndustry,
     taxonomyValuePattern,
     taxonomyCategory,
+    taxonomyCapability,
     allPartners,
     allCustomers,
     distributorOptions,
@@ -176,6 +177,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     getTaxonomyOptions("INDUSTRY"),
     getTaxonomyOptions("VALUE_PATTERN"),
     getTaxonomyOptions("CATEGORY"),
+    getTaxonomyOptions("CAPABILITY"),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.customer.findMany({
       where: { status: { in: ["ACTIVE", "PROSPECT"] } },
@@ -217,6 +219,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     INDUSTRY: taxonomyIndustry,
     VALUE_PATTERN: taxonomyValuePattern,
     CATEGORY: taxonomyCategory,
+    CAPABILITY: taxonomyCapability,
   };
   const instanceMap = buildPartnerInstanceMap(p, labelMaps, labels);
   const stageGuidance = getStageGuidance(p, labels);

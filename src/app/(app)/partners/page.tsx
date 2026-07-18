@@ -10,6 +10,7 @@ import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { getServerI18n } from "@/lib/server-i18n";
 import { isTodoOverdue } from "@/lib/todo-dates";
 import { PartnerKanbanBoard, type KanbanPartnerCard } from "@/components/partner-kanban";
+import { PartnerCoverageMap } from "@/components/partner-coverage-map";
 import {
   indexOpenOpportunitiesByPartner,
   partnersRelatedOpportunityWhere,
@@ -38,6 +39,25 @@ function pickNextTodo(todos: Pick<TodoItem, "title" | "dueDate" | "priority" | "
   })[0];
 }
 
+function buildFilterQuery(sp: {
+  q?: string;
+  stage?: string;
+  owner?: string;
+  tier?: string;
+  industry?: string;
+  role?: string;
+  view?: string;
+}) {
+  const params = new URLSearchParams();
+  if (sp.q) params.set("q", sp.q);
+  if (sp.stage) params.set("stage", sp.stage);
+  if (sp.owner) params.set("owner", sp.owner);
+  if (sp.tier) params.set("tier", sp.tier);
+  if (sp.industry) params.set("industry", sp.industry);
+  if (sp.role) params.set("role", sp.role);
+  return params;
+}
+
 export default async function PartnersPage({
   searchParams,
 }: {
@@ -48,11 +68,13 @@ export default async function PartnersPage({
     tier?: string;
     industry?: string;
     role?: string;
+    view?: string;
   }>;
 }) {
   await requireUser();
-  const [{ labels, messages: m, bcp47 }, sp] = await Promise.all([getServerI18n(), searchParams]);
+  const [{ labels, messages: m, bcp47, locale }, sp] = await Promise.all([getServerI18n(), searchParams]);
 
+  const view = sp.view === "coverage" ? "coverage" : "kanban";
   const filterStageRaw = sp.stage ? parseInt(sp.stage, 10) : NaN;
   const filterStage =
     Number.isInteger(filterStageRaw) && filterStageRaw >= 1 && filterStageRaw <= 3
@@ -67,58 +89,60 @@ export default async function PartnersPage({
         ? { parentId: { not: null } }
         : {};
 
-  const [industryOptions, categoryOptions, users, distributorOptions, partners] = await Promise.all([
-    getTaxonomyOptions("INDUSTRY"),
-    getTaxonomyOptions("CATEGORY"),
-    db.user.findMany({ select: { id: true, name: true } }),
-    db.partner.findMany({
-      where: { isDistributor: true, parentId: null, status: { in: ["ACTIVE", "PROSPECT"] } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    db.partner.findMany({
-      where: {
-        status: "ACTIVE",
-        ...(nameFilter ? { name: nameFilter } : {}),
-        ...(filterStage ? { pipelineStage: filterStage } : {}),
-        ...(sp.owner
-          ? {
-              OR: [
-                { salesUserId: sp.owner },
-                { ownerId: sp.owner },
-                { presalesUserId: sp.owner },
-              ],
-            }
-          : {}),
-        ...(sp.tier ? { tier: sp.tier } : {}),
-        ...(sp.industry
-          ? {
-              OR: [{ industries: { contains: `"${sp.industry}"` } }],
-            }
-          : {}),
-        ...roleFilter,
-      },
-      include: {
-        contacts: { select: { role: true, contactInfo: true } },
-        todos: {
-          where: { status: "OPEN" },
-          select: { title: true, dueDate: true, priority: true, status: true },
-          orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
+  const [industryOptions, capabilityOptions, categoryOptions, users, distributorOptions, partners] =
+    await Promise.all([
+      getTaxonomyOptions("INDUSTRY"),
+      getTaxonomyOptions("CAPABILITY"),
+      getTaxonomyOptions("CATEGORY"),
+      db.user.findMany({ select: { id: true, name: true } }),
+      db.partner.findMany({
+        where: { isDistributor: true, parentId: null, status: { in: ["ACTIVE", "PROSPECT"] } },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      db.partner.findMany({
+        where: {
+          status: "ACTIVE",
+          ...(nameFilter ? { name: nameFilter } : {}),
+          ...(filterStage ? { pipelineStage: filterStage } : {}),
+          ...(sp.owner
+            ? {
+                OR: [
+                  { salesUserId: sp.owner },
+                  { ownerId: sp.owner },
+                  { presalesUserId: sp.owner },
+                ],
+              }
+            : {}),
+          ...(sp.tier ? { tier: sp.tier } : {}),
+          ...(sp.industry
+            ? {
+                OR: [{ industries: { contains: `"${sp.industry}"` } }],
+              }
+            : {}),
+          ...roleFilter,
         },
-        events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
-        owner: { select: { name: true } },
-        salesUser: { select: { name: true } },
-        presalesUser: { select: { name: true } },
-        parent: { select: { id: true, name: true } },
-        _count: { select: { contacts: true, opportunities: true, events: true, trainings: true, children: true } },
-      },
-      orderBy: [{ pipelineStage: "desc" }, { name: "asc" }],
-    }),
-  ]);
+        include: {
+          contacts: { select: { role: true, contactInfo: true } },
+          todos: {
+            where: { status: "OPEN" },
+            select: { title: true, dueDate: true, priority: true, status: true },
+            orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
+          },
+          events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+          owner: { select: { name: true } },
+          salesUser: { select: { name: true } },
+          presalesUser: { select: { name: true } },
+          parent: { select: { id: true, name: true } },
+          _count: { select: { contacts: true, opportunities: true, events: true, trainings: true, children: true } },
+        },
+        orderBy: [{ pipelineStage: "desc" }, { name: "asc" }],
+      }),
+    ]);
 
   const partnerIds = partners.map((p) => p.id);
   const relatedOpps =
-    partnerIds.length > 0
+    view === "kanban" && partnerIds.length > 0
       ? await db.opportunity.findMany({
           where: partnersRelatedOpportunityWhere(partnerIds),
           select: {
@@ -132,42 +156,63 @@ export default async function PartnersPage({
       : [];
   const oppsByPartner = indexOpenOpportunitiesByPartner(relatedOpps, partnerIds);
 
-  const kanbanCards: KanbanPartnerCard[] = partners.map((p) => {
-    const c = computeCompleteness(
-      {
-        ...p,
-        opportunities: Array.from({ length: p._count.opportunities }, () => ({ id: "_" })) as Opportunity[],
-        trainings: Array.from({ length: p._count.trainings }, () => ({ id: "_" })) as Training[],
-      } as unknown as PartnerWithRelations,
-      labels,
-    );
-    const stale = staleDays(p);
-    const activityAt = lastActivityAt(p);
-    const nextTodo = pickNextTodo(p.todos);
-    const activeOpp = oppsByPartner.get(p.id)?.[0] ?? null;
-    return {
-      id: p.id,
-      name: p.name,
-      pipelineStage: p.pipelineStage,
-      tier: p.tier,
-      staleDays: stale,
-      activityLabel:
-        stale === 0
-          ? `${fmtDate(activityAt, bcp47)} · ${m.partners.activityToday}`
-          : `${fmtDate(activityAt, bcp47)} · ${m.partners.activityDaysAgo.replace("{days}", String(stale))}`,
-      activityTone: stale > 30 ? "red" : stale > 14 ? "amber" : "slate",
-      openTodoCount: p.todos.length,
-      nextTodoTitle: nextTodo?.title ?? null,
-      activeOppName: activeOpp?.name ?? null,
-      completeness: c.score,
-    };
-  });
+  const kanbanCards: KanbanPartnerCard[] =
+    view === "kanban"
+      ? partners.map((p) => {
+          const c = computeCompleteness(
+            {
+              ...p,
+              opportunities: Array.from({ length: p._count.opportunities }, () => ({ id: "_" })) as Opportunity[],
+              trainings: Array.from({ length: p._count.trainings }, () => ({ id: "_" })) as Training[],
+            } as unknown as PartnerWithRelations,
+            labels,
+          );
+          const stale = staleDays(p);
+          const activityAt = lastActivityAt(p);
+          const nextTodo = pickNextTodo(p.todos);
+          const activeOpp = oppsByPartner.get(p.id)?.[0] ?? null;
+          return {
+            id: p.id,
+            name: p.name,
+            pipelineStage: p.pipelineStage,
+            tier: p.tier,
+            staleDays: stale,
+            activityLabel:
+              stale === 0
+                ? `${fmtDate(activityAt, bcp47)} · ${m.partners.activityToday}`
+                : `${fmtDate(activityAt, bcp47)} · ${m.partners.activityDaysAgo.replace("{days}", String(stale))}`,
+            activityTone: stale > 30 ? "red" : stale > 14 ? "amber" : "slate",
+            openTodoCount: p.todos.length,
+            nextTodoTitle: nextTodo?.title ?? null,
+            activeOppName: activeOpp?.name ?? null,
+            completeness: c.score,
+          };
+        })
+      : [];
+
+  const filterBase = buildFilterQuery(sp);
+  const kanbanHref = (() => {
+    const q = new URLSearchParams(filterBase);
+    q.delete("view");
+    const s = q.toString();
+    return s ? `/partners?${s}` : "/partners";
+  })();
+  const coverageHref = (() => {
+    const q = new URLSearchParams(filterBase);
+    q.set("view", "coverage");
+    return `/partners?${q.toString()}`;
+  })();
+
+  const desc =
+    view === "coverage"
+      ? m.partners.descCoverage.replace("{count}", String(partners.length))
+      : m.partners.desc.replace("{count}", String(partners.length));
 
   return (
     <div className="pb-16">
       <PageHeader
         title={m.partners.title}
-        desc={m.partners.desc.replace("{count}", String(partners.length))}
+        desc={desc}
         actions={
           <div className="flex gap-2">
             <AddPartnerForm
@@ -180,7 +225,31 @@ export default async function PartnersPage({
         }
       />
       <div className="px-8">
+        <div className="flex flex-wrap gap-2 mb-4">
+          <Link
+            href={kanbanHref}
+            className={`rounded-lg px-3 py-1.5 text-sm border ${
+              view === "kanban"
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {m.partners.viewKanban}
+          </Link>
+          <Link
+            href={coverageHref}
+            className={`rounded-lg px-3 py-1.5 text-sm border ${
+              view === "coverage"
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            {m.partners.viewCoverage}
+          </Link>
+        </div>
+
         <form className="flex flex-wrap gap-2 mb-4" method="get">
+          {view === "coverage" ? <input type="hidden" name="view" value="coverage" /> : null}
           {filterStage ? <input type="hidden" name="stage" value={filterStage} /> : null}
           <InstantSearchInput
             placeholder={m.partners.searchPlaceholder}
@@ -243,6 +312,48 @@ export default async function PartnersPage({
               </Link>
             </div>
           </div>
+        ) : view === "coverage" ? (
+          <PartnerCoverageMap
+            partners={partners.map((p) => ({
+              id: p.id,
+              name: p.name,
+              tier: p.tier,
+              country: p.country,
+              city: p.city,
+              industries: p.industries,
+              capabilities: p.capabilities,
+            }))}
+            locale={locale === "zh" ? "zh" : "en"}
+            industryLabels={Object.fromEntries(industryOptions.map((o) => [o.code, o.label]))}
+            capabilityLabels={Object.fromEntries(capabilityOptions.map((o) => [o.code, o.label]))}
+            industryOrder={industryOptions.map((o) => o.code)}
+            capabilityOrder={capabilityOptions.map((o) => o.code)}
+            copy={{
+              pairRegionIndustry: m.partners.coveragePairRegionIndustry,
+              pairRegionCapability: m.partners.coveragePairRegionCapability,
+              pairIndustryCapability: m.partners.coveragePairIndustryCapability,
+              gapsTitle: m.partners.coverageGapsTitle,
+              weakTitle: m.partners.coverageWeakTitle,
+              gapsEmpty: m.partners.coverageGapsEmpty,
+              legendTitle: m.partners.coverageLegendTitle,
+              legendGap: m.partners.coverageLegendGap,
+              legendUntiered: m.partners.coverageLegendUntiered,
+              legendC: m.partners.coverageLegendC,
+              legendB: m.partners.coverageLegendB,
+              legendA: m.partners.coverageLegendA,
+              gapsOnly: m.partners.coverageGapsOnly,
+              partnersInCell: m.partners.coveragePartnersInCell,
+              noPartnersInCell: m.partners.coverageNoPartnersInCell,
+              clickCellHint: m.partners.coverageClickCellHint,
+              gapRegion: m.partners.coverageGapRegion,
+              gapCapability: m.partners.coverageGapCapability,
+              gapIndustry: m.partners.coverageGapIndustry,
+              noneIndustry: m.partners.coverageNoneIndustry,
+              noneCapability: m.partners.coverageNoneCapability,
+              showAllRegions: m.partners.coverageShowAllRegions,
+              hideEmptyRegions: m.partners.coverageHideEmptyRegions,
+            }}
+          />
         ) : (
           <PartnerKanbanBoard
             initialCards={kanbanCards}

@@ -31,6 +31,14 @@ export const labelsZh: LabelsBundle = {
     CROSS: "跨行业",
     OTHER: "其他/待判定",
   },
+  capabilityLabels: {
+    CONSULTING: "咨询",
+    IMPLEMENTATION: "实施/交付",
+    RELATIONSHIP: "关系/客情",
+    SALES: "销售/渠道",
+    TRAINING: "培训/赋能",
+    INTEGRATION: "集成/开发",
+  },
   poolFlagLabels: {
     NEW: "新候选",
     ADVANCING: "推进中",
@@ -158,6 +166,7 @@ export const labelsZh: LabelsBundle = {
     name: "公司全称",
     category: "竞品基因",
     industries: "主攻行业",
+    capabilities: "能力标签",
     tier: "Tier",
     partnerArchetype: "伙伴类型",
     valuePattern: "联合价值模式",
@@ -251,6 +260,7 @@ export const labelsZh: LabelsBundle = {
     INDUSTRY: { label: "主攻行业", hint: "打哪行（可多选）" },
     VALUE_PATTERN: { label: "联合价值模式", hint: "一起卖什么" },
     CATEGORY: { label: "竞品基因", hint: "出身" },
+    CAPABILITY: { label: "能力标签", hint: "能做什么（可多选）" },
   },
   fallbacks: {
     stage: "阶段 {n}",

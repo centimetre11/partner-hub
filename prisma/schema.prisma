@@ -63,6 +63,7 @@ model Partner {
   // PURE_DATA / POWER_BI / TABLEAU / QLIK / IT_INTEGRATOR / OTHER
   category         String   @default("OTHER")
   industries       String?  // JSON 数组，主攻行业多选
+  capabilities     String?  // JSON 数组，能力标签多选（CONSULTING / IMPLEMENTATION / …）
   // DATA_NATIVE / BI_MIGRATOR / IT_INTEGRATOR / IOT_INTEGRATOR / SALES_AGENT / SHELL_DATA / OTHER
   partnerArchetype String?
   // IOT_DASH / APP_REPORT / CLOUD_APP / DATA_BI / BI_COMPLEMENT / OEM_EMBED / GOV_BID
@@ -279,7 +280,7 @@ model WecomPushJob {
 // 维度库：伙伴类型 / 行业 / 价值模式 / 竞品基因 的可扩展选项
 model TaxonomyOption {
   id          String   @id @default(cuid())
-  dimension   String   // ARCHETYPE | INDUSTRY | VALUE_PATTERN | CATEGORY
+  dimension   String   // ARCHETYPE | INDUSTRY | VALUE_PATTERN | CATEGORY | CAPABILITY
   code        String
   label       String
   description String?
