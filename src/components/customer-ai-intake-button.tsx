@@ -9,6 +9,7 @@ export function CustomerAiIntakeButton({
   customerId,
   partnerId,
   label,
+  suffix,
   variant = "soft",
   className,
   onDoneNavigate = "customer",
@@ -16,6 +17,7 @@ export function CustomerAiIntakeButton({
   customerId?: string;
   partnerId?: string | null;
   label?: string;
+  suffix?: React.ReactNode;
   variant?: "soft" | "primary" | "section";
   className?: string;
   /** 新建完成后：跳转客户详情，或仅刷新当前页（伙伴详情用） */
@@ -39,6 +41,7 @@ export function CustomerAiIntakeButton({
     <>
       <button type="button" onClick={() => setOpen(true)} className={className ?? btnClass}>
         {label ?? ai.aiButton}
+        {suffix}
       </button>
       {open && (
         <AiIntakePanel

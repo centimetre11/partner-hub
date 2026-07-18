@@ -16,10 +16,14 @@ export function CreateBusinessRecordDrawer({
   partners,
   customers,
   buttonClassName,
+  buttonLabel,
+  buttonSuffix,
 }: {
   partners: Option[];
   customers: Option[];
   buttonClassName?: string;
+  buttonLabel?: string;
+  buttonSuffix?: React.ReactNode;
 }) {
   const m = useMessages();
   const q = m.dashboard.quickActions;
@@ -62,7 +66,8 @@ export function CreateBusinessRecordDrawer({
           "rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
         }
       >
-        {buttonClassName ? q.businessRecordTitle : `+ ${q.businessRecordTitle}`}
+        {buttonLabel ?? (buttonClassName ? q.businessRecordTitle : `+ ${q.businessRecordTitle}`)}
+        {buttonSuffix}
       </button>
 
       {open && (

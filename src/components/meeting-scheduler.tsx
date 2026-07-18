@@ -312,6 +312,8 @@ export function MeetingScheduler({
   variant,
   autoOpen = false,
   buttonClassName,
+  buttonLabel,
+  buttonSuffix,
 }: {
   currentUserId: string;
   organizerName: string;
@@ -321,6 +323,8 @@ export function MeetingScheduler({
   variant: "card" | "drawer";
   autoOpen?: boolean;
   buttonClassName?: string;
+  buttonLabel?: string;
+  buttonSuffix?: React.ReactNode;
 }) {
   const m = useMessages();
   const s = m.meetingScheduler;
@@ -355,7 +359,8 @@ export function MeetingScheduler({
           "inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
         }
       >
-        {s.openButton}
+        {buttonLabel ?? s.openButton}
+        {buttonSuffix}
       </button>
       <MobileDrawer
         open={open}
@@ -378,6 +383,8 @@ export function MeetingCustomerInviteScheduler({
   boundUsers,
   customers,
   buttonClassName,
+  buttonLabel,
+  buttonSuffix,
 }: {
   currentUserId: string;
   organizerName: string;
@@ -386,6 +393,8 @@ export function MeetingCustomerInviteScheduler({
   boundUsers: BoundUserWithEmail[];
   customers: MeetingCustomerOption[];
   buttonClassName?: string;
+  buttonLabel?: string;
+  buttonSuffix?: React.ReactNode;
 }) {
   const m = useMessages();
   const s = m.meetingCustomerInvite;
@@ -401,7 +410,8 @@ export function MeetingCustomerInviteScheduler({
           "inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
         }
       >
-        {s.openButton}
+        {buttonLabel ?? s.openButton}
+        {buttonSuffix}
       </button>
       <MobileDrawer
         open={open}

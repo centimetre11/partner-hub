@@ -269,6 +269,7 @@ export const messagesZh: Messages = {
     unreadInboxTitle: "✉ 未读收件箱 ({count})",
     quickLinks: "快捷入口",
     quickActions: {
+      actionOpen: "打开",
       createTodoDesc: "为伙伴或客户创建跟进待办，关联商机或项目",
       businessRecordTitle: "录商务记录",
       businessRecordDesc: "选择伙伴或客户，记录拜访、谈判与跟进进展",

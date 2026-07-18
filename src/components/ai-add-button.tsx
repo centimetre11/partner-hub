@@ -10,6 +10,7 @@ export function AiAddButton({
   partnerId,
   customerId,
   label = "✦ AI Add",
+  suffix,
   variant = "ghost",
   className,
 }: {
@@ -17,6 +18,7 @@ export function AiAddButton({
   partnerId?: string;
   customerId?: string;
   label?: string;
+  suffix?: React.ReactNode;
   variant?: "ghost" | "solid" | "soft";
   className?: string;
 }) {
@@ -38,6 +40,7 @@ export function AiAddButton({
         className={className ?? `rounded-lg px-3 py-1.5 text-xs font-medium ${base}`}
       >
         {label}
+        {suffix}
       </button>
       {open && (
         <AiIntakePanel

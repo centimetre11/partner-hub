@@ -269,6 +269,7 @@ export const messagesEn = {
     unreadInboxTitle: "✉ Unread Inbox ({count})",
     quickLinks: "Quick Links",
     quickActions: {
+      actionOpen: "Open",
       createTodoDesc: "Create follow-up todos for partners or customers, linked to opportunities or projects",
       businessRecordTitle: "Log business record",
       businessRecordDesc: "Pick a partner or customer and log a visit, negotiation, or follow-up",
