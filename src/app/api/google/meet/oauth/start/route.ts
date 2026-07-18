@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/session";
-import { buildMeetAuthUrl } from "@/lib/google-meet-oauth";
-import { appBaseUrl, resolveGoogleOauthConfig } from "@/lib/google-oauth";
+import { buildMeetAuthUrl, meetAccountUrl } from "@/lib/google-meet-oauth";
+import { resolveGoogleOauthConfig } from "@/lib/google-oauth";
 
 const STATE_COOKIE = "gmeet_oauth_state";
 const USER_COOKIE = "gmeet_oauth_uid";
@@ -11,9 +11,7 @@ export async function GET() {
 
   const cfg = await resolveGoogleOauthConfig();
   if (!cfg) {
-    return NextResponse.redirect(
-      new URL("/account?google_meet=missing_client#google-meet", appBaseUrl()),
-    );
+    return NextResponse.redirect(new URL(meetAccountUrl("missing_client")));
   }
 
   const state = crypto.randomUUID();

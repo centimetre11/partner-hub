@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectUserMeetFromCode } from "@/lib/google-meet-oauth";
-import { appBaseUrl, resolveGoogleOauthConfig } from "@/lib/google-oauth";
+import { connectUserMeetFromCode, meetAccountUrl } from "@/lib/google-meet-oauth";
+import { resolveGoogleOauthConfig } from "@/lib/google-oauth";
 
 const STATE_COOKIE = "gmeet_oauth_state";
 const USER_COOKIE = "gmeet_oauth_uid";
 
 function accountRedirect(status: string) {
-  return NextResponse.redirect(new URL(`/account?google_meet=${status}#google-meet`, appBaseUrl()));
+  return NextResponse.redirect(new URL(meetAccountUrl(status)));
 }
 
 export async function GET(req: NextRequest) {

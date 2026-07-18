@@ -1,6 +1,5 @@
 import { db } from "./db";
 import {
-  appBaseUrl,
   exchangeCodeForTokens,
   fetchGoogleUserEmail,
   refreshAccessToken,
@@ -15,8 +14,24 @@ export const GOOGLE_MEET_SCOPES = [
   "email",
 ].join(" ");
 
+/** Meet OAuth 专用对外域名（可与 APP_BASE_URL 不同，例如 camelusai.com） */
+export function meetOauthBaseUrl(): string {
+  return (
+    process.env.GOOGLE_MEET_OAUTH_BASE_URL?.trim() ||
+    process.env.APP_BASE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    "http://localhost:3000"
+  ).replace(/\/+$/, "");
+}
+
 export function meetOauthRedirectUri(): string {
-  return `${appBaseUrl()}/api/google/meet/oauth/callback`;
+  return `${meetOauthBaseUrl()}/api/google/meet/oauth/callback`;
+}
+
+export function meetAccountUrl(status?: string): string {
+  const base = `${meetOauthBaseUrl()}/account`;
+  if (!status) return `${base}#google-meet`;
+  return `${base}?google_meet=${encodeURIComponent(status)}#google-meet`;
 }
 
 export function buildMeetAuthUrl(clientId: string, state: string): string {
