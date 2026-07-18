@@ -17,6 +17,7 @@ export function CreateTodoDrawer({
   customers,
   users,
   defaultOwnerRef = "",
+  buttonClassName,
 }: {
   userId: string;
   partners: Option[];
@@ -24,6 +25,7 @@ export function CreateTodoDrawer({
   users: Option[];
   /** Pre-select related partner/customer on open (e.g. on detail pages). */
   defaultOwnerRef?: string;
+  buttonClassName?: string;
 }) {
   const m = useMessages();
   const router = useRouter();
@@ -93,9 +95,12 @@ export function CreateTodoDrawer({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
+        className={
+          buttonClassName ??
+          "rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
+        }
       >
-        + {m.dashboard.createTodo}
+        {buttonClassName ? m.dashboard.createTodo : `+ ${m.dashboard.createTodo}`}
       </button>
 
       {open && (

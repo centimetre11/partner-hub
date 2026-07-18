@@ -312,6 +312,7 @@ export function MeetingScheduler({
   boundUsers,
   variant,
   autoOpen = false,
+  buttonClassName,
 }: {
   currentUserId: string;
   googleMeetConnected: boolean;
@@ -319,6 +320,7 @@ export function MeetingScheduler({
   boundUsers: BoundUser[];
   variant: "card" | "drawer";
   autoOpen?: boolean;
+  buttonClassName?: string;
 }) {
   const m = useMessages();
   const s = m.meetingScheduler;
@@ -349,7 +351,10 @@ export function MeetingScheduler({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+        className={
+          buttonClassName ??
+          "inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+        }
       >
         {s.openButton}
       </button>

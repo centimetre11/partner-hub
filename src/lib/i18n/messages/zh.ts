@@ -268,6 +268,11 @@ export const messagesZh: Messages = {
     staleAlertsTitle: "停滞预警（30+ 天无活动）",
     unreadInboxTitle: "✉ 未读收件箱 ({count})",
     quickLinks: "快捷入口",
+    quickActions: {
+      createTodoDesc: "为伙伴或客户创建跟进待办，关联商机或项目",
+      partnerAiTitle: "伙伴 AI 建档",
+      customerAiTitle: "客户 AI 建档",
+    },
     noWeekTodosEmpty: "未来 7 天暂无待办",
     noStaleEmpty: "正式伙伴近期均有跟进 — 状态良好 ✓",
     noActivityDays: "{days} 天无活动",

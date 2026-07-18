@@ -4,12 +4,9 @@ import { requireUser } from "@/lib/session";
 import { Card, EmptyState, fmtDate, TierBadge } from "@/components/ui";
 import { staleDays } from "@/lib/completeness";
 import { DashboardOverdueTodoRow } from "@/components/dashboard-todo-row";
-import { WeeklyReport } from "./weekly-report";
-import { AiAddButton } from "@/components/ai-add-button";
-import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { BoardOverview } from "./dashboard/board-overview";
 import { DashboardWorkbenchTodos } from "./dashboard-workbench-todos";
-import { MeetingScheduler } from "@/components/meeting-scheduler";
+import { DashboardQuickActions } from "@/components/dashboard-quick-actions";
 import { getMeetingSchedulerContext } from "@/lib/meeting-context";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import { getServerI18n, stageName } from "@/lib/server-i18n";
@@ -88,7 +85,7 @@ type WorkProps = {
 };
 
 async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkProps) {
-  const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications, meetingCtx] =
+  const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications, meetingCtx, partners, customers, users] =
     await Promise.all([
     db.todoItem.findMany({
       where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore(now) } },
@@ -118,6 +115,17 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
         })
       : Promise.resolve([]),
     getMeetingSchedulerContext(userId),
+    db.partner.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.customer.findMany({
+      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
   const stalePartners = activePartners
@@ -144,6 +152,16 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
         ))}
       </div>
 
+      <DashboardQuickActions
+        userId={userId}
+        partners={partners}
+        customers={customers}
+        users={users}
+        googleMeetConnected={meetingCtx.googleMeetConnected}
+        wecomScheduleConfigured={meetingCtx.wecomScheduleConfigured}
+        boundUsers={meetingCtx.boundUsers}
+      />
+
       {(openTodoCount > 0 || overdueTodos.length > 0 || signedPlusCount > 0) && (
         <div className="px-8 mb-4 flex flex-wrap gap-3 text-xs">
           {openTodoCount > 0 && (
@@ -164,9 +182,28 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
         </div>
       )}
 
-      <div className="px-8 grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <div className="xl:col-span-2 space-y-5">
-          {overdueTodos.length > 0 && (
+      <div className="px-8 space-y-5">
+        {INBOX_NAV_ENABLED && unreadNotifications.length > 0 && (
+          <Card
+            title={m.dashboard.unreadInboxTitle.replace("{count}", String(unreadNotifications.length))}
+            className="border-slate-200"
+            actions={<Link href="/inbox" className="text-xs text-sky-600 hover:underline">{m.common.viewAll} →</Link>}
+          >
+            <div className="space-y-2.5">
+              {unreadNotifications.map((n) => (
+                <Link key={n.id} href="/inbox" className="block group">
+                  <div className="text-sm text-slate-800 group-hover:text-sky-600 line-clamp-1">{n.title}</div>
+                  <div className="text-xs text-slate-400 line-clamp-1">
+                    {n.proposal && <span className="text-amber-600 mr-1">{m.dashboard.pendingProposal}</span>}
+                    {n.content?.slice(0, 80) ?? ""}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {overdueTodos.length > 0 && (
             <Card title={m.dashboard.overdueTodosTitle.replace("{count}", String(overdueTodos.length))} className="border-red-200">
               <div className="space-y-2.5">
                 {overdueTodos.map((t) => (
@@ -210,60 +247,6 @@ async function WorkOverview({ userId, now, todoView, m, bcp47, labels }: WorkPro
               {stalePartners.length === 0 && <EmptyState text={m.dashboard.noStaleEmpty} />}
             </div>
           </Card>
-        </div>
-
-        <div className="space-y-5">
-          {INBOX_NAV_ENABLED && unreadNotifications.length > 0 && (
-            <Card
-              title={m.dashboard.unreadInboxTitle.replace("{count}", String(unreadNotifications.length))}
-              className="border-slate-200"
-              actions={<Link href="/inbox" className="text-xs text-sky-600 hover:underline">{m.common.viewAll} →</Link>}
-            >
-              <div className="space-y-2.5">
-                {unreadNotifications.map((n) => (
-                  <Link key={n.id} href="/inbox" className="block group">
-                    <div className="text-sm text-slate-800 group-hover:text-sky-600 line-clamp-1">{n.title}</div>
-                    <div className="text-xs text-slate-400 line-clamp-1">
-                      {n.proposal && <span className="text-amber-600 mr-1">{m.dashboard.pendingProposal}</span>}
-                      {n.content?.slice(0, 80) ?? ""}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </Card>
-          )}
-          <WeeklyReport />
-          <Card title={m.dashboard.scheduleMeeting.title}>
-            <MeetingScheduler
-              currentUserId={userId}
-              googleMeetConnected={meetingCtx.googleMeetConnected}
-              wecomScheduleConfigured={meetingCtx.wecomScheduleConfigured}
-              boundUsers={meetingCtx.boundUsers}
-              variant="card"
-            />
-          </Card>
-          <Card title={m.dashboard.quickLinks}>
-            <div className="space-y-2 text-sm">
-              <div className="rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
-                <div className="font-medium text-slate-800">{m.dashboard.aiOnboarding}</div>
-                <div className="text-xs text-slate-400 mt-0.5 mb-2">{m.dashboard.aiOnboardingDesc}</div>
-                <AiAddButton scope="new_partner" label={m.dashboard.startOnboarding} variant="soft" />
-              </div>
-              <div className="rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
-                <div className="font-medium text-slate-800">{m.dashboard.customerAiOnboarding}</div>
-                <div className="text-xs text-slate-400 mt-0.5 mb-2">{m.dashboard.customerAiOnboardingDesc}</div>
-                <CustomerAiIntakeButton label={m.dashboard.startCustomerOnboarding} variant="soft" />
-              </div>
-              <Link href="/partners?tier=A" className="block rounded-lg border border-slate-100 px-4 py-3 hover:border-slate-300">
-                <div className="font-medium text-slate-800">{m.dashboard.tierAPartners}</div>
-                <div className="text-xs text-slate-400 mt-0.5">{m.dashboard.tierAPartnersDesc}</div>
-              </Link>
-              <Link href="/pool" className="block rounded-lg border border-dashed border-slate-200 px-4 py-2.5 hover:border-slate-300">
-                <div className="text-xs text-slate-500">{m.dashboard.prospectPoolLink}</div>
-              </Link>
-            </div>
-          </Card>
-        </div>
       </div>
     </>
   );

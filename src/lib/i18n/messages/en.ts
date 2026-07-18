@@ -268,6 +268,11 @@ export const messagesEn = {
     staleAlertsTitle: "Stale Partner Alerts (no activity for 30+ days)",
     unreadInboxTitle: "✉ Unread Inbox ({count})",
     quickLinks: "Quick Links",
+    quickActions: {
+      createTodoDesc: "Create follow-up todos for partners or customers, linked to opportunities or projects",
+      partnerAiTitle: "Partner AI onboarding",
+      customerAiTitle: "Customer AI onboarding",
+    },
     noWeekTodosEmpty: "No todos due in the next 7 days",
     noStaleEmpty: "All active partners have recent follow-ups — looking healthy ✓",
     noActivityDays: "{days}d no activity",

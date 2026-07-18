@@ -10,12 +10,14 @@ export function CustomerAiIntakeButton({
   partnerId,
   label,
   variant = "soft",
+  className,
   onDoneNavigate = "customer",
 }: {
   customerId?: string;
   partnerId?: string | null;
   label?: string;
   variant?: "soft" | "primary" | "section";
+  className?: string;
   /** 新建完成后：跳转客户详情，或仅刷新当前页（伙伴详情用） */
   onDoneNavigate?: "customer" | "refresh";
 }) {
@@ -35,7 +37,7 @@ export function CustomerAiIntakeButton({
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={btnClass}>
+      <button type="button" onClick={() => setOpen(true)} className={className ?? btnClass}>
         {label ?? ai.aiButton}
       </button>
       {open && (

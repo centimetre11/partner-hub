@@ -94,7 +94,16 @@ export async function createMeetingAction(formData: FormData): Promise<CreateMee
     meetLink = meet.meetLink;
     if (meet.deleteWarning) warnings.push(meet.deleteWarning);
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Failed to create Google Meet link" };
+    const raw = e instanceof Error ? e.message : "Failed to create Google Meet link";
+    if (/insufficient authentication scopes/i.test(raw)) {
+      return {
+        ok: false,
+        error:
+          "Google 授权缺少日历权限（calendar.events）。请到个人中心 → Google Meet：先「断开连接」，再重新「连接 Google 账号」，并勾选日历相关权限。若仍失败，请在 Google 账号 https://myaccount.google.com/permissions 中移除本应用后重试。",
+        code: "google_insufficient_scopes",
+      };
+    }
+    return { ok: false, error: raw };
   }
 
   const description = `Google Meet: ${meetLink}`;
