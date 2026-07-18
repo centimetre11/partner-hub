@@ -1,10 +1,13 @@
 import type { Locale } from "./i18n/locale";
-import { formatMeetingWindow as formatMeetingWindowInZone } from "./meeting-datetime";
+import { formatMeetingWindow as formatMeetingWindowInZone, formatMeetingWindowFromLocal } from "./meeting-datetime";
 
 export type MeetingInviteEmailInput = {
   title: string;
   startAt: Date;
   endAt: Date;
+  /** datetime-local 墙钟；有值时邮件时间以此为准（与表单一致） */
+  startLocal?: string;
+  endLocal?: string;
   timeZone: string;
   meetLink: string;
   customerName: string;
@@ -16,6 +19,15 @@ export type MeetingInviteEmailInput = {
 };
 
 function formatMeetingWindow(input: MeetingInviteEmailInput): string {
+  if (input.startLocal && input.endLocal) {
+    const fromLocal = formatMeetingWindowFromLocal(
+      input.startLocal,
+      input.endLocal,
+      input.timeZone,
+      input.locale,
+    );
+    if (fromLocal) return fromLocal;
+  }
   return formatMeetingWindowInZone(input.startAt, input.endAt, input.timeZone, input.locale);
 }
 

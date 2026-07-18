@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 import { createMeetingAction, type CreateMeetingResult } from "@/lib/meeting-actions";
@@ -30,6 +30,14 @@ export type BoundUserWithEmail = { id: string; name: string; email: string };
 const input =
   "box-border w-full min-w-0 max-w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
+function imageFilesFromClipboard(data: DataTransfer | null): File[] {
+  if (!data?.items) return [];
+  return [...data.items]
+    .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+    .map((it) => it.getAsFile())
+    .filter((f): f is File => !!f);
+}
+
 type InviteSnapshot = {
   to: string;
   cc?: string;
@@ -37,6 +45,8 @@ type InviteSnapshot = {
   meetingTitle: string;
   customerName: string;
   contactName: string | null;
+  startLocal: string;
+  endLocal: string;
   startAt: Date;
   endAt: Date;
 };
@@ -81,6 +91,8 @@ export function MeetingCustomerInviteForm({
   const [extracting, setExtracting] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const extractBusyRef = useRef(false);
+  const handleImageExtractRef = useRef<(file: File) => Promise<void>>(async () => {});
 
   const [result, setResult] = useState<Extract<CreateMeetingResult, { ok: true }> | null>(null);
   const [copied, setCopied] = useState(false);
@@ -181,6 +193,8 @@ export function MeetingCustomerInviteForm({
   }
 
   async function handleImageExtract(file: File) {
+    if (extractBusyRef.current) return;
+    extractBusyRef.current = true;
     setExtractError(null);
     setExtracting(true);
     try {
@@ -202,8 +216,37 @@ export function MeetingCustomerInviteForm({
       setExtractError(e instanceof Error ? e.message : invite.extractFailed);
     } finally {
       setExtracting(false);
+      extractBusyRef.current = false;
     }
   }
+
+  handleImageExtractRef.current = handleImageExtract;
+
+  useEffect(() => {
+    if (inputMode !== "auto") return;
+    const onPaste = (e: ClipboardEvent) => {
+      const files = imageFilesFromClipboard(e.clipboardData);
+      if (!files.length || extractBusyRef.current) return;
+      e.preventDefault();
+      void handleImageExtractRef.current(files[0]);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [inputMode]);
+
+  const onPasteImage = useCallback((e: React.ClipboardEvent) => {
+    const files = imageFilesFromClipboard(e.clipboardData);
+    if (!files.length) return;
+    e.preventDefault();
+    void handleImageExtractRef.current(files[0]);
+  }, []);
+
+  const onDropImage = useCallback((e: React.DragEvent) => {
+    const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+    if (!files.length) return;
+    e.preventDefault();
+    void handleImageExtractRef.current(files[0]);
+  }, []);
 
   async function openInviteCompose(meetLink: string, snapshot: InviteSnapshot) {
     setComposeNotice(null);
@@ -212,6 +255,8 @@ export function MeetingCustomerInviteForm({
       cc: snapshot.cc,
       subject: snapshot.subject,
       meetingTitle: snapshot.meetingTitle,
+      startLocal: snapshot.startLocal,
+      endLocal: snapshot.endLocal,
       startAt: snapshot.startAt,
       endAt: snapshot.endAt,
       timeZone,
@@ -278,6 +323,8 @@ export function MeetingCustomerInviteForm({
       meetingTitle: subject,
       customerName: selectedCustomer?.name ?? (contactName.trim() || customerEmail.trim()),
       contactName: contactName.trim() || null,
+      startLocal: startAt,
+      endLocal: endAt,
       startAt: parsedStart,
       endAt: parsedEnd,
     };
@@ -302,6 +349,8 @@ export function MeetingCustomerInviteForm({
       cc: inviteSnapshot.cc,
       subject: inviteSnapshot.subject,
       meetingTitle: inviteSnapshot.meetingTitle,
+      startLocal: inviteSnapshot.startLocal,
+      endLocal: inviteSnapshot.endLocal,
       startAt: inviteSnapshot.startAt,
       endAt: inviteSnapshot.endAt,
       timeZone,
@@ -477,8 +526,19 @@ export function MeetingCustomerInviteForm({
       </div>
 
       {inputMode === "auto" && (
-        <div className="rounded-xl border border-dashed border-sky-200 bg-sky-50/40 p-4 space-y-3">
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label={invite.uploadScreenshot}
+          onPaste={onPasteImage}
+          onDrop={onDropImage}
+          onDragOver={(e) => {
+            if ([...e.dataTransfer.types].includes("Files")) e.preventDefault();
+          }}
+          className="rounded-xl border border-dashed border-sky-200 bg-sky-50/40 p-4 space-y-3 outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
+        >
           <p className="text-xs text-sky-900">{invite.autoHint}</p>
+          <p className="text-xs text-sky-700">{invite.pasteHint}</p>
           <input
             ref={fileInputRef}
             type="file"

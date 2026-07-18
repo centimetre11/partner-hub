@@ -94,13 +94,46 @@ export function toDateTimeLocalInput(date: Date, timeZone: string): string {
   return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}`;
 }
 
-/** 企业邮会议时间行：2026/7/18 11:30 */
-export function formatExmailMeetingTime(instant: Date, timeZone: string): string {
-  const dtf = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
+/** 企业邮会议时间行：2026/7/18 11:30（来自 datetime-local 墙钟） */
+export function formatExmailMeetingTimeFromLocal(localValue: string): string | null {
+  const wall = parseWallClockLocal(localValue);
+  if (!wall) return null;
+  return `${wall.year}/${wall.month}/${wall.day} ${formatWallClockTime(wall)}`;
+}
+
+function formatWallClockTime(w: WallClockParts): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(w.hour)}:${pad(w.minute)}`;
+}
+
+/** 邮件/预览：直接用 datetime-local 墙钟，避免 Date 往返偏移。 */
+export function formatMeetingWindowFromLocal(
+  startLocal: string,
+  endLocal: string,
+  timeZone: string,
+  locale: "zh" | "en",
+): string | null {
+  const wall = parseWallClockLocal(startLocal);
+  const endWall = parseWallClockLocal(endLocal);
+  if (!wall || !endWall) return null;
+  const start = parseDateTimeLocal(startLocal, timeZone);
+  if (!start) return null;
+
+  const loc = locale === "zh" ? "zh-CN" : "en-US";
+  const datePart = start.toLocaleDateString(loc, {
+    weekday: "long",
     year: "numeric",
-    month: "numeric",
+    month: "long",
     day: "numeric",
+    timeZone,
+  });
+  const tzLabel = formatTimeZoneLabel(timeZone, start, loc);
+  return `${datePart}, ${formatWallClockTime(wall)} – ${formatWallClockTime(endWall)} (${tzLabel})`;
+}
+
+function formatInstantTime(instant: Date, timeZone: string, locale: string): string {
+  const dtf = new Intl.DateTimeFormat(locale, {
+    timeZone,
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -108,8 +141,8 @@ export function formatExmailMeetingTime(instant: Date, timeZone: string): string
   const parts = Object.fromEntries(
     dtf.formatToParts(instant).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]),
   );
-  const hour = parts.hour === "24" ? "0" : parts.hour;
-  return `${parts.year}/${parts.month}/${parts.day} ${hour}:${parts.minute}`;
+  const hour = parts.hour === "24" ? "00" : parts.hour;
+  return `${hour}:${parts.minute}`;
 }
 
 export function formatMeetingWindow(
@@ -126,15 +159,9 @@ export function formatMeetingWindow(
     day: "numeric",
     timeZone,
   };
-  const timeOpts: Intl.DateTimeFormatOptions = {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone,
-    hour12: false,
-  };
   const datePart = start.toLocaleDateString(loc, dateOpts);
-  const startTime = start.toLocaleTimeString(loc, timeOpts);
-  const endTime = end.toLocaleTimeString(loc, timeOpts);
+  const startTime = formatInstantTime(start, timeZone, loc);
+  const endTime = formatInstantTime(end, timeZone, loc);
   const tzLabel = formatTimeZoneLabel(timeZone, start, loc);
   return `${datePart}, ${startTime} – ${endTime} (${tzLabel})`;
 }

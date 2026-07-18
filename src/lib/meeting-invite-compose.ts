@@ -10,6 +10,8 @@ export type ComposeMeetingInviteInput = {
   cc?: string;
   subject: string;
   meetingTitle: string;
+  startLocal: string;
+  endLocal: string;
   startAt: Date;
   endAt: Date;
   timeZone: string;
@@ -49,6 +51,8 @@ export function previewMeetingInvitationEmail(
     title: input.meetingTitle,
     startAt: input.startAt,
     endAt: input.endAt,
+    startLocal: input.startLocal,
+    endLocal: input.endLocal,
     timeZone: input.timeZone,
     meetLink: input.meetLink,
     customerName: input.customerName,
@@ -105,6 +109,8 @@ export async function composeMeetingInviteEmail(
       body: preview.text,
       bodyHtml: preview.html,
       mode: "meeting",
+      startLocal: input.startLocal,
+      endLocal: input.endLocal,
       startAt: input.startAt.toISOString(),
       endAt: input.endAt.toISOString(),
       timeZone: input.timeZone,

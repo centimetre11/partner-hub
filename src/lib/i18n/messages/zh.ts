@@ -2070,6 +2070,7 @@ export const messagesZh: Messages = {
     modeManual: "手动填写",
     modeAuto: "AI 识图",
     autoHint: "上传会议邀请截图（日历、邮件、聊天等），AI 自动识别标题、时间、邮箱并填入下方表单。",
+    pasteHint: "支持 ⌘/Ctrl + V 直接粘贴剪贴板中的截图，或拖拽图片到此处",
     uploadScreenshot: "上传截图并识别",
     extracting: "识别中…",
     extractFailed: "识图失败，请改用手动填写或换一张更清晰的截图",

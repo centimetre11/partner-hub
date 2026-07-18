@@ -19,7 +19,7 @@
     return true;
   });
 
-  async function runFillCompose({ to, cc, subject, body, bodyHtml, files, mode, startAt, endAt, timeZone }) {
+  async function runFillCompose({ to, cc, subject, body, bodyHtml, files, mode, startAt, endAt, timeZone, startLocal, endLocal }) {
     const isMeeting = mode === "meeting";
 
     // 1. 写信表单未打开时，点击「写信」入口
@@ -81,8 +81,8 @@
     }
 
     // 4b. 会议模式：尝试填充时间；地点 deliberately 不填
-    if (isMeeting && startAt && endAt) {
-      const timeOk = await fillMeetingTime(composeDoc, startAt, endAt, timeZone);
+    if (isMeeting && (startLocal || startAt) && (endLocal || endAt)) {
+      const timeOk = await fillMeetingTime(composeDoc, startAt, endAt, timeZone, startLocal, endLocal);
       if (!timeOk) problems.push("会议时间未能自动填充，请手动核对");
     }
 
@@ -221,6 +221,13 @@
     return out.join(", ");
   }
 
+  function formatExmailFromLocal(local) {
+    if (!local) return null;
+    const m = String(local).trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return null;
+    return `${Number(m[1])}/${Number(m[2])}/${Number(m[3])} ${m[4]}:${m[5]}`;
+  }
+
   function formatExmailDateTime(iso, timeZone) {
     try {
       const d = new Date(iso);
@@ -248,9 +255,9 @@
     }
   }
 
-  async function fillMeetingTime(doc, startIso, endIso, timeZone) {
-    const startStr = formatExmailDateTime(startIso, timeZone);
-    const endStr = formatExmailDateTime(endIso, timeZone);
+  async function fillMeetingTime(doc, startIso, endIso, timeZone, startLocal, endLocal) {
+    const startStr = formatExmailFromLocal(startLocal) || formatExmailDateTime(startIso, timeZone);
+    const endStr = formatExmailFromLocal(endLocal) || formatExmailDateTime(endIso, timeZone);
     if (!startStr || !endStr) return false;
 
     const timeRow = findInputByRowLabel(doc, /^时\s*间/);

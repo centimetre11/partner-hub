@@ -2073,6 +2073,7 @@ export const messagesEn = {
     modeManual: "Manual",
     modeAuto: "AI from screenshot",
     autoHint: "Upload a meeting invite screenshot (calendar, email, chat). AI fills title, time, and emails below.",
+    pasteHint: "Press ⌘/Ctrl + V to paste a screenshot, or drag an image here",
     uploadScreenshot: "Upload & extract",
     extracting: "Extracting…",
     extractFailed: "Extraction failed — try manual entry or a clearer screenshot",

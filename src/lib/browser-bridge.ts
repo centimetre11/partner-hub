@@ -127,6 +127,9 @@ export async function composeEmailViaBridge(params: {
   attachments?: BridgeAttachment[];
   /** meeting：切换到企业邮「会议」选项卡填写（不写地点） */
   mode?: "email" | "meeting";
+  /** datetime-local 墙钟；企业邮会议时间与邮件正文优先使用 */
+  startLocal?: string;
+  endLocal?: string;
   startAt?: string;
   endAt?: string;
   /** IANA 时区；企业邮会议时间按此时区格式化（与 Hub 表单一致） */
