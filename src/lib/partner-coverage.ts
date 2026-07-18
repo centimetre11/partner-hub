@@ -10,11 +10,13 @@ import { normalizePartnerTier, type PartnerTier } from "./tier";
 export const NONE_AXIS_CODE = "_NONE_";
 
 export type CoverageAxisPair = "region-industry" | "region-capability" | "industry-capability";
+export type PipelineStage = 1 | 2 | 3;
 
 export type CoveragePartnerInput = {
   id: string;
   name: string;
   tier?: string | null;
+  pipelineStage?: number | null;
   country?: string | null;
   city?: string | null;
   industries?: string | null;
@@ -25,6 +27,7 @@ export type CoveragePartnerRef = {
   id: string;
   name: string;
   tier: PartnerTier | null;
+  pipelineStage: PipelineStage;
 };
 
 export type CoverageCell = {
@@ -32,19 +35,18 @@ export type CoverageCell = {
   colKey: string;
   partners: CoveragePartnerRef[];
   count: number;
-  /** Strongest tier in cell; null if empty or all untiered */
-  bestTier: PartnerTier | null;
+  /** Deepest pipeline stage in cell; null if empty */
+  bestStage: PipelineStage | null;
   /** true when count === 0 */
   isGap: boolean;
-  /** covered but only C or untiered */
-  isWeak: boolean;
+  /** covered but deepest stage is only 1 */
+  isShallow: boolean;
 };
 
 export type CoverageGapItem = {
   kind: "region" | "industry" | "capability" | "cell";
   key: string;
   label: string;
-  /** optional second axis for cell gaps */
   colKey?: string;
   colLabel?: string;
 };
@@ -58,40 +60,35 @@ export type CoverageMatrix = {
   cells: CoverageCell[];
   cellMap: Map<string, CoverageCell>;
   gaps: CoverageGapItem[];
-  weak: CoverageGapItem[];
+  /** Covered but deepest stage === 1 */
+  shallow: CoverageGapItem[];
 };
 
 function cellKey(row: string, col: string) {
   return `${row}||${col}`;
 }
 
-function tierRank(tier: PartnerTier | null): number {
-  if (tier === "A") return 3;
-  if (tier === "B") return 2;
-  if (tier === "C") return 1;
-  return 0;
+export function normalizePipelineStage(raw: number | null | undefined): PipelineStage {
+  if (raw === 2) return 2;
+  if (raw === 3) return 3;
+  return 1;
 }
 
-function bestTierOf(partners: CoveragePartnerRef[]): PartnerTier | null {
-  let best: PartnerTier | null = null;
-  let rank = -1;
+function bestStageOf(partners: CoveragePartnerRef[]): PipelineStage | null {
+  if (!partners.length) return null;
+  let best: PipelineStage = 1;
   for (const p of partners) {
-    const r = tierRank(p.tier);
-    if (r > rank) {
-      rank = r;
-      best = p.tier;
-    }
+    if (p.pipelineStage > best) best = p.pipelineStage;
   }
   return best;
 }
 
-/** CSS background classes for heat cells (A darkest). */
-export function coverageCellTone(cell: CoverageCell): string {
+/** CSS classes for heat cells by deepest pipeline stage. */
+export function coverageCellTone(cell: Pick<CoverageCell, "isGap" | "bestStage">): string {
   if (cell.isGap) return "bg-slate-50 border-dashed border-slate-200 text-slate-400";
-  if (cell.bestTier === "A") return "bg-sky-700 text-white border-sky-800";
-  if (cell.bestTier === "B") return "bg-sky-500 text-white border-sky-600";
-  if (cell.bestTier === "C") return "bg-sky-200 text-slate-800 border-sky-300";
-  return "bg-sky-100 text-slate-700 border-sky-200";
+  if (cell.bestStage === 3) return "bg-emerald-600 text-white border-emerald-700";
+  if (cell.bestStage === 2) return "bg-sky-500 text-white border-sky-600";
+  return "bg-amber-100 text-amber-900 border-amber-300";
 }
 
 export function buildCoverageMatrix(
@@ -105,10 +102,17 @@ export function buildCoverageMatrix(
     capabilityOrder?: string[];
     noneIndustryLabel: string;
     noneCapabilityLabel: string;
+    /** When set, only include partners in this pipeline stage */
+    stageFilter?: PipelineStage | null;
   },
 ): CoverageMatrix {
   const industryOrder = opts.industryOrder ?? Object.keys(opts.industryLabels);
   const capabilityOrder = opts.capabilityOrder ?? Object.keys(opts.capabilityLabels);
+  const stageFilter = opts.stageFilter ?? null;
+
+  const filtered = stageFilter
+    ? partners.filter((p) => normalizePipelineStage(p.pipelineStage) === stageFilter)
+    : partners;
 
   const regionKeys = [...FOCUS_COUNTRY_CODES, UNKNOWN_COUNTRY_CODE];
   const regionLabels: Record<string, string> = Object.fromEntries(
@@ -156,7 +160,6 @@ export function buildCoverageMatrix(
     }
   }
 
-  // Single-dimension tallies for gap summary
   const regionCounts = new Map<string, CoveragePartnerRef[]>();
   const industryCounts = new Map<string, CoveragePartnerRef[]>();
   const capabilityCounts = new Map<string, CoveragePartnerRef[]>();
@@ -164,11 +167,12 @@ export function buildCoverageMatrix(
   for (const ik of industryKeys) industryCounts.set(ik, []);
   for (const ck of capabilityKeys) capabilityCounts.set(ck, []);
 
-  for (const p of partners) {
+  for (const p of filtered) {
     const ref: CoveragePartnerRef = {
       id: p.id,
       name: p.name,
       tier: normalizePartnerTier(p.tier),
+      pipelineStage: normalizePipelineStage(p.pipelineStage),
     };
     const region = normalizeCountryKey(p.country, p.city);
     const industries = parseIndustries(p);
@@ -213,15 +217,15 @@ export function buildCoverageMatrix(
   for (const rk of rowKeys) {
     for (const ck of colKeys) {
       const list = buckets.get(cellKey(rk, ck)) ?? [];
-      const best = bestTierOf(list);
+      const best = bestStageOf(list);
       const cell: CoverageCell = {
         rowKey: rk,
         colKey: ck,
         partners: list,
         count: list.length,
-        bestTier: best,
+        bestStage: best,
         isGap: list.length === 0,
-        isWeak: list.length > 0 && (best === null || best === "C"),
+        isShallow: list.length > 0 && best === 1,
       };
       cells.push(cell);
       cellMap.set(cellKey(rk, ck), cell);
@@ -229,14 +233,16 @@ export function buildCoverageMatrix(
   }
 
   const gaps: CoverageGapItem[] = [];
-  const weak: CoverageGapItem[] = [];
+  const shallow: CoverageGapItem[] = [];
 
+  // Dimension-level empty gaps (unfiltered intent: use all partners for true "no partner" gaps
+  // when stage filter is on, gaps reflect filtered set — OK for "where are stage-3 partners")
   for (const code of FOCUS_COUNTRY_CODES) {
     const list = regionCounts.get(code) ?? [];
     if (list.length === 0) {
       gaps.push({ kind: "region", key: code, label: regionLabels[code] ?? code });
-    } else if (bestTierOf(list) === null || bestTierOf(list) === "C") {
-      weak.push({ kind: "region", key: code, label: regionLabels[code] ?? code });
+    } else if (bestStageOf(list) === 1) {
+      shallow.push({ kind: "region", key: code, label: regionLabels[code] ?? code });
     }
   }
 
@@ -244,8 +250,8 @@ export function buildCoverageMatrix(
     const list = capabilityCounts.get(code) ?? [];
     if (list.length === 0) {
       gaps.push({ kind: "capability", key: code, label: capabilityLabels[code] ?? code });
-    } else if (bestTierOf(list) === null || bestTierOf(list) === "C") {
-      weak.push({ kind: "capability", key: code, label: capabilityLabels[code] ?? code });
+    } else if (bestStageOf(list) === 1) {
+      shallow.push({ kind: "capability", key: code, label: capabilityLabels[code] ?? code });
     }
   }
 
@@ -253,9 +259,23 @@ export function buildCoverageMatrix(
     const list = industryCounts.get(code) ?? [];
     if (list.length === 0) {
       gaps.push({ kind: "industry", key: code, label: industryLabels[code] ?? code });
-    } else if (bestTierOf(list) === null || bestTierOf(list) === "C") {
-      weak.push({ kind: "industry", key: code, label: industryLabels[code] ?? code });
+    } else if (bestStageOf(list) === 1) {
+      shallow.push({ kind: "industry", key: code, label: industryLabels[code] ?? code });
     }
+  }
+
+  // Cell-level shallow for current matrix (e.g. Saudi × Manufacturing)
+  for (const cell of cells) {
+    if (!cell.isShallow) continue;
+    if (cell.rowKey === NONE_AXIS_CODE || cell.colKey === NONE_AXIS_CODE) continue;
+    if (cell.rowKey === UNKNOWN_COUNTRY_CODE) continue;
+    shallow.push({
+      kind: "cell",
+      key: cell.rowKey,
+      label: rowLabels[cell.rowKey] ?? cell.rowKey,
+      colKey: cell.colKey,
+      colLabel: colLabels[cell.colKey] ?? cell.colKey,
+    });
   }
 
   return {
@@ -267,7 +287,7 @@ export function buildCoverageMatrix(
     cells,
     cellMap,
     gaps,
-    weak,
+    shallow,
   };
 }
 
@@ -281,4 +301,12 @@ export function getCoverageCell(
   colKey: string,
 ): CoverageCell | undefined {
   return matrix.cellMap.get(cellKey(rowKey, colKey));
+}
+
+export function countPartnersByStage(partners: CoveragePartnerInput[]): Record<PipelineStage, number> {
+  const counts: Record<PipelineStage, number> = { 1: 0, 2: 0, 3: 0 };
+  for (const p of partners) {
+    counts[normalizePipelineStage(p.pipelineStage)] += 1;
+  }
+  return counts;
 }

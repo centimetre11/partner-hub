@@ -4,27 +4,35 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   buildCoverageMatrix,
+  countPartnersByStage,
   coverageCellTone,
   type CoverageAxisPair,
   type CoverageCell,
   type CoverageGapItem,
   type CoveragePartnerInput,
+  type PipelineStage,
 } from "@/lib/partner-coverage";
 import { TierBadge } from "@/components/ui";
+
+export type PipelineStageMeta = {
+  stage: PipelineStage;
+  name: string;
+  desc: string;
+};
 
 export type PartnerCoverageCopy = {
   pairRegionIndustry: string;
   pairRegionCapability: string;
   pairIndustryCapability: string;
   gapsTitle: string;
-  weakTitle: string;
+  shallowTitle: string;
   gapsEmpty: string;
+  shallowEmpty: string;
   legendTitle: string;
   legendGap: string;
-  legendUntiered: string;
-  legendC: string;
-  legendB: string;
-  legendA: string;
+  legendStage1: string;
+  legendStage2: string;
+  legendStage3: string;
   gapsOnly: string;
   partnersInCell: string;
   noPartnersInCell: string;
@@ -32,10 +40,16 @@ export type PartnerCoverageCopy = {
   gapRegion: string;
   gapCapability: string;
   gapIndustry: string;
+  shallowCell: string;
+  shallowRegion: string;
+  shallowCapability: string;
+  shallowIndustry: string;
   noneIndustry: string;
   noneCapability: string;
   showAllRegions: string;
   hideEmptyRegions: string;
+  stageFilterHint: string;
+  stageOf: string;
 };
 
 const PAIRS: { key: CoverageAxisPair; labelKey: keyof PartnerCoverageCopy }[] = [
@@ -51,6 +65,40 @@ function gapKindLabel(item: CoverageGapItem, copy: PartnerCoverageCopy) {
   return item.label;
 }
 
+function shallowKindLabel(item: CoverageGapItem, copy: PartnerCoverageCopy) {
+  if (item.kind === "cell") {
+    return copy.shallowCell
+      .replace("{row}", item.label)
+      .replace("{col}", item.colLabel ?? "");
+  }
+  if (item.kind === "region") return copy.shallowRegion.replace("{label}", item.label);
+  if (item.kind === "capability") return copy.shallowCapability.replace("{label}", item.label);
+  if (item.kind === "industry") return copy.shallowIndustry.replace("{label}", item.label);
+  return item.label;
+}
+
+function stageCardTone(stage: PipelineStage, active: boolean) {
+  if (stage === 1) {
+    return active
+      ? "border-amber-400 bg-amber-50/80 ring-2 ring-amber-200"
+      : "border-amber-200/80 bg-amber-50/40 hover:bg-amber-50/70";
+  }
+  if (stage === 2) {
+    return active
+      ? "border-sky-400 bg-sky-50/80 ring-2 ring-sky-200"
+      : "border-sky-200/80 bg-sky-50/40 hover:bg-sky-50/70";
+  }
+  return active
+    ? "border-emerald-400 bg-emerald-50/80 ring-2 ring-emerald-200"
+    : "border-emerald-200/80 bg-emerald-50/40 hover:bg-emerald-50/70";
+}
+
+function stageBadgeTone(stage: PipelineStage) {
+  if (stage === 1) return "bg-amber-600 text-white";
+  if (stage === 2) return "bg-sky-600 text-white";
+  return "bg-emerald-700 text-white";
+}
+
 export function PartnerCoverageMap({
   partners,
   locale,
@@ -58,6 +106,7 @@ export function PartnerCoverageMap({
   capabilityLabels,
   industryOrder,
   capabilityOrder,
+  stages,
   copy,
 }: {
   partners: CoveragePartnerInput[];
@@ -66,12 +115,16 @@ export function PartnerCoverageMap({
   capabilityLabels: Record<string, string>;
   industryOrder: string[];
   capabilityOrder: string[];
+  stages: PipelineStageMeta[];
   copy: PartnerCoverageCopy;
 }) {
   const [pair, setPair] = useState<CoverageAxisPair>("region-capability");
+  const [stageFilter, setStageFilter] = useState<PipelineStage | null>(null);
   const [gapsOnly, setGapsOnly] = useState(false);
   const [hideEmptyRegions, setHideEmptyRegions] = useState(true);
   const [selected, setSelected] = useState<CoverageCell | null>(null);
+
+  const stageCounts = useMemo(() => countPartnersByStage(partners), [partners]);
 
   const matrix = useMemo(
     () =>
@@ -83,8 +136,20 @@ export function PartnerCoverageMap({
         capabilityOrder,
         noneIndustryLabel: copy.noneIndustry,
         noneCapabilityLabel: copy.noneCapability,
+        stageFilter,
       }),
-    [partners, pair, locale, industryLabels, capabilityLabels, industryOrder, capabilityOrder, copy.noneIndustry, copy.noneCapability],
+    [
+      partners,
+      pair,
+      locale,
+      industryLabels,
+      capabilityLabels,
+      industryOrder,
+      capabilityOrder,
+      copy.noneIndustry,
+      copy.noneCapability,
+      stageFilter,
+    ],
   );
 
   const visibleRowKeys = useMemo(() => {
@@ -101,8 +166,18 @@ export function PartnerCoverageMap({
 
   const primaryGaps = matrix.gaps.filter((g) => g.kind === "region" || g.kind === "capability");
   const industryGaps = matrix.gaps.filter((g) => g.kind === "industry");
+  const cellShallow = matrix.shallow.filter((g) => g.kind === "cell");
+  const dimShallow = matrix.shallow.filter((g) => g.kind === "region" || g.kind === "capability");
+
+  const stageName = (stage: PipelineStage) =>
+    stages.find((s) => s.stage === stage)?.name ?? copy.stageOf.replace("{n}", String(stage));
 
   function onGapClick(g: CoverageGapItem) {
+    if (g.kind === "cell") {
+      const cell = matrix.cellMap.get(`${g.key}||${g.colKey}`);
+      if (cell) setSelected(cell);
+      return;
+    }
     if (g.kind === "region") {
       if (pair === "industry-capability") {
         setPair("region-capability");
@@ -119,9 +194,7 @@ export function PartnerCoverageMap({
         setSelected(null);
         return;
       }
-      const first = matrix.cells.find((c) =>
-        pair === "industry-capability" ? c.colKey === g.key : c.colKey === g.key,
-      );
+      const first = matrix.cells.find((c) => c.colKey === g.key);
       if (first) setSelected(first);
       return;
     }
@@ -140,6 +213,43 @@ export function PartnerCoverageMap({
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {stages.map((s) => {
+          const active = stageFilter === s.stage;
+          return (
+            <button
+              key={s.stage}
+              type="button"
+              onClick={() => {
+                setStageFilter((prev) => (prev === s.stage ? null : s.stage));
+                setSelected(null);
+              }}
+              className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${stageCardTone(s.stage, active)}`}
+            >
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${stageBadgeTone(s.stage)}`}
+                >
+                  {s.stage}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-sm font-semibold text-slate-800">{s.name}</span>
+                    <span className="text-sm tabular-nums text-slate-600">{stageCounts[s.stage]}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">{s.desc}</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {stageFilter ? (
+        <p className="text-xs text-slate-500">
+          {copy.stageFilterHint.replace("{name}", stageName(stageFilter))}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2">
         {PAIRS.map((p) => (
           <button
@@ -216,6 +326,8 @@ export function PartnerCoverageMap({
                     }
                     const active =
                       selected?.rowKey === cell.rowKey && selected?.colKey === cell.colKey;
+                    const tipStage =
+                      cell.bestStage != null ? ` · ${stageName(cell.bestStage)}` : "";
                     return (
                       <td key={ck} className="border-b border-slate-50 p-1">
                         <button
@@ -224,7 +336,7 @@ export function PartnerCoverageMap({
                           className={`w-full h-9 rounded-md border text-xs font-medium tabular-nums transition-shadow ${coverageCellTone(cell)} ${
                             active ? "ring-2 ring-slate-900 ring-offset-1" : ""
                           }`}
-                          title={`${matrix.rowLabels[rk]} × ${matrix.colLabels[ck]}: ${cell.count}`}
+                          title={`${matrix.rowLabels[rk]} × ${matrix.colLabels[ck]}: ${cell.count}${tipStage}`}
                         >
                           {cell.isGap ? "—" : cell.count}
                         </button>
@@ -242,24 +354,20 @@ export function PartnerCoverageMap({
             <p className="text-xs font-medium text-slate-700 mb-2">{copy.legendTitle}</p>
             <ul className="space-y-1.5 text-xs text-slate-600">
               <li className="flex items-center gap-2">
-                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: true, bestTier: null, count: 0, isWeak: false, partners: [], rowKey: "", colKey: "" })}`} />
+                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: true, bestStage: null })}`} />
                 {copy.legendGap}
               </li>
               <li className="flex items-center gap-2">
-                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: false, bestTier: null, count: 1, isWeak: true, partners: [], rowKey: "", colKey: "" })}`} />
-                {copy.legendUntiered}
+                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: false, bestStage: 1 })}`} />
+                {copy.legendStage1}
               </li>
               <li className="flex items-center gap-2">
-                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: false, bestTier: "C", count: 1, isWeak: true, partners: [], rowKey: "", colKey: "" })}`} />
-                {copy.legendC}
+                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: false, bestStage: 2 })}`} />
+                {copy.legendStage2}
               </li>
               <li className="flex items-center gap-2">
-                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: false, bestTier: "B", count: 1, isWeak: false, partners: [], rowKey: "", colKey: "" })}`} />
-                {copy.legendB}
-              </li>
-              <li className="flex items-center gap-2">
-                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: false, bestTier: "A", count: 1, isWeak: false, partners: [], rowKey: "", colKey: "" })}`} />
-                {copy.legendA}
+                <span className={`inline-block w-5 h-5 rounded border ${coverageCellTone({ isGap: false, bestStage: 3 })}`} />
+                {copy.legendStage3}
               </li>
             </ul>
           </div>
@@ -269,7 +377,7 @@ export function PartnerCoverageMap({
             {primaryGaps.length === 0 && industryGaps.length === 0 ? (
               <p className="text-xs text-slate-400">{copy.gapsEmpty}</p>
             ) : (
-              <ul className="space-y-1 max-h-48 overflow-y-auto">
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
                 {primaryGaps.map((g) => (
                   <li key={`${g.kind}-${g.key}`}>
                     <button
@@ -290,21 +398,37 @@ export function PartnerCoverageMap({
             )}
           </div>
 
-          {matrix.weak.length > 0 && (
-            <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-3">
-              <p className="text-xs font-medium text-slate-700 mb-2">{copy.weakTitle}</p>
-              <ul className="space-y-1 max-h-32 overflow-y-auto">
-                {matrix.weak
-                  .filter((g) => g.kind === "region" || g.kind === "capability")
-                  .slice(0, 10)
-                  .map((g) => (
-                    <li key={`weak-${g.kind}-${g.key}`} className="text-xs text-slate-500">
-                      {gapKindLabel(g, copy)}
-                    </li>
-                  ))}
+          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-3">
+            <p className="text-xs font-medium text-slate-700 mb-2">{copy.shallowTitle}</p>
+            {cellShallow.length === 0 && dimShallow.length === 0 ? (
+              <p className="text-xs text-slate-400">{copy.shallowEmpty}</p>
+            ) : (
+              <ul className="space-y-1 max-h-40 overflow-y-auto">
+                {cellShallow.slice(0, 12).map((g) => (
+                  <li key={`shallow-cell-${g.key}-${g.colKey}`}>
+                    <button
+                      type="button"
+                      className="text-left text-xs text-amber-800 hover:underline w-full"
+                      onClick={() => onGapClick(g)}
+                    >
+                      {shallowKindLabel(g, copy)}
+                    </button>
+                  </li>
+                ))}
+                {dimShallow.slice(0, 6).map((g) => (
+                  <li key={`shallow-${g.kind}-${g.key}`}>
+                    <button
+                      type="button"
+                      className="text-left text-xs text-slate-600 hover:underline w-full"
+                      onClick={() => onGapClick(g)}
+                    >
+                      {shallowKindLabel(g, copy)}
+                    </button>
+                  </li>
+                ))}
               </ul>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-3">
             {selected ? (
@@ -316,6 +440,9 @@ export function PartnerCoverageMap({
                   {selected.isGap
                     ? copy.noPartnersInCell
                     : copy.partnersInCell.replace("{n}", String(selected.count))}
+                  {selected.bestStage != null && !selected.isGap
+                    ? ` · ${stageName(selected.bestStage)}`
+                    : ""}
                 </p>
                 <ul className="space-y-1.5 max-h-56 overflow-y-auto">
                   {selected.partners.map((p) => (
@@ -323,7 +450,14 @@ export function PartnerCoverageMap({
                       <Link href={`/partners/${p.id}`} className="text-sm text-sky-700 hover:underline truncate">
                         {p.name}
                       </Link>
-                      {p.tier ? <TierBadge tier={p.tier} /> : <span className="text-[10px] text-slate-400">—</span>}
+                      <span className="flex items-center gap-1 shrink-0">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stageBadgeTone(p.pipelineStage)}`}
+                        >
+                          {stageName(p.pipelineStage)}
+                        </span>
+                        {p.tier ? <TierBadge tier={p.tier} /> : null}
+                      </span>
                     </li>
                   ))}
                 </ul>

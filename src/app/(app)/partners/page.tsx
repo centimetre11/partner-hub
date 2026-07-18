@@ -318,6 +318,7 @@ export default async function PartnersPage({
               id: p.id,
               name: p.name,
               tier: p.tier,
+              pipelineStage: p.pipelineStage,
               country: p.country,
               city: p.city,
               industries: p.industries,
@@ -328,19 +329,24 @@ export default async function PartnersPage({
             capabilityLabels={Object.fromEntries(capabilityOptions.map((o) => [o.code, o.label]))}
             industryOrder={industryOptions.map((o) => o.code)}
             capabilityOrder={capabilityOptions.map((o) => o.code)}
+            stages={labels.pipelineStages.map((s) => ({
+              stage: s.stage as 1 | 2 | 3,
+              name: s.name,
+              desc: s.desc,
+            }))}
             copy={{
               pairRegionIndustry: m.partners.coveragePairRegionIndustry,
               pairRegionCapability: m.partners.coveragePairRegionCapability,
               pairIndustryCapability: m.partners.coveragePairIndustryCapability,
               gapsTitle: m.partners.coverageGapsTitle,
-              weakTitle: m.partners.coverageWeakTitle,
+              shallowTitle: m.partners.coverageShallowTitle,
               gapsEmpty: m.partners.coverageGapsEmpty,
+              shallowEmpty: m.partners.coverageShallowEmpty,
               legendTitle: m.partners.coverageLegendTitle,
               legendGap: m.partners.coverageLegendGap,
-              legendUntiered: m.partners.coverageLegendUntiered,
-              legendC: m.partners.coverageLegendC,
-              legendB: m.partners.coverageLegendB,
-              legendA: m.partners.coverageLegendA,
+              legendStage1: m.partners.coverageLegendStage1,
+              legendStage2: m.partners.coverageLegendStage2,
+              legendStage3: m.partners.coverageLegendStage3,
               gapsOnly: m.partners.coverageGapsOnly,
               partnersInCell: m.partners.coveragePartnersInCell,
               noPartnersInCell: m.partners.coverageNoPartnersInCell,
@@ -348,10 +354,16 @@ export default async function PartnersPage({
               gapRegion: m.partners.coverageGapRegion,
               gapCapability: m.partners.coverageGapCapability,
               gapIndustry: m.partners.coverageGapIndustry,
+              shallowCell: m.partners.coverageShallowCell,
+              shallowRegion: m.partners.coverageShallowRegion,
+              shallowCapability: m.partners.coverageShallowCapability,
+              shallowIndustry: m.partners.coverageShallowIndustry,
               noneIndustry: m.partners.coverageNoneIndustry,
               noneCapability: m.partners.coverageNoneCapability,
               showAllRegions: m.partners.coverageShowAllRegions,
               hideEmptyRegions: m.partners.coverageHideEmptyRegions,
+              stageFilterHint: m.partners.coverageStageFilterHint,
+              stageOf: m.partners.stageOf,
             }}
           />
         ) : (
