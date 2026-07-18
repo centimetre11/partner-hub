@@ -93,6 +93,7 @@ export function MeetingCustomerInviteForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractBusyRef = useRef(false);
   const handleImageExtractRef = useRef<(file: File) => Promise<void>>(async () => {});
+  const pendingFormRef = useRef<FormData | null>(null);
 
   const [result, setResult] = useState<Extract<CreateMeetingResult, { ok: true }> | null>(null);
   const [copied, setCopied] = useState(false);
@@ -200,7 +201,7 @@ export function MeetingCustomerInviteForm({
     try {
       const preview = URL.createObjectURL(file);
       setImagePreview(preview);
-      const images = await prepareChatImagesFromFiles([file]);
+      const images = await prepareChatImagesFromFiles([file], { maxSide: 768, quality: 0.72 });
       const res = await fetch("/api/ai/meeting/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -330,20 +331,17 @@ export function MeetingCustomerInviteForm({
     };
 
     start(async () => {
-      const res = await createMeetingAction(fd);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setResult(res);
+      pendingFormRef.current = fd;
       setInviteSnapshot(snapshot);
+      setResult(null);
       setComposeOpened(false);
       setComposeNotice(null);
     });
   }
 
   const emailPreview = useMemo(() => {
-    if (!result?.meetLink || !inviteSnapshot) return null;
+    if (!inviteSnapshot) return null;
+    const meetLink = result?.meetLink ?? invite.meetLinkPlaceholder;
     return previewMeetingInvitationEmail({
       to: inviteSnapshot.to,
       cc: inviteSnapshot.cc,
@@ -354,22 +352,44 @@ export function MeetingCustomerInviteForm({
       startAt: inviteSnapshot.startAt,
       endAt: inviteSnapshot.endAt,
       timeZone,
-      meetLink: result.meetLink,
+      meetLink,
       customerName: inviteSnapshot.customerName,
       contactName: inviteSnapshot.contactName,
       organizerName,
     });
   }, [result, inviteSnapshot, timeZone, organizerName]);
 
-  async function confirmAndOpenCompose() {
-    if (!result?.meetLink || !inviteSnapshot) return;
+  async function confirmAndCreateAndOpen() {
+    if (!inviteSnapshot) return;
+    const fd = pendingFormRef.current;
+    if (!fd) {
+      setError(invite.previewExpired);
+      return;
+    }
     setConfirmingCompose(true);
+    setError(null);
+    setComposeNotice(null);
     try {
-      await openInviteCompose(result.meetLink, inviteSnapshot);
+      const res = await createMeetingAction(fd);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setResult(res);
+      await openInviteCompose(res.meetLink, inviteSnapshot);
       setComposeOpened(true);
     } finally {
       setConfirmingCompose(false);
     }
+  }
+
+  function cancelPreview() {
+    setInviteSnapshot(null);
+    pendingFormRef.current = null;
+    setResult(null);
+    setComposeNotice(null);
+    setComposeOpened(false);
+    setError(null);
   }
 
   async function copyLink() {
@@ -383,49 +403,63 @@ export function MeetingCustomerInviteForm({
     }
   }
 
-  if (result) {
+  if (inviteSnapshot) {
     return (
       <div className="space-y-4 text-sm">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
-          <div className="font-medium">{s.successTitle}</div>
-          <p className="mt-1 text-xs text-emerald-800">{s.wecomCreated.replace("{id}", result.wecomScheduleId)}</p>
-          {composeNotice && (
-            <p
-              className={`mt-1 text-xs ${
-                composeNotice.kind === "ok"
-                  ? "text-emerald-800"
-                  : composeNotice.kind === "warn"
-                    ? "text-amber-800"
-                    : "text-red-700"
-              }`}
-            >
-              {composeNotice.text}
-            </p>
-          )}
-        </div>
-        <div>
-          <div className="text-xs font-medium text-slate-500">{s.meetLink}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <a href={result.meetLink} target="_blank" rel="noreferrer" className="text-sky-700 hover:underline break-all">
-              {result.meetLink}
-            </a>
-            <button
-              type="button"
-              onClick={copyLink}
-              className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300"
-            >
-              {copied ? s.copied : s.copy}
-            </button>
+        {result ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
+            <div className="font-medium">{s.successTitle}</div>
+            <p className="mt-1 text-xs text-emerald-800">{s.wecomCreated.replace("{id}", result.wecomScheduleId)}</p>
+            {composeNotice && (
+              <p
+                className={`mt-1 text-xs ${
+                  composeNotice.kind === "ok"
+                    ? "text-emerald-800"
+                    : composeNotice.kind === "warn"
+                      ? "text-amber-800"
+                      : "text-red-700"
+                }`}
+              >
+                {composeNotice.text}
+              </p>
+            )}
           </div>
-        </div>
-        {result.warnings.length > 0 && (
+        ) : (
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sky-900">
+            <div className="font-medium">{invite.previewStepTitle}</div>
+            <p className="mt-1 text-xs text-sky-800">{invite.previewStepHint}</p>
+          </div>
+        )}
+
+        {result && (
+          <div>
+            <div className="text-xs font-medium text-slate-500">{s.meetLink}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <a href={result.meetLink} target="_blank" rel="noreferrer" className="text-sky-700 hover:underline break-all">
+                {result.meetLink}
+              </a>
+              <button
+                type="button"
+                onClick={copyLink}
+                className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-300"
+              >
+                {copied ? s.copied : s.copy}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {result && result.warnings.length > 0 && (
           <ul className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 space-y-1">
             {result.warnings.map((w) => (
               <li key={w}>{w}</li>
             ))}
           </ul>
         )}
-        {inviteSnapshot && emailPreview && (
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
+
+        {emailPreview && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
             <div className="text-xs font-medium text-slate-700">{invite.confirmPreviewTitle}</div>
             <p className="text-xs text-slate-500">{invite.confirmPreviewHint}</p>
@@ -442,20 +476,49 @@ export function MeetingCustomerInviteForm({
                 {emailPreview.text}
               </pre>
             </div>
-            {!composeOpened ? (
+            {!result ? (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  disabled={confirmingCompose}
+                  onClick={cancelPreview}
+                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 hover:border-slate-300 disabled:opacity-50"
+                >
+                  {invite.cancelPreview}
+                </button>
+                <button
+                  type="button"
+                  disabled={confirmingCompose}
+                  onClick={() => void confirmAndCreateAndOpen()}
+                  className="flex-1 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                >
+                  {confirmingCompose ? invite.confirmCreating : invite.confirmCreateAndOpen}
+                </button>
+              </div>
+            ) : !composeOpened ? (
               <button
                 type="button"
-                disabled={confirmingCompose}
-                onClick={() => void confirmAndOpenCompose()}
+                disabled={reopeningCompose}
+                onClick={async () => {
+                  if (!result?.meetLink) return;
+                  setReopeningCompose(true);
+                  try {
+                    await openInviteCompose(result.meetLink, inviteSnapshot);
+                    setComposeOpened(true);
+                  } finally {
+                    setReopeningCompose(false);
+                  }
+                }}
                 className="w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
               >
-                {confirmingCompose ? invite.confirmOpening : invite.confirmOpenExmail}
+                {reopeningCompose ? invite.confirmOpening : invite.confirmOpenExmail}
               </button>
             ) : (
               <button
                 type="button"
                 disabled={reopeningCompose}
                 onClick={async () => {
+                  if (!result?.meetLink) return;
                   setReopeningCompose(true);
                   try {
                     await openInviteCompose(result.meetLink, inviteSnapshot);
@@ -470,20 +533,20 @@ export function MeetingCustomerInviteForm({
             )}
           </div>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            setResult(null);
-            setEmailSubject("");
-            setComposeNotice(null);
-            setInviteSnapshot(null);
-            setComposeOpened(false);
-            setImagePreview(null);
-          }}
-          className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
-        >
-          {s.createAnother}
-        </button>
+
+        {result && (
+          <button
+            type="button"
+            onClick={() => {
+              cancelPreview();
+              setEmailSubject("");
+              setImagePreview(null);
+            }}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
+          >
+            {s.createAnother}
+          </button>
+        )}
       </div>
     );
   }
@@ -730,7 +793,7 @@ export function MeetingCustomerInviteForm({
         }
         className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
       >
-        {pending ? s.submitting : s.submit}
+        {pending ? invite.submitting : invite.submit}
       </button>
     </form>
   );
