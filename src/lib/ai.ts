@@ -200,6 +200,17 @@ async function buildSceneCandidates(
   if (apiConfigId) pushExplicit(apiConfigId);
   for (const id of preferred) pushExplicit(id);
 
+  // vision 场景：优先视觉模型，避免场景分配里第一个是纯文本模型
+  if (scene === "vision" && explicitIds.length > 1) {
+    const visionIds = explicitIds.filter((id) => {
+      const a = byId.get(id);
+      return a && detectVisionFromText(a.name, a.model, a.extraConfig);
+    });
+    const otherIds = explicitIds.filter((id) => !visionIds.includes(id));
+    explicitIds.length = 0;
+    explicitIds.push(...visionIds, ...otherIds);
+  }
+
   // 兜底部分：其余全部启用模型
   let fallbackRows = configured.filter((a) => !explicitIds.includes(a.id));
   if (scene === "vision") {

@@ -25,38 +25,37 @@ export type MeetingExtractContext = {
   userId: string;
 };
 
-/** 识图只需短 JSON，限制 token 加快响应 */
-const MEETING_EXTRACT_MAX_TOKENS = 480;
+/**
+ * 视觉模型（尤其 Seed 系）常先 reasoning 再输出 JSON，token 过低会截断成空对象。
+ * 仍比旧版 4096 小，但足够完整 JSON。
+ */
+const MEETING_EXTRACT_MAX_TOKENS = 1536;
 
 function buildPrompt(ctx: MeetingExtractContext): string {
   const { locale, timeZone, nowLocal, weekday } = ctx;
   const datePart = nowLocal.slice(0, 10);
 
   if (locale === "zh") {
-    return `从截图提取会议邀约 JSON。当前：${weekday} ${nowLocal}（${timeZone}）。
-输出字段（startAt/endAt 必须是用户时区 ${timeZone} 的墙钟 YYYY-MM-DDTHH:mm）：
+    return `你是会议邀约截图 OCR + 结构化助手。必须阅读图片中的文字，禁止猜测。
+
+当前时间：${weekday} ${nowLocal}（${timeZone}）
+只输出 JSON（startAt/endAt 为用户时区 ${timeZone} 墙钟 YYYY-MM-DDTHH:mm）：
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
-日期规则（关键）：
-- 「周二/Tuesday」= 今天(${datePart})之后最近的那个周二，不是今天本身除非今天就是周二
-- 截图若写其他时区（如 Riyadh time / GMT+3），先换算成 ${timeZone} 再写入 startAt
-- 只有开始时间则 endAt = startAt + 1 小时
-
-主题规则：无明确标题时，用「与 {联系人} 的会议」或 "Meeting with {name}"
-其他：仅图片可见信息；邮箱小写；contactName=外部联系人姓名。只输出 JSON。`;
+日期：「周二/Tuesday」= ${datePart} 之后最近的一个周二；其他时区（如 Riyadh 4pm）先换算到 ${timeZone}。
+主题：无标题时用「与 {contactName} 的会议」；contactName=截图里外部联系人姓名（如 LinkedIn 对话对方）。
+邮箱小写；仅结束时间缺失时 endAt = startAt + 1h。`;
   }
 
-  return `Extract meeting invite JSON from screenshot. Now: ${weekday} ${nowLocal} (${timeZone}).
-startAt/endAt = wall-clock in USER timezone ${timeZone}, format YYYY-MM-DDTHH:mm:
+  return `Meeting invite screenshot OCR + extraction. READ the image text; do not guess.
+
+Now: ${weekday} ${nowLocal} (${timeZone})
+JSON only (startAt/endAt wall-clock in ${timeZone}, YYYY-MM-DDTHH:mm):
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
-Date rules (critical):
-- "Tuesday" = the nearest Tuesday ON OR AFTER today (${datePart}), not today unless today is Tuesday
-- If another TZ is mentioned (e.g. "4pm Riyadh"), convert to ${timeZone} before writing startAt
-- If only start time, endAt = startAt + 1 hour
-
-Subject: if no explicit title, use "Meeting with {contactName}"
-Other: visible text only; lowercase emails; contactName = external person. JSON only.`;
+Dates: "Tuesday" = nearest Tuesday on/after ${datePart}; convert other TZ (e.g. "4pm Riyadh") to ${timeZone}.
+Subject: if missing use "Meeting with {contactName}"; contactName = external person in screenshot (e.g. LinkedIn chat partner).
+Lowercase emails; endAt = startAt + 1h only when end missing.`;
 }
 
 function parseJsonContent(raw: string | null | undefined): MeetingExtractResult | null {
@@ -87,12 +86,23 @@ export function normalizeLocalDateTime(raw: string | undefined): string | null {
   const slash = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})[,\sT]+(\d{1,2}):(\d{2})/);
   if (slash) {
     const pad = (n: string) => n.padStart(2, "0");
-    return `${slash[1]}-${pad(slash[2])}-${pad(slash[3])}T${pad(slash[4])}:${slash[5]}`;
+    return `${slash[1]}-${pad(slash[2])}-${pad(slash[3])}T${pad(slash[4])}:${pad(slash[5])}`;
   }
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0, 16);
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) return s.includes("T") ? s.slice(0, 16) : null;
   return null;
+}
+
+export function hasUsefulMeetingExtract(r: MeetingExtractResult): boolean {
+  return !!(
+    r.subject?.trim() ||
+    r.startAt?.trim() ||
+    r.contactName?.trim() ||
+    r.customerName?.trim() ||
+    r.customerEmails?.length ||
+    r.colleagueEmails?.length
+  );
 }
 
 export function normalizeMeetingExtractResult(
@@ -140,7 +150,10 @@ export async function extractMeetingFromImages(
   const system = buildPrompt(ctx);
   const userMsg: ChatMessage = {
     role: "user",
-    content: ctx.locale === "zh" ? "提取 JSON。" : "Extract JSON.",
+    content:
+      ctx.locale === "zh"
+        ? "请仔细阅读截图中的会议邀约文字并输出 JSON。"
+        : "Read the meeting invite text in the screenshot and output JSON.",
     images,
   };
   const chat: ChatMessage[] = [
@@ -154,12 +167,20 @@ export async function extractMeetingFromImages(
     temperature: 0,
     feature: "Meeting invite: extract",
     userId: ctx.userId,
-    taskTier: "fast",
     maxTokens: MEETING_EXTRACT_MAX_TOKENS,
     toolChoice: "none",
-    apiFallback: false,
   });
 
   const parsed = parseJsonContent(content) ?? {};
-  return normalizeMeetingExtractResult(parsed, ctx);
+  const result = normalizeMeetingExtractResult(parsed, ctx);
+
+  if (!hasUsefulMeetingExtract(result)) {
+    throw new AIError(
+      ctx.locale === "zh"
+        ? "未能从截图识别到会议信息。请确认：① 截图含清晰的时间/联系人文字；② 设置 → 场景模型分配 →「图片识别」已配置视觉模型（名称含 vl/vision/seed/4o 等）。"
+        : "Could not extract meeting info from the screenshot. Ensure readable time/contact text, and assign a vision-capable model under Settings → Scene models → Vision.",
+    );
+  }
+
+  return result;
 }

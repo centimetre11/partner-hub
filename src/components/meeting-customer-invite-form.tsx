@@ -207,7 +207,7 @@ export function MeetingCustomerInviteForm({
     try {
       const preview = URL.createObjectURL(file);
       setImagePreview(preview);
-      const images = await prepareChatImagesFromFiles([file], { maxSide: 512, quality: 0.62 });
+      const images = await prepareChatImagesFromFiles([file], { maxSide: 896, quality: 0.75 });
       const now = new Date();
       const weekday = now.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
         weekday: "long",
@@ -231,6 +231,7 @@ export function MeetingCustomerInviteForm({
       setInputMode("manual");
     } catch (e) {
       setExtractError(e instanceof Error ? e.message : invite.extractFailed);
+      setImagePreview(null);
     } finally {
       setExtracting(false);
       extractBusyRef.current = false;
