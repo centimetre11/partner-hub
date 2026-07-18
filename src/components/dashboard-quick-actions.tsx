@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMessages } from "@/lib/i18n/context";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { CreateBusinessRecordDrawer } from "@/components/create-business-record-drawer";
@@ -83,7 +84,14 @@ export function DashboardQuickActions({
   const openLabel = q.actionOpen;
 
   return (
-    <div className="mb-6 grid grid-cols-1 gap-3 px-8 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
+    <div className="mb-6 grid grid-cols-1 gap-3 px-8 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      <QuickActionCard title={q.mossTitle} desc={q.mossDesc}>
+        <Link href="/moss" className={cardActionBtn}>
+          {openLabel}
+          <ChevronRightIcon />
+        </Link>
+      </QuickActionCard>
+
       <QuickActionCard title={m.dashboard.createTodo} desc={q.createTodoDesc}>
         <CreateTodoDrawer
           userId={userId}
