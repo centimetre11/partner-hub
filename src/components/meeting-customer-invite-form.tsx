@@ -12,6 +12,7 @@ import type { MeetingExtractResult } from "@/lib/meeting-extract";
 import {
   parseDateTimeLocal,
   isoToDateTimeLocal,
+  toDateTimeLocalInput,
   defaultMeetingStartLocal,
   defaultMeetingEndLocal,
   getBrowserTimeZone,
@@ -173,6 +174,11 @@ export function MeetingCustomerInviteForm({
 
   function applyExtract(data: MeetingExtractResult) {
     if (data.subject?.trim()) setEmailSubject(data.subject.trim());
+    else if (data.contactName?.trim()) {
+      setEmailSubject(
+        locale === "zh" ? `与 ${data.contactName.trim()} 的会议` : `Meeting with ${data.contactName.trim()}`,
+      );
+    }
     const sLocal = isoToDateTimeLocal(data.startAt, timeZone);
     const eLocal = isoToDateTimeLocal(data.endAt, timeZone);
     if (sLocal) setStartAt(sLocal);
@@ -201,11 +207,21 @@ export function MeetingCustomerInviteForm({
     try {
       const preview = URL.createObjectURL(file);
       setImagePreview(preview);
-      const images = await prepareChatImagesFromFiles([file], { maxSide: 768, quality: 0.72 });
+      const images = await prepareChatImagesFromFiles([file], { maxSide: 512, quality: 0.62 });
+      const now = new Date();
+      const weekday = now.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
+        weekday: "long",
+        timeZone,
+      });
       const res = await fetch("/api/ai/meeting/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images, timeZone }),
+        body: JSON.stringify({
+          images,
+          timeZone,
+          nowLocal: toDateTimeLocalInput(now, timeZone),
+          weekday,
+        }),
       });
       const data = (await res.json()) as { ok?: boolean; result?: MeetingExtractResult; error?: string };
       if (!res.ok || !data.result) {

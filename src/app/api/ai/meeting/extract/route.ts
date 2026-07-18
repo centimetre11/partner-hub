@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { ChatImage } from "@/lib/ai";
 import { AIError } from "@/lib/ai";
 import { extractMeetingFromImages } from "@/lib/meeting-extract";
+import { toDateTimeLocalInput } from "@/lib/meeting-datetime";
 import { getLocale } from "@/lib/i18n/locale-server";
 import { getSessionUserId } from "@/lib/session";
 
@@ -12,19 +13,25 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const images = body.images as ChatImage[] | undefined;
   const timeZone = String(body.timeZone ?? "UTC").trim() || "UTC";
+  const nowLocal =
+    String(body.nowLocal ?? "").trim() ||
+    toDateTimeLocalInput(new Date(), timeZone);
+  const weekday =
+    String(body.weekday ?? "").trim() ||
+    new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" }).format(new Date());
 
   if (!Array.isArray(images) || !images.length) {
     return NextResponse.json({ error: "请上传截图" }, { status: 400 });
   }
 
   const locale = await getLocale();
-  const today = new Date().toISOString().slice(0, 10);
 
   try {
     const result = await extractMeetingFromImages(images, {
       locale,
       timeZone,
-      today,
+      nowLocal,
+      weekday,
       userId: uid,
     });
     return NextResponse.json({ ok: true, result });
