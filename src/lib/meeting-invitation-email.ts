@@ -1,4 +1,5 @@
 import type { Locale } from "./i18n/locale";
+import { formatMeetingWindow as formatMeetingWindowInZone } from "./meeting-datetime";
 
 export type MeetingInviteEmailInput = {
   title: string;
@@ -15,23 +16,7 @@ export type MeetingInviteEmailInput = {
 };
 
 function formatMeetingWindow(input: MeetingInviteEmailInput): string {
-  const loc = input.locale === "zh" ? "zh-CN" : "en-US";
-  const dateOpts: Intl.DateTimeFormatOptions = {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: input.timeZone,
-  };
-  const timeOpts: Intl.DateTimeFormatOptions = {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: input.timeZone,
-  };
-  const datePart = input.startAt.toLocaleDateString(loc, dateOpts);
-  const startTime = input.startAt.toLocaleTimeString(loc, timeOpts);
-  const endTime = input.endAt.toLocaleTimeString(loc, timeOpts);
-  return `${datePart}, ${startTime} – ${endTime} (${input.timeZone})`;
+  return formatMeetingWindowInZone(input.startAt, input.endAt, input.timeZone, input.locale);
 }
 
 function greeting(input: MeetingInviteEmailInput): string {

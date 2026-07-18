@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useMessages } from "@/lib/i18n/context";
+import {
+  defaultMeetingStartLocal,
+  defaultMeetingEndLocal,
+  getBrowserTimeZone,
+  formatTimeZoneLabel,
+} from "@/lib/meeting-datetime";
+import { useLocale, useMessages } from "@/lib/i18n/context";
 import { createMeetingAction, type CreateMeetingResult } from "@/lib/meeting-actions";
 import {
   MeetingCustomerInviteForm,
@@ -16,25 +22,6 @@ type BoundUser = { id: string; name: string };
 
 const input =
   "box-border w-full min-w-0 max-w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
-
-function defaultStartLocal(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return toLocalInput(d);
-}
-
-function defaultEndLocal(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 2);
-  return toLocalInput(d);
-}
-
-function toLocalInput(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 function MobileDrawer({
   open,
@@ -113,10 +100,11 @@ function MeetingForm({
   onSuccess?: (result: Extract<CreateMeetingResult, { ok: true }>) => void;
 }) {
   const m = useMessages();
+  const locale = useLocale();
   const s = m.meetingScheduler;
   const [title, setTitle] = useState("");
-  const [startAt, setStartAt] = useState(defaultStartLocal);
-  const [endAt, setEndAt] = useState(defaultEndLocal);
+  const [startAt, setStartAt] = useState(() => defaultMeetingStartLocal());
+  const [endAt, setEndAt] = useState(() => defaultMeetingEndLocal());
   const [selected, setSelected] = useState<Set<string>>(() => new Set([currentUserId]));
   const [notifyAttendees, setNotifyAttendees] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,10 +112,12 @@ function MeetingForm({
   const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
 
-  const timeZone = useMemo(
-    () => (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"),
-    [],
-  );
+  const timeZone = useMemo(() => getBrowserTimeZone(), []);
+
+  const timeZoneLabel = useMemo(() => {
+    const loc = locale === "zh" ? "zh-CN" : "en-US";
+    return formatTimeZoneLabel(timeZone, new Date(), loc);
+  }, [timeZone, locale]);
 
   function toggleUser(id: string) {
     setSelected((prev) => {
@@ -264,6 +254,7 @@ function MeetingForm({
           />
         </label>
       </div>
+      <p className="text-xs text-slate-400">{s.timeZoneHint.replace("{tz}", timeZoneLabel)}</p>
 
       <fieldset className="space-y-2">
         <legend className="text-xs text-slate-500">{s.attendees}</legend>

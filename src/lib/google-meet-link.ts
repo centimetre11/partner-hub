@@ -1,4 +1,5 @@
 import { getUserMeetAccessToken } from "./google-meet-oauth";
+import { toGoogleCalendarDateTime } from "./meeting-datetime";
 
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
@@ -13,6 +14,10 @@ type CalendarEvent = {
 
 export type CreateMeetLinkInput = {
   summary?: string;
+  /** datetime-local 墙钟（与 timeZone 配套，供 Google Calendar API） */
+  startLocal: string;
+  endLocal: string;
+  /** UTC 瞬间（供校验与其它系统） */
   start: Date;
   end: Date;
   timeZone: string;
@@ -43,10 +48,16 @@ export async function createMeetLinkForUser(
   const requestId = crypto.randomUUID();
   const summary = input.summary?.trim() || "Partner Hub Meeting";
 
+  const startDateTime = toGoogleCalendarDateTime(input.startLocal);
+  const endDateTime = toGoogleCalendarDateTime(input.endLocal);
+  if (!startDateTime || !endDateTime) {
+    throw new Error("Invalid meeting start or end time");
+  }
+
   const body = {
     summary,
-    start: { dateTime: input.start.toISOString(), timeZone: input.timeZone },
-    end: { dateTime: input.end.toISOString(), timeZone: input.timeZone },
+    start: { dateTime: startDateTime, timeZone: input.timeZone },
+    end: { dateTime: endDateTime, timeZone: input.timeZone },
     conferenceData: {
       createRequest: {
         requestId,

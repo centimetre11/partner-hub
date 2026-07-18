@@ -5,10 +5,18 @@ import Link from "next/link";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 import { createMeetingAction, type CreateMeetingResult } from "@/lib/meeting-actions";
 import { isBridgeAvailable } from "@/lib/browser-bridge";
-import { composeMeetingInviteEmail } from "@/lib/meeting-invite-compose";
+import { composeMeetingInviteEmail, previewMeetingInvitationEmail } from "@/lib/meeting-invite-compose";
 import { prepareChatImagesFromFiles } from "@/lib/ai-images";
-import type { MeetingExtractResult } from "@/lib/meeting-extract";
 import { isValidEmail, parseEmailRecipients, validateEmailList } from "@/lib/email-recipients";
+import type { MeetingExtractResult } from "@/lib/meeting-extract";
+import {
+  parseDateTimeLocal,
+  isoToDateTimeLocal,
+  defaultMeetingStartLocal,
+  defaultMeetingEndLocal,
+  getBrowserTimeZone,
+  formatTimeZoneLabel,
+} from "@/lib/meeting-datetime";
 
 export type MeetingCustomerOption = {
   id: string;
@@ -21,34 +29,6 @@ export type BoundUserWithEmail = { id: string; name: string; email: string };
 
 const input =
   "box-border w-full min-w-0 max-w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
-
-function defaultStartLocal(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return toLocalInput(d);
-}
-
-function defaultEndLocal(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 2);
-  return toLocalInput(d);
-}
-
-function toLocalInput(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function isoToLocalInput(raw: string | undefined): string | null {
-  if (!raw?.trim()) return null;
-  const trimmed = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(trimmed)) return trimmed.slice(0, 16);
-  const d = new Date(trimmed);
-  if (Number.isNaN(d.getTime())) return null;
-  return toLocalInput(d);
-}
 
 type InviteSnapshot = {
   to: string;
@@ -85,8 +65,8 @@ export function MeetingCustomerInviteForm({
 
   const [inputMode, setInputMode] = useState<InputMode>("manual");
   const [emailSubject, setEmailSubject] = useState("");
-  const [startAt, setStartAt] = useState(defaultStartLocal);
-  const [endAt, setEndAt] = useState(defaultEndLocal);
+  const [startAt, setStartAt] = useState(() => defaultMeetingStartLocal());
+  const [endAt, setEndAt] = useState(() => defaultMeetingEndLocal());
   const [selected, setSelected] = useState<Set<string>>(() => new Set([currentUserId]));
   const [notifyAttendees, setNotifyAttendees] = useState(true);
 
@@ -112,11 +92,15 @@ export function MeetingCustomerInviteForm({
   } | null>(null);
   const [inviteSnapshot, setInviteSnapshot] = useState<InviteSnapshot | null>(null);
   const [reopeningCompose, setReopeningCompose] = useState(false);
+  const [composeOpened, setComposeOpened] = useState(false);
+  const [confirmingCompose, setConfirmingCompose] = useState(false);
 
-  const timeZone = useMemo(
-    () => (typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC"),
-    [],
-  );
+  const timeZone = useMemo(() => getBrowserTimeZone(), []);
+
+  const timeZoneLabel = useMemo(() => {
+    const loc = locale === "zh" ? "zh-CN" : "en-US";
+    return formatTimeZoneLabel(timeZone, new Date(), loc);
+  }, [timeZone, locale]);
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId) ?? null,
@@ -176,8 +160,8 @@ export function MeetingCustomerInviteForm({
 
   function applyExtract(data: MeetingExtractResult) {
     if (data.subject?.trim()) setEmailSubject(data.subject.trim());
-    const sLocal = isoToLocalInput(data.startAt);
-    const eLocal = isoToLocalInput(data.endAt);
+    const sLocal = isoToDateTimeLocal(data.startAt, timeZone);
+    const eLocal = isoToDateTimeLocal(data.endAt, timeZone);
     if (sLocal) setStartAt(sLocal);
     if (eLocal) setEndAt(eLocal);
     if (data.contactName?.trim()) setContactName(data.contactName.trim());
@@ -235,7 +219,7 @@ export function MeetingCustomerInviteForm({
       customerName: snapshot.customerName,
       contactName: snapshot.contactName,
       organizerName,
-      locale,
+      locale: "en",
     });
     if (composeResult.ok && composeResult.warning) {
       setComposeNotice({ kind: "warn", text: composeResult.warning });
@@ -280,8 +264,12 @@ export function MeetingCustomerInviteForm({
     fd.set("notifyAttendees", notifyAttendees ? "true" : "false");
     for (const id of selected) fd.append("attendeeUserIds", id);
 
-    const parsedStart = new Date(startAt);
-    const parsedEnd = new Date(endAt);
+    const parsedStart = parseDateTimeLocal(startAt, timeZone);
+    const parsedEnd = parseDateTimeLocal(endAt, timeZone);
+    if (!parsedStart || !parsedEnd) {
+      setError(s.startAt);
+      return;
+    }
     const cc = colleagueValidation.valid.length ? colleagueValidation.valid.join(", ") : undefined;
     const snapshot: InviteSnapshot = {
       to: customerEmail.trim(),
@@ -302,8 +290,37 @@ export function MeetingCustomerInviteForm({
       }
       setResult(res);
       setInviteSnapshot(snapshot);
-      await openInviteCompose(res.meetLink, snapshot);
+      setComposeOpened(false);
+      setComposeNotice(null);
     });
+  }
+
+  const emailPreview = useMemo(() => {
+    if (!result?.meetLink || !inviteSnapshot) return null;
+    return previewMeetingInvitationEmail({
+      to: inviteSnapshot.to,
+      cc: inviteSnapshot.cc,
+      subject: inviteSnapshot.subject,
+      meetingTitle: inviteSnapshot.meetingTitle,
+      startAt: inviteSnapshot.startAt,
+      endAt: inviteSnapshot.endAt,
+      timeZone,
+      meetLink: result.meetLink,
+      customerName: inviteSnapshot.customerName,
+      contactName: inviteSnapshot.contactName,
+      organizerName,
+    });
+  }, [result, inviteSnapshot, timeZone, organizerName]);
+
+  async function confirmAndOpenCompose() {
+    if (!result?.meetLink || !inviteSnapshot) return;
+    setConfirmingCompose(true);
+    try {
+      await openInviteCompose(result.meetLink, inviteSnapshot);
+      setComposeOpened(true);
+    } finally {
+      setConfirmingCompose(false);
+    }
   }
 
   async function copyLink() {
@@ -359,22 +376,50 @@ export function MeetingCustomerInviteForm({
             ))}
           </ul>
         )}
-        {inviteSnapshot && (
-          <button
-            type="button"
-            disabled={reopeningCompose}
-            onClick={async () => {
-              setReopeningCompose(true);
-              try {
-                await openInviteCompose(result.meetLink, inviteSnapshot);
-              } finally {
-                setReopeningCompose(false);
-              }
-            }}
-            className="w-full rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
-          >
-            {reopeningCompose ? invite.reopeningCompose : invite.reopenCompose}
-          </button>
+        {inviteSnapshot && emailPreview && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <div className="text-xs font-medium text-slate-700">{invite.confirmPreviewTitle}</div>
+            <p className="text-xs text-slate-500">{invite.confirmPreviewHint}</p>
+            <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs space-y-2">
+              <div>
+                <span className="text-slate-400">{invite.previewTo}: </span>
+                <span className="text-slate-800 break-all">{emailPreview.to}</span>
+              </div>
+              <div>
+                <span className="text-slate-400">{invite.previewSubject}: </span>
+                <span className="text-slate-800">{emailPreview.subject}</span>
+              </div>
+              <pre className="whitespace-pre-wrap text-slate-700 leading-relaxed max-h-48 overflow-y-auto">
+                {emailPreview.text}
+              </pre>
+            </div>
+            {!composeOpened ? (
+              <button
+                type="button"
+                disabled={confirmingCompose}
+                onClick={() => void confirmAndOpenCompose()}
+                className="w-full rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {confirmingCompose ? invite.confirmOpening : invite.confirmOpenExmail}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={reopeningCompose}
+                onClick={async () => {
+                  setReopeningCompose(true);
+                  try {
+                    await openInviteCompose(result.meetLink, inviteSnapshot);
+                  } finally {
+                    setReopeningCompose(false);
+                  }
+                }}
+                className="w-full rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+              >
+                {reopeningCompose ? invite.reopeningCompose : invite.reopenCompose}
+              </button>
+            )}
+          </div>
         )}
         <button
           type="button"
@@ -383,6 +428,7 @@ export function MeetingCustomerInviteForm({
             setEmailSubject("");
             setComposeNotice(null);
             setInviteSnapshot(null);
+            setComposeOpened(false);
             setImagePreview(null);
           }}
           className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
@@ -574,6 +620,7 @@ export function MeetingCustomerInviteForm({
           />
         </label>
       </div>
+      <p className="text-xs text-slate-400">{s.timeZoneHint.replace("{tz}", timeZoneLabel)}</p>
 
       <fieldset className="space-y-2">
         <legend className="text-xs text-slate-500">{s.attendees}</legend>

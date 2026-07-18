@@ -3,6 +3,7 @@
 import { db } from "./db";
 import { requireUser } from "./session";
 import { createMeetLinkForUser } from "./google-meet-link";
+import { parseDateTimeLocal, formatMeetingWindow } from "./meeting-datetime";
 import { getUserGoogleMeetStatus } from "./google-meet-oauth";
 import { resolveHubUserIdsToWecomUserIds, sendWecomAppMessage } from "./wecom-app-message";
 import { createWecomSchedule, isWecomScheduleConfigured } from "./wecom-schedule";
@@ -24,20 +25,19 @@ function parseAttendeeIds(raw: FormData): string[] {
   return [...new Set(single.split(/[,;|]/).map((s) => s.trim()).filter(Boolean))];
 }
 
-function parseDateTime(raw: string): Date | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const d = new Date(trimmed);
-  return Number.isNaN(d.getTime()) ? null : d;
+function parseDateTime(raw: string, timeZone: string): Date | null {
+  return parseDateTimeLocal(raw, timeZone);
 }
 
 export async function createMeetingAction(formData: FormData): Promise<CreateMeetingResult> {
   const user = await requireUser();
 
   const title = String(formData.get("title") ?? "").trim();
-  const startAt = parseDateTime(String(formData.get("startAt") ?? ""));
-  const endAt = parseDateTime(String(formData.get("endAt") ?? ""));
+  const startAtRaw = String(formData.get("startAt") ?? "");
+  const endAtRaw = String(formData.get("endAt") ?? "");
   const timeZone = String(formData.get("timeZone") ?? "").trim() || "UTC";
+  const startAt = parseDateTime(startAtRaw, timeZone);
+  const endAt = parseDateTime(endAtRaw, timeZone);
   const notifyAttendees = formData.get("notifyAttendees") !== "false";
 
   if (!title) return { ok: false, error: "Meeting title is required" };
@@ -87,6 +87,8 @@ export async function createMeetingAction(formData: FormData): Promise<CreateMee
   try {
     const meet = await createMeetLinkForUser(user.id, {
       summary: title,
+      startLocal: startAtRaw,
+      endLocal: endAtRaw,
       start: startAt,
       end: endAt,
       timeZone,
@@ -127,7 +129,7 @@ export async function createMeetingAction(formData: FormData): Promise<CreateMee
       touser: recipients,
       msgtype: "textcard",
       title: title.slice(0, 128),
-      content: `时间：${startAt.toLocaleString()}\nGoogle Meet：${meetLink}`,
+      content: `时间：${formatMeetingWindow(startAt, endAt, timeZone, "zh")}\nGoogle Meet：${meetLink}`,
       url: meetLink,
       btntxt: "加入",
     });

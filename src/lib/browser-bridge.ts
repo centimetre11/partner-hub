@@ -125,6 +125,12 @@ export async function composeEmailViaBridge(params: {
   /** 富文本 HTML；有值时优先注入企业邮编辑器 */
   bodyHtml?: string;
   attachments?: BridgeAttachment[];
+  /** meeting：切换到企业邮「会议」选项卡填写（不写地点） */
+  mode?: "email" | "meeting";
+  startAt?: string;
+  endAt?: string;
+  /** IANA 时区；企业邮会议时间按此时区格式化（与 Hub 表单一致） */
+  timeZone?: string;
 }): Promise<ComposeResult> {
   const attachments = params.attachments ?? [];
   try {

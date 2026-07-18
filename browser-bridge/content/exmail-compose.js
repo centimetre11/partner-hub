@@ -19,11 +19,23 @@
     return true;
   });
 
-  async function runFillCompose({ to, cc, subject, body, bodyHtml, files }) {
+  async function runFillCompose({ to, cc, subject, body, bodyHtml, files, mode, startAt, endAt, timeZone }) {
+    const isMeeting = mode === "meeting";
+
     // 1. 写信表单未打开时，点击「写信」入口
     if (!findEditorBody()) {
       const btn = await waitFor(() => findComposeButton(), 15000, "找不到「写信」按钮，请确认已登录企业邮");
       btn.click();
+      await sleep(500);
+    }
+
+    // 1b. 会议邀约：切换到「会议」选项卡（非普通邮件）
+    if (isMeeting) {
+      const switched = await switchToMeetingTab();
+      if (!switched) {
+        return { ok: false, error: "找不到企业邮「会议」选项卡，请手动切换到会议后再试" };
+      }
+      await sleep(700);
     }
 
     // 2. 等待写信表单（以正文编辑器出现为准）
@@ -33,18 +45,21 @@
 
     const problems = [];
 
+    // 收件人：会议模式将抄送合并进收件人
+    const recipientList = isMeeting && cc ? mergeRecipients(to, cc) : to;
+
     // 3. 收件人（最先填，避免正文抢焦点；经典版需模拟真实输入 + Tab/Enter 确认）
-    if (to) {
+    if (recipientList) {
       const recipientField = findRecipientField(composeDoc);
       if (recipientField) {
-        const filled = await fillRecipient(recipientField, to);
+        const filled = await fillRecipient(recipientField, recipientList);
         if (!filled) problems.push("收件人填充失败");
       } else {
         problems.push("收件人输入框未找到");
       }
     }
 
-    if (cc) {
+    if (!isMeeting && cc) {
       const ccField = findCcField(composeDoc);
       if (ccField) {
         const filled = await fillRecipient(ccField, cc);
@@ -65,7 +80,13 @@
       }
     }
 
-    // 5. 正文（优先 HTML 富文本）
+    // 4b. 会议模式：尝试填充时间；地点 deliberately 不填
+    if (isMeeting && startAt && endAt) {
+      const timeOk = await fillMeetingTime(composeDoc, startAt, endAt, timeZone);
+      if (!timeOk) problems.push("会议时间未能自动填充，请手动核对");
+    }
+
+    // 5. 正文 / 备注（优先 HTML 富文本）
     if (body || bodyHtml) fillBody(editorBody, body, bodyHtml);
 
     // 6. 附件
@@ -164,6 +185,86 @@
       if ((text === "写信" || text === "写邮件" || text === "Compose") && isVisible(el)) return el;
     }
     return null;
+  }
+
+  async function switchToMeetingTab() {
+    const candidates = queryAllGlobal("a, button, span, div, li, label, [role='tab']");
+    for (const el of candidates) {
+      const text = (el.textContent || "").trim();
+      if ((text === "会议" || text === "Meeting") && isVisible(el)) {
+        el.click();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function mergeRecipients(to, cc) {
+    const parts = String(to || "")
+      .split(/[,;|]/)
+      .concat(
+        String(cc || "")
+          .split(/[,;|]/)
+          .map((s) => s.trim()),
+      )
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const seen = new Set();
+    const out = [];
+    for (const p of parts) {
+      const key = p.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(p);
+      }
+    }
+    return out.join(", ");
+  }
+
+  function formatExmailDateTime(iso, timeZone) {
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return null;
+      const tz =
+        timeZone && String(timeZone).trim()
+          ? String(timeZone).trim()
+          : Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const dtf = new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+        year: "numeric",
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const parts = Object.fromEntries(
+        dtf.formatToParts(d).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]),
+      );
+      const hour = parts.hour === "24" ? "0" : parts.hour;
+      return `${parts.year}/${parts.month}/${parts.day} ${hour}:${parts.minute}`;
+    } catch {
+      return null;
+    }
+  }
+
+  async function fillMeetingTime(doc, startIso, endIso, timeZone) {
+    const startStr = formatExmailDateTime(startIso, timeZone);
+    const endStr = formatExmailDateTime(endIso, timeZone);
+    if (!startStr || !endStr) return false;
+
+    const timeRow = findInputByRowLabel(doc, /^时\s*间/);
+    const container = timeRow ? timeRow.closest("tr, .compose_field, .field, li, div") : doc.body;
+    const inputs = Array.from(
+      (container || doc).querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
+    ).filter(isVisible);
+
+    if (inputs.length >= 2) {
+      setNativeValue(inputs[0], startStr);
+      setNativeValue(inputs[1], endStr);
+      return true;
+    }
+    return false;
   }
 
   // ---------- 正文编辑器（写信表单的锚点）----------
