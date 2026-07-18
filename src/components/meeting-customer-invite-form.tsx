@@ -93,7 +93,6 @@ export function MeetingCustomerInviteForm({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
   const [extractText, setExtractText] = useState("");
-  const [pendingExtract, setPendingExtract] = useState<MeetingExtractResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const extractBusyRef = useRef(false);
   const imagePreviewUrlRef = useRef<string | null>(null);
@@ -189,7 +188,6 @@ export function MeetingCustomerInviteForm({
     } else {
       setImagePreview(null);
     }
-    setPendingExtract(null);
     setExtractError(null);
   }
 
@@ -220,18 +218,6 @@ export function MeetingCustomerInviteForm({
     }
   }
 
-  function confirmPendingExtract() {
-    if (!pendingExtract) return;
-    applyExtract(pendingExtract);
-    setPendingExtract(null);
-    setInputMode("manual");
-  }
-
-  function cancelPendingExtract() {
-    setPendingExtract(null);
-    setExtractError(null);
-  }
-
   async function runExtract(source: "image" | "text") {
     if (extractBusyRef.current) return;
     if (source === "image" && !pendingImageFile) {
@@ -244,7 +230,6 @@ export function MeetingCustomerInviteForm({
     }
     extractBusyRef.current = true;
     setExtractError(null);
-    setPendingExtract(null);
     setExtracting(true);
     try {
       const now = new Date();
@@ -271,7 +256,8 @@ export function MeetingCustomerInviteForm({
       if (!res.ok || !data.result) {
         throw new Error(data.error || invite.extractFailed);
       }
-      setPendingExtract(data.result);
+      applyExtract(data.result);
+      setInputMode("manual");
     } catch (e) {
       setExtractError(e instanceof Error ? e.message : invite.extractFailed);
     } finally {
@@ -279,24 +265,6 @@ export function MeetingCustomerInviteForm({
       extractBusyRef.current = false;
     }
   }
-
-  const extractPreview = useMemo(() => {
-    if (!pendingExtract) return null;
-    const startLocal = pendingExtract.startAt ? isoToDateTimeLocal(pendingExtract.startAt, timeZone) : null;
-    const endLocal = pendingExtract.endAt ? isoToDateTimeLocal(pendingExtract.endAt, timeZone) : null;
-    return {
-      subject: pendingExtract.subject?.trim() || "—",
-      startLocal: startLocal || "—",
-      endLocal: endLocal || "—",
-      customerEmails: pendingExtract.customerEmails?.length
-        ? pendingExtract.customerEmails.join(", ")
-        : "—",
-      colleagueEmails: pendingExtract.colleagueEmails?.length
-        ? pendingExtract.colleagueEmails.join(", ")
-        : "—",
-      contactName: pendingExtract.contactName?.trim() || "—",
-    };
-  }, [pendingExtract, timeZone]);
 
   useEffect(() => {
     return () => {
@@ -623,7 +591,6 @@ export function MeetingCustomerInviteForm({
               setEmailSubject("");
               setImageFile(null);
               setExtractText("");
-              setPendingExtract(null);
             }}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
           >
@@ -736,7 +703,6 @@ export function MeetingCustomerInviteForm({
               value={extractText}
               onChange={(e) => {
                 setExtractText(e.target.value);
-                setPendingExtract(null);
                 setExtractError(null);
               }}
               rows={4}
@@ -752,59 +718,6 @@ export function MeetingCustomerInviteForm({
               {extracting ? invite.extracting : invite.recognizeText}
             </button>
           </div>
-
-          {extractPreview && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 space-y-3">
-              <div className="text-xs font-medium text-emerald-900">{invite.extractPreviewTitle}</div>
-              <p className="text-xs text-emerald-800">{invite.extractPreviewHint}</p>
-              <div className="rounded-lg border border-emerald-200 bg-white p-3 text-xs space-y-2 text-slate-700">
-                <div>
-                  <span className="text-slate-400">{invite.emailSubject}: </span>
-                  {extractPreview.subject}
-                </div>
-                <div>
-                  <span className="text-slate-400">{s.startAt}: </span>
-                  {extractPreview.startLocal}
-                </div>
-                <div>
-                  <span className="text-slate-400">{s.endAt}: </span>
-                  {extractPreview.endLocal}
-                </div>
-                <div>
-                  <span className="text-slate-400">{invite.customerEmail}: </span>
-                  {extractPreview.customerEmails}
-                </div>
-                {extractPreview.colleagueEmails !== "—" && (
-                  <div>
-                    <span className="text-slate-400">{invite.colleagueEmails}: </span>
-                    {extractPreview.colleagueEmails}
-                  </div>
-                )}
-                {extractPreview.contactName !== "—" && (
-                  <div>
-                    <span className="text-slate-400">{invite.contactName}: </span>
-                    {extractPreview.contactName}
-                  </div>
-                )}
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  onClick={cancelPendingExtract}
-                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:border-slate-300"
-                >
-                  {invite.cancelExtract}
-                </button>
-                <button
-                  type="button"
-                  onClick={confirmPendingExtract}
-                  className="flex-1 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                  {invite.confirmExtract}
-                </button>
-              </div>
-            </div>
-          )}
 
           {extractError && <p className="text-xs text-red-600">{extractError}</p>}
         </div>

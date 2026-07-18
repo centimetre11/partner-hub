@@ -44,11 +44,23 @@ export function mergeInviteRecipients(to: string, cc?: string): string {
     .join(", ");
 }
 
+/** 表单主题可能是中文（企微日程用）；企业邮主题/正文固定英文。 */
+export function englishMeetingTitle(subject: string, contactName: string | null): string {
+  const raw = subject.trim();
+  const contact = contactName?.trim();
+  const zh = raw.match(/^与\s*(.+?)\s*的会议\s*$/);
+  if (zh) return `Meeting with ${zh[1].trim()}`;
+  if (/^Meeting with /i.test(raw)) return raw;
+  if (contact) return `Meeting with ${contact}`;
+  return raw || "Online meeting";
+}
+
 export function previewMeetingInvitationEmail(
   input: Omit<ComposeMeetingInviteInput, "locale"> & { meetLink: string },
 ): MeetingInviteEmailPreview {
+  const titleEn = englishMeetingTitle(input.meetingTitle || input.subject, input.contactName);
   const content = buildMeetingInvitationEmail({
-    title: input.meetingTitle,
+    title: titleEn,
     startAt: input.startAt,
     endAt: input.endAt,
     startLocal: input.startLocal,
@@ -59,10 +71,9 @@ export function previewMeetingInvitationEmail(
     contactName: input.contactName,
     organizerName: input.organizerName,
     locale: "en",
-    subjectOverride: input.subject,
   });
   return {
-    subject: input.subject,
+    subject: content.subject,
     to: mergeInviteRecipients(input.to, input.cc),
     text: content.text,
     html: content.html,

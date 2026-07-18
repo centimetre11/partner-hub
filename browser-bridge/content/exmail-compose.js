@@ -45,15 +45,17 @@
 
     const problems = [];
 
-    // 收件人：会议模式将抄送合并进收件人
-    const recipientList = isMeeting && cc ? mergeRecipients(to, cc) : to;
+    // 收件人：会议模式将抄送合并进收件人（无抄送时仅填客户邮箱）
+    const recipientList = isMeeting ? mergeRecipients(to, cc || "") : to;
+    const emailOnlyRecipients = filterEmailRecipients(recipientList);
 
     // 3. 收件人（最先填，避免正文抢焦点；经典版需模拟真实输入 + Tab/Enter 确认）
-    if (recipientList) {
-      const recipientField = findRecipientField(composeDoc);
+    if (emailOnlyRecipients) {
+      const recipientField = findRecipientField(composeDoc, isMeeting);
       if (recipientField) {
-        const filled = await fillRecipient(recipientField, recipientList);
+        const filled = await fillRecipient(recipientField, emailOnlyRecipients);
         if (!filled) problems.push("收件人填充失败");
+        else await sleep(200);
       } else {
         problems.push("收件人输入框未找到");
       }
@@ -69,13 +71,13 @@
       }
     }
 
-    // 4. 主题（仅在写信表单文档内查找）
+    // 4. 主题（仅在写信表单文档内查找；会议模式可能没有独立主题行）
     if (subject) {
-      const subjectField = findSubjectField(composeDoc);
+      const subjectField = findSubjectField(composeDoc, isMeeting);
       if (subjectField) {
         subjectField.focus();
         setNativeValue(subjectField, subject);
-      } else {
+      } else if (!isMeeting) {
         problems.push("主题输入框未找到");
       }
     }
@@ -221,6 +223,36 @@
     return out.join(", ");
   }
 
+  /** 只保留像邮箱的片段，避免日期等误入收件人 */
+  function filterEmailRecipients(raw) {
+    return String(raw || "")
+      .split(/[,;|]/)
+      .map((s) => s.trim())
+      .filter((s) => s.includes("@") && !looksLikeDateTime(s))
+      .join(", ");
+  }
+
+  function looksLikeDateTime(s) {
+    return (
+      /^\d{4}[/-]\d{1,2}[/-]\d{1,2}/.test(s) ||
+      /^\d{1,2}:\d{2}/.test(s) ||
+      /^\d{4}-\d{2}-\d{2}T/.test(s)
+    );
+  }
+
+  function isInRecipientArea(el) {
+    return Boolean(el.closest("#toAreaCtrl, #ccAreaCtrl, .addr_area"));
+  }
+
+  function findTimeRow(doc) {
+    for (const input of doc.querySelectorAll("input[type='text'], input:not([type='hidden'])")) {
+      if (!isVisible(input) || isInRecipientArea(input)) continue;
+      const row = input.closest("tr, .compose_field, .field, li, div");
+      if (row && /^时\s*间/.test((row.textContent || "").trim().slice(0, 12))) return row;
+    }
+    return null;
+  }
+
   function formatExmailFromLocal(local) {
     if (!local) return null;
     const m = String(local).trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
@@ -260,18 +292,18 @@
     const endStr = formatExmailFromLocal(endLocal) || formatExmailDateTime(endIso, timeZone);
     if (!startStr || !endStr) return false;
 
-    const timeRow = findInputByRowLabel(doc, /^时\s*间/);
-    const container = timeRow ? timeRow.closest("tr, .compose_field, .field, li, div") : doc.body;
-    const inputs = Array.from(
-      (container || doc).querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
-    ).filter(isVisible);
+    const timeRow = findTimeRow(doc);
+    if (!timeRow) return false;
 
-    if (inputs.length >= 2) {
-      setNativeValue(inputs[0], startStr);
-      setNativeValue(inputs[1], endStr);
-      return true;
-    }
-    return false;
+    const inputs = Array.from(
+      timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
+    ).filter(isVisible).filter((el) => !isInRecipientArea(el));
+
+    if (inputs.length < 2) return false;
+
+    setNativeValue(inputs[0], startStr);
+    setNativeValue(inputs[1], endStr);
+    return true;
   }
 
   // ---------- 正文编辑器（写信表单的锚点）----------
@@ -316,7 +348,7 @@
 
   // ---------- 字段定位（限定写信表单文档）----------
 
-  function findRecipientField(doc) {
+  function findRecipientField(doc, isMeeting = false) {
     const strategies = [
       () => doc.querySelector("#toAreaCtrl .addr_text input"),
       () => doc.querySelector("#toAreaCtrl .addr_input input"),
@@ -330,15 +362,19 @@
           isVisible,
         ),
       () => Array.from(doc.querySelectorAll("input[name='to']")).find(isVisible),
-      () => findInputBeforeSubject(doc),
-      () => findInputByRowLabel(doc, /^收件人/),
       () =>
         Array.from(doc.querySelectorAll("#toAreaCtrl [contenteditable='true']")).find(isVisible),
       () => Array.from(doc.querySelectorAll("input[placeholder*='收件人']")).find(isVisible),
     ];
+    if (!isMeeting) {
+      strategies.push(
+        () => findInputBeforeSubject(doc),
+        () => findInputByRowLabel(doc, /^收件人/),
+      );
+    }
     for (const s of strategies) {
       const el = s();
-      if (el && isVisible(el)) return el;
+      if (el && isVisible(el) && !looksLikeDateTime(el.value || "")) return el;
     }
     return null;
   }
@@ -374,7 +410,7 @@
     return null;
   }
 
-  function findSubjectField(doc) {
+  function findSubjectField(doc, isMeeting = false) {
     const strategies = [
       () => Array.from(doc.querySelectorAll("input[name='subject']")).find(isVisible),
       () => (isVisible(doc.querySelector("#subject")) ? doc.querySelector("#subject") : null),
@@ -383,9 +419,14 @@
     ];
     for (const s of strategies) {
       const el = s();
-      if (el) return el;
+      if (el && !isInRecipientArea(el) && !(isMeeting && isInTimeRow(el))) return el;
     }
     return null;
+  }
+
+  function isInTimeRow(el) {
+    const row = el.closest("tr, .compose_field, .field, li, div");
+    return Boolean(row && /^时\s*间/.test((row.textContent || "").trim().slice(0, 12)));
   }
 
   function findInputByRowLabel(doc, labelRe) {
