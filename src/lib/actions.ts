@@ -529,7 +529,7 @@ export async function setPartnerStatusOverrideAction(
 // ============ 联系人 ============
 
 export async function upsertContactAction(owner: OwnerRef, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   const data = {
     name: String(formData.get("name") ?? "").trim(),
@@ -543,14 +543,52 @@ export async function upsertContactAction(owner: OwnerRef, formData: FormData) {
     notes: String(formData.get("notes") ?? "") || null,
   };
   if (!data.name) return;
-  if (id) await db.contact.update({ where: { id }, data });
-  else await db.contact.create({ data: { ...data, ...ownerData(owner) } });
+  if (id) {
+    const contact = await db.contact.update({ where: { id }, data });
+    void recordSystemEvent({
+      category: "CONTACT",
+      action: "contact.update",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Contact",
+      targetId: contact.id,
+      targetLabel: contact.name,
+      summary: `更新联系人：${contact.name}`,
+      meta: { ownerKind: owner.kind, ownerId: owner.id },
+    });
+  } else {
+    const contact = await db.contact.create({ data: { ...data, ...ownerData(owner) } });
+    void recordSystemEvent({
+      category: "CONTACT",
+      action: "contact.create",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Contact",
+      targetId: contact.id,
+      targetLabel: contact.name,
+      summary: `新建联系人：${contact.name}`,
+      meta: { ownerKind: owner.kind, ownerId: owner.id },
+    });
+  }
   revalidatePath(ownerPath(owner));
 }
 
 export async function deleteContactAction(owner: OwnerRef, contactId: string) {
-  await requireUser();
+  const user = await requireUser();
+  const contact = await db.contact.findUnique({ where: { id: contactId } });
+  if (!contact) return;
   await db.contact.delete({ where: { id: contactId } });
+  void recordSystemEvent({
+    category: "CONTACT",
+    action: "contact.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Contact",
+    targetId: contactId,
+    targetLabel: contact.name,
+    summary: `删除联系人：${contact.name}`,
+    meta: { ownerKind: owner.kind, ownerId: owner.id },
+  });
   revalidatePath(ownerPath(owner));
 }
 
@@ -658,7 +696,7 @@ export async function resetPowerMapLayoutAction(owner: OwnerRef) {
 // ============ 商机 ============
 
 export async function upsertOpportunityAction(owner: OwnerRef, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   const followUp = String(formData.get("followUpAt") ?? "");
   const data: Record<string, unknown> = {
@@ -683,13 +721,35 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     if (crossPartnerId !== undefined) data.partnerId = crossPartnerId;
     if (crossCustomerId !== undefined) data.customerId = crossCustomerId;
     const opp = await db.opportunity.update({ where: { id }, data });
+    void recordSystemEvent({
+      category: "OPPORTUNITY",
+      action: "opportunity.update",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Opportunity",
+      targetId: opp.id,
+      targetLabel: opp.name,
+      summary: `更新商机：${opp.name}`,
+      meta: { customerId: opp.customerId, partnerId: opp.partnerId },
+    });
     if (opp.partnerId) revalidatePath(`/partners/${opp.partnerId}`);
     if (opp.customerId) revalidatePath(`/customers/${opp.customerId}`);
   } else {
     const createData = { ...data, ...ownerData(owner) } as Record<string, unknown>;
     if (owner.kind === "customer" && crossPartnerId !== undefined) createData.partnerId = crossPartnerId;
     if (owner.kind === "partner" && crossCustomerId !== undefined) createData.customerId = crossCustomerId;
-    await db.opportunity.create({ data: createData as never });
+    const opp = await db.opportunity.create({ data: createData as never });
+    void recordSystemEvent({
+      category: "OPPORTUNITY",
+      action: "opportunity.create",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Opportunity",
+      targetId: opp.id,
+      targetLabel: opp.name,
+      summary: `新建商机：${opp.name}`,
+      meta: { customerId: opp.customerId, partnerId: opp.partnerId },
+    });
   }
   revalidatePath(ownerPath(owner));
   revalidatePath("/opportunities");
@@ -702,8 +762,21 @@ export async function createOpportunityFromListAction(formData: FormData) {
 }
 
 export async function deleteOpportunityAction(owner: OwnerRef, oppId: string) {
-  await requireUser();
+  const user = await requireUser();
+  const opp = await db.opportunity.findUnique({ where: { id: oppId } });
+  if (!opp) return;
   await db.opportunity.delete({ where: { id: oppId } });
+  void recordSystemEvent({
+    category: "OPPORTUNITY",
+    action: "opportunity.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Opportunity",
+    targetId: oppId,
+    targetLabel: opp.name,
+    summary: `删除商机：${opp.name}`,
+    meta: { customerId: opp.customerId, partnerId: opp.partnerId },
+  });
   revalidatePath(ownerPath(owner));
   revalidatePath("/opportunities");
 }
@@ -714,7 +787,7 @@ const PROJECT_PHASES = ["KICKOFF", "IMPLEMENT", "ACCEPTANCE", "GOLIVE", "MAINTEN
 const PROJECT_STATUSES = ["ACTIVE", "ON_HOLD", "DONE", "CLOSED"] as const;
 
 export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   const phase = String(formData.get("phase") ?? "KICKOFF");
   const status = String(formData.get("status") ?? "ACTIVE");
@@ -737,6 +810,17 @@ export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
   if (id) {
     if (crossPartnerId !== undefined) data.partnerId = crossPartnerId;
     const proj = await db.project.update({ where: { id }, data });
+    void recordSystemEvent({
+      category: "PROJECT",
+      action: "project.update",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Project",
+      targetId: proj.id,
+      targetLabel: proj.name,
+      summary: `更新合作项目：${proj.name}`,
+      meta: { customerId: proj.customerId, partnerId: proj.partnerId },
+    });
     if (proj.partnerId) revalidatePath(`/partners/${proj.partnerId}`);
     revalidatePath(`/customers/${proj.customerId}`);
   } else {
@@ -746,7 +830,18 @@ export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
     const createData: Record<string, unknown> = { ...data, customerId };
     if (crossPartnerId !== undefined) createData.partnerId = crossPartnerId;
     else if (owner.kind === "partner") createData.partnerId = owner.id;
-    await db.project.create({ data: createData as never });
+    const proj = await db.project.create({ data: createData as never });
+    void recordSystemEvent({
+      category: "PROJECT",
+      action: "project.create",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Project",
+      targetId: proj.id,
+      targetLabel: proj.name,
+      summary: `新建合作项目：${proj.name}`,
+      meta: { customerId: proj.customerId, partnerId: proj.partnerId },
+    });
   }
   revalidatePath(ownerPath(owner));
   revalidatePath("/projects");
@@ -759,8 +854,21 @@ export async function createProjectFromListAction(formData: FormData) {
 }
 
 export async function deleteProjectAction(owner: OwnerRef, projectId: string) {
-  await requireUser();
+  const user = await requireUser();
+  const proj = await db.project.findUnique({ where: { id: projectId } });
+  if (!proj) return;
   await db.project.delete({ where: { id: projectId } });
+  void recordSystemEvent({
+    category: "PROJECT",
+    action: "project.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Project",
+    targetId: projectId,
+    targetLabel: proj.name,
+    summary: `删除合作项目：${proj.name}`,
+    meta: { customerId: proj.customerId, partnerId: proj.partnerId },
+  });
   revalidatePath(ownerPath(owner));
   revalidatePath("/projects");
 }
@@ -772,11 +880,22 @@ export async function createProjectWorkLogAction(owner: OwnerRef, formData: Form
   if (!projectId || !content) return;
   const proj = await db.project.findUnique({
     where: { id: projectId },
-    select: { customerId: true, partnerId: true },
+    select: { customerId: true, partnerId: true, name: true },
   });
   if (!proj) return;
-  await db.projectWorkLog.create({
+  const log = await db.projectWorkLog.create({
     data: { projectId, authorId: user.id, content },
+  });
+  void recordSystemEvent({
+    category: "PROJECT",
+    action: "project.worklog.create",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "ProjectWorkLog",
+    targetId: log.id,
+    targetLabel: proj.name,
+    summary: `添加项目工作记录：${proj.name}`,
+    meta: { projectId, customerId: proj.customerId, partnerId: proj.partnerId },
   });
   revalidatePath(`/customers/${proj.customerId}`);
   if (proj.partnerId) revalidatePath(`/partners/${proj.partnerId}`);
@@ -784,13 +903,28 @@ export async function createProjectWorkLogAction(owner: OwnerRef, formData: Form
 }
 
 export async function deleteProjectWorkLogAction(owner: OwnerRef, logId: string) {
-  await requireUser();
+  const user = await requireUser();
   const log = await db.projectWorkLog.findUnique({
     where: { id: logId },
-    include: { project: { select: { customerId: true, partnerId: true } } },
+    include: { project: { select: { customerId: true, partnerId: true, name: true } } },
   });
   if (!log) return;
   await db.projectWorkLog.delete({ where: { id: logId } });
+  void recordSystemEvent({
+    category: "PROJECT",
+    action: "project.worklog.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "ProjectWorkLog",
+    targetId: logId,
+    targetLabel: log.project.name,
+    summary: `删除项目工作记录：${log.project.name}`,
+    meta: {
+      projectId: log.projectId,
+      customerId: log.project.customerId,
+      partnerId: log.project.partnerId,
+    },
+  });
   revalidatePath(`/customers/${log.project.customerId}`);
   if (log.project.partnerId) revalidatePath(`/partners/${log.project.partnerId}`);
   revalidatePath(ownerPath(owner));
@@ -798,14 +932,15 @@ export async function deleteProjectWorkLogAction(owner: OwnerRef, logId: string)
 
 // 机会赢单后一键转化为合作项目（幂等：已转化则直接复用）
 export async function convertOpportunityToProjectAction(owner: OwnerRef, oppId: string) {
-  await requireUser();
+  const user = await requireUser();
   const opp = await db.opportunity.findUnique({ where: { id: oppId } });
   if (!opp || !opp.customerId) return;
   // 纯产品型成交不含交付项目，不允许转项目
   if (opp.dealType === "PRODUCT") return;
   const existing = await db.project.findUnique({ where: { sourceOpportunityId: oppId } });
+  let projectId: string;
   if (!existing) {
-    await db.project.create({
+    const project = await db.project.create({
       data: {
         customerId: opp.customerId,
         partnerId: opp.partnerId ?? null,
@@ -816,11 +951,25 @@ export async function convertOpportunityToProjectAction(owner: OwnerRef, oppId: 
         status: "ACTIVE",
       },
     });
+    projectId = project.id;
+  } else {
+    projectId = existing.id;
   }
   // 转化即视为赢单且为项目型成交
   if (opp.status !== "WON" || opp.dealType !== "PROJECT") {
     await db.opportunity.update({ where: { id: oppId }, data: { status: "WON", dealType: "PROJECT" } });
   }
+  void recordSystemEvent({
+    category: "OPPORTUNITY",
+    action: "opportunity.convert_to_project",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Opportunity",
+    targetId: oppId,
+    targetLabel: opp.name,
+    summary: `商机转合作项目：${opp.name}`,
+    meta: { customerId: opp.customerId, partnerId: opp.partnerId, projectId },
+  });
   if (opp.partnerId) revalidatePath(`/partners/${opp.partnerId}`);
   revalidatePath(`/customers/${opp.customerId}`);
   revalidatePath(ownerPath(owner));
@@ -855,7 +1004,7 @@ export async function createTodoAction(formData: FormData) {
       partnerId = opp.partnerId;
     }
   }
-  await db.todoItem.create({
+  const todo = await db.todoItem.create({
     data: {
       title,
       detail: String(formData.get("detail") ?? "") || null,
@@ -868,6 +1017,17 @@ export async function createTodoAction(formData: FormData) {
       priority: String(formData.get("priority") ?? "MEDIUM"),
     },
   });
+  void recordSystemEvent({
+    category: "TODO",
+    action: "todo.create",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "TodoItem",
+    targetId: todo.id,
+    targetLabel: todo.title,
+    summary: `新建待办：${todo.title}`,
+    meta: { partnerId, customerId, opportunityId, projectId },
+  });
   revalidatePath("/todos");
   revalidatePath("/");
   revalidatePath("/mobile");
@@ -876,12 +1036,23 @@ export async function createTodoAction(formData: FormData) {
 }
 
 export async function toggleTodoAction(todoId: string) {
-  await requireUser();
+  const user = await requireUser();
   const t = await db.todoItem.findUniqueOrThrow({ where: { id: todoId } });
   const done = t.status !== "DONE";
   await db.todoItem.update({
     where: { id: todoId },
     data: { status: done ? "DONE" : "OPEN", doneAt: done ? new Date() : null },
+  });
+  void recordSystemEvent({
+    category: "TODO",
+    action: "todo.toggle",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "TodoItem",
+    targetId: todoId,
+    targetLabel: t.title,
+    summary: done ? `完成待办：${t.title}` : `重新打开待办：${t.title}`,
+    meta: { partnerId: t.partnerId, customerId: t.customerId },
   });
   revalidatePath("/todos");
   revalidatePath("/");
@@ -955,12 +1126,35 @@ export async function completeTodoWithNoteAction(formData: FormData) {
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
   if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
 
+  void recordSystemEvent({
+    category: "TODO",
+    action: "todo.complete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "TodoItem",
+    targetId: todoId,
+    targetLabel: t.title,
+    summary: `完成待办（含备注）：${t.title}`,
+    meta: { partnerId: t.partnerId, customerId: t.customerId, syncToBusinessRecord: sync },
+  });
+
   return { ok: true as const, ...crmFeedback };
 }
 
 export async function deleteTodoAction(todoId: string) {
-  await requireUser();
+  const user = await requireUser();
   const t = await db.todoItem.delete({ where: { id: todoId } });
+  void recordSystemEvent({
+    category: "TODO",
+    action: "todo.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "TodoItem",
+    targetId: todoId,
+    targetLabel: t.title,
+    summary: `删除待办：${t.title}`,
+    meta: { partnerId: t.partnerId, customerId: t.customerId },
+  });
   revalidatePath("/todos");
   revalidatePath("/");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
@@ -999,6 +1193,17 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
     }
   }
   const t = await db.todoItem.update({ where: { id: todoId }, data });
+  void recordSystemEvent({
+    category: "TODO",
+    action: "todo.update",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "TodoItem",
+    targetId: t.id,
+    targetLabel: t.title,
+    summary: `更新待办：${t.title}`,
+    meta: { partnerId: t.partnerId, customerId: t.customerId },
+  });
   revalidatePath("/todos");
   revalidatePath("/");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
@@ -1114,7 +1319,7 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
   const recorderCheck = await assertCrmRecordersMapped(crmRecorderUserIds);
   if (!recorderCheck.ok) return { ok: false as const, error: recorderCheck.error };
 
-  const { crmSync } = await persistBusinessRecord({
+  const { record, crmSync } = await persistBusinessRecord({
     owner,
     userId: user.id,
     category,
@@ -1129,6 +1334,18 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
     crmRecorderUserIds,
   });
 
+  void recordSystemEvent({
+    category: "BUSINESS",
+    action: "business_record.create",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "BusinessRecord",
+    targetId: record.id,
+    targetLabel: record.title,
+    summary: `新建商务记录：${record.title}`,
+    meta: { ownerKind: owner.kind, ownerId: owner.id, source },
+  });
+
   revalidatePath(ownerPath(owner));
   revalidatePath("/todos");
   revalidatePath("/");
@@ -1138,10 +1355,10 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
 }
 
 export async function deleteBusinessRecordAction(owner: OwnerRef, recordId: string) {
-  await requireUser();
+  const user = await requireUser();
   const record = await db.businessRecord.findUnique({
     where: { id: recordId },
-    select: { partnerId: true, customerId: true, timelineEventId: true },
+    select: { partnerId: true, customerId: true, timelineEventId: true, title: true },
   });
   if (!record) return;
   const ownerId = owner.kind === "customer" ? record.customerId : record.partnerId;
@@ -1151,6 +1368,18 @@ export async function deleteBusinessRecordAction(owner: OwnerRef, recordId: stri
   if (record.timelineEventId) {
     await db.timelineEvent.delete({ where: { id: record.timelineEventId } }).catch(() => {});
   }
+
+  void recordSystemEvent({
+    category: "BUSINESS",
+    action: "business_record.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "BusinessRecord",
+    targetId: recordId,
+    targetLabel: record.title,
+    summary: `删除商务记录：${record.title}`,
+    meta: { ownerKind: owner.kind, ownerId: owner.id },
+  });
 
   revalidatePath(ownerPath(owner));
   revalidatePath("/");

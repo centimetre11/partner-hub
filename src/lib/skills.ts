@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { ToolDef } from "./ai";
+import { recordSystemEvent } from "./activity-log";
 import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS, stageName } from "./constants";
 import { partnerContext, customerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
@@ -56,6 +57,26 @@ export type SkillContext = {
 
 export function newSkillContext(partial: Partial<SkillContext> & Pick<SkillContext, "mode">): SkillContext {
   return { userId: null, pendingProposals: [], actions: [], ...partial };
+}
+
+function logSkillSystemEvent(
+  ctx: SkillContext,
+  opts: {
+    category: string;
+    action: string;
+    targetType: string;
+    targetId: string;
+    targetLabel: string;
+    summary: string;
+    meta?: Record<string, unknown>;
+  },
+) {
+  if (!ctx.userId) return;
+  void recordSystemEvent({
+    ...opts,
+    actorId: ctx.userId,
+    meta: { source: "assistant", ...opts.meta },
+  });
 }
 
 // ============ Skill definitions ============
@@ -417,6 +438,15 @@ const updateCustomer: Skill = {
         meta: JSON.stringify({ via: "assistant", fields }),
       },
     });
+    logSkillSystemEvent(ctx, {
+      category: "CUSTOMER",
+      action: "customer.update",
+      targetType: "Customer",
+      targetId: c.id,
+      targetLabel: c.name,
+      summary: `更新客户：${c.name}`,
+      meta: { fields: Object.keys(data) },
+    });
     const msg = `Updated customer ${c.name}: ${changes.join("; ")}`;
     ctx.actions.push(msg);
     return msg;
@@ -488,6 +518,15 @@ const createTodo: Skill = {
         priority: ["HIGH", "MEDIUM", "LOW"].includes(String(args.priority)) ? String(args.priority) : "MEDIUM",
         source: "AI",
       },
+    });
+    logSkillSystemEvent(ctx, {
+      category: "TODO",
+      action: "todo.create",
+      targetType: "TodoItem",
+      targetId: t.id,
+      targetLabel: t.title,
+      summary: `新建待办：${t.title}`,
+      meta: { partnerId, customerId, opportunityId, projectId },
     });
     const owner = customerId ? `customer ${ownerLabel ?? customerId}` : partnerId ? `partner ${ownerLabel ?? partnerId}` : "unlinked";
     const linkNote = projectId ? ` · project` : opportunityId ? ` · deal` : "";
@@ -654,6 +693,15 @@ const updateTodo: Skill = {
     if (!changes.length) return "No fields to update";
 
     await db.todoItem.update({ where: { id: todoId }, data });
+    logSkillSystemEvent(ctx, {
+      category: "TODO",
+      action: "todo.update",
+      targetType: "TodoItem",
+      targetId: todoId,
+      targetLabel: existing.title,
+      summary: `更新待办：${existing.title}`,
+      meta: { partnerId: existing.partnerId, customerId: existing.customerId },
+    });
     const msg = `Updated todo「${existing.title}」: ${changes.join("; ")}`;
     ctx.actions.push(msg);
     return msg;
@@ -797,6 +845,15 @@ const updateOpportunity: Skill = {
     if (!changes.length) return "No fields to update";
 
     await db.opportunity.update({ where: { id }, data });
+    logSkillSystemEvent(ctx, {
+      category: "OPPORTUNITY",
+      action: "opportunity.update",
+      targetType: "Opportunity",
+      targetId: id,
+      targetLabel: existing.name,
+      summary: `更新商机：${existing.name}`,
+      meta: { customerId: existing.customerId, partnerId: existing.partnerId },
+    });
     const msg = `Updated opportunity「${existing.name}」: ${changes.join("; ")}`;
     ctx.actions.push(msg);
     return msg;

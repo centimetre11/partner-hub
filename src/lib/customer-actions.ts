@@ -87,10 +87,10 @@ export async function createCustomerAction(formData: FormData) {
 // ============ 更新 ============
 
 export async function updateCustomerAction(customerId: string, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const existing = await db.customer.findUnique({
     where: { id: customerId },
-    select: { partnerLinks: { select: { partnerId: true } } },
+    select: { name: true, partnerLinks: { select: { partnerId: true } } },
   });
   if (!existing) return { error: "Customer not found" };
 
@@ -112,7 +112,18 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
   }
   if (!Object.keys(data).length) return { ok: true as const };
 
-  await db.customer.update({ where: { id: customerId }, data });
+  const customer = await db.customer.update({ where: { id: customerId }, data });
+  void recordSystemEvent({
+    category: "CUSTOMER",
+    action: "customer.update",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Customer",
+    targetId: customerId,
+    targetLabel: customer.name,
+    summary: `更新客户：${customer.name}`,
+    meta: { fields: Object.keys(data) },
+  });
   revalidateCustomerPaths(customerId, existing.partnerLinks.map((l) => l.partnerId));
   return { ok: true as const };
 }
@@ -120,8 +131,8 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
 // ============ 跟单五问（STOCK） ============
 
 export async function updateCustomerStockAction(customerId: string, formData: FormData) {
-  await requireUser();
-  const existing = await db.customer.findUnique({ where: { id: customerId }, select: { id: true } });
+  const user = await requireUser();
+  const existing = await db.customer.findUnique({ where: { id: customerId }, select: { id: true, name: true } });
   if (!existing) return;
   await db.customer.update({
     where: { id: customerId },
@@ -132,6 +143,16 @@ export async function updateCustomerStockAction(customerId: string, formData: Fo
       q5Cost: str(formData, "q5Cost"),
       q5Key: str(formData, "q5Key"),
     },
+  });
+  void recordSystemEvent({
+    category: "CUSTOMER",
+    action: "customer.stock.update",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Customer",
+    targetId: customerId,
+    targetLabel: existing.name,
+    summary: `更新客户跟单五问：${existing.name}`,
   });
   revalidateCustomerPaths(customerId);
 }
@@ -164,43 +185,104 @@ export async function deleteCustomerAction(customerId: string) {
 
 // 为客户新增一个伙伴绑定（多对多，可重复调用绑定多个伙伴）
 export async function addCustomerPartnerAction(customerId: string, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const partnerId = str(formData, "partnerId");
   if (!partnerId) return;
-  const existing = await db.customer.findUnique({ where: { id: customerId }, select: { id: true } });
+  const existing = await db.customer.findUnique({
+    where: { id: customerId },
+    select: { id: true, name: true, partnerLinks: { where: { partnerId }, select: { partnerId: true } } },
+  });
   if (!existing) return;
   await db.customerPartner.upsert({
     where: { customerId_partnerId: { customerId, partnerId } },
     create: { customerId, partnerId, relation: "SERVED_BY" },
     update: {},
   });
+  if (!existing.partnerLinks.length) {
+    void recordSystemEvent({
+      category: "CUSTOMER",
+      action: "customer.bind_partner",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Customer",
+      targetId: customerId,
+      targetLabel: existing.name,
+      summary: `客户绑定伙伴：${existing.name}`,
+      meta: { partnerId },
+    });
+  }
   revalidateCustomerPaths(customerId, [partnerId]);
 }
 
 // 移除客户的某个伙伴绑定
 export async function removeCustomerPartnerAction(customerId: string, partnerId: string) {
-  await requireUser();
+  const user = await requireUser();
+  const customer = await db.customer.findUnique({ where: { id: customerId }, select: { name: true } });
   await db.customerPartner.deleteMany({ where: { customerId, partnerId } });
+  if (customer) {
+    void recordSystemEvent({
+      category: "CUSTOMER",
+      action: "customer.unbind_partner",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Customer",
+      targetId: customerId,
+      targetLabel: customer.name,
+      summary: `客户解绑伙伴：${customer.name}`,
+      meta: { partnerId },
+    });
+  }
   revalidateCustomerPaths(customerId, [partnerId]);
 }
 
 // ============ 伙伴详情页：绑定已有客户 / 新建并绑定 / 解绑 ============
 
 export async function bindCustomerToPartnerAction(partnerId: string, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const customerId = str(formData, "customerId");
   if (!customerId) return;
+  const customer = await db.customer.findUnique({ where: { id: customerId }, select: { name: true } });
+  const existingLink = await db.customerPartner.findUnique({
+    where: { customerId_partnerId: { customerId, partnerId } },
+  });
   await db.customerPartner.upsert({
     where: { customerId_partnerId: { customerId, partnerId } },
     create: { customerId, partnerId, relation: "SERVED_BY" },
     update: {},
   });
+  if (customer && !existingLink) {
+    void recordSystemEvent({
+      category: "CUSTOMER",
+      action: "customer.bind_partner",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Customer",
+      targetId: customerId,
+      targetLabel: customer.name,
+      summary: `客户绑定伙伴：${customer.name}`,
+      meta: { partnerId },
+    });
+  }
   revalidateCustomerPaths(customerId, [partnerId]);
 }
 
 export async function unbindCustomerFromPartnerAction(partnerId: string, customerId: string) {
-  await requireUser();
+  const user = await requireUser();
+  const customer = await db.customer.findUnique({ where: { id: customerId }, select: { name: true } });
   await db.customerPartner.deleteMany({ where: { customerId, partnerId } });
+  if (customer) {
+    void recordSystemEvent({
+      category: "CUSTOMER",
+      action: "customer.unbind_partner",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Customer",
+      targetId: customerId,
+      targetLabel: customer.name,
+      summary: `客户解绑伙伴：${customer.name}`,
+      meta: { partnerId },
+    });
+  }
   revalidateCustomerPaths(customerId, [partnerId]);
 }
 
@@ -276,9 +358,22 @@ export async function createSelfCustomerForPartnerAction(partnerId: string) {
 // ============ 帆软三连接（KMS / CRM 客户） ============
 
 export async function updateCustomerIntegrationsAction(customerId: string, formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
+  const customer = await db.customer.findUnique({ where: { id: customerId }, select: { name: true } });
+  if (!customer) return;
   const kmsRootPath = String(formData.get("kmsRootPath") ?? "").trim() || null;
   const crmCustomerId = String(formData.get("crmCustomerId") ?? "").trim() || null;
   await db.customer.update({ where: { id: customerId }, data: { kmsRootPath, crmCustomerId } });
+  void recordSystemEvent({
+    category: "CUSTOMER",
+    action: "customer.integrations.update",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Customer",
+    targetId: customerId,
+    targetLabel: customer.name,
+    summary: `更新客户集成配置：${customer.name}`,
+    meta: { kmsRootPath: !!kmsRootPath, crmCustomerId: !!crmCustomerId },
+  });
   revalidatePath(`/customers/${customerId}`);
 }

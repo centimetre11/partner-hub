@@ -40,7 +40,21 @@ type PaginatedResponse<T> = {
   totalPages: number;
 };
 
-const SYSTEM_CATEGORIES = ["AUTH", "USER", "PARTNER", "SETTINGS", "CUSTOMER", "AI", "CRM"] as const;
+const SYSTEM_CATEGORIES = [
+  "AUTH",
+  "USER",
+  "PARTNER",
+  "CUSTOMER",
+  "CONTACT",
+  "OPPORTUNITY",
+  "PROJECT",
+  "TODO",
+  "BUSINESS",
+  "CRM",
+  "LEADS",
+  "AI",
+  "SETTINGS",
+] as const;
 
 export function ActivityLogsCard({
   stats,
@@ -166,7 +180,10 @@ export function ActivityLogsCard({
             }}
             options={[
               { value: "ALL", label: m.filterAll },
-              ...SYSTEM_CATEGORIES.map((c) => ({ value: c, label: c })),
+              ...SYSTEM_CATEGORIES.map((c) => ({
+                value: c,
+                label: m.categoryLabels[c as keyof typeof m.categoryLabels] ?? c,
+              })),
             ]}
           />
         )}
