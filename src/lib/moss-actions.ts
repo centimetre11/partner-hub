@@ -98,16 +98,9 @@ export async function fetchMossInsightAction(input: {
   const dossier = res.dossier!;
   return {
     sections: [
-      { tool: "profile", text: dossier.humanSummary, data: dossier.profile },
-      ...dossier.risks.map((r) => ({
-        tool: r.label,
-        text: r.summary || r.error || `${r.count} 条`,
-        data: r,
-      })),
+      { tool: "insight", text: dossier.humanSummary, data: dossier },
     ],
-    errors: dossier.risks
-      .filter((r) => r.status === "error")
-      .map((r) => ({ tool: r.label, error: r.error || "失败" })),
+    errors: [],
     summary: dossier.humanSummary,
   };
 }
@@ -128,8 +121,12 @@ export async function saveMossToCustomerAction(input: {
       creditCode: input.creditCode.trim(),
       mossSnapshot: input.dossier as unknown as Prisma.InputJsonValue,
       mossSyncedAt: new Date(),
-      industry: customer.industry || input.dossier.profile.industry || undefined,
-      scale: customer.scale || input.dossier.profile.scale || undefined,
+      industry: customer.industry || input.dossier.industry.industry || undefined,
+      scale:
+        customer.scale ||
+        input.dossier.scale.staffRange ||
+        input.dossier.scale.regCapital ||
+        undefined,
       city: customer.city || undefined,
     },
   });
@@ -151,9 +148,13 @@ export async function addMossTimelineAction(input: {
     data: {
       customerId: input.customerId,
       type: "NEWS",
-      title: `Moss 背调 · ${input.dossier.companyName}`,
+      title: `Moss 洞察 · ${input.dossier.companyName}`,
       content: input.dossier.humanSummary,
-      meta: JSON.stringify({ source: "moss", creditCode: input.dossier.creditCode, riskLevel: input.dossier.riskLevel }),
+      meta: JSON.stringify({
+        source: "moss",
+        creditCode: input.dossier.creditCode,
+        fitLevel: input.dossier.fitLevel,
+      }),
       createdById: user.id,
     },
   });

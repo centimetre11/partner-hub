@@ -38,7 +38,7 @@ export type PartnerPrepBrief = {
     customerId: string;
     customerName: string;
     creditCode?: string | null;
-    mossRiskLevel?: "clear" | "watch" | "alert" | null;
+    mossFitLevel?: "hot" | "warm" | "neutral" | "unknown" | null;
     mossSyncedAt?: string | null;
     opportunities: {
       id: string;

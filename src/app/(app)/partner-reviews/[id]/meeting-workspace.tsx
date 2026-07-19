@@ -2347,7 +2347,7 @@ function PrepBriefOverview({
                         customerId={group.customerId}
                         customerName={group.customerName}
                         creditCode={group.creditCode}
-                        mossRiskLevel={group.mossRiskLevel}
+                        mossFitLevel={group.mossFitLevel}
                         mossSyncedAt={group.mossSyncedAt}
                         configured={mossConfigured}
                       />

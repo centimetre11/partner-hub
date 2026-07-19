@@ -3,7 +3,7 @@ import "server-only";
 import { db } from "../db";
 import { chatJson } from "../ai";
 import type { PartnerPrepBrief } from "./types";
-import { parseMossRiskLevelFromSnapshot } from "../moss-dossier";
+import { parseMossFitLevelFromSnapshot } from "../moss-dossier";
 import { formatProcessTagsDisplay } from "../opportunity-process-tags";
 import {
   normalizeOpportunityStatus,
@@ -293,7 +293,7 @@ export async function buildPartnerPrepBrief(
     return {
       ...group,
       creditCode: row?.creditCode ?? null,
-      mossRiskLevel: row?.mossSnapshot ? parseMossRiskLevelFromSnapshot(row.mossSnapshot) : null,
+      mossFitLevel: row?.mossSnapshot ? parseMossFitLevelFromSnapshot(row.mossSnapshot) : null,
       mossSyncedAt: row?.mossSyncedAt?.toISOString() ?? null,
     };
   });

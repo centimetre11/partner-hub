@@ -6,7 +6,6 @@ import { BackButton } from "@/components/back-button";
 import { getServerI18n } from "@/lib/server-i18n";
 import { getClueId, isNurturingLead } from "@/lib/leads";
 import { LeadActions } from "@/components/leads/lead-actions";
-import { LeadResearchPanel } from "@/components/leads/lead-research-panel";
 import { LeadEmail } from "@/components/leads/lead-email";
 import { LeadWhatsApp } from "@/components/leads/lead-whatsapp";
 import { LeadDetailGuard } from "@/components/leads/lead-detail-guard";
@@ -171,9 +170,6 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <MossLeadSection entityName={lead.name} configured={mossStatus.configured} />
         </div>
 
-        <div className="lg:col-span-2">
-          <LeadResearchPanel leadId={lead.id} />
-        </div>
       </div>
     </div>
   );

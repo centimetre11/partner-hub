@@ -62,7 +62,7 @@ export function MossPrepCustomerBadge({
   customerId,
   customerName,
   creditCode,
-  mossRiskLevel,
+  mossFitLevel,
   mossSyncedAt,
   initialDossier,
   configured,
@@ -70,7 +70,7 @@ export function MossPrepCustomerBadge({
   customerId: string;
   customerName: string;
   creditCode?: string | null;
-  mossRiskLevel?: "clear" | "watch" | "alert" | null;
+  mossFitLevel?: "hot" | "warm" | "neutral" | "unknown" | null;
   mossSyncedAt?: string | null;
   initialDossier?: MossDossier | null;
   configured: boolean;
@@ -80,7 +80,7 @@ export function MossPrepCustomerBadge({
 
   if (!configured) return null;
 
-  const label = mossRiskLevel ? m.moss.dossier.riskLevel[mossRiskLevel] : "Moss";
+  const label = mossFitLevel ? m.moss.dossier.fitLevel[mossFitLevel] : "Moss";
 
   return (
     <>
