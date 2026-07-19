@@ -95,6 +95,7 @@ model Partner {
   aiVerified       String? // VERIFIED / PARTIAL / UNKNOWN
   manualChecked    Boolean  @default(false)
   monitorDims      String? // JSON 数组：舆情监控勾选的维度
+  statusOverview   String? // JSON：伙伴状态总览维度手动覆盖 { dim: { level, note, updatedAt, updatedById } }
   kmsRootPath      String? // KMS 主目录，手动填写
   gdriveFolderUrl  String? // 该伙伴材料归档的 Google Drive 子目录链接
   crmCustomerId    String? // 帆软 CRM 客户 ID

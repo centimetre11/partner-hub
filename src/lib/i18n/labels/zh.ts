@@ -227,7 +227,7 @@ export const labelsZh: LabelsBundle = {
     OTHER: "其他",
   },
   workspacePanels: [
-    { id: "guide", label: "伙伴概览", desc: "监控 · 商务记录 · 待办 · 档案" },
+    { id: "guide", label: "伙伴概览", desc: "状态总览 · 商务记录 · 待办" },
     { id: "positioning", label: "定位打法", desc: "Tier · 类型 · 价值模式 · 画像" },
     { id: "pipeline", label: "商机推进", desc: "Pipeline 商机跟踪" },
     { id: "relationship", label: "关系经营", desc: "权力地图 · 动态" },

@@ -6,7 +6,9 @@ import { Badge, Card, EmptyState, ScoreBar, fmtDateTime } from "@/components/ui"
 import { formatTierLabel, normalizePartnerTier } from "@/lib/tier";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { computeCompleteness } from "@/lib/completeness";
+import { computePartnerStatus, type StatusCopy } from "@/lib/partner-status";
 import { buildPartnerInstanceMap, getStageGuidance } from "@/lib/partner-framework";
+import { PartnerStatusOverview } from "@/components/partner-status-overview";
 import {
   getTaxonomyOptions,
   labelFromMap,
@@ -111,6 +113,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
   const completeness = computeCompleteness(p, labels);
   const industryCodes = parseIndustries(p);
   const networkPartnerIds = [p.id, ...p.children.map((c) => c.id)];
+  const reviewSince = new Date(Date.now() - 90 * 24 * 3600 * 1000);
 
   const [
     users,
@@ -132,6 +135,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     attachCandidates,
     rollupOpportunities,
     rollupProjects,
+    recentReviewItems,
   ] = await Promise.all([
     db.user.findMany(),
     db.customer.findMany({
@@ -212,7 +216,47 @@ export async function PartnerDetailBody({ id }: { id: string }) {
           take: 50,
         })
       : Promise.resolve([]),
+    db.partnerReviewItem.findMany({
+      where: {
+        partnerId: id,
+        OR: [
+          { discussedAt: { gte: reviewSince } },
+          { updatedAt: { gte: reviewSince }, status: { in: ["DISCUSSED", "CONFIRMED"] } },
+        ],
+      },
+      select: { discussedAt: true, status: true, updatedAt: true },
+      take: 20,
+    }),
   ]);
+
+  const statusCopy: StatusCopy = {
+    evidence: m.partnerStatus.evidenceCopy,
+    next: m.partnerStatus.nextCopy,
+  };
+  const statusOverview = computePartnerStatus(
+    {
+      dedicatedHeadcount: p.dedicatedHeadcount,
+      valuePattern: p.valuePattern,
+      valuePartnerOffer: p.valuePartnerOffer,
+      valueFanruanOffer: p.valueFanruanOffer,
+      valueCustomerOutcome: p.valueCustomerOutcome,
+      playbook: p.playbook,
+      pitch: p.pitch,
+      certLevel: p.certLevel,
+      capabilities: p.capabilities,
+      pipelineStage: p.pipelineStage,
+      updatedAt: p.updatedAt,
+      contacts: p.contacts.map((c) => ({ name: c.name, role: c.role, attitude: c.attitude })),
+      solutions: p.solutions.map((s) => ({ name: s.name, status: s.status })),
+      trainings: p.trainings.map((t) => ({ status: t.status })),
+      opportunities: relatedOpportunities.map((o) => ({ status: o.status })),
+      businessRecords: p.businessRecords.map((r) => ({ occurredAt: r.occurredAt })),
+      events: p.events.map((e) => ({ createdAt: e.createdAt })),
+      reviewItems: recentReviewItems,
+    },
+    p.statusOverview,
+    statusCopy,
+  );
 
   const taxonomy = {
     ARCHETYPE: taxonomyArchetype,
@@ -247,6 +291,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
         taxonomy={taxonomy}
         guide={
           <div className="space-y-5">
+            <PartnerStatusOverview partnerId={p.id} overview={statusOverview} />
             {SENTIMENT_MONITOR_ENABLED && (
               <SentimentMonitorSection
                 partnerId={p.id}

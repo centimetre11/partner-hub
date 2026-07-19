@@ -25,6 +25,12 @@ import {
   serializeProcessTags,
 } from "./opportunity-process-tags";
 import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opportunity-status";
+import {
+  isStatusDimensionKey,
+  parseStatusOverrides,
+  serializeStatusOverrides,
+  type StatusLevel,
+} from "./partner-status";
 
 // ============ 认证 ============
 
@@ -479,6 +485,45 @@ export async function setPipelineStageAction(partnerId: string, stage: number) {
   });
   revalidatePath(`/partners/${partnerId}`);
   revalidatePath("/partners");
+}
+
+/** Set or clear a partner status-overview dimension override. `level === null` clears override. */
+export async function setPartnerStatusOverrideAction(
+  partnerId: string,
+  dimension: string,
+  level: number | null,
+  note?: string | null,
+) {
+  const user = await requireUser();
+  if (!isStatusDimensionKey(dimension)) return { error: "INVALID_DIMENSION" as const };
+
+  const p = await db.partner.findUnique({
+    where: { id: partnerId },
+    select: { id: true, statusOverview: true },
+  });
+  if (!p) return { error: "NOT_FOUND" as const };
+
+  const overrides = parseStatusOverrides(p.statusOverview);
+  if (level === null) {
+    delete overrides[dimension];
+  } else {
+    if (level !== 0 && level !== 1 && level !== 2 && level !== 3) {
+      return { error: "INVALID_LEVEL" as const };
+    }
+    overrides[dimension] = {
+      level: level as StatusLevel,
+      note: note?.trim() || undefined,
+      updatedAt: new Date().toISOString(),
+      updatedById: user.id,
+    };
+  }
+
+  await db.partner.update({
+    where: { id: partnerId },
+    data: { statusOverview: serializeStatusOverrides(overrides) },
+  });
+  revalidatePath(`/partners/${partnerId}`);
+  return { ok: true as const };
 }
 
 // ============ 联系人 ============

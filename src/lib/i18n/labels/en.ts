@@ -227,7 +227,7 @@ export const labelsEn: LabelsBundle = {
     OTHER: "Other",
   },
   workspacePanels: [
-    { id: "guide", label: "Overview", desc: "Monitor · Records · Todos · Profile" },
+    { id: "guide", label: "Overview", desc: "Status · Records · Todos" },
     { id: "positioning", label: "Positioning playbook", desc: "Tier · Type · Value pattern · Profile" },
     { id: "pipeline", label: "Pipeline", desc: "Pipeline opportunity tracking" },
     { id: "relationship", label: "Relationship management", desc: "Power map · Activity" },
