@@ -33,6 +33,7 @@ import {
   reportRowFromConfirmed,
 } from "@/lib/partner-review/final-report";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
+import { MossPrepCustomerBadge } from "@/components/moss/moss-workflow-sections";
 import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 export type { MeetingClient, ReviewItemClient };
@@ -219,9 +220,11 @@ function draftsFromItems(items: ReviewItemClient[]): Record<string, ConfirmDraft
 export function MeetingWorkspace({
   meeting: initial,
   allPartners,
+  mossConfigured = false,
 }: {
   meeting: MeetingClient;
   allPartners: { id: string; name: string; tier: string | null }[];
+  mossConfigured?: boolean;
 }) {
   const router = useRouter();
   const [meeting, setMeeting] = useState(initial);
@@ -934,7 +937,7 @@ export function MeetingWorkspace({
                       part="left"
                     />
                   ) : activeItem.prepBrief ? (
-                    <PrepBriefOverview brief={activeItem.prepBrief} />
+                    <PrepBriefOverview brief={activeItem.prepBrief} mossConfigured={mossConfigured} />
                   ) : phase === "post" && postStep === "assign" ? (
                     <p className="text-xs text-slate-400">请先在上方时间线确认纪要归属，再提炼进展总结</p>
                   ) : phase === "post" ? (
@@ -2280,7 +2283,13 @@ function tidyClientText(text: string) {
   return flat.replace(/【联系人\s*[^】]+】\s*/g, "").trim();
 }
 
-function PrepBriefOverview({ brief }: { brief: PartnerPrepBrief }) {
+function PrepBriefOverview({
+  brief,
+  mossConfigured = false,
+}: {
+  brief: PartnerPrepBrief;
+  mossConfigured?: boolean;
+}) {
   return (
     <div className="space-y-4 text-sm">
       {brief.summaryLine ? (
@@ -2332,7 +2341,19 @@ function PrepBriefOverview({ brief }: { brief: PartnerPrepBrief }) {
                   ) : (
                     <span className="text-sm font-semibold text-slate-900">{group.customerName}</span>
                   )}
-                  <span className="text-[11px] text-slate-500">{group.opportunities.length} 个商机</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {group.customerId !== "__unassigned__" ? (
+                      <MossPrepCustomerBadge
+                        customerId={group.customerId}
+                        customerName={group.customerName}
+                        creditCode={group.creditCode}
+                        mossRiskLevel={group.mossRiskLevel}
+                        mossSyncedAt={group.mossSyncedAt}
+                        configured={mossConfigured}
+                      />
+                    ) : null}
+                    <span className="text-[11px] text-slate-500">{group.opportunities.length} 个商机</span>
+                  </div>
                 </div>
                 <ul className="space-y-1.5">
                   {group.opportunities.map((o) => (

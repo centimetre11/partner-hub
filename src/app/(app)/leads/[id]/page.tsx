@@ -11,6 +11,8 @@ import { LeadEmail } from "@/components/leads/lead-email";
 import { LeadWhatsApp } from "@/components/leads/lead-whatsapp";
 import { LeadDetailGuard } from "@/components/leads/lead-detail-guard";
 import { LeadRemovedState } from "@/components/leads/lead-removed-state";
+import { MossLeadSection } from "@/components/moss/moss-workflow-sections";
+import { getMossConfigStatus } from "@/lib/moss";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -43,6 +45,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
 
   const lead = await db.crmLead.findUnique({ where: { id } });
   if (!lead) return <LeadRemovedState leadId={id} />;
+  const mossStatus = await getMossConfigStatus();
 
   const nurturing = isNurturingLead(lead.status);
   const tagsText = formatMultiline(lead.tags);
@@ -163,6 +166,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
             </Card>
           </div>
         )}
+
+        <div className="lg:col-span-2">
+          <MossLeadSection entityName={lead.name} configured={mossStatus.configured} />
+        </div>
 
         <div className="lg:col-span-2">
           <LeadResearchPanel leadId={lead.id} />

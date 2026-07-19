@@ -176,6 +176,9 @@ model Customer {
   kmsRootPath   String? // KMS 主目录
   gdriveFolderUrl String? // 该客户材料归档的 Google Drive 子目录链接
   crmCustomerId String? // 帆软 CRM 客户 ID
+  creditCode    String? // 统一社会信用代码（Moss 主体锁定）
+  mossSnapshot  Json?   // 最近一次 Moss 背调结构化快照
+  mossSyncedAt  DateTime?
   wecomChatBindCode          String?
   wecomChatBindCodeExpiresAt DateTime?
   // 销售负责人 / 售前负责人

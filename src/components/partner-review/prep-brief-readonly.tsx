@@ -1,5 +1,6 @@
 import type { PartnerPrepBrief } from "@/lib/partner-review/types";
 import { categoryLabel, tidyProgressText } from "@/lib/partner-review/brief";
+import { MossPrepCustomerBadge } from "@/components/moss/moss-workflow-sections";
 
 const CATEGORY_LABEL: Record<string, string> = {
   VISIT: "拜访",
@@ -17,9 +18,11 @@ function tidyClientText(text: string): string {
 export function PrepBriefReadonly({
   brief,
   compact = false,
+  mossConfigured = true,
 }: {
   brief: PartnerPrepBrief;
   compact?: boolean;
+  mossConfigured?: boolean;
 }) {
   const todos = brief.todos?.length
     ? brief.todos
@@ -60,7 +63,19 @@ export function PrepBriefReadonly({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-slate-900">{group.customerName}</span>
-                  <span className="text-[11px] text-slate-500">{group.opportunities.length} 个商机</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {group.customerId !== "__unassigned__" ? (
+                      <MossPrepCustomerBadge
+                        customerId={group.customerId}
+                        customerName={group.customerName}
+                        creditCode={group.creditCode}
+                        mossRiskLevel={group.mossRiskLevel}
+                        mossSyncedAt={group.mossSyncedAt}
+                        configured={mossConfigured}
+                      />
+                    ) : null}
+                    <span className="text-[11px] text-slate-500">{group.opportunities.length} 个商机</span>
+                  </div>
                 </div>
                 <ul className="space-y-1.5">
                   {group.opportunities.map((o) => (

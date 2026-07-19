@@ -6,6 +6,7 @@ import { Badge, PageHeader } from "@/components/ui";
 import { toMeetingClient } from "@/lib/partner-review/meeting-client";
 import { DeleteMeetingButton } from "../delete-meeting-button";
 import { MeetingWorkspace } from "./meeting-workspace";
+import { isMossConfigured } from "@/lib/moss";
 
 /** 会后提炼会并行调多次 AI，避免默认超时导致「点了没写入」 */
 export const maxDuration = 300;
@@ -45,6 +46,7 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
     orderBy: { name: "asc" },
     select: { id: true, name: true, tier: true },
   });
+  const mossConfigured = await isMossConfigured();
 
   return (
     <div className="pb-16">
@@ -81,7 +83,7 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
         </div>
 
         {/* key 仅用会议 id：切伙伴/改 status 时切勿整页重挂 */}
-        <MeetingWorkspace key={meeting.id} meeting={client} allPartners={allPartners} />
+        <MeetingWorkspace key={meeting.id} meeting={client} allPartners={allPartners} mossConfigured={mossConfigured} />
       </div>
     </div>
   );

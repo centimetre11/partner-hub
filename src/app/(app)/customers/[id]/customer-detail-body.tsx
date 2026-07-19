@@ -35,6 +35,9 @@ import {
   createTodoAction,
   deleteTodoAction,
 } from "@/lib/actions";
+import { MossCustomerSection } from "@/components/moss/moss-workflow-sections";
+import { getMossConfigStatus } from "@/lib/moss";
+import { parseMossDossier } from "@/lib/moss-dossier";
 
 export async function CustomerDetailBody({ id }: { id: string }) {
   const user = await requireUser();
@@ -78,6 +81,9 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     },
   });
   if (!customer) notFound();
+
+  const mossStatus = await getMossConfigStatus();
+  const initialMossDossier = parseMossDossier(customer.mossSnapshot);
 
   const [partners, customers, users, wecomChat, matchedCrmCustomer, ammoConfig, linkedSolutions] = await Promise.all([
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -175,6 +181,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   // ============ 客户概览（三连接 + 商务记录 + 待办） ============
   const overviewPanel = (
     <div className="space-y-5">
+      <MossCustomerSection
+        customerId={customer.id}
+        entityName={customer.name}
+        creditCode={customer.creditCode}
+        mossSyncedAt={customer.mossSyncedAt?.toISOString() ?? null}
+        initialDossier={initialMossDossier}
+        configured={mossStatus.configured}
+      />
       <BusinessRecordsSection owner={owner} records={customer.businessRecords} contacts={contactOptions} />
       <Card
         title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos))}
