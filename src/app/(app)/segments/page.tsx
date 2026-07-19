@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { PageHeader, Card, Badge } from "@/components/ui";
+import { PageHeader, Card, Badge, fmtDateTime } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { loadSegmentInsightSummary } from "@/lib/customer-segment";
 import { loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
+import { db } from "@/lib/db";
+import { findMeaStrategyBaselineReport } from "@/lib/mea-strategy-report";
 
 function Stat({ label, value, tone = "text-slate-900" }: { label: string; value: string | number; tone?: string }) {
   return (
@@ -33,9 +35,13 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
 
 export default async function SegmentsPage() {
   await requireUser();
-  const { messages: m } = await getServerI18n();
+  const { messages: m, bcp47 } = await getServerI18n();
   const s = m.segments;
-  const [summary, labelMaps] = await Promise.all([loadSegmentInsightSummary(), loadTaxonomyLabelMaps()]);
+  const [summary, labelMaps, baselineReport] = await Promise.all([
+    loadSegmentInsightSummary(),
+    loadTaxonomyLabelMaps(),
+    findMeaStrategyBaselineReport(db),
+  ]);
 
   const maxSeg = Math.max(...summary.segments.map((x) => x.prospects + x.active + x.openOpps + x.won), 1);
 
@@ -44,6 +50,23 @@ export default async function SegmentsPage() {
       <PageHeader title={s.title} desc={s.desc} />
 
       <div className="px-8 space-y-5">
+        {baselineReport && (
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm text-indigo-900">
+              <span className="font-medium">{s.baselineReportLabel}</span>
+              <span className="text-indigo-700/80 ml-2">
+                {s.baselineReportUpdated.replace("{date}", fmtDateTime(baselineReport.updatedAt, bcp47))}
+              </span>
+            </div>
+            <Link
+              href={`/documents/${baselineReport.id}`}
+              className="text-sm text-indigo-700 font-medium hover:underline shrink-0"
+            >
+              {s.openBaselineReport} →
+            </Link>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label={s.statTotalCustomers} value={summary.totalEndCustomers} />
           <Stat label={s.statTaggedRate} value={`${summary.taggedRate}%`} tone="text-sky-600" />

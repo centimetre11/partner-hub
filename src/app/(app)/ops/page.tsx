@@ -6,13 +6,14 @@ import { Badge, Card, PageHeader, fmtDateTime } from "@/components/ui";
 import { OpsCenterNav } from "@/components/ops-center-nav";
 import { getServerI18n } from "@/lib/server-i18n";
 import { getWeeklyReportStatusAction } from "@/lib/weekly-report-actions";
+import { findMeaStrategyBaselineReport } from "@/lib/mea-strategy-report";
 
 export default async function OpsCenterPage() {
   const user = await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
   const admin = isSuperAdmin(user);
 
-  const [meetingCount, liveCount, recentMeetings, weeklyStatus] = await Promise.all([
+  const [meetingCount, liveCount, recentMeetings, weeklyStatus, baselineReport] = await Promise.all([
     db.partnerReviewMeeting.count(),
     db.partnerReviewMeeting.count({ where: { status: { in: ["LIVE", "PREP", "PROCESSING"] } } }),
     db.partnerReviewMeeting.findMany({
@@ -24,6 +25,7 @@ export default async function OpsCenterPage() {
       },
     }),
     admin ? getWeeklyReportStatusAction() : Promise.resolve(null),
+    findMeaStrategyBaselineReport(db),
   ]);
 
   return (
@@ -32,7 +34,7 @@ export default async function OpsCenterPage() {
       <OpsCenterNav />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-6 max-w-7xl">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Link
             href="/partner-reviews"
             className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300 transition-colors"
@@ -75,6 +77,27 @@ export default async function OpsCenterPage() {
             </div>
             <div className="mt-4 inline-flex rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-800">
               {m.ops.openWeeklyReport}
+            </div>
+          </Link>
+
+          <Link
+            href={baselineReport ? `/documents/${baselineReport.id}` : "/documents"}
+            className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300 transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{m.ops.strategyReport}</div>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">{m.ops.strategyReportDesc}</p>
+              </div>
+              <span className="text-2xl opacity-70">📋</span>
+            </div>
+            <div className="mt-4 text-xs text-slate-500">
+              {baselineReport
+                ? m.ops.strategyReportUpdated.replace("{date}", fmtDateTime(baselineReport.updatedAt, bcp47))
+                : m.ops.strategyReportMissing}
+            </div>
+            <div className="mt-4 inline-flex rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-800 px-3 py-1.5 text-sm">
+              {m.ops.openStrategyReport}
             </div>
           </Link>
         </div>

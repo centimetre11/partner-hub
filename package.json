@@ -10,7 +10,8 @@
     "wecom-bot": "tsx scripts/wecom-bot.ts",
     "crm-sync": "tsx scripts/crm-sync.ts",
     "leads-sync": "tsx scripts/leads-sync.ts",
-    "weekly-report:setup": "tsx scripts/setup-weekly-report.ts"
+    "weekly-report:setup": "tsx scripts/setup-weekly-report.ts",
+    "seed:mea-strategy-report": "tsx scripts/seed-mea-strategy-report.ts"
   },
   "dependencies": {
     "@blocknote/core": "^0.51.4",
