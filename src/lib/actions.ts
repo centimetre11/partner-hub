@@ -15,6 +15,7 @@ import { normalizePartnerTier } from "./tier";
 import { persistBusinessRecord, normalizeBusinessRecordCategory, parseCrmRecorderUserIdsFromForm, formatBusinessRecordCrmFeedback, assertCrmRecordersMapped } from "./business-record-core";
 import { normalizeCrmTraceAction, normalizeCrmTraceNature } from "./crm-trace-constants";
 import { recordSystemEvent } from "./activity-log";
+import { logLinkedTimeline, logOwnerTimeline } from "./timeline-log";
 import { type OwnerRef, ownerPath, ownerWhere, ownerData } from "./owner";
 import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { assertTwoLevelHierarchy } from "./partner-hierarchy";
@@ -556,6 +557,10 @@ export async function upsertContactAction(owner: OwnerRef, formData: FormData) {
       summary: `更新联系人：${contact.name}`,
       meta: { ownerKind: owner.kind, ownerId: owner.id },
     });
+    await logOwnerTimeline(owner, user.id, {
+      title: `更新联系人：${contact.name}`,
+      meta: { entity: "contact", contactId: contact.id },
+    });
   } else {
     const contact = await db.contact.create({ data: { ...data, ...ownerData(owner) } });
     void recordSystemEvent({
@@ -568,6 +573,10 @@ export async function upsertContactAction(owner: OwnerRef, formData: FormData) {
       targetLabel: contact.name,
       summary: `新建联系人：${contact.name}`,
       meta: { ownerKind: owner.kind, ownerId: owner.id },
+    });
+    await logOwnerTimeline(owner, user.id, {
+      title: `新建联系人：${contact.name}`,
+      meta: { entity: "contact", contactId: contact.id },
     });
   }
   revalidatePath(ownerPath(owner));
@@ -588,6 +597,10 @@ export async function deleteContactAction(owner: OwnerRef, contactId: string) {
     targetLabel: contact.name,
     summary: `删除联系人：${contact.name}`,
     meta: { ownerKind: owner.kind, ownerId: owner.id },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `删除联系人：${contact.name}`,
+    meta: { entity: "contact", contactId },
   });
   revalidatePath(ownerPath(owner));
 }
@@ -732,6 +745,11 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
       summary: `更新商机：${opp.name}`,
       meta: { customerId: opp.customerId, partnerId: opp.partnerId },
     });
+    await logOwnerTimeline(owner, user.id, {
+      title: `更新商机：${opp.name}`,
+      content: opp.amount ? `金额：${opp.amount}` : null,
+      meta: { entity: "opportunity", opportunityId: opp.id },
+    });
     if (opp.partnerId) revalidatePath(`/partners/${opp.partnerId}`);
     if (opp.customerId) revalidatePath(`/customers/${opp.customerId}`);
   } else {
@@ -749,6 +767,11 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
       targetLabel: opp.name,
       summary: `新建商机：${opp.name}`,
       meta: { customerId: opp.customerId, partnerId: opp.partnerId },
+    });
+    await logOwnerTimeline(owner, user.id, {
+      title: `新建商机：${opp.name}`,
+      content: opp.amount ? `金额：${opp.amount}` : null,
+      meta: { entity: "opportunity", opportunityId: opp.id },
     });
   }
   revalidatePath(ownerPath(owner));
@@ -776,6 +799,10 @@ export async function deleteOpportunityAction(owner: OwnerRef, oppId: string) {
     targetLabel: opp.name,
     summary: `删除商机：${opp.name}`,
     meta: { customerId: opp.customerId, partnerId: opp.partnerId },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `删除商机：${opp.name}`,
+    meta: { entity: "opportunity", opportunityId: oppId },
   });
   revalidatePath(ownerPath(owner));
   revalidatePath("/opportunities");
@@ -821,6 +848,11 @@ export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
       summary: `更新合作项目：${proj.name}`,
       meta: { customerId: proj.customerId, partnerId: proj.partnerId },
     });
+    await logOwnerTimeline(owner, user.id, {
+      title: `更新合作项目：${proj.name}`,
+      meta: { entity: "project", projectId: proj.id },
+      projectId: proj.id,
+    });
     if (proj.partnerId) revalidatePath(`/partners/${proj.partnerId}`);
     revalidatePath(`/customers/${proj.customerId}`);
   } else {
@@ -841,6 +873,11 @@ export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
       targetLabel: proj.name,
       summary: `新建合作项目：${proj.name}`,
       meta: { customerId: proj.customerId, partnerId: proj.partnerId },
+    });
+    await logOwnerTimeline(owner, user.id, {
+      title: `新建合作项目：${proj.name}`,
+      meta: { entity: "project", projectId: proj.id },
+      projectId: proj.id,
     });
   }
   revalidatePath(ownerPath(owner));
@@ -868,6 +905,10 @@ export async function deleteProjectAction(owner: OwnerRef, projectId: string) {
     targetLabel: proj.name,
     summary: `删除合作项目：${proj.name}`,
     meta: { customerId: proj.customerId, partnerId: proj.partnerId },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `删除合作项目：${proj.name}`,
+    meta: { entity: "project", projectId },
   });
   revalidatePath(ownerPath(owner));
   revalidatePath("/projects");
@@ -897,6 +938,12 @@ export async function createProjectWorkLogAction(owner: OwnerRef, formData: Form
     summary: `添加项目工作记录：${proj.name}`,
     meta: { projectId, customerId: proj.customerId, partnerId: proj.partnerId },
   });
+  await logOwnerTimeline(owner, user.id, {
+    title: `项目工作记录：${proj.name}`,
+    content,
+    meta: { entity: "project_worklog", projectId, workLogId: log.id },
+    projectId,
+  });
   revalidatePath(`/customers/${proj.customerId}`);
   if (proj.partnerId) revalidatePath(`/partners/${proj.partnerId}`);
   revalidatePath(ownerPath(owner));
@@ -924,6 +971,11 @@ export async function deleteProjectWorkLogAction(owner: OwnerRef, logId: string)
       customerId: log.project.customerId,
       partnerId: log.project.partnerId,
     },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `删除项目工作记录：${log.project.name}`,
+    meta: { entity: "project_worklog", projectId: log.projectId, workLogId: logId },
+    projectId: log.projectId,
   });
   revalidatePath(`/customers/${log.project.customerId}`);
   if (log.project.partnerId) revalidatePath(`/partners/${log.project.partnerId}`);
@@ -969,6 +1021,12 @@ export async function convertOpportunityToProjectAction(owner: OwnerRef, oppId: 
     targetLabel: opp.name,
     summary: `商机转合作项目：${opp.name}`,
     meta: { customerId: opp.customerId, partnerId: opp.partnerId, projectId },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `商机转合作项目：${opp.name}`,
+    content: existing ? "复用已有项目" : "已新建交付项目",
+    meta: { entity: "opportunity", opportunityId: oppId, projectId },
+    projectId,
   });
   if (opp.partnerId) revalidatePath(`/partners/${opp.partnerId}`);
   revalidatePath(`/customers/${opp.customerId}`);
@@ -1028,6 +1086,12 @@ export async function createTodoAction(formData: FormData) {
     summary: `新建待办：${todo.title}`,
     meta: { partnerId, customerId, opportunityId, projectId },
   });
+  await logLinkedTimeline(user.id, {
+    customerId,
+    partnerId,
+    title: `新建待办：${todo.title}`,
+    meta: { entity: "todo", todoId: todo.id },
+  });
   revalidatePath("/todos");
   revalidatePath("/");
   revalidatePath("/mobile");
@@ -1053,6 +1117,12 @@ export async function toggleTodoAction(todoId: string) {
     targetLabel: t.title,
     summary: done ? `完成待办：${t.title}` : `重新打开待办：${t.title}`,
     meta: { partnerId: t.partnerId, customerId: t.customerId },
+  });
+  await logLinkedTimeline(user.id, {
+    customerId: t.customerId,
+    partnerId: t.partnerId,
+    title: done ? `完成待办：${t.title}` : `重新打开待办：${t.title}`,
+    meta: { entity: "todo", todoId },
   });
   revalidatePath("/todos");
   revalidatePath("/");
@@ -1137,6 +1207,15 @@ export async function completeTodoWithNoteAction(formData: FormData) {
     summary: `完成待办（含备注）：${t.title}`,
     meta: { partnerId: t.partnerId, customerId: t.customerId, syncToBusinessRecord: sync },
   });
+  if (!sync) {
+    await logLinkedTimeline(user.id, {
+      customerId: t.customerId,
+      partnerId: t.partnerId,
+      title: `完成待办：${t.title}`,
+      content: note,
+      meta: { entity: "todo", todoId },
+    });
+  }
 
   return { ok: true as const, ...crmFeedback };
 }
@@ -1154,6 +1233,12 @@ export async function deleteTodoAction(todoId: string) {
     targetLabel: t.title,
     summary: `删除待办：${t.title}`,
     meta: { partnerId: t.partnerId, customerId: t.customerId },
+  });
+  await logLinkedTimeline(user.id, {
+    customerId: t.customerId,
+    partnerId: t.partnerId,
+    title: `删除待办：${t.title}`,
+    meta: { entity: "todo", todoId },
   });
   revalidatePath("/todos");
   revalidatePath("/");
@@ -1203,6 +1288,12 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
     targetLabel: t.title,
     summary: `更新待办：${t.title}`,
     meta: { partnerId: t.partnerId, customerId: t.customerId },
+  });
+  await logLinkedTimeline(user.id, {
+    customerId: t.customerId,
+    partnerId: t.partnerId,
+    title: `更新待办：${t.title}`,
+    meta: { entity: "todo", todoId: t.id },
   });
   revalidatePath("/todos");
   revalidatePath("/");
@@ -1379,6 +1470,10 @@ export async function deleteBusinessRecordAction(owner: OwnerRef, recordId: stri
     targetLabel: record.title,
     summary: `删除商务记录：${record.title}`,
     meta: { ownerKind: owner.kind, ownerId: owner.id },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `删除商务记录：${record.title}`,
+    meta: { entity: "business_record", recordId },
   });
 
   revalidatePath(ownerPath(owner));

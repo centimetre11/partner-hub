@@ -1,6 +1,7 @@
 import { db } from "./db";
 import type { ToolDef } from "./ai";
 import { recordSystemEvent } from "./activity-log";
+import { logLinkedTimeline } from "./timeline-log";
 import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS, stageName } from "./constants";
 import { partnerContext, customerContext, type FieldUpdate } from "./proposals";
 import { computeCompleteness, staleDays } from "./completeness";
@@ -528,6 +529,14 @@ const createTodo: Skill = {
       summary: `新建待办：${t.title}`,
       meta: { partnerId, customerId, opportunityId, projectId },
     });
+    if (ctx.userId) {
+      await logLinkedTimeline(ctx.userId, {
+        customerId,
+        partnerId,
+        title: `新建待办：${t.title}`,
+        meta: { entity: "todo", todoId: t.id, source: "assistant" },
+      });
+    }
     const owner = customerId ? `customer ${ownerLabel ?? customerId}` : partnerId ? `partner ${ownerLabel ?? partnerId}` : "unlinked";
     const linkNote = projectId ? ` · project` : opportunityId ? ` · deal` : "";
     const msg = `Created todo: ${t.title}${t.dueDate ? ` (due ${t.dueDate.toISOString().slice(0, 10)})` : ""} · ${owner}${linkNote}`;
@@ -702,6 +711,15 @@ const updateTodo: Skill = {
       summary: `更新待办：${existing.title}`,
       meta: { partnerId: existing.partnerId, customerId: existing.customerId },
     });
+    if (ctx.userId) {
+      await logLinkedTimeline(ctx.userId, {
+        customerId: existing.customerId,
+        partnerId: existing.partnerId,
+        title: `更新待办：${existing.title}`,
+        content: changes.join("; "),
+        meta: { entity: "todo", todoId, source: "assistant" },
+      });
+    }
     const msg = `Updated todo「${existing.title}」: ${changes.join("; ")}`;
     ctx.actions.push(msg);
     return msg;
@@ -854,6 +872,15 @@ const updateOpportunity: Skill = {
       summary: `更新商机：${existing.name}`,
       meta: { customerId: existing.customerId, partnerId: existing.partnerId },
     });
+    if (ctx.userId) {
+      await logLinkedTimeline(ctx.userId, {
+        customerId: existing.customerId,
+        partnerId: existing.partnerId,
+        title: `更新商机：${existing.name}`,
+        content: changes.join("; "),
+        meta: { entity: "opportunity", opportunityId: id, source: "assistant" },
+      });
+    }
     const msg = `Updated opportunity「${existing.name}」: ${changes.join("; ")}`;
     ctx.actions.push(msg);
     return msg;
