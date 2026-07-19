@@ -38,6 +38,8 @@ import {
 import { MossCustomerSection } from "@/components/moss/moss-workflow-sections";
 import { getMossConfigStatus } from "@/lib/moss";
 import { parseMossDossier } from "@/lib/moss-dossier";
+import { getTaxonomyOptions } from "@/lib/taxonomy";
+import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
 
 export async function CustomerDetailBody({ id }: { id: string }) {
   const user = await requireUser();
@@ -85,6 +87,22 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   const mossStatus = await getMossConfigStatus();
   const initialMossDossier = parseMossDossier(customer.mossSnapshot);
 
+  const [segmentOptions, winFactorOptions, lossReasonOptions] = await Promise.all([
+    getTaxonomyOptions("CUSTOMER_SEGMENT"),
+    getTaxonomyOptions("WIN_FACTOR"),
+    getTaxonomyOptions("LOSS_REASON"),
+  ]);
+  const [buyingTriggerOptions, entryPathOptions, icpTierOptions] = await Promise.all([
+    getTaxonomyOptions("BUYING_TRIGGER"),
+    getTaxonomyOptions("ENTRY_PATH"),
+    getTaxonomyOptions("ICP_TIER"),
+  ]);
+
+  const oppStatusOptions = OPPORTUNITY_STATUS_CODES.map((code) => ({
+    value: code,
+    label: opportunityStatusLabel(code, locale),
+  }));
+
   const [partners, customers, users, wecomChat, matchedCrmCustomer, ammoConfig, linkedSolutions] = await Promise.all([
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.customer.findMany({
@@ -131,6 +149,10 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         name: customer.name,
         status: customer.status,
         industry: customer.industry,
+        customerSegment: customer.customerSegment,
+        buyingTrigger: customer.buyingTrigger,
+        entryPath: customer.entryPath,
+        icpTier: customer.icpTier,
         scale: customer.scale,
         city: customer.city,
         country: customer.country,
@@ -145,6 +167,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       }}
       users={users}
       partners={partners}
+      segmentOptions={{
+        customerSegment: segmentOptions,
+        buyingTrigger: buyingTriggerOptions,
+        entryPath: entryPathOptions,
+        icpTier: icpTierOptions,
+      }}
     />
   );
 
@@ -283,13 +311,17 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 defaultNextStep={o.nextStep}
               />
               <input name="followUpAt" type="date" defaultValue={o.followUpAt ? new Date(o.followUpAt).toISOString().slice(0, 10) : ""} className={input} />
-              <select name="status" defaultValue={normalizeOpportunityStatus(o.status)} className={input}>
-                {OPPORTUNITY_STATUS_CODES.map((code) => (
-                  <option key={code} value={code}>
-                    {opportunityStatusLabel(code, locale)}
-                  </option>
-                ))}
-              </select>
+              <OpportunityStatusWithOutcome
+                defaultStatus={normalizeOpportunityStatus(o.status)}
+                defaultCustomerSegment={o.customerSegment}
+                defaultWinFactor={o.winFactor}
+                defaultLossReason={o.lossReason}
+                segmentOptions={segmentOptions}
+                winFactorOptions={winFactorOptions}
+                lossReasonOptions={lossReasonOptions}
+                customerDefaultSegment={customer.customerSegment}
+                statusOptions={oppStatusOptions}
+              />
               <select name="dealType" defaultValue={o.dealType ?? ""} className={input}>
                 <option value="">{c.dealTypeNone}</option>
                 <option value="PROJECT">{c.dealTypeProject}</option>
@@ -344,14 +376,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
           <input name="name" required placeholder={c.opportunityName} className={input} />
           <input name="amount" placeholder={m.common.amount} className={input} />
           <OpportunityProcessFields key="add-opp" />
-          <select name="status" defaultValue="P20" className={input} aria-label={m.common.status}>
-            <option value="P20">{m.opportunities.statusP20}</option>
-            <option value="P50">{m.opportunities.statusP50}</option>
-            <option value="P80">{m.opportunities.statusP80}</option>
-            <option value="WON">{m.common.won}</option>
-            <option value="LOST">{m.common.lost}</option>
-            <option value="PAUSED">{m.common.paused}</option>
-          </select>
+          <OpportunityStatusWithOutcome
+            defaultStatus="P20"
+            segmentOptions={segmentOptions}
+            winFactorOptions={winFactorOptions}
+            lossReasonOptions={lossReasonOptions}
+            customerDefaultSegment={customer.customerSegment}
+            statusOptions={oppStatusOptions}
+          />
           <input name="followUpAt" type="date" className={input} />
           <select name="dealType" defaultValue="" className={input}>
             <option value="">{c.dealTypeNone}</option>

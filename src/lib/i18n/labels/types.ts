@@ -2,7 +2,18 @@ import type { Locale } from "../locale";
 
 export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "relationship";
 
-export type TaxonomyDimension = "ARCHETYPE" | "INDUSTRY" | "VALUE_PATTERN" | "CATEGORY" | "CAPABILITY";
+export type TaxonomyDimension =
+  | "ARCHETYPE"
+  | "INDUSTRY"
+  | "VALUE_PATTERN"
+  | "CATEGORY"
+  | "CAPABILITY"
+  | "CUSTOMER_SEGMENT"
+  | "BUYING_TRIGGER"
+  | "ENTRY_PATH"
+  | "ICP_TIER"
+  | "WIN_FACTOR"
+  | "LOSS_REASON";
 
 export type LabelsBundle = {
   locale: Locale;
@@ -34,6 +45,12 @@ export type LabelsBundle = {
   partnerFieldLabels: Record<string, string>;
   partnerArchetypeLabels: Record<string, string>;
   valuePatternLabels: Record<string, string>;
+  customerSegmentLabels: Record<string, string>;
+  buyingTriggerLabels: Record<string, string>;
+  entryPathLabels: Record<string, string>;
+  icpTierLabels: Record<string, string>;
+  winFactorLabels: Record<string, string>;
+  lossReasonLabels: Record<string, string>;
   actionDomainLabels: Record<string, string>;
   userRoleLabels: Record<string, string>;
   workspacePanels: { id: WorkspacePanelId; label: string; desc: string }[];

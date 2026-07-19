@@ -726,10 +726,32 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     const dt = String(formData.get("dealType") ?? "").trim();
     data.dealType = dt === "PROJECT" || dt === "PRODUCT" ? dt : null;
   }
+  if (formData.has("customerSegment")) {
+    data.customerSegment = String(formData.get("customerSegment") ?? "").trim() || null;
+  }
+  if (formData.has("winFactor")) {
+    data.winFactor = String(formData.get("winFactor") ?? "").trim() || null;
+  }
+  if (formData.has("lossReason")) {
+    data.lossReason = String(formData.get("lossReason") ?? "").trim() || null;
+  }
   if (!data.name) return;
   // 商机以客户为主体，伙伴为可选关联（带单/交付方）；反之亦然
   const crossPartnerId = formData.has("partnerId") ? String(formData.get("partnerId") ?? "").trim() || null : undefined;
   const crossCustomerId = formData.has("customerId") ? String(formData.get("customerId") ?? "").trim() || null : undefined;
+
+  const statusCode = normalizeOpportunityStatus(String(data.status ?? DEFAULT_OPPORTUNITY_STATUS));
+  if ((statusCode === "WON" || statusCode === "LOST") && !data.customerSegment) {
+    const cid =
+      crossCustomerId ??
+      (owner.kind === "customer" ? owner.id : id
+        ? (await db.opportunity.findUnique({ where: { id }, select: { customerId: true } }))?.customerId
+        : null);
+    if (cid) {
+      const cust = await db.customer.findUnique({ where: { id: cid }, select: { customerSegment: true } });
+      if (cust?.customerSegment) data.customerSegment = cust.customerSegment;
+    }
+  }
   if (id) {
     if (crossPartnerId !== undefined) data.partnerId = crossPartnerId;
     if (crossCustomerId !== undefined) data.customerId = crossCustomerId;

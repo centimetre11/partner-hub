@@ -13,6 +13,12 @@ const LIBRARY_PATHS: Record<TaxonomyDimension, string> = {
   VALUE_PATTERN: "/taxonomy?dim=VALUE_PATTERN",
   CATEGORY: "/taxonomy?dim=CATEGORY",
   CAPABILITY: "/taxonomy?dim=CAPABILITY",
+  CUSTOMER_SEGMENT: "/taxonomy?dim=CUSTOMER_SEGMENT",
+  BUYING_TRIGGER: "/taxonomy?dim=BUYING_TRIGGER",
+  ENTRY_PATH: "/taxonomy?dim=ENTRY_PATH",
+  ICP_TIER: "/taxonomy?dim=ICP_TIER",
+  WIN_FACTOR: "/taxonomy?dim=WIN_FACTOR",
+  LOSS_REASON: "/taxonomy?dim=LOSS_REASON",
 };
 
 export function TaxonomySelectField({

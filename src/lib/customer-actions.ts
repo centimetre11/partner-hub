@@ -21,6 +21,10 @@ function str(formData: FormData, key: string): string | null {
 function readCustomerFields(formData: FormData) {
   return {
     industry: str(formData, "industry"),
+    customerSegment: str(formData, "customerSegment"),
+    buyingTrigger: str(formData, "buyingTrigger"),
+    entryPath: str(formData, "entryPath"),
+    icpTier: str(formData, "icpTier"),
     city: str(formData, "city"),
     country: str(formData, "country"),
     website: str(formData, "website"),
@@ -104,7 +108,8 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
     data.status = normalizeStatus(formData.get("status") as string | null);
   }
   for (const key of [
-    "industry", "city", "country", "website", "scale",
+    "industry", "customerSegment", "buyingTrigger", "entryPath", "icpTier",
+    "city", "country", "website", "scale",
     "contactName", "contactTitle", "contactPhone", "contactEmail",
     "notes", "ownerId", "presalesUserId",
   ] as const) {
@@ -155,6 +160,30 @@ export async function updateCustomerStockAction(customerId: string, formData: Fo
     summary: `更新客户跟单五问：${existing.name}`,
   });
   revalidateCustomerPaths(customerId);
+}
+
+// ============ 从伙伴 knownClients 导入终端客户 ============
+
+export async function importKnownClientsAction(partnerId: string) {
+  const user = await requireUser();
+  const { importKnownClientsForPartner } = await import("./customer-segment");
+  const result = await importKnownClientsForPartner(partnerId);
+  const partner = await db.partner.findUnique({ where: { id: partnerId }, select: { name: true } });
+  void recordSystemEvent({
+    category: "CUSTOMER",
+    action: "customer.import_known_clients",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Partner",
+    targetId: partnerId,
+    targetLabel: partner?.name ?? partnerId,
+    summary: `从伙伴已知客户导入：新建 ${result.created}，关联 ${result.linked}，跳过 ${result.skipped}`,
+    meta: result,
+  });
+  revalidatePath(`/partners/${partnerId}`);
+  revalidatePath("/customers");
+  revalidatePath("/segments");
+  return result;
 }
 
 // ============ 删除 ============

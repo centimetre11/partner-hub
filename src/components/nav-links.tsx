@@ -59,6 +59,7 @@ export function NavLinks({
         { href: "/ops", label: m.nav.opsOverview, icon: "▣", exact: true },
         { href: "/partner-reviews", label: m.nav.partnerReviews, icon: "◫" },
         { href: "/ops/weekly-report", label: m.nav.weeklyReport, icon: "▤" },
+        { href: "/segments", label: m.nav.segments, icon: "◍" },
       ],
     },
     {

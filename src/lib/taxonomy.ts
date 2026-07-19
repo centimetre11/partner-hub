@@ -4,7 +4,18 @@ import { getLabels, type LabelsBundle } from "./i18n/labels";
 import { getLocale } from "./i18n/locale-server";
 import { type Locale } from "./i18n/locale";
 
-export type TaxonomyDimension = "ARCHETYPE" | "INDUSTRY" | "VALUE_PATTERN" | "CATEGORY" | "CAPABILITY";
+export type TaxonomyDimension =
+  | "ARCHETYPE"
+  | "INDUSTRY"
+  | "VALUE_PATTERN"
+  | "CATEGORY"
+  | "CAPABILITY"
+  | "CUSTOMER_SEGMENT"
+  | "BUYING_TRIGGER"
+  | "ENTRY_PATH"
+  | "ICP_TIER"
+  | "WIN_FACTOR"
+  | "LOSS_REASON";
 
 export type TaxonomyOptionRow = {
   code: string;
@@ -20,6 +31,12 @@ const BUILTIN_EN: Record<TaxonomyDimension, Record<string, string>> = {
   VALUE_PATTERN: labelsEn.valuePatternLabels,
   CATEGORY: labelsEn.categoryLabels,
   CAPABILITY: labelsEn.capabilityLabels,
+  CUSTOMER_SEGMENT: labelsEn.customerSegmentLabels,
+  BUYING_TRIGGER: labelsEn.buyingTriggerLabels,
+  ENTRY_PATH: labelsEn.entryPathLabels,
+  ICP_TIER: labelsEn.icpTierLabels,
+  WIN_FACTOR: labelsEn.winFactorLabels,
+  LOSS_REASON: labelsEn.lossReasonLabels,
 };
 
 function builtinMapForLocale(ui: LabelsBundle): Record<TaxonomyDimension, Record<string, string>> {
@@ -29,6 +46,12 @@ function builtinMapForLocale(ui: LabelsBundle): Record<TaxonomyDimension, Record
     VALUE_PATTERN: ui.valuePatternLabels,
     CATEGORY: ui.categoryLabels,
     CAPABILITY: ui.capabilityLabels,
+    CUSTOMER_SEGMENT: ui.customerSegmentLabels,
+    BUYING_TRIGGER: ui.buyingTriggerLabels,
+    ENTRY_PATH: ui.entryPathLabels,
+    ICP_TIER: ui.icpTierLabels,
+    WIN_FACTOR: ui.winFactorLabels,
+    LOSS_REASON: ui.lossReasonLabels,
   };
 }
 

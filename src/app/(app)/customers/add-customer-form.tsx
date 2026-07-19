@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createCustomerAction } from "@/lib/customer-actions";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
+import { TaxonomySelectField } from "@/components/taxonomy-fields";
+import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { useMessages } from "@/lib/i18n/context";
 
 type Option = { id: string; name: string; role?: string };
@@ -26,11 +28,18 @@ export function AddCustomerForm({
   users,
   defaultPartnerId,
   defaultOpen = false,
+  segmentOptions,
 }: {
   partners: Option[];
   users: Option[];
   defaultPartnerId?: string;
   defaultOpen?: boolean;
+  segmentOptions?: {
+    customerSegment: TaxonomyOptionRow[];
+    buyingTrigger: TaxonomyOptionRow[];
+    entryPath: TaxonomyOptionRow[];
+    icpTier: TaxonomyOptionRow[];
+  };
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const messages = useMessages();
@@ -73,6 +82,12 @@ export function AddCustomerForm({
                 <input name="city" placeholder={c.cityPlaceholder} className={input} />
                 <input name="country" placeholder={c.countryPlaceholder} className={input} />
               </div>
+              {segmentOptions && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <TaxonomySelectField dimension="CUSTOMER_SEGMENT" name="customerSegment" value="" options={segmentOptions.customerSegment} />
+                  <TaxonomySelectField dimension="ICP_TIER" name="icpTier" value="" options={segmentOptions.icpTier} />
+                </div>
+              )}
               <input name="website" placeholder={c.websitePlaceholder} className={input} />
               <input name="scale" placeholder={c.scalePlaceholder} className={input} />
               <div className="flex gap-2">

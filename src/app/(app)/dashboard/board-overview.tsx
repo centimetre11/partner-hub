@@ -6,6 +6,8 @@ import { computeCompleteness, staleDays } from "@/lib/completeness";
 import { overdueDueDateBefore } from "@/lib/todo-dates";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import { OPEN_OPPORTUNITY_STATUSES } from "@/lib/opportunity-status";
+import { loadSegmentInsightSummary } from "@/lib/customer-segment";
+import { loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
 
 function Bar({ label, value, max, tone = "bg-slate-500", suffix }: { label: string; value: number; max: number; tone?: string; suffix?: string }) {
   return (
@@ -30,6 +32,8 @@ export async function BoardOverview() {
     where: { status: { in: ["ACTIVE", "PROSPECT"] } },
     include: { contacts: true, opportunities: true, events: true, trainings: true },
   });
+  const segmentSummary = await loadSegmentInsightSummary();
+  const labelMaps = await loadTaxonomyLabelMaps();
   const openTodos = await db.todoItem.count({ where: { status: "OPEN" } });
   const overdueTodos = await db.todoItem.count({ where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } } });
   const activeOppCount = await db.opportunity.count({
@@ -110,6 +114,35 @@ export async function BoardOverview() {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+        <Card
+          title={b.segmentInsightTitle}
+          actions={
+            <Link href="/segments" className="text-xs text-sky-600 hover:underline">
+              {m.segments.boardLink}
+            </Link>
+          }
+        >
+          <p className="text-xs text-slate-500 mb-3">
+            {b.segmentTaggedRate.replace("{rate}", String(segmentSummary.taggedRate))}
+            {" · "}
+            {m.segments.statPrimaryIcp}: {segmentSummary.primaryIcpCount}
+          </p>
+          <div className="space-y-2">
+            {segmentSummary.segments
+              .filter((row) => row.code !== "_UNTAGGED")
+              .slice(0, 5)
+              .map((row) => (
+                <Bar
+                  key={row.code}
+                  label={labelFromMap(labelMaps.CUSTOMER_SEGMENT, row.code, row.label)}
+                  value={row.openOpps + row.won}
+                  max={Math.max(...segmentSummary.segments.map((s) => s.openOpps + s.won), 1)}
+                  tone="bg-violet-500"
+                />
+              ))}
+          </div>
+        </Card>
+
         <Card title={b.funnelTitle}>
           <div className="space-y-2.5">
             {funnel.map((f, i) => (

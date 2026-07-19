@@ -258,7 +258,7 @@ const searchCustomers: Skill = {
     return customers
       .map(
         (c) =>
-          `[id:${c.id}] ${c.name} | ${c.status} | ${c.country ?? "?"} | Industry:${c.industry ?? "-"} | Partner:${c.partner?.name ?? "-"} | Owner:${c.owner?.name ?? "-"}`
+          `[id:${c.id}] ${c.name} | ${c.status} | ${c.country ?? "?"} | Segment:${(c as { customerSegment?: string | null }).customerSegment ?? "-"} | Industry:${c.industry ?? "-"} | Partner:${c.partner?.name ?? "-"} | Owner:${c.owner?.name ?? "-"}`
       )
       .join("\n");
   },

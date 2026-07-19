@@ -9,6 +9,7 @@ import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { getTaxonomyOptions, loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -19,7 +20,7 @@ function statusTone(status: string): "green" | "blue" | "zinc" {
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; partner?: string; owner?: string; presales?: string; unbound?: string; add?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; partner?: string; owner?: string; presales?: string; unbound?: string; add?: string; segment?: string; icpTier?: string }>;
 }) {
   await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
@@ -27,12 +28,14 @@ export default async function CustomersPage({
   const sp = await searchParams;
   const nameFilter = nameContainsWhere(sp.q);
 
-  const [customers, partners, users] = await Promise.all([
+  const [customers, partners, users, segmentOptions, icpTierOptions, buyingTriggerOptions, entryPathOptions, labelMaps] = await Promise.all([
     db.customer.findMany({
       where: {
         ...END_CUSTOMER_WHERE,
         ...(nameFilter ? { name: nameFilter } : {}),
         ...(sp.status ? { status: sp.status } : {}),
+        ...(sp.segment ? { customerSegment: sp.segment } : {}),
+        ...(sp.icpTier ? { icpTier: sp.icpTier } : {}),
         ...(sp.owner ? { ownerId: sp.owner } : {}),
         ...(sp.presales ? { presalesUserId: sp.presales } : {}),
         ...(sp.unbound === "1"
@@ -51,6 +54,11 @@ export default async function CustomersPage({
     }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
+    getTaxonomyOptions("CUSTOMER_SEGMENT"),
+    getTaxonomyOptions("ICP_TIER"),
+    getTaxonomyOptions("BUYING_TRIGGER"),
+    getTaxonomyOptions("ENTRY_PATH"),
+    loadTaxonomyLabelMaps(),
   ]);
 
   const statusLabel = (s: string) =>
@@ -68,6 +76,12 @@ export default async function CustomersPage({
               users={users}
               defaultPartnerId={sp.partner}
               defaultOpen={sp.add === "1"}
+              segmentOptions={{
+                customerSegment: segmentOptions,
+                buyingTrigger: buyingTriggerOptions,
+                entryPath: entryPathOptions,
+                icpTier: icpTierOptions,
+              }}
             />
             <CreateFromCrmButton entity="customer" />
           </div>
@@ -81,6 +95,18 @@ export default async function CustomersPage({
             <option value="ACTIVE">{c.statusActive}</option>
             <option value="PROSPECT">{c.statusProspect}</option>
             <option value="INACTIVE">{c.statusInactive}</option>
+          </select>
+          <select name="segment" defaultValue={sp.segment ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">{c.allSegments}</option>
+            {segmentOptions.map((opt) => (
+              <option key={opt.code} value={opt.code}>{opt.label}</option>
+            ))}
+          </select>
+          <select name="icpTier" defaultValue={sp.icpTier ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+            <option value="">{c.allIcpTiers}</option>
+            {icpTierOptions.map((opt) => (
+              <option key={opt.code} value={opt.code}>{opt.label}</option>
+            ))}
           </select>
           <select name="partner" defaultValue={sp.partner ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
             <option value="">{c.allPartners}</option>
@@ -118,6 +144,7 @@ export default async function CustomersPage({
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">
                     <th className="px-4 py-2.5 font-medium">{c.colName}</th>
+                    <th className="px-4 py-2.5 font-medium">{c.colSegment}</th>
                     <th className="px-4 py-2.5 font-medium">{c.colIndustry}</th>
                     <th className="px-4 py-2.5 font-medium">{c.colRegion}</th>
                     <th className="px-4 py-2.5 font-medium">{c.colPartner}</th>
@@ -133,6 +160,16 @@ export default async function CustomersPage({
                       <td className="px-4 py-3">
                         <span className="font-medium text-slate-900">{cust.name}</span>
                         <div className="text-[11px] text-slate-400 mt-0.5">{c.createdAt} {fmtDate(cust.createdAt, bcp47)}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {cust.customerSegment ? (
+                          <span className="text-slate-700">{labelFromMap(labelMaps.CUSTOMER_SEGMENT, cust.customerSegment)}</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                        {cust.icpTier && (
+                          <div className="text-[11px] text-slate-400 mt-0.5">{labelFromMap(labelMaps.ICP_TIER, cust.icpTier)}</div>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">{cust.industry ?? "—"}</td>
                       <td className="px-4 py-3 text-slate-600">{[cust.city, cust.country].filter(Boolean).join(" · ") || "—"}</td>

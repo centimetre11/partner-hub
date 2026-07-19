@@ -3,19 +3,32 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui";
+import { Card, Badge } from "@/components/ui";
 import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
-import { useMessages } from "@/lib/i18n/context";
+import { TaxonomySelectField } from "@/components/taxonomy-fields";
+import type { TaxonomyOptionRow } from "@/lib/taxonomy";
+import { useMessages, useLabels } from "@/lib/i18n/context";
 
 type Option = { id: string; name: string; role?: string };
 
 type BoundPartner = { id: string; name: string; relation: string };
+
+type SegmentOptions = {
+  customerSegment: TaxonomyOptionRow[];
+  buyingTrigger: TaxonomyOptionRow[];
+  entryPath: TaxonomyOptionRow[];
+  icpTier: TaxonomyOptionRow[];
+};
 
 type CustomerProfile = {
   id: string;
   name: string;
   status: string;
   industry: string | null;
+  customerSegment: string | null;
+  buyingTrigger: string | null;
+  entryPath: string | null;
+  icpTier: string | null;
   scale: string | null;
   city: string | null;
   country: string | null;
@@ -31,16 +44,25 @@ type CustomerProfile = {
 
 const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
+function icpTone(tier: string | null | undefined): "green" | "amber" | "zinc" {
+  if (tier === "PRIMARY") return "green";
+  if (tier === "NURTURE") return "amber";
+  return "zinc";
+}
+
 export function CustomerProfilePanel({
   customer,
   users,
   partners,
+  segmentOptions,
 }: {
   customer: CustomerProfile;
   users: Option[];
   partners: Option[];
+  segmentOptions: SegmentOptions;
 }) {
   const m = useMessages();
+  const labels = useLabels();
   const c = m.customers;
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -56,11 +78,18 @@ export function CustomerProfilePanel({
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? c.statusActive : s === "PROSPECT" ? c.statusProspect : c.statusInactive;
 
+  const mapLabel = (map: Record<string, string>, code: string | null | undefined) =>
+    code ? (map[code] ?? code) : "—";
+
   const fields: [string, string | null][] = [
     [c.colName, customer.name],
     [c.statusLabel, statusLabel(customer.status)],
     [c.salesOwnerLabel, customer.owner?.name ?? null],
     [c.presalesOwnerLabel, customer.presalesUser?.name ?? null],
+    [c.customerSegmentLabel, mapLabel(labels.customerSegmentLabels, customer.customerSegment)],
+    [c.icpTierLabel, mapLabel(labels.icpTierLabels, customer.icpTier)],
+    [c.buyingTriggerLabel, mapLabel(labels.buyingTriggerLabels, customer.buyingTrigger)],
+    [c.entryPathLabel, mapLabel(labels.entryPathLabels, customer.entryPath)],
     [c.industryLabel, customer.industry],
     [c.scaleLabel, customer.scale],
     [c.cityPlaceholder, customer.city],
@@ -72,8 +101,16 @@ export function CustomerProfilePanel({
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
       <div className="xl:col-span-2 space-y-4">
-        <div className="flex justify-end">
-          <button type="button" onClick={() => { setError(null); setOpen(true); }} className="text-xs text-sky-600 hover:underline">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-1.5">
+            {customer.customerSegment && (
+              <Badge tone="blue">{mapLabel(labels.customerSegmentLabels, customer.customerSegment)}</Badge>
+            )}
+            {customer.icpTier && (
+              <Badge tone={icpTone(customer.icpTier)}>{mapLabel(labels.icpTierLabels, customer.icpTier)}</Badge>
+            )}
+          </div>
+          <button type="button" onClick={() => { setError(null); setOpen(true); }} className="text-xs text-sky-600 hover:underline shrink-0">
             {c.editProfile}
           </button>
         </div>
@@ -81,8 +118,8 @@ export function CustomerProfilePanel({
           {fields.map(([label, value]) => (
             <div key={label} className={label === c.notesPlaceholder ? "sm:col-span-2" : ""}>
               <dt className="text-xs text-slate-400">{label}</dt>
-              <dd className={`mt-0.5 whitespace-pre-wrap ${value ? "text-slate-800" : "text-slate-300"}`}>
-                {value || m.common.toBeFilled}
+              <dd className={`mt-0.5 whitespace-pre-wrap ${value && value !== "—" ? "text-slate-800" : "text-slate-300"}`}>
+                {value && value !== "—" ? value : m.common.toBeFilled}
               </dd>
             </div>
           ))}
@@ -213,6 +250,35 @@ export function CustomerProfilePanel({
                   ))}
                 </select>
               </label>
+              <div className="sm:col-span-2 pt-1 border-t border-slate-100">
+                <p className="text-xs font-medium text-slate-500 mb-2">{c.segmentSection}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <TaxonomySelectField
+                    dimension="CUSTOMER_SEGMENT"
+                    name="customerSegment"
+                    value={customer.customerSegment ?? ""}
+                    options={segmentOptions.customerSegment}
+                  />
+                  <TaxonomySelectField
+                    dimension="ICP_TIER"
+                    name="icpTier"
+                    value={customer.icpTier ?? ""}
+                    options={segmentOptions.icpTier}
+                  />
+                  <TaxonomySelectField
+                    dimension="BUYING_TRIGGER"
+                    name="buyingTrigger"
+                    value={customer.buyingTrigger ?? ""}
+                    options={segmentOptions.buyingTrigger}
+                  />
+                  <TaxonomySelectField
+                    dimension="ENTRY_PATH"
+                    name="entryPath"
+                    value={customer.entryPath ?? ""}
+                    options={segmentOptions.entryPath}
+                  />
+                </div>
+              </div>
               <label className="text-sm">
                 <span className="text-xs text-slate-500">{c.industryLabel}</span>
                 <input name="industry" defaultValue={customer.industry ?? ""} className={input} />

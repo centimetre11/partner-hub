@@ -28,6 +28,7 @@ import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
 import { PartnerHierarchySection } from "@/components/partner-hierarchy-section";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
+import { ImportKnownClientsButton } from "@/components/import-known-clients-button";
 import { listDistributorCandidates } from "@/lib/partner-hierarchy";
 import { TodoItemRow } from "@/components/todo-item-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
@@ -129,6 +130,12 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     taxonomyValuePattern,
     taxonomyCategory,
     taxonomyCapability,
+    taxonomyCustomerSegment,
+    taxonomyBuyingTrigger,
+    taxonomyEntryPath,
+    taxonomyIcpTier,
+    taxonomyWinFactor,
+    taxonomyLossReason,
     allPartners,
     allCustomers,
     distributorOptions,
@@ -182,6 +189,12 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     getTaxonomyOptions("VALUE_PATTERN"),
     getTaxonomyOptions("CATEGORY"),
     getTaxonomyOptions("CAPABILITY"),
+    getTaxonomyOptions("CUSTOMER_SEGMENT"),
+    getTaxonomyOptions("BUYING_TRIGGER"),
+    getTaxonomyOptions("ENTRY_PATH"),
+    getTaxonomyOptions("ICP_TIER"),
+    getTaxonomyOptions("WIN_FACTOR"),
+    getTaxonomyOptions("LOSS_REASON"),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.customer.findMany({
       where: { status: { in: ["ACTIVE", "PROSPECT"] } },
@@ -264,6 +277,12 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     VALUE_PATTERN: taxonomyValuePattern,
     CATEGORY: taxonomyCategory,
     CAPABILITY: taxonomyCapability,
+    CUSTOMER_SEGMENT: taxonomyCustomerSegment,
+    BUYING_TRIGGER: taxonomyBuyingTrigger,
+    ENTRY_PATH: taxonomyEntryPath,
+    ICP_TIER: taxonomyIcpTier,
+    WIN_FACTOR: taxonomyWinFactor,
+    LOSS_REASON: taxonomyLossReason,
   };
   const instanceMap = buildPartnerInstanceMap(p, labelMaps, labels);
   const stageGuidance = getStageGuidance(p, labels);
@@ -457,6 +476,9 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                       <dd className={v ? "text-slate-800 mt-0.5" : "text-slate-300 mt-0.5"}>{v || m.common.toBeFilled}</dd>
                     </div>
                   ))}
+                  <div className="sm:col-span-2 pt-1">
+                    <ImportKnownClientsButton partnerId={p.id} knownClients={p.knownClients} />
+                  </div>
                 </dl>
               </Card>
             </div>
