@@ -1,9 +1,10 @@
 import Link from "next/link";
-import type { Opportunity, TodoItem, Training } from "@prisma/client";
+import type { TodoItem } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { PageHeader, EmptyState, fmtDate } from "@/components/ui";
-import { computeCompleteness, staleDays, type PartnerWithRelations } from "@/lib/completeness";
+import { staleDays } from "@/lib/completeness";
+import { computePartnerStatus, type StatusCopy } from "@/lib/partner-status";
 import { getTaxonomyOptions } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
 import { CreateFromCrmButton } from "@/components/create-from-crm-button";
@@ -11,10 +12,8 @@ import { getServerI18n } from "@/lib/server-i18n";
 import { isTodoOverdue } from "@/lib/todo-dates";
 import { PartnerKanbanBoard, type KanbanPartnerCard } from "@/components/partner-kanban";
 import { PartnerCoverageMap } from "@/components/partner-coverage-map";
-import {
-  indexOpenOpportunitiesByPartner,
-  partnersRelatedOpportunityWhere,
-} from "@/lib/partner-opportunities";
+import { indexOpenOpportunitiesByPartner } from "@/lib/partner-opportunities";
+import { OPEN_OPPORTUNITY_STATUSES } from "@/lib/opportunity-status";
 import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
 
@@ -123,13 +122,20 @@ export default async function PartnersPage({
           ...roleFilter,
         },
         include: {
-          contacts: { select: { role: true, contactInfo: true } },
+          contacts: { select: { name: true, role: true, attitude: true } },
           todos: {
             where: { status: "OPEN" },
             select: { title: true, dueDate: true, priority: true, status: true },
             orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
           },
-          events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+          events: { orderBy: { createdAt: "desc" }, take: 5, select: { createdAt: true } },
+          solutions: { select: { name: true, status: true } },
+          trainings: { select: { status: true } },
+          businessRecords: {
+            select: { occurredAt: true },
+            orderBy: { occurredAt: "desc" },
+            take: 30,
+          },
           owner: { select: { name: true } },
           salesUser: { select: { name: true } },
           presalesUser: { select: { name: true } },
@@ -141,36 +147,85 @@ export default async function PartnersPage({
     ]);
 
   const partnerIds = partners.map((p) => p.id);
-  const relatedOpps =
+  const reviewSince = new Date(Date.now() - 90 * 24 * 3600 * 1000);
+  const openStatusSet = new Set(OPEN_OPPORTUNITY_STATUSES);
+
+  const [relatedOpps, recentReviewItems] =
     view === "kanban" && partnerIds.length > 0
-      ? await db.opportunity.findMany({
-          where: partnersRelatedOpportunityWhere(partnerIds),
-          select: {
-            name: true,
-            updatedAt: true,
-            partnerId: true,
-            customer: { select: { partnerLinks: { select: { partnerId: true } } } },
-          },
-          orderBy: { updatedAt: "desc" },
-        })
-      : [];
+      ? await Promise.all([
+          db.opportunity.findMany({
+            where: {
+              OR: [
+                { partnerId: { in: partnerIds } },
+                { customer: { partnerLinks: { some: { partnerId: { in: partnerIds } } } } },
+              ],
+            },
+            select: {
+              name: true,
+              status: true,
+              updatedAt: true,
+              partnerId: true,
+              customer: { select: { partnerLinks: { select: { partnerId: true } } } },
+            },
+            orderBy: { updatedAt: "desc" },
+          }),
+          db.partnerReviewItem.findMany({
+            where: {
+              partnerId: { in: partnerIds },
+              OR: [
+                { discussedAt: { gte: reviewSince } },
+                { updatedAt: { gte: reviewSince }, status: { in: ["DISCUSSED", "CONFIRMED"] } },
+              ],
+            },
+            select: { partnerId: true, discussedAt: true, status: true, updatedAt: true },
+          }),
+        ])
+      : [[], []];
+
   const oppsByPartner = indexOpenOpportunitiesByPartner(relatedOpps, partnerIds);
+  const reviewsByPartner = new Map<string, typeof recentReviewItems>();
+  for (const id of partnerIds) reviewsByPartner.set(id, []);
+  for (const item of recentReviewItems) {
+    reviewsByPartner.get(item.partnerId)?.push(item);
+  }
+
+  const statusCopy: StatusCopy = {
+    evidence: m.partnerStatus.evidenceCopy,
+    next: m.partnerStatus.nextCopy,
+  };
 
   const kanbanCards: KanbanPartnerCard[] =
     view === "kanban"
       ? partners.map((p) => {
-          const c = computeCompleteness(
+          const partnerOpps = oppsByPartner.get(p.id) ?? [];
+          const health = computePartnerStatus(
             {
-              ...p,
-              opportunities: Array.from({ length: p._count.opportunities }, () => ({ id: "_" })) as Opportunity[],
-              trainings: Array.from({ length: p._count.trainings }, () => ({ id: "_" })) as Training[],
-            } as unknown as PartnerWithRelations,
-            labels,
+              dedicatedHeadcount: p.dedicatedHeadcount,
+              valuePattern: p.valuePattern,
+              valuePartnerOffer: p.valuePartnerOffer,
+              valueFanruanOffer: p.valueFanruanOffer,
+              valueCustomerOutcome: p.valueCustomerOutcome,
+              playbook: p.playbook,
+              pitch: p.pitch,
+              certLevel: p.certLevel,
+              capabilities: p.capabilities,
+              pipelineStage: p.pipelineStage,
+              updatedAt: p.updatedAt,
+              contacts: p.contacts,
+              solutions: p.solutions,
+              trainings: p.trainings,
+              opportunities: partnerOpps.map((o) => ({ status: o.status })),
+              businessRecords: p.businessRecords,
+              events: p.events,
+              reviewItems: reviewsByPartner.get(p.id) ?? [],
+            },
+            p.statusOverview,
+            statusCopy,
           );
           const stale = staleDays(p);
           const activityAt = lastActivityAt(p);
           const nextTodo = pickNextTodo(p.todos);
-          const activeOpp = oppsByPartner.get(p.id)?.[0] ?? null;
+          const activeOpp = partnerOpps.find((o) => openStatusSet.has(o.status)) ?? null;
           return {
             id: p.id,
             name: p.name,
@@ -185,7 +240,7 @@ export default async function PartnersPage({
             openTodoCount: p.todos.length,
             nextTodoTitle: nextTodo?.title ?? null,
             activeOppName: activeOpp?.name ?? null,
-            completeness: c.score,
+            healthScore: health.healthScore,
           };
         })
       : [];

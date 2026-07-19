@@ -30,7 +30,8 @@ export type KanbanPartnerCard = {
   openTodoCount: number;
   nextTodoTitle: string | null;
   activeOppName: string | null;
-  completeness: number;
+  /** 七维伙伴健康分 0–100（非档案完整度） */
+  healthScore: number;
 };
 
 export type KanbanStageMeta = {
@@ -140,7 +141,7 @@ function CardBody({ card, copy }: { card: KanbanPartnerCard; copy: Copy }) {
         {card.activeOppName ? truncate(card.activeOppName, 22) : copy.noActiveDeal}
       </div>
       <div className="mt-2 w-full max-w-[7rem]">
-        <ScoreBar score={card.completeness} />
+        <ScoreBar score={card.healthScore} />
       </div>
     </>
   );
@@ -235,7 +236,7 @@ function PartnerKanbanCard({ card, copy }: { card: KanbanPartnerCard; copy: Copy
         {card.activeOppName ? truncate(card.activeOppName, 22) : copy.noActiveDeal}
       </div>
       <div className="mt-2 w-full max-w-[7rem]">
-        <ScoreBar score={card.completeness} />
+        <ScoreBar score={card.healthScore} />
       </div>
     </div>
   );
