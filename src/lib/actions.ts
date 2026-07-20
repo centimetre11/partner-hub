@@ -26,6 +26,7 @@ import {
   serializeProcessTags,
 } from "./opportunity-process-tags";
 import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opportunity-status";
+import { amountAndCurrencyFromFormData, formatAmountDisplay } from "./amount";
 import {
   DEFAULT_CONTRACT_STATUS,
   DEFAULT_CONTRACT_TYPE,
@@ -726,10 +727,12 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
   const user = await requireUser();
   const id = String(formData.get("id") ?? "");
   const followUp = String(formData.get("followUpAt") ?? "");
+  const { amount, currency } = amountAndCurrencyFromFormData(formData);
   const data: Record<string, unknown> = {
     name: String(formData.get("name") ?? "").trim(),
     client: String(formData.get("client") ?? "") || null,
-    amount: String(formData.get("amount") ?? "") || null,
+    amount,
+    currency,
     stage: serializeProcessTags(processTagsFromFormData(formData)),
     nextStep: normalizeNextProcessTag(String(formData.get("nextStep") ?? "") || null),
     followUpAt: followUp ? new Date(followUp) : null,
@@ -783,7 +786,7 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     });
     await logOwnerTimeline(owner, user.id, {
       title: `更新商机：${opp.name}`,
-      content: opp.amount ? `金额：${opp.amount}` : null,
+      content: opp.amount ? `金额：${formatAmountDisplay(opp.amount, opp.currency, "zh")}` : null,
       meta: { entity: "opportunity", opportunityId: opp.id },
     });
     if (opp.partnerId) revalidatePath(`/partners/${opp.partnerId}`);
@@ -806,7 +809,7 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
     });
     await logOwnerTimeline(owner, user.id, {
       title: `新建商机：${opp.name}`,
-      content: opp.amount ? `金额：${opp.amount}` : null,
+      content: opp.amount ? `金额：${formatAmountDisplay(opp.amount, opp.currency, "zh")}` : null,
       meta: { entity: "opportunity", opportunityId: opp.id },
     });
   }
@@ -856,9 +859,11 @@ export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
   const status = String(formData.get("status") ?? "ACTIVE");
   const start = String(formData.get("startDate") ?? "");
   const end = String(formData.get("endDate") ?? "");
+  const { amount, currency } = amountAndCurrencyFromFormData(formData);
   const data: Record<string, unknown> = {
     name: String(formData.get("name") ?? "").trim(),
-    amount: String(formData.get("amount") ?? "") || null,
+    amount,
+    currency,
     phase: (PROJECT_PHASES as readonly string[]).includes(phase) ? phase : "KICKOFF",
     status: (PROJECT_STATUSES as readonly string[]).includes(status) ? status : "ACTIVE",
     startDate: start ? new Date(start) : null,
@@ -1018,11 +1023,13 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     resolvedParentId = parent?.id ?? null;
   }
 
+  const { amount, currency } = amountAndCurrencyFromFormData(formData);
   const data: Record<string, unknown> = {
     name,
     contractType,
     status,
-    amount: String(formData.get("amount") ?? "").trim() || null,
+    amount,
+    currency,
     startDate: parseOptionalDate(formData, "startDate"),
     endDate: parseOptionalDate(formData, "endDate"),
     renewsAt: parseOptionalDate(formData, "renewsAt"),
@@ -1066,7 +1073,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       title: `更新合同：${contract.name}`,
       content: [
         contract.contractType,
-        contract.amount ? `金额：${contract.amount}` : null,
+        contract.amount ? `金额：${formatAmountDisplay(contract.amount, contract.currency, "zh")}` : null,
         contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
         contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
         contract.status,
@@ -1110,7 +1117,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       title: `新建合同：${contract.name}`,
       content: [
         contract.contractType,
-        contract.amount ? `金额：${contract.amount}` : null,
+        contract.amount ? `金额：${formatAmountDisplay(contract.amount, contract.currency, "zh")}` : null,
         contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
         contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
         contract.status,
@@ -1162,6 +1169,7 @@ export async function createProductMaintRenewalAction(owner: OwnerRef, buyoutId:
       contractType: "PRODUCT_MAINTENANCE",
       status: "ACTIVE",
       amount: suggested,
+      currency: buyout.currency,
       startDate: start,
       endDate: end,
       renewsAt: end,
@@ -1170,7 +1178,7 @@ export async function createProductMaintRenewalAction(owner: OwnerRef, buyoutId:
       productMaintIncludedY1: false,
       projectMaintRatePct: null,
       projectMaintIncludedY1: false,
-      notes: `Standalone product maintenance after year 1 (rate ${rate}% of buyout${buyout.amount ? ` ${buyout.amount}` : ""}).`,
+      notes: `Standalone product maintenance after year 1 (rate ${rate}% of buyout${buyout.amount ? ` ${formatAmountDisplay(buyout.amount, buyout.currency, "en")}` : ""}).`,
       createdById: user.id,
     },
   });
@@ -1225,6 +1233,7 @@ export async function createProjectMaintRenewalAction(owner: OwnerRef, projectCo
       contractType: "PROJECT_MAINTENANCE",
       status: "ACTIVE",
       amount: suggested,
+      currency: parent.currency,
       startDate: start,
       endDate: end,
       renewsAt: end,
@@ -1233,7 +1242,7 @@ export async function createProjectMaintRenewalAction(owner: OwnerRef, projectCo
       productMaintIncludedY1: false,
       projectMaintRatePct: null,
       projectMaintIncludedY1: false,
-      notes: `Standalone project maintenance after year 1 (rate ${rate}% of project contract${parent.amount ? ` ${parent.amount}` : ""}).`,
+      notes: `Standalone project maintenance after year 1 (rate ${rate}% of project contract${parent.amount ? ` ${formatAmountDisplay(parent.amount, parent.currency, "en")}` : ""}).`,
       createdById: user.id,
     },
   });
@@ -1374,6 +1383,7 @@ export async function convertOpportunityToProjectAction(owner: OwnerRef, oppId: 
         partnerId: opp.partnerId ?? null,
         name: opp.name,
         amount: opp.amount ?? null,
+        currency: opp.currency ?? null,
         sourceOpportunityId: oppId,
         phase: "KICKOFF",
         status: "ACTIVE",

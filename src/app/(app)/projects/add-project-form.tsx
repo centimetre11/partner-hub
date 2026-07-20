@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createProjectFromListAction } from "@/lib/actions";
-import { useMessages } from "@/lib/i18n/context";
+import { useMessages, useLocale } from "@/lib/i18n/context";
+import { AmountInput } from "@/components/amount-input";
 
 type Option = { id: string; name: string };
 
@@ -29,6 +30,7 @@ export function AddProjectForm({
 }) {
   const [open, setOpen] = useState(false);
   const m = useMessages();
+  const locale = useLocale();
   const p = m.projects;
   const c = m.customers;
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
@@ -62,16 +64,20 @@ export function AddProjectForm({
                 ))}
               </select>
               <input name="name" required placeholder={c.projectName} className={input} />
-              <div className="flex gap-2">
-                <input name="amount" placeholder={m.common.amount} className={input} />
-                <select name="phase" defaultValue="KICKOFF" className={input} aria-label={p.colPhase}>
-                  <option value="KICKOFF">{c.phaseKICKOFF}</option>
-                  <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>
-                  <option value="ACCEPTANCE">{c.phaseACCEPTANCE}</option>
-                  <option value="GOLIVE">{c.phaseGOLIVE}</option>
-                  <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
-                </select>
-              </div>
+              <AmountInput
+                inputClassName={input}
+                amountPlaceholder={m.common.amount}
+                amountAriaLabel={m.common.amount}
+                currencyAriaLabel={m.common.currency}
+                locale={locale}
+              />
+              <select name="phase" defaultValue="KICKOFF" className={input} aria-label={p.colPhase}>
+                <option value="KICKOFF">{c.phaseKICKOFF}</option>
+                <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>
+                <option value="ACCEPTANCE">{c.phaseACCEPTANCE}</option>
+                <option value="GOLIVE">{c.phaseGOLIVE}</option>
+                <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
+              </select>
               <div className="flex gap-2">
                 <input name="startDate" type="date" className={input} aria-label={c.projectStartDate} />
                 <input name="endDate" type="date" className={input} aria-label={c.projectEndDate} />

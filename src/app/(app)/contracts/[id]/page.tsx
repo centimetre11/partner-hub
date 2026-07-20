@@ -14,6 +14,7 @@ import {
   isContractPastEnd,
 } from "@/lib/contract-types";
 import { contractArrAmount, formatArrNumber, isArrContractType } from "@/lib/arr";
+import { formatAmountDisplay } from "@/lib/amount";
 
 export default async function ContractDetailPage({
   params,
@@ -47,7 +48,7 @@ export default async function ContractDetailPage({
       opportunity: { select: { id: true, name: true, status: true } },
       project: { select: { id: true, name: true, phase: true, status: true } },
       parentContract: {
-        select: { id: true, name: true, contractType: true, amount: true },
+        select: { id: true, name: true, contractType: true, amount: true, currency: true },
       },
       childContracts: {
         select: {
@@ -56,6 +57,7 @@ export default async function ContractDetailPage({
           contractType: true,
           status: true,
           amount: true,
+          currency: true,
           startDate: true,
           endDate: true,
         },
@@ -115,7 +117,9 @@ export default async function ContractDetailPage({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
             <div className="text-xs text-slate-400">{t.colAmount}</div>
-            <div className="text-xl font-semibold tabular-nums mt-1">{ct.amount ?? "—"}</div>
+            <div className="text-xl font-semibold tabular-nums mt-1">
+              {formatAmountDisplay(ct.amount, ct.currency, locale)}
+            </div>
           </div>
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
             <div className="text-xs text-slate-400">{t.colArr}</div>
@@ -188,7 +192,9 @@ export default async function ContractDetailPage({
                 </Link>
                 <span className="text-slate-400 text-xs ml-2">
                   {contractTypeLabel(ct.parentContract.contractType, locale)}
-                  {ct.parentContract.amount ? ` · ${ct.parentContract.amount}` : ""}
+                  {ct.parentContract.amount
+                    ? ` · ${formatAmountDisplay(ct.parentContract.amount, ct.parentContract.currency, locale)}`
+                    : ""}
                 </span>
               </Row>
             )}
@@ -207,7 +213,9 @@ export default async function ContractDetailPage({
                       <Badge tone={contractStatusTone(child.status)}>
                         {contractStatusLabel(child.status, locale)}
                       </Badge>
-                      <span className="text-slate-500 tabular-nums">{child.amount ?? "—"}</span>
+                      <span className="text-slate-500 tabular-nums">
+                        {formatAmountDisplay(child.amount, child.currency, locale)}
+                      </span>
                       <span className="text-xs text-slate-400">
                         {fmtDate(child.startDate, bcp47)} → {fmtDate(child.endDate, bcp47)}
                       </span>

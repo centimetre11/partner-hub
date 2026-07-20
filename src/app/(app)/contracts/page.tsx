@@ -16,6 +16,7 @@ import {
   isContractPastEnd,
 } from "@/lib/contract-types";
 import { contractArrAmount, formatArrNumber, isArrContractType } from "@/lib/arr";
+import { formatAmountDisplay } from "@/lib/amount";
 
 export default async function ContractsPage({
   searchParams,
@@ -215,7 +216,9 @@ export default async function ContractsPage({
                           {pastEnd && <Badge tone="amber">{t.pastEnd}</Badge>}
                         </div>
                       </td>
-                      <td className="px-3 py-3 tabular-nums text-slate-700">{ct.amount ?? "—"}</td>
+                      <td className="px-3 py-3 tabular-nums text-slate-700">
+                        {formatAmountDisplay(ct.amount, ct.currency, locale)}
+                      </td>
                       <td className="px-3 py-3 tabular-nums text-emerald-700">
                         {arr > 0 ? formatArrNumber(arr) : "—"}
                       </td>

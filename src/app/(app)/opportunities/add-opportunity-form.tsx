@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { createOpportunityFromListAction } from "@/lib/actions";
-import { useMessages } from "@/lib/i18n/context";
+import { useMessages, useLocale } from "@/lib/i18n/context";
 import { OpportunityProcessFields } from "@/components/opportunity-process-fields";
+import { AmountInput } from "@/components/amount-input";
 
 type Option = { id: string; name: string };
 
@@ -30,6 +31,7 @@ export function AddOpportunityForm({
 }) {
   const [open, setOpen] = useState(false);
   const m = useMessages();
+  const locale = useLocale();
   const o = m.opportunities;
   const c = m.customers;
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
@@ -63,7 +65,13 @@ export function AddOpportunityForm({
                 ))}
               </select>
               <input name="name" required placeholder={c.opportunityName} className={input} />
-              <input name="amount" placeholder={m.common.amount} className={input} />
+              <AmountInput
+                inputClassName={input}
+                amountPlaceholder={m.common.amount}
+                amountAriaLabel={m.common.amount}
+                currencyAriaLabel={m.common.currency}
+                locale={locale}
+              />
               <OpportunityProcessFields />
               <select name="status" defaultValue="P20" className={input} aria-label={m.common.status}>
                 <option value="P20">{o.statusP20}</option>

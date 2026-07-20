@@ -46,6 +46,8 @@ import { parseMossDossier } from "@/lib/moss-dossier";
 import { getTaxonomyOptions } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
 import { CustomerContractForm } from "@/components/customer-contract-form";
+import { AmountInput } from "@/components/amount-input";
+import { formatAmountDisplay } from "@/lib/amount";
 import {
   billingCycleLabel,
   contractStatusLabel,
@@ -315,7 +317,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 {o.project && <Badge tone="indigo">{c.projectConverted}</Badge>}
               </div>
               <div className="text-xs text-slate-400 mt-0.5">
-                {m.common.amount}: {o.amount ?? "—"}
+                {m.common.amount}: {formatAmountDisplay(o.amount, o.currency, locale)}
                 {o.partner && ` · ${c.viaPartner}: ${o.partner.name}`}
                 {o.followUpAt && ` · ${m.partnerDetail.followUp}: ${fmtDate(o.followUpAt, bcp47)}`}
                 {o.notes && ` · ${m.common.note}: ${o.notes.length > 40 ? `${o.notes.slice(0, 40)}…` : o.notes}`}
@@ -327,7 +329,15 @@ export async function CustomerDetailBody({ id }: { id: string }) {
             <form action={upsertOpportunityAction.bind(null, owner)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
               <input type="hidden" name="id" value={o.id} />
               <input name="name" defaultValue={o.name} className={input} />
-              <input name="amount" defaultValue={o.amount ?? ""} placeholder={m.common.amount} className={input} />
+              <AmountInput
+                inputClassName={input}
+                amountPlaceholder={m.common.amount}
+                amountAriaLabel={m.common.amount}
+                currencyAriaLabel={m.common.currency}
+                locale={locale}
+                defaultAmount={o.amount}
+                defaultCurrency={o.currency}
+              />
               <OpportunityProcessFields
                 key={`edit-${o.id}`}
                 idPrefix={`opp-${o.id}`}
@@ -398,7 +408,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addOpportunity}</summary>
         <form action={upsertOpportunityAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
           <input name="name" required placeholder={c.opportunityName} className={input} />
-          <input name="amount" placeholder={m.common.amount} className={input} />
+          <AmountInput
+            inputClassName={input}
+            amountPlaceholder={m.common.amount}
+            amountAriaLabel={m.common.amount}
+            currencyAriaLabel={m.common.currency}
+            locale={locale}
+          />
           <OpportunityProcessFields key="add-opp" />
           <OpportunityStatusWithOutcome
             defaultStatus="P20"
@@ -512,7 +528,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   {pastEnd && <Badge tone="amber">{c.contractStatusExpired}</Badge>}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
-                  {m.common.amount}: {ct.amount ?? "—"}
+                  {m.common.amount}: {formatAmountDisplay(ct.amount, ct.currency, locale)}
                   {ct.billingCycle && ` · ${billingCycleLabel(ct.billingCycle, locale)}`}
                   {ct.startDate && ` · ${c.contractStartDate}: ${fmtDate(ct.startDate, bcp47)}`}
                   {ct.endDate && ` · ${c.contractEndDate}: ${fmtDate(ct.endDate, bcp47)}`}
@@ -556,6 +572,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   contractType: ct.contractType,
                   status: ct.status,
                   amount: ct.amount,
+                  currency: ct.currency,
                   billingCycle: ct.billingCycle,
                   startDate: ct.startDate ? new Date(ct.startDate).toISOString().slice(0, 10) : "",
                   endDate: ct.endDate ? new Date(ct.endDate).toISOString().slice(0, 10) : "",
@@ -645,7 +662,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addProject}</summary>
         <form action={upsertProjectAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
           <input name="name" required placeholder={c.projectName} className={input} />
-          <input name="amount" placeholder={m.common.amount} className={input} />
+          <AmountInput
+            inputClassName={input}
+            amountPlaceholder={m.common.amount}
+            amountAriaLabel={m.common.amount}
+            currencyAriaLabel={m.common.currency}
+            locale={locale}
+          />
           <select name="phase" defaultValue="KICKOFF" className={input}>
             <option value="KICKOFF">{c.phaseKICKOFF}</option>
             <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>

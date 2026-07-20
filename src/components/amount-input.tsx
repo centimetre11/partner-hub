@@ -129,12 +129,18 @@ export function AmountInput({
   }
 
   const submitAmount = normalizeAmountInput(amountValue) ?? "";
+  const submitPreserve =
+    !submitAmount &&
+    (preserve ||
+      (isControlled && amountValue.trim() && normalizeAmountInput(amountValue) == null
+        ? amountValue.trim()
+        : ""));
 
   return (
     <div className={className ?? "flex gap-1.5 min-w-0"}>
       <input type="hidden" name={nameAmount} value={submitAmount} readOnly />
-      {preserve && !submitAmount ? (
-        <input type="hidden" name="amountPreserve" value={preserve} readOnly />
+      {submitPreserve ? (
+        <input type="hidden" name="amountPreserve" value={submitPreserve} readOnly />
       ) : null}
       <input
         id={amountId}

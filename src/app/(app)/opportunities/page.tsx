@@ -20,6 +20,7 @@ import {
 } from "@/lib/opportunity-status";
 import { InstantSearchInput } from "@/components/instant-search-input";
 import { nameContainsWhere } from "@/lib/name-search";
+import { formatAmountDisplay } from "@/lib/amount";
 
 export default async function OpportunitiesPage({
   searchParams,
@@ -226,7 +227,9 @@ export default async function OpportunitiesPage({
                       <td className="px-4 py-3 text-slate-600">
                         {formatNextProcessDisplay(opp.nextStep, locale) || "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">{opp.amount ?? "—"}</td>
+                      <td className="px-4 py-3 text-slate-600 tabular-nums">
+                        {formatAmountDisplay(opp.amount, opp.currency, locale)}
+                      </td>
                       <td className="px-4 py-3">
                         <Badge tone={opportunityStatusTone(opp.status)}>
                           {opportunityStatusLabel(opp.status, locale)}

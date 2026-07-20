@@ -10,8 +10,10 @@ import {
   deleteProjectWorkLogAction,
   createTodoAction,
 } from "@/lib/actions";
-import { useMessages } from "@/lib/i18n/context";
+import { useMessages, useLocale } from "@/lib/i18n/context";
 import type { OwnerRef } from "@/lib/owner";
+import { AmountInput } from "@/components/amount-input";
+import { formatAmountDisplay } from "@/lib/amount";
 
 type Option = { id: string; name: string; role?: string };
 
@@ -36,6 +38,7 @@ export type CustomerProject = {
   phase: string;
   status: string;
   amount: string | null;
+  currency: string | null;
   startDate: Date | null;
   endDate: Date | null;
   partnerId: string | null;
@@ -64,6 +67,7 @@ export function CustomerProjectCard({
   bcp47: string;
 }) {
   const m = useMessages();
+  const locale = useLocale();
   const c = m.customers;
   const [editing, setEditing] = useState(false);
 
@@ -98,7 +102,7 @@ export function CustomerProjectCard({
       .join(" – ") || "—";
 
   const infoFields: [string, string][] = [
-    [m.common.amount, project.amount ?? "—"],
+    [m.common.amount, formatAmountDisplay(project.amount, project.currency, locale)],
     [m.projects.colPhase, phaseLabel(project.phase)],
     [m.projects.colStatus, statusLabel(project.status)],
     [m.projects.colDates, dateRange],
@@ -223,7 +227,15 @@ export function CustomerProjectCard({
             >
               <input type="hidden" name="id" value={project.id} />
               <input name="name" defaultValue={project.name} className={input} />
-              <input name="amount" defaultValue={project.amount ?? ""} placeholder={m.common.amount} className={input} />
+              <AmountInput
+                inputClassName={input}
+                amountPlaceholder={m.common.amount}
+                amountAriaLabel={m.common.amount}
+                currencyAriaLabel={m.common.currency}
+                locale={locale}
+                defaultAmount={project.amount}
+                defaultCurrency={project.currency}
+              />
               <select name="phase" defaultValue={project.phase} className={input}>
                 <option value="KICKOFF">{c.phaseKICKOFF}</option>
                 <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>

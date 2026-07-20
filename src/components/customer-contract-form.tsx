@@ -13,6 +13,8 @@ import {
   isPrimaryCommercialType,
   type ContractTypeCode,
 } from "@/lib/contract-types";
+import { AmountInput } from "@/components/amount-input";
+import { currencyForInput, formatAmountDisplay, type AmountCurrency } from "@/lib/amount";
 
 export type ContractFormCopy = {
   contractName: string;
@@ -58,6 +60,7 @@ type ContractDefaults = {
   contractType?: string;
   status?: string;
   amount?: string | null;
+  currency?: string | null;
   billingCycle?: string | null;
   startDate?: string;
   endDate?: string;
@@ -119,6 +122,7 @@ export function CustomerContractForm({
     (defaults?.contractType as ContractTypeCode) || "SUBSCRIPTION"
   );
   const [amount, setAmount] = useState(defaults?.amount ?? "");
+  const [currency, setCurrency] = useState<AmountCurrency>(currencyForInput(defaults?.currency));
   const productRate = useRateState(defaults?.productMaintRatePct);
   const projectRate = useRateState(defaults?.projectMaintRatePct);
   const [productMaintIncludedY1, setProductMaintIncludedY1] = useState(
@@ -176,12 +180,16 @@ export function CustomerContractForm({
           </option>
         ))}
       </select>
-      <input
-        name="amount"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        placeholder={copy.amount}
-        className={inputClassName}
+      <AmountInput
+        inputClassName={inputClassName}
+        amountPlaceholder={copy.amount}
+        amountAriaLabel={copy.amount}
+        currencyAriaLabel={locale === "en" ? "Currency" : "币种"}
+        locale={locale}
+        amount={amount}
+        currency={currency}
+        onAmountChange={setAmount}
+        onCurrencyChange={setCurrency}
       />
 
       {showBilling ? (
@@ -303,7 +311,7 @@ export function CustomerContractForm({
           {productEstimate && (
             <p className="text-[11px] text-sky-700">
               {copy.productMaintEstimate
-                .replace("{amount}", productEstimate)
+                .replace("{amount}", formatAmountDisplay(productEstimate, currency, locale))
                 .replace("{rate}", String(productRate.resolved))}
             </p>
           )}
@@ -361,7 +369,7 @@ export function CustomerContractForm({
           {projectEstimate && (
             <p className="text-[11px] text-emerald-700">
               {copy.projectMaintEstimate
-                .replace("{amount}", projectEstimate)
+                .replace("{amount}", formatAmountDisplay(projectEstimate, currency, locale))
                 .replace("{rate}", String(projectRate.resolved))}
             </p>
           )}
