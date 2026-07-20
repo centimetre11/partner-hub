@@ -1484,6 +1484,7 @@ export async function createTodoAction(formData: FormData) {
       partnerId = opp.partnerId;
     }
   }
+  const source = String(formData.get("source") ?? "MANUAL").trim() || "MANUAL";
   const todo = await db.todoItem.create({
     data: {
       title,
@@ -1495,6 +1496,7 @@ export async function createTodoAction(formData: FormData) {
       assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
       dueDate: due ? new Date(due) : null,
       priority: String(formData.get("priority") ?? "MEDIUM"),
+      source,
     },
   });
   void recordSystemEvent({
@@ -1506,7 +1508,7 @@ export async function createTodoAction(formData: FormData) {
     targetId: todo.id,
     targetLabel: todo.title,
     summary: `新建待办：${todo.title}`,
-    meta: { partnerId, customerId, opportunityId, projectId },
+    meta: { partnerId, customerId, opportunityId, projectId, source },
   });
   await logLinkedTimeline(user.id, {
     customerId,
@@ -1517,6 +1519,8 @@ export async function createTodoAction(formData: FormData) {
   revalidatePath("/todos");
   revalidatePath("/");
   revalidatePath("/mobile");
+  revalidatePath("/arr/calendar");
+  revalidatePath("/arr");
   if (partnerId) revalidatePath(`/partners/${partnerId}`);
   if (customerId) revalidatePath(`/customers/${customerId}`);
 }
@@ -1863,6 +1867,8 @@ export async function createBusinessRecordAction(owner: OwnerRef, formData: Form
   revalidatePath("/todos");
   revalidatePath("/");
   revalidatePath("/mobile");
+  revalidatePath("/arr/calendar");
+  revalidatePath("/arr");
 
   return { ok: true, ...formatBusinessRecordCrmFeedback(crmSync) };
 }

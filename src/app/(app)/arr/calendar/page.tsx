@@ -18,7 +18,7 @@ export default async function ArrCalendarPage({
 }: {
   searchParams: Promise<{ year?: string; from?: string; to?: string; owner?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { messages: m, bcp47, locale } = await getServerI18n();
   const t = m.arrCalendar;
   const sp = await searchParams;
@@ -60,20 +60,56 @@ export default async function ArrCalendarPage({
   const active = contracts.filter(isActiveArrContract);
   const customerIds = [...new Set(active.map((c) => c.customerId))];
 
-  // Profiles for ARR customers (may already be included)
-  const profiles = await db.arrCustomerProfile.findMany({
-    where: { customerId: { in: customerIds } },
-    include: {
-      cells: { where: { year, month: { gte: fromMonth, lte: toMonth } } },
-    },
-  });
-  const profileByCustomer = new Map(profiles.map((p) => [p.customerId, p]));
+  const [profiles, openTodos, partners, customers, users, owners] = await Promise.all([
+    db.arrCustomerProfile.findMany({
+      where: { customerId: { in: customerIds } },
+      include: {
+        cells: { where: { year, month: { gte: fromMonth, lte: toMonth } } },
+      },
+    }),
+    db.todoItem.findMany({
+      where: {
+        customerId: { in: customerIds },
+        status: { in: ["OPEN"] },
+      },
+      select: {
+        id: true,
+        title: true,
+        dueDate: true,
+        customerId: true,
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+    }),
+    db.partner.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.customer.findMany({
+      where: { id: { in: customerIds } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.user.findMany({
+      where: { ownedCustomers: { some: { id: { in: customerIds } } } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
-  const owners = await db.user.findMany({
-    where: { ownedCustomers: { some: { id: { in: customerIds } } } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  const profileByCustomer = new Map(profiles.map((p) => [p.customerId, p]));
+  const todosByCustomer = new Map<string, CalendarRowData["openTodos"]>();
+  for (const todo of openTodos) {
+    if (!todo.customerId) continue;
+    const list = todosByCustomer.get(todo.customerId) ?? [];
+    list.push({
+      id: todo.id,
+      title: todo.title,
+      dueDate: todo.dueDate ? fmtDate(todo.dueDate, bcp47) : null,
+    });
+    todosByCustomer.set(todo.customerId, list);
+  }
 
   const byCustomer = new Map<string, CalendarRowData>();
   for (const ct of active) {
@@ -90,8 +126,7 @@ export default async function ArrCalendarPage({
       }
       const custContracts = active.filter((c) => c.customerId === ct.customerId);
       const computedLatest = latestServiceDateFromContracts(custContracts);
-      const latest =
-        profile?.latestServiceAt ?? computedLatest;
+      const latest = profile?.latestServiceAt ?? computedLatest;
       row = {
         customerId: ct.customerId,
         customerName: ct.customer.name,
@@ -101,6 +136,7 @@ export default async function ArrCalendarPage({
         latestService: latest ? fmtDate(latest, bcp47) : null,
         situation: profile?.situation ?? "",
         todo: profile?.todo ?? "",
+        openTodos: todosByCustomer.get(ct.customerId) ?? [],
         cells,
       };
       byCustomer.set(ct.customerId, row);
@@ -137,6 +173,7 @@ export default async function ArrCalendarPage({
           <p>{t.guide1}</p>
           <p>{t.guide2}</p>
           <p>{t.guide3}</p>
+          <p>{t.guide4}</p>
         </div>
 
         <form className="flex flex-wrap gap-2 items-end" method="get">
@@ -227,6 +264,10 @@ export default async function ArrCalendarPage({
             months={months}
             rows={rows}
             locale={locale}
+            userId={user.id}
+            partners={partners}
+            customers={customers}
+            users={users}
             copy={{
               colCustomer: t.colCustomer,
               colPartner: t.colPartner,
@@ -241,6 +282,16 @@ export default async function ArrCalendarPage({
               placeholderCell: t.placeholderCell,
               placeholderSituation: t.placeholderSituation,
               placeholderTodo: t.placeholderTodo,
+              actionEdit: t.actionEdit,
+              actionAddTodo: t.actionAddTodo,
+              actionLogRecord: t.actionLogRecord,
+              actionOpenCustomer: t.actionOpenCustomer,
+              openTodosEmpty: t.openTodosEmpty,
+              addTodoForCustomer: t.addTodoForCustomer,
+              todoDuePrefix: t.todoDuePrefix,
+              createdHint: t.createdHint,
+              primaryFollowUp: t.primaryFollowUp,
+              primaryInspection: t.primaryInspection,
             }}
           />
         )}

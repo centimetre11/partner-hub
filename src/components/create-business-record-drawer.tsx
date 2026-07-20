@@ -15,12 +15,27 @@ const input =
 export function CreateBusinessRecordDrawer({
   partners,
   customers,
+  defaultOwnerRef = "",
+  defaultTitle = "",
+  open: openProp,
+  onOpenChange,
+  showTrigger = true,
+  lockOwner = false,
+  onCreated,
   buttonClassName,
   buttonLabel,
   buttonSuffix,
 }: {
   partners: Option[];
   customers: Option[];
+  /** Pre-select related partner/customer on open. */
+  defaultOwnerRef?: string;
+  defaultTitle?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
+  lockOwner?: boolean;
+  onCreated?: () => void;
   buttonClassName?: string;
   buttonLabel?: string;
   buttonSuffix?: React.ReactNode;
@@ -28,8 +43,14 @@ export function CreateBusinessRecordDrawer({
   const m = useMessages();
   const q = m.dashboard.quickActions;
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [ownerRef, setOwnerRef] = useState("");
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
+  const [ownerRef, setOwnerRef] = useState(defaultOwnerRef);
 
   useEffect(() => {
     if (!open) return;
@@ -46,8 +67,8 @@ export function CreateBusinessRecordDrawer({
   }, [open]);
 
   useEffect(() => {
-    if (!open) setOwnerRef("");
-  }, [open]);
+    if (open) setOwnerRef(defaultOwnerRef);
+  }, [open, defaultOwnerRef]);
 
   const parsed = parseOwnerRef(ownerRef);
   const owner: OwnerRef | null = parsed
@@ -58,17 +79,19 @@ export function CreateBusinessRecordDrawer({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          buttonClassName ??
-          "rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
-        }
-      >
-        {buttonLabel ?? (buttonClassName ? q.businessRecordTitle : `+ ${q.businessRecordTitle}`)}
-        {buttonSuffix}
-      </button>
+      {showTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={
+            buttonClassName ??
+            "rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
+          }
+        >
+          {buttonLabel ?? (buttonClassName ? q.businessRecordTitle : `+ ${q.businessRecordTitle}`)}
+          {buttonSuffix}
+        </button>
+      )}
 
       {open && (
         <>
@@ -103,8 +126,9 @@ export function CreateBusinessRecordDrawer({
                 <select
                   value={ownerRef}
                   onChange={(e) => setOwnerRef(e.target.value)}
+                  disabled={lockOwner}
                   className={input}
-                  autoFocus
+                  autoFocus={!defaultTitle}
                 >
                   <option value="">{q.businessRecordNone}</option>
                   {partners.length > 0 && (
@@ -130,12 +154,14 @@ export function CreateBusinessRecordDrawer({
 
               {owner ? (
                 <BusinessRecordForm
+                  key={`${owner.kind}:${owner.id}:${defaultTitle}`}
                   owner={owner}
                   source="MANUAL"
+                  defaultTitle={defaultTitle}
                   compact
                   onDone={() => {
                     setOpen(false);
-                    setOwnerRef("");
+                    onCreated?.();
                     router.refresh();
                   }}
                 />

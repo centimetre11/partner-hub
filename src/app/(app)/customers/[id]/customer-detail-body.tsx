@@ -57,6 +57,9 @@ import {
   contractTypeTone,
   isContractPastEnd,
 } from "@/lib/contract-types";
+import { contractArrAmount, isActiveArrContract } from "@/lib/arr";
+import { normalizeArrCalendarKind } from "@/lib/arr-calendar-types";
+import { CustomerArrPanel } from "@/components/customer-arr-panel";
 
 export async function CustomerDetailBody({ id }: { id: string }) {
   const user = await requireUser();
@@ -110,6 +113,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       _count: { select: { businessRecords: true } },
       assets: { orderBy: { createdAt: "desc" } },
       trainings: { orderBy: { updatedAt: "desc" } },
+      arrProfile: {
+        include: {
+          cells: {
+            where: { year: new Date().getFullYear() },
+            orderBy: { month: "asc" },
+          },
+        },
+      },
     },
   });
   if (!customer) notFound();
@@ -806,6 +817,56 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </div>
   );
 
+  const arrYear = new Date().getFullYear();
+  const arrContracts = customer.contracts
+    .filter((ct) => isActiveArrContract(ct))
+    .map((ct) => ({
+      id: ct.id,
+      name: ct.name,
+      contractType: ct.contractType,
+      arr: contractArrAmount(ct),
+      renewsAt: ct.renewsAt,
+      endDate: ct.endDate,
+    }));
+  const totalArr = arrContracts.reduce((sum, ct) => sum + ct.arr, 0);
+  const arrCells = (customer.arrProfile?.cells ?? []).map((cell) => ({
+    month: cell.month,
+    content: cell.content,
+    kind: normalizeArrCalendarKind(cell.kind),
+  }));
+  const arrOpenTodos = customer.todos
+    .filter((t) => t.status === "OPEN")
+    .map((t) => ({ id: t.id, title: t.title, dueDate: t.dueDate }));
+
+  const arrPanel = (
+    <CustomerArrPanel
+      customerId={customer.id}
+      year={arrYear}
+      totalArr={totalArr}
+      situation={customer.arrProfile?.situation ?? ""}
+      contracts={arrContracts}
+      cells={arrCells}
+      openTodos={arrOpenTodos}
+      locale={locale}
+      bcp47={bcp47}
+      copy={{
+        arrOpenCalendar: c.arrOpenCalendar,
+        arrTotalLabel: c.arrTotalLabel,
+        arrNoContracts: c.arrNoContracts,
+        arrSituationLabel: c.arrSituationLabel,
+        arrPlanThisYear: c.arrPlanThisYear,
+        arrNoPlanCells: c.arrNoPlanCells,
+        arrOpenTodos: c.arrOpenTodos,
+        arrViewAllTodos: c.arrViewAllTodos,
+        arrContractsHeading: c.arrContractsHeading,
+        arrRenewsPrefix: c.arrRenewsPrefix,
+        arrEndsPrefix: c.arrEndsPrefix,
+        openTodosEmpty: m.arrCalendar.openTodosEmpty,
+        todoDuePrefix: m.arrCalendar.todoDuePrefix,
+      }}
+    />
+  );
+
   const tabs: CustomerTab[] = [
     {
       id: "overview",
@@ -834,6 +895,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       desc: c.tabContractsDesc,
       badge: customer.contracts.length ? String(customer.contracts.length) : null,
       content: contractsPanel,
+    },
+    {
+      id: "arr",
+      label: c.tabArr,
+      desc: c.tabArrDesc,
+      badge: arrContracts.length ? String(arrContracts.length) : null,
+      content: arrPanel,
     },
     {
       id: "projects",

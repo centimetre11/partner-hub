@@ -30,7 +30,7 @@ export function CustomerWorkspaceShell({ tabs }: { tabs: CustomerTab[] }) {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-12 sm:pb-16">
-      <div className={`grid grid-cols-2 gap-2 mb-5 ${tabs.length >= 7 ? "sm:grid-cols-3 lg:grid-cols-7" : tabs.length >= 6 ? "sm:grid-cols-3 lg:grid-cols-6" : tabs.length >= 5 ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-4 lg:grid-cols-4"}`}>
+      <div className={`grid grid-cols-2 gap-2 mb-5 ${tabs.length >= 8 ? "sm:grid-cols-4 lg:grid-cols-8" : tabs.length >= 7 ? "sm:grid-cols-3 lg:grid-cols-7" : tabs.length >= 6 ? "sm:grid-cols-3 lg:grid-cols-6" : tabs.length >= 5 ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-4 lg:grid-cols-4"}`}>
         {tabs.map((t) => {
           const isActive = activeTab?.id === t.id;
           return (
