@@ -81,6 +81,7 @@ export type ContractFormCopy = {
   aiExtractImageRequired: string;
   aiExtractOrText: string;
   aiExtractTextPlaceholder: string;
+  aiExtractGatewayError: string;
   amount: string;
   note: string;
   save: string;

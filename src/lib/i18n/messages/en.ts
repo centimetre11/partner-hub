@@ -896,6 +896,8 @@ export const messagesEn = {
     aiExtractImageRequired: "Please upload or paste a screenshot first",
     aiExtractOrText: "Or paste CRM text",
     aiExtractTextPlaceholder: "Paste opportunity/contract fields from CRM…",
+    aiExtractGatewayError:
+      "Server interrupted while recognizing (502). Crop to the main fields or use a smaller screenshot, then try again.",
     productMaintRate: "Product maintenance rate",
     productMaintRateHint: "Share of the product buyout that counts as product maintenance (e.g. 15% or 20%). Distinct from project maintenance.",
     productMaintRateCustom: "Custom %",

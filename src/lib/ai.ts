@@ -719,7 +719,22 @@ async function volcengineResponsesCompletion(
     throw new AIError(`Volcengine API call failed (${res.status}): ${text.slice(0, 500)}`);
   }
 
-  const data = (await res.json()) as Record<string, unknown>;
+  const rawBody = await res.text().catch(() => "");
+  let data: Record<string, unknown>;
+  try {
+    data = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
+  } catch {
+    await recordBestEffort({
+      api,
+      feature: opts.feature ?? "Unlabeled AI call",
+      userId: opts.userId,
+      status: "FAILED",
+      error: `Non-JSON response: ${rawBody.slice(0, 300)}`,
+    });
+    throw new AIError(
+      `Volcengine returned non-JSON response: ${rawBody.replace(/\s+/g, " ").slice(0, 200)}`
+    );
+  }
   if (process.env.DEBUG_VOLC_REQUEST === "1") {
     const output = (data.output ?? []) as Array<Record<string, unknown>>;
     console.error("[volcengine] output types:", output.map((o) => o.type).join(", "));

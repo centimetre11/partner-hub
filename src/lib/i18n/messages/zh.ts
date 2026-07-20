@@ -896,6 +896,8 @@ export const messagesZh: Messages = {
     aiExtractImageRequired: "请先上传或粘贴截图",
     aiExtractOrText: "或粘贴 CRM 文字",
     aiExtractTextPlaceholder: "粘贴 CRM 机会/合同字段文字…",
+    aiExtractGatewayError:
+      "识别时服务中断（502）。请裁剪到主要字段区域或换更小的截图后重试。",
     productMaintRate: "产品维保比例",
     productMaintRateHint: "买断产品合同中产品维保所占比例（如 15% 或 20%）。与项目维保不同。",
     productMaintRateCustom: "自定义 %",

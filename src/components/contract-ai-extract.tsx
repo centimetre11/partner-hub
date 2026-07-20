@@ -17,6 +17,7 @@ export type ContractAiExtractCopy = {
   aiExtractImageRequired: string;
   aiExtractOrText: string;
   aiExtractTextPlaceholder: string;
+  aiExtractGatewayError?: string;
 };
 
 function imageFilesFromClipboard(data: DataTransfer | null): File[] {
@@ -110,9 +111,10 @@ export function ContractAiExtract({
         customerNameHint: customerNameHint ?? "",
       };
       if (source === "image" && pendingFile) {
+        // Keep payload small — large screenshots previously crashed the Node upstream (nginx 502 HTML).
         payload.images = await prepareChatImagesFromFiles([pendingFile], {
-          maxSide: 1280,
-          quality: 0.8,
+          maxSide: 896,
+          quality: 0.72,
         });
       } else {
         payload.text = text.trim();
@@ -122,11 +124,21 @@ export function ContractAiExtract({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = (await res.json()) as {
-        ok?: boolean;
-        result?: ContractExtractResult;
-        error?: string;
-      };
+      const raw = await res.text();
+      let data: { ok?: boolean; result?: ContractExtractResult; error?: string } = {};
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        if (res.status === 502 || res.status === 504 || /^\s*</.test(raw)) {
+          throw new Error(
+            copy.aiExtractGatewayError ||
+              "Server interrupted while recognizing (502). Try a tighter crop / smaller screenshot."
+          );
+        }
+        throw new Error(
+          `${copy.aiExtractFailed}${res.status ? ` (HTTP ${res.status})` : ""}`
+        );
+      }
       if (!res.ok || !data.result) {
         throw new Error(data.error || copy.aiExtractFailed);
       }

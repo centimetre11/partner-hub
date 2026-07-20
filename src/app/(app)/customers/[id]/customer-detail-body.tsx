@@ -512,6 +512,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     aiExtractImageRequired: c.aiExtractImageRequired,
     aiExtractOrText: c.aiExtractOrText,
     aiExtractTextPlaceholder: c.aiExtractTextPlaceholder,
+    aiExtractGatewayError: c.aiExtractGatewayError,
     amount: m.common.amount,
     note: m.common.note,
     save: m.common.save,
