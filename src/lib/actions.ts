@@ -29,8 +29,8 @@ import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opport
 import {
   DEFAULT_CONTRACT_STATUS,
   DEFAULT_CONTRACT_TYPE,
+  DEFAULT_PRODUCT_MAINT_RATE_PCT,
   DEFAULT_PROJECT_MAINT_RATE_PCT,
-  DEFAULT_WEIBAO_RATE_PCT,
   estimateMaintAmount,
   expectedParentType,
   isPrimaryCommercialType,
@@ -985,13 +985,15 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     ? String(formData.get("parentContractId") ?? "").trim() || null
     : undefined;
 
-  // Bundled maintenance: Weibao on buyout; project maintenance on project contracts. Not for subscription.
-  const weibaoRatePct =
-    contractType === "BUYOUT" ? normalizeMaintRatePct(String(formData.get("weibaoRatePct") ?? "")) : null;
-  const weibaoIncludedY1 =
+  // Bundled maintenance: product maint on buyout; project maint on project contracts. Not for subscription.
+  const productMaintRatePct =
     contractType === "BUYOUT"
-      ? String(formData.get("weibaoIncludedY1") ?? "") === "on" ||
-        String(formData.get("weibaoIncludedY1") ?? "") === "true"
+      ? normalizeMaintRatePct(String(formData.get("productMaintRatePct") ?? formData.get("weibaoRatePct") ?? ""))
+      : null;
+  const productMaintIncludedY1 =
+    contractType === "BUYOUT"
+      ? String(formData.get("productMaintIncludedY1") ?? formData.get("weibaoIncludedY1") ?? "") === "on" ||
+        String(formData.get("productMaintIncludedY1") ?? formData.get("weibaoIncludedY1") ?? "") === "true"
       : false;
   const projectMaintRatePct =
     contractType === "PROJECT"
@@ -1025,8 +1027,8 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     endDate: parseOptionalDate(formData, "endDate"),
     renewsAt: parseOptionalDate(formData, "renewsAt"),
     billingCycle: isPrimaryCommercialType(contractType) ? null : billingCycle,
-    weibaoRatePct,
-    weibaoIncludedY1,
+    productMaintRatePct,
+    productMaintIncludedY1,
     projectMaintRatePct,
     projectMaintIncludedY1,
     notes: String(formData.get("notes") ?? "").trim() || null,
@@ -1056,7 +1058,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         partnerId: contract.partnerId,
         contractType: contract.contractType,
         status: contract.status,
-        weibaoRatePct: contract.weibaoRatePct,
+        productMaintRatePct: contract.productMaintRatePct,
         projectMaintRatePct: contract.projectMaintRatePct,
       },
     });
@@ -1065,7 +1067,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       content: [
         contract.contractType,
         contract.amount ? `金额：${contract.amount}` : null,
-        contract.weibaoRatePct != null ? `微宝 ${contract.weibaoRatePct}%` : null,
+        contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
         contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
         contract.status,
       ]
@@ -1100,7 +1102,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         partnerId: contract.partnerId,
         contractType: contract.contractType,
         status: contract.status,
-        weibaoRatePct: contract.weibaoRatePct,
+        productMaintRatePct: contract.productMaintRatePct,
         projectMaintRatePct: contract.projectMaintRatePct,
       },
     });
@@ -1109,7 +1111,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       content: [
         contract.contractType,
         contract.amount ? `金额：${contract.amount}` : null,
-        contract.weibaoRatePct != null ? `微宝 ${contract.weibaoRatePct}%` : null,
+        contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
         contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
         contract.status,
       ]
@@ -1136,8 +1138,8 @@ function renewalWindowFromParent(parent: {
   return { start, end };
 }
 
-/** From a buyout: create a year-2+ standalone Weibao (MAINTENANCE) renewal linked to the product contract. */
-export async function createWeibaoRenewalAction(owner: OwnerRef, buyoutId: string) {
+/** From a buyout: create year-2+ standalone product maintenance linked to the product contract. */
+export async function createProductMaintRenewalAction(owner: OwnerRef, buyoutId: string) {
   const user = await requireUser();
   if (owner.kind !== "customer") return;
   const buyout = await db.contract.findFirst({
@@ -1145,7 +1147,7 @@ export async function createWeibaoRenewalAction(owner: OwnerRef, buyoutId: strin
   });
   if (!buyout) return;
 
-  const rate = buyout.weibaoRatePct ?? DEFAULT_WEIBAO_RATE_PCT;
+  const rate = buyout.productMaintRatePct ?? DEFAULT_PRODUCT_MAINT_RATE_PCT;
   const suggested = estimateMaintAmount(buyout.amount, rate);
   const { start, end } = renewalWindowFromParent(buyout);
 
@@ -1156,45 +1158,48 @@ export async function createWeibaoRenewalAction(owner: OwnerRef, buyoutId: strin
       opportunityId: buyout.opportunityId,
       projectId: buyout.projectId,
       parentContractId: buyout.id,
-      name: `${buyout.name} · Weibao renewal`,
-      contractType: "MAINTENANCE",
+      name: `${buyout.name} · Product maintenance`,
+      contractType: "PRODUCT_MAINTENANCE",
       status: "ACTIVE",
       amount: suggested,
       startDate: start,
       endDate: end,
       renewsAt: end,
       billingCycle: "YEARLY",
-      weibaoRatePct: null,
-      weibaoIncludedY1: false,
+      productMaintRatePct: null,
+      productMaintIncludedY1: false,
       projectMaintRatePct: null,
       projectMaintIncludedY1: false,
-      notes: `Standalone Weibao after year 1 (rate ${rate}% of buyout${buyout.amount ? ` ${buyout.amount}` : ""}).`,
+      notes: `Standalone product maintenance after year 1 (rate ${rate}% of buyout${buyout.amount ? ` ${buyout.amount}` : ""}).`,
       createdById: user.id,
     },
   });
 
   void recordSystemEvent({
     category: "CONTRACT",
-    action: "contract.weibao_renewal.create",
+    action: "contract.product_maint_renewal.create",
     actorId: user.id,
     actorLabel: user.name,
     targetType: "Contract",
     targetId: contract.id,
     targetLabel: contract.name,
-    summary: `从买断创建微宝续约：${contract.name}`,
+    summary: `从买断创建产品维保续约：${contract.name}`,
     meta: {
       customerId: contract.customerId,
       parentContractId: buyout.id,
-      weibaoRatePct: rate,
+      productMaintRatePct: rate,
     },
   });
   await logOwnerTimeline(owner, user.id, {
-    title: `新建微宝续约：${contract.name}`,
+    title: `新建产品维保：${contract.name}`,
     content: `关联买断 ${buyout.name} · ${rate}%`,
     meta: { entity: "contract", contractId: contract.id, parentContractId: buyout.id },
   });
   revalidatePath(ownerPath(owner));
 }
+
+/** @deprecated use createProductMaintRenewalAction */
+export const createWeibaoRenewalAction = createProductMaintRenewalAction;
 
 /** From a project contract: create year-2+ standalone project maintenance linked to the project contract. */
 export async function createProjectMaintRenewalAction(owner: OwnerRef, projectContractId: string) {
@@ -1224,8 +1229,8 @@ export async function createProjectMaintRenewalAction(owner: OwnerRef, projectCo
       endDate: end,
       renewsAt: end,
       billingCycle: "YEARLY",
-      weibaoRatePct: null,
-      weibaoIncludedY1: false,
+      productMaintRatePct: null,
+      productMaintIncludedY1: false,
       projectMaintRatePct: null,
       projectMaintIncludedY1: false,
       notes: `Standalone project maintenance after year 1 (rate ${rate}% of project contract${parent.amount ? ` ${parent.amount}` : ""}).`,

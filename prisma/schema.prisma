@@ -467,9 +467,10 @@ model Project {
   @@index([partnerId])
 }
 
-// 合同：客户已签约的商务合同（订阅 / 买断+微宝 / 项目合同+项目维保）
-// 买断：产品合同含一定比例微宝（如 15%/20%）；首年微宝随产品打包，次年起单独付微宝。
+// 合同：客户已签约的商务合同（订阅 / 买断+产品维保 / 项目合同+项目维保）
+// 买断：产品合同可含一定比例产品维保（如 15%/20%）；首年产品维保随产品打包，次年起单独付产品维保。
 // 项目合同：首年含项目维保，次年起单独买项目维保。订阅无此类捆绑逻辑。
+// 注意区分：PRODUCT_MAINTENANCE=产品维保 vs PROJECT_MAINTENANCE=项目维保
 model Contract {
   id            String    @id @default(cuid())
   customerId    String
@@ -482,25 +483,25 @@ model Contract {
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
   projectId     String?
   project       Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  // 续约可挂回母合同：微宝→买断，项目维保→项目合同
+  // 续约可挂回母合同：产品维保→买断，项目维保→项目合同
   parentContractId String?
   parentContract   Contract?  @relation("ContractRenewalChain", fields: [parentContractId], references: [id], onDelete: SetNull)
   childContracts   Contract[] @relation("ContractRenewalChain")
   name          String
-  // SUBSCRIPTION 订阅 / BUYOUT 买断 / MAINTENANCE 微宝 / PROJECT 项目合同 / PROJECT_MAINTENANCE 项目维保
+  // SUBSCRIPTION 订阅 / BUYOUT 买断 / PRODUCT_MAINTENANCE 产品维保 / PROJECT 项目合同 / PROJECT_MAINTENANCE 项目维保
   contractType  String
   // DRAFT 草稿 / ACTIVE 生效 / EXPIRED 已到期 / CANCELLED 已取消 / RENEWED 已续约（归档）
   status        String    @default("ACTIVE")
   amount        String?
   startDate     DateTime?
   endDate       DateTime? // 买断可为空（永久授权）
-  renewsAt      DateTime? // 下次续约/续费日（订阅、微宝、项目维保常用）
+  renewsAt      DateTime? // 下次续约/续费日（订阅、产品维保、项目维保常用）
   // MONTHLY / QUARTERLY / YEARLY / OTHER；买断/项目主合同通常为空
   billingCycle  String?
-  // 买断专用：微宝占产品合同金额比例（如 15、20）
-  weibaoRatePct Int?
-  // 买断专用：首年微宝是否已含在产品买断价中
-  weibaoIncludedY1 Boolean @default(false)
+  // 买断专用：产品维保占产品合同金额比例（如 15、20）
+  productMaintRatePct Int?
+  // 买断专用：首年产品维保是否已含在产品买断价中
+  productMaintIncludedY1 Boolean @default(false)
   // 项目合同专用：项目维保占项目合同金额比例（如 15、20）
   projectMaintRatePct Int?
   // 项目合同专用：首年项目维保是否已含在项目价中

@@ -198,15 +198,15 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
         .map((ct) => {
           const end = ct.endDate?.toISOString().slice(0, 10) ?? "-";
           const renew = ct.renewsAt?.toISOString().slice(0, 10) ?? "-";
-          const weibao =
-            ct.contractType === "BUYOUT" && ct.weibaoRatePct != null
-              ? ` weibao:${ct.weibaoRatePct}%${ct.weibaoIncludedY1 ? "(Y1 included)" : ""}`
+          const productMaint =
+            ct.contractType === "BUYOUT" && ct.productMaintRatePct != null
+              ? ` productMaint:${ct.productMaintRatePct}%${ct.productMaintIncludedY1 ? "(Y1 included)" : ""}`
               : "";
           const projMaint =
             ct.contractType === "PROJECT" && ct.projectMaintRatePct != null
               ? ` projectMaint:${ct.projectMaintRatePct}%${ct.projectMaintIncludedY1 ? "(Y1 included)" : ""}`
               : "";
-          return `- id=${ct.id} name:${ct.name} type:${ct.contractType} status:${ct.status} amount:${ct.amount ?? "-"}${weibao}${projMaint} end:${end} renews:${renew} partner:${ct.partner?.name ?? "-"}`;
+          return `- id=${ct.id} name:${ct.name} type:${ct.contractType} status:${ct.status} amount:${ct.amount ?? "-"}${productMaint}${projMaint} end:${end} renews:${renew} partner:${ct.partner?.name ?? "-"}`;
         })
         .join("\n")
     : noneLabel(locale);

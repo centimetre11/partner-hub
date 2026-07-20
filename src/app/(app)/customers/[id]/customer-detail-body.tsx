@@ -32,7 +32,7 @@ import {
   upsertProjectAction,
   upsertContractAction,
   deleteContractAction,
-  createWeibaoRenewalAction,
+  createProductMaintRenewalAction,
   createProjectMaintRenewalAction,
   convertOpportunityToProjectAction,
   addNoteAction,
@@ -434,7 +434,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </div>
   );
 
-  // ============ 合同（订阅 / 微宝 / 买断） ============
+  // ============ 合同（订阅 / 买断+产品维保 / 项目合同+项目维保） ============
   const contractFormCopy = {
     contractName: c.contractName,
     contractType: c.contractType,
@@ -448,15 +448,15 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     contractLinkOpportunityNone: c.contractLinkOpportunityNone,
     contractLinkProjectNone: c.contractLinkProjectNone,
     contractNotesPlaceholder: c.contractNotesPlaceholder,
-    weibaoRate: c.weibaoRate,
-    weibaoRateHint: c.weibaoRateHint,
-    weibaoRateCustom: c.weibaoRateCustom,
-    weibaoIncludedY1: c.weibaoIncludedY1,
-    weibaoBuyoutRule: c.weibaoBuyoutRule,
-    weibaoEstimate: c.weibaoEstimate,
-    weibaoParentBuyout: c.weibaoParentBuyout,
-    weibaoParentNone: c.weibaoParentNone,
-    weibaoSubscriptionNote: c.weibaoSubscriptionNote,
+    productMaintRate: c.productMaintRate,
+    productMaintRateHint: c.productMaintRateHint,
+    productMaintRateCustom: c.productMaintRateCustom,
+    productMaintIncludedY1: c.productMaintIncludedY1,
+    productMaintBuyoutRule: c.productMaintBuyoutRule,
+    productMaintEstimate: c.productMaintEstimate,
+    productMaintParent: c.productMaintParent,
+    productMaintParentNone: c.productMaintParentNone,
+    subscriptionNote: c.subscriptionNote,
     projectMaintRate: c.projectMaintRate,
     projectMaintRateHint: c.projectMaintRateHint,
     projectMaintIncludedY1: c.projectMaintIncludedY1,
@@ -496,11 +496,11 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   <Badge tone={contractStatusTone(ct.status)}>
                     {contractStatusLabel(ct.status, locale)}
                   </Badge>
-                  {ct.contractType === "BUYOUT" && ct.weibaoRatePct != null && (
-                    <Badge tone="amber">{c.weibaoRateBadge.replace("{rate}", String(ct.weibaoRatePct))}</Badge>
+                  {ct.contractType === "BUYOUT" && ct.productMaintRatePct != null && (
+                    <Badge tone="amber">{c.productMaintRateBadge.replace("{rate}", String(ct.productMaintRatePct))}</Badge>
                   )}
-                  {ct.contractType === "BUYOUT" && ct.weibaoIncludedY1 && (
-                    <Badge tone="green">{c.weibaoY1Badge}</Badge>
+                  {ct.contractType === "BUYOUT" && ct.productMaintIncludedY1 && (
+                    <Badge tone="green">{c.productMaintY1Badge}</Badge>
                   )}
                   {ct.contractType === "PROJECT" && ct.projectMaintRatePct != null && (
                     <Badge tone="purple">{c.projectMaintRateBadge.replace("{rate}", String(ct.projectMaintRatePct))}</Badge>
@@ -555,8 +555,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   opportunityId: ct.opportunityId,
                   projectId: ct.projectId,
                   parentContractId: ct.parentContractId,
-                  weibaoRatePct: ct.weibaoRatePct,
-                  weibaoIncludedY1: ct.weibaoIncludedY1,
+                  productMaintRatePct: ct.productMaintRatePct,
+                  productMaintIncludedY1: ct.productMaintIncludedY1,
                   projectMaintRatePct: ct.projectMaintRatePct,
                   projectMaintIncludedY1: ct.projectMaintIncludedY1,
                   notes: ct.notes,
@@ -564,12 +564,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               />
               {ct.contractType === "BUYOUT" && (
                 <form
-                  action={createWeibaoRenewalAction.bind(null, owner, ct.id)}
+                  action={createProductMaintRenewalAction.bind(null, owner, ct.id)}
                   className="flex items-center justify-end gap-2 border-t border-slate-50 pt-3"
                 >
-                  <span className="text-[11px] text-slate-400">{c.createWeibaoRenewalHint}</span>
+                  <span className="text-[11px] text-slate-400">{c.createProductMaintRenewalHint}</span>
                   <button className="rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-3 py-1.5 text-xs hover:bg-amber-100">
-                    {c.createWeibaoRenewal}
+                    {c.createProductMaintRenewal}
                   </button>
                 </form>
               )}
@@ -605,8 +605,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
             projectContracts={projectContractOptions}
             defaults={{
               partnerId: customer.partnerLinks[0]?.partner.id ?? "",
-              weibaoIncludedY1: true,
-              weibaoRatePct: 15,
+              productMaintIncludedY1: true,
+              productMaintRatePct: 15,
               projectMaintIncludedY1: true,
               projectMaintRatePct: 15,
             }}

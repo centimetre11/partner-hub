@@ -27,15 +27,15 @@ export type ContractFormCopy = {
   contractLinkOpportunityNone: string;
   contractLinkProjectNone: string;
   contractNotesPlaceholder: string;
-  weibaoRate: string;
-  weibaoRateHint: string;
-  weibaoRateCustom: string;
-  weibaoIncludedY1: string;
-  weibaoBuyoutRule: string;
-  weibaoEstimate: string;
-  weibaoParentBuyout: string;
-  weibaoParentNone: string;
-  weibaoSubscriptionNote: string;
+  productMaintRate: string;
+  productMaintRateHint: string;
+  productMaintRateCustom: string;
+  productMaintIncludedY1: string;
+  productMaintBuyoutRule: string;
+  productMaintEstimate: string;
+  productMaintParent: string;
+  productMaintParentNone: string;
+  subscriptionNote: string;
   projectMaintRate: string;
   projectMaintRateHint: string;
   projectMaintIncludedY1: string;
@@ -66,8 +66,8 @@ type ContractDefaults = {
   opportunityId?: string | null;
   projectId?: string | null;
   parentContractId?: string | null;
-  weibaoRatePct?: number | null;
-  weibaoIncludedY1?: boolean;
+  productMaintRatePct?: number | null;
+  productMaintIncludedY1?: boolean;
   projectMaintRatePct?: number | null;
   projectMaintIncludedY1?: boolean;
   notes?: string | null;
@@ -80,9 +80,12 @@ function useRateState(initial: number | null | undefined, fallback = 15) {
     start === 20 ? "20" : isPreset ? "15" : "custom"
   );
   const [customRate, setCustomRate] = useState(isPreset || initial == null ? "" : String(initial));
-  const resolved =
-    rateMode === "custom" ? Number(customRate) || null : Number(rateMode);
+  const resolved = rateMode === "custom" ? Number(customRate) || null : Number(rateMode);
   return { rateMode, setRateMode, customRate, setCustomRate, resolved };
+}
+
+function isRenewalType(type: ContractTypeCode) {
+  return type === "PRODUCT_MAINTENANCE" || type === "PROJECT_MAINTENANCE";
 }
 
 export function CustomerContractForm({
@@ -116,16 +119,18 @@ export function CustomerContractForm({
     (defaults?.contractType as ContractTypeCode) || "SUBSCRIPTION"
   );
   const [amount, setAmount] = useState(defaults?.amount ?? "");
-  const weibaoRate = useRateState(defaults?.weibaoRatePct);
+  const productRate = useRateState(defaults?.productMaintRatePct);
   const projectRate = useRateState(defaults?.projectMaintRatePct);
-  const [weibaoIncludedY1, setWeibaoIncludedY1] = useState(defaults?.weibaoIncludedY1 ?? true);
+  const [productMaintIncludedY1, setProductMaintIncludedY1] = useState(
+    defaults?.productMaintIncludedY1 ?? true
+  );
   const [projectMaintIncludedY1, setProjectMaintIncludedY1] = useState(
     defaults?.projectMaintIncludedY1 ?? true
   );
 
-  const weibaoEstimate =
-    contractType === "BUYOUT" && weibaoRate.resolved != null
-      ? estimateMaintAmount(amount, weibaoRate.resolved)
+  const productEstimate =
+    contractType === "BUYOUT" && productRate.resolved != null
+      ? estimateMaintAmount(amount, productRate.resolved)
       : null;
   const projectEstimate =
     contractType === "PROJECT" && projectRate.resolved != null
@@ -133,8 +138,7 @@ export function CustomerContractForm({
       : null;
 
   const showBilling = !isPrimaryCommercialType(contractType);
-  const yearlyDefault =
-    contractType === "MAINTENANCE" || contractType === "PROJECT_MAINTENANCE" ? "YEARLY" : "";
+  const yearlyDefault = isRenewalType(contractType) ? "YEARLY" : "";
 
   return (
     <form action={action} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
@@ -250,34 +254,34 @@ export function CustomerContractForm({
 
       {contractType === "BUYOUT" && (
         <div className="col-span-2 md:col-span-3 rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-3 space-y-2">
-          <p className="text-[11px] text-slate-600 leading-relaxed">{copy.weibaoBuyoutRule}</p>
+          <p className="text-[11px] text-slate-600 leading-relaxed">{copy.productMaintBuyoutRule}</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div>
-              <label className="block text-[11px] text-slate-500 mb-1">{copy.weibaoRate}</label>
+              <label className="block text-[11px] text-slate-500 mb-1">{copy.productMaintRate}</label>
               <select
-                value={weibaoRate.rateMode}
-                onChange={(e) => weibaoRate.setRateMode(e.target.value as "15" | "20" | "custom")}
+                value={productRate.rateMode}
+                onChange={(e) => productRate.setRateMode(e.target.value as "15" | "20" | "custom")}
                 className={inputClassName}
-                aria-label={copy.weibaoRate}
+                aria-label={copy.productMaintRate}
               >
                 {MAINT_RATE_PRESETS.map((r) => (
                   <option key={r} value={String(r)}>
                     {r}%
                   </option>
                 ))}
-                <option value="custom">{copy.weibaoRateCustom}</option>
+                <option value="custom">{copy.productMaintRateCustom}</option>
               </select>
-              <input type="hidden" name="weibaoRatePct" value={weibaoRate.resolved ?? ""} />
+              <input type="hidden" name="productMaintRatePct" value={productRate.resolved ?? ""} />
             </div>
-            {weibaoRate.rateMode === "custom" && (
+            {productRate.rateMode === "custom" && (
               <div>
-                <label className="block text-[11px] text-slate-500 mb-1">{copy.weibaoRateCustom}</label>
+                <label className="block text-[11px] text-slate-500 mb-1">{copy.productMaintRateCustom}</label>
                 <input
                   type="number"
                   min={1}
                   max={100}
-                  value={weibaoRate.customRate}
-                  onChange={(e) => weibaoRate.setCustomRate(e.target.value)}
+                  value={productRate.customRate}
+                  onChange={(e) => productRate.setCustomRate(e.target.value)}
                   className={inputClassName}
                   placeholder="15"
                 />
@@ -286,21 +290,21 @@ export function CustomerContractForm({
             <label className="flex items-center gap-2 text-sm text-slate-700 sm:mt-6">
               <input
                 type="checkbox"
-                name="weibaoIncludedY1"
+                name="productMaintIncludedY1"
                 value="true"
-                checked={weibaoIncludedY1}
-                onChange={(e) => setWeibaoIncludedY1(e.target.checked)}
+                checked={productMaintIncludedY1}
+                onChange={(e) => setProductMaintIncludedY1(e.target.checked)}
                 className="rounded border-slate-300"
               />
-              {copy.weibaoIncludedY1}
+              {copy.productMaintIncludedY1}
             </label>
           </div>
-          <p className="text-[11px] text-slate-400">{copy.weibaoRateHint}</p>
-          {weibaoEstimate && (
+          <p className="text-[11px] text-slate-400">{copy.productMaintRateHint}</p>
+          {productEstimate && (
             <p className="text-[11px] text-sky-700">
-              {copy.weibaoEstimate
-                .replace("{amount}", weibaoEstimate)
-                .replace("{rate}", String(weibaoRate.resolved))}
+              {copy.productMaintEstimate
+                .replace("{amount}", productEstimate)
+                .replace("{rate}", String(productRate.resolved))}
             </p>
           )}
         </div>
@@ -323,13 +327,13 @@ export function CustomerContractForm({
                     {r}%
                   </option>
                 ))}
-                <option value="custom">{copy.weibaoRateCustom}</option>
+                <option value="custom">{copy.productMaintRateCustom}</option>
               </select>
               <input type="hidden" name="projectMaintRatePct" value={projectRate.resolved ?? ""} />
             </div>
             {projectRate.rateMode === "custom" && (
               <div>
-                <label className="block text-[11px] text-slate-500 mb-1">{copy.weibaoRateCustom}</label>
+                <label className="block text-[11px] text-slate-500 mb-1">{copy.productMaintRateCustom}</label>
                 <input
                   type="number"
                   min={1}
@@ -364,15 +368,15 @@ export function CustomerContractForm({
         </div>
       )}
 
-      {contractType === "MAINTENANCE" && (
+      {contractType === "PRODUCT_MAINTENANCE" && (
         <div className="col-span-2 md:col-span-3">
-          <label className="block text-[11px] text-slate-500 mb-1">{copy.weibaoParentBuyout}</label>
+          <label className="block text-[11px] text-slate-500 mb-1">{copy.productMaintParent}</label>
           <select
             name="parentContractId"
             defaultValue={defaults?.parentContractId ?? ""}
             className={inputClassName}
           >
-            <option value="">{copy.weibaoParentNone}</option>
+            <option value="">{copy.productMaintParentNone}</option>
             {buyouts.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name}
@@ -401,11 +405,11 @@ export function CustomerContractForm({
       )}
 
       {contractType === "SUBSCRIPTION" && (
-        <p className="col-span-2 md:col-span-3 text-[11px] text-slate-400">{copy.weibaoSubscriptionNote}</p>
+        <p className="col-span-2 md:col-span-3 text-[11px] text-slate-400">{copy.subscriptionNote}</p>
       )}
 
       {!isRenewalType(contractType) && <input type="hidden" name="parentContractId" value="" />}
-      {contractType !== "BUYOUT" && <input type="hidden" name="weibaoRatePct" value="" />}
+      {contractType !== "BUYOUT" && <input type="hidden" name="productMaintRatePct" value="" />}
       {contractType !== "PROJECT" && <input type="hidden" name="projectMaintRatePct" value="" />}
 
       <textarea
@@ -428,8 +432,4 @@ export function CustomerContractForm({
       </div>
     </form>
   );
-}
-
-function isRenewalType(type: ContractTypeCode) {
-  return type === "MAINTENANCE" || type === "PROJECT_MAINTENANCE";
 }
