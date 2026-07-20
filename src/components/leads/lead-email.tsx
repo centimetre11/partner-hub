@@ -17,8 +17,9 @@ import {
   markdownToPlainText,
   migrateEmailTemplates,
   normalizeEmailMarkdown,
-  openMailtoCompose,
   normalizeLeadEmail,
+  prepareAttachmentsForBridge,
+  openMailtoCompose,
   templateChipLabel,
   type LeadEmailAttachment,
   type LeadEmailTemplate,
@@ -280,22 +281,47 @@ export function LeadEmail({
     setBridgeNotice(null);
     try {
       const selected = attachments.filter((a) => checkedIds.has(a.id));
+      let bridgeAttachments: { filename: string; base64: string; mimeType: string }[] = [];
+      let prefetchFailed: { att: LeadEmailAttachment; status: number | null }[] = [];
+
+      if (selected.length) {
+        const prep = await prepareAttachmentsForBridge(selected);
+        bridgeAttachments = prep.ready;
+        prefetchFailed = prep.failed;
+        if (prefetchFailed.length === selected.length) {
+          const names = prefetchFailed.map((f) => f.att.filename).join("、");
+          setBridgeNotice({
+            kind: "error",
+            text: prefetchFailed.every((f) => f.status === 404)
+              ? l.attachmentMissingOnServer.replace("{names}", names)
+              : l.attachmentDownloadFailed,
+          });
+          return;
+        }
+      }
+
       const result = await composeEmailViaBridge({
         to: normalizedEmail,
         subject,
         body,
         bodyHtml: markdownToEmailHtml(body),
-        attachments: selected.map((a) => ({
-          url: `${window.location.origin}/api/assets/${a.assetId}`,
-          filename: a.filename,
-        })),
+        attachments: bridgeAttachments,
       });
-      if (result.ok && result.warning) {
+
+      if (prefetchFailed.length) {
+        const names = prefetchFailed.map((f) => f.att.filename).join("、");
+        setBridgeNotice({
+          kind: "warn",
+          text: prefetchFailed.every((f) => f.status === 404)
+            ? l.attachmentPartialMissing.replace("{names}", names)
+            : l.attachmentDownloadFailed,
+        });
+      } else if (result.ok && result.warning) {
         setBridgeNotice({ kind: "warn", text: result.warning });
       } else if (result.ok) {
         setBridgeNotice({
           kind: "ok",
-          text: selected.length ? l.bridgeDoneWithAttachments : l.bridgeDone,
+          text: bridgeAttachments.length ? l.bridgeDoneWithAttachments : l.bridgeDone,
         });
       } else {
         setBridgeNotice({ kind: "error", text: result.error || l.bridgeFailed });

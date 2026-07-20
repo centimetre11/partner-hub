@@ -936,7 +936,7 @@ async function aiMatchMinutesToPartners(
 export function matchMethodLabel(method?: string): string {
   switch (method) {
     case "timeline":
-      return "已按时间戳弱参考匹配（请核对）";
+      return "已按会中打点与录音时间轴对齐（讯飞路径）";
     case "summary_sections":
       return "已按「小结」编号整段对齐讨论顺序";
     case "duration":
@@ -983,6 +983,18 @@ export async function matchMinutesToPartners(
 
   if (!text) {
     return { segments: [], method: "empty" };
+  }
+
+  const isXfyun = (meeting as { matchSource?: string | null }).matchSource === "xfyun";
+
+  // 0) 讯飞一次性录音：打点与录音同钟 → 时间轴可作为主依据
+  if (isXfyun && markedCount >= 2) {
+    const timeSegments = computeTranscriptSegments(meeting);
+    const filled = countPartnersWithText(timeSegments);
+    const need = Math.max(2, Math.ceil(markedCount * 0.5));
+    if (filled >= need) {
+      return { segments: timeSegments, method: "timeline" };
+    }
   }
 
   // 1) 智能纪要「小结」编号 ↔ 讨论顺序（天然整段）

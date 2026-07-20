@@ -14,12 +14,15 @@ import {
   resetMeetingToPrepAction,
   getMeetingPreviewPathAction,
   matchMeetingMinutesAction,
+  matchXfyunMinutesAction,
+  switchMatchSourceAction,
   extractMeetingOutcomesAction,
   saveMatchedNotesAction,
   runMeetingPrepAction,
   startPartnerReviewMeetingAction,
   confirmMeetingItemsAction,
 } from "@/lib/partner-review/actions";
+import { MeetingBatchRecorder } from "@/components/partner-review/meeting-batch-recorder";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
 import {
@@ -58,6 +61,7 @@ function matchMethodFlash(method?: string): string {
     case "name":
       return "名称匹配可能打散段落 · 请按顺序整段核对切点后再提炼";
     case "timeline":
+      return "已按打点与讯飞录音时间轴对齐 · 请核对切点后提炼";
     case "timeline_fallback":
       return "时间戳仅弱参考 · 请按顺序整段核对切点后再提炼";
     case "ai_fallback":
@@ -566,77 +570,253 @@ export function MeetingWorkspace({
 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：开会准备（可选）→ 开始开会 → 腾讯会议讨论并按顺序点伙伴 → 结束会议 → 粘贴纪要 →
-          <strong>确认归属</strong> → <strong>提炼进展与待办</strong> → 入库与分享。
+          建议：开会准备 → 开始开会 →（可选）路径 B 开始录音并按顺序打点 → 结束 →
+          路径 A 粘贴腾讯纪要 与/或 路径 B 讯飞转写 → 对比校准 → 提炼入库。
         </p>
       ) : null}
 
       {phase === "live" ? (
-        <DiscussingNowBanner
-          currentDiscussItem={currentDiscussItem}
-          meetingStartedAt={meeting.startedAt}
-          markJustAt={markJustAt}
-        />
-      ) : null}
-
-      {/* 会后第一步：粘贴 + 匹配归属 */}
-      {(phase === "post" || phase === "done") && (
-        <MinutesPastePanel
-          phase={phase}
-          postStep={postStep}
-          transcript={transcript}
-          liveNotes={liveNotes}
-          busy={busy}
-          workStage={workStage}
-          onTranscriptChange={setTranscript}
-          onMatch={() =>
-            run(async () => {
-              setWorkStage("saving");
-              const t = window.setTimeout(() => setWorkStage("matching"), 400);
-              try {
-                const res = await matchMeetingMinutesAction(meeting.id, transcript);
-                if (res.error) {
-                  setWorkStage("idle");
-                  flash(undefined, res.error);
-                  return;
-                }
-                if (res.liveNotes) {
-                  setLiveNotes(res.liveNotes);
-                  const segments = parsePartnerSectionsFromLiveNotes(res.liveNotes, meeting.items);
-                  applySegmentsToDrafts(segments, setMatchDrafts, setUnassignedDraft);
-                }
-                setProposal(null);
-                setConfirmDrafts({});
+        <>
+          <DiscussingNowBanner
+            currentDiscussItem={currentDiscussItem}
+            meetingStartedAt={meeting.startedAt}
+            markJustAt={markJustAt}
+          />
+          <MeetingBatchRecorder
+            meetingId={meeting.id}
+            transcriptStatus={meeting.transcriptStatus}
+            transcriptError={meeting.transcriptError}
+            onFlash={flash}
+            onRecordingStarted={(startedAt) => {
+              setMeeting((m) => ({
+                ...m,
+                status: "LIVE",
+                startedAt: m.startedAt ?? startedAt ?? new Date().toISOString(),
+                recordingStartedAt: startedAt ?? new Date().toISOString(),
+                transcriptStatus: "recording",
+              }));
+            }}
+            onTranscribed={({ plain, liveNotes: notes, matchMethod }) => {
+              setTranscript(plain);
+              setMeeting((m) => ({
+                ...m,
+                transcriptText: plain,
+                xfyunTranscriptText: plain,
+                xfyunLiveNotes: notes,
+                matchSource: "xfyun",
+                transcriptStatus: "ready",
+              }));
+              if (notes) {
+                setLiveNotes(notes);
+                applySegmentsToDrafts(
+                  parsePartnerSectionsFromLiveNotes(notes, meeting.items),
+                  setMatchDrafts,
+                  setUnassignedDraft,
+                );
                 lockAssignStep.current = true;
                 setPostStep("assign");
-                setWorkStage("done");
-                flash("已按讨论顺序整段切分 · 请在下方核对切点（可用并入上/下一段），再点紫色按钮提炼");
+              }
+              flash(`${matchMethodFlash(matchMethod)}（路径 B · 讯飞）· 腾讯粘贴仍可并行对比`);
+            }}
+          />
+        </>
+      ) : null}
+
+      {/* 会后：路径 A 腾讯粘贴 + 路径 B 讯飞（并行保留） */}
+      {(phase === "post" || phase === "done") && (
+        <div className="space-y-3">
+          {(meeting.tencentLiveNotes || meeting.xfyunLiveNotes) && phase === "post" ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px]">
+              <span className="font-medium text-slate-700">当前生效：</span>
+              <button
+                type="button"
+                disabled={busy || !meeting.tencentLiveNotes}
+                onClick={() =>
+                  run(async () => {
+                    const res = await switchMatchSourceAction(meeting.id, "tencent");
+                    if (res.error) {
+                      flash(undefined, res.error);
+                      return;
+                    }
+                    const notes = meeting.tencentLiveNotes ?? "";
+                    setLiveNotes(notes);
+                    setTranscript(meeting.tencentTranscriptText ?? transcript);
+                    setMeeting((m) => ({ ...m, matchSource: "tencent", liveNotes: notes }));
+                    applySegmentsToDrafts(
+                      parsePartnerSectionsFromLiveNotes(notes, meeting.items),
+                      setMatchDrafts,
+                      setUnassignedDraft,
+                    );
+                    lockAssignStep.current = true;
+                    setPostStep("assign");
+                    flash("已切换到路径 A（腾讯纪要）");
+                  }, { refresh: false })
+                }
+                className={`rounded-full border px-2.5 py-1 ${
+                  meeting.matchSource === "tencent"
+                    ? "border-sky-400 bg-sky-50 font-semibold text-sky-900"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                } disabled:opacity-40`}
+              >
+                A 腾讯纪要
+              </button>
+              <button
+                type="button"
+                disabled={busy || !meeting.xfyunLiveNotes}
+                onClick={() =>
+                  run(async () => {
+                    const res = await switchMatchSourceAction(meeting.id, "xfyun");
+                    if (res.error) {
+                      flash(undefined, res.error);
+                      return;
+                    }
+                    const notes = meeting.xfyunLiveNotes ?? "";
+                    setLiveNotes(notes);
+                    setTranscript(meeting.xfyunTranscriptText ?? transcript);
+                    setMeeting((m) => ({ ...m, matchSource: "xfyun", liveNotes: notes }));
+                    applySegmentsToDrafts(
+                      parsePartnerSectionsFromLiveNotes(notes, meeting.items),
+                      setMatchDrafts,
+                      setUnassignedDraft,
+                    );
+                    lockAssignStep.current = true;
+                    setPostStep("assign");
+                    flash("已切换到路径 B（讯飞录音）");
+                  }, { refresh: false })
+                }
+                className={`rounded-full border px-2.5 py-1 ${
+                  meeting.matchSource === "xfyun"
+                    ? "border-emerald-400 bg-emerald-50 font-semibold text-emerald-900"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                } disabled:opacity-40`}
+              >
+                B 讯飞录音
+              </button>
+              <span className="text-slate-400">两边结果都保留，可对照后选一边继续提炼</span>
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <MinutesPastePanel
+              phase={phase}
+              postStep={postStep}
+              transcript={
+                meeting.matchSource === "xfyun" && meeting.tencentTranscriptText
+                  ? meeting.tencentTranscriptText
+                  : transcript
+              }
+              liveNotes={liveNotes}
+              busy={busy}
+              workStage={workStage}
+              onTranscriptChange={setTranscript}
+              onMatch={() =>
+                run(async () => {
+                  setWorkStage("saving");
+                  const t = window.setTimeout(() => setWorkStage("matching"), 400);
+                  try {
+                    const res = await matchMeetingMinutesAction(meeting.id, transcript);
+                    if (res.error) {
+                      setWorkStage("idle");
+                      flash(undefined, res.error);
+                      return;
+                    }
+                    if (res.liveNotes) {
+                      setLiveNotes(res.liveNotes);
+                      setMeeting((m) => ({
+                        ...m,
+                        matchSource: "tencent",
+                        tencentTranscriptText: transcript,
+                        tencentLiveNotes: res.liveNotes ?? null,
+                        liveNotes: res.liveNotes ?? null,
+                      }));
+                      applySegmentsToDrafts(
+                        parsePartnerSectionsFromLiveNotes(res.liveNotes, meeting.items),
+                        setMatchDrafts,
+                        setUnassignedDraft,
+                      );
+                    }
+                    setProposal(null);
+                    setConfirmDrafts({});
+                    lockAssignStep.current = true;
+                    setPostStep("assign");
+                    setWorkStage("done");
+                    flash(`${matchMethodFlash(res.matchMethod)}（路径 A · 腾讯）`);
+                    requestAnimationFrame(() => {
+                      document.getElementById("assignment-timeline")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    });
+                  } finally {
+                    window.clearTimeout(t);
+                  }
+                }, { refresh: false })
+              }
+              onRematch={() => {
+                lockAssignStep.current = true;
+                setPostStep("assign");
+                setProposal(null);
+                setConfirmDrafts({});
+                setWorkStage("idle");
+                flash("请在下方时间线核对各伙伴段落，改完后点紫色按钮提炼");
                 requestAnimationFrame(() => {
                   document.getElementById("assignment-timeline")?.scrollIntoView({
                     behavior: "smooth",
                     block: "start",
                   });
                 });
-              } finally {
-                window.clearTimeout(t);
+              }}
+            />
+            <XfyunPathPanel
+              phase={phase}
+              busy={busy}
+              meeting={meeting}
+              onMatchXfyun={() =>
+                run(async () => {
+                  setWorkStage("matching");
+                  try {
+                    const res = await matchXfyunMinutesAction(meeting.id);
+                    if (res.error) {
+                      setWorkStage("idle");
+                      flash(undefined, res.error);
+                      return;
+                    }
+                    if (res.liveNotes) {
+                      setLiveNotes(res.liveNotes);
+                      setTranscript(meeting.xfyunTranscriptText ?? transcript);
+                      setMeeting((m) => ({
+                        ...m,
+                        matchSource: "xfyun",
+                        xfyunLiveNotes: res.liveNotes ?? null,
+                        liveNotes: res.liveNotes ?? null,
+                      }));
+                      applySegmentsToDrafts(
+                        parsePartnerSectionsFromLiveNotes(res.liveNotes, meeting.items),
+                        setMatchDrafts,
+                        setUnassignedDraft,
+                      );
+                    }
+                    setProposal(null);
+                    setConfirmDrafts({});
+                    lockAssignStep.current = true;
+                    setPostStep("assign");
+                    setWorkStage("done");
+                    flash(`${matchMethodFlash(res.matchMethod)}（路径 B · 讯飞）`);
+                    requestAnimationFrame(() => {
+                      document.getElementById("assignment-timeline")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    });
+                  } catch (e) {
+                    setWorkStage("idle");
+                    flash(undefined, e instanceof Error ? e.message : String(e));
+                  }
+                }, { refresh: false })
               }
-            })
-          }
-          onRematch={() => {
-            lockAssignStep.current = true;
-            setPostStep("assign");
-            setProposal(null);
-            setConfirmDrafts({});
-            setWorkStage("idle");
-            flash("请在下方时间线核对各伙伴段落，改完后点紫色按钮提炼");
-            requestAnimationFrame(() => {
-              document.getElementById("assignment-timeline")?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              });
-            });
-          }}
-        />
+            />
+          </div>
+        </div>
       )}
 
       {phase === "post" ? <PostStepIndicator step={postStep} /> : null}
@@ -1100,6 +1280,85 @@ function PostStepIndicator({ step }: { step: PostStep }) {
   );
 }
 
+function XfyunPathPanel({
+  phase,
+  busy,
+  meeting,
+  onMatchXfyun,
+}: {
+  phase: string;
+  busy: boolean;
+  meeting: MeetingClient;
+  onMatchXfyun: () => void;
+}) {
+  const hasXfyun = !!(meeting.xfyunTranscriptText?.trim() || meeting.transcriptStatus === "ready");
+  const preview = (meeting.xfyunTranscriptText || "").trim();
+
+  return (
+    <section className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+      <div>
+        <div className="text-sm font-semibold text-slate-900">路径 B · 讯飞一次性录音</div>
+        <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+          会中录音 + 打点（开录时刻对齐）→ 会后整段讯飞转写 → 按时间轴匹配。不替换路径 A。
+        </p>
+      </div>
+      {phase === "done" ? (
+        <p className="text-xs text-slate-500">
+          {preview ? `讯飞转写 ${preview.length} 字` : "本场未使用讯飞路径"}
+        </p>
+      ) : (
+        <>
+          <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-[11px] text-slate-600 space-y-1">
+            <p>
+              状态：{" "}
+              <span className="font-medium text-slate-800">
+                {meeting.transcriptStatus || "idle"}
+              </span>
+              {meeting.recordingBytes
+                ? ` · 录音 ${(meeting.recordingBytes / 1024 / 1024).toFixed(1)} MB`
+                : ""}
+            </p>
+            {meeting.recordingStartedAt ? (
+              <p>开录：{new Date(meeting.recordingStartedAt).toLocaleString()}</p>
+            ) : (
+              <p className="text-amber-800">会中未开录则无法走本路径；可先结束会议后仍用路径 A。</p>
+            )}
+            {meeting.transcriptError ? (
+              <p className="text-red-600">{meeting.transcriptError}</p>
+            ) : null}
+          </div>
+          {preview ? (
+            <details className="text-xs">
+              <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
+                讯飞转写预览（{preview.length} 字）
+              </summary>
+              <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-100 bg-white px-2 py-1.5 font-mono text-[11px]">
+                {preview.slice(0, 4000)}
+                {preview.length > 4000 ? "…" : ""}
+              </pre>
+            </details>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy || !hasXfyun}
+              onClick={onMatchXfyun}
+              className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-800 disabled:opacity-40"
+            >
+              {meeting.xfyunLiveNotes ? "重新匹配讯飞归属" : "用讯飞转写匹配归属"}
+            </button>
+            {!hasXfyun ? (
+              <span className="text-[11px] text-slate-400 self-center">
+                请在开会中使用「开始录音」
+              </span>
+            ) : null}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function MinutesPastePanel({
   phase,
   postStep,
@@ -1130,15 +1389,14 @@ function MinutesPastePanel({
         <div>
           <div className="text-sm font-semibold text-slate-900">
             {phase === "done"
-              ? "会议纪要（只读）"
+              ? "路径 A · 腾讯纪要（只读）"
               : collapsed
-                ? "1. 会议纪要（已匹配）"
-                : "1. 粘贴会议纪要"}
+                ? "路径 A · 腾讯纪要（已匹配）"
+                : "路径 A · 粘贴腾讯纪要"}
           </div>
           {phase === "post" && !collapsed ? (
             <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-              粘贴全文后点「自动匹配归属」。系统把内容粗分到议程伙伴；
-              <strong>真正确认归属</strong>在下一步的时间线里完成。
+              原有流程：粘贴腾讯会议纪要 → 按 next/讨论顺序匹配。与路径 B 并行保留，可对比校准。
             </p>
           ) : null}
           {phase === "post" && collapsed ? (

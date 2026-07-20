@@ -4,7 +4,7 @@
 //   { type: "composeEmail", to, subject, body, attachments: [{url, filename}] }
 //   { type: "fillCrmActivation", url, fields: { region, country, countryAliases, sales, companyName, partnerType, contactName, contactTitle, email, phone } }
 
-const VERSION = "1.1.23";
+const VERSION = "1.1.24";
 
 const MAIL_TAB_PATTERNS = [
   "https://exmail.qq.com/*",
@@ -50,8 +50,18 @@ async function handleComposeEmail(payload) {
   if (!to) return { ok: false, error: "missing recipient" };
 
   const files = [];
+  const attachmentErrors = [];
   for (const att of attachments || []) {
     try {
+      if (att.base64) {
+        files.push({
+          filename: att.filename || "attachment",
+          mimeType: att.mimeType || "application/octet-stream",
+          base64: att.base64,
+        });
+        continue;
+      }
+      if (!att.url) throw new Error("missing url");
       const res = await fetch(att.url, { credentials: "include" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = await res.arrayBuffer();
@@ -61,7 +71,7 @@ async function handleComposeEmail(payload) {
         base64: arrayBufferToBase64(buf),
       });
     } catch (err) {
-      return { ok: false, error: `附件下载失败（${att.filename}）: ${err.message}` };
+      attachmentErrors.push(`${att.filename}: ${err.message}`);
     }
   }
 
@@ -90,7 +100,15 @@ async function handleComposeEmail(payload) {
     endAt: payload.endAt || "",
     timeZone: payload.timeZone || "",
   }, payload.mode === "meeting" ? 50000 : 85000);
-  return response || { ok: false, error: "no response from page" };
+  if (!response) return { ok: false, error: "no response from page" };
+  if (attachmentErrors.length) {
+    const warn = `部分附件未能注入：${attachmentErrors.join("；")}`;
+    if (response.ok) {
+      return { ...response, warning: response.warning ? `${response.warning}；${warn}` : warn };
+    }
+    return { ok: false, error: `附件下载失败（${attachmentErrors.join("；")}）` };
+  }
+  return response;
 }
 
 function sendTabMessageWithTimeout(tabId, message, timeoutMs) {

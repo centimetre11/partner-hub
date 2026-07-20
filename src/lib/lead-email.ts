@@ -234,6 +234,51 @@ export function buildAssetDownloadUrl(assetId: string, download = false): string
   return download ? `${base}?download=1` : base;
 }
 
+/** 浏览器助手注入用的附件载荷（页面侧 fetch，避免扩展拿不到登录 Cookie）。 */
+export type BridgePreparedAttachment = {
+  filename: string;
+  mimeType: string;
+  base64: string;
+};
+
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk) as unknown as number[]);
+  }
+  return btoa(binary);
+}
+
+/** 在 Hub 页面内下载勾选附件并转为 base64，供扩展直接注入企业邮。 */
+export async function prepareAttachmentsForBridge(
+  attachments: LeadEmailAttachment[],
+): Promise<{ ready: BridgePreparedAttachment[]; failed: { att: LeadEmailAttachment; status: number | null }[] }> {
+  const ready: BridgePreparedAttachment[] = [];
+  const failed: { att: LeadEmailAttachment; status: number | null }[] = [];
+  for (const att of attachments) {
+    try {
+      const res = await fetch(buildAssetDownloadUrl(att.assetId, true), {
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        failed.push({ att, status: res.status });
+        continue;
+      }
+      const buf = await res.arrayBuffer();
+      ready.push({
+        filename: att.filename,
+        mimeType: res.headers.get("content-type") || "application/octet-stream",
+        base64: arrayBufferToBase64(buf),
+      });
+    } catch {
+      failed.push({ att, status: null });
+    }
+  }
+  return { ready, failed };
+}
+
 /** 通过 fetch + Blob 触发下载（比 <a href> 更可靠，避免后台标签页被拦截）。 */
 export async function downloadAttachment(att: LeadEmailAttachment): Promise<boolean> {
   try {

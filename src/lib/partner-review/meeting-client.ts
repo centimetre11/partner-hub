@@ -33,6 +33,11 @@ export type MeetingClient = {
   endedAt: string | null;
   liveNotes: string | null;
   transcriptText: string | null;
+  matchSource: string | null;
+  tencentTranscriptText: string | null;
+  tencentLiveNotes: string | null;
+  xfyunTranscriptText: string | null;
+  xfyunLiveNotes: string | null;
   prepGeneratedAt: string | null;
   previewToken: string | null;
   dingtalkRecordId: string | null;
@@ -145,6 +150,11 @@ export function toMeetingClient(raw: {
   endedAt?: Date | null;
   liveNotes: string | null;
   transcriptText: string | null;
+  matchSource?: string | null;
+  tencentTranscriptText?: string | null;
+  tencentLiveNotes?: string | null;
+  xfyunTranscriptText?: string | null;
+  xfyunLiveNotes?: string | null;
   prepGeneratedAt: Date | null;
   previewToken?: string | null;
   dingtalkRecordId: string | null;
@@ -185,6 +195,11 @@ export function toMeetingClient(raw: {
     endedAt: raw.endedAt?.toISOString() ?? null,
     liveNotes: raw.liveNotes,
     transcriptText: raw.transcriptText,
+    matchSource: raw.matchSource ?? null,
+    tencentTranscriptText: raw.tencentTranscriptText ?? null,
+    tencentLiveNotes: raw.tencentLiveNotes ?? null,
+    xfyunTranscriptText: raw.xfyunTranscriptText ?? null,
+    xfyunLiveNotes: raw.xfyunLiveNotes ?? null,
     prepGeneratedAt: raw.prepGeneratedAt?.toISOString() ?? null,
     previewToken: raw.previewToken ?? null,
     dingtalkRecordId: raw.dingtalkRecordId,

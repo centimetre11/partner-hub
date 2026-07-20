@@ -1,7 +1,12 @@
 /**
  * 为历史上「每周个人工作周报」的每次成功运行，补档个人周报 + 完整管理者汇总（不发邮件）。
  *
- * 运行：npx tsx scripts/backfill-weekly-report-snapshots.ts
+ * 运行（容器内，需绕过 server-only）：
+ *   cp node_modules/server-only/index.js /tmp/server-only.bak.js
+ *   printf 'module.exports = {};\n' > node_modules/server-only/index.js
+ *   SKIP_LLM=1 npx tsx scripts/backfill-weekly-report-snapshots.ts
+ *   mv /tmp/server-only.bak.js node_modules/server-only/index.js
+ *
  * 可选：SKIP_LLM=1 用确定性兜底叙述（更快，不调 AI）
  */
 import { db } from "../src/lib/db";

@@ -5,8 +5,12 @@ export const BROWSER_BRIDGE_EXTENSION_ID =
   process.env.NEXT_PUBLIC_BROWSER_BRIDGE_EXTENSION_ID || "gnmnjdfmcfegdkkgpopoefjpjlcabajl";
 
 export type BridgeAttachment = {
-  url: string;
   filename: string;
+  /** 页面侧已下载的 base64；优先于 url */
+  base64?: string;
+  mimeType?: string;
+  /** 旧版扩展仍会从 Hub 拉取；新版由页面预取后只传 base64 */
+  url?: string;
 };
 
 type ChromeRuntime = {

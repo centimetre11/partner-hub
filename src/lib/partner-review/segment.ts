@@ -35,7 +35,8 @@ function sentenceRelativeMs(
 
 /** 根据腾讯会议纪要 + 议程打点（相对开会时间）拆成伙伴段落 */
 export function computeTranscriptSegments(meeting: MeetingWithItems): TranscriptSegment[] {
-  const anchor = meeting.startedAt ?? meeting.recordingStartedAt;
+  // 讯飞一次性录音：以开录时刻为锚，与 relative_ms 转写对齐；无录音时回退开会时刻
+  const anchor = meeting.recordingStartedAt ?? meeting.startedAt;
   const timed =
     parseTimedTranscriptDoc(meeting.transcriptJson) ??
     parseTranscriptTextToTimedDoc(meeting.transcriptText ?? "", {

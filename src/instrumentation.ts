@@ -17,6 +17,13 @@ export async function register() {
     }, 60 * 1000);
     console.log("[leads-scheduler] Started — checking leads sync every minute");
 
+    setInterval(() => {
+      void import("./lib/channel-scheduler").then(({ channelSchedulerTick }) =>
+        channelSchedulerTick(),
+      );
+    }, 60 * 1000);
+    console.log("[channel-scheduler] Started — checking channel sync every minute");
+
     if (process.env.WECOM_BOT_AUTOSTART === "1") {
       const g = globalThis as typeof globalThis & {
         __wecomBotStop?: () => void;

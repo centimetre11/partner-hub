@@ -1126,6 +1126,54 @@ model LeadsSyncLog {
   createdAt  DateTime @default(now())
 }
 
+// 帆软 CRM Channel 公海（转出无机会的线索/客户），按 sta_recdate 分段拉取后 upsert
+model CrmChannel {
+  id           String    @id // clue_id，无则 com:{com_id}
+  companyId    String? // com_id
+  name         String? // com_name
+  status       String? // com_status
+  province     String? // com_province
+  countryCn    String? // cou_CN_name
+  city         String? // com_city
+  region       String? // reg
+  zone         String? // zone
+  rank         String? // com_rank
+  source       String? // com_source
+  sourceDetail String? // source
+  phone        String? // actphone
+  contName     String? // cont_name
+  contEmail    String? // cont_email
+  contDuty     String? // cont_duty
+  salesman     String? // com_salesman
+  typeDetail   String? // typedetail：线索/客户
+  overseaAgent String? // com_oversea_agent
+  contRecdate  DateTime? // cont_recdate
+  staSalesOld  String? // sta_sales_old，转出前销售
+  staRecdate   DateTime? // sta_recdate，转出时间
+  syncedAt     DateTime  @updatedAt
+
+  @@index([staRecdate])
+  @@index([salesman])
+  @@index([typeDetail])
+  @@index([status])
+}
+
+// Channel 公海同步日志
+model ChannelSyncLog {
+  id         String   @id @default(cuid())
+  status     String
+  mode       String // backfill | daily
+  rangeStart String?
+  rangeEnd   String?
+  rowCount   Int?
+  durationMs Int?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([mode])
+}
+
 // 钉钉开放平台凭证（A1 录音 / 钉盘 / 事件回调）
 model SystemDingTalkConfig {
   id        String   @id @default("singleton")
@@ -1181,6 +1229,16 @@ model PartnerReviewMeeting {
   transcriptText         String?
   /// 带句子 startTime 的结构化转写 JSON（TimedTranscriptDoc）
   transcriptJson         String?
+  /// 当前用于匹配的转写来源：tencent | xfyun
+  matchSource            String?
+  /// 路径 A：腾讯/粘贴纪要（与讯飞并行保留，便于对比校准）
+  tencentTranscriptText  String?
+  tencentTranscriptJson  String?
+  tencentLiveNotes       String?
+  /// 路径 B：讯飞一次性录音转写
+  xfyunTranscriptText    String?
+  xfyunTranscriptJson    String?
+  xfyunLiveNotes         String?
   /// 自研录音：本地文件相对路径（uploads/recordings/...）
   recordingPath          String?
   recordingMimeType      String?
@@ -1190,7 +1248,7 @@ model PartnerReviewMeeting {
   /// idle | recording | uploaded | transcribing | ready | error
   transcriptStatus       String?
   transcriptError        String?
-  liveNotes              String? // 会中侧栏记录本（含 <<<PARTNER:id|name>>> 标记）
+  liveNotes              String? // 当前生效的归属记录本（与 matchSource 对应）
   prepGeneratedAt        DateTime?
   /// 会前预览分享 token（无需登录即可查看议程与简报）
   previewToken           String?  @unique

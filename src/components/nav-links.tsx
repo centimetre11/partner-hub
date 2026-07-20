@@ -47,6 +47,7 @@ export function NavLinks({
     { href: "/", label: m.nav.dashboard, icon: "◧" },
     { href: "/mobile", label: m.nav.mobileDesk, icon: "▣", mobileOnly: true },
     { href: "/leads", label: m.nav.leads, icon: "◔" },
+    { href: "/channel", label: m.nav.channel, icon: "◐" },
     { href: "/partners", label: m.nav.activePartners, icon: "◮" },
     { href: "/customers", label: m.nav.customers, icon: "◍" },
     { href: "/opportunities", label: m.nav.opportunities, icon: "◉" },

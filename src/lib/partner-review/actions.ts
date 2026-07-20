@@ -127,6 +127,13 @@ export async function resetMeetingToPrepAction(meetingId: string) {
         transcriptStatus: null,
         transcriptError: null,
         liveNotes: null,
+        matchSource: null,
+        tencentTranscriptText: null,
+        tencentTranscriptJson: null,
+        tencentLiveNotes: null,
+        xfyunTranscriptText: null,
+        xfyunTranscriptJson: null,
+        xfyunLiveNotes: null,
         recordingPath: null,
         recordingMimeType: null,
         recordingBytes: null,
@@ -243,7 +250,7 @@ export async function addPartnersToMeetingAction(meetingId: string, partnerIds: 
   return { ok: true as const, items: createdItems };
 }
 
-/** 第一步：保存纪要并匹配归属到各伙伴（不提炼） */
+/** 路径 A：保存腾讯/粘贴纪要并匹配归属（不覆盖讯飞转写字段） */
 export async function matchMeetingMinutesAction(meetingId: string, transcriptText: string) {
   const user = await requireUser();
   const meeting = await db.partnerReviewMeeting.findUnique({
@@ -256,19 +263,111 @@ export async function matchMeetingMinutesAction(meetingId: string, transcriptTex
   const timed = parseTranscriptTextToTimedDoc(transcriptText, {
     recordingStartedAt: anchor,
   });
+  const json = timed ? serializeTimedTranscriptDoc(timed) : null;
   await db.partnerReviewMeeting.update({
     where: { id: meetingId },
     data: {
       transcriptText,
-      transcriptJson: timed ? serializeTimedTranscriptDoc(timed) : null,
+      transcriptJson: json,
+      tencentTranscriptText: transcriptText,
+      tencentTranscriptJson: json,
+      matchSource: "tencent",
       transcriptStatus: transcriptText.trim() ? "ready" : "idle",
       status: "PROCESSING",
     },
   });
 
   const { liveNotes, matchMethod } = await materializeLiveNotesForMeeting(meetingId, user.id);
+  if (liveNotes) {
+    await db.partnerReviewMeeting.update({
+      where: { id: meetingId },
+      data: { tencentLiveNotes: liveNotes },
+    });
+  }
   revalidateMeeting(meetingId);
-  return { ok: true as const, liveNotes, matchMethod };
+  return { ok: true as const, liveNotes, matchMethod, matchSource: "tencent" as const };
+}
+
+/** 路径 B：用已就绪的讯飞转写重新匹配（打点与录音同钟，优先时间轴） */
+export async function matchXfyunMinutesAction(meetingId: string) {
+  const user = await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({
+    where: { id: meetingId },
+    select: {
+      xfyunTranscriptText: true,
+      xfyunTranscriptJson: true,
+      transcriptText: true,
+      transcriptJson: true,
+      matchSource: true,
+    },
+  });
+  if (!meeting) return { error: "会议不存在" };
+  const text = meeting.xfyunTranscriptText?.trim() || meeting.transcriptText?.trim();
+  const json = meeting.xfyunTranscriptJson || meeting.transcriptJson;
+  if (!text) return { error: "尚无讯飞转写，请先完成会中录音并转写" };
+
+  await db.partnerReviewMeeting.update({
+    where: { id: meetingId },
+    data: {
+      transcriptText: text,
+      transcriptJson: json,
+      matchSource: "xfyun",
+      transcriptStatus: "ready",
+      status: "PROCESSING",
+    },
+  });
+
+  const { liveNotes, matchMethod } = await materializeLiveNotesForMeeting(meetingId, user.id);
+  if (liveNotes) {
+    await db.partnerReviewMeeting.update({
+      where: { id: meetingId },
+      data: { xfyunLiveNotes: liveNotes },
+    });
+  }
+  revalidateMeeting(meetingId);
+  return { ok: true as const, liveNotes, matchMethod, matchSource: "xfyun" as const };
+}
+
+/** 切换当前生效的匹配结果（腾讯 / 讯飞），便于对比校准 */
+export async function switchMatchSourceAction(
+  meetingId: string,
+  source: "tencent" | "xfyun",
+) {
+  await requireUser();
+  const meeting = await db.partnerReviewMeeting.findUnique({ where: { id: meetingId } });
+  if (!meeting) return { error: "会议不存在" };
+
+  if (source === "tencent") {
+    const text = meeting.tencentTranscriptText?.trim();
+    if (!text && !meeting.tencentLiveNotes?.trim()) {
+      return { error: "尚无腾讯纪要匹配结果" };
+    }
+    await db.partnerReviewMeeting.update({
+      where: { id: meetingId },
+      data: {
+        matchSource: "tencent",
+        transcriptText: meeting.tencentTranscriptText ?? meeting.transcriptText,
+        transcriptJson: meeting.tencentTranscriptJson ?? meeting.transcriptJson,
+        liveNotes: meeting.tencentLiveNotes ?? meeting.liveNotes,
+      },
+    });
+  } else {
+    const text = meeting.xfyunTranscriptText?.trim();
+    if (!text && !meeting.xfyunLiveNotes?.trim()) {
+      return { error: "尚无讯飞转写匹配结果" };
+    }
+    await db.partnerReviewMeeting.update({
+      where: { id: meetingId },
+      data: {
+        matchSource: "xfyun",
+        transcriptText: meeting.xfyunTranscriptText ?? meeting.transcriptText,
+        transcriptJson: meeting.xfyunTranscriptJson ?? meeting.transcriptJson,
+        liveNotes: meeting.xfyunLiveNotes ?? meeting.liveNotes,
+      },
+    });
+  }
+  revalidateMeeting(meetingId);
+  return { ok: true as const, matchSource: source };
 }
 
 /** 第二步：基于已确认的 liveNotes 归属提炼进展与待办 */
