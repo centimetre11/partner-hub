@@ -17,6 +17,15 @@ export function CreateTodoDrawer({
   customers,
   users,
   defaultOwnerRef = "",
+  defaultTitle = "",
+  defaultDueDate = "",
+  defaultDetail = "",
+  source,
+  open: openProp,
+  onOpenChange,
+  showTrigger = true,
+  lockOwner = false,
+  onCreated,
   buttonClassName,
   buttonLabel,
   buttonSuffix,
@@ -27,15 +36,36 @@ export function CreateTodoDrawer({
   users: Option[];
   /** Pre-select related partner/customer on open (e.g. on detail pages). */
   defaultOwnerRef?: string;
+  defaultTitle?: string;
+  defaultDueDate?: string;
+  defaultDetail?: string;
+  /** Optional TodoItem.source (e.g. ARR_CALENDAR). */
+  source?: string;
+  /** Controlled open state (omit for internal state). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  showTrigger?: boolean;
+  /** When true, owner select is disabled (pre-scoped contexts). */
+  lockOwner?: boolean;
+  onCreated?: () => void;
   buttonClassName?: string;
   buttonLabel?: string;
   buttonSuffix?: React.ReactNode;
 }) {
   const m = useMessages();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [saving, setSaving] = useState(false);
   const [ownerRef, setOwnerRef] = useState(defaultOwnerRef);
+  const [title, setTitle] = useState(defaultTitle);
+  const [dueDate, setDueDate] = useState(defaultDueDate);
+  const [detail, setDetail] = useState(defaultDetail);
   const [link, setLink] = useState("");
   const [linkOptions, setLinkOptions] = useState<{ opportunities: Option[]; projects: Option[] } | null>(null);
   const [linkLoading, setLinkLoading] = useState(false);
@@ -58,13 +88,16 @@ export function CreateTodoDrawer({
   }, [open, saving]);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setOwnerRef(defaultOwnerRef);
+      setTitle(defaultTitle);
+      setDueDate(defaultDueDate);
+      setDetail(defaultDetail);
       setLink("");
       setLinkOptions(null);
       setLinkLoading(false);
     }
-  }, [open, defaultOwnerRef]);
+  }, [open, defaultOwnerRef, defaultTitle, defaultDueDate, defaultDetail]);
 
   useEffect(() => {
     setLink("");
@@ -96,17 +129,19 @@ export function CreateTodoDrawer({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={
-          buttonClassName ??
-          "rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
-        }
-      >
-        {buttonLabel ?? (buttonClassName ? m.dashboard.createTodo : `+ ${m.dashboard.createTodo}`)}
-        {buttonSuffix}
-      </button>
+      {showTrigger && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={
+            buttonClassName ??
+            "rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-medium hover:bg-slate-700 shrink-0"
+          }
+        >
+          {buttonLabel ?? (buttonClassName ? m.dashboard.createTodo : `+ ${m.dashboard.createTodo}`)}
+          {buttonSuffix}
+        </button>
+      )}
 
       {open && (
         <>
@@ -142,8 +177,10 @@ export function CreateTodoDrawer({
                 try {
                   appendTodoOwnerToFormData(formData);
                   if (link) formData.set("link", link);
+                  if (source) formData.set("source", source);
                   await createTodoAction(formData);
                   setOpen(false);
+                  onCreated?.();
                   router.refresh();
                 } catch (err) {
                   if (typeof window !== "undefined") {
@@ -161,6 +198,8 @@ export function CreateTodoDrawer({
                     name="title"
                     required
                     autoFocus
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
                     placeholder={m.partnerDetail.addTodoPlaceholder}
                     className={input}
                   />
@@ -172,6 +211,7 @@ export function CreateTodoDrawer({
                     name="ownerRef"
                     value={ownerRef}
                     onChange={(e) => setOwnerRef(e.target.value)}
+                    disabled={lockOwner}
                     className={input}
                   >
                     <option value="">{m.todos.noRelated}</option>
@@ -246,12 +286,24 @@ export function CreateTodoDrawer({
 
                 <label className="block">
                   <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldDueDate}</span>
-                  <input name="dueDate" type="date" className={input} />
+                  <input
+                    name="dueDate"
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className={input}
+                  />
                 </label>
 
                 <label className="block">
                   <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldNotes}</span>
-                  <input name="detail" placeholder={m.todos.fieldNotesOptional} className={input} />
+                  <input
+                    name="detail"
+                    value={detail}
+                    onChange={(e) => setDetail(e.target.value)}
+                    placeholder={m.todos.fieldNotesOptional}
+                    className={input}
+                  />
                 </label>
               </div>
 
