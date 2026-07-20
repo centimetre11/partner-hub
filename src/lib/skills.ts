@@ -298,7 +298,7 @@ const getCustomer: Skill = {
     function: {
       name: "get_customer",
       description:
-        "Get an end-customer (account) profile by name — includes contacts (power map), active opportunities, contracts (subscription/maintenance/buyout), projects, and open todos. NOT a Fanruan partner.",
+        "Get an end-customer (account) profile by name — includes contacts (power map), active opportunities, contracts (subscription/Weibao/buyout; buyouts may include Weibao %), projects, and open todos. NOT a Fanruan partner.",
       parameters: {
         type: "object",
         properties: { name: { type: "string", description: "Customer company name (fuzzy match supported)" } },

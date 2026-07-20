@@ -29,9 +29,12 @@ import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opport
 import {
   DEFAULT_CONTRACT_STATUS,
   DEFAULT_CONTRACT_TYPE,
+  DEFAULT_WEIBAO_RATE_PCT,
+  estimateWeibaoAmount,
   normalizeBillingCycle,
   normalizeContractStatus,
   normalizeContractType,
+  normalizeWeibaoRatePct,
 } from "./contract-types";
 import {
   isStatusDimensionKey,
@@ -974,6 +977,27 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
   const projectId = formData.has("projectId")
     ? String(formData.get("projectId") ?? "").trim() || null
     : undefined;
+  const parentContractId = formData.has("parentContractId")
+    ? String(formData.get("parentContractId") ?? "").trim() || null
+    : undefined;
+
+  // Weibao rate / Y1 bundling only apply to buyout product contracts (not subscription).
+  const weibaoRatePct =
+    contractType === "BUYOUT" ? normalizeWeibaoRatePct(String(formData.get("weibaoRatePct") ?? "")) : null;
+  const weibaoIncludedY1 =
+    contractType === "BUYOUT" ? String(formData.get("weibaoIncludedY1") ?? "") === "on" || String(formData.get("weibaoIncludedY1") ?? "") === "true" : false;
+
+  // Year-2+ Weibao renewals may link back to a buyout; subscription/buyout clear the parent.
+  let resolvedParentId: string | null | undefined = parentContractId;
+  if (contractType !== "MAINTENANCE") {
+    resolvedParentId = null;
+  } else if (parentContractId) {
+    const parent = await db.contract.findFirst({
+      where: { id: parentContractId, customerId: owner.id, contractType: "BUYOUT" },
+      select: { id: true },
+    });
+    resolvedParentId = parent?.id ?? null;
+  }
 
   const data: Record<string, unknown> = {
     name,
@@ -984,6 +1008,8 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     endDate: parseOptionalDate(formData, "endDate"),
     renewsAt: parseOptionalDate(formData, "renewsAt"),
     billingCycle: contractType === "BUYOUT" ? null : billingCycle,
+    weibaoRatePct,
+    weibaoIncludedY1,
     notes: String(formData.get("notes") ?? "").trim() || null,
   };
 
@@ -991,8 +1017,11 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     if (partnerId !== undefined) data.partnerId = partnerId;
     if (opportunityId !== undefined) data.opportunityId = opportunityId;
     if (projectId !== undefined) data.projectId = projectId;
+    if (resolvedParentId !== undefined) data.parentContractId = resolvedParentId;
     const existing = await db.contract.findFirst({ where: { id, customerId: owner.id } });
     if (!existing) return;
+    // Prevent self-parent cycles
+    if (data.parentContractId === id) data.parentContractId = null;
     const contract = await db.contract.update({ where: { id }, data });
     void recordSystemEvent({
       category: "CONTRACT",
@@ -1008,6 +1037,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         partnerId: contract.partnerId,
         contractType: contract.contractType,
         status: contract.status,
+        weibaoRatePct: contract.weibaoRatePct,
       },
     });
     await logOwnerTimeline(owner, user.id, {
@@ -1015,6 +1045,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       content: [
         contract.contractType,
         contract.amount ? `金额：${contract.amount}` : null,
+        contract.weibaoRatePct != null ? `微宝 ${contract.weibaoRatePct}%` : null,
         contract.status,
       ]
         .filter(Boolean)
@@ -1030,6 +1061,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         partnerId: partnerId ?? null,
         opportunityId: opportunityId ?? null,
         projectId: projectId ?? null,
+        parentContractId: resolvedParentId ?? null,
         createdById: user.id,
       } as never,
     });
@@ -1047,6 +1079,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         partnerId: contract.partnerId,
         contractType: contract.contractType,
         status: contract.status,
+        weibaoRatePct: contract.weibaoRatePct,
       },
     });
     await logOwnerTimeline(owner, user.id, {
@@ -1054,6 +1087,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       content: [
         contract.contractType,
         contract.amount ? `金额：${contract.amount}` : null,
+        contract.weibaoRatePct != null ? `微宝 ${contract.weibaoRatePct}%` : null,
         contract.status,
       ]
         .filter(Boolean)
@@ -1062,6 +1096,70 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     });
     if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
   }
+  revalidatePath(ownerPath(owner));
+}
+
+/** From a buyout: create a year-2+ standalone Weibao (MAINTENANCE) renewal linked to the product contract. */
+export async function createWeibaoRenewalAction(owner: OwnerRef, buyoutId: string) {
+  const user = await requireUser();
+  if (owner.kind !== "customer") return;
+  const buyout = await db.contract.findFirst({
+    where: { id: buyoutId, customerId: owner.id, contractType: "BUYOUT" },
+  });
+  if (!buyout) return;
+
+  const rate = buyout.weibaoRatePct ?? DEFAULT_WEIBAO_RATE_PCT;
+  const suggested = estimateWeibaoAmount(buyout.amount, rate);
+  const start = buyout.endDate
+    ? new Date(buyout.endDate)
+    : buyout.startDate
+      ? new Date(new Date(buyout.startDate).getTime() + 365 * 24 * 60 * 60 * 1000)
+      : new Date();
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+
+  const contract = await db.contract.create({
+    data: {
+      customerId: owner.id,
+      partnerId: buyout.partnerId,
+      opportunityId: buyout.opportunityId,
+      projectId: buyout.projectId,
+      parentContractId: buyout.id,
+      name: `${buyout.name} · Weibao renewal`,
+      contractType: "MAINTENANCE",
+      status: "ACTIVE",
+      amount: suggested,
+      startDate: start,
+      endDate: end,
+      renewsAt: end,
+      billingCycle: "YEARLY",
+      weibaoRatePct: null,
+      weibaoIncludedY1: false,
+      notes: `Standalone Weibao after year 1 (rate ${rate}% of buyout${buyout.amount ? ` ${buyout.amount}` : ""}).`,
+      createdById: user.id,
+    },
+  });
+
+  void recordSystemEvent({
+    category: "CONTRACT",
+    action: "contract.weibao_renewal.create",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Contract",
+    targetId: contract.id,
+    targetLabel: contract.name,
+    summary: `从买断创建微宝续约：${contract.name}`,
+    meta: {
+      customerId: contract.customerId,
+      parentContractId: buyout.id,
+      weibaoRatePct: rate,
+    },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `新建微宝续约：${contract.name}`,
+    content: `关联买断 ${buyout.name} · ${rate}%`,
+    meta: { entity: "contract", contractId: contract.id, parentContractId: buyout.id },
+  });
   revalidatePath(ownerPath(owner));
 }
 

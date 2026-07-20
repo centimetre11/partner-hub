@@ -1,4 +1,4 @@
-/** Customer commercial contract types, statuses, and billing cycles. */
+/** Customer commercial contract types, statuses, billing cycles, and Weibao (buyout) rules. */
 
 export const CONTRACT_TYPE_CODES = ["SUBSCRIPTION", "MAINTENANCE", "BUYOUT"] as const;
 export type ContractTypeCode = (typeof CONTRACT_TYPE_CODES)[number];
@@ -9,8 +9,12 @@ export type ContractStatusCode = (typeof CONTRACT_STATUS_CODES)[number];
 export const BILLING_CYCLE_CODES = ["MONTHLY", "QUARTERLY", "YEARLY", "OTHER"] as const;
 export type BillingCycleCode = (typeof BILLING_CYCLE_CODES)[number];
 
+/** Common Weibao rates embedded in product buyout contracts. */
+export const WEIBAO_RATE_PRESETS = [15, 20] as const;
+
 export const DEFAULT_CONTRACT_STATUS: ContractStatusCode = "ACTIVE";
 export const DEFAULT_CONTRACT_TYPE: ContractTypeCode = "SUBSCRIPTION";
+export const DEFAULT_WEIBAO_RATE_PCT = 15;
 
 const TYPE_SET = new Set<string>(CONTRACT_TYPE_CODES);
 const STATUS_SET = new Set<string>(CONTRACT_STATUS_CODES);
@@ -33,7 +37,7 @@ export function normalizeContractType(raw: string | null | undefined): ContractT
   const upper = raw.trim().toUpperCase();
   if (isContractTypeCode(upper)) return upper;
   if (/订阅|subscription|saas|recurring/i.test(raw)) return "SUBSCRIPTION";
-  if (/维保|maintenance|support|ams/i.test(raw)) return "MAINTENANCE";
+  if (/微宝|weibao|维保|maintenance|support|ams/i.test(raw)) return "MAINTENANCE";
   if (/买断|buyout|perpetual|one[- ]?time|license/i.test(raw)) return "BUYOUT";
   return null;
 }
@@ -60,10 +64,43 @@ export function normalizeBillingCycle(raw: string | null | undefined): BillingCy
   return "OTHER";
 }
 
+/** Parse Weibao rate percent (1–100). Empty / invalid → null. */
+export function normalizeWeibaoRatePct(raw: string | number | null | undefined): number | null {
+  if (raw == null || raw === "") return null;
+  const n = typeof raw === "number" ? raw : Number(String(raw).replace(/%/g, "").trim());
+  if (!Number.isFinite(n)) return null;
+  const rounded = Math.round(n);
+  if (rounded < 1 || rounded > 100) return null;
+  return rounded;
+}
+
+/** Extract a numeric amount from free-text amount fields (e.g. "120,000 USD"). */
+export function parseContractAmountNumber(amount: string | null | undefined): number | null {
+  if (!amount?.trim()) return null;
+  const cleaned = amount.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  if (!cleaned) return null;
+  const n = Number(cleaned[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Suggested standalone Weibao amount = buyout amount × rate%. */
+export function estimateWeibaoAmount(
+  buyoutAmount: string | null | undefined,
+  ratePct: number | null | undefined
+): string | null {
+  const base = parseContractAmountNumber(buyoutAmount);
+  const rate = normalizeWeibaoRatePct(ratePct);
+  if (base == null || rate == null) return null;
+  const value = (base * rate) / 100;
+  if (!Number.isFinite(value)) return null;
+  // Keep integers clean; otherwise 2 decimal places
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
 /** English labels for UI selects / badges (shared map). */
 export const CONTRACT_TYPE_LABELS: Record<ContractTypeCode, string> = {
   SUBSCRIPTION: "Subscription",
-  MAINTENANCE: "Maintenance",
+  MAINTENANCE: "Weibao",
   BUYOUT: "Buyout",
 };
 
@@ -84,7 +121,7 @@ export const BILLING_CYCLE_LABELS: Record<BillingCycleCode, string> = {
 
 export const CONTRACT_TYPE_LABELS_ZH: Record<ContractTypeCode, string> = {
   SUBSCRIPTION: "订阅",
-  MAINTENANCE: "维保",
+  MAINTENANCE: "微宝",
   BUYOUT: "买断",
 };
 

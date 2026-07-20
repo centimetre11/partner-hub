@@ -32,6 +32,7 @@ import {
   upsertProjectAction,
   upsertContractAction,
   deleteContractAction,
+  createWeibaoRenewalAction,
   convertOpportunityToProjectAction,
   addNoteAction,
   createTodoAction,
@@ -42,10 +43,8 @@ import { getMossConfigStatus } from "@/lib/moss";
 import { parseMossDossier } from "@/lib/moss-dossier";
 import { getTaxonomyOptions } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
+import { CustomerContractForm } from "@/components/customer-contract-form";
 import {
-  BILLING_CYCLE_CODES,
-  CONTRACT_STATUS_CODES,
-  CONTRACT_TYPE_CODES,
   billingCycleLabel,
   contractStatusLabel,
   contractStatusTone,
@@ -78,6 +77,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
           partner: { select: { id: true, name: true } },
           opportunity: { select: { id: true, name: true } },
           project: { select: { id: true, name: true } },
+          parentContract: { select: { id: true, name: true, contractType: true } },
+          childContracts: { select: { id: true, name: true, status: true }, take: 5 },
         },
         orderBy: [{ status: "asc" }, { renewsAt: "asc" }, { updatedAt: "desc" }],
       },
@@ -432,7 +433,42 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </div>
   );
 
-  // ============ 合同（订阅 / 维保 / 买断） ============
+  // ============ 合同（订阅 / 微宝 / 买断） ============
+  const contractFormCopy = {
+    contractName: c.contractName,
+    contractType: c.contractType,
+    contractStatus: c.contractStatus,
+    contractBillingCycle: c.contractBillingCycle,
+    contractBillingNone: c.contractBillingNone,
+    contractStartDate: c.contractStartDate,
+    contractEndDate: c.contractEndDate,
+    contractRenewsAt: c.contractRenewsAt,
+    viaPartnerNone: c.viaPartnerNone,
+    contractLinkOpportunityNone: c.contractLinkOpportunityNone,
+    contractLinkProjectNone: c.contractLinkProjectNone,
+    contractNotesPlaceholder: c.contractNotesPlaceholder,
+    weibaoRate: c.weibaoRate,
+    weibaoRateHint: c.weibaoRateHint,
+    weibaoRateCustom: c.weibaoRateCustom,
+    weibaoIncludedY1: c.weibaoIncludedY1,
+    weibaoBuyoutRule: c.weibaoBuyoutRule,
+    weibaoEstimate: c.weibaoEstimate,
+    weibaoParentBuyout: c.weibaoParentBuyout,
+    weibaoParentNone: c.weibaoParentNone,
+    weibaoSubscriptionNote: c.weibaoSubscriptionNote,
+    amount: m.common.amount,
+    note: m.common.note,
+    save: m.common.save,
+    add: m.common.add,
+    delete: m.common.delete,
+  };
+  const contractPartners = partners.map((p) => ({ id: p.id, name: p.name }));
+  const contractOpps = customer.opportunities.map((o) => ({ id: o.id, name: o.name }));
+  const contractProjects = customer.projects.map((p) => ({ id: p.id, name: p.name }));
+  const buyoutOptions = customer.contracts
+    .filter((ct) => ct.contractType === "BUYOUT")
+    .map((ct) => ({ id: ct.id, name: ct.name }));
+
   const contractsPanel = (
     <div className="space-y-3">
       {customer.contracts.map((ct) => {
@@ -449,6 +485,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   <Badge tone={contractStatusTone(ct.status)}>
                     {contractStatusLabel(ct.status, locale)}
                   </Badge>
+                  {ct.contractType === "BUYOUT" && ct.weibaoRatePct != null && (
+                    <Badge tone="amber">{c.weibaoRateBadge.replace("{rate}", String(ct.weibaoRatePct))}</Badge>
+                  )}
+                  {ct.contractType === "BUYOUT" && ct.weibaoIncludedY1 && (
+                    <Badge tone="green">{c.weibaoY1Badge}</Badge>
+                  )}
                   {pastEnd && <Badge tone="amber">{c.contractStatusExpired}</Badge>}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
@@ -458,6 +500,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   {ct.endDate && ` · ${c.contractEndDate}: ${fmtDate(ct.endDate, bcp47)}`}
                   {ct.renewsAt && ` · ${c.contractRenewsAt}: ${fmtDate(ct.renewsAt, bcp47)}`}
                   {ct.partner && ` · ${c.viaPartner}: ${ct.partner.name}`}
+                  {ct.parentContract && ` · ${c.linkedBuyout}: ${ct.parentContract.name}`}
                   {ct.opportunity && ` · ${c.belongsToOpportunity}: ${ct.opportunity.name}`}
                   {ct.project && ` · ${c.belongsToProject}: ${ct.project.name}`}
                 </div>
@@ -467,79 +510,48 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               </div>
               <span className="text-slate-300 group-open:rotate-90">›</span>
             </summary>
-            <div className="px-4 pb-4 pt-1 border-t border-slate-50">
-              <form action={upsertContractAction.bind(null, owner)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                <input type="hidden" name="id" value={ct.id} />
-                <input name="name" defaultValue={ct.name} className={input} aria-label={c.contractName} />
-                <select name="contractType" defaultValue={ct.contractType} className={input} aria-label={c.contractType}>
-                  {CONTRACT_TYPE_CODES.map((code) => (
-                    <option key={code} value={code}>{contractTypeLabel(code, locale)}</option>
-                  ))}
-                </select>
-                <select name="status" defaultValue={ct.status} className={input} aria-label={c.contractStatus}>
-                  {CONTRACT_STATUS_CODES.map((code) => (
-                    <option key={code} value={code}>{contractStatusLabel(code, locale)}</option>
-                  ))}
-                </select>
-                <input name="amount" defaultValue={ct.amount ?? ""} placeholder={m.common.amount} className={input} />
-                <select name="billingCycle" defaultValue={ct.billingCycle ?? ""} className={input} aria-label={c.contractBillingCycle}>
-                  <option value="">{c.contractBillingNone}</option>
-                  {BILLING_CYCLE_CODES.map((code) => (
-                    <option key={code} value={code}>{billingCycleLabel(code, locale)}</option>
-                  ))}
-                </select>
-                <input
-                  name="startDate"
-                  type="date"
-                  defaultValue={ct.startDate ? new Date(ct.startDate).toISOString().slice(0, 10) : ""}
-                  className={input}
-                  aria-label={c.contractStartDate}
-                />
-                <input
-                  name="endDate"
-                  type="date"
-                  defaultValue={ct.endDate ? new Date(ct.endDate).toISOString().slice(0, 10) : ""}
-                  className={input}
-                  aria-label={c.contractEndDate}
-                />
-                <input
-                  name="renewsAt"
-                  type="date"
-                  defaultValue={ct.renewsAt ? new Date(ct.renewsAt).toISOString().slice(0, 10) : ""}
-                  className={input}
-                  aria-label={c.contractRenewsAt}
-                />
-                <select name="partnerId" defaultValue={ct.partnerId ?? ""} className={input}>
-                  <option value="">{c.viaPartnerNone}</option>
-                  {partners.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <select name="opportunityId" defaultValue={ct.opportunityId ?? ""} className={input}>
-                  <option value="">{c.contractLinkOpportunityNone}</option>
-                  {customer.opportunities.map((o) => (
-                    <option key={o.id} value={o.id}>{o.name}</option>
-                  ))}
-                </select>
-                <select name="projectId" defaultValue={ct.projectId ?? ""} className={input}>
-                  <option value="">{c.contractLinkProjectNone}</option>
-                  {customer.projects.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <textarea
-                  name="notes"
-                  rows={2}
-                  defaultValue={ct.notes ?? ""}
-                  placeholder={c.contractNotesPlaceholder}
-                  className={`${input} col-span-2 md:col-span-3`}
-                  aria-label={m.common.note}
-                />
-                <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
-                  <button formAction={deleteContractAction.bind(null, owner, ct.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
-                  <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
-                </div>
-              </form>
+            <div className="px-4 pb-4 pt-1 border-t border-slate-50 space-y-3">
+              <CustomerContractForm
+                action={upsertContractAction.bind(null, owner)}
+                deleteAction={deleteContractAction.bind(null, owner, ct.id)}
+                mode="edit"
+                locale={locale}
+                copy={contractFormCopy}
+                inputClassName={input}
+                partners={contractPartners}
+                opportunities={contractOpps}
+                projects={contractProjects}
+                buyouts={buyoutOptions.filter((b) => b.id !== ct.id)}
+                defaults={{
+                  id: ct.id,
+                  name: ct.name,
+                  contractType: ct.contractType,
+                  status: ct.status,
+                  amount: ct.amount,
+                  billingCycle: ct.billingCycle,
+                  startDate: ct.startDate ? new Date(ct.startDate).toISOString().slice(0, 10) : "",
+                  endDate: ct.endDate ? new Date(ct.endDate).toISOString().slice(0, 10) : "",
+                  renewsAt: ct.renewsAt ? new Date(ct.renewsAt).toISOString().slice(0, 10) : "",
+                  partnerId: ct.partnerId,
+                  opportunityId: ct.opportunityId,
+                  projectId: ct.projectId,
+                  parentContractId: ct.parentContractId,
+                  weibaoRatePct: ct.weibaoRatePct,
+                  weibaoIncludedY1: ct.weibaoIncludedY1,
+                  notes: ct.notes,
+                }}
+              />
+              {ct.contractType === "BUYOUT" && (
+                <form
+                  action={createWeibaoRenewalAction.bind(null, owner, ct.id)}
+                  className="flex items-center justify-end gap-2 border-t border-slate-50 pt-3"
+                >
+                  <span className="text-[11px] text-slate-400">{c.createWeibaoRenewalHint}</span>
+                  <button className="rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-3 py-1.5 text-xs hover:bg-amber-100">
+                    {c.createWeibaoRenewal}
+                  </button>
+                </form>
+              )}
             </div>
           </details>
         );
@@ -547,57 +559,24 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       {customer.contracts.length === 0 && <EmptyState text={c.noContracts} />}
       <details className="rounded-lg border border-dashed border-slate-200">
         <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addContract}</summary>
-        <form action={upsertContractAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-          <input name="name" required placeholder={c.contractName} className={input} />
-          <select name="contractType" defaultValue="SUBSCRIPTION" className={input} aria-label={c.contractType}>
-            {CONTRACT_TYPE_CODES.map((code) => (
-              <option key={code} value={code}>{contractTypeLabel(code, locale)}</option>
-            ))}
-          </select>
-          <select name="status" defaultValue="ACTIVE" className={input} aria-label={c.contractStatus}>
-            {CONTRACT_STATUS_CODES.map((code) => (
-              <option key={code} value={code}>{contractStatusLabel(code, locale)}</option>
-            ))}
-          </select>
-          <input name="amount" placeholder={m.common.amount} className={input} />
-          <select name="billingCycle" defaultValue="" className={input} aria-label={c.contractBillingCycle}>
-            <option value="">{c.contractBillingNone}</option>
-            {BILLING_CYCLE_CODES.map((code) => (
-              <option key={code} value={code}>{billingCycleLabel(code, locale)}</option>
-            ))}
-          </select>
-          <input name="startDate" type="date" className={input} aria-label={c.contractStartDate} />
-          <input name="endDate" type="date" className={input} aria-label={c.contractEndDate} />
-          <input name="renewsAt" type="date" className={input} aria-label={c.contractRenewsAt} />
-          <select name="partnerId" defaultValue={customer.partnerLinks[0]?.partner.id ?? ""} className={input}>
-            <option value="">{c.viaPartnerNone}</option>
-            {partners.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <select name="opportunityId" defaultValue="" className={input}>
-            <option value="">{c.contractLinkOpportunityNone}</option>
-            {customer.opportunities.map((o) => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </select>
-          <select name="projectId" defaultValue="" className={input}>
-            <option value="">{c.contractLinkProjectNone}</option>
-            {customer.projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <textarea
-            name="notes"
-            rows={2}
-            placeholder={c.contractNotesPlaceholder}
-            className={`${input} col-span-2 md:col-span-3`}
-            aria-label={m.common.note}
+        <div className="px-4 pb-4">
+          <CustomerContractForm
+            action={upsertContractAction.bind(null, owner)}
+            mode="create"
+            locale={locale}
+            copy={contractFormCopy}
+            inputClassName={input}
+            partners={contractPartners}
+            opportunities={contractOpps}
+            projects={contractProjects}
+            buyouts={buyoutOptions}
+            defaults={{
+              partnerId: customer.partnerLinks[0]?.partner.id ?? "",
+              weibaoIncludedY1: true,
+              weibaoRatePct: 15,
+            }}
           />
-          <div className="col-span-2 md:col-span-3 flex justify-end">
-            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
-          </div>
-        </form>
+        </div>
       </details>
     </div>
   );

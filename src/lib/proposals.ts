@@ -198,7 +198,11 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
         .map((ct) => {
           const end = ct.endDate?.toISOString().slice(0, 10) ?? "-";
           const renew = ct.renewsAt?.toISOString().slice(0, 10) ?? "-";
-          return `- id=${ct.id} name:${ct.name} type:${ct.contractType} status:${ct.status} amount:${ct.amount ?? "-"} end:${end} renews:${renew} partner:${ct.partner?.name ?? "-"}`;
+          const weibao =
+            ct.contractType === "BUYOUT" && ct.weibaoRatePct != null
+              ? ` weibao:${ct.weibaoRatePct}%${ct.weibaoIncludedY1 ? "(Y1 included)" : ""}`
+              : "";
+          return `- id=${ct.id} name:${ct.name} type:${ct.contractType} status:${ct.status} amount:${ct.amount ?? "-"}${weibao} end:${end} renews:${renew} partner:${ct.partner?.name ?? "-"}`;
         })
         .join("\n")
     : noneLabel(locale);
