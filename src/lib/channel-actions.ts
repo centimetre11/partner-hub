@@ -16,6 +16,9 @@ export async function triggerChannelSyncAction() {
   const rowCount =
     (result.backfill?.skipped ? 0 : (result.backfill?.rowCount ?? 0)) +
     (result.daily?.rowCount ?? 0);
+  const deletedCount =
+    (result.backfill?.skipped ? 0 : (result.backfill?.deletedCount ?? 0)) +
+    (result.daily?.deletedCount ?? 0);
   const durationMs =
     (result.backfill?.durationMs ?? 0) + (result.daily?.durationMs ?? 0);
 
@@ -25,18 +28,20 @@ export async function triggerChannelSyncAction() {
     actorId: user.id,
     actorLabel: user.name,
     summary: result.ok
-      ? `Channel 公海同步完成：${rowCount} 条`
+      ? `Channel 公海同步完成：写入 ${rowCount}，移除 ${deletedCount}`
       : "Channel 公海同步失败",
     status: result.ok ? "SUCCESS" : "FAILED",
     detail: result.error ?? undefined,
     meta: {
       rowCount,
+      deletedCount,
       durationMs,
       backfill: result.backfill
         ? {
             rangeStart: result.backfill.rangeStart,
             rangeEnd: result.backfill.rangeEnd,
             rowCount: result.backfill.rowCount,
+            deletedCount: result.backfill.deletedCount,
             skipped: result.backfill.skipped ?? false,
             backfillDone: result.backfill.backfillDone ?? false,
           }
@@ -46,6 +51,7 @@ export async function triggerChannelSyncAction() {
             rangeStart: result.daily.rangeStart,
             rangeEnd: result.daily.rangeEnd,
             rowCount: result.daily.rowCount,
+            deletedCount: result.daily.deletedCount,
           }
         : null,
     },
@@ -60,11 +66,15 @@ export async function triggerChannelSyncAction() {
   return {
     ok: true as const,
     rowCount,
+    deletedCount,
     durationMs,
     backfillDone: result.backfill?.backfillDone ?? (result.backfill == null),
     backfillRange:
       result.backfill && !result.backfill.skipped
         ? `${result.backfill.rangeStart} → ${result.backfill.rangeEnd}`
         : null,
+    dailyRange: result.daily
+      ? `${result.daily.rangeStart} → ${result.daily.rangeEnd}`
+      : null,
   };
 }

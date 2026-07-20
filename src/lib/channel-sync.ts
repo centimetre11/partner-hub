@@ -1,13 +1,18 @@
 import { db } from "./db";
 import {
+  addDaysYmd,
   addOneMonthYmd,
   compareYmd,
   fetchChannelData,
   getChannelBackfillStart,
+  getChannelReconcileChunkDays,
+  getChannelReconcileDays,
+  getDaysAgoYmd,
   getMonthStartYmd,
   getTodayYmd,
   getTomorrowYmd,
   normalizeChannelRows,
+  ymdToDateStart,
   type CrmChannelUpsert,
 } from "./channel";
 
@@ -26,6 +31,7 @@ export type ChannelRangeSyncResult = {
   rangeStart: string;
   rangeEnd: string;
   rowCount: number;
+  deletedCount: number;
   durationMs: number;
   advanced?: boolean;
   backfillDone?: boolean;
@@ -128,6 +134,31 @@ async function upsertChannels(channels: CrmChannelUpsert[]) {
   }
 }
 
+/**
+ * 删除本地落在 [rangeStart, rangeEnd) 且不在本次 CRM 返回集合中的记录
+ *（CRM 已从公海捞走 → Hub 同步移除）
+ */
+async function deleteMissingInRange(
+  rangeStart: string,
+  rangeEnd: string,
+  keepIds: Set<string>,
+): Promise<number> {
+  const start = ymdToDateStart(rangeStart);
+  const end = ymdToDateStart(rangeEnd);
+  const existing = await db.crmChannel.findMany({
+    where: { staRecdate: { gte: start, lt: end } },
+    select: { id: true },
+  });
+  const toDelete = existing.filter((r) => !keepIds.has(r.id)).map((r) => r.id);
+  if (toDelete.length === 0) return 0;
+
+  for (let i = 0; i < toDelete.length; i += BATCH) {
+    const chunk = toDelete.slice(i, i + BATCH);
+    await db.crmChannel.deleteMany({ where: { id: { in: chunk } } });
+  }
+  return toDelete.length;
+}
+
 async function writeLog(input: {
   status: "SUCCESS" | "FAILED" | "SKIPPED";
   mode: ChannelSyncMode;
@@ -150,6 +181,7 @@ async function writeLog(input: {
   });
 }
 
+/** 拉取区间 → upsert → 删除 CRM 已不在公海的本地行 */
 async function syncChannelRange(
   mode: ChannelSyncMode,
   rangeStart: string,
@@ -160,6 +192,11 @@ async function syncChannelRange(
     const rows = await fetchChannelData(rangeStart, rangeEnd);
     const { channels } = normalizeChannelRows(rows);
     await upsertChannels(channels);
+    const deletedCount = await deleteMissingInRange(
+      rangeStart,
+      rangeEnd,
+      new Set(channels.map((c) => c.id)),
+    );
     const durationMs = Date.now() - started;
     await writeLog({
       status: "SUCCESS",
@@ -168,9 +205,10 @@ async function syncChannelRange(
       rangeEnd,
       rowCount: channels.length,
       durationMs,
+      error: deletedCount > 0 ? `deleted=${deletedCount}` : undefined,
     });
     console.log(
-      `[channel-sync] ${mode} OK — ${channels.length} rows (${rangeStart} → ${rangeEnd}) in ${durationMs}ms`,
+      `[channel-sync] ${mode} OK — upsert ${channels.length}, delete ${deletedCount} (${rangeStart} → ${rangeEnd}) in ${durationMs}ms`,
     );
     return {
       ok: true,
@@ -178,6 +216,7 @@ async function syncChannelRange(
       rangeStart,
       rangeEnd,
       rowCount: channels.length,
+      deletedCount,
       durationMs,
     };
   } catch (e) {
@@ -198,6 +237,7 @@ async function syncChannelRange(
       rangeStart,
       rangeEnd,
       rowCount: 0,
+      deletedCount: 0,
       durationMs,
       error,
     };
@@ -205,7 +245,7 @@ async function syncChannelRange(
 }
 
 /**
- * 历史回补：每次最多拉一个月；成功才推进 cursor。
+ * 历史回补：每次最多拉一个月并对账；成功才推进 cursor。
  * cursor ≥ 当月 1 号时标记完成。
  */
 export async function syncChannelBackfillMonth(): Promise<ChannelRangeSyncResult> {
@@ -217,6 +257,7 @@ export async function syncChannelBackfillMonth(): Promise<ChannelRangeSyncResult
       rangeStart: monthStart,
       rangeEnd: monthStart,
       rowCount: 0,
+      deletedCount: 0,
       durationMs: 0,
       skipped: true,
       backfillDone: true,
@@ -235,6 +276,7 @@ export async function syncChannelBackfillMonth(): Promise<ChannelRangeSyncResult
       rangeStart: cursor,
       rangeEnd: monthStart,
       rowCount: 0,
+      deletedCount: 0,
       durationMs: 0,
       skipped: true,
       backfillDone: true,
@@ -255,8 +297,59 @@ export async function syncChannelBackfillMonth(): Promise<ChannelRangeSyncResult
   return { ...result, advanced: true, backfillDone: done };
 }
 
-/** 日常：按 sta_recdate 拉取当天（startdate=今天, enddate=明天） */
+/**
+ * 日常 / 立即同步：对最近 N 天按小段对账（upsert + 删缺失），
+ * 覆盖「从历史公海被捞回跟进」的场景。
+ */
 export async function syncChannelDaily(): Promise<ChannelRangeSyncResult> {
+  const reconcileDays = getChannelReconcileDays();
+  const chunkDays = getChannelReconcileChunkDays();
+  const rangeEnd = getTomorrowYmd();
+  const rangeStart = getDaysAgoYmd(reconcileDays - 1);
+  const started = Date.now();
+
+  let rowCount = 0;
+  let deletedCount = 0;
+  let cursor = rangeStart;
+
+  while (compareYmd(cursor, rangeEnd) < 0) {
+    let chunkEnd = addDaysYmd(cursor, chunkDays);
+    if (compareYmd(chunkEnd, rangeEnd) > 0) chunkEnd = rangeEnd;
+
+    const result = await syncChannelRange("daily", cursor, chunkEnd);
+    if (!result.ok) {
+      return {
+        ...result,
+        rangeStart,
+        rangeEnd,
+        rowCount,
+        deletedCount,
+        durationMs: Date.now() - started,
+      };
+    }
+    rowCount += result.rowCount;
+    deletedCount += result.deletedCount;
+    cursor = chunkEnd;
+  }
+
+  await setSetting(LAST_DAILY_SYNC_KEY, new Date().toISOString());
+  const durationMs = Date.now() - started;
+  console.log(
+    `[channel-sync] daily reconcile OK — upsert ${rowCount}, delete ${deletedCount} (${rangeStart} → ${rangeEnd}) in ${durationMs}ms`,
+  );
+  return {
+    ok: true,
+    mode: "daily",
+    rangeStart,
+    rangeEnd,
+    rowCount,
+    deletedCount,
+    durationMs,
+  };
+}
+
+/** 仅同步当天（调试用） */
+export async function syncChannelTodayOnly(): Promise<ChannelRangeSyncResult> {
   const rangeStart = getTodayYmd();
   const rangeEnd = getTomorrowYmd();
   const result = await syncChannelRange("daily", rangeStart, rangeEnd);
@@ -266,7 +359,7 @@ export async function syncChannelDaily(): Promise<ChannelRangeSyncResult> {
   return result;
 }
 
-/** 调度 / 手动：先回补一个月（若未完成），再同步当天 */
+/** 调度 / 手动：先回补一个月（若未完成），再对账最近 N 天 */
 export async function runChannelSyncTick(): Promise<ChannelSyncTickResult> {
   if (syncing) {
     return { ok: false, backfill: null, daily: null, error: "SYNC_IN_PROGRESS" };

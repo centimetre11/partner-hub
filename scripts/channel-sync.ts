@@ -15,7 +15,7 @@ async function main() {
       process.exit(1);
     }
     console.log(
-      `[channel-sync] Backfill done — ${result.rowCount} rows (${result.rangeStart} → ${result.rangeEnd})` +
+      `[channel-sync] Backfill done — upsert ${result.rowCount}, delete ${result.deletedCount} (${result.rangeStart} → ${result.rangeEnd})` +
         (result.skipped ? " [skipped]" : "") +
         (result.backfillDone ? " [backfill complete]" : ""),
     );
@@ -29,7 +29,7 @@ async function main() {
       process.exit(1);
     }
     console.log(
-      `[channel-sync] Daily done — ${result.rowCount} rows (${result.rangeStart} → ${result.rangeEnd}) in ${result.durationMs}ms`,
+      `[channel-sync] Daily done — upsert ${result.rowCount}, delete ${result.deletedCount} (${result.rangeStart} → ${result.rangeEnd}) in ${result.durationMs}ms`,
     );
     return;
   }
@@ -41,13 +41,13 @@ async function main() {
   }
   if (result.backfill) {
     console.log(
-      `[channel-sync] Backfill — ${result.backfill.rowCount} rows (${result.backfill.rangeStart} → ${result.backfill.rangeEnd})` +
+      `[channel-sync] Backfill — upsert ${result.backfill.rowCount}, delete ${result.backfill.deletedCount} (${result.backfill.rangeStart} → ${result.backfill.rangeEnd})` +
         (result.backfill.skipped ? " [skipped]" : ""),
     );
   }
   if (result.daily) {
     console.log(
-      `[channel-sync] Daily — ${result.daily.rowCount} rows (${result.daily.rangeStart} → ${result.daily.rangeEnd}) in ${result.daily.durationMs}ms`,
+      `[channel-sync] Daily — upsert ${result.daily.rowCount}, delete ${result.daily.deletedCount} (${result.daily.rangeStart} → ${result.daily.rangeEnd}) in ${result.daily.durationMs}ms`,
     );
   }
 }

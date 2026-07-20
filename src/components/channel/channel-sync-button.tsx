@@ -29,7 +29,13 @@ export function ChannelSyncButton() {
         return;
       }
       if ("ok" in res && res.ok) {
-        setMessage(formatMsg(l.syncSuccess, { count: res.rowCount, ms: res.durationMs }));
+        setMessage(
+          formatMsg(l.syncSuccess, {
+            count: res.rowCount,
+            deleted: res.deletedCount,
+            ms: res.durationMs,
+          }),
+        );
         router.refresh();
       }
     });

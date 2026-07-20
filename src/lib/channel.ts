@@ -110,9 +110,25 @@ export function addOneMonthYmd(ymd: string): string {
   return formatYmd(year, month, 1);
 }
 
+/** 日历日加减（用 UTC 正午避免 DST 跳变） */
+export function addDaysYmd(ymd: string, days: number): string {
+  const p = parseYmd(ymd);
+  if (!p) throw new Error(`Invalid YMD: ${ymd}`);
+  const noonUtc = Date.UTC(p.year, p.month - 1, p.day, 12, 0, 0);
+  const d = new Date(noonUtc + days * 24 * 60 * 60 * 1000);
+  return formatYmd(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+}
+
 export function compareYmd(a: string, b: string): number {
   if (a === b) return 0;
   return a < b ? -1 : 1;
+}
+
+/** 区间下界：本地日历日 00:00 */
+export function ymdToDateStart(ymd: string): Date {
+  const p = parseYmd(ymd);
+  if (!p) throw new Error(`Invalid YMD: ${ymd}`);
+  return new Date(p.year, p.month - 1, p.day, 0, 0, 0, 0);
 }
 
 export function getTodayYmd(timeZone = getChannelSyncTimezone()): string {
@@ -121,11 +137,21 @@ export function getTodayYmd(timeZone = getChannelSyncTimezone()): string {
 }
 
 export function getTomorrowYmd(timeZone = getChannelSyncTimezone()): string {
-  const p = getZonedParts(new Date(), timeZone);
-  // 用 UTC 日期算术避免夏令时边界问题：先取当日 12:00 UTC 再 +1 天
-  const noonUtc = Date.UTC(p.year, p.month - 1, p.day, 12, 0, 0);
-  const next = getZonedParts(new Date(noonUtc + 24 * 60 * 60 * 1000), timeZone);
-  return formatYmd(next.year, next.month, next.day);
+  return addDaysYmd(getTodayYmd(timeZone), 1);
+}
+
+export function getDaysAgoYmd(days: number, timeZone = getChannelSyncTimezone()): string {
+  return addDaysYmd(getTodayYmd(timeZone), -Math.max(0, days));
+}
+
+export function getChannelReconcileDays() {
+  const n = Number(process.env.CHANNEL_RECONCILE_DAYS ?? "30");
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 90) : 30;
+}
+
+export function getChannelReconcileChunkDays() {
+  const n = Number(process.env.CHANNEL_RECONCILE_CHUNK_DAYS ?? "7");
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), 31) : 7;
 }
 
 export function getMonthStartYmd(timeZone = getChannelSyncTimezone()): string {
