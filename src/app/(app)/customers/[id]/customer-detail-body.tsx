@@ -30,6 +30,10 @@ import {
   upsertOpportunityAction,
   deleteOpportunityAction,
   upsertProjectAction,
+  upsertContractAction,
+  deleteContractAction,
+  createProductMaintRenewalAction,
+  createProjectMaintRenewalAction,
   convertOpportunityToProjectAction,
   addNoteAction,
   createTodoAction,
@@ -40,6 +44,15 @@ import { getMossConfigStatus } from "@/lib/moss";
 import { parseMossDossier } from "@/lib/moss-dossier";
 import { getTaxonomyOptions } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
+import { CustomerContractForm } from "@/components/customer-contract-form";
+import {
+  billingCycleLabel,
+  contractStatusLabel,
+  contractStatusTone,
+  contractTypeLabel,
+  contractTypeTone,
+  isContractPastEnd,
+} from "@/lib/contract-types";
 
 export async function CustomerDetailBody({ id }: { id: string }) {
   const user = await requireUser();
@@ -59,6 +72,16 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       opportunities: {
         include: { partner: { select: { id: true, name: true } }, project: { select: { id: true } } },
         orderBy: { updatedAt: "desc" },
+      },
+      contracts: {
+        include: {
+          partner: { select: { id: true, name: true } },
+          opportunity: { select: { id: true, name: true } },
+          project: { select: { id: true, name: true } },
+          parentContract: { select: { id: true, name: true, contractType: true } },
+          childContracts: { select: { id: true, name: true, status: true }, take: 5 },
+        },
+        orderBy: [{ status: "asc" }, { renewsAt: "asc" }, { updatedAt: "desc" }],
       },
       projects: {
         include: {
@@ -411,6 +434,188 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </div>
   );
 
+  // ============ 合同（订阅 / 买断+产品维保 / 项目合同+项目维保） ============
+  const contractFormCopy = {
+    contractName: c.contractName,
+    contractType: c.contractType,
+    contractStatus: c.contractStatus,
+    contractBillingCycle: c.contractBillingCycle,
+    contractBillingNone: c.contractBillingNone,
+    contractStartDate: c.contractStartDate,
+    contractEndDate: c.contractEndDate,
+    contractRenewsAt: c.contractRenewsAt,
+    viaPartnerNone: c.viaPartnerNone,
+    contractLinkOpportunityNone: c.contractLinkOpportunityNone,
+    contractLinkProjectNone: c.contractLinkProjectNone,
+    contractNotesPlaceholder: c.contractNotesPlaceholder,
+    productMaintRate: c.productMaintRate,
+    productMaintRateHint: c.productMaintRateHint,
+    productMaintRateCustom: c.productMaintRateCustom,
+    productMaintIncludedY1: c.productMaintIncludedY1,
+    productMaintBuyoutRule: c.productMaintBuyoutRule,
+    productMaintEstimate: c.productMaintEstimate,
+    productMaintParent: c.productMaintParent,
+    productMaintParentNone: c.productMaintParentNone,
+    subscriptionNote: c.subscriptionNote,
+    projectMaintRate: c.projectMaintRate,
+    projectMaintRateHint: c.projectMaintRateHint,
+    projectMaintIncludedY1: c.projectMaintIncludedY1,
+    projectMaintRule: c.projectMaintRule,
+    projectMaintEstimate: c.projectMaintEstimate,
+    projectMaintParent: c.projectMaintParent,
+    projectMaintParentNone: c.projectMaintParentNone,
+    amount: m.common.amount,
+    note: m.common.note,
+    save: m.common.save,
+    add: m.common.add,
+    delete: m.common.delete,
+  };
+  const contractPartners = partners.map((p) => ({ id: p.id, name: p.name }));
+  const contractOpps = customer.opportunities.map((o) => ({ id: o.id, name: o.name }));
+  const contractProjects = customer.projects.map((p) => ({ id: p.id, name: p.name }));
+  const buyoutOptions = customer.contracts
+    .filter((ct) => ct.contractType === "BUYOUT")
+    .map((ct) => ({ id: ct.id, name: ct.name }));
+  const projectContractOptions = customer.contracts
+    .filter((ct) => ct.contractType === "PROJECT")
+    .map((ct) => ({ id: ct.id, name: ct.name }));
+
+  const contractsPanel = (
+    <div className="space-y-3">
+      {customer.contracts.map((ct) => {
+        const pastEnd = isContractPastEnd(ct.endDate, ct.status);
+        return (
+          <details key={ct.id} className="group rounded-lg border border-slate-100 hover:border-slate-200">
+            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-slate-900">{ct.name}</span>
+                  <Badge tone={contractTypeTone(ct.contractType)}>
+                    {contractTypeLabel(ct.contractType, locale)}
+                  </Badge>
+                  <Badge tone={contractStatusTone(ct.status)}>
+                    {contractStatusLabel(ct.status, locale)}
+                  </Badge>
+                  {ct.contractType === "BUYOUT" && ct.productMaintRatePct != null && (
+                    <Badge tone="amber">{c.productMaintRateBadge.replace("{rate}", String(ct.productMaintRatePct))}</Badge>
+                  )}
+                  {ct.contractType === "BUYOUT" && ct.productMaintIncludedY1 && (
+                    <Badge tone="green">{c.productMaintY1Badge}</Badge>
+                  )}
+                  {ct.contractType === "PROJECT" && ct.projectMaintRatePct != null && (
+                    <Badge tone="purple">{c.projectMaintRateBadge.replace("{rate}", String(ct.projectMaintRatePct))}</Badge>
+                  )}
+                  {ct.contractType === "PROJECT" && ct.projectMaintIncludedY1 && (
+                    <Badge tone="green">{c.projectMaintY1Badge}</Badge>
+                  )}
+                  {pastEnd && <Badge tone="amber">{c.contractStatusExpired}</Badge>}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {m.common.amount}: {ct.amount ?? "—"}
+                  {ct.billingCycle && ` · ${billingCycleLabel(ct.billingCycle, locale)}`}
+                  {ct.startDate && ` · ${c.contractStartDate}: ${fmtDate(ct.startDate, bcp47)}`}
+                  {ct.endDate && ` · ${c.contractEndDate}: ${fmtDate(ct.endDate, bcp47)}`}
+                  {ct.renewsAt && ` · ${c.contractRenewsAt}: ${fmtDate(ct.renewsAt, bcp47)}`}
+                  {ct.partner && ` · ${c.viaPartner}: ${ct.partner.name}`}
+                  {ct.parentContract &&
+                    ` · ${ct.contractType === "PROJECT_MAINTENANCE" ? c.linkedProjectContract : c.linkedBuyout}: ${ct.parentContract.name}`}
+                  {ct.opportunity && ` · ${c.belongsToOpportunity}: ${ct.opportunity.name}`}
+                  {ct.project && ` · ${c.belongsToProject}: ${ct.project.name}`}
+                </div>
+                {pastEnd && (
+                  <div className="text-[11px] text-amber-600 mt-1">{c.contractPastEndHint}</div>
+                )}
+              </div>
+              <span className="text-slate-300 group-open:rotate-90">›</span>
+            </summary>
+            <div className="px-4 pb-4 pt-1 border-t border-slate-50 space-y-3">
+              <CustomerContractForm
+                action={upsertContractAction.bind(null, owner)}
+                deleteAction={deleteContractAction.bind(null, owner, ct.id)}
+                mode="edit"
+                locale={locale}
+                copy={contractFormCopy}
+                inputClassName={input}
+                partners={contractPartners}
+                opportunities={contractOpps}
+                projects={contractProjects}
+                buyouts={buyoutOptions.filter((b) => b.id !== ct.id)}
+                projectContracts={projectContractOptions.filter((p) => p.id !== ct.id)}
+                defaults={{
+                  id: ct.id,
+                  name: ct.name,
+                  contractType: ct.contractType,
+                  status: ct.status,
+                  amount: ct.amount,
+                  billingCycle: ct.billingCycle,
+                  startDate: ct.startDate ? new Date(ct.startDate).toISOString().slice(0, 10) : "",
+                  endDate: ct.endDate ? new Date(ct.endDate).toISOString().slice(0, 10) : "",
+                  renewsAt: ct.renewsAt ? new Date(ct.renewsAt).toISOString().slice(0, 10) : "",
+                  partnerId: ct.partnerId,
+                  opportunityId: ct.opportunityId,
+                  projectId: ct.projectId,
+                  parentContractId: ct.parentContractId,
+                  productMaintRatePct: ct.productMaintRatePct,
+                  productMaintIncludedY1: ct.productMaintIncludedY1,
+                  projectMaintRatePct: ct.projectMaintRatePct,
+                  projectMaintIncludedY1: ct.projectMaintIncludedY1,
+                  notes: ct.notes,
+                }}
+              />
+              {ct.contractType === "BUYOUT" && (
+                <form
+                  action={createProductMaintRenewalAction.bind(null, owner, ct.id)}
+                  className="flex items-center justify-end gap-2 border-t border-slate-50 pt-3"
+                >
+                  <span className="text-[11px] text-slate-400">{c.createProductMaintRenewalHint}</span>
+                  <button className="rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-3 py-1.5 text-xs hover:bg-amber-100">
+                    {c.createProductMaintRenewal}
+                  </button>
+                </form>
+              )}
+              {ct.contractType === "PROJECT" && (
+                <form
+                  action={createProjectMaintRenewalAction.bind(null, owner, ct.id)}
+                  className="flex items-center justify-end gap-2 border-t border-slate-50 pt-3"
+                >
+                  <span className="text-[11px] text-slate-400">{c.createProjectMaintRenewalHint}</span>
+                  <button className="rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs hover:bg-emerald-100">
+                    {c.createProjectMaintRenewal}
+                  </button>
+                </form>
+              )}
+            </div>
+          </details>
+        );
+      })}
+      {customer.contracts.length === 0 && <EmptyState text={c.noContracts} />}
+      <details className="rounded-lg border border-dashed border-slate-200">
+        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addContract}</summary>
+        <div className="px-4 pb-4">
+          <CustomerContractForm
+            action={upsertContractAction.bind(null, owner)}
+            mode="create"
+            locale={locale}
+            copy={contractFormCopy}
+            inputClassName={input}
+            partners={contractPartners}
+            opportunities={contractOpps}
+            projects={contractProjects}
+            buyouts={buyoutOptions}
+            projectContracts={projectContractOptions}
+            defaults={{
+              partnerId: customer.partnerLinks[0]?.partner.id ?? "",
+              productMaintIncludedY1: true,
+              productMaintRatePct: 15,
+              projectMaintIncludedY1: true,
+              projectMaintRatePct: 15,
+            }}
+          />
+        </div>
+      </details>
+    </div>
+  );
+
   // ============ 合作项目（默认展开；日常操作优先，基本信息只读） ============
   const projectsPanel = (
     <div className="space-y-4">
@@ -554,6 +759,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       desc: c.tabOpportunitiesDesc,
       badge: customer.opportunities.length ? String(customer.opportunities.length) : null,
       content: opportunitiesPanel,
+    },
+    {
+      id: "contracts",
+      label: c.tabContracts,
+      desc: c.tabContractsDesc,
+      badge: customer.contracts.length ? String(customer.contracts.length) : null,
+      content: contractsPanel,
     },
     {
       id: "projects",

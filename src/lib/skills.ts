@@ -292,13 +292,13 @@ const getPartner: Skill = {
 const getCustomer: Skill = {
   name: "get_customer",
   label: "Read customer profile",
-  desc: "Get end-customer account profile (contacts, opportunities, open todos)",
+  desc: "Get end-customer account profile (contacts, opportunities, contracts, open todos)",
   def: {
     type: "function",
     function: {
       name: "get_customer",
       description:
-        "Get an end-customer (account) profile by name — includes contacts (power map), active opportunities, and open todos. NOT a Fanruan partner.",
+        "Get an end-customer (account) profile by name — includes contacts (power map), active opportunities, contracts (subscription/buyout/product maintenance/project contract/project maintenance — product vs project maintenance are distinct), projects, and open todos. NOT a Fanruan partner.",
       parameters: {
         type: "object",
         properties: { name: { type: "string", description: "Customer company name (fuzzy match supported)" } },

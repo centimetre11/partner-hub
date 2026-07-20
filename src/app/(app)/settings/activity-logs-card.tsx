@@ -48,6 +48,7 @@ const SYSTEM_CATEGORIES = [
   "CONTACT",
   "OPPORTUNITY",
   "PROJECT",
+  "CONTRACT",
   "TODO",
   "BUSINESS",
   "CRM",

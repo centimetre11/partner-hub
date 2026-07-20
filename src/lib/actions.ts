@@ -27,6 +27,20 @@ import {
 } from "./opportunity-process-tags";
 import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opportunity-status";
 import {
+  DEFAULT_CONTRACT_STATUS,
+  DEFAULT_CONTRACT_TYPE,
+  DEFAULT_PRODUCT_MAINT_RATE_PCT,
+  DEFAULT_PROJECT_MAINT_RATE_PCT,
+  estimateMaintAmount,
+  expectedParentType,
+  isPrimaryCommercialType,
+  isRenewalMaintType,
+  normalizeBillingCycle,
+  normalizeContractStatus,
+  normalizeContractType,
+  normalizeMaintRatePct,
+} from "./contract-types";
+import {
   isStatusDimensionKey,
   parseStatusOverrides,
   serializeStatusOverrides,
@@ -934,6 +948,346 @@ export async function deleteProjectAction(owner: OwnerRef, projectId: string) {
   });
   revalidatePath(ownerPath(owner));
   revalidatePath("/projects");
+}
+
+// ============ 合同（订阅 / 维保 / 买断） ============
+
+function parseOptionalDate(formData: FormData, key: string): Date | null {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function upsertContractAction(owner: OwnerRef, formData: FormData) {
+  const user = await requireUser();
+  if (owner.kind !== "customer") return;
+
+  const id = String(formData.get("id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+
+  const typeRaw = String(formData.get("contractType") ?? "").trim();
+  const contractType = normalizeContractType(typeRaw) ?? DEFAULT_CONTRACT_TYPE;
+  const status = normalizeContractStatus(String(formData.get("status") ?? DEFAULT_CONTRACT_STATUS));
+  const billingCycle = normalizeBillingCycle(String(formData.get("billingCycle") ?? "") || null);
+
+  const partnerId = formData.has("partnerId")
+    ? String(formData.get("partnerId") ?? "").trim() || null
+    : undefined;
+  const opportunityId = formData.has("opportunityId")
+    ? String(formData.get("opportunityId") ?? "").trim() || null
+    : undefined;
+  const projectId = formData.has("projectId")
+    ? String(formData.get("projectId") ?? "").trim() || null
+    : undefined;
+  const parentContractId = formData.has("parentContractId")
+    ? String(formData.get("parentContractId") ?? "").trim() || null
+    : undefined;
+
+  // Bundled maintenance: product maint on buyout; project maint on project contracts. Not for subscription.
+  const productMaintRatePct =
+    contractType === "BUYOUT"
+      ? normalizeMaintRatePct(String(formData.get("productMaintRatePct") ?? formData.get("weibaoRatePct") ?? ""))
+      : null;
+  const productMaintIncludedY1 =
+    contractType === "BUYOUT"
+      ? String(formData.get("productMaintIncludedY1") ?? formData.get("weibaoIncludedY1") ?? "") === "on" ||
+        String(formData.get("productMaintIncludedY1") ?? formData.get("weibaoIncludedY1") ?? "") === "true"
+      : false;
+  const projectMaintRatePct =
+    contractType === "PROJECT"
+      ? normalizeMaintRatePct(String(formData.get("projectMaintRatePct") ?? ""))
+      : null;
+  const projectMaintIncludedY1 =
+    contractType === "PROJECT"
+      ? String(formData.get("projectMaintIncludedY1") ?? "") === "on" ||
+        String(formData.get("projectMaintIncludedY1") ?? "") === "true"
+      : false;
+
+  // Year-2+ renewals may link back to parent commercial contract.
+  let resolvedParentId: string | null | undefined = parentContractId;
+  const parentType = expectedParentType(contractType);
+  if (!isRenewalMaintType(contractType)) {
+    resolvedParentId = null;
+  } else if (parentContractId && parentType) {
+    const parent = await db.contract.findFirst({
+      where: { id: parentContractId, customerId: owner.id, contractType: parentType },
+      select: { id: true },
+    });
+    resolvedParentId = parent?.id ?? null;
+  }
+
+  const data: Record<string, unknown> = {
+    name,
+    contractType,
+    status,
+    amount: String(formData.get("amount") ?? "").trim() || null,
+    startDate: parseOptionalDate(formData, "startDate"),
+    endDate: parseOptionalDate(formData, "endDate"),
+    renewsAt: parseOptionalDate(formData, "renewsAt"),
+    billingCycle: isPrimaryCommercialType(contractType) ? null : billingCycle,
+    productMaintRatePct,
+    productMaintIncludedY1,
+    projectMaintRatePct,
+    projectMaintIncludedY1,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+  };
+
+  if (id) {
+    if (partnerId !== undefined) data.partnerId = partnerId;
+    if (opportunityId !== undefined) data.opportunityId = opportunityId;
+    if (projectId !== undefined) data.projectId = projectId;
+    if (resolvedParentId !== undefined) data.parentContractId = resolvedParentId;
+    const existing = await db.contract.findFirst({ where: { id, customerId: owner.id } });
+    if (!existing) return;
+    // Prevent self-parent cycles
+    if (data.parentContractId === id) data.parentContractId = null;
+    const contract = await db.contract.update({ where: { id }, data });
+    void recordSystemEvent({
+      category: "CONTRACT",
+      action: "contract.update",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Contract",
+      targetId: contract.id,
+      targetLabel: contract.name,
+      summary: `更新合同：${contract.name}`,
+      meta: {
+        customerId: contract.customerId,
+        partnerId: contract.partnerId,
+        contractType: contract.contractType,
+        status: contract.status,
+        productMaintRatePct: contract.productMaintRatePct,
+        projectMaintRatePct: contract.projectMaintRatePct,
+      },
+    });
+    await logOwnerTimeline(owner, user.id, {
+      title: `更新合同：${contract.name}`,
+      content: [
+        contract.contractType,
+        contract.amount ? `金额：${contract.amount}` : null,
+        contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
+        contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
+        contract.status,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      meta: { entity: "contract", contractId: contract.id },
+    });
+    if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
+  } else {
+    const contract = await db.contract.create({
+      data: {
+        ...data,
+        customerId: owner.id,
+        partnerId: partnerId ?? null,
+        opportunityId: opportunityId ?? null,
+        projectId: projectId ?? null,
+        parentContractId: resolvedParentId ?? null,
+        createdById: user.id,
+      } as never,
+    });
+    void recordSystemEvent({
+      category: "CONTRACT",
+      action: "contract.create",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Contract",
+      targetId: contract.id,
+      targetLabel: contract.name,
+      summary: `新建合同：${contract.name}`,
+      meta: {
+        customerId: contract.customerId,
+        partnerId: contract.partnerId,
+        contractType: contract.contractType,
+        status: contract.status,
+        productMaintRatePct: contract.productMaintRatePct,
+        projectMaintRatePct: contract.projectMaintRatePct,
+      },
+    });
+    await logOwnerTimeline(owner, user.id, {
+      title: `新建合同：${contract.name}`,
+      content: [
+        contract.contractType,
+        contract.amount ? `金额：${contract.amount}` : null,
+        contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
+        contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
+        contract.status,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      meta: { entity: "contract", contractId: contract.id },
+    });
+    if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
+  }
+  revalidatePath(ownerPath(owner));
+}
+
+function renewalWindowFromParent(parent: {
+  endDate: Date | null;
+  startDate: Date | null;
+}): { start: Date; end: Date } {
+  const start = parent.endDate
+    ? new Date(parent.endDate)
+    : parent.startDate
+      ? new Date(new Date(parent.startDate).getTime() + 365 * 24 * 60 * 60 * 1000)
+      : new Date();
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+  return { start, end };
+}
+
+/** From a buyout: create year-2+ standalone product maintenance linked to the product contract. */
+export async function createProductMaintRenewalAction(owner: OwnerRef, buyoutId: string) {
+  const user = await requireUser();
+  if (owner.kind !== "customer") return;
+  const buyout = await db.contract.findFirst({
+    where: { id: buyoutId, customerId: owner.id, contractType: "BUYOUT" },
+  });
+  if (!buyout) return;
+
+  const rate = buyout.productMaintRatePct ?? DEFAULT_PRODUCT_MAINT_RATE_PCT;
+  const suggested = estimateMaintAmount(buyout.amount, rate);
+  const { start, end } = renewalWindowFromParent(buyout);
+
+  const contract = await db.contract.create({
+    data: {
+      customerId: owner.id,
+      partnerId: buyout.partnerId,
+      opportunityId: buyout.opportunityId,
+      projectId: buyout.projectId,
+      parentContractId: buyout.id,
+      name: `${buyout.name} · Product maintenance`,
+      contractType: "PRODUCT_MAINTENANCE",
+      status: "ACTIVE",
+      amount: suggested,
+      startDate: start,
+      endDate: end,
+      renewsAt: end,
+      billingCycle: "YEARLY",
+      productMaintRatePct: null,
+      productMaintIncludedY1: false,
+      projectMaintRatePct: null,
+      projectMaintIncludedY1: false,
+      notes: `Standalone product maintenance after year 1 (rate ${rate}% of buyout${buyout.amount ? ` ${buyout.amount}` : ""}).`,
+      createdById: user.id,
+    },
+  });
+
+  void recordSystemEvent({
+    category: "CONTRACT",
+    action: "contract.product_maint_renewal.create",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Contract",
+    targetId: contract.id,
+    targetLabel: contract.name,
+    summary: `从买断创建产品维保续约：${contract.name}`,
+    meta: {
+      customerId: contract.customerId,
+      parentContractId: buyout.id,
+      productMaintRatePct: rate,
+    },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `新建产品维保：${contract.name}`,
+    content: `关联买断 ${buyout.name} · ${rate}%`,
+    meta: { entity: "contract", contractId: contract.id, parentContractId: buyout.id },
+  });
+  revalidatePath(ownerPath(owner));
+}
+
+/** @deprecated use createProductMaintRenewalAction */
+export const createWeibaoRenewalAction = createProductMaintRenewalAction;
+
+/** From a project contract: create year-2+ standalone project maintenance linked to the project contract. */
+export async function createProjectMaintRenewalAction(owner: OwnerRef, projectContractId: string) {
+  const user = await requireUser();
+  if (owner.kind !== "customer") return;
+  const parent = await db.contract.findFirst({
+    where: { id: projectContractId, customerId: owner.id, contractType: "PROJECT" },
+  });
+  if (!parent) return;
+
+  const rate = parent.projectMaintRatePct ?? DEFAULT_PROJECT_MAINT_RATE_PCT;
+  const suggested = estimateMaintAmount(parent.amount, rate);
+  const { start, end } = renewalWindowFromParent(parent);
+
+  const contract = await db.contract.create({
+    data: {
+      customerId: owner.id,
+      partnerId: parent.partnerId,
+      opportunityId: parent.opportunityId,
+      projectId: parent.projectId,
+      parentContractId: parent.id,
+      name: `${parent.name} · Project maintenance`,
+      contractType: "PROJECT_MAINTENANCE",
+      status: "ACTIVE",
+      amount: suggested,
+      startDate: start,
+      endDate: end,
+      renewsAt: end,
+      billingCycle: "YEARLY",
+      productMaintRatePct: null,
+      productMaintIncludedY1: false,
+      projectMaintRatePct: null,
+      projectMaintIncludedY1: false,
+      notes: `Standalone project maintenance after year 1 (rate ${rate}% of project contract${parent.amount ? ` ${parent.amount}` : ""}).`,
+      createdById: user.id,
+    },
+  });
+
+  void recordSystemEvent({
+    category: "CONTRACT",
+    action: "contract.project_maint_renewal.create",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Contract",
+    targetId: contract.id,
+    targetLabel: contract.name,
+    summary: `从项目合同创建项目维保续约：${contract.name}`,
+    meta: {
+      customerId: contract.customerId,
+      parentContractId: parent.id,
+      projectMaintRatePct: rate,
+    },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `新建项目维保：${contract.name}`,
+    content: `关联项目合同 ${parent.name} · ${rate}%`,
+    meta: { entity: "contract", contractId: contract.id, parentContractId: parent.id },
+  });
+  revalidatePath(ownerPath(owner));
+}
+
+export async function deleteContractAction(owner: OwnerRef, contractId: string) {
+  const user = await requireUser();
+  if (owner.kind !== "customer") return;
+  const contract = await db.contract.findFirst({ where: { id: contractId, customerId: owner.id } });
+  if (!contract) return;
+  await db.contract.delete({ where: { id: contractId } });
+  void recordSystemEvent({
+    category: "CONTRACT",
+    action: "contract.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Contract",
+    targetId: contractId,
+    targetLabel: contract.name,
+    summary: `删除合同：${contract.name}`,
+    meta: {
+      customerId: contract.customerId,
+      partnerId: contract.partnerId,
+      contractType: contract.contractType,
+    },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `删除合同：${contract.name}`,
+    meta: { entity: "contract", contractId },
+  });
+  revalidatePath(ownerPath(owner));
+  if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
 }
 
 export async function createProjectWorkLogAction(owner: OwnerRef, formData: FormData) {
