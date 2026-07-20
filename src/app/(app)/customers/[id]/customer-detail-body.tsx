@@ -30,6 +30,8 @@ import {
   upsertOpportunityAction,
   deleteOpportunityAction,
   upsertProjectAction,
+  upsertContractAction,
+  deleteContractAction,
   convertOpportunityToProjectAction,
   addNoteAction,
   createTodoAction,
@@ -40,6 +42,17 @@ import { getMossConfigStatus } from "@/lib/moss";
 import { parseMossDossier } from "@/lib/moss-dossier";
 import { getTaxonomyOptions } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
+import {
+  BILLING_CYCLE_CODES,
+  CONTRACT_STATUS_CODES,
+  CONTRACT_TYPE_CODES,
+  billingCycleLabel,
+  contractStatusLabel,
+  contractStatusTone,
+  contractTypeLabel,
+  contractTypeTone,
+  isContractPastEnd,
+} from "@/lib/contract-types";
 
 export async function CustomerDetailBody({ id }: { id: string }) {
   const user = await requireUser();
@@ -59,6 +72,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       opportunities: {
         include: { partner: { select: { id: true, name: true } }, project: { select: { id: true } } },
         orderBy: { updatedAt: "desc" },
+      },
+      contracts: {
+        include: {
+          partner: { select: { id: true, name: true } },
+          opportunity: { select: { id: true, name: true } },
+          project: { select: { id: true, name: true } },
+        },
+        orderBy: [{ status: "asc" }, { renewsAt: "asc" }, { updatedAt: "desc" }],
       },
       projects: {
         include: {
@@ -411,6 +432,176 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     </div>
   );
 
+  // ============ 合同（订阅 / 维保 / 买断） ============
+  const contractsPanel = (
+    <div className="space-y-3">
+      {customer.contracts.map((ct) => {
+        const pastEnd = isContractPastEnd(ct.endDate, ct.status);
+        return (
+          <details key={ct.id} className="group rounded-lg border border-slate-100 hover:border-slate-200">
+            <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-medium text-slate-900">{ct.name}</span>
+                  <Badge tone={contractTypeTone(ct.contractType)}>
+                    {contractTypeLabel(ct.contractType, locale)}
+                  </Badge>
+                  <Badge tone={contractStatusTone(ct.status)}>
+                    {contractStatusLabel(ct.status, locale)}
+                  </Badge>
+                  {pastEnd && <Badge tone="amber">{c.contractStatusExpired}</Badge>}
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  {m.common.amount}: {ct.amount ?? "—"}
+                  {ct.billingCycle && ` · ${billingCycleLabel(ct.billingCycle, locale)}`}
+                  {ct.startDate && ` · ${c.contractStartDate}: ${fmtDate(ct.startDate, bcp47)}`}
+                  {ct.endDate && ` · ${c.contractEndDate}: ${fmtDate(ct.endDate, bcp47)}`}
+                  {ct.renewsAt && ` · ${c.contractRenewsAt}: ${fmtDate(ct.renewsAt, bcp47)}`}
+                  {ct.partner && ` · ${c.viaPartner}: ${ct.partner.name}`}
+                  {ct.opportunity && ` · ${c.belongsToOpportunity}: ${ct.opportunity.name}`}
+                  {ct.project && ` · ${c.belongsToProject}: ${ct.project.name}`}
+                </div>
+                {pastEnd && (
+                  <div className="text-[11px] text-amber-600 mt-1">{c.contractPastEndHint}</div>
+                )}
+              </div>
+              <span className="text-slate-300 group-open:rotate-90">›</span>
+            </summary>
+            <div className="px-4 pb-4 pt-1 border-t border-slate-50">
+              <form action={upsertContractAction.bind(null, owner)} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                <input type="hidden" name="id" value={ct.id} />
+                <input name="name" defaultValue={ct.name} className={input} aria-label={c.contractName} />
+                <select name="contractType" defaultValue={ct.contractType} className={input} aria-label={c.contractType}>
+                  {CONTRACT_TYPE_CODES.map((code) => (
+                    <option key={code} value={code}>{contractTypeLabel(code, locale)}</option>
+                  ))}
+                </select>
+                <select name="status" defaultValue={ct.status} className={input} aria-label={c.contractStatus}>
+                  {CONTRACT_STATUS_CODES.map((code) => (
+                    <option key={code} value={code}>{contractStatusLabel(code, locale)}</option>
+                  ))}
+                </select>
+                <input name="amount" defaultValue={ct.amount ?? ""} placeholder={m.common.amount} className={input} />
+                <select name="billingCycle" defaultValue={ct.billingCycle ?? ""} className={input} aria-label={c.contractBillingCycle}>
+                  <option value="">{c.contractBillingNone}</option>
+                  {BILLING_CYCLE_CODES.map((code) => (
+                    <option key={code} value={code}>{billingCycleLabel(code, locale)}</option>
+                  ))}
+                </select>
+                <input
+                  name="startDate"
+                  type="date"
+                  defaultValue={ct.startDate ? new Date(ct.startDate).toISOString().slice(0, 10) : ""}
+                  className={input}
+                  aria-label={c.contractStartDate}
+                />
+                <input
+                  name="endDate"
+                  type="date"
+                  defaultValue={ct.endDate ? new Date(ct.endDate).toISOString().slice(0, 10) : ""}
+                  className={input}
+                  aria-label={c.contractEndDate}
+                />
+                <input
+                  name="renewsAt"
+                  type="date"
+                  defaultValue={ct.renewsAt ? new Date(ct.renewsAt).toISOString().slice(0, 10) : ""}
+                  className={input}
+                  aria-label={c.contractRenewsAt}
+                />
+                <select name="partnerId" defaultValue={ct.partnerId ?? ""} className={input}>
+                  <option value="">{c.viaPartnerNone}</option>
+                  {partners.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <select name="opportunityId" defaultValue={ct.opportunityId ?? ""} className={input}>
+                  <option value="">{c.contractLinkOpportunityNone}</option>
+                  {customer.opportunities.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+                <select name="projectId" defaultValue={ct.projectId ?? ""} className={input}>
+                  <option value="">{c.contractLinkProjectNone}</option>
+                  {customer.projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <textarea
+                  name="notes"
+                  rows={2}
+                  defaultValue={ct.notes ?? ""}
+                  placeholder={c.contractNotesPlaceholder}
+                  className={`${input} col-span-2 md:col-span-3`}
+                  aria-label={m.common.note}
+                />
+                <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
+                  <button formAction={deleteContractAction.bind(null, owner, ct.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
+                  <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
+                </div>
+              </form>
+            </div>
+          </details>
+        );
+      })}
+      {customer.contracts.length === 0 && <EmptyState text={c.noContracts} />}
+      <details className="rounded-lg border border-dashed border-slate-200">
+        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addContract}</summary>
+        <form action={upsertContractAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+          <input name="name" required placeholder={c.contractName} className={input} />
+          <select name="contractType" defaultValue="SUBSCRIPTION" className={input} aria-label={c.contractType}>
+            {CONTRACT_TYPE_CODES.map((code) => (
+              <option key={code} value={code}>{contractTypeLabel(code, locale)}</option>
+            ))}
+          </select>
+          <select name="status" defaultValue="ACTIVE" className={input} aria-label={c.contractStatus}>
+            {CONTRACT_STATUS_CODES.map((code) => (
+              <option key={code} value={code}>{contractStatusLabel(code, locale)}</option>
+            ))}
+          </select>
+          <input name="amount" placeholder={m.common.amount} className={input} />
+          <select name="billingCycle" defaultValue="" className={input} aria-label={c.contractBillingCycle}>
+            <option value="">{c.contractBillingNone}</option>
+            {BILLING_CYCLE_CODES.map((code) => (
+              <option key={code} value={code}>{billingCycleLabel(code, locale)}</option>
+            ))}
+          </select>
+          <input name="startDate" type="date" className={input} aria-label={c.contractStartDate} />
+          <input name="endDate" type="date" className={input} aria-label={c.contractEndDate} />
+          <input name="renewsAt" type="date" className={input} aria-label={c.contractRenewsAt} />
+          <select name="partnerId" defaultValue={customer.partnerLinks[0]?.partner.id ?? ""} className={input}>
+            <option value="">{c.viaPartnerNone}</option>
+            {partners.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select name="opportunityId" defaultValue="" className={input}>
+            <option value="">{c.contractLinkOpportunityNone}</option>
+            {customer.opportunities.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+          <select name="projectId" defaultValue="" className={input}>
+            <option value="">{c.contractLinkProjectNone}</option>
+            {customer.projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <textarea
+            name="notes"
+            rows={2}
+            placeholder={c.contractNotesPlaceholder}
+            className={`${input} col-span-2 md:col-span-3`}
+            aria-label={m.common.note}
+          />
+          <div className="col-span-2 md:col-span-3 flex justify-end">
+            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
+          </div>
+        </form>
+      </details>
+    </div>
+  );
+
   // ============ 合作项目（默认展开；日常操作优先，基本信息只读） ============
   const projectsPanel = (
     <div className="space-y-4">
@@ -554,6 +745,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       desc: c.tabOpportunitiesDesc,
       badge: customer.opportunities.length ? String(customer.opportunities.length) : null,
       content: opportunitiesPanel,
+    },
+    {
+      id: "contracts",
+      label: c.tabContracts,
+      desc: c.tabContractsDesc,
+      badge: customer.contracts.length ? String(customer.contracts.length) : null,
+      content: contractsPanel,
     },
     {
       id: "projects",

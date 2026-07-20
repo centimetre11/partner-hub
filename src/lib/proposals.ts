@@ -142,6 +142,12 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
       contacts: { orderBy: { createdAt: "asc" } },
       opportunities: { where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] } }, orderBy: { updatedAt: "desc" }, take: 20 },
       projects: { where: { status: { not: "CLOSED" } }, orderBy: { updatedAt: "desc" }, take: 20, include: { partner: { select: { name: true } } } },
+      contracts: {
+        where: { status: { in: ["DRAFT", "ACTIVE"] } },
+        orderBy: [{ renewsAt: "asc" }, { updatedAt: "desc" }],
+        take: 20,
+        include: { partner: { select: { name: true } } },
+      },
       todos: {
         where: { status: "OPEN" },
         orderBy: { dueDate: "asc" },
@@ -187,6 +193,15 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
         )
         .join("\n")
     : noneLabel(locale);
+  const contracts = c.contracts.length
+    ? c.contracts
+        .map((ct) => {
+          const end = ct.endDate?.toISOString().slice(0, 10) ?? "-";
+          const renew = ct.renewsAt?.toISOString().slice(0, 10) ?? "-";
+          return `- id=${ct.id} name:${ct.name} type:${ct.contractType} status:${ct.status} amount:${ct.amount ?? "-"} end:${end} renews:${renew} partner:${ct.partner?.name ?? "-"}`;
+        })
+        .join("\n")
+    : noneLabel(locale);
   const projects = c.projects.length
     ? c.projects
         .map(
@@ -205,9 +220,10 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
     : noneLabel(locale);
   const contactsSection = locale === "zh" ? "[权力地图 / 关键人物]" : "[Power map / key people]";
   const oppsSection = locale === "zh" ? "[商机]" : "[Opportunities]";
+  const contractsSection = locale === "zh" ? "[合同]" : "[Contracts]";
   const projectsSection = locale === "zh" ? "[合作项目]" : "[Projects]";
   const todosSection = locale === "zh" ? "[进行中待办]" : "[Open todos]";
-  return `${header}\n- name[name]: ${c.name}\n${fields}\n${partnerLine}\n${wecomLine}\n\n${contactsSection}\n${contacts}\n\n${oppsSection}\n${opps}\n\n${projectsSection}\n${projects}\n\n${todosSection}\n${todos}`;
+  return `${header}\n- name[name]: ${c.name}\n${fields}\n${partnerLine}\n${wecomLine}\n\n${contactsSection}\n${contacts}\n\n${oppsSection}\n${opps}\n\n${contractsSection}\n${contracts}\n\n${projectsSection}\n${projects}\n\n${todosSection}\n${todos}`;
 }
 
 /** Business record intake: partner name + contacts only (fast attribute extraction) */

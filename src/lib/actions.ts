@@ -27,6 +27,13 @@ import {
 } from "./opportunity-process-tags";
 import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opportunity-status";
 import {
+  DEFAULT_CONTRACT_STATUS,
+  DEFAULT_CONTRACT_TYPE,
+  normalizeBillingCycle,
+  normalizeContractStatus,
+  normalizeContractType,
+} from "./contract-types";
+import {
   isStatusDimensionKey,
   parseStatusOverrides,
   serializeStatusOverrides,
@@ -934,6 +941,157 @@ export async function deleteProjectAction(owner: OwnerRef, projectId: string) {
   });
   revalidatePath(ownerPath(owner));
   revalidatePath("/projects");
+}
+
+// ============ 合同（订阅 / 维保 / 买断） ============
+
+function parseOptionalDate(formData: FormData, key: string): Date | null {
+  const raw = String(formData.get(key) ?? "").trim();
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function upsertContractAction(owner: OwnerRef, formData: FormData) {
+  const user = await requireUser();
+  if (owner.kind !== "customer") return;
+
+  const id = String(formData.get("id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+
+  const typeRaw = String(formData.get("contractType") ?? "").trim();
+  const contractType = normalizeContractType(typeRaw) ?? DEFAULT_CONTRACT_TYPE;
+  const status = normalizeContractStatus(String(formData.get("status") ?? DEFAULT_CONTRACT_STATUS));
+  const billingCycle = normalizeBillingCycle(String(formData.get("billingCycle") ?? "") || null);
+
+  const partnerId = formData.has("partnerId")
+    ? String(formData.get("partnerId") ?? "").trim() || null
+    : undefined;
+  const opportunityId = formData.has("opportunityId")
+    ? String(formData.get("opportunityId") ?? "").trim() || null
+    : undefined;
+  const projectId = formData.has("projectId")
+    ? String(formData.get("projectId") ?? "").trim() || null
+    : undefined;
+
+  const data: Record<string, unknown> = {
+    name,
+    contractType,
+    status,
+    amount: String(formData.get("amount") ?? "").trim() || null,
+    startDate: parseOptionalDate(formData, "startDate"),
+    endDate: parseOptionalDate(formData, "endDate"),
+    renewsAt: parseOptionalDate(formData, "renewsAt"),
+    billingCycle: contractType === "BUYOUT" ? null : billingCycle,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+  };
+
+  if (id) {
+    if (partnerId !== undefined) data.partnerId = partnerId;
+    if (opportunityId !== undefined) data.opportunityId = opportunityId;
+    if (projectId !== undefined) data.projectId = projectId;
+    const existing = await db.contract.findFirst({ where: { id, customerId: owner.id } });
+    if (!existing) return;
+    const contract = await db.contract.update({ where: { id }, data });
+    void recordSystemEvent({
+      category: "CONTRACT",
+      action: "contract.update",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Contract",
+      targetId: contract.id,
+      targetLabel: contract.name,
+      summary: `更新合同：${contract.name}`,
+      meta: {
+        customerId: contract.customerId,
+        partnerId: contract.partnerId,
+        contractType: contract.contractType,
+        status: contract.status,
+      },
+    });
+    await logOwnerTimeline(owner, user.id, {
+      title: `更新合同：${contract.name}`,
+      content: [
+        contract.contractType,
+        contract.amount ? `金额：${contract.amount}` : null,
+        contract.status,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      meta: { entity: "contract", contractId: contract.id },
+    });
+    if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
+  } else {
+    const contract = await db.contract.create({
+      data: {
+        ...data,
+        customerId: owner.id,
+        partnerId: partnerId ?? null,
+        opportunityId: opportunityId ?? null,
+        projectId: projectId ?? null,
+        createdById: user.id,
+      } as never,
+    });
+    void recordSystemEvent({
+      category: "CONTRACT",
+      action: "contract.create",
+      actorId: user.id,
+      actorLabel: user.name,
+      targetType: "Contract",
+      targetId: contract.id,
+      targetLabel: contract.name,
+      summary: `新建合同：${contract.name}`,
+      meta: {
+        customerId: contract.customerId,
+        partnerId: contract.partnerId,
+        contractType: contract.contractType,
+        status: contract.status,
+      },
+    });
+    await logOwnerTimeline(owner, user.id, {
+      title: `新建合同：${contract.name}`,
+      content: [
+        contract.contractType,
+        contract.amount ? `金额：${contract.amount}` : null,
+        contract.status,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      meta: { entity: "contract", contractId: contract.id },
+    });
+    if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
+  }
+  revalidatePath(ownerPath(owner));
+}
+
+export async function deleteContractAction(owner: OwnerRef, contractId: string) {
+  const user = await requireUser();
+  if (owner.kind !== "customer") return;
+  const contract = await db.contract.findFirst({ where: { id: contractId, customerId: owner.id } });
+  if (!contract) return;
+  await db.contract.delete({ where: { id: contractId } });
+  void recordSystemEvent({
+    category: "CONTRACT",
+    action: "contract.delete",
+    actorId: user.id,
+    actorLabel: user.name,
+    targetType: "Contract",
+    targetId: contractId,
+    targetLabel: contract.name,
+    summary: `删除合同：${contract.name}`,
+    meta: {
+      customerId: contract.customerId,
+      partnerId: contract.partnerId,
+      contractType: contract.contractType,
+    },
+  });
+  await logOwnerTimeline(owner, user.id, {
+    title: `删除合同：${contract.name}`,
+    meta: { entity: "contract", contractId },
+  });
+  revalidatePath(ownerPath(owner));
+  if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
 }
 
 export async function createProjectWorkLogAction(owner: OwnerRef, formData: FormData) {
