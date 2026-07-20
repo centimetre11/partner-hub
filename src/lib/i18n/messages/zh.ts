@@ -995,8 +995,6 @@ export const messagesZh: Messages = {
     allCustomers: "全部客户",
     arrOnly: "仅 ARR",
     empty: "暂无匹配合同。请在客户详情的「合同」页签中新增。",
-    linkArr: "ARR 统计",
-    linkCalendar: "日历表",
     statListed: "列表合同数",
     statArrContracts: "其中 ARR 合同",
     statArrFromList: "列表中生效合同贡献 ARR",
@@ -1048,8 +1046,8 @@ export const messagesZh: Messages = {
     desc: "统计产品订阅、产品维保、项目维保的年经常性收入",
     scopeHint:
       "ARR = 生效中的「订阅 + 产品维保 + 项目维保」（按计费周期年化）。买断与项目主合同不计入。",
-    linkContracts: "合同列表",
     linkCalendar: "日历表",
+    linkOverview: "总览",
     statTotalArr: "ARR 合计",
     statSubscription: "产品订阅",
     statProductMaint: "产品维保",
@@ -1074,7 +1072,6 @@ export const messagesZh: Messages = {
   arrCalendar: {
     title: "ARR 客户日历表",
     desc: "{year} 年 · {count} 家 ARR 客户 · 按月安排续费提醒、巡检与跟进",
-    linkArr: "ARR 总览",
     seedRenewals: "一键生成续费提醒",
     guide1: "了解客户使用情况；安排半年巡检与续费提醒。",
     guide2: "巡检：由线上会议群驱动；未联系客户找销售跟进、系统更新等。",

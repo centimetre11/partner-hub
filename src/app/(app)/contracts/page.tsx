@@ -71,22 +71,6 @@ export default async function ContractsPage({
       <PageHeader
         title={t.title}
         desc={t.desc.replace("{count}", String(contracts.length))}
-        actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/arr"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              {t.linkArr}
-            </Link>
-            <Link
-              href="/arr/calendar"
-              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800"
-            >
-              {t.linkCalendar}
-            </Link>
-          </div>
-        }
       />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-4">

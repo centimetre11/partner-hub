@@ -1000,8 +1000,6 @@ export const messagesEn = {
     allCustomers: "All customers",
     arrOnly: "ARR only",
     empty: "No contracts match. Add contracts on a customer detail page.",
-    linkArr: "ARR stats",
-    linkCalendar: "ARR calendar",
     statListed: "Listed contracts",
     statArrContracts: "ARR contracts in list",
     statArrFromList: "ARR from listed active contracts",
@@ -1053,8 +1051,8 @@ export const messagesEn = {
     desc: "Annual recurring revenue from subscriptions, product maintenance, and project maintenance",
     scopeHint:
       "ARR = active Subscription + Product maintenance + Project maintenance (annualized by billing cycle). Buyout and project primary contracts are excluded.",
-    linkContracts: "Contracts",
-    linkCalendar: "ARR calendar",
+    linkCalendar: "Calendar",
+    linkOverview: "Overview",
     statTotalArr: "Total ARR",
     statSubscription: "Subscription",
     statProductMaint: "Product maintenance",
@@ -1079,7 +1077,6 @@ export const messagesEn = {
   arrCalendar: {
     title: "ARR customer calendar",
     desc: "{year} · {count} ARR customers · plan monthly actions (renewal, inspection, follow-up)",
-    linkArr: "ARR overview",
     seedRenewals: "Seed renewal reminders",
     guide1: "Understand customer usage; schedule six-month inspections and renewal reminders.",
     guide2: "Inspection: driven by online meeting groups; uncontacted customers → find sales to follow up.",

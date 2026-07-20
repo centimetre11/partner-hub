@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import { ArrViewSwitch } from "@/components/arr-view-switch";
 import { EmptyState, PageHeader, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import {
@@ -119,12 +119,7 @@ export default async function ArrCalendarPage({
         desc={t.desc.replace("{year}", String(year)).replace("{count}", String(rows.length))}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              href="/arr"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              {t.linkArr}
-            </Link>
+            <ArrViewSwitch />
             <form action={seedAction}>
               <button
                 type="submit"

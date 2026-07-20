@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
+import { ArrViewSwitch } from "@/components/arr-view-switch";
 import { Badge, Card, EmptyState, PageHeader, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import {
@@ -150,22 +151,7 @@ export default async function ArrPage() {
       <PageHeader
         title={t.title}
         desc={t.desc}
-        actions={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/contracts?arrOnly=1&status=ACTIVE"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              {t.linkContracts}
-            </Link>
-            <Link
-              href="/arr/calendar"
-              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800"
-            >
-              {t.linkCalendar}
-            </Link>
-          </div>
-        }
+        actions={<ArrViewSwitch />}
       />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-5 max-w-7xl">
