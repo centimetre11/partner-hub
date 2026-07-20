@@ -41,6 +41,7 @@ import {
   normalizeContractType,
   normalizeMaintRatePct,
 } from "./contract-types";
+import { lineItemsFromFormData } from "./contract-line-items";
 import {
   isStatusDimensionKey,
   parseStatusOverrides,
@@ -1024,6 +1025,11 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
   }
 
   const { amount, currency } = amountAndCurrencyFromFormData(formData);
+  const crmContractId = formData.has("crmContractId")
+    ? String(formData.get("crmContractId") ?? "").trim() || null
+    : undefined;
+  const lineItems = lineItemsFromFormData(formData);
+
   const data: Record<string, unknown> = {
     name,
     contractType,
@@ -1040,6 +1046,23 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     projectMaintIncludedY1,
     notes: String(formData.get("notes") ?? "").trim() || null,
   };
+  if (crmContractId !== undefined) data.crmContractId = crmContractId;
+
+  async function replaceLineItems(contractId: string) {
+    await db.contractLineItem.deleteMany({ where: { contractId } });
+    if (!lineItems.length) return;
+    await db.contractLineItem.createMany({
+      data: lineItems.map((item, index) => ({
+        contractId,
+        product: item.product,
+        version: item.version,
+        amount: item.amount,
+        currency: item.currency,
+        cycleYears: item.cycleYears,
+        sortOrder: index,
+      })),
+    });
+  }
 
   if (id) {
     if (partnerId !== undefined) data.partnerId = partnerId;
@@ -1051,6 +1074,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     // Prevent self-parent cycles
     if (data.parentContractId === id) data.parentContractId = null;
     const contract = await db.contract.update({ where: { id }, data });
+    await replaceLineItems(contract.id);
     void recordSystemEvent({
       category: "CONTRACT",
       action: "contract.update",
@@ -1067,6 +1091,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         status: contract.status,
         productMaintRatePct: contract.productMaintRatePct,
         projectMaintRatePct: contract.projectMaintRatePct,
+        lineItemCount: lineItems.length,
       },
     });
     await logOwnerTimeline(owner, user.id, {
@@ -1076,6 +1101,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         contract.amount ? `金额：${formatAmountDisplay(contract.amount, contract.currency, "zh")}` : null,
         contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
         contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
+        lineItems.length ? `明细 ${lineItems.length} 行` : null,
         contract.status,
       ]
         .filter(Boolean)
@@ -1083,6 +1109,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       meta: { entity: "contract", contractId: contract.id },
     });
     if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
+    revalidatePath(`/contracts/${contract.id}`);
   } else {
     const contract = await db.contract.create({
       data: {
@@ -1095,6 +1122,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         createdById: user.id,
       } as never,
     });
+    await replaceLineItems(contract.id);
     void recordSystemEvent({
       category: "CONTRACT",
       action: "contract.create",
@@ -1111,6 +1139,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         status: contract.status,
         productMaintRatePct: contract.productMaintRatePct,
         projectMaintRatePct: contract.projectMaintRatePct,
+        lineItemCount: lineItems.length,
       },
     });
     await logOwnerTimeline(owner, user.id, {
@@ -1120,6 +1149,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
         contract.amount ? `金额：${formatAmountDisplay(contract.amount, contract.currency, "zh")}` : null,
         contract.productMaintRatePct != null ? `产品维保 ${contract.productMaintRatePct}%` : null,
         contract.projectMaintRatePct != null ? `项目维保 ${contract.projectMaintRatePct}%` : null,
+        lineItems.length ? `明细 ${lineItems.length} 行` : null,
         contract.status,
       ]
         .filter(Boolean)
@@ -1127,8 +1157,11 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
       meta: { entity: "contract", contractId: contract.id },
     });
     if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
+    revalidatePath(`/contracts/${contract.id}`);
   }
   revalidatePath(ownerPath(owner));
+  revalidatePath("/contracts");
+  revalidatePath("/arr");
 }
 
 function renewalWindowFromParent(parent: {
@@ -1296,6 +1329,9 @@ export async function deleteContractAction(owner: OwnerRef, contractId: string) 
     meta: { entity: "contract", contractId },
   });
   revalidatePath(ownerPath(owner));
+  revalidatePath("/contracts");
+  revalidatePath(`/contracts/${contractId}`);
+  revalidatePath("/arr");
   if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
 }
 

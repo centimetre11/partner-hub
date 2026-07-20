@@ -1266,9 +1266,91 @@ function parseOptionalDate(raw: unknown): Date | undefined {
 
 const CUSTOMER_STATUSES = ["ACTIVE", "PROSPECT", "INACTIVE"];
 
+/** Customer columns writable from intake (profile fields + CRM ownership). */
+const CUSTOMER_INTAKE_EXTRA_FIELDS = ["crmCustomerId", "ownerId", "presalesUserId"] as const;
+
 function normalizeCustomerStatus(raw: unknown): string | undefined {
   const v = asTrimmedString(raw).toUpperCase();
   return CUSTOMER_STATUSES.includes(v) ? v : undefined;
+}
+
+/** Pull 帆软 CRM 客户 ID from seed / notes when the model buried it in free text. */
+function extractCrmCustomerIdFromText(text?: string | null): string | undefined {
+  const s = asTrimmedString(text);
+  if (!s) return undefined;
+  const m =
+    s.match(/帆软\s*CRM\s*客户\s*ID\s*[：:]\s*([0-9a-fA-F-]{20,})/) ||
+    s.match(/CRM\s*客户\s*ID\s*[：:]\s*([0-9a-fA-F-]{20,})/) ||
+    s.match(/CRM\s*customer\s*ID\s*[：:]\s*([0-9a-fA-F-]{20,})/i);
+  return m?.[1]?.trim() || undefined;
+}
+
+function customerWritableFromData(data: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(CUSTOMER_FIELD_LABELS)) {
+    if (key === "name") continue;
+    if (data[key] !== undefined) out[key] = data[key];
+  }
+  for (const key of CUSTOMER_INTAKE_EXTRA_FIELDS) {
+    if (data[key] !== undefined) out[key] = data[key];
+  }
+  return out;
+}
+
+async function resolveCrmSalesUserId(name: string | null | undefined): Promise<string | null> {
+  const n = name?.trim();
+  if (!n) return null;
+  const user = await db.user.findFirst({
+    where: { crmSalesmanName: n },
+    select: { id: true },
+  });
+  return user?.id ?? null;
+}
+
+/**
+ * When intake came from CRM seed (or model put com_id in notes), bind CRM + fill gaps
+ * that the LLM often drops after web research (city / contact / owner).
+ */
+async function enrichCustomerIntakeFromCrm(
+  data: Record<string, unknown>,
+  proposal: IntakeProposal,
+  sourceText?: string,
+): Promise<void> {
+  const crmCustomerId =
+    asTrimmedString(proposal.crmCustomerId) ||
+    extractCrmCustomerIdFromText(sourceText) ||
+    extractCrmCustomerIdFromText(asTrimmedString(data.notes));
+  if (!crmCustomerId) return;
+
+  data.crmCustomerId = crmCustomerId;
+
+  const crm = await db.crmCustomer.findUnique({
+    where: { id: crmCustomerId },
+    include: { contacts: { orderBy: { recdate: "desc" }, take: 1 } },
+  });
+  if (!crm) return;
+
+  if (!asTrimmedString(data.city)) {
+    const city = asTrimmedString(crm.city) || asTrimmedString(crm.province);
+    if (city) data.city = city;
+  }
+
+  const contact = crm.contacts[0];
+  if (contact?.name) {
+    if (!asTrimmedString(data.contactName)) data.contactName = contact.name;
+    if (!asTrimmedString(data.contactTitle) && contact.duty) data.contactTitle = contact.duty;
+    if (!asTrimmedString(data.contactPhone) && contact.mobile) data.contactPhone = contact.mobile;
+    if (!asTrimmedString(data.contactEmail) && contact.email) data.contactEmail = contact.email;
+  }
+
+  if (!asTrimmedString(data.ownerId)) {
+    const ownerId = await resolveCrmSalesUserId(crm.salesman);
+    if (ownerId) data.ownerId = ownerId;
+  }
+  if (!asTrimmedString(data.presalesUserId)) {
+    const presalesUserId = await resolveCrmSalesUserId(crm.presales);
+    if (presalesUserId) data.presalesUserId = presalesUserId;
+  }
 }
 
 /** Apply a customer intake proposal: write to the Customer entity + power-map contacts. */
@@ -1307,29 +1389,32 @@ async function applyCustomerIntake(opts: {
   let customerId = opts.customerId ?? "";
   if (customerId) {
     if (proposedName) data.name = proposedName;
-    await db.customer.update({ where: { id: customerId }, data });
+    // Update: only attach CRM id when present — do not backfill from CRM over existing profile
+    const crmId =
+      asTrimmedString(proposal.crmCustomerId) ||
+      extractCrmCustomerIdFromText(opts.sourceText) ||
+      extractCrmCustomerIdFromText(asTrimmedString(data.notes));
+    if (crmId) data.crmCustomerId = crmId;
+    await db.customer.update({
+      where: { id: customerId },
+      data: customerWritableFromData(data) as Prisma.CustomerUncheckedUpdateInput,
+    });
     applied.push(locale === "zh" ? "已更新客户档案" : "Updated customer profile");
   } else {
     if (!proposedName) throw new Error(locale === "zh" ? "请提供客户名称" : "Customer name is required");
+    // Create: bind CRM + fill city/contact/owner gaps the model often drops after research
+    await enrichCustomerIntakeFromCrm(data, proposal, opts.sourceText);
+    const writable = customerWritableFromData(data);
     const created = await db.customer.create({
       data: {
         name: proposedName,
-        status: (data.status as string) ?? "PROSPECT",
+        status: (writable.status as string) ?? "PROSPECT",
         createdById: userId,
-        industry: (data.industry as string) ?? null,
-        scale: (data.scale as string) ?? null,
-        city: (data.city as string) ?? null,
-        country: (data.country as string) ?? null,
-        website: (data.website as string) ?? null,
-        contactName: (data.contactName as string) ?? null,
-        contactTitle: (data.contactTitle as string) ?? null,
-        contactPhone: (data.contactPhone as string) ?? null,
-        contactEmail: (data.contactEmail as string) ?? null,
-        notes: (data.notes as string) ?? null,
+        ...writable,
         ...(opts.partnerId
           ? { partnerLinks: { create: { partnerId: opts.partnerId, relation: "SERVED_BY" } } }
           : {}),
-      },
+      } as Prisma.CustomerUncheckedCreateInput,
     });
     customerId = created.id;
     applied.push(locale === "zh" ? `已创建客户：${created.name}` : `Created customer: ${created.name}`);

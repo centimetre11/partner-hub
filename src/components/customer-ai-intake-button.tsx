@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMessages } from "@/lib/i18n/context";
+import { useLocale, useMessages } from "@/lib/i18n/context";
 import { AiIntakePanel } from "@/components/ai-intake-panel";
+import { profileEnrichSeedMessage } from "@/lib/intake-profile-enrich";
 
 export function CustomerAiIntakeButton({
   customerId,
@@ -13,6 +14,8 @@ export function CustomerAiIntakeButton({
   variant = "soft",
   className,
   onDoneNavigate = "customer",
+  /** When enriching an existing customer, auto-run research from archive context */
+  autoEnrich = false,
 }: {
   customerId?: string;
   partnerId?: string | null;
@@ -22,13 +25,16 @@ export function CustomerAiIntakeButton({
   className?: string;
   /** 新建完成后：跳转客户详情，或仅刷新当前页（伙伴详情用） */
   onDoneNavigate?: "customer" | "refresh";
+  autoEnrich?: boolean;
 }) {
   const router = useRouter();
+  const locale = useLocale();
   const messages = useMessages();
   const ai = messages.customers.ai;
   const [open, setOpen] = useState(false);
 
   const scope = customerId ? "customer_profile" : "new_customer";
+  const enrich = !!customerId && autoEnrich;
 
   const btnClass =
     variant === "primary"
@@ -40,7 +46,7 @@ export function CustomerAiIntakeButton({
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className={className ?? btnClass}>
-        {label ?? ai.aiButton}
+        {label ?? (enrich ? ai.aiComplete : ai.aiButton)}
         {suffix}
       </button>
       {open && (
@@ -48,6 +54,8 @@ export function CustomerAiIntakeButton({
           scope={scope}
           customerId={customerId}
           partnerId={partnerId ?? undefined}
+          seedMessage={enrich ? profileEnrichSeedMessage(locale, "customer") : undefined}
+          autoStart={enrich}
           onClose={() => setOpen(false)}
           onDone={(id) => {
             setOpen(false);

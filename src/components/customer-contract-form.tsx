@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   BILLING_CYCLE_CODES,
   CONTRACT_STATUS_CODES,
@@ -14,7 +14,17 @@ import {
   type ContractTypeCode,
 } from "@/lib/contract-types";
 import { AmountInput } from "@/components/amount-input";
-import { currencyForInput, formatAmountDisplay, type AmountCurrency } from "@/lib/amount";
+import {
+  AMOUNT_CURRENCIES,
+  currencyForInput,
+  formatAmountDisplay,
+  type AmountCurrency,
+} from "@/lib/amount";
+import {
+  emptyLineItem,
+  lineItemsToFormJson,
+  type ContractLineItemInput,
+} from "@/lib/contract-line-items";
 
 export type ContractFormCopy = {
   contractName: string;
@@ -45,6 +55,16 @@ export type ContractFormCopy = {
   projectMaintEstimate: string;
   projectMaintParent: string;
   projectMaintParentNone: string;
+  crmContractId: string;
+  crmContractIdPlaceholder: string;
+  lineItemsTitle: string;
+  lineItemsHint: string;
+  lineProduct: string;
+  lineVersion: string;
+  lineAmount: string;
+  lineCycleYears: string;
+  lineAdd: string;
+  lineRemove: string;
   amount: string;
   note: string;
   save: string;
@@ -54,6 +74,14 @@ export type ContractFormCopy = {
 
 type Option = { id: string; name: string };
 
+export type ContractFormLineItemDefault = {
+  product: string;
+  version?: string | null;
+  amount?: string | null;
+  currency?: string | null;
+  cycleYears?: number | null;
+};
+
 type ContractDefaults = {
   id?: string;
   name?: string;
@@ -61,6 +89,7 @@ type ContractDefaults = {
   status?: string;
   amount?: string | null;
   currency?: string | null;
+  crmContractId?: string | null;
   billingCycle?: string | null;
   startDate?: string;
   endDate?: string;
@@ -74,6 +103,7 @@ type ContractDefaults = {
   projectMaintRatePct?: number | null;
   projectMaintIncludedY1?: boolean;
   notes?: string | null;
+  lineItems?: ContractFormLineItemDefault[];
 };
 
 function useRateState(initial: number | null | undefined, fallback = 15) {
@@ -89,6 +119,20 @@ function useRateState(initial: number | null | undefined, fallback = 15) {
 
 function isRenewalType(type: ContractTypeCode) {
   return type === "PRODUCT_MAINTENANCE" || type === "PROJECT_MAINTENANCE";
+}
+
+function toLineState(
+  items: ContractFormLineItemDefault[] | undefined,
+  fallbackCurrency: string | null | undefined
+): ContractLineItemInput[] {
+  if (!items?.length) return [];
+  return items.map((it) => ({
+    product: it.product ?? "",
+    version: it.version ?? null,
+    amount: it.amount ?? null,
+    currency: it.currency ? currencyForInput(it.currency) : currencyForInput(fallbackCurrency),
+    cycleYears: it.cycleYears ?? 1,
+  }));
 }
 
 export function CustomerContractForm({
@@ -123,6 +167,9 @@ export function CustomerContractForm({
   );
   const [amount, setAmount] = useState(defaults?.amount ?? "");
   const [currency, setCurrency] = useState<AmountCurrency>(currencyForInput(defaults?.currency));
+  const [lineItems, setLineItems] = useState<ContractLineItemInput[]>(() =>
+    toLineState(defaults?.lineItems, defaults?.currency)
+  );
   const productRate = useRateState(defaults?.productMaintRatePct);
   const projectRate = useRateState(defaults?.projectMaintRatePct);
   const [productMaintIncludedY1, setProductMaintIncludedY1] = useState(
@@ -143,10 +190,16 @@ export function CustomerContractForm({
 
   const showBilling = !isPrimaryCommercialType(contractType);
   const yearlyDefault = isRenewalType(contractType) ? "YEARLY" : "";
+  const lineItemsJson = useMemo(() => lineItemsToFormJson(lineItems), [lineItems]);
+
+  const updateLine = (index: number, patch: Partial<ContractLineItemInput>) => {
+    setLineItems((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
 
   return (
     <form action={action} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
       {defaults?.id && <input type="hidden" name="id" value={defaults.id} />}
+      <input type="hidden" name="lineItems" value={lineItemsJson} />
       <input
         name="name"
         required={mode === "create"}
@@ -190,6 +243,13 @@ export function CustomerContractForm({
         currency={currency}
         onAmountChange={setAmount}
         onCurrencyChange={setCurrency}
+      />
+      <input
+        name="crmContractId"
+        defaultValue={defaults?.crmContractId ?? ""}
+        placeholder={copy.crmContractIdPlaceholder}
+        className={inputClassName}
+        aria-label={copy.crmContractId}
       />
 
       {showBilling ? (
@@ -259,6 +319,89 @@ export function CustomerContractForm({
           </option>
         ))}
       </select>
+
+      <div className="col-span-2 md:col-span-3 rounded-lg border border-slate-200 bg-slate-50/40 px-3 py-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="text-xs font-medium text-slate-700">{copy.lineItemsTitle}</div>
+            <p className="text-[11px] text-slate-400 mt-0.5">{copy.lineItemsHint}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLineItems((prev) => [...prev, emptyLineItem(currency)])}
+            className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50"
+          >
+            {copy.lineAdd}
+          </button>
+        </div>
+        {lineItems.length > 0 && (
+          <div className="space-y-2">
+            {lineItems.map((row, index) => (
+              <div
+                key={index}
+                className="grid grid-cols-2 md:grid-cols-6 gap-2 rounded-md border border-slate-100 bg-white p-2"
+              >
+                <input
+                  value={row.product}
+                  onChange={(e) => updateLine(index, { product: e.target.value })}
+                  placeholder={copy.lineProduct}
+                  className={inputClassName}
+                  aria-label={copy.lineProduct}
+                />
+                <input
+                  value={row.version ?? ""}
+                  onChange={(e) => updateLine(index, { version: e.target.value || null })}
+                  placeholder={copy.lineVersion}
+                  className={inputClassName}
+                  aria-label={copy.lineVersion}
+                />
+                <input
+                  value={row.amount ?? ""}
+                  onChange={(e) => updateLine(index, { amount: e.target.value || null })}
+                  placeholder={copy.lineAmount}
+                  className={inputClassName}
+                  aria-label={copy.lineAmount}
+                />
+                <select
+                  value={row.currency ?? currency}
+                  onChange={(e) =>
+                    updateLine(index, { currency: currencyForInput(e.target.value) })
+                  }
+                  className={inputClassName}
+                  aria-label={locale === "en" ? "Currency" : "币种"}
+                >
+                  {AMOUNT_CURRENCIES.map((code) => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={row.cycleYears ?? ""}
+                  onChange={(e) =>
+                    updateLine(index, {
+                      cycleYears: e.target.value ? Number(e.target.value) || null : null,
+                    })
+                  }
+                  placeholder={copy.lineCycleYears}
+                  className={inputClassName}
+                  aria-label={copy.lineCycleYears}
+                />
+                <button
+                  type="button"
+                  onClick={() => setLineItems((prev) => prev.filter((_, i) => i !== index))}
+                  className="text-xs text-slate-400 hover:text-red-600 text-left md:text-center"
+                >
+                  {copy.lineRemove}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {contractType === "BUYOUT" && (
         <div className="col-span-2 md:col-span-3 rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-3 space-y-2">

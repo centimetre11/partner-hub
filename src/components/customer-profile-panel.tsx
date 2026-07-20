@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Badge } from "@/components/ui";
+import { AiAddButton } from "@/components/ai-add-button";
 import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
 import { TaxonomySelectField } from "@/components/taxonomy-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
-import { useMessages, useLabels } from "@/lib/i18n/context";
+import { profileEnrichSeedMessage } from "@/lib/intake-profile-enrich";
+import { useMessages, useLabels, useLocale } from "@/lib/i18n/context";
 
 type Option = { id: string; name: string; role?: string };
 
@@ -63,6 +65,7 @@ export function CustomerProfilePanel({
 }) {
   const m = useMessages();
   const labels = useLabels();
+  const locale = useLocale();
   const c = m.customers;
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -110,9 +113,19 @@ export function CustomerProfilePanel({
               <Badge tone={icpTone(customer.icpTier)}>{mapLabel(labels.icpTierLabels, customer.icpTier)}</Badge>
             )}
           </div>
-          <button type="button" onClick={() => { setError(null); setOpen(true); }} className="text-xs text-sky-600 hover:underline shrink-0">
-            {c.editProfile}
-          </button>
+          <div className="flex items-center justify-end gap-2 shrink-0">
+            <AiAddButton
+              scope="customer_profile"
+              customerId={customer.id}
+              label={c.ai.aiComplete}
+              variant="soft"
+              seedMessage={profileEnrichSeedMessage(locale, "customer")}
+              autoStart
+            />
+            <button type="button" onClick={() => { setError(null); setOpen(true); }} className="text-xs text-sky-600 hover:underline">
+              {c.editProfile}
+            </button>
+          </div>
         </div>
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4 text-sm">
           {fields.map(([label, value]) => (

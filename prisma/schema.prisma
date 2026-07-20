@@ -500,6 +500,8 @@ model Contract {
   amount        String?
   // ISO 4217, e.g. CNY / USD; null treated as CNY for display
   currency      String?
+  // 帆软 CRM 合同/机会 ID，便于对账与续费对齐
+  crmContractId String?
   startDate     DateTime?
   endDate       DateTime? // 买断可为空（永久授权）
   renewsAt      DateTime? // 下次续约/续费日（订阅、产品维保、项目维保常用）
@@ -518,6 +520,7 @@ model Contract {
   createdBy     User?     @relation("ContractCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  lineItems     ContractLineItem[]
 
   @@index([customerId])
   @@index([partnerId])
@@ -528,6 +531,28 @@ model Contract {
   @@index([status])
   @@index([endDate])
   @@index([renewsAt])
+  @@index([crmContractId])
+}
+
+// 合同产品与服务明细行（对齐 CRM：产品 / 版本 / 金额 / 周期）
+model ContractLineItem {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  // 预计产品与服务，如 FineBI
+  product    String
+  // 预计版本，如 V6.0
+  version    String?
+  amount     String?
+  // ISO 4217；空则回退合同币种
+  currency   String?
+  // 预计周期（年）
+  cycleYears Int?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([contractId])
 }
 
 // ARR 客户日历：行级概况（基本情况 / 待办）+ 按月格子

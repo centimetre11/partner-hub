@@ -13,6 +13,8 @@ export function AiAddButton({
   suffix,
   variant = "ghost",
   className,
+  seedMessage,
+  autoStart,
 }: {
   scope: IntakeScope;
   partnerId?: string;
@@ -21,6 +23,10 @@ export function AiAddButton({
   suffix?: React.ReactNode;
   variant?: "ghost" | "solid" | "soft";
   className?: string;
+  /** Prefill first user message (e.g. profile enrich prompt) */
+  seedMessage?: string;
+  /** Send seedMessage on mount */
+  autoStart?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,6 +53,8 @@ export function AiAddButton({
           scope={scope}
           partnerId={partnerId}
           customerId={customerId}
+          seedMessage={seedMessage}
+          autoStart={autoStart}
           onClose={() => setOpen(false)}
           onDone={
             scope === "new_partner"
@@ -54,12 +62,16 @@ export function AiAddButton({
                   setOpen(false);
                   router.push(`/partners/${id}`);
                 }
-              : customerId
-                ? () => {
+              : scope === "new_customer"
+                ? (id) => {
+                    setOpen(false);
+                    if (id) router.push(`/customers/${id}`);
+                    else router.refresh();
+                  }
+                : () => {
                     setOpen(false);
                     router.refresh();
                   }
-                : undefined
           }
         />
       )}

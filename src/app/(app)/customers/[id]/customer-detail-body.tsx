@@ -6,6 +6,7 @@ import { Badge, Card, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { PowerMapSection } from "@/components/power-map-flow";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
+import { BUSINESS_RECORD_PAGE_SIZE } from "@/lib/business-record-core";
 import { CustomerWorkspaceShell, type CustomerTab } from "@/components/customer-workspace-shell";
 import { AiAddButton } from "@/components/ai-add-button";
 import { CustomerIntegrationsPanel } from "@/components/customer-integrations-panel";
@@ -83,6 +84,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
           project: { select: { id: true, name: true } },
           parentContract: { select: { id: true, name: true, contractType: true } },
           childContracts: { select: { id: true, name: true, status: true }, take: 5 },
+          lineItems: { orderBy: { sortOrder: "asc" } },
         },
         orderBy: [{ status: "asc" }, { renewsAt: "asc" }, { updatedAt: "desc" }],
       },
@@ -102,8 +104,10 @@ export async function CustomerDetailBody({ id }: { id: string }) {
       events: { orderBy: { createdAt: "desc" }, take: 100, include: { createdBy: { select: { name: true } } } },
       businessRecords: {
         orderBy: { occurredAt: "desc" },
+        take: BUSINESS_RECORD_PAGE_SIZE,
         include: { createdBy: { select: { name: true } }, contact: { select: { name: true } } },
       },
+      _count: { select: { businessRecords: true } },
       assets: { orderBy: { createdAt: "desc" } },
       trainings: { orderBy: { updatedAt: "desc" } },
     },
@@ -243,7 +247,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         initialDossier={initialMossDossier}
         configured={mossStatus.configured}
       />
-      <BusinessRecordsSection owner={owner} records={customer.businessRecords} contacts={contactOptions} />
+      <BusinessRecordsSection
+        owner={owner}
+        records={customer.businessRecords}
+        totalCount={customer._count.businessRecords}
+        contacts={contactOptions}
+      />
       <Card
         title={m.partnerDetail.todosOpen.replace("{count}", String(openTodos))}
         actions={
@@ -481,6 +490,16 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     projectMaintEstimate: c.projectMaintEstimate,
     projectMaintParent: c.projectMaintParent,
     projectMaintParentNone: c.projectMaintParentNone,
+    crmContractId: c.crmContractId,
+    crmContractIdPlaceholder: c.crmContractIdPlaceholder,
+    lineItemsTitle: c.lineItemsTitle,
+    lineItemsHint: c.lineItemsHint,
+    lineProduct: c.lineProduct,
+    lineVersion: c.lineVersion,
+    lineAmount: c.lineAmount,
+    lineCycleYears: c.lineCycleYears,
+    lineAdd: c.lineAdd,
+    lineRemove: c.lineRemove,
     amount: m.common.amount,
     note: m.common.note,
     save: m.common.save,
@@ -573,6 +592,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   status: ct.status,
                   amount: ct.amount,
                   currency: ct.currency,
+                  crmContractId: ct.crmContractId,
                   billingCycle: ct.billingCycle,
                   startDate: ct.startDate ? new Date(ct.startDate).toISOString().slice(0, 10) : "",
                   endDate: ct.endDate ? new Date(ct.endDate).toISOString().slice(0, 10) : "",
@@ -586,6 +606,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   projectMaintRatePct: ct.projectMaintRatePct,
                   projectMaintIncludedY1: ct.projectMaintIncludedY1,
                   notes: ct.notes,
+                  lineItems: ct.lineItems,
                 }}
               />
               {ct.contractType === "BUYOUT" && (

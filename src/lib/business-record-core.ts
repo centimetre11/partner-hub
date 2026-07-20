@@ -1,6 +1,8 @@
 import { db } from "./db";
 import { syncBusinessRecordToCrm, type CrmBusinessRecordSyncResult } from "./crm-business-record";
-import { type OwnerRef, ownerData } from "./owner";
+import { type OwnerRef, ownerData, ownerWhere } from "./owner";
+
+export const BUSINESS_RECORD_PAGE_SIZE = 5;
 
 export const BUSINESS_RECORD_CATEGORIES = [
   "VISIT",
@@ -46,6 +48,60 @@ export type BusinessRecordCrmSyncDisplay = {
   reason?: string;
   syncedAt?: Date;
 };
+
+export type BusinessRecordListItem = {
+  id: string;
+  category: string;
+  title: string;
+  content: string | null;
+  occurredAt: Date;
+  crmTraceNature: string | null;
+  crmTraceAction: string | null;
+  crmSyncedAt: Date | null;
+  crmSyncStatus: string | null;
+  crmSyncError: string | null;
+  createdBy: { name: string } | null;
+  contact: { name: string } | null;
+};
+
+export async function queryBusinessRecords(owner: OwnerRef, page = 1, pageSize = BUSINESS_RECORD_PAGE_SIZE) {
+  const size = Math.min(50, Math.max(1, pageSize));
+  const currentPage = Math.max(1, page);
+  const where = ownerWhere(owner);
+  const skip = (currentPage - 1) * size;
+
+  const [items, total] = await Promise.all([
+    db.businessRecord.findMany({
+      where,
+      orderBy: { occurredAt: "desc" },
+      skip,
+      take: size,
+      select: {
+        id: true,
+        category: true,
+        title: true,
+        content: true,
+        occurredAt: true,
+        crmTraceNature: true,
+        crmTraceAction: true,
+        crmSyncedAt: true,
+        crmSyncStatus: true,
+        crmSyncError: true,
+        createdBy: { select: { name: true } },
+        contact: { select: { name: true } },
+      },
+    }),
+    db.businessRecord.count({ where }),
+  ]);
+
+  return {
+    items: items as BusinessRecordListItem[],
+    total,
+    page: currentPage,
+    pageSize: size,
+    totalPages: Math.max(1, Math.ceil(total / size)),
+  };
+}
 
 export function resolveBusinessRecordCrmSync(record: {
   crmSyncStatus?: string | null;

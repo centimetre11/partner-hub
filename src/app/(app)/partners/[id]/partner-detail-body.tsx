@@ -28,6 +28,7 @@ import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
 import { PartnerHierarchySection } from "@/components/partner-hierarchy-section";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
+import { BUSINESS_RECORD_PAGE_SIZE } from "@/lib/business-record-core";
 import { ImportKnownClientsButton } from "@/components/import-known-clients-button";
 import { listDistributorCandidates } from "@/lib/partner-hierarchy";
 import { TodoItemRow } from "@/components/todo-item-row";
@@ -98,12 +99,13 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       },
       businessRecords: {
         orderBy: { occurredAt: "desc" },
-        take: 20,
+        take: BUSINESS_RECORD_PAGE_SIZE,
         include: {
           createdBy: true,
           contact: { select: { name: true } },
         },
       },
+      _count: { select: { businessRecords: true } },
       customerLinks: { include: { customer: true }, orderBy: { customer: { name: "asc" } } },
     },
   });
@@ -332,6 +334,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
             <BusinessRecordsSection
               owner={{ kind: "partner", id: p.id }}
               records={p.businessRecords}
+              totalCount={p._count.businessRecords}
               contacts={contactOptions}
             />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
