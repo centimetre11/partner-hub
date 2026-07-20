@@ -202,7 +202,11 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
             ct.contractType === "BUYOUT" && ct.weibaoRatePct != null
               ? ` weibao:${ct.weibaoRatePct}%${ct.weibaoIncludedY1 ? "(Y1 included)" : ""}`
               : "";
-          return `- id=${ct.id} name:${ct.name} type:${ct.contractType} status:${ct.status} amount:${ct.amount ?? "-"}${weibao} end:${end} renews:${renew} partner:${ct.partner?.name ?? "-"}`;
+          const projMaint =
+            ct.contractType === "PROJECT" && ct.projectMaintRatePct != null
+              ? ` projectMaint:${ct.projectMaintRatePct}%${ct.projectMaintIncludedY1 ? "(Y1 included)" : ""}`
+              : "";
+          return `- id=${ct.id} name:${ct.name} type:${ct.contractType} status:${ct.status} amount:${ct.amount ?? "-"}${weibao}${projMaint} end:${end} renews:${renew} partner:${ct.partner?.name ?? "-"}`;
         })
         .join("\n")
     : noneLabel(locale);

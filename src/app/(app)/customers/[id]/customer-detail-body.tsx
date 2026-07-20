@@ -33,6 +33,7 @@ import {
   upsertContractAction,
   deleteContractAction,
   createWeibaoRenewalAction,
+  createProjectMaintRenewalAction,
   convertOpportunityToProjectAction,
   addNoteAction,
   createTodoAction,
@@ -456,6 +457,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     weibaoParentBuyout: c.weibaoParentBuyout,
     weibaoParentNone: c.weibaoParentNone,
     weibaoSubscriptionNote: c.weibaoSubscriptionNote,
+    projectMaintRate: c.projectMaintRate,
+    projectMaintRateHint: c.projectMaintRateHint,
+    projectMaintIncludedY1: c.projectMaintIncludedY1,
+    projectMaintRule: c.projectMaintRule,
+    projectMaintEstimate: c.projectMaintEstimate,
+    projectMaintParent: c.projectMaintParent,
+    projectMaintParentNone: c.projectMaintParentNone,
     amount: m.common.amount,
     note: m.common.note,
     save: m.common.save,
@@ -467,6 +475,9 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   const contractProjects = customer.projects.map((p) => ({ id: p.id, name: p.name }));
   const buyoutOptions = customer.contracts
     .filter((ct) => ct.contractType === "BUYOUT")
+    .map((ct) => ({ id: ct.id, name: ct.name }));
+  const projectContractOptions = customer.contracts
+    .filter((ct) => ct.contractType === "PROJECT")
     .map((ct) => ({ id: ct.id, name: ct.name }));
 
   const contractsPanel = (
@@ -491,6 +502,12 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   {ct.contractType === "BUYOUT" && ct.weibaoIncludedY1 && (
                     <Badge tone="green">{c.weibaoY1Badge}</Badge>
                   )}
+                  {ct.contractType === "PROJECT" && ct.projectMaintRatePct != null && (
+                    <Badge tone="purple">{c.projectMaintRateBadge.replace("{rate}", String(ct.projectMaintRatePct))}</Badge>
+                  )}
+                  {ct.contractType === "PROJECT" && ct.projectMaintIncludedY1 && (
+                    <Badge tone="green">{c.projectMaintY1Badge}</Badge>
+                  )}
                   {pastEnd && <Badge tone="amber">{c.contractStatusExpired}</Badge>}
                 </div>
                 <div className="text-xs text-slate-400 mt-0.5">
@@ -500,7 +517,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   {ct.endDate && ` · ${c.contractEndDate}: ${fmtDate(ct.endDate, bcp47)}`}
                   {ct.renewsAt && ` · ${c.contractRenewsAt}: ${fmtDate(ct.renewsAt, bcp47)}`}
                   {ct.partner && ` · ${c.viaPartner}: ${ct.partner.name}`}
-                  {ct.parentContract && ` · ${c.linkedBuyout}: ${ct.parentContract.name}`}
+                  {ct.parentContract &&
+                    ` · ${ct.contractType === "PROJECT_MAINTENANCE" ? c.linkedProjectContract : c.linkedBuyout}: ${ct.parentContract.name}`}
                   {ct.opportunity && ` · ${c.belongsToOpportunity}: ${ct.opportunity.name}`}
                   {ct.project && ` · ${c.belongsToProject}: ${ct.project.name}`}
                 </div>
@@ -522,6 +540,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 opportunities={contractOpps}
                 projects={contractProjects}
                 buyouts={buyoutOptions.filter((b) => b.id !== ct.id)}
+                projectContracts={projectContractOptions.filter((p) => p.id !== ct.id)}
                 defaults={{
                   id: ct.id,
                   name: ct.name,
@@ -538,6 +557,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   parentContractId: ct.parentContractId,
                   weibaoRatePct: ct.weibaoRatePct,
                   weibaoIncludedY1: ct.weibaoIncludedY1,
+                  projectMaintRatePct: ct.projectMaintRatePct,
+                  projectMaintIncludedY1: ct.projectMaintIncludedY1,
                   notes: ct.notes,
                 }}
               />
@@ -549,6 +570,17 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                   <span className="text-[11px] text-slate-400">{c.createWeibaoRenewalHint}</span>
                   <button className="rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-3 py-1.5 text-xs hover:bg-amber-100">
                     {c.createWeibaoRenewal}
+                  </button>
+                </form>
+              )}
+              {ct.contractType === "PROJECT" && (
+                <form
+                  action={createProjectMaintRenewalAction.bind(null, owner, ct.id)}
+                  className="flex items-center justify-end gap-2 border-t border-slate-50 pt-3"
+                >
+                  <span className="text-[11px] text-slate-400">{c.createProjectMaintRenewalHint}</span>
+                  <button className="rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs hover:bg-emerald-100">
+                    {c.createProjectMaintRenewal}
                   </button>
                 </form>
               )}
@@ -570,10 +602,13 @@ export async function CustomerDetailBody({ id }: { id: string }) {
             opportunities={contractOpps}
             projects={contractProjects}
             buyouts={buyoutOptions}
+            projectContracts={projectContractOptions}
             defaults={{
               partnerId: customer.partnerLinks[0]?.partner.id ?? "",
               weibaoIncludedY1: true,
               weibaoRatePct: 15,
+              projectMaintIncludedY1: true,
+              projectMaintRatePct: 15,
             }}
           />
         </div>

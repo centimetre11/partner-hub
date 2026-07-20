@@ -1,6 +1,12 @@
-/** Customer commercial contract types, statuses, billing cycles, and Weibao (buyout) rules. */
+/** Customer commercial contracts: subscription, product buyout/Weibao, project + project maintenance. */
 
-export const CONTRACT_TYPE_CODES = ["SUBSCRIPTION", "MAINTENANCE", "BUYOUT"] as const;
+export const CONTRACT_TYPE_CODES = [
+  "SUBSCRIPTION",
+  "BUYOUT",
+  "MAINTENANCE",
+  "PROJECT",
+  "PROJECT_MAINTENANCE",
+] as const;
 export type ContractTypeCode = (typeof CONTRACT_TYPE_CODES)[number];
 
 export const CONTRACT_STATUS_CODES = ["DRAFT", "ACTIVE", "EXPIRED", "CANCELLED", "RENEWED"] as const;
@@ -9,12 +15,15 @@ export type ContractStatusCode = (typeof CONTRACT_STATUS_CODES)[number];
 export const BILLING_CYCLE_CODES = ["MONTHLY", "QUARTERLY", "YEARLY", "OTHER"] as const;
 export type BillingCycleCode = (typeof BILLING_CYCLE_CODES)[number];
 
-/** Common Weibao rates embedded in product buyout contracts. */
-export const WEIBAO_RATE_PRESETS = [15, 20] as const;
+/** Common rates embedded in product buyout (Weibao) or project contracts. */
+export const MAINT_RATE_PRESETS = [15, 20] as const;
+/** @deprecated use MAINT_RATE_PRESETS */
+export const WEIBAO_RATE_PRESETS = MAINT_RATE_PRESETS;
 
 export const DEFAULT_CONTRACT_STATUS: ContractStatusCode = "ACTIVE";
 export const DEFAULT_CONTRACT_TYPE: ContractTypeCode = "SUBSCRIPTION";
 export const DEFAULT_WEIBAO_RATE_PCT = 15;
+export const DEFAULT_PROJECT_MAINT_RATE_PCT = 15;
 
 const TYPE_SET = new Set<string>(CONTRACT_TYPE_CODES);
 const STATUS_SET = new Set<string>(CONTRACT_STATUS_CODES);
@@ -32,12 +41,33 @@ export function isBillingCycleCode(value: string): value is BillingCycleCode {
   return CYCLE_SET.has(value);
 }
 
+/** Main commercial contracts that do not use a recurring billing cycle field. */
+export function isPrimaryCommercialType(type: ContractTypeCode | string | null | undefined): boolean {
+  return type === "BUYOUT" || type === "PROJECT";
+}
+
+/** Renewal / add-on types that may link to a parent commercial contract. */
+export function isRenewalMaintType(type: ContractTypeCode | string | null | undefined): boolean {
+  return type === "MAINTENANCE" || type === "PROJECT_MAINTENANCE";
+}
+
+export function expectedParentType(
+  type: ContractTypeCode | string | null | undefined
+): "BUYOUT" | "PROJECT" | null {
+  if (type === "MAINTENANCE") return "BUYOUT";
+  if (type === "PROJECT_MAINTENANCE") return "PROJECT";
+  return null;
+}
+
 export function normalizeContractType(raw: string | null | undefined): ContractTypeCode | null {
   if (!raw?.trim()) return null;
-  const upper = raw.trim().toUpperCase();
+  const upper = raw.trim().toUpperCase().replace(/[\s-]+/g, "_");
   if (isContractTypeCode(upper)) return upper;
+  if (/项目维保|project[_\s]?maint/i.test(raw)) return "PROJECT_MAINTENANCE";
+  if (/项目合同|project\s*contract|^project$/i.test(raw)) return "PROJECT";
   if (/订阅|subscription|saas|recurring/i.test(raw)) return "SUBSCRIPTION";
-  if (/微宝|weibao|维保|maintenance|support|ams/i.test(raw)) return "MAINTENANCE";
+  if (/微宝|weibao/i.test(raw)) return "MAINTENANCE";
+  if (/维保|maintenance|support|ams/i.test(raw)) return "MAINTENANCE";
   if (/买断|buyout|perpetual|one[- ]?time|license/i.test(raw)) return "BUYOUT";
   return null;
 }
@@ -64,8 +94,8 @@ export function normalizeBillingCycle(raw: string | null | undefined): BillingCy
   return "OTHER";
 }
 
-/** Parse Weibao rate percent (1–100). Empty / invalid → null. */
-export function normalizeWeibaoRatePct(raw: string | number | null | undefined): number | null {
+/** Parse maintenance/Weibao rate percent (1–100). Empty / invalid → null. */
+export function normalizeMaintRatePct(raw: string | number | null | undefined): number | null {
   if (raw == null || raw === "") return null;
   const n = typeof raw === "number" ? raw : Number(String(raw).replace(/%/g, "").trim());
   if (!Number.isFinite(n)) return null;
@@ -73,6 +103,9 @@ export function normalizeWeibaoRatePct(raw: string | number | null | undefined):
   if (rounded < 1 || rounded > 100) return null;
   return rounded;
 }
+
+/** @deprecated use normalizeMaintRatePct */
+export const normalizeWeibaoRatePct = normalizeMaintRatePct;
 
 /** Extract a numeric amount from free-text amount fields (e.g. "120,000 USD"). */
 export function parseContractAmountNumber(amount: string | null | undefined): number | null {
@@ -83,25 +116,29 @@ export function parseContractAmountNumber(amount: string | null | undefined): nu
   return Number.isFinite(n) ? n : null;
 }
 
-/** Suggested standalone Weibao amount = buyout amount × rate%. */
-export function estimateWeibaoAmount(
-  buyoutAmount: string | null | undefined,
+/** Suggested standalone maintenance amount = parent amount × rate%. */
+export function estimateMaintAmount(
+  parentAmount: string | null | undefined,
   ratePct: number | null | undefined
 ): string | null {
-  const base = parseContractAmountNumber(buyoutAmount);
-  const rate = normalizeWeibaoRatePct(ratePct);
+  const base = parseContractAmountNumber(parentAmount);
+  const rate = normalizeMaintRatePct(ratePct);
   if (base == null || rate == null) return null;
   const value = (base * rate) / 100;
   if (!Number.isFinite(value)) return null;
-  // Keep integers clean; otherwise 2 decimal places
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
+
+/** @deprecated use estimateMaintAmount */
+export const estimateWeibaoAmount = estimateMaintAmount;
 
 /** English labels for UI selects / badges (shared map). */
 export const CONTRACT_TYPE_LABELS: Record<ContractTypeCode, string> = {
   SUBSCRIPTION: "Subscription",
-  MAINTENANCE: "Weibao",
   BUYOUT: "Buyout",
+  MAINTENANCE: "Weibao",
+  PROJECT: "Project contract",
+  PROJECT_MAINTENANCE: "Project maintenance",
 };
 
 export const CONTRACT_STATUS_LABELS: Record<ContractStatusCode, string> = {
@@ -121,8 +158,10 @@ export const BILLING_CYCLE_LABELS: Record<BillingCycleCode, string> = {
 
 export const CONTRACT_TYPE_LABELS_ZH: Record<ContractTypeCode, string> = {
   SUBSCRIPTION: "订阅",
-  MAINTENANCE: "微宝",
   BUYOUT: "买断",
+  MAINTENANCE: "微宝",
+  PROJECT: "项目合同",
+  PROJECT_MAINTENANCE: "项目维保",
 };
 
 export const CONTRACT_STATUS_LABELS_ZH: Record<ContractStatusCode, string> = {
@@ -168,15 +207,19 @@ export function billingCycleLabel(
 
 export function contractTypeTone(
   raw: string | null | undefined
-): "indigo" | "amber" | "blue" | "zinc" {
+): "indigo" | "amber" | "blue" | "zinc" | "green" | "purple" {
   const code = normalizeContractType(raw);
   switch (code) {
     case "SUBSCRIPTION":
       return "indigo";
-    case "MAINTENANCE":
-      return "amber";
     case "BUYOUT":
       return "blue";
+    case "MAINTENANCE":
+      return "amber";
+    case "PROJECT":
+      return "green";
+    case "PROJECT_MAINTENANCE":
+      return "purple";
     default:
       return "zinc";
   }
