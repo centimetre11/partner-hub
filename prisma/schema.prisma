@@ -209,6 +209,7 @@ model Customer {
   wecomChat       WecomChat?
   assets          Asset[]
   trainings       Training[]
+  arrProfile      ArrCustomerProfile?
 
   @@index([partnerId])
   @@index([name])
@@ -410,6 +411,8 @@ model Opportunity {
   name       String
   client     String?
   amount     String?
+  // ISO 4217, e.g. CNY / USD; null treated as CNY for display
+  currency   String?
   // JSON array of process tag codes, e.g. ["QUOTE","BID_DOC"]; see opportunity-process-tags.ts
   stage      String    @default("[\"DISCOVERY\"]")
   // Single process tag code for next focus, e.g. "BID"; same code set as stage
@@ -451,6 +454,8 @@ model Project {
   // ACTIVE 进行中 / ON_HOLD 暂停 / DONE 已完成 / CLOSED 已关闭
   status              String       @default("ACTIVE")
   amount              String?
+  // ISO 4217, e.g. CNY / USD; null treated as CNY for display
+  currency            String?
   startDate           DateTime?
   endDate             DateTime?
   ownerId             String?
@@ -493,6 +498,8 @@ model Contract {
   // DRAFT 草稿 / ACTIVE 生效 / EXPIRED 已到期 / CANCELLED 已取消 / RENEWED 已续约（归档）
   status        String    @default("ACTIVE")
   amount        String?
+  // ISO 4217, e.g. CNY / USD; null treated as CNY for display
+  currency      String?
   startDate     DateTime?
   endDate       DateTime? // 买断可为空（永久授权）
   renewsAt      DateTime? // 下次续约/续费日（订阅、产品维保、项目维保常用）
@@ -521,6 +528,40 @@ model Contract {
   @@index([status])
   @@index([endDate])
   @@index([renewsAt])
+}
+
+// ARR 客户日历：行级概况（基本情况 / 待办）+ 按月格子
+model ArrCustomerProfile {
+  id              String   @id @default(cuid())
+  customerId      String   @unique
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  // 客户基本情况（自由文本）
+  situation       String?
+  // 当前待办
+  todo            String?
+  // 最晚服务时间覆盖；空则从 ARR 合同的 endDate / renewsAt 推算
+  latestServiceAt DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  cells           ArrCalendarCell[]
+}
+
+// ARR 日历格子：某客户 × 年 × 月 的计划/记录
+model ArrCalendarCell {
+  id        String            @id @default(cuid())
+  profileId String
+  profile   ArrCustomerProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  year      Int
+  month     Int // 1–12
+  content   String            @default("")
+  // NOTE / RENEWAL_REMINDER / INSPECTION / FOLLOW_UP
+  kind      String            @default("NOTE")
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([profileId, year, month])
+  @@index([year, month])
+  @@index([profileId])
 }
 
 // 项目工作记录：按条记录交付进展，供周报汇总

@@ -52,6 +52,8 @@ export function NavLinks({
     { href: "/customers", label: m.nav.customers, icon: "◍" },
     { href: "/opportunities", label: m.nav.opportunities, icon: "◉" },
     { href: "/projects", label: m.nav.projects, icon: "▤" },
+    { href: "/contracts", label: m.nav.contracts, icon: "◫" },
+    { href: "/arr", label: m.nav.arr, icon: "◈", aliases: ["/arr/calendar"] },
     {
       id: "ops",
       label: m.nav.ops,

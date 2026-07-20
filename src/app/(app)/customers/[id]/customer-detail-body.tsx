@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
@@ -529,6 +530,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               <span className="text-slate-300 group-open:rotate-90">›</span>
             </summary>
             <div className="px-4 pb-4 pt-1 border-t border-slate-50 space-y-3">
+              <div className="flex justify-end">
+                <Link
+                  href={`/contracts/${ct.id}`}
+                  className="text-xs text-sky-600 hover:underline"
+                >
+                  {c.contractDetailLink}
+                </Link>
+              </div>
               <CustomerContractForm
                 action={upsertContractAction.bind(null, owner)}
                 deleteAction={deleteContractAction.bind(null, owner, ct.id)}

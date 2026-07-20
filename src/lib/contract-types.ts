@@ -1,5 +1,7 @@
 /** Customer commercial contracts: subscription, buyout + product maint, project + project maint. */
 
+import { parseAmountNumber } from "@/lib/amount";
+
 export const CONTRACT_TYPE_CODES = [
   "SUBSCRIPTION",
   "BUYOUT",
@@ -114,11 +116,7 @@ export const normalizeWeibaoRatePct = normalizeMaintRatePct;
 
 /** Extract a numeric amount from free-text amount fields (e.g. "120,000 USD"). */
 export function parseContractAmountNumber(amount: string | null | undefined): number | null {
-  if (!amount?.trim()) return null;
-  const cleaned = amount.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
-  if (!cleaned) return null;
-  const n = Number(cleaned[0]);
-  return Number.isFinite(n) ? n : null;
+  return parseAmountNumber(amount);
 }
 
 /** Suggested standalone maintenance amount = parent amount × rate%. */
