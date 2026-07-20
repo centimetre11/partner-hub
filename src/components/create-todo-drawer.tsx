@@ -207,33 +207,51 @@ export function CreateTodoDrawer({
 
                 <label className="block min-w-0">
                   <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
-                  <select
-                    name="ownerRef"
-                    value={ownerRef}
-                    onChange={(e) => setOwnerRef(e.target.value)}
-                    disabled={lockOwner}
-                    className={input}
-                  >
-                    <option value="">{m.todos.noRelated}</option>
-                    {partners.length > 0 && (
-                      <optgroup label={m.todos.partnersGroup}>
-                        {partners.map((p) => (
-                          <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {customers.length > 0 && (
-                      <optgroup label={m.todos.customersGroup}>
-                        {customers.map((c) => (
-                          <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
+                  {lockOwner ? (
+                    <>
+                      {/* Disabled selects are omitted from FormData — keep a hidden field. */}
+                      <input type="hidden" name="ownerRef" value={ownerRef} />
+                      <div className={`${input} bg-slate-50 text-slate-700`}>
+                        {(() => {
+                          const parsed = parseTodoOwnerRef(ownerRef);
+                          if (parsed.customerId) {
+                            return customers.find((c) => c.id === parsed.customerId)?.name ?? m.todos.customersGroup;
+                          }
+                          if (parsed.partnerId) {
+                            return partners.find((p) => p.id === parsed.partnerId)?.name ?? m.todos.partnersGroup;
+                          }
+                          return m.todos.noRelated;
+                        })()}
+                      </div>
+                    </>
+                  ) : (
+                    <select
+                      name="ownerRef"
+                      value={ownerRef}
+                      onChange={(e) => setOwnerRef(e.target.value)}
+                      className={input}
+                    >
+                      <option value="">{m.todos.noRelated}</option>
+                      {partners.length > 0 && (
+                        <optgroup label={m.todos.partnersGroup}>
+                          {partners.map((p) => (
+                            <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {customers.length > 0 && (
+                        <optgroup label={m.todos.customersGroup}>
+                          {customers.map((c) => (
+                            <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  )}
                 </label>
 
                 {customerId && (

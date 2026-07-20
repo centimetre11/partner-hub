@@ -160,7 +160,7 @@ export async function ensureTaxonomySeed() {
     });
   }
 
-  await db.taxonomyOption.createMany({ data: rows });
+  await db.taxonomyOption.createMany({ data: rows, skipDuplicates: true });
 }
 
 async function syncBuiltinTaxonomyLabels() {

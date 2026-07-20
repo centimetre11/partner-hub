@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import Link from "next/link";
 import {
   ARR_CALENDAR_KIND_CODES,
@@ -88,6 +96,10 @@ type CellMenu = {
   month: number;
   content: string;
   kind: ArrCalendarKind;
+  /** Viewport coords for fixed popover (avoids table overflow clipping). */
+  top: number;
+  left: number;
+  width: number;
 };
 
 type TodoDraft = {
@@ -151,20 +163,49 @@ export function ArrCalendarTable({
   useEffect(() => {
     if (!cellMenu) return;
     const onDoc = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setCellMenu(null);
-      }
+      const target = e.target as Node;
+      if (menuRef.current?.contains(target)) return;
+      setCellMenu(null);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setCellMenu(null);
     };
-    document.addEventListener("mousedown", onDoc);
+    // Defer so the opening click does not immediately dismiss the menu.
+    const timer = window.setTimeout(() => {
+      document.addEventListener("mousedown", onDoc);
+    }, 0);
     window.addEventListener("keydown", onKey);
     return () => {
+      window.clearTimeout(timer);
       document.removeEventListener("mousedown", onDoc);
       window.removeEventListener("keydown", onKey);
     };
   }, [cellMenu]);
+
+  function openCellMenu(
+    e: ReactMouseEvent<HTMLButtonElement>,
+    row: CalendarRowData,
+    month: number,
+    cell: CalendarRowData["cells"][number] | undefined
+  ) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = Math.max(rect.width, 148);
+    let left = rect.left;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    if (left < 8) left = 8;
+    let top = rect.bottom + 4;
+    if (top + 160 > window.innerHeight) top = Math.max(8, rect.top - 164);
+    setCellMenu({
+      customerId: row.customerId,
+      customerName: row.customerName,
+      month,
+      content: cell?.content ?? "",
+      kind: cell?.kind ?? "NOTE",
+      top,
+      left,
+      width,
+    });
+  }
 
   const monthHeaders = useMemo(
     () => months.map((m) => ({ month: m, label: monthLabel(m, locale) })),
@@ -445,18 +486,10 @@ export function ArrCalendarTable({
                   }
 
                   return (
-                    <td key={month} className="px-1 py-1 relative">
+                    <td key={month} className="px-1 py-1">
                       <button
                         type="button"
-                        onClick={() =>
-                          setCellMenu({
-                            customerId: row.customerId,
-                            customerName: row.customerName,
-                            month,
-                            content: cell?.content ?? "",
-                            kind: cell?.kind ?? "NOTE",
-                          })
-                        }
+                        onClick={(e) => openCellMenu(e, row, month, cell)}
                         onDoubleClick={(e) => {
                           e.preventDefault();
                           setCellMenu(null);
@@ -484,73 +517,6 @@ export function ArrCalendarTable({
                           </span>
                         )}
                       </button>
-
-                      {menuOpen && cellMenu && (
-                        <div
-                          ref={menuRef}
-                          className="absolute left-1 right-1 top-full z-30 mt-0.5 rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg"
-                        >
-                          {(() => {
-                            const primary = primaryAction(cellMenu.kind);
-                            const todoLabel =
-                              cellMenu.kind === "FOLLOW_UP"
-                                ? copy.primaryFollowUp
-                                : copy.actionAddTodo;
-                            const recordLabel =
-                              cellMenu.kind === "INSPECTION"
-                                ? copy.primaryInspection
-                                : copy.actionLogRecord;
-                            return (
-                              <div className="flex flex-col gap-0.5">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    primary === "todo"
-                                      ? openTodoFromCell(cellMenu)
-                                      : openRecordFromCell(cellMenu)
-                                  }
-                                  className="rounded px-2 py-1.5 text-left text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800"
-                                >
-                                  {primary === "todo" ? todoLabel : recordLabel}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    primary === "todo"
-                                      ? openRecordFromCell(cellMenu)
-                                      : openTodoFromCell(cellMenu)
-                                  }
-                                  className="rounded px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
-                                >
-                                  {primary === "todo" ? recordLabel : todoLabel}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditing({
-                                      customerId: cellMenu.customerId,
-                                      month: cellMenu.month,
-                                      content: cellMenu.content,
-                                      kind: cellMenu.kind,
-                                    });
-                                    setCellMenu(null);
-                                  }}
-                                  className="rounded px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
-                                >
-                                  {copy.actionEdit}
-                                </button>
-                                <Link
-                                  href={`/customers/${cellMenu.customerId}?tab=arr`}
-                                  className="rounded px-2 py-1.5 text-left text-[11px] text-sky-700 hover:bg-sky-50"
-                                  onClick={() => setCellMenu(null)}
-                                >
-                                  {copy.actionOpenCustomer}
-                                </Link>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
                     </td>
                   );
                 })}
@@ -559,6 +525,73 @@ export function ArrCalendarTable({
           </tbody>
         </table>
       </div>
+
+      {cellMenu && (
+        <div
+          ref={menuRef}
+          role="menu"
+          className="fixed z-[60] rounded-lg border border-slate-200 bg-white p-1.5 shadow-lg"
+          style={{ top: cellMenu.top, left: cellMenu.left, width: cellMenu.width }}
+        >
+          {(() => {
+            const primary = primaryAction(cellMenu.kind);
+            const todoLabel =
+              cellMenu.kind === "FOLLOW_UP" ? copy.primaryFollowUp : copy.actionAddTodo;
+            const recordLabel =
+              cellMenu.kind === "INSPECTION"
+                ? copy.primaryInspection
+                : copy.actionLogRecord;
+            return (
+              <div className="flex flex-col gap-0.5">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    primary === "todo" ? openTodoFromCell(cellMenu) : openRecordFromCell(cellMenu)
+                  }
+                  className="rounded px-2 py-1.5 text-left text-[11px] font-medium text-white bg-slate-900 hover:bg-slate-800"
+                >
+                  {primary === "todo" ? todoLabel : recordLabel}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() =>
+                    primary === "todo" ? openRecordFromCell(cellMenu) : openTodoFromCell(cellMenu)
+                  }
+                  className="rounded px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
+                >
+                  {primary === "todo" ? recordLabel : todoLabel}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setEditing({
+                      customerId: cellMenu.customerId,
+                      month: cellMenu.month,
+                      content: cellMenu.content,
+                      kind: cellMenu.kind,
+                    });
+                    setCellMenu(null);
+                  }}
+                  className="rounded px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
+                >
+                  {copy.actionEdit}
+                </button>
+                <Link
+                  href={`/customers/${cellMenu.customerId}?tab=arr`}
+                  role="menuitem"
+                  className="rounded px-2 py-1.5 text-left text-[11px] text-sky-700 hover:bg-sky-50"
+                  onClick={() => setCellMenu(null)}
+                >
+                  {copy.actionOpenCustomer}
+                </Link>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <CreateTodoDrawer
         userId={userId}
@@ -579,7 +612,30 @@ export function ArrCalendarTable({
         defaultDetail={todoDraft?.detail ?? ""}
         source="ARR_CALENDAR"
         onCreated={() => {
-          if (todoDraft) markFlash(todoDraft.customerId, todoDraft.month);
+          if (todoDraft) {
+            markFlash(todoDraft.customerId, todoDraft.month);
+            // Optimistic: show the new todo in the column until refresh lands.
+            if (todoDraft.title.trim()) {
+              const id = `local-${Date.now()}`;
+              setRows((prev) =>
+                prev.map((r) =>
+                  r.customerId === todoDraft.customerId
+                    ? {
+                        ...r,
+                        openTodos: [
+                          {
+                            id,
+                            title: todoDraft.title.trim(),
+                            dueDate: todoDraft.dueDate || null,
+                          },
+                          ...r.openTodos,
+                        ],
+                      }
+                    : r
+                )
+              );
+            }
+          }
         }}
       />
 
