@@ -422,7 +422,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
     case "opportunity":
       return "Fill opportunities only (owned by a customer/account). Leave others as empty arrays.";
     case "profile":
-      return `Fill fields only (FieldUpdate; oldValue may be empty). Field names: ${fl} (category: ${cat}; industries: ${ind}). Use tools when info is insufficient. Leave others as empty arrays.`;
+      return `Fill fields only (FieldUpdate; oldValue may be empty). Field names: ${fl} (category: ${cat}; industries: ${ind}). Prefer blanks over overwriting accurate existing values. Use tools when info is insufficient. Leave others as empty arrays.`;
     case "training":
       return "Fill trainings only. Leave others as empty arrays.";
     case "solution":
@@ -434,7 +434,7 @@ export function schemaHintForScope(scope: IntakeScope, locale: Locale): string {
     case "new_customer":
       return `Set partnerName to the END-CUSTOMER company name; fill customer profile fields in fields (codes only: ${fieldListForScope(locale, scope)}; status: ACTIVE/PROSPECT/INACTIVE). Add people to contacts. Do NOT extract follow-up todos/next steps from meeting notes — leave todos as empty array. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
     case "customer_profile":
-      return `Fill customer fields only (FieldUpdate; oldValue may be empty). Codes: ${fieldListForScope(locale, scope)}. Use tools when info is insufficient. Add new people to contacts. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
+      return `Fill customer fields only (FieldUpdate; oldValue may be empty). Codes: ${fieldListForScope(locale, scope)}. Prefer blanks over overwriting accurate existing values. Use tools when info is insufficient. Add new people to contacts. Leave opportunities/trainings/solutions/businessRecords as empty arrays.`;
   }
 }
 
@@ -516,8 +516,10 @@ Decide add (action=add) vs update (action=update with id) against the existing l
   },
   profile: {
     title: "Complete partner profile",
-    intro: "The user wants to fill or update profile fields. May include a KMS link or scattered notes; combine existing record with tool research.",
-    guide: "Map user input and research to profile fields. Use tools when info is insufficient.",
+    intro:
+      "The user wants to fill or update an existing partner's profile. The system injects the current archive below — combine it with tool research. Prefer filling blanks; do not overwrite accurate existing values.",
+    guide:
+      "Start from [existing partner archive] fields (empty/null = blank). Research via tools, then emit FieldUpdates only for blanks or clear corrections. Prefer taxonomy codes from the library. Ask clarifications when unsure instead of guessing over good data.",
   },
   training: {
     title: "Add training plan",
@@ -568,8 +570,9 @@ Identity: only emit a tier:"required" identity clarification when the company is
   customer_profile: {
     title: "Complete customer profile",
     intro:
-      "The user wants to fill or update an existing END-CUSTOMER's profile fields. May include a KMS link or scattered notes; combine the existing record with tool research.",
-    guide: "Map user input and research to the customer profile fields. Use tools when info is insufficient. Add new people to contacts.",
+      "The user wants to fill or update an existing END-CUSTOMER profile. The system injects the current archive below — combine it with tool research. Prefer filling blanks; do not overwrite accurate existing values.",
+    guide:
+      "Start from [existing customer archive] fields (empty/null = blank). Research via tools, then emit FieldUpdates only for blanks or clear corrections (industry, scale, city, country, website, customerSegment, buyingTrigger, entryPath, icpTier, contacts). Use customer taxonomy codes from the library. Add new people to contacts. Ask clarifications when unsure instead of guessing over good data.",
   },
 };
 

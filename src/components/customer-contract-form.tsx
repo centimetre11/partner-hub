@@ -11,6 +11,8 @@ import {
   contractTypeLabel,
   estimateMaintAmount,
   isPrimaryCommercialType,
+  type BillingCycleCode,
+  type ContractStatusCode,
   type ContractTypeCode,
 } from "@/lib/contract-types";
 import { AmountInput } from "@/components/amount-input";
@@ -25,6 +27,8 @@ import {
   lineItemsToFormJson,
   type ContractLineItemInput,
 } from "@/lib/contract-line-items";
+import { ContractAiExtract } from "@/components/contract-ai-extract";
+import type { ContractExtractResult } from "@/lib/contract-extract-types";
 
 export type ContractFormCopy = {
   contractName: string;
@@ -65,6 +69,18 @@ export type ContractFormCopy = {
   lineCycleYears: string;
   lineAdd: string;
   lineRemove: string;
+  aiExtractTitle: string;
+  aiExtractHint: string;
+  aiExtractUpload: string;
+  aiExtractPaste: string;
+  aiExtractRun: string;
+  aiExtractRunning: string;
+  aiExtractClear: string;
+  aiExtractSuccess: string;
+  aiExtractFailed: string;
+  aiExtractImageRequired: string;
+  aiExtractOrText: string;
+  aiExtractTextPlaceholder: string;
   amount: string;
   note: string;
   save: string;
@@ -148,6 +164,7 @@ export function CustomerContractForm({
   copy,
   inputClassName,
   mode,
+  customerNameHint,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   deleteAction?: (formData: FormData) => void | Promise<void>;
@@ -161,12 +178,27 @@ export function CustomerContractForm({
   copy: ContractFormCopy;
   inputClassName: string;
   mode: "create" | "edit";
+  /** Helps AI match CRM screenshot to the current customer. */
+  customerNameHint?: string | null;
 }) {
+  const [name, setName] = useState(defaults?.name ?? "");
   const [contractType, setContractType] = useState<ContractTypeCode>(
     (defaults?.contractType as ContractTypeCode) || "SUBSCRIPTION"
   );
+  const [status, setStatus] = useState<ContractStatusCode>(
+    (defaults?.status as ContractStatusCode) || "ACTIVE"
+  );
   const [amount, setAmount] = useState(defaults?.amount ?? "");
   const [currency, setCurrency] = useState<AmountCurrency>(currencyForInput(defaults?.currency));
+  const [crmContractId, setCrmContractId] = useState(defaults?.crmContractId ?? "");
+  const [billingCycle, setBillingCycle] = useState(
+    defaults?.billingCycle ?? (isRenewalType((defaults?.contractType as ContractTypeCode) || "SUBSCRIPTION") ? "YEARLY" : "")
+  );
+  const [startDate, setStartDate] = useState(defaults?.startDate ?? "");
+  const [endDate, setEndDate] = useState(defaults?.endDate ?? "");
+  const [renewsAt, setRenewsAt] = useState(defaults?.renewsAt ?? "");
+  const [opportunityId, setOpportunityId] = useState(defaults?.opportunityId ?? "");
+  const [notes, setNotes] = useState(defaults?.notes ?? "");
   const [lineItems, setLineItems] = useState<ContractLineItemInput[]>(() =>
     toLineState(defaults?.lineItems, defaults?.currency)
   );
@@ -189,21 +221,91 @@ export function CustomerContractForm({
       : null;
 
   const showBilling = !isPrimaryCommercialType(contractType);
-  const yearlyDefault = isRenewalType(contractType) ? "YEARLY" : "";
   const lineItemsJson = useMemo(() => lineItemsToFormJson(lineItems), [lineItems]);
 
   const updateLine = (index: number, patch: Partial<ContractLineItemInput>) => {
     setLineItems((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
+  function applyExtract(result: ContractExtractResult) {
+    if (result.name?.trim()) setName(result.name.trim());
+    if (result.contractType) {
+      setContractType(result.contractType);
+      if (isPrimaryCommercialType(result.contractType)) setBillingCycle("");
+      else if (result.billingCycle) setBillingCycle(result.billingCycle);
+      else if (result.contractType === "SUBSCRIPTION" || isRenewalType(result.contractType)) {
+        setBillingCycle("YEARLY");
+      }
+    } else if (result.billingCycle) {
+      setBillingCycle(result.billingCycle);
+    }
+    if (result.status) setStatus(result.status);
+    if (result.amount != null) setAmount(result.amount);
+    if (result.currency) setCurrency(result.currency);
+    if (result.crmContractId?.trim()) setCrmContractId(result.crmContractId.trim());
+    if (result.startDate) setStartDate(result.startDate);
+    if (result.endDate) setEndDate(result.endDate);
+    if (result.renewsAt) setRenewsAt(result.renewsAt);
+    if (result.lineItems?.length) {
+      setLineItems(
+        result.lineItems.map((it) => ({
+          product: it.product,
+          version: it.version,
+          amount: it.amount,
+          currency: it.currency ? currencyForInput(it.currency) : currencyForInput(result.currency),
+          cycleYears: it.cycleYears ?? 1,
+        }))
+      );
+    }
+    // Match opportunity by name (CRM opportunity name often equals contract name)
+    const matchName = result.name?.trim();
+    if (matchName) {
+      const opp = opportunities.find(
+        (o) => o.name.trim().toLowerCase() === matchName.toLowerCase()
+      );
+      if (opp) setOpportunityId(opp.id);
+    }
+    const noteBits = [
+      result.notes?.trim(),
+      result.salesOwnerName?.trim()
+        ? locale === "zh"
+          ? `CRM 销售：${result.salesOwnerName.trim()}`
+          : `CRM sales: ${result.salesOwnerName.trim()}`
+        : null,
+      result.customerName?.trim() &&
+      customerNameHint &&
+      result.customerName.trim().toLowerCase() !== customerNameHint.trim().toLowerCase()
+        ? locale === "zh"
+          ? `截图客户：${result.customerName.trim()}`
+          : `Screenshot customer: ${result.customerName.trim()}`
+        : null,
+    ].filter(Boolean);
+    if (noteBits.length) {
+      setNotes((prev) => {
+        const extra = noteBits.join("\n");
+        if (!prev?.trim()) return extra;
+        if (prev.includes(extra)) return prev;
+        return `${prev.trim()}\n${extra}`;
+      });
+    }
+  }
+
   return (
     <form action={action} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
       {defaults?.id && <input type="hidden" name="id" value={defaults.id} />}
       <input type="hidden" name="lineItems" value={lineItemsJson} />
+
+      <ContractAiExtract
+        copy={copy}
+        customerNameHint={customerNameHint}
+        onExtracted={applyExtract}
+      />
+
       <input
         name="name"
         required={mode === "create"}
-        defaultValue={defaults?.name ?? ""}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
         placeholder={copy.contractName}
         className={inputClassName}
         aria-label={copy.contractName}
@@ -223,7 +325,8 @@ export function CustomerContractForm({
       </select>
       <select
         name="status"
-        defaultValue={defaults?.status ?? "ACTIVE"}
+        value={status}
+        onChange={(e) => setStatus(e.target.value as ContractStatusCode)}
         className={inputClassName}
         aria-label={copy.contractStatus}
       >
@@ -246,7 +349,8 @@ export function CustomerContractForm({
       />
       <input
         name="crmContractId"
-        defaultValue={defaults?.crmContractId ?? ""}
+        value={crmContractId}
+        onChange={(e) => setCrmContractId(e.target.value)}
         placeholder={copy.crmContractIdPlaceholder}
         className={inputClassName}
         aria-label={copy.crmContractId}
@@ -255,7 +359,8 @@ export function CustomerContractForm({
       {showBilling ? (
         <select
           name="billingCycle"
-          defaultValue={defaults?.billingCycle ?? yearlyDefault}
+          value={billingCycle}
+          onChange={(e) => setBillingCycle(e.target.value as BillingCycleCode | "")}
           className={inputClassName}
           aria-label={copy.contractBillingCycle}
         >
@@ -273,21 +378,24 @@ export function CustomerContractForm({
       <input
         name="startDate"
         type="date"
-        defaultValue={defaults?.startDate ?? ""}
+        value={startDate}
+        onChange={(e) => setStartDate(e.target.value)}
         className={inputClassName}
         aria-label={copy.contractStartDate}
       />
       <input
         name="endDate"
         type="date"
-        defaultValue={defaults?.endDate ?? ""}
+        value={endDate}
+        onChange={(e) => setEndDate(e.target.value)}
         className={inputClassName}
         aria-label={copy.contractEndDate}
       />
       <input
         name="renewsAt"
         type="date"
-        defaultValue={defaults?.renewsAt ?? ""}
+        value={renewsAt}
+        onChange={(e) => setRenewsAt(e.target.value)}
         className={inputClassName}
         aria-label={copy.contractRenewsAt}
       />
@@ -301,7 +409,8 @@ export function CustomerContractForm({
       </select>
       <select
         name="opportunityId"
-        defaultValue={defaults?.opportunityId ?? ""}
+        value={opportunityId}
+        onChange={(e) => setOpportunityId(e.target.value)}
         className={inputClassName}
       >
         <option value="">{copy.contractLinkOpportunityNone}</option>
@@ -566,7 +675,8 @@ export function CustomerContractForm({
       <textarea
         name="notes"
         rows={2}
-        defaultValue={defaults?.notes ?? ""}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
         placeholder={copy.contractNotesPlaceholder}
         className={`${inputClassName} col-span-2 md:col-span-3`}
         aria-label={copy.note}

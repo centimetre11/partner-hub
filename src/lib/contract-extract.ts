@@ -164,11 +164,12 @@ export function normalizeContractExtractResult(raw: Record<string, unknown>): Co
     String(raw.latestFollowUp ?? "").trim(),
   ].filter(Boolean);
 
+  const statusRaw = String(raw.status ?? "").trim();
   const result: ContractExtractResult = {
     name: String(raw.name ?? "").trim() || undefined,
     customerName: String(raw.customerName ?? "").trim() || undefined,
     contractType: contractType ?? undefined,
-    status: normalizeContractStatus(String(raw.status ?? "") || undefined),
+    status: statusRaw ? normalizeContractStatus(statusRaw) : undefined,
     amount: amount ?? undefined,
     currency,
     crmContractId: String(raw.crmContractId ?? raw.opportunityId ?? "").trim() || undefined,

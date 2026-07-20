@@ -40,6 +40,7 @@ import { SentimentMonitorSection } from "@/components/sentiment-monitor-section"
 import { SENTIMENT_MONITOR_ENABLED } from "@/lib/feature-flags";
 import { AiAddButton } from "@/components/ai-add-button";
 import { TodoEditButton } from "@/components/todo-edit-button";
+import { profileEnrichSeedMessage } from "@/lib/intake-profile-enrich";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import type { Messages } from "@/lib/i18n/messages/en";
 
@@ -399,7 +400,14 @@ export async function PartnerDetailBody({ id }: { id: string }) {
         positioning={
           <div className="space-y-5">
             <div className="flex items-center justify-end gap-2">
-              <AiAddButton scope="profile" partnerId={p.id} label={m.partnerDetail.aiComplete} variant="soft" />
+              <AiAddButton
+                scope="profile"
+                partnerId={p.id}
+                label={m.partnerDetail.aiComplete}
+                variant="soft"
+                seedMessage={profileEnrichSeedMessage(locale, "partner")}
+                autoStart
+              />
               <ProfileEditor
                 partner={p}
                 users={users}

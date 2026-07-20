@@ -52,6 +52,7 @@ import type { Locale } from "./i18n/locale";
 import { taxonomyListForAi, normalizeIndustriesInput } from "./taxonomy";
 import {
   businessRecordContext,
+  customerContext,
   intakeBoundPartnerLine,
   partnerContext,
   powermapContext,
@@ -217,43 +218,50 @@ async function partnerContextForScope(scope: IntakeScope, partnerId: string, loc
   return partnerContext(partnerId, locale);
 }
 
-/** Existing customer record context for customer_profile /补全 scope. */
+/**
+ * Customer archive context for intake — same depth as partnerContext for AI 补全:
+ * full profile fields + ownership/CRM + contacts/opportunities/etc.
+ */
 async function customerContextForIntake(customerId: string, locale: Locale): Promise<string> {
-  const c = await db.customer.findUnique({
-    where: { id: customerId },
-    select: {
-      name: true,
-      status: true,
-      industry: true,
-      scale: true,
-      city: true,
-      country: true,
-      website: true,
-      notes: true,
-      contacts: { select: { id: true, name: true, title: true, department: true, role: true }, take: 30 },
-    },
-  });
-  if (!c) return "";
-  const lines: string[] = [];
-  const pushIf = (label: string, value: string | null | undefined) => {
-    if (value && value.trim()) lines.push(`${label}: ${value.trim()}`);
-  };
-  pushIf(locale === "zh" ? "名称" : "Name", c.name);
-  pushIf(locale === "zh" ? "状态" : "Status", c.status);
-  pushIf(locale === "zh" ? "行业" : "Industry", c.industry);
-  pushIf(locale === "zh" ? "规模" : "Scale", c.scale);
-  pushIf(locale === "zh" ? "城市" : "City", c.city);
-  pushIf(locale === "zh" ? "国家" : "Country", c.country);
-  pushIf(locale === "zh" ? "官网" : "Website", c.website);
-  pushIf(locale === "zh" ? "备注" : "Notes", c.notes);
-  if (c.contacts.length) {
-    const people = c.contacts
-      .map((p) => [p.name, p.title, p.department].filter(Boolean).join(" / "))
-      .join("; ");
-    lines.push((locale === "zh" ? "现有联系人: " : "Existing contacts: ") + people);
+  const [base, ownership] = await Promise.all([
+    customerContext(customerId, locale),
+    db.customer.findUnique({
+      where: { id: customerId },
+      select: {
+        crmCustomerId: true,
+        owner: { select: { name: true } },
+        presalesUser: { select: { name: true } },
+      },
+    }),
+  ]);
+  if (!ownership) return base;
+  const extra: string[] = [];
+  if (ownership.owner?.name) {
+    extra.push(
+      locale === "zh"
+        ? `- 销售负责人[owner]: ${ownership.owner.name}`
+        : `- Sales owner[owner]: ${ownership.owner.name}`
+    );
   }
-  const header = locale === "zh" ? `[客户档案：${c.name}]` : `[Customer profile: ${c.name}]`;
-  return `${header}\n${lines.join("\n")}`;
+  if (ownership.presalesUser?.name) {
+    extra.push(
+      locale === "zh"
+        ? `- 售前负责人[presales]: ${ownership.presalesUser.name}`
+        : `- Presales[presales]: ${ownership.presalesUser.name}`
+    );
+  }
+  if (ownership.crmCustomerId) {
+    extra.push(
+      locale === "zh"
+        ? `- 帆软 CRM 客户 ID[crmCustomerId]: ${ownership.crmCustomerId}`
+        : `- Fanruan CRM customer ID[crmCustomerId]: ${ownership.crmCustomerId}`
+    );
+  }
+  if (!extra.length) return base;
+  // Insert ownership lines after the header / name block
+  const nl = base.indexOf("\n");
+  if (nl < 0) return `${base}\n${extra.join("\n")}`;
+  return `${base.slice(0, nl)}\n${extra.join("\n")}${base.slice(nl)}`;
 }
 
 /** OCR plain text from the latest user image (fallback when JSON extract returns empty). */
@@ -837,7 +845,15 @@ async function runIntakeTurnCore(opts: {
   const customerScope = isCustomerScope(opts.scope);
   const fast = isFastIntakeScope(opts.scope);
   let taxonomyHint = "";
-  if (!fast && !customerScope) {
+  if (!fast && customerScope) {
+    const [segmentList, triggerList, entryList, icpList] = await Promise.all([
+      taxonomyListForAi("CUSTOMER_SEGMENT"),
+      taxonomyListForAi("BUYING_TRIGGER"),
+      taxonomyListForAi("ENTRY_PATH"),
+      taxonomyListForAi("ICP_TIER"),
+    ]);
+    taxonomyHint = `Customer taxonomy codes (use codes only): customerSegment=${segmentList}; buyingTrigger=${triggerList}; entryPath=${entryList}; icpTier=${icpList}`;
+  } else if (!fast) {
     const [categoryList, industryList, archetypeList, valuePatternList] = await Promise.all([
       taxonomyListForAi("CATEGORY"),
       taxonomyListForAi("INDUSTRY"),

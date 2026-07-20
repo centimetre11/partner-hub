@@ -500,6 +500,18 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     lineCycleYears: c.lineCycleYears,
     lineAdd: c.lineAdd,
     lineRemove: c.lineRemove,
+    aiExtractTitle: c.aiExtractTitle,
+    aiExtractHint: c.aiExtractHint,
+    aiExtractUpload: c.aiExtractUpload,
+    aiExtractPaste: c.aiExtractPaste,
+    aiExtractRun: c.aiExtractRun,
+    aiExtractRunning: c.aiExtractRunning,
+    aiExtractClear: c.aiExtractClear,
+    aiExtractSuccess: c.aiExtractSuccess,
+    aiExtractFailed: c.aiExtractFailed,
+    aiExtractImageRequired: c.aiExtractImageRequired,
+    aiExtractOrText: c.aiExtractOrText,
+    aiExtractTextPlaceholder: c.aiExtractTextPlaceholder,
     amount: m.common.amount,
     note: m.common.note,
     save: m.common.save,
@@ -580,6 +592,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
                 locale={locale}
                 copy={contractFormCopy}
                 inputClassName={input}
+                customerNameHint={customer.name}
                 partners={contractPartners}
                 opportunities={contractOpps}
                 projects={contractProjects}
@@ -645,6 +658,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
             locale={locale}
             copy={contractFormCopy}
             inputClassName={input}
+            customerNameHint={customer.name}
             partners={contractPartners}
             opportunities={contractOpps}
             projects={contractProjects}

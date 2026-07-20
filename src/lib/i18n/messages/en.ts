@@ -986,6 +986,7 @@ export const messagesEn = {
     },
     ai: {
       aiButton: "✦ AI intake",
+      aiComplete: "✦ AI complete",
     },
   },
   contracts: {

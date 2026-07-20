@@ -981,6 +981,7 @@ export const messagesZh: Messages = {
     },
     ai: {
       aiButton: "✦ AI 建档",
+      aiComplete: "✦ AI 补全",
     },
   },
   contracts: {
