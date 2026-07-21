@@ -167,12 +167,6 @@ export default async function ArrCalendarPage({
       />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-4">
-        <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-4 py-3 text-xs text-slate-600 leading-relaxed space-y-1">
-          <p>{t.guide1}</p>
-          <p>{t.guide2}</p>
-          <p>{t.guide3}</p>
-        </div>
-
         <form className="flex flex-wrap gap-2 items-end" method="get">
           <label className="text-xs text-slate-500">
             {t.year}
