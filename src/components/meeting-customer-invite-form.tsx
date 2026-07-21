@@ -15,9 +15,9 @@ import {
   toDateTimeLocalInput,
   defaultMeetingStartLocal,
   defaultMeetingEndLocal,
-  getBrowserTimeZone,
   formatTimeZoneLabel,
 } from "@/lib/meeting-datetime";
+import { resolveSubmitTimeZone, useClientTimeZone } from "@/lib/use-client-timezone";
 
 export type MeetingCustomerOption = {
   id: string;
@@ -112,7 +112,7 @@ export function MeetingCustomerInviteForm({
   const [confirmingCompose, setConfirmingCompose] = useState(false);
   const [composePhase, setComposePhase] = useState<"idle" | "creating" | "opening">("idle");
 
-  const timeZone = useMemo(() => getBrowserTimeZone(), []);
+  const timeZone = useClientTimeZone();
 
   const timeZoneLabel = useMemo(() => {
     const loc = locale === "zh" ? "zh-CN" : "en-US";
@@ -198,8 +198,9 @@ export function MeetingCustomerInviteForm({
         locale === "zh" ? `与 ${data.contactName.trim()} 的会议` : `Meeting with ${data.contactName.trim()}`,
       );
     }
-    const sLocal = isoToDateTimeLocal(data.startAt, timeZone);
-    const eLocal = isoToDateTimeLocal(data.endAt, timeZone);
+    const tz = resolveSubmitTimeZone(timeZone);
+    const sLocal = isoToDateTimeLocal(data.startAt, tz);
+    const eLocal = isoToDateTimeLocal(data.endAt, tz);
     if (sLocal) setStartAt(sLocal);
     if (eLocal) setEndAt(eLocal);
     if (data.contactName?.trim()) setContactName(data.contactName.trim());
@@ -232,14 +233,15 @@ export function MeetingCustomerInviteForm({
     setExtractError(null);
     setExtracting(true);
     try {
+      const tz = resolveSubmitTimeZone(timeZone);
       const now = new Date();
       const weekday = now.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
         weekday: "long",
-        timeZone,
+        timeZone: tz,
       });
       const payload: Record<string, unknown> = {
-        timeZone,
-        nowLocal: toDateTimeLocalInput(now, timeZone),
+        timeZone: tz,
+        nowLocal: toDateTimeLocalInput(now, tz),
         weekday,
       };
       if (source === "image" && pendingImageFile) {
@@ -297,7 +299,7 @@ export function MeetingCustomerInviteForm({
       endLocal: snapshot.endLocal,
       startAt: snapshot.startAt,
       endAt: snapshot.endAt,
-      timeZone,
+      timeZone: resolveSubmitTimeZone(timeZone),
       meetLink,
       customerName: snapshot.customerName,
       contactName: snapshot.contactName,
@@ -339,16 +341,17 @@ export function MeetingCustomerInviteForm({
       return;
     }
 
+    const tz = resolveSubmitTimeZone(timeZone);
     const fd = new FormData();
     fd.set("title", subject);
     fd.set("startAt", startAt);
     fd.set("endAt", endAt);
-    fd.set("timeZone", timeZone);
+    fd.set("timeZone", tz);
     fd.set("notifyAttendees", notifyAttendees ? "true" : "false");
     for (const id of selected) fd.append("attendeeUserIds", id);
 
-    const parsedStart = parseDateTimeLocal(startAt, timeZone);
-    const parsedEnd = parseDateTimeLocal(endAt, timeZone);
+    const parsedStart = parseDateTimeLocal(startAt, tz);
+    const parsedEnd = parseDateTimeLocal(endAt, tz);
     if (!parsedStart || !parsedEnd) {
       setError(s.startAt);
       return;
@@ -388,7 +391,7 @@ export function MeetingCustomerInviteForm({
       endLocal: inviteSnapshot.endLocal,
       startAt: inviteSnapshot.startAt,
       endAt: inviteSnapshot.endAt,
-      timeZone,
+      timeZone: resolveSubmitTimeZone(timeZone),
       meetLink,
       customerName: inviteSnapshot.customerName,
       contactName: inviteSnapshot.contactName,

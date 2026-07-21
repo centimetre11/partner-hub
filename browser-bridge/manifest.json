@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Partner Hub 浏览器助手",
-  "version": "1.1.25",
+  "version": "1.1.27",
   "description": "Partner Hub 的浏览器操作桥：企业邮写信自动填充；CRM 海外激活填报表自动预填。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnrw0mdh1Bo3PNpmLriqznXP3OdKEw+7Hv98MZ+ArmRJE9OegMxWd9+5jIy4I42RNidz3vzgISl9WmYManIi5AXh9v7TkoruMSnx5uNmxOdPqfM0Mcs2kgrYUxUjPmTvsAP2OCS5k2b9wKUC+wJms6BMfOgpMP9XOXSDId5twpMobohOp0mKg5+p+X6/PoShO4Bw8T8ae98vKDSD4xZaQ6CebFJk0EHaG6VNK5FWxOXya3wft5QhL2N4I1G0/4BWuemiMwVOJgNK5Zd+Sv/UmTROI2JSFGN030msspx6wDMiUGjwPSkOLIcMV87yh3QfqPSk7S4m/URAUGQ6OYAWWaQIDAQAB",
   "background": {

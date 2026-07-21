@@ -3,8 +3,9 @@
 // 「写信表单文档」，收件人/主题/附件均只在该文档内查找，避免误填顶层搜索框等无关输入。
 
 (() => {
-  if (window.__phBridgeComposeLoaded) return;
-  window.__phBridgeComposeLoaded = true;
+  const SCRIPT_VER = "1.1.27";
+  if (window.__phBridgeComposeVer === SCRIPT_VER) return;
+  window.__phBridgeComposeVer = SCRIPT_VER;
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || message.type !== "fillCompose") return false;
@@ -21,6 +22,7 @@
 
   async function runFillCompose({ to, cc, subject, body, bodyHtml, files, mode, startAt, endAt, timeZone, startLocal, endLocal }) {
     const isMeeting = mode === "meeting";
+    const problems = [];
 
     // 1. 写信表单未打开时，点击「写信」入口
     if (!findEditorBody()) {
@@ -33,17 +35,17 @@
     if (isMeeting) {
       const switched = await switchToMeetingTab();
       if (!switched) {
-        return { ok: false, error: "找不到企业邮「会议」选项卡，请手动切换到会议后再试" };
+        problems.push("未能切换到「会议」选项卡，已按普通邮件填充（请手动切到会议核对时间）");
+        await sleep(400);
+      } else {
+        await sleep(900);
       }
-      await sleep(900);
     }
 
     // 2. 等待写信表单（以正文编辑器出现为准；切会议 Tab 后 DOM 可能刷新）
     const editorBody = await waitFor(() => findEditorBody(), 20000, "写信表单未出现（找不到正文编辑器）");
     // 写信表单文档：编辑器 iframe 所在的文档（经典版），或编辑器自身所在文档（新版）
     const composeDoc = editorBody.__phComposeDoc || editorBody.ownerDocument;
-
-    const problems = [];
 
     // 收件人：会议模式将抄送合并进收件人（无抄送时仅填客户邮箱）
     const recipientList = isMeeting ? mergeRecipients(to, cc || "") : to;
@@ -190,26 +192,53 @@
   }
 
   async function switchToMeetingTab() {
+    const roots = [];
     const composeDoc = findComposeDocument();
-    const roots = composeDoc ? [composeDoc] : [];
+    if (composeDoc) roots.push(composeDoc);
     const editor = findEditorBody();
     if (editor?.__phComposeDoc && !roots.includes(editor.__phComposeDoc)) {
       roots.push(editor.__phComposeDoc);
     }
-    if (!roots.length) roots.push(document);
+    if (!roots.includes(document)) roots.push(document);
 
     for (const root of roots) {
-      const candidates = root.querySelectorAll(
-        "a, button, span, div, li, label, [role='tab']",
+      // 优先：与「普通邮件」同栏的「会议」Tab（企业邮经典写信页）
+      const normalTab = Array.from(
+        root.querySelectorAll("a, button, span, div, li, label, [role='tab']"),
+      ).find(
+        (el) =>
+          isVisible(el) &&
+          /^(普通邮件|Normal(\s*Mail)?)$/i.test((el.textContent || "").trim()),
       );
-      for (const el of candidates) {
+      if (normalTab) {
+        const bar =
+          normalTab.closest("ul, nav, .tab, .tabs, .compose_tab, .mod-tab, .tab_list") ||
+          normalTab.parentElement;
+        if (bar) {
+          const meetingTab = Array.from(
+            bar.querySelectorAll("a, button, span, div, li, label, [role='tab']"),
+          ).find(
+            (el) =>
+              isVisible(el) && /^(会议|Meeting)$/i.test((el.textContent || "").trim()),
+          );
+          if (meetingTab) {
+            meetingTab.click();
+            await sleep(900);
+            return true;
+          }
+        }
+      }
+
+      // 次选：写信区域内可见的「会议」
+      const composeSelectors =
+        "#toAreaCtrl, .mail-compose, .compose_dialog, .mod-compose, .compose_wrap, .compose_area, .compose_main, .compose_toolbar";
+      for (const el of root.querySelectorAll("a, button, span, div, li, label, [role='tab']")) {
         if (!isVisible(el)) continue;
         const text = (el.textContent || "").trim();
         if (text !== "会议" && text !== "Meeting") continue;
-        // 避免点到页面导航或其他区域的「会议」
         const inCompose =
-          Boolean(el.closest("#toAreaCtrl, .mail-compose, .compose_dialog, .mod-compose, .compose_wrap")) ||
-          root !== document;
+          Boolean(el.closest(composeSelectors)) ||
+          Boolean(normalTab && el.closest(normalTab.parentElement?.tagName || "div"));
         if (!inCompose && root === document) continue;
         el.click();
         await sleep(900);
@@ -273,6 +302,13 @@
   }
 
   function findTimeRow(doc) {
+    for (const el of doc.querySelectorAll("label, td, th, span, div")) {
+      const t = (el.textContent || "").trim();
+      if (t === "时间" || /^时\s*间/.test(t.slice(0, 6))) {
+        const row = el.closest("tr, .compose_field, .field, li, .form_item, div");
+        if (row && row.querySelector("select, input")) return row;
+      }
+    }
     for (const input of doc.querySelectorAll("input[type='text'], input:not([type='hidden'])")) {
       if (!isVisible(input) || isInRecipientArea(input)) continue;
       const row = input.closest("tr, .compose_field, .field, li, div");
@@ -315,19 +351,189 @@
     }
   }
 
+  function parseLocalParts(local) {
+    const m = String(local || "")
+      .trim()
+      .match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    if (!m) return null;
+    return {
+      year: Number(m[1]),
+      month: Number(m[2]),
+      day: Number(m[3]),
+      hour: Number(m[4]),
+      minute: Number(m[5]),
+    };
+  }
+
+  function parseIsoToParts(iso, timeZone) {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return null;
+      const tz =
+        timeZone && String(timeZone).trim()
+          ? String(timeZone).trim()
+          : Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const dtf = new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+      const parts = Object.fromEntries(
+        dtf.formatToParts(d).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]),
+      );
+      return {
+        year: Number(parts.year),
+        month: Number(parts.month),
+        day: Number(parts.day),
+        hour: Number(parts.hour === "24" ? "0" : parts.hour),
+        minute: Number(parts.minute),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function exmailDateOnly(parts) {
+    return `${parts.year}/${parts.month}/${parts.day}`;
+  }
+
+  function sortByPosition(elements) {
+    return elements.slice().sort((a, b) => {
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      if (Math.abs(ra.top - rb.top) > 10) return ra.top - rb.top;
+      return ra.left - rb.left;
+    });
+  }
+
+  function setSelectByNumber(select, num) {
+    const candidates = [String(num), String(num).padStart(2, "0")];
+    for (const c of candidates) {
+      for (const opt of select.options) {
+        const ov = String(opt.value).trim();
+        const ot = String(opt.text).trim();
+        if (ov === c || ot === c || Number(ov) === num || Number(ot) === num) {
+          if (select.value !== opt.value) {
+            select.value = opt.value;
+            select.dispatchEvent(new Event("input", { bubbles: true }));
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  async function fillDateInput(input, parts) {
+    const dateStr = exmailDateOnly(parts);
+    input.focus();
+    setNativeValue(input, dateStr);
+    dispatchInputText(input, dateStr);
+    input.dispatchEvent(new Event("blur", { bubbles: true }));
+    await sleep(120);
+    if (!String(input.value || "").includes(String(parts.year))) {
+      input.click();
+      await sleep(150);
+      setNativeValue(input, dateStr);
+      pressKey(input, "Enter", 13);
+      await sleep(120);
+    }
+  }
+
+  function dateInputMatches(input, parts) {
+    const v = String(input.value || "");
+    if (!v.includes(String(parts.year))) return false;
+    const m = parts.month;
+    const d = parts.day;
+    return (
+      v.includes(`${parts.year}/${m}/${d}`) ||
+      v.includes(`${parts.year}/${String(m).padStart(2, "0")}/${String(d).padStart(2, "0")}`)
+    );
+  }
+
+  function verifyMeetingTime(timeRow, startParts, endParts) {
+    const selects = sortByPosition(Array.from(timeRow.querySelectorAll("select")).filter(isVisible));
+    const inputs = sortByPosition(
+      Array.from(
+        timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
+      )
+        .filter(isVisible)
+        .filter((el) => !isInRecipientArea(el)),
+    );
+    let ok = true;
+    if (selects.length >= 4) {
+      const sh = Number(selects[0].value);
+      const sm = Number(selects[1].value);
+      const eh = Number(selects[2].value);
+      const em = Number(selects[3].value);
+      ok =
+        sh === startParts.hour &&
+        sm === startParts.minute &&
+        eh === endParts.hour &&
+        em === endParts.minute;
+    }
+    if (inputs.length >= 2) {
+      ok = ok && dateInputMatches(inputs[0], startParts) && dateInputMatches(inputs[1], endParts);
+    }
+    return ok;
+  }
+
   async function fillMeetingTime(doc, startIso, endIso, timeZone, startLocal, endLocal) {
-    const startStr = formatExmailFromLocal(startLocal) || formatExmailDateTime(startIso, timeZone);
-    const endStr = formatExmailFromLocal(endLocal) || formatExmailDateTime(endIso, timeZone);
-    if (!startStr || !endStr) return false;
+    const startParts = parseLocalParts(startLocal) || parseIsoToParts(startIso, timeZone);
+    const endParts = parseLocalParts(endLocal) || parseIsoToParts(endIso, timeZone);
+    if (!startParts || !endParts) return false;
 
     const timeRow = findTimeRow(doc);
     if (!timeRow) return false;
 
-    const inputs = Array.from(
-      timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
-    ).filter(isVisible).filter((el) => !isInRecipientArea(el));
+    const selects = sortByPosition(Array.from(timeRow.querySelectorAll("select")).filter(isVisible));
+    const inputs = sortByPosition(
+      Array.from(
+        timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
+      )
+        .filter(isVisible)
+        .filter((el) => !isInRecipientArea(el)),
+    );
 
-    if (inputs.length < 2) return false;
+    // 企业邮会议 Tab：日期框 + 时/分下拉（非两个整段 datetime 文本框）
+    if (selects.length >= 4 && inputs.length >= 2) {
+      await fillDateInput(inputs[0], startParts);
+      setSelectByNumber(selects[0], startParts.hour);
+      setSelectByNumber(selects[1], startParts.minute);
+      await fillDateInput(inputs[1], endParts);
+      setSelectByNumber(selects[2], endParts.hour);
+      setSelectByNumber(selects[3], endParts.minute);
+      await sleep(200);
+      return verifyMeetingTime(timeRow, startParts, endParts);
+    }
+
+    if (selects.length >= 2 && inputs.length >= 1) {
+      if (inputs.length >= 2) {
+        await fillDateInput(inputs[0], startParts);
+        await fillDateInput(inputs[1], endParts);
+      } else {
+        await fillDateInput(inputs[0], startParts);
+      }
+      const half = Math.min(2, Math.floor(selects.length / 2));
+      for (let i = 0; i < half; i++) {
+        const parts = i === 0 ? startParts : endParts;
+        setSelectByNumber(selects[i * 2], parts.hour);
+        if (selects[i * 2 + 1]) setSelectByNumber(selects[i * 2 + 1], parts.minute);
+      }
+      await sleep(200);
+      return verifyMeetingTime(timeRow, startParts, endParts);
+    }
+
+    // 旧版：两个整段 datetime 文本框
+    const startStr = formatExmailFromLocal(startLocal) || formatExmailDateTime(startIso, timeZone);
+    const endStr = formatExmailFromLocal(endLocal) || formatExmailDateTime(endIso, timeZone);
+    if (!startStr || !endStr || inputs.length < 2) return false;
 
     setNativeValue(inputs[0], startStr);
     setNativeValue(inputs[1], endStr);

@@ -5,9 +5,9 @@ import Link from "next/link";
 import {
   defaultMeetingStartLocal,
   defaultMeetingEndLocal,
-  getBrowserTimeZone,
   formatTimeZoneLabel,
 } from "@/lib/meeting-datetime";
+import { resolveSubmitTimeZone, useClientTimeZone } from "@/lib/use-client-timezone";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 import { createMeetingAction, type CreateMeetingResult } from "@/lib/meeting-actions";
 import {
@@ -112,7 +112,7 @@ function MeetingForm({
   const [copied, setCopied] = useState(false);
   const [pending, start] = useTransition();
 
-  const timeZone = useMemo(() => getBrowserTimeZone(), []);
+  const timeZone = useClientTimeZone();
 
   const timeZoneLabel = useMemo(() => {
     const loc = locale === "zh" ? "zh-CN" : "en-US";
@@ -132,11 +132,12 @@ function MeetingForm({
     e.preventDefault();
     setError(null);
     setResult(null);
+    const tz = resolveSubmitTimeZone(timeZone);
     const fd = new FormData();
     fd.set("title", title);
     fd.set("startAt", startAt);
     fd.set("endAt", endAt);
-    fd.set("timeZone", timeZone);
+    fd.set("timeZone", tz);
     fd.set("notifyAttendees", notifyAttendees ? "true" : "false");
     for (const id of selected) fd.append("attendeeUserIds", id);
 
