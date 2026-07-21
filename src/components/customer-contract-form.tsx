@@ -31,12 +31,15 @@ import {
 } from "@/lib/contract-line-items";
 import { ContractAiExtract } from "@/components/contract-ai-extract";
 import type { ContractExtractResult } from "@/lib/contract-extract-types";
+import { termYearsFromDateRange } from "@/lib/arr";
 
 export type ContractFormCopy = {
   contractName: string;
   contractType: string;
   contractStatus: string;
   contractBillingCycle: string;
+  contractTermYears: string;
+  contractTermYearsHint: string;
   contractBillingNone: string;
   contractStartDate: string;
   contractEndDate: string;
@@ -135,6 +138,7 @@ type ContractDefaults = {
   currency?: string | null;
   crmContractId?: string | null;
   billingCycle?: string | null;
+  termYears?: number | null;
   startDate?: string;
   endDate?: string;
   renewsAt?: string;
@@ -222,6 +226,15 @@ export function CustomerContractForm({
   const [billingCycle, setBillingCycle] = useState(
     defaults?.billingCycle ?? (isRenewalType((defaults?.contractType as ContractTypeCode) || "SUBSCRIPTION") ? "YEARLY" : "")
   );
+  const [termYears, setTermYears] = useState(
+    String(
+      defaults?.termYears && defaults.termYears > 0
+        ? defaults.termYears
+        : !isPrimaryCommercialType((defaults?.contractType as ContractTypeCode) || "SUBSCRIPTION")
+          ? 1
+          : ""
+    )
+  );
   const [startDate, setStartDate] = useState(defaults?.startDate ?? "");
   const [endDate, setEndDate] = useState(defaults?.endDate ?? "");
   const [renewsAt, setRenewsAt] = useState(defaults?.renewsAt ?? "");
@@ -277,6 +290,12 @@ export function CustomerContractForm({
     if (result.crmContractId?.trim()) setCrmContractId(result.crmContractId.trim());
     if (result.startDate) setStartDate(result.startDate);
     if (result.endDate) setEndDate(result.endDate);
+    if (result.termYears != null && result.termYears > 0) {
+      setTermYears(String(result.termYears));
+    } else if (result.startDate && result.endDate) {
+      const inferred = termYearsFromDateRange(result.startDate, result.endDate);
+      if (inferred != null) setTermYears(String(inferred));
+    }
     if (result.renewsAt) setRenewsAt(result.renewsAt);
     if (result.lineItems?.length) {
       setLineItems(
@@ -362,7 +381,17 @@ export function CustomerContractForm({
       <select
         name="contractType"
         value={contractType}
-        onChange={(e) => setContractType(e.target.value as ContractTypeCode)}
+        onChange={(e) => {
+          const next = e.target.value as ContractTypeCode;
+          setContractType(next);
+          if (isPrimaryCommercialType(next)) {
+            setBillingCycle("");
+            setTermYears("");
+          } else {
+            if (!billingCycle) setBillingCycle("YEARLY");
+            if (!termYears || Number(termYears) <= 0) setTermYears("1");
+          }
+        }}
         className={inputClassName}
         aria-label={copy.contractType}
       >
@@ -431,6 +460,26 @@ export function CustomerContractForm({
         </label>
       ) : (
         <input type="hidden" name="billingCycle" value="" />
+      )}
+
+      {showBilling ? (
+        <label className="block min-w-0 space-y-1">
+          <span className="text-[11px] text-slate-500">{copy.contractTermYears}</span>
+          <input
+            name="termYears"
+            type="number"
+            min={1}
+            max={100}
+            step={1}
+            value={termYears}
+            onChange={(e) => setTermYears(e.target.value)}
+            className={inputClassName}
+            aria-label={copy.contractTermYears}
+          />
+          <span className="text-[10px] text-slate-400 leading-snug">{copy.contractTermYearsHint}</span>
+        </label>
+      ) : (
+        <input type="hidden" name="termYears" value="" />
       )}
 
       <label className="block min-w-0 space-y-1">

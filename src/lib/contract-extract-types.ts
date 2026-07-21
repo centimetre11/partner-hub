@@ -13,6 +13,8 @@ export type ContractExtractResult = {
   currency?: AmountCurrency;
   crmContractId?: string;
   billingCycle?: BillingCycleCode;
+  /** Years the contract amount covers (multi-year subscription). */
+  termYears?: number;
   startDate?: string;
   endDate?: string;
   renewsAt?: string;

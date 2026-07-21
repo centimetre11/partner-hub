@@ -11,6 +11,7 @@ import {
 } from "./contract-types";
 import { normalizeAmountInput, normalizeCurrency } from "./amount";
 import { normalizeLineItem, type ContractLineItemInput } from "./contract-line-items";
+import { normalizeTermYears, termYearsFromDateRange } from "./arr";
 import type { ContractExtractResult } from "./contract-extract-types";
 
 export type { ContractExtractResult } from "./contract-extract-types";
@@ -46,7 +47,7 @@ function buildPrompt(ctx: ContractExtractContext, source: "image" | "text"): str
     return `你是 CRM 合同截图结构化助手。${sourceHint}${customerHint || ""}
 
 只输出 JSON：
-{"name":"","customerName":"","contractType":"SUBSCRIPTION|BUYOUT|PRODUCT_MAINTENANCE|PROJECT|PROJECT_MAINTENANCE","status":"DRAFT|ACTIVE|EXPIRED|CANCELLED|RENEWED","amount":"","currency":"CNY|USD|EUR|SGD|HKD","crmContractId":"","billingCycle":"MONTHLY|QUARTERLY|YEARLY|OTHER","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","renewsAt":"YYYY-MM-DD","salesOwnerName":"","notes":"","lineItems":[{"product":"","version":"","amount":"","currency":"","cycleYears":1}]}
+{"name":"","customerName":"","contractType":"SUBSCRIPTION|BUYOUT|PRODUCT_MAINTENANCE|PROJECT|PROJECT_MAINTENANCE","status":"DRAFT|ACTIVE|EXPIRED|CANCELLED|RENEWED","amount":"","currency":"CNY|USD|EUR|SGD|HKD","crmContractId":"","billingCycle":"MONTHLY|QUARTERLY|YEARLY|OTHER","termYears":1,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","renewsAt":"YYYY-MM-DD","salesOwnerName":"","notes":"","lineItems":[{"product":"","version":"","amount":"","currency":"","cycleYears":1}]}
 
 支持两类帆软 CRM 页面：
 
@@ -57,6 +58,7 @@ function buildPrompt(ctx: ContractExtractContext, source: "image" | "text"): str
 - 机会ID → crmContractId；机会销售 → salesOwnerName
 - 预计产品与服务表 → lineItems
 - 预计日期/关闭日 → endDate 或 renewsAt；创建日 → startDate
+- 若起止跨多年，termYears 填整数年数（约等于结束年−开始年，近整年则四舍五入）
 
 【B. 合同详情（合同文件 + 合同内容）】
 - 合同名称 → name；公司名称/最终用户 → customerName
@@ -67,6 +69,7 @@ function buildPrompt(ctx: ContractExtractContext, source: "image" | "text"): str
 - 合同状态：执行中/生效 → ACTIVE；草稿 → DRAFT；到期 → EXPIRED；取消 → CANCELLED
 - 合同类型写「其他合同」但名称含「订阅」→ SUBSCRIPTION+YEARLY；含买断 → BUYOUT；含维保按产品/项目维保
 - 无产品表时：从合同名推断产品（FineBI/FineReport 等）写入 lineItems，金额用产品金额，cycleYears=1
+- 多年订阅：产品金额通常是合同总价，termYears 按签单日到结束日估算（如 2026-01 至 2030-12 → 5）
 
 需求概述/备注/文件备注 → notes。勿编造金额或 ID。日期 YYYY-MM-DD。看不到的字段空字符串/空数组。`;
   }
@@ -74,13 +77,13 @@ function buildPrompt(ctx: ContractExtractContext, source: "image" | "text"): str
   return `CRM contract screenshot extraction. ${sourceHint}${customerHint || ""}
 
 JSON only:
-{"name":"","customerName":"","contractType":"SUBSCRIPTION|BUYOUT|PRODUCT_MAINTENANCE|PROJECT|PROJECT_MAINTENANCE","status":"DRAFT|ACTIVE|EXPIRED|CANCELLED|RENEWED","amount":"","currency":"CNY|USD|EUR|SGD|HKD","crmContractId":"","billingCycle":"MONTHLY|QUARTERLY|YEARLY|OTHER","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","renewsAt":"YYYY-MM-DD","salesOwnerName":"","notes":"","lineItems":[{"product":"","version":"","amount":"","currency":"","cycleYears":1}]}
+{"name":"","customerName":"","contractType":"SUBSCRIPTION|BUYOUT|PRODUCT_MAINTENANCE|PROJECT|PROJECT_MAINTENANCE","status":"DRAFT|ACTIVE|EXPIRED|CANCELLED|RENEWED","amount":"","currency":"CNY|USD|EUR|SGD|HKD","crmContractId":"","billingCycle":"MONTHLY|QUARTERLY|YEARLY|OTHER","termYears":1,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","renewsAt":"YYYY-MM-DD","salesOwnerName":"","notes":"","lineItems":[{"product":"","version":"","amount":"","currency":"","cycleYears":1}]}
 
 Two FanRuan page types:
 
-[A. Opportunity] name/customer; procurement→type; total amount/currency; opportunity ID; sales; products table; dates.
+[A. Opportunity] name/customer; procurement→type; total amount/currency; opportunity ID; sales; products table; dates; termYears if multi-year.
 
-[B. Contract detail] contract name→name; company/end user→customerName; 产品金额→amount; contract UUID/file no→crmContractId; signing→startDate; end→endDate (+renewsAt for subscription); sales; status 执行中→ACTIVE; type「其他合同」+订阅 in name→SUBSCRIPTION; infer FineBI line item from name if no product table.
+[B. Contract detail] contract name→name; company/end user→customerName; 产品金额→amount (often multi-year total); contract UUID/file no→crmContractId; signing→startDate; end→endDate (+renewsAt for subscription); sales; status 执行中→ACTIVE; type「其他合同」+订阅 in name→SUBSCRIPTION; infer FineBI line item from name if no product table; termYears from signing→end (e.g. 2026-01 to 2030-12 → 5).
 
 Never invent amounts/IDs. Dates YYYY-MM-DD. Empty string/[] when not visible.`;
 }
@@ -195,6 +198,21 @@ export function normalizeContractExtractResult(raw: Record<string, unknown>): Co
   ].filter(Boolean);
 
   const statusRaw = String(raw.status ?? raw.contractStatus ?? "").trim();
+  const startDate = normalizeDateYmd(
+    raw.startDate ?? raw.signingDate ?? raw.签单日期 ?? raw.createdAt
+  );
+  const endDate = normalizeDateYmd(raw.endDate ?? raw.结束日期 ?? raw.estimatedDate);
+
+  let termYears: number | undefined;
+  const termRaw = raw.termYears ?? raw.subscriptionYears ?? raw.years;
+  if (termRaw != null && String(termRaw).trim() !== "") {
+    const n = Number(termRaw);
+    if (Number.isFinite(n) && n > 0) termYears = normalizeTermYears(n);
+  }
+  if (termYears == null && startDate && endDate) {
+    termYears = termYearsFromDateRange(startDate, endDate) ?? undefined;
+  }
+
   const result: ContractExtractResult = {
     name: nameHint || undefined,
     customerName:
@@ -207,10 +225,9 @@ export function normalizeContractExtractResult(raw: Record<string, unknown>): Co
       String(raw.crmContractId ?? raw.contractId ?? raw.opportunityId ?? raw.fileNumber ?? "")
         .trim() || undefined,
     billingCycle: billingCycle ?? undefined,
-    startDate: normalizeDateYmd(
-      raw.startDate ?? raw.signingDate ?? raw.签单日期 ?? raw.createdAt
-    ),
-    endDate: normalizeDateYmd(raw.endDate ?? raw.结束日期 ?? raw.estimatedDate),
+    termYears,
+    startDate,
+    endDate,
     renewsAt: normalizeDateYmd(raw.renewsAt ?? raw.renewalDate),
     salesOwnerName:
       String(raw.salesOwnerName ?? raw.contractSales ?? raw.responsibleSales ?? "").trim() ||

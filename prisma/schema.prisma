@@ -511,6 +511,8 @@ model Contract {
   renewsAt      DateTime? // 下次续约/续费日（订阅、产品维保、项目维保常用）
   // MONTHLY / QUARTERLY / YEARLY / OTHER；买断/项目主合同通常为空
   billingCycle  String?
+  // 订阅/维保：合同总金额覆盖的年数；ARR = 金额 ÷ termYears（再按计费周期年化）；空/≤0 视为 1
+  termYears     Int?
   // 买断专用：产品维保占产品合同金额比例（如 15、20）
   productMaintRatePct Int?
   // 买断专用：首年产品维保是否已含在产品买断价中

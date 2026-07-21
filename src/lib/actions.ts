@@ -978,6 +978,12 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
   const contractType = normalizeContractType(typeRaw) ?? DEFAULT_CONTRACT_TYPE;
   const status = normalizeContractStatus(String(formData.get("status") ?? DEFAULT_CONTRACT_STATUS));
   const billingCycle = normalizeBillingCycle(String(formData.get("billingCycle") ?? "") || null);
+  const termYearsRaw = String(formData.get("termYears") ?? "").trim();
+  const termYearsParsed = termYearsRaw ? Number(termYearsRaw) : NaN;
+  const termYears =
+    Number.isFinite(termYearsParsed) && termYearsParsed > 0
+      ? Math.min(100, Math.max(1, Math.round(termYearsParsed)))
+      : null;
 
   const partnerId = formData.has("partnerId")
     ? String(formData.get("partnerId") ?? "").trim() || null
@@ -1041,6 +1047,7 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     endDate: parseOptionalDate(formData, "endDate"),
     renewsAt: parseOptionalDate(formData, "renewsAt"),
     billingCycle: isPrimaryCommercialType(contractType) ? null : billingCycle,
+    termYears: isPrimaryCommercialType(contractType) ? null : termYears ?? 1,
     productMaintRatePct,
     productMaintIncludedY1,
     projectMaintRatePct,
@@ -1213,6 +1220,7 @@ export async function createProductMaintRenewalAction(owner: OwnerRef, buyoutId:
       endDate: end,
       renewsAt: end,
       billingCycle: "YEARLY",
+      termYears: 1,
       productMaintRatePct: null,
       productMaintIncludedY1: false,
       projectMaintRatePct: null,
@@ -1277,6 +1285,7 @@ export async function createProjectMaintRenewalAction(owner: OwnerRef, projectCo
       endDate: end,
       renewsAt: end,
       billingCycle: "YEARLY",
+      termYears: 1,
       productMaintRatePct: null,
       productMaintIncludedY1: false,
       projectMaintRatePct: null,

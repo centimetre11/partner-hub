@@ -96,6 +96,8 @@ export default async function ContractDetailPage({
     contractType: c.contractType,
     contractStatus: c.contractStatus,
     contractBillingCycle: c.contractBillingCycle,
+    contractTermYears: c.contractTermYears,
+    contractTermYearsHint: c.contractTermYearsHint,
     contractBillingNone: c.contractBillingNone,
     contractStartDate: c.contractStartDate,
     contractEndDate: c.contractEndDate,
@@ -223,7 +225,7 @@ export default async function ContractDetailPage({
           {isArrContractType(ct.contractType) && <Badge tone="green">ARR</Badge>}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
             <div className="text-xs text-slate-400">{t.colAmount}</div>
             <div className="text-xl font-semibold tabular-nums mt-1">
@@ -240,6 +242,12 @@ export default async function ContractDetailPage({
             <div className="text-xs text-slate-400">{t.colCycle}</div>
             <div className="text-xl font-semibold mt-1">
               {billingCycleLabel(ct.billingCycle, locale) ?? "—"}
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
+            <div className="text-xs text-slate-400">{t.colTermYears}</div>
+            <div className="text-xl font-semibold tabular-nums mt-1">
+              {ct.termYears != null && ct.termYears > 0 ? ct.termYears : "—"}
             </div>
           </div>
         </div>
@@ -438,6 +446,7 @@ export default async function ContractDetailPage({
               currency: ct.currency,
               crmContractId: ct.crmContractId,
               billingCycle: ct.billingCycle,
+              termYears: ct.termYears,
               startDate: ct.startDate ? new Date(ct.startDate).toISOString().slice(0, 10) : "",
               endDate: ct.endDate ? new Date(ct.endDate).toISOString().slice(0, 10) : "",
               renewsAt: ct.renewsAt ? new Date(ct.renewsAt).toISOString().slice(0, 10) : "",

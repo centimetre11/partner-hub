@@ -63,6 +63,8 @@ export type ArrContractInput = {
   amount: string | null;
   currency?: string | null;
   billingCycle: string | null;
+  /** Years the header amount covers; ARR divides by this when > 1. */
+  termYears?: number | null;
   endDate: Date | string | null;
   renewsAt?: Date | string | null;
   startDate?: Date | string | null;
@@ -70,6 +72,30 @@ export type ArrContractInput = {
   customerId?: string;
   lineItems?: ArrLineItemInput[] | null;
 };
+
+/** Normalize subscription term years; null/invalid → 1. */
+export function normalizeTermYears(raw: number | string | null | undefined): number {
+  const n = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return Math.min(100, Math.max(1, Math.round(n)));
+}
+
+/**
+ * Rough calendar term years from start→end (integer).
+ * e.g. 2026-01-29 → 2030-12-31 ≈ 5.
+ */
+export function termYearsFromDateRange(
+  start: Date | string | null | undefined,
+  end: Date | string | null | undefined
+): number | null {
+  if (!start || !end) return null;
+  const s = typeof start === "string" ? new Date(start) : start;
+  const e = typeof end === "string" ? new Date(end) : end;
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e <= s) return null;
+  const years = (e.getTime() - s.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  if (!Number.isFinite(years) || years <= 0) return null;
+  return normalizeTermYears(Math.max(1, Math.round(years)));
+}
 
 /** Whether a contract currently counts toward ARR. */
 export function isActiveArrContract(ct: ArrContractInput): boolean {
@@ -81,14 +107,15 @@ export function isActiveArrContract(ct: ArrContractInput): boolean {
 
 /**
  * ARR contribution in USD.
- * Prefers header amount; if empty, sums line items (amount / cycleYears).
+ * Prefers header amount ÷ termYears; if header empty, sums line items (amount / cycleYears).
  */
 export function contractArrAmount(ct: ArrContractInput): number {
   if (!isActiveArrContract(ct)) return 0;
 
   const header = parseContractAmountNumber(ct.amount);
   if (header != null && header > 0) {
-    const annual = annualizeContractAmount(header, ct.billingCycle);
+    const years = normalizeTermYears(ct.termYears);
+    const annual = annualizeContractAmount(header / years, ct.billingCycle);
     return toArrUsd(annual, ct.currency);
   }
 
