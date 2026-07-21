@@ -3,7 +3,7 @@
 // 「写信表单文档」，收件人/主题/附件均只在该文档内查找，避免误填顶层搜索框等无关输入。
 
 (() => {
-  const SCRIPT_VER = "1.1.28";
+  const SCRIPT_VER = "1.1.29";
   if (window.__phBridgeComposeVer === SCRIPT_VER) return;
   window.__phBridgeComposeVer = SCRIPT_VER;
 
@@ -28,22 +28,29 @@
     if (!findEditorBody()) {
       const btn = await waitFor(() => findComposeButton(), 15000, "找不到「写信」按钮，请确认已登录企业邮");
       btn.click();
-      await sleep(500);
+      await sleep(800);
     }
 
-    // 1b. 会议邀约：切换到「会议」选项卡（非普通邮件）
+    // 2. 等待写信表单（以正文编辑器出现为准）
+    let editorBody = await waitFor(() => findEditorBody(), 20000, "写信表单未出现（找不到正文编辑器）");
+
+    // 2b. 会议邀约：等 Tab 栏出现后切到「会议」（勿在普通邮件里填）
     if (isMeeting) {
+      await waitFor(
+        () => findComposeTabBar() || findTimeRow(findComposeDocument() || document),
+        12000,
+        "找不到写信 Tab 栏",
+      ).catch(() => null);
       const switched = await switchToMeetingTab();
       if (!switched) {
         problems.push("未能切换到「会议」选项卡，已按普通邮件填充（请手动切到会议核对时间）");
         await sleep(400);
       } else {
         await sleep(900);
+        editorBody = (await waitFor(() => findEditorBody(), 10000, "").catch(() => null)) || editorBody;
       }
     }
 
-    // 2. 等待写信表单（以正文编辑器出现为准；切会议 Tab 后 DOM 可能刷新）
-    const editorBody = await waitFor(() => findEditorBody(), 20000, "写信表单未出现（找不到正文编辑器）");
     // 写信表单文档：编辑器 iframe 所在的文档（经典版），或编辑器自身所在文档（新版）
     const composeDoc = editorBody.__phComposeDoc || editorBody.ownerDocument;
 
@@ -191,7 +198,17 @@
     return null;
   }
 
-  async function switchToMeetingTab() {
+  function elementLabel(el) {
+    if (!el) return "";
+    for (const node of el.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+        return node.textContent.trim();
+      }
+    }
+    return (el.textContent || "").trim();
+  }
+
+  function composeRoots() {
     const roots = [];
     const composeDoc = findComposeDocument();
     if (composeDoc) roots.push(composeDoc);
@@ -200,52 +217,120 @@
       roots.push(editor.__phComposeDoc);
     }
     if (!roots.includes(document)) roots.push(document);
+    return roots;
+  }
 
-    for (const root of roots) {
-      // 优先：与「普通邮件」同栏的「会议」Tab（企业邮经典写信页）
-      const normalTab = Array.from(
-        root.querySelectorAll("a, button, span, div, li, label, [role='tab']"),
-      ).find(
-        (el) =>
-          isVisible(el) &&
-          /^(普通邮件|Normal(\s*Mail)?)$/i.test((el.textContent || "").trim()),
-      );
-      if (normalTab) {
-        const bar =
-          normalTab.closest("ul, nav, .tab, .tabs, .compose_tab, .mod-tab, .tab_list") ||
-          normalTab.parentElement;
-        if (bar) {
-          const meetingTab = Array.from(
-            bar.querySelectorAll("a, button, span, div, li, label, [role='tab']"),
-          ).find(
-            (el) =>
-              isVisible(el) && /^(会议|Meeting)$/i.test((el.textContent || "").trim()),
-          );
-          if (meetingTab) {
-            meetingTab.click();
-            await sleep(900);
-            return true;
+  /** 写信页 Tab 栏：含「普通邮件」+「会议」的紧凑容器 */
+  function findComposeTabBar() {
+    for (const root of composeRoots()) {
+      const toArea = root.querySelector("#toAreaCtrl");
+      if (toArea) {
+        let ancestor = toArea.parentElement;
+        for (let depth = 0; depth < 25 && ancestor; depth++) {
+          for (const el of ancestor.querySelectorAll("ul, ol, nav, div, tr, p, span, a")) {
+            if (!isVisible(el)) continue;
+            const compact = (el.textContent || "").replace(/\s+/g, "");
+            if (
+              compact.includes("普通邮件") &&
+              compact.includes("会议") &&
+              compact.length <= 48
+            ) {
+              return { root, bar: el };
+            }
           }
+          ancestor = ancestor.parentElement;
         }
       }
 
-      // 次选：写信区域内可见的「会议」
-      const composeSelectors =
-        "#toAreaCtrl, .mail-compose, .compose_dialog, .mod-compose, .compose_wrap, .compose_area, .compose_main, .compose_toolbar";
-      for (const el of root.querySelectorAll("a, button, span, div, li, label, [role='tab']")) {
-        if (!isVisible(el)) continue;
-        const text = (el.textContent || "").trim();
-        if (text !== "会议" && text !== "Meeting") continue;
-        const inCompose =
-          Boolean(el.closest(composeSelectors)) ||
-          Boolean(normalTab && el.closest(normalTab.parentElement?.tagName || "div"));
-        if (!inCompose && root === document) continue;
-        el.click();
-        await sleep(900);
-        return true;
+      for (const sel of [
+        "#meetingtab",
+        "#tab_meeting",
+        "#meeting_tab",
+        "#meetingTab",
+        "[data-type='meeting']",
+        "a[href*='meeting']",
+      ]) {
+        const hit = root.querySelector(sel);
+        if (hit && isVisible(hit)) {
+          return { root, bar: hit.parentElement || hit, meetingEl: hit };
+        }
+      }
+    }
+    return null;
+  }
+
+  function findMeetingTabInBar(bar) {
+    if (!bar) return null;
+    const nodes = bar.querySelectorAll("a, button, span, div, li, label, [role='tab']");
+    for (const el of nodes) {
+      if (!isVisible(el)) continue;
+      const label = elementLabel(el);
+      if (label === "会议" || label === "Meeting") return el;
+      if ((el.textContent || "").trim() === "会议") return el;
+    }
+    return null;
+  }
+
+  function isMeetingComposeActive() {
+    for (const root of composeRoots()) {
+      if (findTimeRow(root)) return true;
+      for (const el of root.querySelectorAll(".active, .selected, .current, .on, .cur")) {
+        const t = (el.textContent || "").trim();
+        if (t === "会议" || t.startsWith("会议")) return true;
       }
     }
     return false;
+  }
+
+  async function clickTabElement(el) {
+    const target = el.closest("a, button, [role='tab'], li") || el;
+    try {
+      target.scrollIntoView({ block: "nearest", inline: "nearest" });
+    } catch {
+      // ignore
+    }
+    const win = target.ownerDocument.defaultView;
+    for (const type of ["pointerdown", "mousedown", "mouseup", "click"]) {
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: win }));
+    }
+    target.click();
+    await sleep(700);
+  }
+
+  async function switchToMeetingTab() {
+    if (isMeetingComposeActive()) return true;
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const found = findComposeTabBar();
+      if (found?.meetingEl) {
+        await clickTabElement(found.meetingEl);
+        if (isMeetingComposeActive()) return true;
+      }
+      if (found?.bar) {
+        const tab = findMeetingTabInBar(found.bar);
+        if (tab) {
+          await clickTabElement(tab);
+          if (isMeetingComposeActive()) return true;
+        }
+      }
+
+      for (const root of composeRoots()) {
+        for (const el of root.querySelectorAll("a, button, span, div, li, label, [role='tab']")) {
+          if (!isVisible(el)) continue;
+          const label = elementLabel(el);
+          if (label !== "会议" && label !== "Meeting") continue;
+          const parent = el.parentElement;
+          const ctx = parent ? parent.textContent || "" : "";
+          if (!ctx.includes("普通邮件") && !ctx.includes("Normal")) continue;
+          await clickTabElement(el);
+          if (isMeetingComposeActive()) return true;
+        }
+      }
+
+      await sleep(450);
+    }
+
+    return isMeetingComposeActive();
   }
 
   function findComposeDocument() {
