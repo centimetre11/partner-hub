@@ -17,7 +17,7 @@ export default async function ArrCalendarPage({
 }: {
   searchParams: Promise<{ year?: string; from?: string; to?: string; owner?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { messages: m, bcp47, locale } = await getServerI18n();
   const t = m.arrCalendar;
   const sp = await searchParams;
@@ -25,7 +25,6 @@ export default async function ArrCalendarPage({
   const now = new Date();
   const year = Number(sp.year) || now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-  // Default: from current month through Dec of the selected year (or Jan if viewing another year).
   const defaultFrom = year === now.getFullYear() ? currentMonth : 1;
   const fromMonth = Math.min(12, Math.max(1, Number(sp.from) || defaultFrom));
   const toMonth = Math.min(12, Math.max(fromMonth, Number(sp.to) || 12));
@@ -43,10 +42,6 @@ export default async function ArrCalendarPage({
           name: true,
           ownerId: true,
           owner: { select: { id: true, name: true } },
-          partnerLinks: {
-            include: { partner: { select: { id: true, name: true } } },
-            take: 3,
-          },
           arrProfile: {
             include: {
               cells: {
@@ -62,7 +57,7 @@ export default async function ArrCalendarPage({
   const active = contracts.filter(isActiveArrContract);
   const customerIds = [...new Set(active.map((c) => c.customerId))];
 
-  const [profiles, openTodos] = await Promise.all([
+  const [profiles, openTodos, owners, partners, customers, users] = await Promise.all([
     db.arrCustomerProfile.findMany({
       where: { customerId: { in: customerIds } },
       include: {
@@ -86,6 +81,22 @@ export default async function ArrCalendarPage({
           orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
         })
       : Promise.resolve([]),
+    db.user.findMany({
+      where: { ownedCustomers: { some: { id: { in: customerIds } } } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.partner.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.customer.findMany({
+      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
   const profileByCustomer = new Map(profiles.map((p) => [p.customerId, p]));
@@ -96,12 +107,6 @@ export default async function ArrCalendarPage({
     list.push(todo);
     todosByCustomer.set(todo.customerId, list);
   }
-
-  const owners = await db.user.findMany({
-    where: { ownedCustomers: { some: { id: { in: customerIds } } } },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
 
   const byCustomer = new Map<string, CalendarRowData>();
   for (const ct of active) {
@@ -120,11 +125,9 @@ export default async function ArrCalendarPage({
       row = {
         customerId: ct.customerId,
         customerName: ct.customer.name,
-        partnerNames: ct.customer.partnerLinks.map((p) => p.partner.name),
         ownerName: ct.customer.owner?.name ?? null,
         arr: 0,
         latestService: latest ? fmtDate(latest, bcp47) : null,
-        situation: profile?.situation ?? "",
         legacyTodo: profile?.todo?.trim() ?? "",
         openTodos: todos.map((todo) => ({
           id: todo.id,
@@ -141,7 +144,6 @@ export default async function ArrCalendarPage({
   }
 
   const rows = [...byCustomer.values()].sort((a, b) => b.arr - a.arr);
-
   const seedAction = seedRenewalRemindersAction.bind(null, year);
 
   return (
@@ -241,19 +243,19 @@ export default async function ArrCalendarPage({
             rows={rows}
             locale={locale}
             bcp47={bcp47}
+            userId={user.id}
+            partners={partners}
+            customers={customers}
+            users={users}
             copy={{
               colCustomer: t.colCustomer,
-              colPartner: t.colPartner,
               colArr: t.colArr,
               colLatestService: t.colLatestService,
               colOwner: t.colOwner,
-              colSituation: t.colSituation,
               colTodo: t.colTodo,
               save: t.save,
               saving: t.saving,
               placeholderCell: t.placeholderCell,
-              placeholderSituation: t.placeholderSituation,
-              placeholderTodo: t.placeholderTodo,
               addTodo: t.addTodo,
               noOpenTodos: t.noOpenTodos,
               viewCustomerTodos: t.viewCustomerTodos,

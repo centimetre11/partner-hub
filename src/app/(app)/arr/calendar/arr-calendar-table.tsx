@@ -2,51 +2,44 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { monthLabel } from "@/lib/arr-calendar-types";
-import {
-  upsertArrCalendarCellAction,
-  upsertArrCustomerProfileAction,
-} from "@/lib/arr-calendar-actions";
-import { createTodoAction } from "@/lib/actions";
+import { upsertArrCalendarCellAction } from "@/lib/arr-calendar-actions";
+import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { fmtDate } from "@/components/ui";
+import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
 
 export type CalendarOpenTodo = {
   id: string;
   title: string;
   status: string;
-  dueDate: string | null; // ISO
+  dueDate: string | null;
   assigneeName: string | null;
 };
 
 export type CalendarRowData = {
   customerId: string;
   customerName: string;
-  partnerNames: string[];
+  /** Customer.owner — sales owner on the customer, not a contract field. */
   ownerName: string | null;
   arr: number;
   latestService: string | null;
-  situation: string;
-  /** Legacy free-text from ArrCustomerProfile.todo (read-only hint). */
   legacyTodo: string;
   openTodos: CalendarOpenTodo[];
   cells: Record<number, { content: string }>;
 };
 
+type Option = { id: string; name: string };
+
 type Copy = {
   colCustomer: string;
-  colPartner: string;
   colArr: string;
   colLatestService: string;
   colOwner: string;
-  colSituation: string;
   colTodo: string;
   save: string;
   saving: string;
   placeholderCell: string;
-  placeholderSituation: string;
-  placeholderTodo: string;
   addTodo: string;
   noOpenTodos: string;
   viewCustomerTodos: string;
@@ -57,60 +50,16 @@ function formatArr(n: number) {
   return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
-function QuickAddTodo({
-  customerId,
-  placeholder,
-  addLabel,
-}: {
-  customerId: string;
-  placeholder: string;
-  addLabel: string;
-}) {
-  const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  return (
-    <form
-      className="flex gap-1 mt-1"
-      onSubmit={(e) => {
-        e.preventDefault();
-        const t = title.trim();
-        if (!t || pending) return;
-        const fd = new FormData();
-        fd.set("title", t);
-        fd.set("customerId", customerId);
-        startTransition(async () => {
-          await createTodoAction(fd);
-          setTitle("");
-          router.refresh();
-        });
-      }}
-    >
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={placeholder}
-        disabled={pending}
-        className="flex-1 min-w-0 rounded border border-slate-200 px-1.5 py-1 text-[11px] outline-none focus:border-sky-300"
-      />
-      <button
-        type="submit"
-        disabled={pending || !title.trim()}
-        className="shrink-0 rounded bg-slate-900 text-white px-1.5 py-1 text-[10px] disabled:opacity-40"
-      >
-        {addLabel}
-      </button>
-    </form>
-  );
-}
-
 export function ArrCalendarTable({
   year,
   months,
   rows: initialRows,
   locale,
   bcp47,
+  userId,
+  partners,
+  customers,
+  users,
   copy,
 }: {
   year: number;
@@ -118,6 +67,10 @@ export function ArrCalendarTable({
   rows: CalendarRowData[];
   locale: "zh" | "en";
   bcp47: string;
+  userId: string;
+  partners: Option[];
+  customers: Option[];
+  users: Option[];
   copy: Copy;
 }) {
   const [rows, setRows] = useState(initialRows);
@@ -126,10 +79,6 @@ export function ArrCalendarTable({
     customerId: string;
     month: number;
     content: string;
-  } | null>(null);
-  const [profileEdit, setProfileEdit] = useState<{
-    customerId: string;
-    value: string;
   } | null>(null);
 
   useEffect(() => {
@@ -165,21 +114,6 @@ export function ArrCalendarTable({
     });
   }, [editing, year]);
 
-  const saveSituation = useCallback(() => {
-    if (!profileEdit) return;
-    const { customerId, value } = profileEdit;
-    setRows((prev) =>
-      prev.map((r) => (r.customerId === customerId ? { ...r, situation: value } : r))
-    );
-    setProfileEdit(null);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("customerId", customerId);
-      fd.set("situation", value);
-      await upsertArrCustomerProfileAction(fd);
-    });
-  }, [profileEdit]);
-
   return (
     <div className="relative">
       {pending && (
@@ -188,14 +122,11 @@ export function ArrCalendarTable({
         </div>
       )}
       <div className="overflow-x-auto rounded-lg border border-slate-200/80 bg-white shadow-sm">
-        <table className="w-full text-sm border-collapse min-w-[1400px]">
+        <table className="w-full text-sm border-collapse min-w-[1100px]">
           <thead>
             <tr className="bg-slate-50/80 text-left text-xs text-slate-500">
               <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2.5 font-medium min-w-[160px] border-b border-r border-slate-200">
                 {copy.colCustomer}
-              </th>
-              <th className="px-2 py-2.5 font-medium min-w-[100px] border-b border-slate-200">
-                {copy.colPartner}
               </th>
               <th className="px-2 py-2.5 font-medium min-w-[72px] border-b border-slate-200 text-right">
                 {copy.colArr}
@@ -205,9 +136,6 @@ export function ArrCalendarTable({
               </th>
               <th className="px-2 py-2.5 font-medium min-w-[100px] border-b border-slate-200">
                 {copy.colOwner}
-              </th>
-              <th className="px-2 py-2.5 font-medium min-w-[180px] border-b border-slate-200">
-                {copy.colSituation}
               </th>
               <th className="px-2 py-2.5 font-medium min-w-[200px] border-b border-slate-200">
                 {copy.colTodo}
@@ -233,9 +161,6 @@ export function ArrCalendarTable({
                     {row.customerName}
                   </Link>
                 </td>
-                <td className="px-2 py-2 text-xs text-slate-500">
-                  {row.partnerNames.length ? row.partnerNames.join("、") : "—"}
-                </td>
                 <td className="px-2 py-2 text-right tabular-nums text-emerald-700 font-medium">
                   {formatArr(row.arr)}
                 </td>
@@ -243,34 +168,6 @@ export function ArrCalendarTable({
                   {row.latestService || "—"}
                 </td>
                 <td className="px-2 py-2 text-xs text-slate-600">{row.ownerName ?? "—"}</td>
-                <td className="px-2 py-2">
-                  {profileEdit?.customerId === row.customerId ? (
-                    <textarea
-                      autoFocus
-                      value={profileEdit.value}
-                      onChange={(e) => setProfileEdit({ ...profileEdit, value: e.target.value })}
-                      onBlur={saveSituation}
-                      rows={3}
-                      className="w-full rounded border border-sky-300 px-2 py-1 text-xs resize-y"
-                      placeholder={copy.placeholderSituation}
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setProfileEdit({
-                          customerId: row.customerId,
-                          value: row.situation,
-                        })
-                      }
-                      className="w-full text-left text-xs text-slate-600 whitespace-pre-wrap min-h-[2.5rem] hover:bg-slate-50 rounded px-1 -mx-1"
-                    >
-                      {row.situation || (
-                        <span className="text-slate-300">{copy.placeholderSituation}</span>
-                      )}
-                    </button>
-                  )}
-                </td>
                 <td className="px-2 py-2">
                   <div className="space-y-1.5 min-w-[11rem]">
                     {row.openTodos.length === 0 && row.legacyTodo ? (
@@ -305,10 +202,14 @@ export function ArrCalendarTable({
                         </li>
                       ))}
                     </ul>
-                    <QuickAddTodo
-                      customerId={row.customerId}
-                      placeholder={copy.placeholderTodo}
-                      addLabel={copy.addTodo}
+                    <CreateTodoDrawer
+                      userId={userId}
+                      partners={partners}
+                      customers={customers}
+                      users={users}
+                      defaultOwnerRef={encodeTodoOwnerRef("customer", row.customerId)}
+                      buttonLabel={copy.addTodo}
+                      buttonClassName="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-700 hover:bg-slate-50"
                     />
                     <Link
                       href={`/customers/${row.customerId}?tab=overview`}
