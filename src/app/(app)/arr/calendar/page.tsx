@@ -9,7 +9,6 @@ import {
   isActiveArrContract,
   latestServiceDateFromContracts,
 } from "@/lib/arr";
-import { seedRenewalRemindersAction } from "@/lib/arr-calendar-actions";
 import { ArrCalendarTable, type CalendarRowData } from "./arr-calendar-table";
 
 export default async function ArrCalendarPage({
@@ -87,7 +86,6 @@ export default async function ArrCalendarPage({
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    // Drawer locks to the row customer; keep lists lean.
     Promise.resolve([] as { id: string; name: string }[]),
     db.customer.findMany({
       where: { id: { in: customerIds } },
@@ -126,6 +124,7 @@ export default async function ArrCalendarPage({
         ownerName: ct.customer.owner?.name ?? null,
         arr: 0,
         latestService: latest ? fmtDate(latest, bcp47) : null,
+        notes: profile?.situation ?? "",
         legacyTodo: profile?.todo?.trim() ?? "",
         openTodos: todos.map((todo) => ({
           id: todo.id,
@@ -142,26 +141,13 @@ export default async function ArrCalendarPage({
   }
 
   const rows = [...byCustomer.values()].sort((a, b) => b.arr - a.arr);
-  const seedAction = seedRenewalRemindersAction.bind(null, year);
 
   return (
     <div className="pb-16">
       <PageHeader
         title={t.title}
         desc={t.desc.replace("{year}", String(year)).replace("{count}", String(rows.length))}
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            <ArrViewSwitch />
-            <form action={seedAction}>
-              <button
-                type="submit"
-                className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 px-3 py-1.5 text-sm hover:bg-amber-100"
-              >
-                {t.seedRenewals}
-              </button>
-            </form>
-          </div>
-        }
+        actions={<ArrViewSwitch />}
       />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-4">
@@ -244,10 +230,12 @@ export default async function ArrCalendarPage({
               colArr: t.colArr,
               colLatestService: t.colLatestService,
               colOwner: t.colOwner,
+              colNotes: t.colNotes,
               colTodo: t.colTodo,
               save: t.save,
               saving: t.saving,
               placeholderCell: t.placeholderCell,
+              placeholderNotes: t.placeholderNotes,
               addTodo: t.addTodo,
               noOpenTodos: t.noOpenTodos,
               viewCustomerTodos: t.viewCustomerTodos,

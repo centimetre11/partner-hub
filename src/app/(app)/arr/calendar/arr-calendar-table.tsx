@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { monthLabel } from "@/lib/arr-calendar-types";
-import { upsertArrCalendarCellAction } from "@/lib/arr-calendar-actions";
+import {
+  upsertArrCalendarCellAction,
+  upsertArrCustomerProfileAction,
+} from "@/lib/arr-calendar-actions";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { fmtDate } from "@/components/ui";
@@ -24,6 +27,8 @@ export type CalendarRowData = {
   ownerName: string | null;
   arr: number;
   latestService: string | null;
+  /** Free-text notes (ArrCustomerProfile.situation). */
+  notes: string;
   legacyTodo: string;
   openTodos: CalendarOpenTodo[];
   cells: Record<number, { content: string }>;
@@ -36,10 +41,12 @@ type Copy = {
   colArr: string;
   colLatestService: string;
   colOwner: string;
+  colNotes: string;
   colTodo: string;
   save: string;
   saving: string;
   placeholderCell: string;
+  placeholderNotes: string;
   addTodo: string;
   noOpenTodos: string;
   viewCustomerTodos: string;
@@ -80,6 +87,10 @@ export function ArrCalendarTable({
     month: number;
     content: string;
   } | null>(null);
+  const [notesEdit, setNotesEdit] = useState<{
+    customerId: string;
+    value: string;
+  } | null>(null);
 
   useEffect(() => {
     setRows(initialRows);
@@ -114,6 +125,21 @@ export function ArrCalendarTable({
     });
   }, [editing, year]);
 
+  const saveNotes = useCallback(() => {
+    if (!notesEdit) return;
+    const { customerId, value } = notesEdit;
+    setRows((prev) =>
+      prev.map((r) => (r.customerId === customerId ? { ...r, notes: value } : r))
+    );
+    setNotesEdit(null);
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("customerId", customerId);
+      fd.set("situation", value);
+      await upsertArrCustomerProfileAction(fd);
+    });
+  }, [notesEdit]);
+
   return (
     <div className="relative">
       {pending && (
@@ -122,7 +148,7 @@ export function ArrCalendarTable({
         </div>
       )}
       <div className="overflow-x-auto rounded-lg border border-slate-200/80 bg-white shadow-sm">
-        <table className="w-full text-sm border-collapse min-w-[1100px]">
+        <table className="w-full text-sm border-collapse min-w-[1200px]">
           <thead>
             <tr className="bg-slate-50/80 text-left text-xs text-slate-500">
               <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2.5 font-medium min-w-[160px] border-b border-r border-slate-200">
@@ -136,6 +162,9 @@ export function ArrCalendarTable({
               </th>
               <th className="px-2 py-2.5 font-medium min-w-[100px] border-b border-slate-200">
                 {copy.colOwner}
+              </th>
+              <th className="px-2 py-2.5 font-medium min-w-[180px] border-b border-slate-200">
+                {copy.colNotes}
               </th>
               <th className="px-2 py-2.5 font-medium min-w-[200px] border-b border-slate-200">
                 {copy.colTodo}
@@ -168,6 +197,34 @@ export function ArrCalendarTable({
                   {row.latestService || "—"}
                 </td>
                 <td className="px-2 py-2 text-xs text-slate-600">{row.ownerName ?? "—"}</td>
+                <td className="px-2 py-2">
+                  {notesEdit?.customerId === row.customerId ? (
+                    <textarea
+                      autoFocus
+                      value={notesEdit.value}
+                      onChange={(e) => setNotesEdit({ ...notesEdit, value: e.target.value })}
+                      onBlur={saveNotes}
+                      rows={3}
+                      className="w-full rounded border border-sky-300 px-2 py-1 text-xs resize-y"
+                      placeholder={copy.placeholderNotes}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNotesEdit({
+                          customerId: row.customerId,
+                          value: row.notes,
+                        })
+                      }
+                      className="w-full text-left text-xs text-slate-600 whitespace-pre-wrap min-h-[2.5rem] hover:bg-slate-50 rounded px-1 -mx-1"
+                    >
+                      {row.notes || (
+                        <span className="text-slate-300">{copy.placeholderNotes}</span>
+                      )}
+                    </button>
+                  )}
+                </td>
                 <td className="px-2 py-2">
                   <div className="space-y-1.5 min-w-[11rem]">
                     {row.openTodos.length === 0 && row.legacyTodo ? (
