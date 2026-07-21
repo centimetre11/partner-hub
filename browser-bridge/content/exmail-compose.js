@@ -3,7 +3,7 @@
 // 「写信表单文档」，收件人/主题/附件均只在该文档内查找，避免误填顶层搜索框等无关输入。
 
 (() => {
-  const SCRIPT_VER = "1.1.27";
+  const SCRIPT_VER = "1.1.28";
   if (window.__phBridgeComposeVer === SCRIPT_VER) return;
   window.__phBridgeComposeVer = SCRIPT_VER;
 
@@ -302,19 +302,72 @@
   }
 
   function findTimeRow(doc) {
-    for (const el of doc.querySelectorAll("label, td, th, span, div")) {
+    for (const el of doc.querySelectorAll("label, td, th, span")) {
       const t = (el.textContent || "").trim();
-      if (t === "时间" || /^时\s*间/.test(t.slice(0, 6))) {
-        const row = el.closest("tr, .compose_field, .field, li, .form_item, div");
-        if (row && row.querySelector("select, input")) return row;
-      }
+      if (t !== "时间" && !/^时\s*间[:：]?$/.test(t)) continue;
+      const row =
+        el.closest("tr") ||
+        el.closest(".compose_field, .field, .form_item, li");
+      if (!row || !row.querySelector("select, input")) continue;
+      const head = (row.textContent || "").trim().slice(0, 8);
+      if (/^时\s*间/.test(head)) return row;
     }
     for (const input of doc.querySelectorAll("input[type='text'], input:not([type='hidden'])")) {
       if (!isVisible(input) || isInRecipientArea(input)) continue;
-      const row = input.closest("tr, .compose_field, .field, li, div");
+      const row = input.closest("tr, .compose_field, .field, li");
       if (row && /^时\s*间/.test((row.textContent || "").trim().slice(0, 12))) return row;
     }
     return null;
+  }
+
+  function classifySelect(select) {
+    const nums = [...select.options]
+      .map((o) => Number(String(o.value).trim()))
+      .filter((n) => Number.isFinite(n));
+    if (!nums.length) return "unknown";
+    const max = Math.max(...nums);
+    const min = Math.min(...nums);
+    if (max >= 1900) return "year";
+    if (max <= 23 && min >= 0) return "hour";
+    if (max <= 59 && min >= 0) return "minute";
+    return "unknown";
+  }
+
+  function isDateLikeInput(input) {
+    if (!input || input.tagName !== "INPUT") return false;
+    const v = String(input.value || "").trim();
+    if (/^\d{4}[/-]\d{1,2}[/-]\d{1,2}/.test(v) || /星期/.test(v)) return true;
+    const rect = input.getBoundingClientRect();
+    return rect.width >= 96;
+  }
+
+  function findMeetingTimeControls(timeRow) {
+    const selects = sortByPosition(Array.from(timeRow.querySelectorAll("select")).filter(isVisible));
+    const hours = selects.filter((s) => classifySelect(s) === "hour");
+    const minutes = selects.filter((s) => classifySelect(s) === "minute");
+
+    let dateInputs = sortByPosition(
+      Array.from(
+        timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
+      )
+        .filter(isVisible)
+        .filter((el) => !isInRecipientArea(el))
+        .filter(isDateLikeInput),
+    );
+
+    if (dateInputs.length < 2) {
+      const wideInputs = sortByPosition(
+        Array.from(
+          timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
+        )
+          .filter(isVisible)
+          .filter((el) => !isInRecipientArea(el))
+          .filter((el) => el.getBoundingClientRect().width >= 96),
+      );
+      if (wideInputs.length >= 2) dateInputs = wideInputs.slice(0, 2);
+    }
+
+    return { dateInputs, hours, minutes };
   }
 
   function formatExmailFromLocal(local) {
@@ -411,7 +464,9 @@
     });
   }
 
-  function setSelectByNumber(select, num) {
+  function setSelectByNumber(select, num, kind) {
+    if (kind === "hour" && (num < 0 || num > 23)) return false;
+    if (kind === "minute" && (num < 0 || num > 59)) return false;
     const candidates = [String(num), String(num).padStart(2, "0")];
     for (const c of candidates) {
       for (const opt of select.options) {
@@ -431,19 +486,31 @@
   }
 
   async function fillDateInput(input, parts) {
+    if (!isDateLikeInput(input) && input.getBoundingClientRect().width < 96) return false;
     const dateStr = exmailDateOnly(parts);
     input.focus();
+    try {
+      input.select();
+    } catch {
+      // ignore
+    }
     setNativeValue(input, dateStr);
     dispatchInputText(input, dateStr);
     input.dispatchEvent(new Event("blur", { bubbles: true }));
     await sleep(120);
-    if (!String(input.value || "").includes(String(parts.year))) {
+    if (!dateInputMatches(input, parts)) {
       input.click();
       await sleep(150);
+      try {
+        input.select();
+      } catch {
+        // ignore
+      }
       setNativeValue(input, dateStr);
       pressKey(input, "Enter", 13);
       await sleep(120);
     }
+    return dateInputMatches(input, parts);
   }
 
   function dateInputMatches(input, parts) {
@@ -458,28 +525,19 @@
   }
 
   function verifyMeetingTime(timeRow, startParts, endParts) {
-    const selects = sortByPosition(Array.from(timeRow.querySelectorAll("select")).filter(isVisible));
-    const inputs = sortByPosition(
-      Array.from(
-        timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
-      )
-        .filter(isVisible)
-        .filter((el) => !isInRecipientArea(el)),
-    );
+    const { dateInputs, hours, minutes } = findMeetingTimeControls(timeRow);
     let ok = true;
-    if (selects.length >= 4) {
-      const sh = Number(selects[0].value);
-      const sm = Number(selects[1].value);
-      const eh = Number(selects[2].value);
-      const em = Number(selects[3].value);
+    if (hours.length >= 2 && minutes.length >= 2) {
       ok =
-        sh === startParts.hour &&
-        sm === startParts.minute &&
-        eh === endParts.hour &&
-        em === endParts.minute;
+        Number(hours[0].value) === startParts.hour &&
+        Number(minutes[0].value) === startParts.minute &&
+        Number(hours[1].value) === endParts.hour &&
+        Number(minutes[1].value) === endParts.minute;
     }
-    if (inputs.length >= 2) {
-      ok = ok && dateInputMatches(inputs[0], startParts) && dateInputMatches(inputs[1], endParts);
+    if (dateInputs.length >= 2) {
+      ok = ok && dateInputMatches(dateInputs[0], startParts) && dateInputMatches(dateInputs[1], endParts);
+    } else if (dateInputs.length === 1) {
+      ok = ok && dateInputMatches(dateInputs[0], startParts);
     }
     return ok;
   }
@@ -492,45 +550,32 @@
     const timeRow = findTimeRow(doc);
     if (!timeRow) return false;
 
-    const selects = sortByPosition(Array.from(timeRow.querySelectorAll("select")).filter(isVisible));
+    const { dateInputs, hours, minutes } = findMeetingTimeControls(timeRow);
+
+    if (hours.length >= 2 && minutes.length >= 2) {
+      if (dateInputs.length >= 2) {
+        await fillDateInput(dateInputs[0], startParts);
+        await fillDateInput(dateInputs[1], endParts);
+      } else if (dateInputs.length === 1) {
+        await fillDateInput(dateInputs[0], startParts);
+      }
+      setSelectByNumber(hours[0], startParts.hour, "hour");
+      setSelectByNumber(minutes[0], startParts.minute, "minute");
+      setSelectByNumber(hours[1], endParts.hour, "hour");
+      setSelectByNumber(minutes[1], endParts.minute, "minute");
+      await sleep(250);
+      return verifyMeetingTime(timeRow, startParts, endParts);
+    }
+
+    // 旧版：两个整段 datetime 文本框（无时分下拉时）
     const inputs = sortByPosition(
       Array.from(
         timeRow.querySelectorAll("input[type='text'], input:not([type='hidden']):not([type='checkbox'])"),
       )
         .filter(isVisible)
-        .filter((el) => !isInRecipientArea(el)),
+        .filter((el) => !isInRecipientArea(el))
+        .filter((el) => el.getBoundingClientRect().width >= 120),
     );
-
-    // 企业邮会议 Tab：日期框 + 时/分下拉（非两个整段 datetime 文本框）
-    if (selects.length >= 4 && inputs.length >= 2) {
-      await fillDateInput(inputs[0], startParts);
-      setSelectByNumber(selects[0], startParts.hour);
-      setSelectByNumber(selects[1], startParts.minute);
-      await fillDateInput(inputs[1], endParts);
-      setSelectByNumber(selects[2], endParts.hour);
-      setSelectByNumber(selects[3], endParts.minute);
-      await sleep(200);
-      return verifyMeetingTime(timeRow, startParts, endParts);
-    }
-
-    if (selects.length >= 2 && inputs.length >= 1) {
-      if (inputs.length >= 2) {
-        await fillDateInput(inputs[0], startParts);
-        await fillDateInput(inputs[1], endParts);
-      } else {
-        await fillDateInput(inputs[0], startParts);
-      }
-      const half = Math.min(2, Math.floor(selects.length / 2));
-      for (let i = 0; i < half; i++) {
-        const parts = i === 0 ? startParts : endParts;
-        setSelectByNumber(selects[i * 2], parts.hour);
-        if (selects[i * 2 + 1]) setSelectByNumber(selects[i * 2 + 1], parts.minute);
-      }
-      await sleep(200);
-      return verifyMeetingTime(timeRow, startParts, endParts);
-    }
-
-    // 旧版：两个整段 datetime 文本框
     const startStr = formatExmailFromLocal(startLocal) || formatExmailDateTime(startIso, timeZone);
     const endStr = formatExmailFromLocal(endLocal) || formatExmailDateTime(endIso, timeZone);
     if (!startStr || !endStr || inputs.length < 2) return false;

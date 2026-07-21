@@ -51,9 +51,11 @@ function buildPrompt(ctx: MeetingExtractContext, source: "image" | "text"): stri
 只输出 JSON（startAt/endAt 为用户时区 ${timeZone} 墙钟 YYYY-MM-DDTHH:mm）：
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
-日期：「周二/Tuesday」= ${datePart} 之后最近的一个周二；带时区缩写的时间先解析再换算到 ${timeZone} 墙钟。
-时区缩写：CST 默认中国标准时间 UTC+8（除非上下文明显是美国中部 CST UTC-6）；另支持 EST/EDT、PST/PDT、GMT、UTC、IST、GST 等。
-示例："Jul 27, 4:00 PM (CST)" → 解析为 7 月 27 日 16:00 CST → 换算到 ${timeZone} → 输出 YYYY-MM-DDTHH:mm。
+日期：「周二/Tuesday」= ${datePart} 之后最近的一个周二。
+时区规则：仅当邀约原文明确写出时区缩写（如 CST、GST、UTC+4）时才做换算；若只有「4:00 PM」「16:00」等未标注时区的时间，一律视为用户当前时区 ${timeZone} 的墙钟，不要按 CST 等其他时区理解。
+带时区缩写的时间先解析再换算到 ${timeZone} 墙钟。CST 默认中国标准时间 UTC+8（除非上下文明显是美国中部 CST UTC-6）；另支持 EST/EDT、PST/PDT、GMT、UTC、IST、GST 等。
+示例（有时区）："Jul 27, 4:00 PM (CST)" → 7 月 27 日 16:00 CST → 换算到 ${timeZone}。
+示例（无时区）："8 月 3 日 16:00" → 直接在 ${timeZone} 输出 2026-08-03T16:00。
 主题：无标题时用「与 {contactName} 的会议」；contactName=外部联系人姓名。
 邮箱小写；仅结束时间缺失时 endAt = startAt + 1h。`;
   }
@@ -64,9 +66,12 @@ Now: ${weekday} ${nowLocal} (${timeZone})
 JSON only (startAt/endAt wall-clock in ${timeZone}, YYYY-MM-DDTHH:mm):
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
-Dates: "Tuesday" = nearest Tuesday on/after ${datePart}; convert other TZ abbreviations to ${timeZone} wall-clock.
-TZ abbreviations: CST = China Standard Time UTC+8 unless US context (then Central UTC-6); also handle EST/EDT, PST/PDT, GMT, UTC, IST, GST, etc.
-Examples: "Jul 27, 4:00 PM (CST)" → parse Jul 27 16:00 CST → convert to ${timeZone} → output YYYY-MM-DDTHH:mm.
+Dates: "Tuesday" = nearest Tuesday on/after ${datePart}.
+TZ rules: convert only when the invite explicitly names a timezone (CST, GST, UTC+4, etc.). Bare times like "4:00 PM" or "16:00" without TZ → treat as wall-clock in ${timeZone}, not CST.
+When TZ is explicit, parse then convert to ${timeZone} wall-clock.
+TZ abbreviations when present: CST = China Standard Time UTC+8 unless US context (Central UTC-6); also EST/EDT, PST/PDT, GMT, UTC, IST, GST, etc.
+Example with TZ: "Jul 27, 4:00 PM (CST)" → Jul 27 16:00 CST → convert to ${timeZone} → YYYY-MM-DDTHH:mm.
+Example without TZ: "Aug 3, 4:00 PM" → Aug 3 16:00 in ${timeZone} directly.
 Subject: if missing use "Meeting with {contactName}"; contactName = external person.
 Lowercase emails; endAt = startAt + 1h only when end missing.`;
 }

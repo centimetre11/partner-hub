@@ -520,6 +520,15 @@ export function MeetingCustomerInviteForm({
                 <span className="text-slate-400">{invite.previewSubject}: </span>
                 <span className="text-slate-800">{emailPreview.subject}</span>
               </div>
+              {inviteSnapshot && (
+                <div>
+                  <span className="text-slate-400">{s.startAt}: </span>
+                  <span className="text-slate-800 font-medium">
+                    {inviteSnapshot.startLocal.replace("T", " ")} – {inviteSnapshot.endLocal.replace("T", " ")}{" "}
+                    ({timeZoneLabel})
+                  </span>
+                </div>
+              )}
               <pre className="whitespace-pre-wrap text-slate-700 leading-relaxed max-h-48 overflow-y-auto">
                 {emailPreview.text}
               </pre>
