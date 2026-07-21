@@ -817,7 +817,10 @@ export function MeetingCustomerInviteForm({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block space-y-1">
-          <span className="text-xs text-slate-500">{s.startAt}</span>
+          <span className="text-xs text-slate-500">
+            {s.startAt}
+            <span className="ml-1 font-normal text-sky-700/80">({timeZoneLabel})</span>
+          </span>
           <input
             required
             type="datetime-local"
@@ -827,7 +830,10 @@ export function MeetingCustomerInviteForm({
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-slate-500">{s.endAt}</span>
+          <span className="text-xs text-slate-500">
+            {s.endAt}
+            <span className="ml-1 font-normal text-sky-700/80">({timeZoneLabel})</span>
+          </span>
           <input
             required
             type="datetime-local"

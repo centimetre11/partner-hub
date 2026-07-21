@@ -2632,7 +2632,7 @@ export const messagesZh: Messages = {
     titlePlaceholder: "周例会…",
     startAt: "开始时间",
     endAt: "结束时间",
-    timeZoneHint: "以下时间按 {tz} 解读，并与企微日程、邮件、Google 日历保持一致",
+    timeZoneHint: "时区默认跟随电脑/浏览器（当前 {tz}）。下方开始/结束时间为该时区的本地墙钟，与企微、邮件、Google 日历一致",
     attendees: "参与人（已绑定企微）",
     you: "我",
     noBoundUsers: "暂无已绑定企微的用户。",

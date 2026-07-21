@@ -2643,7 +2643,7 @@ export const messagesEn = {
     titlePlaceholder: "Weekly sync…",
     startAt: "Start",
     endAt: "End",
-    timeZoneHint: "Times below use {tz} and stay aligned across WeCom, email, and Google Calendar",
+    timeZoneHint: "Timezone follows your browser (currently {tz}). Start/end below are local wall-clock in that zone, aligned with WeCom, email, and Google Calendar",
     attendees: "Attendees (WeCom-bound)",
     you: "you",
     noBoundUsers: "No users with bound WeCom accounts.",

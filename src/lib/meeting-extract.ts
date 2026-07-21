@@ -27,9 +27,10 @@ export type MeetingExtractContext = {
 
 /**
  * 视觉模型（尤其 Seed 系）常先 reasoning 再输出 JSON，token 过低会截断成空对象。
- * 仍比旧版 4096 小，但足够完整 JSON。
+ * 文字识别走 fast 场景，输出更短。
  */
-const MEETING_EXTRACT_MAX_TOKENS = 1536;
+const MEETING_EXTRACT_VISION_MAX_TOKENS = 1536;
+const MEETING_EXTRACT_TEXT_MAX_TOKENS = 1024;
 
 function buildPrompt(ctx: MeetingExtractContext, source: "image" | "text"): string {
   const { locale, timeZone, nowLocal, weekday } = ctx;
@@ -50,7 +51,9 @@ function buildPrompt(ctx: MeetingExtractContext, source: "image" | "text"): stri
 只输出 JSON（startAt/endAt 为用户时区 ${timeZone} 墙钟 YYYY-MM-DDTHH:mm）：
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
-日期：「周二/Tuesday」= ${datePart} 之后最近的一个周二；其他时区（如 Riyadh 4pm）先换算到 ${timeZone}。
+日期：「周二/Tuesday」= ${datePart} 之后最近的一个周二；带时区缩写的时间先解析再换算到 ${timeZone} 墙钟。
+时区缩写：CST 默认中国标准时间 UTC+8（除非上下文明显是美国中部 CST UTC-6）；另支持 EST/EDT、PST/PDT、GMT、UTC、IST、GST 等。
+示例："Jul 27, 4:00 PM (CST)" → 解析为 7 月 27 日 16:00 CST → 换算到 ${timeZone} → 输出 YYYY-MM-DDTHH:mm。
 主题：无标题时用「与 {contactName} 的会议」；contactName=外部联系人姓名。
 邮箱小写；仅结束时间缺失时 endAt = startAt + 1h。`;
   }
@@ -61,7 +64,9 @@ Now: ${weekday} ${nowLocal} (${timeZone})
 JSON only (startAt/endAt wall-clock in ${timeZone}, YYYY-MM-DDTHH:mm):
 {"subject":"","startAt":"","endAt":"","customerEmails":[],"colleagueEmails":[],"contactName":"","customerName":""}
 
-Dates: "Tuesday" = nearest Tuesday on/after ${datePart}; convert other TZ (e.g. "4pm Riyadh") to ${timeZone}.
+Dates: "Tuesday" = nearest Tuesday on/after ${datePart}; convert other TZ abbreviations to ${timeZone} wall-clock.
+TZ abbreviations: CST = China Standard Time UTC+8 unless US context (then Central UTC-6); also handle EST/EDT, PST/PDT, GMT, UTC, IST, GST, etc.
+Examples: "Jul 27, 4:00 PM (CST)" → parse Jul 27 16:00 CST → convert to ${timeZone} → output YYYY-MM-DDTHH:mm.
 Subject: if missing use "Meeting with {contactName}"; contactName = external person.
 Lowercase emails; endAt = startAt + 1h only when end missing.`;
 }
@@ -197,12 +202,15 @@ async function runMeetingExtractChat(
   ];
   normalizeMessagesForAi(chat);
 
+  const isText = source === "text";
   const { content } = await chatCompletion(chat, {
     jsonMode: true,
     temperature: 0,
-    feature: source === "image" ? "Meeting invite: extract" : "Meeting invite: extract text",
+    feature: isText ? "Meeting invite: extract text" : "Meeting invite: extract",
     userId: ctx.userId,
-    maxTokens: MEETING_EXTRACT_MAX_TOKENS,
+    maxTokens: isText ? MEETING_EXTRACT_TEXT_MAX_TOKENS : MEETING_EXTRACT_VISION_MAX_TOKENS,
+    taskTier: isText ? "fast" : undefined,
+    scene: isText ? "fast" : "vision",
     toolChoice: "none",
   });
 
