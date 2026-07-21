@@ -53,6 +53,7 @@ export default async function ContractsPage({
       customer: { select: { id: true, name: true, owner: { select: { name: true } } } },
       partner: { select: { id: true, name: true } },
       parentContract: { select: { id: true, name: true } },
+      lineItems: { select: { amount: true, currency: true, cycleYears: true } },
     },
     orderBy: [{ endDate: "asc" }, { updatedAt: "desc" }],
   });
