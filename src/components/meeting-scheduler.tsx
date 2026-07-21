@@ -49,21 +49,24 @@ function MobileDrawer({
     };
   }, [open]);
 
-  if (!open) return null;
-
   return (
     <>
-      <button
-        type="button"
-        aria-label={cancelLabel}
-        className="fixed inset-0 z-40 bg-slate-950/40"
-        onClick={() => !saving && onClose()}
-      />
+      {open ? (
+        <button
+          type="button"
+          aria-label={cancelLabel}
+          className="fixed inset-0 z-40 bg-slate-950/40"
+          onClick={() => !saving && onClose()}
+        />
+      ) : null}
       <div
         role="dialog"
-        aria-modal
+        aria-modal={open}
+        aria-hidden={!open}
         aria-labelledby={titleId}
-        className="fixed inset-x-0 bottom-0 z-50 box-border flex max-h-[96dvh] w-full max-w-full flex-col overflow-hidden rounded-t-[1.75rem] border border-slate-200 bg-white shadow-2xl"
+        className={`fixed inset-x-0 bottom-0 z-50 box-border flex max-h-[96dvh] w-full max-w-full flex-col overflow-hidden rounded-t-[1.75rem] border border-slate-200 bg-white shadow-2xl transition-transform ${
+          open ? "translate-y-0" : "pointer-events-none translate-y-full opacity-0"
+        }`}
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
@@ -73,7 +76,7 @@ function MobileDrawer({
           <button
             type="button"
             disabled={saving}
-            onClick={onClose}
+            onClick={() => !saving && onClose()}
             className="shrink-0 rounded-full px-2 text-2xl leading-none text-slate-400 hover:text-slate-700 disabled:opacity-50"
             aria-label={cancelLabel}
           >
@@ -410,6 +413,7 @@ export function MeetingCustomerInviteScheduler({
   const m = useMessages();
   const s = m.meetingCustomerInvite;
   const [open, setOpen] = useState(false);
+  const [formBusy, setFormBusy] = useState(false);
 
   return (
     <>
@@ -427,6 +431,7 @@ export function MeetingCustomerInviteScheduler({
       <MobileDrawer
         open={open}
         onClose={() => setOpen(false)}
+        saving={formBusy}
         title={s.drawerTitle}
         titleId="meeting-customer-invite-title"
         cancelLabel={m.common.cancel}
@@ -438,6 +443,7 @@ export function MeetingCustomerInviteScheduler({
           wecomScheduleConfigured={wecomScheduleConfigured}
           boundUsers={boundUsers}
           customers={customers}
+          onBusyChange={setFormBusy}
         />
       </MobileDrawer>
     </>

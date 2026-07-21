@@ -50,6 +50,9 @@ type InviteSnapshot = {
   endLocal: string;
   startAt: Date;
   endAt: Date;
+  timeZone: string;
+  attendeeUserIds: string[];
+  notifyAttendees: boolean;
 };
 
 type InputMode = "manual" | "auto";
@@ -61,6 +64,7 @@ export function MeetingCustomerInviteForm({
   wecomScheduleConfigured,
   boundUsers,
   customers,
+  onBusyChange,
 }: {
   currentUserId: string;
   organizerName: string;
@@ -68,6 +72,8 @@ export function MeetingCustomerInviteForm({
   wecomScheduleConfigured: boolean;
   boundUsers: BoundUserWithEmail[];
   customers: MeetingCustomerOption[];
+  /** 创建会议 / 打开企业邮进行中时通知父级，避免抽屉被误关导致状态丢失 */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const m = useMessages();
   const locale = useLocale();
@@ -118,6 +124,21 @@ export function MeetingCustomerInviteForm({
     const loc = locale === "zh" ? "zh-CN" : "en-US";
     return formatTimeZoneLabel(timeZone, new Date(), loc);
   }, [timeZone, locale]);
+
+  useEffect(() => {
+    onBusyChange?.(confirmingCompose || reopeningCompose);
+  }, [confirmingCompose, reopeningCompose, onBusyChange]);
+
+  function buildMeetingFormData(snapshot: InviteSnapshot): FormData {
+    const fd = new FormData();
+    fd.set("title", snapshot.subject);
+    fd.set("startAt", snapshot.startLocal);
+    fd.set("endAt", snapshot.endLocal);
+    fd.set("timeZone", snapshot.timeZone);
+    fd.set("notifyAttendees", snapshot.notifyAttendees ? "true" : "false");
+    for (const id of snapshot.attendeeUserIds) fd.append("attendeeUserIds", id);
+    return fd;
+  }
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId) ?? null,
@@ -342,14 +363,6 @@ export function MeetingCustomerInviteForm({
     }
 
     const tz = resolveSubmitTimeZone(timeZone);
-    const fd = new FormData();
-    fd.set("title", subject);
-    fd.set("startAt", startAt);
-    fd.set("endAt", endAt);
-    fd.set("timeZone", tz);
-    fd.set("notifyAttendees", notifyAttendees ? "true" : "false");
-    for (const id of selected) fd.append("attendeeUserIds", id);
-
     const parsedStart = parseDateTimeLocal(startAt, tz);
     const parsedEnd = parseDateTimeLocal(endAt, tz);
     if (!parsedStart || !parsedEnd) {
@@ -368,10 +381,13 @@ export function MeetingCustomerInviteForm({
       endLocal: endAt,
       startAt: parsedStart,
       endAt: parsedEnd,
+      timeZone: tz,
+      attendeeUserIds: [...selected],
+      notifyAttendees,
     };
 
-    start(async () => {
-      pendingFormRef.current = fd;
+    pendingFormRef.current = buildMeetingFormData(snapshot);
+    start(() => {
       setInviteSnapshot(snapshot);
       setResult(null);
       setComposeOpened(false);
@@ -401,11 +417,8 @@ export function MeetingCustomerInviteForm({
 
   async function confirmAndCreateAndOpen() {
     if (!inviteSnapshot) return;
-    const fd = pendingFormRef.current;
-    if (!fd) {
-      setError(invite.previewExpired);
-      return;
-    }
+    const fd = pendingFormRef.current ?? buildMeetingFormData(inviteSnapshot);
+    pendingFormRef.current = fd;
     setConfirmingCompose(true);
     setComposePhase("creating");
     setError(null);
@@ -421,6 +434,8 @@ export function MeetingCustomerInviteForm({
       setComposeNotice({ kind: "ok", text: invite.creatingDoneOpeningExmail });
       await openInviteCompose(res.meetLink, inviteSnapshot);
       setComposeOpened(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : invite.composeFailed);
     } finally {
       setConfirmingCompose(false);
       setComposePhase("idle");
@@ -546,7 +561,10 @@ export function MeetingCustomerInviteForm({
                 <button
                   type="button"
                   disabled={confirmingCompose}
-                  onClick={() => void confirmAndCreateAndOpen()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void confirmAndCreateAndOpen();
+                  }}
                   className="flex-1 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
                 >
                   {confirmingCompose
