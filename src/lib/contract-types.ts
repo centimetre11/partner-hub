@@ -87,7 +87,7 @@ export function normalizeContractStatus(raw: string | null | undefined): Contrac
   if (/expired|到期|过期/i.test(raw)) return "EXPIRED";
   if (/cancel|取消|终止/i.test(raw)) return "CANCELLED";
   if (/renew|续约/i.test(raw)) return "RENEWED";
-  if (/active|生效|有效/i.test(raw)) return "ACTIVE";
+  if (/active|生效|有效|执行中|履行中/i.test(raw)) return "ACTIVE";
   return DEFAULT_CONTRACT_STATUS;
 }
 

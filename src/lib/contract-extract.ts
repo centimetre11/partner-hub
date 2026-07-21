@@ -46,19 +46,27 @@ function buildPrompt(ctx: ContractExtractContext, source: "image" | "text"): str
 只输出 JSON：
 {"name":"","customerName":"","contractType":"SUBSCRIPTION|BUYOUT|PRODUCT_MAINTENANCE|PROJECT|PROJECT_MAINTENANCE","status":"DRAFT|ACTIVE|EXPIRED|CANCELLED|RENEWED","amount":"","currency":"CNY|USD|EUR|SGD|HKD","crmContractId":"","billingCycle":"MONTHLY|QUARTERLY|YEARLY|OTHER","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","renewsAt":"YYYY-MM-DD","salesOwnerName":"","notes":"","lineItems":[{"product":"","version":"","amount":"","currency":"","cycleYears":1}]}
 
-字段映射（CRM → 本系统）：
-- 机会名称/合同名称 → name
-- 客户名称 → customerName
-- 预计采购方式：年费订阅/订阅 → SUBSCRIPTION+YEARLY；买断/永久 → BUYOUT；产品维保 → PRODUCT_MAINTENANCE；项目合同 → PROJECT；项目维保 → PROJECT_MAINTENANCE
-- 预计总金额 → amount（纯数字，去逗号）；币种 → currency（USD/CNY…）
-- 机会ID/合同ID → crmContractId（UUID 或 CRM 编号原样）
-- 预计日期/关闭日 → endDate 或 renewsAt（续费场景优先 renewsAt）；创建日 → startDate（可空）
-- 机会销售 → salesOwnerName
-- 预计产品与服务表格 → lineItems（product/version/amount/cycleYears）
-- 需求概述/备注/最新跟进 → 合并进 notes
-- 赢单概率、流程状态等商机字段：若无明确合同状态则 status=ACTIVE；勿编造金额或 ID
+支持两类帆软 CRM 页面：
 
-日期只输出 YYYY-MM-DD。金额不要带币种符号。看不到的字段用空字符串/空数组。`;
+【A. 机会详情】
+- 机会名称 → name；客户名称 → customerName
+- 预计采购方式：年费订阅/订阅 → SUBSCRIPTION+YEARLY；买断 → BUYOUT；产品维保 → PRODUCT_MAINTENANCE；项目合同 → PROJECT；项目维保 → PROJECT_MAINTENANCE
+- 预计总金额 → amount；币种 → currency
+- 机会ID → crmContractId；机会销售 → salesOwnerName
+- 预计产品与服务表 → lineItems
+- 预计日期/关闭日 → endDate 或 renewsAt；创建日 → startDate
+
+【B. 合同详情（合同文件 + 合同内容）】
+- 合同名称 → name；公司名称/最终用户 → customerName
+- 产品金额 → amount（纯数字去逗号）；页面无币种可留空 currency
+- 合同id（UUID）优先，其次文件编号 → crmContractId
+- 签单日期 → startDate；结束日期 → endDate（订阅同时 renewsAt=结束日期）
+- 责任销售/合同销售 → salesOwnerName
+- 合同状态：执行中/生效 → ACTIVE；草稿 → DRAFT；到期 → EXPIRED；取消 → CANCELLED
+- 合同类型写「其他合同」但名称含「订阅」→ SUBSCRIPTION+YEARLY；含买断 → BUYOUT；含维保按产品/项目维保
+- 无产品表时：从合同名推断产品（FineBI/FineReport 等）写入 lineItems，金额用产品金额，cycleYears=1
+
+需求概述/备注/文件备注 → notes。勿编造金额或 ID。日期 YYYY-MM-DD。看不到的字段空字符串/空数组。`;
   }
 
   return `CRM contract screenshot extraction. ${sourceHint}${customerHint || ""}
@@ -66,18 +74,13 @@ function buildPrompt(ctx: ContractExtractContext, source: "image" | "text"): str
 JSON only:
 {"name":"","customerName":"","contractType":"SUBSCRIPTION|BUYOUT|PRODUCT_MAINTENANCE|PROJECT|PROJECT_MAINTENANCE","status":"DRAFT|ACTIVE|EXPIRED|CANCELLED|RENEWED","amount":"","currency":"CNY|USD|EUR|SGD|HKD","crmContractId":"","billingCycle":"MONTHLY|QUARTERLY|YEARLY|OTHER","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","renewsAt":"YYYY-MM-DD","salesOwnerName":"","notes":"","lineItems":[{"product":"","version":"","amount":"","currency":"","cycleYears":1}]}
 
-CRM → Hub mapping:
-- Opportunity/contract name → name; customer → customerName
-- Procurement: annual subscription → SUBSCRIPTION+YEARLY; buyout → BUYOUT; product maint → PRODUCT_MAINTENANCE; project → PROJECT; project maint → PROJECT_MAINTENANCE
-- Total amount → amount (digits only); currency → currency
-- Opportunity/contract ID → crmContractId
-- Estimated/close date → endDate or renewsAt; created date → startDate (optional)
-- Sales owner → salesOwnerName
-- Products table → lineItems
-- Demand notes / follow-up → notes
-- Win % / pipeline status: default status=ACTIVE if unclear; never invent amounts/IDs
+Two FanRuan page types:
 
-Dates as YYYY-MM-DD. Empty string/[] when not visible.`;
+[A. Opportunity] name/customer; procurement→type; total amount/currency; opportunity ID; sales; products table; dates.
+
+[B. Contract detail] contract name→name; company/end user→customerName; 产品金额→amount; contract UUID/file no→crmContractId; signing→startDate; end→endDate (+renewsAt for subscription); sales; status 执行中→ACTIVE; type「其他合同」+订阅 in name→SUBSCRIPTION; infer FineBI line item from name if no product table.
+
+Never invent amounts/IDs. Dates YYYY-MM-DD. Empty string/[] when not visible.`;
 }
 
 function parseJsonContent(raw: string | null | undefined): Record<string, unknown> | null {
@@ -131,58 +134,89 @@ export function hasUsefulContractExtract(r: ContractExtractResult): boolean {
 }
 
 export function normalizeContractExtractResult(raw: Record<string, unknown>): ContractExtractResult {
-  const procurement = String(raw.procurementMode ?? raw.采购方式 ?? "").trim();
+  const procurement = String(raw.procurementMode ?? raw.采购方式 ?? raw.contractTypeLabel ?? "").trim();
+  const nameHint = String(raw.name ?? raw.contractName ?? "").trim();
   let contractType =
     normalizeContractType(String(raw.contractType ?? "")) ??
-    normalizeContractType(procurement);
+    normalizeContractType(procurement) ??
+    normalizeContractType(nameHint);
 
-  // Extra CRM wording
-  if (!contractType && procurement) {
-    if (/年费|订阅|subscription|saas/i.test(procurement)) contractType = "SUBSCRIPTION";
-    else if (/买断|buyout|永久/i.test(procurement)) contractType = "BUYOUT";
+  // Extra CRM wording (机会采购方式 / 合同类型「其他合同」+ 名称含订阅)
+  if (!contractType && (procurement || nameHint)) {
+    const blob = `${procurement} ${nameHint}`;
+    if (/年费|订阅|subscription|saas/i.test(blob)) contractType = "SUBSCRIPTION";
+    else if (/买断|buyout|永久/i.test(blob)) contractType = "BUYOUT";
+    else if (/项目维保/i.test(blob)) contractType = "PROJECT_MAINTENANCE";
+    else if (/产品维保|维保/i.test(blob)) contractType = "PRODUCT_MAINTENANCE";
+    else if (/项目合同/i.test(blob)) contractType = "PROJECT";
   }
 
   let billingCycle = normalizeBillingCycle(String(raw.billingCycle ?? "") || null);
   if (!billingCycle && contractType === "SUBSCRIPTION") billingCycle = "YEARLY";
-  if (!billingCycle && /年费|annual|yearly/i.test(procurement)) billingCycle = "YEARLY";
+  if (!billingCycle && /年费|annual|yearly|订阅/i.test(`${procurement} ${nameHint}`)) {
+    billingCycle = "YEARLY";
+  }
 
   const lineRaw = Array.isArray(raw.lineItems) ? raw.lineItems : [];
-  const lineItems = lineRaw
+  let lineItems = lineRaw
     .map((item) => normalizeLineItem(item))
     .filter((x): x is ContractLineItemInput => !!x);
 
   const amount =
     normalizeAmountInput(raw.amount) ??
-    normalizeAmountInput(String(raw.amount ?? "").replace(/[^\d.]/g, ""));
+    normalizeAmountInput(raw.productAmount) ??
+    normalizeAmountInput(raw.产品金额) ??
+    normalizeAmountInput(String(raw.amount ?? raw.productAmount ?? "").replace(/[^\d.]/g, ""));
 
   const currency = normalizeCurrency(raw.currency) ?? undefined;
+
+  // Infer a product line from contract name when CRM contract page has no product table.
+  if (!lineItems.length && nameHint) {
+    const productMatch = nameHint.match(/\b(FineBI|FineReport|FineDataLink|FDL|简道云|九数云)\b/i);
+    if (productMatch) {
+      const inferred = normalizeLineItem({
+        product: productMatch[1],
+        amount: amount ?? null,
+        currency: currency ?? null,
+        cycleYears: 1,
+      });
+      if (inferred) lineItems = [inferred];
+    }
+  }
 
   const notesParts = [
     String(raw.notes ?? "").trim(),
     String(raw.demandOverview ?? "").trim(),
     String(raw.demandRemarks ?? "").trim(),
     String(raw.latestFollowUp ?? "").trim(),
+    String(raw.fileNotes ?? "").trim(),
   ].filter(Boolean);
 
-  const statusRaw = String(raw.status ?? "").trim();
+  const statusRaw = String(raw.status ?? raw.contractStatus ?? "").trim();
   const result: ContractExtractResult = {
-    name: String(raw.name ?? "").trim() || undefined,
-    customerName: String(raw.customerName ?? "").trim() || undefined,
+    name: nameHint || undefined,
+    customerName:
+      String(raw.customerName ?? raw.endUser ?? raw.companyName ?? "").trim() || undefined,
     contractType: contractType ?? undefined,
     status: statusRaw ? normalizeContractStatus(statusRaw) : undefined,
     amount: amount ?? undefined,
     currency,
-    crmContractId: String(raw.crmContractId ?? raw.opportunityId ?? "").trim() || undefined,
+    crmContractId:
+      String(raw.crmContractId ?? raw.contractId ?? raw.opportunityId ?? raw.fileNumber ?? "")
+        .trim() || undefined,
     billingCycle: billingCycle ?? undefined,
-    startDate: normalizeDateYmd(raw.startDate ?? raw.createdAt),
-    endDate: normalizeDateYmd(raw.endDate ?? raw.estimatedDate),
+    startDate: normalizeDateYmd(
+      raw.startDate ?? raw.signingDate ?? raw.签单日期 ?? raw.createdAt
+    ),
+    endDate: normalizeDateYmd(raw.endDate ?? raw.结束日期 ?? raw.estimatedDate),
     renewsAt: normalizeDateYmd(raw.renewsAt ?? raw.renewalDate),
-    salesOwnerName: String(raw.salesOwnerName ?? "").trim() || undefined,
+    salesOwnerName:
+      String(raw.salesOwnerName ?? raw.contractSales ?? raw.responsibleSales ?? "").trim() ||
+      undefined,
     notes: notesParts.length ? notesParts.join("\n") : undefined,
     lineItems: lineItems.length ? lineItems : undefined,
   };
 
-  // If only endDate and looks like renewal, keep both; if subscription and renewsAt empty, copy endDate
   if (result.contractType === "SUBSCRIPTION" && result.endDate && !result.renewsAt) {
     result.renewsAt = result.endDate;
   }
@@ -201,8 +235,8 @@ export async function extractContractFromImages(
     role: "user",
     content:
       ctx.locale === "zh"
-        ? "请仔细阅读截图中的 CRM 合同/机会信息并输出 JSON。"
-        : "Read the CRM contract/opportunity info in the screenshot and output JSON.",
+        ? "请仔细阅读截图（机会详情或合同详情均可）中的字段并输出 JSON。"
+        : "Read the CRM opportunity or contract-detail fields in the screenshot and output JSON.",
     images,
   };
   return runContractExtractChat(system, userMsg, ctx, "image");
