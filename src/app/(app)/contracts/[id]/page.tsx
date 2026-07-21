@@ -13,7 +13,7 @@ import {
   contractTypeTone,
   isContractPastEnd,
 } from "@/lib/contract-types";
-import { contractArrAmount, formatArrNumber, isArrContractType } from "@/lib/arr";
+import { contractArrAmount, formatArrUsd, isArrContractType } from "@/lib/arr";
 import { formatAmountDisplay } from "@/lib/amount";
 import { CustomerContractForm } from "@/components/customer-contract-form";
 import {
@@ -232,7 +232,7 @@ export default async function ContractDetailPage({
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
             <div className="text-xs text-slate-400">{t.colArr}</div>
             <div className="text-xl font-semibold tabular-nums text-emerald-700 mt-1">
-              {arr > 0 ? formatArrNumber(arr) : "—"}
+              {arr > 0 ? formatArrUsd(arr) : "—"}
             </div>
           </div>
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">

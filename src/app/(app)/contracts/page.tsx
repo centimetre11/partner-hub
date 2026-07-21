@@ -15,7 +15,7 @@ import {
   contractTypeTone,
   isContractPastEnd,
 } from "@/lib/contract-types";
-import { contractArrAmount, formatArrNumber, isArrContractType } from "@/lib/arr";
+import { contractArrAmount, formatArrUsd, isArrContractType } from "@/lib/arr";
 import { formatAmountDisplay } from "@/lib/amount";
 
 export default async function ContractsPage({
@@ -84,7 +84,7 @@ export default async function ContractsPage({
             <div className="text-xs text-slate-400 mt-0.5">{t.statArrContracts}</div>
           </div>
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4 col-span-2">
-            <div className="text-2xl font-bold tabular-nums text-emerald-700">{formatArrNumber(totalArr)}</div>
+            <div className="text-2xl font-bold tabular-nums text-emerald-700">{formatArrUsd(totalArr)}</div>
             <div className="text-xs text-slate-400 mt-0.5">{t.statArrFromList}</div>
           </div>
         </div>
@@ -204,7 +204,7 @@ export default async function ContractsPage({
                         {formatAmountDisplay(ct.amount, ct.currency, locale)}
                       </td>
                       <td className="px-3 py-3 tabular-nums text-emerald-700">
-                        {arr > 0 ? formatArrNumber(arr) : "—"}
+                        {arr > 0 ? formatArrUsd(arr) : "—"}
                       </td>
                       <td className="px-3 py-3 text-slate-500">
                         {billingCycleLabel(ct.billingCycle, locale) ?? "—"}
