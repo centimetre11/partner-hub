@@ -13,6 +13,8 @@ export type ContractAiExtractCopy = {
   aiExtractRunning: string;
   aiExtractClear: string;
   aiExtractSuccess: string;
+  aiExtractSuccessCompact?: string;
+  aiExtractAgain?: string;
   aiExtractFailed: string;
   aiExtractImageRequired: string;
   aiExtractOrText: string;
@@ -49,37 +51,45 @@ export function ContractAiExtract({
   const busyRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const setImageFile = useCallback((file: File | null) => {
+  const clearPreviewUrl = useCallback(() => {
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
     }
-    setPendingFile(file);
-    setError(null);
-    setSuccess(false);
-    if (file) {
-      const url = URL.createObjectURL(file);
-      previewUrlRef.current = url;
-      setPreview(url);
-    } else {
-      setPreview(null);
-    }
   }, []);
+
+  const setImageFile = useCallback(
+    (file: File | null) => {
+      clearPreviewUrl();
+      setPendingFile(file);
+      setError(null);
+      setSuccess(false);
+      if (file) {
+        const url = URL.createObjectURL(file);
+        previewUrlRef.current = url;
+        setPreview(url);
+      } else {
+        setPreview(null);
+      }
+    },
+    [clearPreviewUrl]
+  );
 
   useEffect(() => {
     return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+      clearPreviewUrl();
     };
-  }, []);
+  }, [clearPreviewUrl]);
 
   const onPaste = useCallback(
     (e: React.ClipboardEvent) => {
+      if (success) return;
       const files = imageFilesFromClipboard(e.clipboardData);
       if (!files.length) return;
       e.preventDefault();
       setImageFile(files[0]);
     },
-    [setImageFile]
+    [setImageFile, success]
   );
 
   const onDrop = useCallback(
@@ -119,6 +129,7 @@ export function ContractAiExtract({
       } else {
         payload.text = text.trim();
       }
+
       const res = await fetch("/api/ai/contract/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,27 +140,51 @@ export function ContractAiExtract({
       try {
         data = raw ? (JSON.parse(raw) as typeof data) : {};
       } catch {
-        if (res.status === 502 || res.status === 504 || /^\s*</.test(raw)) {
-          throw new Error(
-            copy.aiExtractGatewayError ||
-              "Server interrupted while recognizing (502). Try a tighter crop / smaller screenshot."
-          );
-        }
         throw new Error(
-          `${copy.aiExtractFailed}${res.status ? ` (HTTP ${res.status})` : ""}`
+          copy.aiExtractGatewayError ||
+            `${copy.aiExtractFailed}${res.status ? ` (HTTP ${res.status})` : ""}`
         );
       }
-      if (!res.ok || !data.result) {
-        throw new Error(data.error || copy.aiExtractFailed);
+      if (!res.ok || !data.ok || !data.result) {
+        throw new Error(
+          data.error ||
+            copy.aiExtractGatewayError ||
+            `${copy.aiExtractFailed}${res.status ? ` (HTTP ${res.status})` : ""}`
+        );
       }
       onExtracted(data.result);
       setSuccess(true);
+      // Drop the big screenshot so focus moves to review + save.
+      clearPreviewUrl();
+      setPendingFile(null);
+      setPreview(null);
+      setText("");
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.aiExtractFailed);
     } finally {
       setExtracting(false);
       busyRef.current = false;
     }
+  }
+
+  if (success && !error) {
+    return (
+      <div className="col-span-2 md:col-span-3 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-2.5 flex items-start justify-between gap-3">
+        <p className="text-[11px] text-emerald-800 leading-relaxed">
+          {copy.aiExtractSuccessCompact ?? copy.aiExtractSuccess}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setSuccess(false);
+            setError(null);
+          }}
+          className="shrink-0 text-[11px] text-emerald-700/80 hover:text-emerald-900 underline"
+        >
+          {copy.aiExtractAgain ?? copy.aiExtractClear}
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -239,7 +274,6 @@ export function ContractAiExtract({
       </details>
 
       {error && <p className="text-[11px] text-red-600">{error}</p>}
-      {success && !error && <p className="text-[11px] text-emerald-700">{copy.aiExtractSuccess}</p>}
     </div>
   );
 }

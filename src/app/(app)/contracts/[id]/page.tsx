@@ -138,6 +138,8 @@ export default async function ContractDetailPage({
     aiExtractRunning: c.aiExtractRunning,
     aiExtractClear: c.aiExtractClear,
     aiExtractSuccess: c.aiExtractSuccess,
+    aiExtractSuccessCompact: c.aiExtractSuccessCompact,
+    aiExtractAgain: c.aiExtractAgain,
     aiExtractFailed: c.aiExtractFailed,
     aiExtractImageRequired: c.aiExtractImageRequired,
     aiExtractOrText: c.aiExtractOrText,
@@ -148,6 +150,9 @@ export default async function ContractDetailPage({
     save: m.common.save,
     add: m.common.add,
     delete: m.common.delete,
+    contractSaving: c.contractSaving,
+    contractSaved: c.contractSaved,
+    contractCreated: c.contractCreated,
   };
 
   const partners = ct.customer.partnerLinks.map((pl) => ({

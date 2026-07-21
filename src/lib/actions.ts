@@ -1158,6 +1158,11 @@ export async function upsertContractAction(owner: OwnerRef, formData: FormData) 
     });
     if (contract.partnerId) revalidatePath(`/partners/${contract.partnerId}`);
     revalidatePath(`/contracts/${contract.id}`);
+    revalidatePath(ownerPath(owner));
+    revalidatePath("/contracts");
+    revalidatePath("/arr");
+    // Leave the stuck create form (AI panel still open) — go to the new contract.
+    redirect(`/contracts/${contract.id}`);
   }
   revalidatePath(ownerPath(owner));
   revalidatePath("/contracts");

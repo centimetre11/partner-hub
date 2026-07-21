@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import {
   BILLING_CYCLE_CODES,
   CONTRACT_STATUS_CODES,
@@ -78,6 +79,8 @@ export type ContractFormCopy = {
   aiExtractRunning: string;
   aiExtractClear: string;
   aiExtractSuccess: string;
+  aiExtractSuccessCompact: string;
+  aiExtractAgain: string;
   aiExtractFailed: string;
   aiExtractImageRequired: string;
   aiExtractOrText: string;
@@ -88,9 +91,31 @@ export type ContractFormCopy = {
   save: string;
   add: string;
   delete: string;
+  contractSaving: string;
+  contractSaved: string;
+  contractCreated: string;
 };
 
 type Option = { id: string; name: string };
+
+function ContractSubmitButton({
+  mode,
+  copy,
+}: {
+  mode: "create" | "edit";
+  copy: Pick<ContractFormCopy, "save" | "add" | "contractSaving">;
+}) {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {pending ? copy.contractSaving : mode === "edit" ? copy.save : copy.add}
+    </button>
+  );
+}
 
 export type ContractFormLineItemDefault = {
   product: string;
@@ -212,6 +237,8 @@ export function CustomerContractForm({
   const [projectMaintIncludedY1, setProjectMaintIncludedY1] = useState(
     defaults?.projectMaintIncludedY1 ?? true
   );
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [aiKey, setAiKey] = useState(0);
 
   const productEstimate =
     contractType === "BUYOUT" && productRate.resolved != null
@@ -294,16 +321,33 @@ export function CustomerContractForm({
     }
   }
 
+  async function handleAction(formData: FormData) {
+    setSavedFlash(false);
+    await action(formData);
+    // Create path redirects away; edit stays and needs visible confirmation.
+    if (mode === "edit") {
+      setSavedFlash(true);
+      setAiKey((k) => k + 1);
+    }
+  }
+
   return (
-    <form action={action} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+    <form action={handleAction} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
       {defaults?.id && <input type="hidden" name="id" value={defaults.id} />}
       <input type="hidden" name="lineItems" value={lineItemsJson} />
 
       <ContractAiExtract
+        key={aiKey}
         copy={copy}
         customerNameHint={customerNameHint}
         onExtracted={applyExtract}
       />
+
+      {savedFlash && (
+        <p className="col-span-2 md:col-span-3 text-[11px] text-emerald-700">
+          {mode === "edit" ? copy.contractSaved : copy.contractCreated}
+        </p>
+      )}
 
       <input
         name="name"
@@ -709,9 +753,7 @@ export function CustomerContractForm({
             {copy.delete}
           </button>
         )}
-        <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">
-          {mode === "edit" ? copy.save : copy.add}
-        </button>
+        <ContractSubmitButton mode={mode} copy={copy} />
       </div>
     </form>
   );

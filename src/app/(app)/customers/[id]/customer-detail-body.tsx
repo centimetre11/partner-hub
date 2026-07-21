@@ -508,6 +508,8 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     aiExtractRunning: c.aiExtractRunning,
     aiExtractClear: c.aiExtractClear,
     aiExtractSuccess: c.aiExtractSuccess,
+    aiExtractSuccessCompact: c.aiExtractSuccessCompact,
+    aiExtractAgain: c.aiExtractAgain,
     aiExtractFailed: c.aiExtractFailed,
     aiExtractImageRequired: c.aiExtractImageRequired,
     aiExtractOrText: c.aiExtractOrText,
@@ -518,6 +520,9 @@ export async function CustomerDetailBody({ id }: { id: string }) {
     save: m.common.save,
     add: m.common.add,
     delete: m.common.delete,
+    contractSaving: c.contractSaving,
+    contractSaved: c.contractSaved,
+    contractCreated: c.contractCreated,
   };
   const contractPartners = partners.map((p) => ({ id: p.id, name: p.name }));
   const contractOpps = customer.opportunities.map((o) => ({ id: o.id, name: o.name }));
