@@ -245,6 +245,3 @@ export async function resetLeadReviewToPrepAction(meetingId: string) {
   revalidateMeeting(meetingId);
   return { ok: true as const };
 }
-
-export type { LeadReviewConfig };
-export { normalizeConfig };
