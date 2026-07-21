@@ -52,6 +52,7 @@ model User {
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
   partnerReviewMeetings PartnerReviewMeeting[]
+  leadReviewMeetings LeadReviewMeeting[]
   weeklyReportSnapshots WeeklyReportSnapshot[]
 }
 
@@ -1220,6 +1221,7 @@ model CrmLead {
   contRecdate  DateTime? // cont_recdate
   jzDate       DateTime? // jz_date，KPI 截止时间
   syncedAt     DateTime  @updatedAt
+  leadReviewItems LeadReviewItem[]
 
   @@index([salesman])
   @@index([status])
@@ -1281,6 +1283,7 @@ model CrmChannel {
   staSalesOld  String? // sta_sales_old，转出前销售
   staRecdate   DateTime? // sta_recdate，转出时间
   syncedAt     DateTime  @updatedAt
+  leadReviewItems LeadReviewItem[]
 
   @@index([staRecdate])
   @@index([salesman])
@@ -1427,6 +1430,79 @@ model PartnerReviewTodoDraft {
   dueDate    DateTime?
   confirmed  Boolean  @default(false)
   todoItemId String? // 确认落库后的 TodoItem.id
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([itemId])
+}
+
+// 过线索会议：可配置取样（Channel 公海 + 培育）
+model LeadReviewMeeting {
+  id              String    @id @default(cuid())
+  title           String
+  // DRAFT | PREP | LIVE | PROCESSING | DONE
+  status          String    @default("DRAFT")
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdById     String
+  createdBy       User      @relation(fields: [createdById], references: [id])
+  /// JSON：{ salesmanNames, channelCount, nurtureCount, includeChannelCustomer }
+  configJson      String?
+  liveNotes       String?
+  prepGeneratedAt DateTime?
+  previewToken    String?   @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  items           LeadReviewItem[]
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model LeadReviewItem {
+  id                String   @id @default(cuid())
+  meetingId         String
+  meeting           LeadReviewMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  /// CHANNEL | NURTURE
+  source            String
+  channelId         String?
+  channel           CrmChannel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  leadId            String?
+  lead              CrmLead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  /// 展示用快照名（防止源记录被删后议程空白）
+  displayName       String?
+  sortOrder         Int      @default(0)
+  discussedAt       DateTime?
+  prepBrief         String?
+  coreNotes         String?
+  /// QUALITY | DIGESTION | NORMAL | WATCH
+  verdict           String?
+  confirmedSnapshot String?
+  // PENDING | DISCUSSED | CONFIRMED
+  status            String   @default("PENDING")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  todoDrafts        LeadReviewTodoDraft[]
+
+  @@index([meetingId, sortOrder])
+  @@index([channelId])
+  @@index([leadId])
+  @@index([source])
+  @@index([status])
+}
+
+model LeadReviewTodoDraft {
+  id         String   @id @default(cuid())
+  itemId     String
+  item       LeadReviewItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  title      String
+  detail     String?
+  assigneeId String?
+  dueDate    DateTime?
+  confirmed  Boolean  @default(false)
+  todoItemId String?
   sortOrder  Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

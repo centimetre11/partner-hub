@@ -13,7 +13,8 @@ export default async function OpsCenterPage() {
   const { messages: m, bcp47 } = await getServerI18n();
   const admin = isSuperAdmin(user);
 
-  const [meetingCount, liveCount, recentMeetings, weeklyStatus, baselineReport] = await Promise.all([
+  const [meetingCount, liveCount, recentMeetings, leadMeetingCount, leadLiveCount, weeklyStatus, baselineReport] =
+    await Promise.all([
     db.partnerReviewMeeting.count(),
     db.partnerReviewMeeting.count({ where: { status: { in: ["LIVE", "PREP", "PROCESSING"] } } }),
     db.partnerReviewMeeting.findMany({
@@ -24,6 +25,8 @@ export default async function OpsCenterPage() {
         items: { select: { id: true } },
       },
     }),
+    db.leadReviewMeeting.count(),
+    db.leadReviewMeeting.count({ where: { status: { in: ["LIVE", "PREP", "PROCESSING", "DRAFT"] } } }),
     admin ? getWeeklyReportStatusAction() : Promise.resolve(null),
     findMeaStrategyBaselineReport(db),
   ]);
@@ -54,6 +57,28 @@ export default async function OpsCenterPage() {
             </div>
             <div className="mt-4 inline-flex rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm">
               {m.ops.openPartnerReviews}
+            </div>
+          </Link>
+
+          <Link
+            href="/lead-reviews"
+            className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5 hover:border-slate-300 transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">{m.ops.leadReviews}</div>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">{m.ops.leadReviewsDesc}</p>
+              </div>
+              <span className="text-2xl opacity-70">◔</span>
+            </div>
+            <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
+              <span>{m.ops.meetingTotal.replace("{count}", String(leadMeetingCount))}</span>
+              {leadLiveCount > 0 && (
+                <Badge tone="amber">{m.ops.meetingActive.replace("{count}", String(leadLiveCount))}</Badge>
+              )}
+            </div>
+            <div className="mt-4 inline-flex rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm">
+              {m.ops.openLeadReviews}
             </div>
           </Link>
 
