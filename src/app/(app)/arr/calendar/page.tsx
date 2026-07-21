@@ -9,7 +9,6 @@ import {
   isActiveArrContract,
   latestServiceDateFromContracts,
 } from "@/lib/arr";
-import { normalizeArrCalendarKind } from "@/lib/arr-calendar-types";
 import { seedRenewalRemindersAction } from "@/lib/arr-calendar-actions";
 import { ArrCalendarTable, type CalendarRowData } from "./arr-calendar-table";
 
@@ -25,7 +24,10 @@ export default async function ArrCalendarPage({
 
   const now = new Date();
   const year = Number(sp.year) || now.getFullYear();
-  const fromMonth = Math.min(12, Math.max(1, Number(sp.from) || 1));
+  const currentMonth = now.getMonth() + 1;
+  // Default: from current month through Dec of the selected year (or Jan if viewing another year).
+  const defaultFrom = year === now.getFullYear() ? currentMonth : 1;
+  const fromMonth = Math.min(12, Math.max(1, Number(sp.from) || defaultFrom));
   const toMonth = Math.min(12, Math.max(fromMonth, Number(sp.to) || 12));
   const months = Array.from({ length: toMonth - fromMonth + 1 }, (_, i) => fromMonth + i);
 
@@ -60,14 +62,40 @@ export default async function ArrCalendarPage({
   const active = contracts.filter(isActiveArrContract);
   const customerIds = [...new Set(active.map((c) => c.customerId))];
 
-  // Profiles for ARR customers (may already be included)
-  const profiles = await db.arrCustomerProfile.findMany({
-    where: { customerId: { in: customerIds } },
-    include: {
-      cells: { where: { year, month: { gte: fromMonth, lte: toMonth } } },
-    },
-  });
+  const [profiles, openTodos] = await Promise.all([
+    db.arrCustomerProfile.findMany({
+      where: { customerId: { in: customerIds } },
+      include: {
+        cells: { where: { year, month: { gte: fromMonth, lte: toMonth } } },
+      },
+    }),
+    customerIds.length
+      ? db.todoItem.findMany({
+          where: {
+            customerId: { in: customerIds },
+            status: { not: "DONE" },
+          },
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            dueDate: true,
+            customerId: true,
+            assignee: { select: { name: true } },
+          },
+          orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+        })
+      : Promise.resolve([]),
+  ]);
+
   const profileByCustomer = new Map(profiles.map((p) => [p.customerId, p]));
+  const todosByCustomer = new Map<string, typeof openTodos>();
+  for (const todo of openTodos) {
+    if (!todo.customerId) continue;
+    const list = todosByCustomer.get(todo.customerId) ?? [];
+    list.push(todo);
+    todosByCustomer.set(todo.customerId, list);
+  }
 
   const owners = await db.user.findMany({
     where: { ownedCustomers: { some: { id: { in: customerIds } } } },
@@ -83,15 +111,12 @@ export default async function ArrCalendarPage({
       const profile = profileByCustomer.get(ct.customerId) ?? ct.customer.arrProfile;
       const cells: CalendarRowData["cells"] = {};
       for (const cell of profile?.cells ?? []) {
-        cells[cell.month] = {
-          content: cell.content,
-          kind: normalizeArrCalendarKind(cell.kind),
-        };
+        cells[cell.month] = { content: cell.content };
       }
       const custContracts = active.filter((c) => c.customerId === ct.customerId);
       const computedLatest = latestServiceDateFromContracts(custContracts);
-      const latest =
-        profile?.latestServiceAt ?? computedLatest;
+      const latest = profile?.latestServiceAt ?? computedLatest;
+      const todos = todosByCustomer.get(ct.customerId) ?? [];
       row = {
         customerId: ct.customerId,
         customerName: ct.customer.name,
@@ -100,7 +125,14 @@ export default async function ArrCalendarPage({
         arr: 0,
         latestService: latest ? fmtDate(latest, bcp47) : null,
         situation: profile?.situation ?? "",
-        todo: profile?.todo ?? "",
+        legacyTodo: profile?.todo?.trim() ?? "",
+        openTodos: todos.map((todo) => ({
+          id: todo.id,
+          title: todo.title,
+          status: todo.status,
+          dueDate: todo.dueDate ? todo.dueDate.toISOString() : null,
+          assigneeName: todo.assignee?.name ?? null,
+        })),
         cells,
       };
       byCustomer.set(ct.customerId, row);
@@ -200,25 +232,6 @@ export default async function ArrCalendarPage({
           </button>
         </form>
 
-        <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-          <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-amber-100 border border-amber-200" />
-            {t.legendRenewal}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-sky-50 border border-sky-200" />
-            {t.legendInspection}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-violet-50 border border-violet-200" />
-            {t.legendFollowUp}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-white border border-slate-200" />
-            {t.legendNote}
-          </span>
-        </div>
-
         {!rows.length ? (
           <EmptyState text={t.empty} />
         ) : (
@@ -227,6 +240,7 @@ export default async function ArrCalendarPage({
             months={months}
             rows={rows}
             locale={locale}
+            bcp47={bcp47}
             copy={{
               colCustomer: t.colCustomer,
               colPartner: t.colPartner,
@@ -235,12 +249,15 @@ export default async function ArrCalendarPage({
               colOwner: t.colOwner,
               colSituation: t.colSituation,
               colTodo: t.colTodo,
-              kindLabel: t.kindLabel,
               save: t.save,
               saving: t.saving,
               placeholderCell: t.placeholderCell,
               placeholderSituation: t.placeholderSituation,
               placeholderTodo: t.placeholderTodo,
+              addTodo: t.addTodo,
+              noOpenTodos: t.noOpenTodos,
+              viewCustomerTodos: t.viewCustomerTodos,
+              legacyTodoHint: t.legacyTodoHint,
             }}
           />
         )}

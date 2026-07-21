@@ -1,18 +1,24 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import {
-  ARR_CALENDAR_KIND_CODES,
-  arrCalendarKindCellClass,
-  arrCalendarKindLabel,
-  monthLabel,
-  type ArrCalendarKind,
-} from "@/lib/arr-calendar-types";
+import { useRouter } from "next/navigation";
+import { monthLabel } from "@/lib/arr-calendar-types";
 import {
   upsertArrCalendarCellAction,
   upsertArrCustomerProfileAction,
 } from "@/lib/arr-calendar-actions";
+import { createTodoAction } from "@/lib/actions";
+import { TodoCompleteButton } from "@/components/todo-complete-dialog";
+import { fmtDate } from "@/components/ui";
+
+export type CalendarOpenTodo = {
+  id: string;
+  title: string;
+  status: string;
+  dueDate: string | null; // ISO
+  assigneeName: string | null;
+};
 
 export type CalendarRowData = {
   customerId: string;
@@ -20,10 +26,12 @@ export type CalendarRowData = {
   partnerNames: string[];
   ownerName: string | null;
   arr: number;
-  latestService: string | null; // ISO date or empty
+  latestService: string | null;
   situation: string;
-  todo: string;
-  cells: Record<number, { content: string; kind: ArrCalendarKind }>;
+  /** Legacy free-text from ArrCustomerProfile.todo (read-only hint). */
+  legacyTodo: string;
+  openTodos: CalendarOpenTodo[];
+  cells: Record<number, { content: string }>;
 };
 
 type Copy = {
@@ -34,16 +42,67 @@ type Copy = {
   colOwner: string;
   colSituation: string;
   colTodo: string;
-  kindLabel: string;
   save: string;
   saving: string;
   placeholderCell: string;
   placeholderSituation: string;
   placeholderTodo: string;
+  addTodo: string;
+  noOpenTodos: string;
+  viewCustomerTodos: string;
+  legacyTodoHint: string;
 };
 
 function formatArr(n: number) {
   return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+}
+
+function QuickAddTodo({
+  customerId,
+  placeholder,
+  addLabel,
+}: {
+  customerId: string;
+  placeholder: string;
+  addLabel: string;
+}) {
+  const router = useRouter();
+  const [title, setTitle] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <form
+      className="flex gap-1 mt-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const t = title.trim();
+        if (!t || pending) return;
+        const fd = new FormData();
+        fd.set("title", t);
+        fd.set("customerId", customerId);
+        startTransition(async () => {
+          await createTodoAction(fd);
+          setTitle("");
+          router.refresh();
+        });
+      }}
+    >
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder={placeholder}
+        disabled={pending}
+        className="flex-1 min-w-0 rounded border border-slate-200 px-1.5 py-1 text-[11px] outline-none focus:border-sky-300"
+      />
+      <button
+        type="submit"
+        disabled={pending || !title.trim()}
+        className="shrink-0 rounded bg-slate-900 text-white px-1.5 py-1 text-[10px] disabled:opacity-40"
+      >
+        {addLabel}
+      </button>
+    </form>
+  );
 }
 
 export function ArrCalendarTable({
@@ -51,12 +110,14 @@ export function ArrCalendarTable({
   months,
   rows: initialRows,
   locale,
+  bcp47,
   copy,
 }: {
   year: number;
   months: number[];
   rows: CalendarRowData[];
   locale: "zh" | "en";
+  bcp47: string;
   copy: Copy;
 }) {
   const [rows, setRows] = useState(initialRows);
@@ -65,13 +126,15 @@ export function ArrCalendarTable({
     customerId: string;
     month: number;
     content: string;
-    kind: ArrCalendarKind;
   } | null>(null);
   const [profileEdit, setProfileEdit] = useState<{
     customerId: string;
-    field: "situation" | "todo";
     value: string;
   } | null>(null);
+
+  useEffect(() => {
+    setRows(initialRows);
+  }, [initialRows]);
 
   const monthHeaders = useMemo(
     () => months.map((m) => ({ month: m, label: monthLabel(m, locale) })),
@@ -80,13 +143,13 @@ export function ArrCalendarTable({
 
   const saveCell = useCallback(() => {
     if (!editing) return;
-    const { customerId, month, content, kind } = editing;
+    const { customerId, month, content } = editing;
     setRows((prev) =>
       prev.map((r) => {
         if (r.customerId !== customerId) return r;
         const nextCells = { ...r.cells };
         if (!content.trim()) delete nextCells[month];
-        else nextCells[month] = { content: content.trim(), kind };
+        else nextCells[month] = { content: content.trim() };
         return { ...r, cells: nextCells };
       })
     );
@@ -97,22 +160,22 @@ export function ArrCalendarTable({
       fd.set("year", String(year));
       fd.set("month", String(month));
       fd.set("content", content);
-      fd.set("kind", kind);
+      fd.set("kind", "NOTE");
       await upsertArrCalendarCellAction(fd);
     });
   }, [editing, year]);
 
-  const saveProfile = useCallback(() => {
+  const saveSituation = useCallback(() => {
     if (!profileEdit) return;
-    const { customerId, field, value } = profileEdit;
+    const { customerId, value } = profileEdit;
     setRows((prev) =>
-      prev.map((r) => (r.customerId === customerId ? { ...r, [field]: value } : r))
+      prev.map((r) => (r.customerId === customerId ? { ...r, situation: value } : r))
     );
     setProfileEdit(null);
     startTransition(async () => {
       const fd = new FormData();
       fd.set("customerId", customerId);
-      fd.set(field, value);
+      fd.set("situation", value);
       await upsertArrCustomerProfileAction(fd);
     });
   }, [profileEdit]);
@@ -146,7 +209,7 @@ export function ArrCalendarTable({
               <th className="px-2 py-2.5 font-medium min-w-[180px] border-b border-slate-200">
                 {copy.colSituation}
               </th>
-              <th className="px-2 py-2.5 font-medium min-w-[120px] border-b border-slate-200">
+              <th className="px-2 py-2.5 font-medium min-w-[200px] border-b border-slate-200">
                 {copy.colTodo}
               </th>
               {monthHeaders.map((h) => (
@@ -181,25 +244,22 @@ export function ArrCalendarTable({
                 </td>
                 <td className="px-2 py-2 text-xs text-slate-600">{row.ownerName ?? "—"}</td>
                 <td className="px-2 py-2">
-                  {profileEdit?.customerId === row.customerId && profileEdit.field === "situation" ? (
-                    <div className="space-y-1">
-                      <textarea
-                        autoFocus
-                        value={profileEdit.value}
-                        onChange={(e) => setProfileEdit({ ...profileEdit, value: e.target.value })}
-                        onBlur={saveProfile}
-                        rows={3}
-                        className="w-full rounded border border-sky-300 px-2 py-1 text-xs resize-y"
-                        placeholder={copy.placeholderSituation}
-                      />
-                    </div>
+                  {profileEdit?.customerId === row.customerId ? (
+                    <textarea
+                      autoFocus
+                      value={profileEdit.value}
+                      onChange={(e) => setProfileEdit({ ...profileEdit, value: e.target.value })}
+                      onBlur={saveSituation}
+                      rows={3}
+                      className="w-full rounded border border-sky-300 px-2 py-1 text-xs resize-y"
+                      placeholder={copy.placeholderSituation}
+                    />
                   ) : (
                     <button
                       type="button"
                       onClick={() =>
                         setProfileEdit({
                           customerId: row.customerId,
-                          field: "situation",
                           value: row.situation,
                         })
                       }
@@ -212,31 +272,51 @@ export function ArrCalendarTable({
                   )}
                 </td>
                 <td className="px-2 py-2">
-                  {profileEdit?.customerId === row.customerId && profileEdit.field === "todo" ? (
-                    <textarea
-                      autoFocus
-                      value={profileEdit.value}
-                      onChange={(e) => setProfileEdit({ ...profileEdit, value: e.target.value })}
-                      onBlur={saveProfile}
-                      rows={2}
-                      className="w-full rounded border border-sky-300 px-2 py-1 text-xs resize-y"
+                  <div className="space-y-1.5 min-w-[11rem]">
+                    {row.openTodos.length === 0 && row.legacyTodo ? (
+                      <p className="text-[10px] text-slate-400 leading-snug whitespace-pre-wrap">
+                        <span className="text-slate-300">{copy.legacyTodoHint} </span>
+                        {row.legacyTodo}
+                      </p>
+                    ) : null}
+                    {row.openTodos.length === 0 && !row.legacyTodo ? (
+                      <p className="text-[10px] text-slate-300">{copy.noOpenTodos}</p>
+                    ) : null}
+                    <ul className="space-y-1">
+                      {row.openTodos.map((todo) => (
+                        <li key={todo.id} className="flex items-start gap-1.5">
+                          <TodoCompleteButton
+                            todoId={todo.id}
+                            title={todo.title}
+                            status={todo.status}
+                            customerId={row.customerId}
+                            size="sm"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[11px] text-slate-800 leading-snug line-clamp-2">
+                              {todo.title}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {todo.dueDate ? fmtDate(todo.dueDate, bcp47) : null}
+                              {todo.dueDate && todo.assigneeName ? " · " : null}
+                              {todo.assigneeName}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    <QuickAddTodo
+                      customerId={row.customerId}
                       placeholder={copy.placeholderTodo}
+                      addLabel={copy.addTodo}
                     />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setProfileEdit({
-                          customerId: row.customerId,
-                          field: "todo",
-                          value: row.todo,
-                        })
-                      }
-                      className="w-full text-left text-xs text-slate-600 whitespace-pre-wrap min-h-[2rem] hover:bg-slate-50 rounded px-1 -mx-1"
+                    <Link
+                      href={`/customers/${row.customerId}?tab=overview`}
+                      className="block text-[10px] text-sky-600 hover:underline"
                     >
-                      {row.todo || <span className="text-slate-300">{copy.placeholderTodo}</span>}
-                    </button>
-                  )}
+                      {copy.viewCustomerTodos}
+                    </Link>
+                  </div>
                 </td>
                 {months.map((month) => {
                   const cell = row.cells[month];
@@ -256,24 +336,7 @@ export function ArrCalendarTable({
                             className="w-full text-xs px-1 py-0.5 resize-y outline-none"
                             placeholder={copy.placeholderCell}
                           />
-                          <div className="flex items-center gap-1">
-                            <select
-                              value={editing.kind}
-                              onChange={(e) =>
-                                setEditing({
-                                  ...editing,
-                                  kind: e.target.value as ArrCalendarKind,
-                                })
-                              }
-                              className="flex-1 text-[10px] border border-slate-200 rounded px-1 py-0.5"
-                              aria-label={copy.kindLabel}
-                            >
-                              {ARR_CALENDAR_KIND_CODES.map((k) => (
-                                <option key={k} value={k}>
-                                  {arrCalendarKindLabel(k, locale)}
-                                </option>
-                              ))}
-                            </select>
+                          <div className="flex justify-end">
                             <button
                               type="button"
                               onClick={saveCell}
@@ -295,12 +358,11 @@ export function ArrCalendarTable({
                             customerId: row.customerId,
                             month,
                             content: cell?.content ?? "",
-                            kind: cell?.kind ?? "NOTE",
                           })
                         }
                         className={`w-full min-h-[3.5rem] rounded border px-1.5 py-1 text-left text-[11px] whitespace-pre-wrap leading-snug ${
                           cell
-                            ? arrCalendarKindCellClass(cell.kind)
+                            ? "bg-white border-slate-100"
                             : "bg-slate-50/50 border-transparent hover:border-slate-200 hover:bg-white"
                         }`}
                       >

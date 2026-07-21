@@ -1522,6 +1522,8 @@ export async function createTodoAction(formData: FormData) {
   revalidatePath("/todos");
   revalidatePath("/");
   revalidatePath("/mobile");
+  revalidatePath("/arr");
+  revalidatePath("/arr/calendar");
   if (partnerId) revalidatePath(`/partners/${partnerId}`);
   if (customerId) revalidatePath(`/customers/${customerId}`);
 }
@@ -1553,6 +1555,8 @@ export async function toggleTodoAction(todoId: string) {
   });
   revalidatePath("/todos");
   revalidatePath("/");
+  revalidatePath("/arr");
+  revalidatePath("/arr/calendar");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
   if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
 }
@@ -1620,6 +1624,8 @@ export async function completeTodoWithNoteAction(formData: FormData) {
 
   revalidatePath("/todos");
   revalidatePath("/");
+  revalidatePath("/arr");
+  revalidatePath("/arr/calendar");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
   if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
 
@@ -1669,6 +1675,8 @@ export async function deleteTodoAction(todoId: string) {
   });
   revalidatePath("/todos");
   revalidatePath("/");
+  revalidatePath("/arr");
+  revalidatePath("/arr/calendar");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
   if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
 }
@@ -1724,6 +1732,8 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
   });
   revalidatePath("/todos");
   revalidatePath("/");
+  revalidatePath("/arr");
+  revalidatePath("/arr/calendar");
   if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
   if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
   if (existing.partnerId && existing.partnerId !== t.partnerId) {

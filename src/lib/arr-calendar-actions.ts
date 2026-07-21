@@ -3,10 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import {
-  inferKindFromContent,
-  normalizeArrCalendarKind,
-} from "@/lib/arr-calendar-types";
 
 async function ensureProfile(customerId: string) {
   return db.arrCustomerProfile.upsert({
@@ -22,7 +18,6 @@ export async function upsertArrCalendarCellAction(formData: FormData) {
   const year = Number(formData.get("year"));
   const month = Number(formData.get("month"));
   const content = String(formData.get("content") ?? "").trim();
-  const kindRaw = String(formData.get("kind") ?? "").trim();
 
   if (!customerId || !Number.isFinite(year) || month < 1 || month > 12) {
     return { ok: false as const, error: "invalid_input" };
@@ -32,9 +27,8 @@ export async function upsertArrCalendarCellAction(formData: FormData) {
   if (!customer) return { ok: false as const, error: "customer_not_found" };
 
   const profile = await ensureProfile(customerId);
-  const kind = kindRaw
-    ? normalizeArrCalendarKind(kindRaw)
-    : inferKindFromContent(content);
+  // Monthly grid is notes-only; ignore legacy kind dropdown / content inference.
+  const kind = "NOTE";
 
   if (!content) {
     await db.arrCalendarCell.deleteMany({
@@ -144,7 +138,7 @@ export async function seedRenewalRemindersAction(year: number, _formData?: FormD
         year,
         month,
         content: `${label}：${ct.name}`,
-        kind: "RENEWAL_REMINDER",
+        kind: "NOTE",
       },
     });
   }
