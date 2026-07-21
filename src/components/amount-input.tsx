@@ -137,32 +137,18 @@ export function AmountInput({
         : ""));
 
   return (
-    <div className={className ?? "flex gap-1.5 min-w-0"}>
+    <div className={className ?? "flex gap-1.5 min-w-0 items-stretch"}>
       <input type="hidden" name={nameAmount} value={submitAmount} readOnly />
       {submitPreserve ? (
         <input type="hidden" name="amountPreserve" value={submitPreserve} readOnly />
       ) : null}
-      <input
-        id={amountId}
-        type="text"
-        inputMode="decimal"
-        autoComplete="off"
-        disabled={disabled}
-        aria-label={amountAriaLabel}
-        placeholder={amountPlaceholder}
-        value={display}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        onChange={handleChange}
-        className={`${inputClassName} flex-1 min-w-0 tabular-nums`}
-      />
       <select
         name={nameCurrency}
         disabled={disabled}
         aria-label={currencyAriaLabel}
         value={currencyValue}
         onChange={(e) => setCurrency(currencyForInput(e.target.value))}
-        className={`${inputClassName} w-[5.5rem] shrink-0`}
+        className={`${inputClassName} w-[4.75rem] shrink-0`}
       >
         {AMOUNT_CURRENCIES.map((code) => (
           <option key={code} value={code}>
@@ -170,6 +156,20 @@ export function AmountInput({
           </option>
         ))}
       </select>
+      <input
+        id={amountId}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        disabled={disabled}
+        aria-label={amountAriaLabel}
+        placeholder={amountPlaceholder ?? "0.00"}
+        value={display}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onChange={handleChange}
+        className={`${inputClassName} flex-1 min-w-0 tabular-nums`}
+      />
     </div>
   );
 }

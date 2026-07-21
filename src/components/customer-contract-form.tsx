@@ -20,6 +20,7 @@ import {
   AMOUNT_CURRENCIES,
   currencyForInput,
   formatAmountDisplay,
+  normalizeAmountInput,
   type AmountCurrency,
 } from "@/lib/amount";
 import {
@@ -241,7 +242,9 @@ export function CustomerContractForm({
       setBillingCycle(result.billingCycle);
     }
     if (result.status) setStatus(result.status);
-    if (result.amount != null) setAmount(result.amount);
+    // Never let CRM IDs / free text land in the amount box.
+    const parsedAmount = normalizeAmountInput(result.amount);
+    if (parsedAmount != null) setAmount(parsedAmount);
     if (result.currency) setCurrency(result.currency);
     if (result.crmContractId?.trim()) setCrmContractId(result.crmContractId.trim());
     if (result.startDate) setStartDate(result.startDate);
@@ -337,69 +340,87 @@ export function CustomerContractForm({
           </option>
         ))}
       </select>
-      <AmountInput
-        inputClassName={inputClassName}
-        amountPlaceholder={copy.amount}
-        amountAriaLabel={copy.amount}
-        currencyAriaLabel={locale === "en" ? "Currency" : "币种"}
-        locale={locale}
-        amount={amount}
-        currency={currency}
-        onAmountChange={setAmount}
-        onCurrencyChange={setCurrency}
-      />
-      <input
-        name="crmContractId"
-        value={crmContractId}
-        onChange={(e) => setCrmContractId(e.target.value)}
-        placeholder={copy.crmContractIdPlaceholder}
-        className={inputClassName}
-        aria-label={copy.crmContractId}
-      />
+      <label className="block min-w-0 space-y-1">
+        <span className="text-[11px] text-slate-500">{copy.amount}</span>
+        <AmountInput
+          inputClassName={inputClassName}
+          amountPlaceholder="0.00"
+          amountAriaLabel={copy.amount}
+          currencyAriaLabel={locale === "en" ? "Currency" : "币种"}
+          locale={locale}
+          amount={amount}
+          currency={currency}
+          onAmountChange={setAmount}
+          onCurrencyChange={setCurrency}
+        />
+      </label>
+      <label className="block min-w-0 space-y-1">
+        <span className="text-[11px] text-slate-500">{copy.crmContractId}</span>
+        <input
+          name="crmContractId"
+          value={crmContractId}
+          onChange={(e) => setCrmContractId(e.target.value)}
+          placeholder={copy.crmContractIdPlaceholder}
+          className={`${inputClassName} font-mono text-xs`}
+          aria-label={copy.crmContractId}
+        />
+      </label>
 
       {showBilling ? (
-        <select
-          name="billingCycle"
-          value={billingCycle}
-          onChange={(e) => setBillingCycle(e.target.value as BillingCycleCode | "")}
-          className={inputClassName}
-          aria-label={copy.contractBillingCycle}
-        >
-          <option value="">{copy.contractBillingNone}</option>
-          {BILLING_CYCLE_CODES.map((code) => (
-            <option key={code} value={code}>
-              {billingCycleLabel(code, locale)}
-            </option>
-          ))}
-        </select>
+        <label className="block min-w-0 space-y-1">
+          <span className="text-[11px] text-slate-500">{copy.contractBillingCycle}</span>
+          <select
+            name="billingCycle"
+            value={billingCycle}
+            onChange={(e) => setBillingCycle(e.target.value as BillingCycleCode | "")}
+            className={inputClassName}
+            aria-label={copy.contractBillingCycle}
+          >
+            <option value="">{copy.contractBillingNone}</option>
+            {BILLING_CYCLE_CODES.map((code) => (
+              <option key={code} value={code}>
+                {billingCycleLabel(code, locale)}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : (
         <input type="hidden" name="billingCycle" value="" />
       )}
 
-      <input
-        name="startDate"
-        type="date"
-        value={startDate}
-        onChange={(e) => setStartDate(e.target.value)}
-        className={inputClassName}
-        aria-label={copy.contractStartDate}
-      />
-      <input
-        name="endDate"
-        type="date"
-        value={endDate}
-        onChange={(e) => setEndDate(e.target.value)}
-        className={inputClassName}
-        aria-label={copy.contractEndDate}
-      />
-      <input
-        name="renewsAt"
-        type="date"
-        value={renewsAt}
-        onChange={(e) => setRenewsAt(e.target.value)}
-        className={inputClassName}
-        aria-label={copy.contractRenewsAt}
-      />
+      <label className="block min-w-0 space-y-1">
+        <span className="text-[11px] text-slate-500">{copy.contractStartDate}</span>
+        <input
+          name="startDate"
+          type="date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          className={inputClassName}
+          aria-label={copy.contractStartDate}
+        />
+      </label>
+      <label className="block min-w-0 space-y-1">
+        <span className="text-[11px] text-slate-500">{copy.contractEndDate}</span>
+        <input
+          name="endDate"
+          type="date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          className={inputClassName}
+          aria-label={copy.contractEndDate}
+        />
+      </label>
+      <label className="block min-w-0 space-y-1">
+        <span className="text-[11px] text-slate-500">{copy.contractRenewsAt}</span>
+        <input
+          name="renewsAt"
+          type="date"
+          value={renewsAt}
+          onChange={(e) => setRenewsAt(e.target.value)}
+          className={inputClassName}
+          aria-label={copy.contractRenewsAt}
+        />
+      </label>
       <select name="partnerId" defaultValue={defaults?.partnerId ?? ""} className={inputClassName}>
         <option value="">{copy.viaPartnerNone}</option>
         {partners.map((p) => (
