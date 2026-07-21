@@ -45,6 +45,9 @@ export function TodoItemRow({
         <div className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>
           {todo.title}
           {todo.source === "AI" && <span className="ml-1.5 text-[10px] text-purple-500">AI</span>}
+          {todo.source === "ARR" && (
+            <span className="ml-1.5 rounded bg-amber-50 px-1 py-0.5 text-[10px] text-amber-700">ARR</span>
+          )}
           {linkLabel && (
             <span className="ml-1 inline-block rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500 align-middle">
               {linkLabel}

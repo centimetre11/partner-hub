@@ -208,6 +208,8 @@ export function ArrCalendarTable({
                       customers={customers}
                       users={users}
                       defaultOwnerRef={encodeTodoOwnerRef("customer", row.customerId)}
+                      source="ARR"
+                      lockOwner
                       buttonLabel={copy.addTodo}
                       buttonClassName="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] text-slate-700 hover:bg-slate-50"
                     />

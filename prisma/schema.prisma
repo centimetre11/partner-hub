@@ -48,6 +48,9 @@ model User {
   reportLocale    String?
   wecomBindCode String? // 企微一键绑定码（6 位，短期有效）
   wecomBindCodeExpiresAt DateTime?
+  // 忘记密码：存 token 的 sha256，明文只出现在邮件链接里
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
   partnerReviewMeetings PartnerReviewMeeting[]
   weeklyReportSnapshots WeeklyReportSnapshot[]
 }
@@ -621,7 +624,7 @@ model TodoItem {
   dueDate    DateTime?
   priority   String    @default("MEDIUM") // HIGH / MEDIUM / LOW
   status     String    @default("OPEN") // OPEN / DONE / CANCELLED
-  source     String    @default("MANUAL") // MANUAL / AI / SEED
+  source     String    @default("MANUAL") // MANUAL / AI / SEED / ARR
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   doneAt     DateTime?
@@ -1069,10 +1072,10 @@ model SystemKnowhowCredential {
   updatedAt DateTime @updatedAt
 }
 
-// 团队邮件服务（QQ 邮箱 SMTP 等）
+// 团队邮件服务（腾讯企业邮箱 / QQ 邮箱 SMTP）
 model SystemEmailConfig {
   id         String   @id @default("singleton")
-  smtpHost   String   @default("smtp.qq.com")
+  smtpHost   String   @default("smtp.exmail.qq.com")
   smtpPort   Int      @default(465)
   smtpSecure Boolean  @default(true)
   fromEmail  String

@@ -17,6 +17,7 @@ export function CustomerTodoRow({
     status: string;
     dueDate: Date | null;
     assignee: { name: string } | null;
+    source?: string | null;
   };
   customerId: string;
   bcp47: string;
@@ -36,6 +37,9 @@ export function CustomerTodoRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-sm ${isDone ? "line-through text-slate-300" : "text-slate-800"}`}>{todo.title}</span>
+          {todo.source === "ARR" && (
+            <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">ARR</span>
+          )}
           {tag && (
             <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{tag.label}</span>
           )}

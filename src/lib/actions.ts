@@ -27,6 +27,7 @@ import {
 } from "./opportunity-process-tags";
 import { DEFAULT_OPPORTUNITY_STATUS, normalizeOpportunityStatus } from "./opportunity-status";
 import { amountAndCurrencyFromFormData, formatAmountDisplay } from "./amount";
+import { normalizeTodoSource } from "./todo-source";
 import {
   DEFAULT_CONTRACT_STATUS,
   DEFAULT_CONTRACT_TYPE,
@@ -1500,6 +1501,7 @@ export async function createTodoAction(formData: FormData) {
       assigneeId: String(formData.get("assigneeId") ?? "") || user.id,
       dueDate: due ? new Date(due) : null,
       priority: String(formData.get("priority") ?? "MEDIUM"),
+      source: normalizeTodoSource(formData.get("source")),
     },
   });
   void recordSystemEvent({
@@ -1511,7 +1513,7 @@ export async function createTodoAction(formData: FormData) {
     targetId: todo.id,
     targetLabel: todo.title,
     summary: `新建待办：${todo.title}`,
-    meta: { partnerId, customerId, opportunityId, projectId },
+    meta: { partnerId, customerId, opportunityId, projectId, source: todo.source },
   });
   await logLinkedTimeline(user.id, {
     customerId,

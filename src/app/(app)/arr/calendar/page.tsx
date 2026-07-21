@@ -69,6 +69,7 @@ export default async function ArrCalendarPage({
           where: {
             customerId: { in: customerIds },
             status: { not: "DONE" },
+            source: "ARR",
           },
           select: {
             id: true,
@@ -86,13 +87,10 @@ export default async function ArrCalendarPage({
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
-    db.partner.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+    // Drawer locks to the row customer; keep lists lean.
+    Promise.resolve([] as { id: string; name: string }[]),
     db.customer.findMany({
-      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
+      where: { id: { in: customerIds } },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

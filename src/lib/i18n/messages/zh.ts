@@ -1106,7 +1106,7 @@ export const messagesZh: Messages = {
   },
   arrCalendar: {
     title: "ARR 客户日历表",
-    desc: "{year} 年 · {count} 家 ARR 客户 · 从当月起按月写备注，待办与系统待办打通",
+    desc: "{year} 年 · {count} 家 ARR 客户 · 月格备注；待办为 ARR 专属（系统待办带 ARR 标记）",
     seedRenewals: "一键生成续费提醒",
     guide1: "了解客户使用情况；在月格填写备注（续费、巡检、跟进都可以写在备注里）。",
     guide2: "待办列对接系统待办：可挂多条、勾完成；也可点进客户页统一管理。",
@@ -2737,6 +2737,7 @@ export const messagesZh: Messages = {
     botBindDesc: "无需手填 userid：在 Web 生成 6 位绑定码，到企微群 @ 机器人发送「绑定 绑定码」即可完成。",
     generateBindCode: "生成企微绑定码",
     botBindSend: "请在企微群发送：@机器人 绑定 {code}",
+    botBindGenerated: "绑定码 {code} 已生成，15 分钟内有效。请在企微群发送：@机器人 绑定 {code}",
     userIdCopyHint: "从「我是谁」复制时不要带反引号 `。",
   },
   wecom: {
@@ -2986,6 +2987,10 @@ export const messagesZh: Messages = {
     wecomGenerateBindCode: "生成群绑定码",
     wecomBindCodeSendCustomer: "在企微群发送：@机器人 绑定客户 {code}",
     wecomBindCodeSendPartner: "在企微群发送：@机器人 绑定伙伴 {code}",
+    wecomBindCodeGeneratedCustomer:
+      "绑定码 {code} 已生成，15 分钟内有效。请在企微群发送：@机器人 绑定客户 {code}",
+    wecomBindCodeGeneratedPartner:
+      "绑定码 {code} 已生成，15 分钟内有效。请在企微群发送：@机器人 绑定伙伴 {code}",
     kmsRootPath: "KMS 主目录",
     kmsRootPathHint: "手动填写，如 https://kms.fineres.com/partners/beon-it/",
     crmCustomerId: "CRM 客户 ID",

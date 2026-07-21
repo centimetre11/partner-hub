@@ -17,6 +17,10 @@ export function CreateTodoDrawer({
   customers,
   users,
   defaultOwnerRef = "",
+  /** When set, written to FormData as TodoItem.source (e.g. ARR from calendar). */
+  source,
+  /** Lock related owner to defaultOwnerRef (no switching partner/customer). */
+  lockOwner = false,
   buttonClassName,
   buttonLabel,
   buttonSuffix,
@@ -27,6 +31,8 @@ export function CreateTodoDrawer({
   users: Option[];
   /** Pre-select related partner/customer on open (e.g. on detail pages). */
   defaultOwnerRef?: string;
+  source?: string;
+  lockOwner?: boolean;
   buttonClassName?: string;
   buttonLabel?: string;
   buttonSuffix?: React.ReactNode;
@@ -155,6 +161,7 @@ export function CreateTodoDrawer({
               }}
             >
               <div className="space-y-3 text-sm flex-1">
+                {source ? <input type="hidden" name="source" value={source} /> : null}
                 <label className="block">
                   <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldTitle}</span>
                   <input
@@ -166,35 +173,50 @@ export function CreateTodoDrawer({
                   />
                 </label>
 
-                <label className="block min-w-0">
-                  <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
-                  <select
-                    name="ownerRef"
-                    value={ownerRef}
-                    onChange={(e) => setOwnerRef(e.target.value)}
-                    className={input}
-                  >
-                    <option value="">{m.todos.noRelated}</option>
-                    {partners.length > 0 && (
-                      <optgroup label={m.todos.partnersGroup}>
-                        {partners.map((p) => (
-                          <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {customers.length > 0 && (
-                      <optgroup label={m.todos.customersGroup}>
-                        {customers.map((c) => (
-                          <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
-                </label>
+                {lockOwner && defaultOwnerRef ? (
+                  <input type="hidden" name="ownerRef" value={ownerRef || defaultOwnerRef} />
+                ) : (
+                  <label className="block min-w-0">
+                    <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
+                    <select
+                      name="ownerRef"
+                      value={ownerRef}
+                      onChange={(e) => setOwnerRef(e.target.value)}
+                      className={input}
+                    >
+                      <option value="">{m.todos.noRelated}</option>
+                      {partners.length > 0 && (
+                        <optgroup label={m.todos.partnersGroup}>
+                          {partners.map((p) => (
+                            <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {customers.length > 0 && (
+                        <optgroup label={m.todos.customersGroup}>
+                          {customers.map((c) => (
+                            <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </label>
+                )}
+
+                {lockOwner && customerId ? (
+                  <p className="text-[11px] text-slate-500">
+                    {customers.find((c) => c.id === customerId)?.name ?? customerId}
+                    {source === "ARR" ? (
+                      <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">
+                        ARR
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
 
                 {customerId && (
                   <label className="block min-w-0">
