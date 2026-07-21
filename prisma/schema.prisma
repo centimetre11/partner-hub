@@ -1282,6 +1282,8 @@ model CrmChannel {
   contRecdate  DateTime? // cont_recdate
   staSalesOld  String? // sta_sales_old，转出前销售
   staRecdate   DateTime? // sta_recdate，转出时间
+  detail       String? // detail，商务记录2（若接口返回）
+  traceDetail  String? // trace_detail，商务记录1（若接口返回）
   syncedAt     DateTime  @updatedAt
   leadReviewItems LeadReviewItem[]
 

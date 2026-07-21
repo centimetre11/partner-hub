@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Card } from "@/components/ui";
 import {
@@ -36,17 +36,29 @@ type ItemRow = {
   leadId: string | null;
 };
 
+function Fact({ label, value }: { label: string; value?: string | null }) {
+  if (!value?.trim()) return null;
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="text-sm text-slate-800 whitespace-pre-wrap break-words">{value}</dd>
+    </div>
+  );
+}
+
 export function LeadReviewWorkspace({
   meetingId,
   status,
   liveNotes,
   items,
+  facts,
   stats,
 }: {
   meetingId: string;
   status: string;
   liveNotes: string | null;
   items: ItemRow[];
+  facts: Record<string, LeadPrepBrief>;
   stats: {
     CHANNEL: Record<string, number>;
     NURTURE: Record<string, number>;
@@ -76,14 +88,7 @@ export function LeadReviewWorkspace({
   });
 
   const active = items.find((i) => i.id === activeId) ?? items[0];
-  const brief: LeadPrepBrief | null = useMemo(() => {
-    if (!active?.prepBrief) return null;
-    try {
-      return JSON.parse(active.prepBrief) as LeadPrepBrief;
-    } catch {
-      return null;
-    }
-  }, [active]);
+  const brief = active ? facts[active.id] : null;
 
   function run(fn: () => Promise<{ error?: string; ok?: boolean }>) {
     startTransition(async () => {
@@ -214,50 +219,30 @@ export function LeadReviewWorkspace({
 
         {active ? (
           <div className="space-y-4">
-            <Card title={active.displayName ?? "线索"}>
+            <Card title={brief?.name || active.displayName || "线索"}>
               {brief ? (
-                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div>
-                    <dt className="text-xs text-slate-500">责任销售</dt>
-                    <dd>{brief.salesman ?? "—"}</dd>
-                  </div>
-                  {brief.staSalesOld ? (
-                    <div>
-                      <dt className="text-xs text-slate-500">转出前销售</dt>
-                      <dd>{brief.staSalesOld}</dd>
-                    </div>
-                  ) : null}
-                  <div>
-                    <dt className="text-xs text-slate-500">等级 / 状态</dt>
-                    <dd>
-                      {[brief.rank, brief.status].filter(Boolean).join(" · ") || "—"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-slate-500">{brief.dateLabel}</dt>
-                    <dd>{brief.dateValue ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-slate-500">地区</dt>
-                    <dd>{brief.region ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-slate-500">来源</dt>
-                    <dd>{brief.sourceLabel ?? "—"}</dd>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <dt className="text-xs text-slate-500 mb-1">建议议题</dt>
-                    <dd>
-                      <ul className="list-disc pl-5 space-y-0.5 text-slate-700">
-                        {brief.topics.map((t) => (
-                          <li key={t}>{t}</li>
-                        ))}
-                      </ul>
-                    </dd>
-                  </div>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+                  <Fact label="类型" value={brief.typeDetail} />
+                  <Fact label="等级 / 状态" value={[brief.rank, brief.status].filter(Boolean).join(" · ")} />
+                  <Fact label="责任销售" value={brief.salesman} />
+                  <Fact label="转出前销售" value={brief.staSalesOld} />
+                  <Fact label={brief.dateLabel} value={brief.dateValue} />
+                  <Fact label="KPI 截止" value={brief.jzDate} />
+                  <Fact label="国家 / 城市" value={brief.region} />
+                  <Fact label="省份" value={brief.province} />
+                  <Fact label="来源" value={brief.sourceLabel} />
+                  <Fact label="来源详情" value={brief.sourceDetail} />
+                  <Fact label="联系人" value={brief.contName} />
+                  <Fact label="职位" value={brief.contDuty} />
+                  <Fact label="电话" value={brief.phone} />
+                  <Fact label="邮箱" value={brief.contEmail} />
+                  <Fact label="代理" value={brief.overseaAgent} />
+                  <Fact label="时区" value={brief.zone} />
+                  <Fact label="公司 ID" value={brief.companyId} />
+                  <Fact label="线索 ID" value={brief.clueId} />
                 </dl>
               ) : (
-                <p className="text-sm text-slate-500">尚未生成会前简报，可先点「开会准备」。</p>
+                <p className="text-sm text-slate-500">未找到该条源数据。</p>
               )}
 
               {status === "LIVE" ? (
@@ -275,6 +260,46 @@ export function LeadReviewWorkspace({
                 </div>
               ) : null}
             </Card>
+
+            <Card title="商务记录">
+              {brief?.traceDetail || brief?.detail ? (
+                <dl className="space-y-4 text-sm">
+                  {brief.traceDetail ? (
+                    <div>
+                      <dt className="text-xs text-slate-500 mb-1">商务记录1</dt>
+                      <dd className="text-slate-800 whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 max-h-64 overflow-y-auto">
+                        {brief.traceDetail}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {brief.detail ? (
+                    <div>
+                      <dt className="text-xs text-slate-500 mb-1">商务记录2</dt>
+                      <dd className="text-slate-800 whitespace-pre-wrap break-words rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 max-h-64 overflow-y-auto">
+                        {brief.detail}
+                      </dd>
+                    </div>
+                  ) : null}
+                </dl>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  暂无商务记录。
+                  {active.source === "CHANNEL"
+                    ? "公海同步若未带回该字段，可点「开会准备」后仍为空则需重新同步 Channel 数据。"
+                    : ""}
+                </p>
+              )}
+            </Card>
+
+            {brief?.topics?.length ? (
+              <Card title="建议议题">
+                <ul className="list-disc pl-5 space-y-0.5 text-sm text-slate-700">
+                  {brief.topics.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </Card>
+            ) : null}
 
             {(status === "LIVE" || status === "PROCESSING" || status === "DONE") && (
               <Card title="结论打标">

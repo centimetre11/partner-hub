@@ -127,6 +127,8 @@ async function upsertChannels(channels: CrmChannelUpsert[]) {
             contRecdate: c.contRecdate,
             staSalesOld: c.staSalesOld,
             staRecdate: c.staRecdate,
+            detail: c.detail,
+            traceDetail: c.traceDetail,
           },
         }),
       ),

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "CrmChannel" ADD COLUMN IF NOT EXISTS "detail" TEXT;
+ALTER TABLE "CrmChannel" ADD COLUMN IF NOT EXISTS "traceDetail" TEXT;

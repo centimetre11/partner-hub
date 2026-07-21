@@ -6,6 +6,7 @@ import { BackButton } from "@/components/back-button";
 import { LeadReviewWorkspace } from "./meeting-workspace";
 import { parseLeadReviewConfig } from "@/lib/lead-review/types";
 import { summarizeVerdicts } from "@/lib/lead-review/apply";
+import { loadMeetingItemFacts } from "@/lib/lead-review/brief";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
   DRAFT: { label: "草稿", tone: "zinc" },
@@ -38,6 +39,7 @@ export default async function LeadReviewDetailPage({
     meeting.status === "DONE"
       ? summarizeVerdicts(meeting.items.map((i) => ({ source: i.source, verdict: i.verdict })))
       : null;
+  const facts = await loadMeetingItemFacts(meeting.items);
 
   return (
     <div className="pb-16">
@@ -65,6 +67,7 @@ export default async function LeadReviewDetailPage({
           status={meeting.status}
           liveNotes={meeting.liveNotes}
           stats={stats}
+          facts={facts}
           items={meeting.items.map((i) => ({
             id: i.id,
             source: i.source,

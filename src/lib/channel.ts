@@ -31,6 +31,8 @@ export type CrmChannelRow = {
   cont_recdate?: string;
   sta_sales_old?: string;
   sta_recdate?: string;
+  detail?: string;
+  trace_detail?: string;
 };
 
 export type CrmChannelResponse = {
@@ -62,6 +64,8 @@ export type CrmChannelUpsert = {
   contRecdate: Date | null;
   staSalesOld: string | null;
   staRecdate: Date | null;
+  detail: string | null;
+  traceDetail: string | null;
 };
 
 export function getChannelDataUrlBase() {
@@ -249,6 +253,8 @@ export function normalizeChannelRows(rows: CrmChannelRow[]) {
       contRecdate: parseChannelDate(row.cont_recdate),
       staSalesOld: trimOrNull(row.sta_sales_old),
       staRecdate: parseChannelDate(row.sta_recdate),
+      detail: trimOrNull(row.detail),
+      traceDetail: trimOrNull(row.trace_detail),
     });
   }
 
