@@ -12,7 +12,7 @@ export type CreateMeetingResult =
   | {
       ok: true;
       meetLink: string;
-      wecomScheduleId: string;
+      wecomScheduleId: string | null;
       warnings: string[];
     }
   | { ok: false; error: string; code?: string };
@@ -118,11 +118,14 @@ export async function createMeetingAction(formData: FormData): Promise<CreateMee
     attendeeWecomUserIds: resolved.wecomUserIds,
   });
 
+  let wecomScheduleId: string | null = null;
   if (!scheduleResult.ok) {
-    return { ok: false, error: scheduleResult.error };
+    warnings.push(`企微日程未创建：${scheduleResult.error}`);
+  } else {
+    wecomScheduleId = scheduleResult.scheduleId;
   }
 
-  if (notifyAttendees) {
+  if (notifyAttendees && wecomScheduleId) {
     const others = resolved.wecomUserIds.filter((id) => id !== self?.wecomUserId);
     const recipients = others.length ? others : resolved.wecomUserIds;
     const notify = await sendWecomAppMessage({
@@ -142,7 +145,7 @@ export async function createMeetingAction(formData: FormData): Promise<CreateMee
   return {
     ok: true,
     meetLink,
-    wecomScheduleId: scheduleResult.scheduleId,
+    wecomScheduleId,
     warnings,
   };
 }

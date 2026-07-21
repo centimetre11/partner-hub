@@ -450,7 +450,11 @@ export function MeetingCustomerInviteForm({
         {result ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
             <div className="font-medium">{s.successTitle}</div>
-            <p className="mt-1 text-xs text-emerald-800">{s.wecomCreated.replace("{id}", result.wecomScheduleId)}</p>
+            <p className="mt-1 text-xs text-emerald-800">
+              {result.wecomScheduleId
+                ? s.wecomCreated.replace("{id}", result.wecomScheduleId)
+                : invite.wecomSkipped}
+            </p>
             {composeNotice && (
               <p
                 className={`mt-1 text-xs ${
@@ -490,7 +494,7 @@ export function MeetingCustomerInviteForm({
           </div>
         )}
 
-        {result && result.warnings.length > 0 && (
+        {result?.warnings && result.warnings.length > 0 && (
           <ul className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 space-y-1">
             {result.warnings.map((w) => (
               <li key={w}>{w}</li>

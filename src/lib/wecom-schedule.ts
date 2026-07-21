@@ -29,6 +29,12 @@ export function isWecomScheduleConfigured(): boolean {
 }
 
 function apiError(prefix: string, data: WecomApiError): string {
+  if (data.errcode === 60011) {
+    return (
+      `${prefix}: 60011 应用对参与人没有权限。请管理员在企微「协作 → 日程 → 可调用接口的应用」添加本自建应用，` +
+      `并确保参与人都在应用可见范围内（WECOM_AGENT_ID 需与已授权应用一致）。`
+    );
+  }
   return `${prefix}: ${data.errcode ?? "unknown"} ${data.errmsg ?? ""}`.trim();
 }
 

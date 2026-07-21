@@ -167,7 +167,11 @@ function MeetingForm({
       <div className="space-y-4 text-sm">
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-900">
           <div className="font-medium">{s.successTitle}</div>
-          <p className="mt-1 text-xs text-emerald-800">{s.wecomCreated.replace("{id}", result.wecomScheduleId)}</p>
+          <p className="mt-1 text-xs text-emerald-800">
+            {result.wecomScheduleId
+              ? s.wecomCreated.replace("{id}", result.wecomScheduleId)
+              : s.wecomSkipped}
+          </p>
         </div>
         <div>
           <div className="text-xs font-medium text-slate-500">{s.meetLink}</div>

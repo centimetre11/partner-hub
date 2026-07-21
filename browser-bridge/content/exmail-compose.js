@@ -35,11 +35,11 @@
       if (!switched) {
         return { ok: false, error: "找不到企业邮「会议」选项卡，请手动切换到会议后再试" };
       }
-      await sleep(700);
+      await sleep(900);
     }
 
-    // 2. 等待写信表单（以正文编辑器出现为准）
-    const editorBody = await waitFor(() => findEditorBody(), 15000, "写信表单未出现（找不到正文编辑器）");
+    // 2. 等待写信表单（以正文编辑器出现为准；切会议 Tab 后 DOM 可能刷新）
+    const editorBody = await waitFor(() => findEditorBody(), 20000, "写信表单未出现（找不到正文编辑器）");
     // 写信表单文档：编辑器 iframe 所在的文档（经典版），或编辑器自身所在文档（新版）
     const composeDoc = editorBody.__phComposeDoc || editorBody.ownerDocument;
 
@@ -190,15 +190,43 @@
   }
 
   async function switchToMeetingTab() {
-    const candidates = queryAllGlobal("a, button, span, div, li, label, [role='tab']");
-    for (const el of candidates) {
-      const text = (el.textContent || "").trim();
-      if ((text === "会议" || text === "Meeting") && isVisible(el)) {
+    const composeDoc = findComposeDocument();
+    const roots = composeDoc ? [composeDoc] : [];
+    const editor = findEditorBody();
+    if (editor?.__phComposeDoc && !roots.includes(editor.__phComposeDoc)) {
+      roots.push(editor.__phComposeDoc);
+    }
+    if (!roots.length) roots.push(document);
+
+    for (const root of roots) {
+      const candidates = root.querySelectorAll(
+        "a, button, span, div, li, label, [role='tab']",
+      );
+      for (const el of candidates) {
+        if (!isVisible(el)) continue;
+        const text = (el.textContent || "").trim();
+        if (text !== "会议" && text !== "Meeting") continue;
+        // 避免点到页面导航或其他区域的「会议」
+        const inCompose =
+          Boolean(el.closest("#toAreaCtrl, .mail-compose, .compose_dialog, .mod-compose, .compose_wrap")) ||
+          root !== document;
+        if (!inCompose && root === document) continue;
         el.click();
+        await sleep(900);
         return true;
       }
     }
     return false;
+  }
+
+  function findComposeDocument() {
+    const to = document.querySelector("#toAreaCtrl");
+    if (to) {
+      const doc = to.ownerDocument;
+      return doc;
+    }
+    const editor = findEditorBody();
+    return editor?.__phComposeDoc || null;
   }
 
   function mergeRecipients(to, cc) {
