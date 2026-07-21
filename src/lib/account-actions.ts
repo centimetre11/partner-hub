@@ -31,7 +31,11 @@ export async function changePasswordAction(formData: FormData) {
   }
   await db.user.update({
     where: { id: user.id },
-    data: { passwordHash: await bcrypt.hash(next, 10) },
+    data: {
+      passwordHash: await bcrypt.hash(next, 10),
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+    },
   });
   return { ok: true, message: "Password updated" };
 }

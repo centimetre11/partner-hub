@@ -35,6 +35,13 @@ export function LoginForm({
           placeholder={lm.passwordPlaceholder}
           className="ui-input"
         />
+        {!firstRun && (
+          <p className="mt-1.5 text-right text-sm">
+            <a href="/forgot-password" className="text-slate-500 hover:text-slate-800 underline-offset-2 hover:underline">
+              {lm.forgotPassword}
+            </a>
+          </p>
+        )}
       </div>
       {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       <button disabled={pending} className="ui-btn ui-btn-primary w-full py-2.5">

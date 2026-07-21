@@ -3,6 +3,8 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "./db";
+import { getLocale } from "./i18n/locale-server";
+import { formatMsg, getMessages } from "./i18n/messages";
 import { requireSuperAdmin, requireUser } from "./session";
 import {
   isValidWecomDisplayName,
@@ -121,10 +123,12 @@ export async function generateWecomBindCodeAction() {
   });
 
   revalidatePath("/account");
+  const locale = await getLocale();
+  const message = formatMsg(getMessages(locale).identity.botBindGenerated, { code });
   return {
     ok: true as const,
     code,
     expiresAt: expiresAt.toISOString(),
-    message: `绑定码 ${code} 已生成，15 分钟内有效。请在企微群发送：@机器人 绑定 ${code}`,
+    message,
   };
 }

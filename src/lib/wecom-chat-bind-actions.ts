@@ -3,6 +3,8 @@
 import { randomBytes } from "crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { getLocale } from "@/lib/i18n/locale-server";
+import { formatMsg, getMessages } from "@/lib/i18n/messages";
 import { requireUser } from "@/lib/session";
 
 const BIND_CODE_TTL_MS = 15 * 60 * 1000;
@@ -31,11 +33,15 @@ export async function generateCustomerWecomChatBindCodeAction(customerId: string
   });
 
   revalidatePath(`/customers/${customerId}`);
+  const locale = await getLocale();
+  const message = formatMsg(getMessages(locale).integrations.wecomBindCodeGeneratedCustomer, {
+    code,
+  });
   return {
     ok: true as const,
     code,
     expiresAt: expiresAt.toISOString(),
-    message: `绑定码 ${code} 已生成，15 分钟内有效。请在企微群发送：@机器人 绑定客户 ${code}`,
+    message,
   };
 }
 
@@ -59,10 +65,14 @@ export async function generatePartnerWecomChatBindCodeAction(partnerId: string) 
   });
 
   revalidatePath(`/partners/${partnerId}`);
+  const locale = await getLocale();
+  const message = formatMsg(getMessages(locale).integrations.wecomBindCodeGeneratedPartner, {
+    code,
+  });
   return {
     ok: true as const,
     code,
     expiresAt: expiresAt.toISOString(),
-    message: `绑定码 ${code} 已生成，15 分钟内有效。请在企微群发送：@机器人 绑定伙伴 ${code}`,
+    message,
   };
 }

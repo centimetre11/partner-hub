@@ -100,7 +100,7 @@ export function WeeklyReportSetup({
 
       {!status.emailConfigured && (
         <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
-          邮件服务尚未配置，周报将无法发送。请先在下方「系统邮件服务」中配置 QQ 邮箱 SMTP。
+          邮件服务尚未配置，周报将无法发送。请先在下方「系统邮件服务」中配置企业邮箱 SMTP。
         </div>
       )}
 

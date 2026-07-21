@@ -169,7 +169,7 @@ export async function runWeeklyReportNowAction() {
   const agent = await loadAgent();
   if (!agent) return { error: "请先保存周报配置" };
   if (!(await isEmailServiceConfigured())) {
-    return { error: "邮件服务未配置，请先在「系统邮件服务」中配置 QQ 邮箱 SMTP" };
+    return { error: "邮件服务未配置，请先在「系统邮件服务」中配置企业邮箱 SMTP" };
   }
   try {
     const { runAgent } = await import("./agent-runner");
@@ -190,7 +190,7 @@ export async function sendWeeklyReportTestAction(formData: FormData) {
   const emailOverride = String(formData.get("emailOverride") ?? "").trim();
   if (!userId) return { error: "请选择一个要试发的成员" };
   if (!(await isEmailServiceConfigured())) {
-    return { error: "邮件服务未配置，请先在「系统邮件服务」中配置 QQ 邮箱 SMTP" };
+    return { error: "邮件服务未配置，请先在「系统邮件服务」中配置企业邮箱 SMTP" };
   }
   const agent = await loadAgent();
   const timezone = resolveAgentTimezone(agent?.timezone || DEFAULT_WEEKLY_REPORT_TZ);

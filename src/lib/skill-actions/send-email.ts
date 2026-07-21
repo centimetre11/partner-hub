@@ -16,7 +16,7 @@ export async function runSendEmailTool(
   ctx: { actions: string[] },
 ): Promise<string> {
   if (!(await isEmailServiceConfigured())) {
-    return "Email service not configured. Set up QQ SMTP in Team Settings → Email service.";
+    return "Email service not configured. Set up Exmail SMTP in Team Settings → Email service.";
   }
   const toRaw = String(args.to ?? "").trim();
   const subject = String(args.subject ?? "").trim();

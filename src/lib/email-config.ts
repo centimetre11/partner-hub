@@ -1,10 +1,14 @@
 import { db } from "./db";
 
-export const QQ_SMTP_DEFAULTS = {
-  smtpHost: "smtp.qq.com",
+/** 腾讯企业邮箱 SMTP 默认（也兼容个人 QQ：可在设置里改成 smtp.qq.com） */
+export const EXMAIL_SMTP_DEFAULTS = {
+  smtpHost: "smtp.exmail.qq.com",
   smtpPort: 465,
   smtpSecure: true,
 } as const;
+
+/** @deprecated 使用 EXMAIL_SMTP_DEFAULTS */
+export const QQ_SMTP_DEFAULTS = EXMAIL_SMTP_DEFAULTS;
 
 export type EmailConfig = {
   smtpHost: string;
@@ -41,9 +45,9 @@ export function normalizeFromEmail(raw: string): string {
 }
 
 export function validateFromEmail(email: string): string | null {
-  if (!email) return "请填写发件 QQ 邮箱";
+  if (!email) return "请填写发件邮箱";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return "发件邮箱格式不正确，请填写完整 QQ 邮箱，例如 544050789@qq.com";
+    return "发件邮箱格式不正确，例如 saber@fanruan.com";
   }
   return null;
 }
@@ -57,8 +61,8 @@ function configFromEnv(): EmailConfig | null {
   const authCode = process.env.SMTP_PASS?.trim();
   if (!fromEmail || !authCode || validateFromEmail(fromEmail)) return null;
   return {
-    smtpHost: process.env.SMTP_HOST?.trim() || QQ_SMTP_DEFAULTS.smtpHost,
-    smtpPort: parseSmtpPort(process.env.SMTP_PORT, QQ_SMTP_DEFAULTS.smtpPort),
+    smtpHost: process.env.SMTP_HOST?.trim() || EXMAIL_SMTP_DEFAULTS.smtpHost,
+    smtpPort: parseSmtpPort(process.env.SMTP_PORT, EXMAIL_SMTP_DEFAULTS.smtpPort),
     smtpSecure: process.env.SMTP_SECURE !== "false",
     fromEmail,
     fromName: process.env.SMTP_FROM_NAME?.trim() || null,
@@ -89,8 +93,8 @@ export async function getEmailConfigForClient(): Promise<EmailConfigForClient> {
     fromEmail: row?.fromEmail?.trim() || process.env.SMTP_USER?.trim() || "",
     fromName: row?.fromName?.trim() || process.env.SMTP_FROM_NAME?.trim() || "",
     authTail: resolved?.authCode ? resolved.authCode.slice(-4) : "",
-    smtpHost: row?.smtpHost || process.env.SMTP_HOST?.trim() || QQ_SMTP_DEFAULTS.smtpHost,
-    smtpPort: row?.smtpPort ?? parseSmtpPort(process.env.SMTP_PORT, QQ_SMTP_DEFAULTS.smtpPort),
+    smtpHost: row?.smtpHost || process.env.SMTP_HOST?.trim() || EXMAIL_SMTP_DEFAULTS.smtpHost,
+    smtpPort: row?.smtpPort ?? parseSmtpPort(process.env.SMTP_PORT, EXMAIL_SMTP_DEFAULTS.smtpPort),
     smtpSecure: row?.smtpSecure ?? process.env.SMTP_SECURE !== "false",
     updatedAt: row?.updatedAt?.toISOString(),
   };

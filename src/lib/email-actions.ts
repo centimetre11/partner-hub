@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSuperAdmin } from "./session";
 import { db } from "./db";
-import { QQ_SMTP_DEFAULTS, normalizeFromEmail, resolveEmailConfig, validateFromEmail, type EmailConfig } from "./email-config";
+import { EXMAIL_SMTP_DEFAULTS, normalizeFromEmail, resolveEmailConfig, validateFromEmail, type EmailConfig } from "./email-config";
 import { sendEmail, testEmailConnection } from "./email";
 
 function clean(raw: FormDataEntryValue | null) {
@@ -13,14 +13,14 @@ function clean(raw: FormDataEntryValue | null) {
 
 function parseSmtpPort(raw: FormDataEntryValue | null) {
   const value = Number.parseInt(String(raw ?? ""), 10);
-  return Number.isFinite(value) && value > 0 ? value : QQ_SMTP_DEFAULTS.smtpPort;
+  return Number.isFinite(value) && value > 0 ? value : EXMAIL_SMTP_DEFAULTS.smtpPort;
 }
 
 async function resolveConfigFromForm(formData: FormData, allowStoredAuth = false): Promise<EmailConfig | null> {
   const fromEmailRaw = clean(formData.get("fromEmail"));
   const fromEmail = fromEmailRaw ? normalizeFromEmail(fromEmailRaw) : null;
   const authCode = clean(formData.get("authCode"));
-  const smtpHost = clean(formData.get("smtpHost")) ?? QQ_SMTP_DEFAULTS.smtpHost;
+  const smtpHost = clean(formData.get("smtpHost")) ?? EXMAIL_SMTP_DEFAULTS.smtpHost;
   const smtpPort = parseSmtpPort(formData.get("smtpPort"));
   const smtpSecure = formData.get("smtpSecure") !== "false";
   const fromName = clean(formData.get("fromName"));
@@ -51,17 +51,17 @@ export async function saveSystemEmailConfigAction(formData: FormData) {
   const fromEmailRaw = clean(formData.get("fromEmail"));
   const fromEmail = fromEmailRaw ? normalizeFromEmail(fromEmailRaw) : null;
   const authCode = clean(formData.get("authCode"));
-  const smtpHost = clean(formData.get("smtpHost")) ?? QQ_SMTP_DEFAULTS.smtpHost;
+  const smtpHost = clean(formData.get("smtpHost")) ?? EXMAIL_SMTP_DEFAULTS.smtpHost;
   const smtpPort = parseSmtpPort(formData.get("smtpPort"));
   const smtpSecure = formData.get("smtpSecure") !== "false";
   const fromName = clean(formData.get("fromName"));
 
-  const emailError = fromEmail ? validateFromEmail(fromEmail) : "请填写发件 QQ 邮箱";
-  if (emailError || !fromEmail) return { error: emailError ?? "请填写发件 QQ 邮箱" };
+  const emailError = fromEmail ? validateFromEmail(fromEmail) : "请填写发件邮箱";
+  if (emailError || !fromEmail) return { error: emailError ?? "请填写发件邮箱" };
 
   const stored = await db.systemEmailConfig.findUnique({ where: { id: "singleton" } });
   const finalAuthCode = authCode || stored?.authCode || process.env.SMTP_PASS?.trim() || null;
-  if (!finalAuthCode) return { error: "请填写 QQ 邮箱 SMTP 授权码" };
+  if (!finalAuthCode) return { error: "请填写 SMTP 客户端授权码" };
 
   await db.systemEmailConfig.upsert({
     where: { id: "singleton" },
@@ -114,8 +114,8 @@ export async function sendTestEmailAction(formData: FormData) {
       {
         to,
         subject: "Partner Hub 邮件服务测试",
-        text: "这是一封测试邮件。若你收到此信，说明 QQ 邮箱 SMTP 已配置成功。",
-        html: "<p>这是一封<strong>测试邮件</strong>。</p><p>若你收到此信，说明 QQ 邮箱 SMTP 已配置成功。</p>",
+        text: "这是一封测试邮件。若你收到此信，说明企业邮箱 SMTP 已配置成功。",
+        html: "<p>这是一封<strong>测试邮件</strong>。</p><p>若你收到此信，说明企业邮箱 SMTP 已配置成功。</p>",
       },
       config,
     );

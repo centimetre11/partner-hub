@@ -42,7 +42,7 @@ export async function testEmailConnection(config: EmailConfig) {
 export async function sendEmail(options: SendEmailOptions, config?: EmailConfig) {
   const resolved = config ?? (await resolveEmailConfig());
   if (!isEmailConfigured(resolved)) {
-    throw new Error("邮箱服务未配置，请在团队设置中填写 QQ 邮箱与授权码");
+    throw new Error("邮箱服务未配置，请在团队设置中填写发件邮箱与 SMTP 授权码");
   }
 
   const transporter = createTransport(resolved);

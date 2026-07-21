@@ -15,6 +15,9 @@ const input =
 export function EmailSetup({ config }: { config: EmailConfigForClient }) {
   const [fromEmail, setFromEmail] = useState(config.fromEmail);
   const [fromName, setFromName] = useState(config.fromName);
+  const [smtpHost, setSmtpHost] = useState(config.smtpHost);
+  const [smtpPort, setSmtpPort] = useState(String(config.smtpPort));
+  const [smtpSecure, setSmtpSecure] = useState(config.smtpSecure);
   const [authCode, setAuthCode] = useState("");
   const [testRecipient, setTestRecipient] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -26,9 +29,9 @@ export function EmailSetup({ config }: { config: EmailConfigForClient }) {
     fd.set("fromEmail", fromEmail.trim());
     fd.set("fromName", fromName.trim());
     if (authCode.trim()) fd.set("authCode", authCode.trim());
-    fd.set("smtpHost", config.smtpHost);
-    fd.set("smtpPort", String(config.smtpPort));
-    fd.set("smtpSecure", config.smtpSecure ? "true" : "false");
+    fd.set("smtpHost", smtpHost.trim() || "smtp.exmail.qq.com");
+    fd.set("smtpPort", smtpPort.trim() || "465");
+    fd.set("smtpSecure", smtpSecure ? "true" : "false");
     if (testRecipient.trim()) fd.set("testRecipient", testRecipient.trim());
     return fd;
   }
@@ -56,7 +59,7 @@ export function EmailSetup({ config }: { config: EmailConfigForClient }) {
   return (
     <div className="space-y-4 text-sm">
       <p className="text-xs text-slate-500 leading-relaxed">
-        使用 QQ 邮箱作为 SMTP 发信服务器，向团队成员或其他邮箱地址发送通知。需在 QQ 邮箱设置中开启 SMTP 并生成授权码。优先级：团队数据库配置 →{" "}
+        使用腾讯企业邮箱（或 QQ 邮箱）SMTP 发信。需在邮箱网页版开启 IMAP/SMTP，并生成客户端专用授权码（不是登录密码）。优先级：团队数据库配置 →{" "}
         <code className="text-xs bg-slate-100 px-1 rounded">SMTP_*</code> 环境变量。
       </p>
 
@@ -68,22 +71,22 @@ export function EmailSetup({ config }: { config: EmailConfigForClient }) {
         </div>
       ) : (
         <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-xs text-amber-800">
-          尚未配置邮件服务。请填写 QQ 邮箱与授权码后保存。
+          尚未配置邮件服务。请填写发件邮箱与客户端授权码后保存。
         </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-1 sm:col-span-2">
-          <span className="text-xs text-slate-500">发件 QQ 邮箱</span>
+          <span className="text-xs text-slate-500">发件邮箱</span>
           <input
             type="text"
             value={fromEmail}
             onChange={(e) => setFromEmail(e.target.value)}
-            placeholder="544050789@qq.com"
+            placeholder="saber@fanruan.com"
             className={input}
             autoComplete="off"
           />
-          <p className="text-xs text-slate-400">可只填 QQ 号，系统会自动补全 @qq.com</p>
+          <p className="text-xs text-slate-400">企业邮填完整地址；个人 QQ 号可只填数字，系统会补 @qq.com</p>
         </label>
         <label className="block space-y-1">
           <span className="text-xs text-slate-500">发件人显示名称（可选）</span>
@@ -100,15 +103,42 @@ export function EmailSetup({ config }: { config: EmailConfigForClient }) {
             type="password"
             value={authCode}
             onChange={(e) => setAuthCode(e.target.value)}
-            placeholder={config.configured ? "留空则保留已保存授权码" : "QQ 邮箱 SMTP 授权码"}
+            placeholder={config.configured ? "留空则保留已保存授权码" : "客户端专用授权码"}
             className={input}
             autoComplete="off"
           />
         </label>
+        <label className="block space-y-1">
+          <span className="text-xs text-slate-500">SMTP 服务器</span>
+          <input
+            value={smtpHost}
+            onChange={(e) => setSmtpHost(e.target.value)}
+            placeholder="smtp.exmail.qq.com"
+            className={input}
+            autoComplete="off"
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs text-slate-500">端口</span>
+          <div className="flex gap-2">
+            <input
+              value={smtpPort}
+              onChange={(e) => setSmtpPort(e.target.value)}
+              placeholder="465"
+              className={input}
+              autoComplete="off"
+            />
+            <label className="flex items-center gap-1.5 shrink-0 text-xs text-slate-600 px-1">
+              <input type="checkbox" checked={smtpSecure} onChange={(e) => setSmtpSecure(e.target.checked)} />
+              SSL
+            </label>
+          </div>
+        </label>
       </div>
 
       <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2 text-xs text-slate-500">
-        SMTP：{config.smtpHost}:{config.smtpPort} · {config.smtpSecure ? "SSL" : "STARTTLS"}
+        企业邮默认：smtp.exmail.qq.com:465 · SSL · 当前将使用 {smtpHost || "smtp.exmail.qq.com"}:
+        {smtpPort || "465"} · {smtpSecure ? "SSL" : "STARTTLS"}
       </div>
 
       <div className="flex flex-wrap gap-2">
