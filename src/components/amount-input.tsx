@@ -137,25 +137,11 @@ export function AmountInput({
         : ""));
 
   return (
-    <div className={className ?? "flex gap-1.5 min-w-0 items-stretch"}>
+    <div className={className ?? "grid grid-cols-[minmax(0,1fr)_4.75rem] gap-1.5 w-full min-w-0"}>
       <input type="hidden" name={nameAmount} value={submitAmount} readOnly />
       {submitPreserve ? (
         <input type="hidden" name="amountPreserve" value={submitPreserve} readOnly />
       ) : null}
-      <select
-        name={nameCurrency}
-        disabled={disabled}
-        aria-label={currencyAriaLabel}
-        value={currencyValue}
-        onChange={(e) => setCurrency(currencyForInput(e.target.value))}
-        className={`${inputClassName} w-[4.75rem] shrink-0`}
-      >
-        {AMOUNT_CURRENCIES.map((code) => (
-          <option key={code} value={code}>
-            {code}
-          </option>
-        ))}
-      </select>
       <input
         id={amountId}
         type="text"
@@ -168,8 +154,22 @@ export function AmountInput({
         onFocus={handleFocus}
         onBlur={handleBlur}
         onChange={handleChange}
-        className={`${inputClassName} flex-1 min-w-0 tabular-nums`}
+        className={`${inputClassName} w-full min-w-0 tabular-nums`}
       />
+      <select
+        name={nameCurrency}
+        disabled={disabled}
+        aria-label={currencyAriaLabel}
+        value={currencyValue}
+        onChange={(e) => setCurrency(currencyForInput(e.target.value))}
+        className={`${inputClassName} w-full shrink-0`}
+      >
+        {AMOUNT_CURRENCIES.map((code) => (
+          <option key={code} value={code}>
+            {code}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

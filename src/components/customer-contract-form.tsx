@@ -340,7 +340,7 @@ export function CustomerContractForm({
           </option>
         ))}
       </select>
-      <label className="block min-w-0 space-y-1">
+      <label className="block min-w-0 space-y-1 md:col-span-1">
         <span className="text-[11px] text-slate-500">{copy.amount}</span>
         <AmountInput
           inputClassName={inputClassName}
