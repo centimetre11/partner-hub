@@ -8,7 +8,7 @@ import {
   ARR_CONTRACT_TYPES,
   contractArrAmount,
   emptyArrBreakdown,
-  formatArrNumber,
+  formatArrUsd,
   isActiveArrContract,
   latestServiceDateFromContracts,
   sumArrBreakdown,
@@ -47,6 +47,7 @@ export default async function ArrPage() {
       status: "ACTIVE",
     },
     include: {
+      lineItems: { select: { amount: true, currency: true, cycleYears: true } },
       customer: {
         select: {
           id: true,
@@ -160,20 +161,20 @@ export default async function ArrPage() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label={t.statTotalArr} value={formatArrNumber(breakdown.total)} tone="text-emerald-700" />
+          <Stat label={t.statTotalArr} value={formatArrUsd(breakdown.total)} tone="text-emerald-700" />
           <Stat
             label={t.statSubscription}
-            value={formatArrNumber(breakdown.subscription)}
+            value={formatArrUsd(breakdown.subscription)}
             tone="text-sky-700"
           />
           <Stat
             label={t.statProductMaint}
-            value={formatArrNumber(breakdown.productMaintenance)}
+            value={formatArrUsd(breakdown.productMaintenance)}
             tone="text-amber-700"
           />
           <Stat
             label={t.statProjectMaint}
-            value={formatArrNumber(breakdown.projectMaintenance)}
+            value={formatArrUsd(breakdown.projectMaintenance)}
             tone="text-violet-700"
           />
         </div>
@@ -202,7 +203,7 @@ export default async function ArrPage() {
                       />
                     </div>
                     <div className="w-24 text-right text-xs tabular-nums text-slate-600 shrink-0">
-                      {formatArrNumber(o.total)}
+                      {formatArrUsd(o.total)}
                     </div>
                     <div className="w-12 text-right text-[11px] text-slate-400 shrink-0">
                       {o.customers}
@@ -277,16 +278,16 @@ export default async function ArrPage() {
                       </td>
                       <td className="py-2.5 px-2 text-slate-600">{row.ownerName ?? "—"}</td>
                       <td className="py-2.5 px-2 text-right tabular-nums text-sky-700">
-                        {row.subscription ? formatArrNumber(row.subscription) : "—"}
+                        {row.subscription ? formatArrUsd(row.subscription) : "—"}
                       </td>
                       <td className="py-2.5 px-2 text-right tabular-nums text-amber-700">
-                        {row.productMaintenance ? formatArrNumber(row.productMaintenance) : "—"}
+                        {row.productMaintenance ? formatArrUsd(row.productMaintenance) : "—"}
                       </td>
                       <td className="py-2.5 px-2 text-right tabular-nums text-violet-700">
-                        {row.projectMaintenance ? formatArrNumber(row.projectMaintenance) : "—"}
+                        {row.projectMaintenance ? formatArrUsd(row.projectMaintenance) : "—"}
                       </td>
                       <td className="py-2.5 px-2 text-right tabular-nums font-medium text-emerald-700">
-                        {formatArrNumber(row.total)}
+                        {formatArrUsd(row.total)}
                       </td>
                       <td className="py-2.5 pl-2 text-slate-500 whitespace-nowrap">
                         {fmtDate(row.latestService, bcp47)}

@@ -35,6 +35,7 @@ export default async function ArrCalendarPage({
       status: "ACTIVE",
     },
     include: {
+      lineItems: { select: { amount: true, currency: true, cycleYears: true } },
       customer: {
         select: {
           id: true,

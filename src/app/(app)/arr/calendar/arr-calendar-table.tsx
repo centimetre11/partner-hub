@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { monthLabel } from "@/lib/arr-calendar-types";
+import { formatArrUsd } from "@/lib/arr";
 import {
   upsertArrCalendarCellAction,
   upsertArrCustomerProfileAction,
@@ -54,7 +55,7 @@ type Copy = {
 };
 
 function formatArr(n: number) {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return formatArrUsd(n);
 }
 
 export function ArrCalendarTable({

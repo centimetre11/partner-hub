@@ -1,6 +1,7 @@
 /**
  * ARR (Annual Recurring Revenue) helpers.
  * Counts: product subscription, product maintenance, project maintenance.
+ * All totals are converted to USD for reporting.
  */
 
 import {
@@ -12,6 +13,7 @@ import {
   normalizeContractType,
   parseContractAmountNumber,
 } from "@/lib/contract-types";
+import { toArrUsd } from "@/lib/arr-fx";
 
 /** Contract types that contribute to ARR. */
 export const ARR_CONTRACT_TYPES = [
@@ -28,7 +30,7 @@ export function isArrContractType(type: string | null | undefined): type is ArrC
   return !!code && ARR_TYPE_SET.has(code);
 }
 
-/** Convert a contract amount + billing cycle into annualized value. */
+/** Convert a contract amount + billing cycle into annualized value (native currency). */
 export function annualizeContractAmount(
   amount: string | number | null | undefined,
   billingCycle: string | null | undefined
@@ -44,22 +46,29 @@ export function annualizeContractAmount(
     case "YEARLY":
     case "OTHER":
     default:
-      // Maintenance contracts without cycle are treated as yearly.
       return n;
   }
 }
+
+export type ArrLineItemInput = {
+  amount?: string | null;
+  currency?: string | null;
+  cycleYears?: number | null;
+};
 
 export type ArrContractInput = {
   id: string;
   contractType: string;
   status: string;
   amount: string | null;
+  currency?: string | null;
   billingCycle: string | null;
   endDate: Date | string | null;
   renewsAt?: Date | string | null;
   startDate?: Date | string | null;
   name?: string;
   customerId?: string;
+  lineItems?: ArrLineItemInput[] | null;
 };
 
 /** Whether a contract currently counts toward ARR. */
@@ -70,9 +79,31 @@ export function isActiveArrContract(ct: ArrContractInput): boolean {
   return true;
 }
 
+/**
+ * ARR contribution in USD.
+ * Prefers header amount; if empty, sums line items (amount / cycleYears).
+ */
 export function contractArrAmount(ct: ArrContractInput): number {
   if (!isActiveArrContract(ct)) return 0;
-  return annualizeContractAmount(ct.amount, ct.billingCycle);
+
+  const header = parseContractAmountNumber(ct.amount);
+  if (header != null && header > 0) {
+    const annual = annualizeContractAmount(header, ct.billingCycle);
+    return toArrUsd(annual, ct.currency);
+  }
+
+  const lines = ct.lineItems ?? [];
+  if (!lines.length) return 0;
+
+  let usd = 0;
+  for (const li of lines) {
+    const raw = parseContractAmountNumber(li.amount);
+    if (raw == null || raw <= 0) continue;
+    const years = li.cycleYears && li.cycleYears > 0 ? li.cycleYears : 1;
+    const annual = annualizeContractAmount(raw / years, ct.billingCycle);
+    usd += toArrUsd(annual, li.currency ?? ct.currency);
+  }
+  return usd;
 }
 
 export type ArrBreakdown = {
@@ -128,6 +159,11 @@ export function formatArrNumber(n: number, digits = 2): string {
     minimumFractionDigits: Number.isInteger(rounded) ? 0 : Math.min(digits, 2),
     maximumFractionDigits: digits,
   });
+}
+
+/** Format ARR in USD, e.g. $110,527 */
+export function formatArrUsd(n: number, digits = 2): string {
+  return `$${formatArrNumber(n, digits)}`;
 }
 
 export function arrTypeBucket(type: string | null | undefined): keyof Omit<ArrBreakdown, "total"> | null {
