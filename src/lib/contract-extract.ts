@@ -1,6 +1,7 @@
 import "server-only";
 
 import { AIError, chatCompletion, type ChatImage, type ChatMessage } from "./ai";
+import { maxTokensForTaskTier, maxTokensForVisionIntake } from "./ai-capabilities";
 import { normalizeMessagesForAi } from "./ai-images-server";
 import type { Locale } from "./i18n/locale";
 import {
@@ -21,7 +22,8 @@ export type ContractExtractContext = {
   customerNameHint?: string | null;
 };
 
-const CONTRACT_EXTRACT_MAX_TOKENS = 2048;
+/** Text JSON structuring (after OCR). Vision one-shot fallback uses maxTokensForVisionIntake. */
+const CONTRACT_EXTRACT_TEXT_MAX_TOKENS = 2048;
 
 function buildPrompt(ctx: ContractExtractContext, source: "image" | "text"): string {
   const { locale, customerNameHint } = ctx;
@@ -224,11 +226,54 @@ export function normalizeContractExtractResult(raw: Record<string, unknown>): Co
   return result;
 }
 
+/** OCR only — vision models are much faster/reliable dumping plain text than emitting JSON. */
+async function ocrContractScreenshot(
+  images: ChatImage[],
+  ctx: ContractExtractContext
+): Promise<string | null> {
+  const prompt =
+    ctx.locale === "zh"
+      ? `请完整读取帆软 CRM 截图中所有可见字段文字（机会详情或合同详情均可）。
+逐行列出标签与取值，例如：合同名称、公司名称、最终用户、产品金额、合同id、文件编号、签单日期、结束日期、责任销售、合同销售、合同状态、合同类型、预计采购方式、预计总金额、机会ID、产品明细表等。
+只输出图片中看得见的文字，不要编造，不要输出 JSON。`
+      : `Read all visible FanRuan CRM fields in the screenshot (opportunity or contract detail).
+List each label and value (name, company, amount, contract id, dates, sales, status, type, product table, etc.).
+Only visible text — do not invent, do not output JSON.`;
+
+  try {
+    const chat: ChatMessage[] = [{ role: "user", content: prompt, images }];
+    normalizeMessagesForAi(chat);
+    const { content } = await chatCompletion(chat, {
+      jsonMode: false,
+      temperature: 0.1,
+      feature: "Contract: vision OCR",
+      userId: ctx.userId,
+      scene: "vision",
+      maxTokens: maxTokensForVisionIntake(),
+      toolChoice: "none",
+    });
+    return content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function extractContractFromImages(
   images: ChatImage[],
   ctx: ContractExtractContext
 ): Promise<ContractExtractResult> {
   if (!images.length) throw new AIError(ctx.locale === "zh" ? "请上传截图" : "Please upload a screenshot");
+
+  // Preferred path: OCR (vision) → structure (fast text). Avoids slow/empty vision+JSON.
+  const ocr = await ocrContractScreenshot(images, ctx);
+  if (ocr && ocr.length >= 20) {
+    try {
+      return await extractContractFromText(ocr, ctx, "ocr");
+    } catch (e) {
+      if (!(e instanceof AIError)) throw e;
+      // Fall through to one-shot vision JSON
+    }
+  }
 
   const system = buildPrompt(ctx, "image");
   const userMsg: ChatMessage = {
@@ -244,7 +289,9 @@ export async function extractContractFromImages(
 
 export async function extractContractFromText(
   text: string,
-  ctx: ContractExtractContext
+  ctx: ContractExtractContext,
+  /** Internal: text came from OCR of a screenshot */
+  via: "text" | "ocr" = "text"
 ): Promise<ContractExtractResult> {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -252,21 +299,27 @@ export async function extractContractFromText(
   }
 
   const system = buildPrompt(ctx, "text");
+  const prefix =
+    via === "ocr"
+      ? ctx.locale === "zh"
+        ? "以下是从 CRM 截图 OCR 得到的文字，请提取合同信息并输出 JSON：\n\n"
+        : "OCR text from a CRM screenshot. Extract contract info as JSON:\n\n"
+      : ctx.locale === "zh"
+        ? "请从以下合同/CRM 文字中提取信息并输出 JSON：\n\n"
+        : "Extract contract info from the following text and output JSON:\n\n";
+
   const userMsg: ChatMessage = {
     role: "user",
-    content:
-      ctx.locale === "zh"
-        ? `请从以下合同/CRM 文字中提取信息并输出 JSON：\n\n${trimmed}`
-        : `Extract contract info from the following text and output JSON:\n\n${trimmed}`,
+    content: `${prefix}${trimmed}`,
   };
-  return runContractExtractChat(system, userMsg, ctx, "text");
+  return runContractExtractChat(system, userMsg, ctx, via === "ocr" ? "ocr" : "text");
 }
 
 async function runContractExtractChat(
   system: string,
   userMsg: ChatMessage,
   ctx: ContractExtractContext,
-  source: "image" | "text"
+  source: "image" | "text" | "ocr"
 ): Promise<ContractExtractResult> {
   const chat: ChatMessage[] = [
     { role: "system", content: system },
@@ -274,12 +327,22 @@ async function runContractExtractChat(
   ];
   normalizeMessagesForAi(chat);
 
+  const isVision = source === "image";
   const { content } = await chatCompletion(chat, {
     jsonMode: true,
     temperature: 0,
-    feature: source === "image" ? "Contract: extract screenshot" : "Contract: extract text",
+    feature:
+      source === "image"
+        ? "Contract: extract screenshot"
+        : source === "ocr"
+          ? "Contract: extract from OCR"
+          : "Contract: extract text",
     userId: ctx.userId,
-    maxTokens: CONTRACT_EXTRACT_MAX_TOKENS,
+    maxTokens: isVision
+      ? maxTokensForVisionIntake()
+      : maxTokensForTaskTier("fast") ?? CONTRACT_EXTRACT_TEXT_MAX_TOKENS,
+    taskTier: isVision ? undefined : "fast",
+    scene: isVision ? "vision" : "fast",
     toolChoice: "none",
   });
 
@@ -287,12 +350,13 @@ async function runContractExtractChat(
   const result = normalizeContractExtractResult(parsed);
 
   if (!hasUsefulContractExtract(result)) {
+    const imageLike = source === "image" || source === "ocr";
     throw new AIError(
       ctx.locale === "zh"
-        ? source === "image"
+        ? imageLike
           ? "未能从截图识别到合同信息。请确认截图含名称/金额/产品等清晰文字，并在「设置 → 场景模型 → 图片识别」配置视觉模型。"
           : "未能从文字识别到合同信息。请补充合同名称、金额或产品明细后再试。"
-        : source === "image"
+        : imageLike
           ? "Could not extract contract info from the screenshot. Ensure readable name/amount/product text, and assign a vision model under Settings → Scene models → Vision."
           : "Could not extract contract info from the text. Add name, amount, or line items and try again."
     );

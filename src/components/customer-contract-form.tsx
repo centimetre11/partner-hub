@@ -86,6 +86,7 @@ export type ContractFormCopy = {
   aiExtractOrText: string;
   aiExtractTextPlaceholder: string;
   aiExtractGatewayError: string;
+  aiExtractTimeout: string;
   amount: string;
   note: string;
   save: string;

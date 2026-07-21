@@ -20,6 +20,7 @@ export type ContractAiExtractCopy = {
   aiExtractOrText: string;
   aiExtractTextPlaceholder: string;
   aiExtractGatewayError?: string;
+  aiExtractTimeout?: string;
 };
 
 function imageFilesFromClipboard(data: DataTransfer | null): File[] {
@@ -121,10 +122,10 @@ export function ContractAiExtract({
         customerNameHint: customerNameHint ?? "",
       };
       if (source === "image" && pendingFile) {
-        // Keep payload small — large screenshots previously crashed the Node upstream (nginx 502 HTML).
+        // Aggressive compress — CRM screenshots are dense; smaller = faster vision OCR.
         payload.images = await prepareChatImagesFromFiles([pendingFile], {
-          maxSide: 896,
-          quality: 0.72,
+          maxSide: 768,
+          quality: 0.65,
         });
       } else {
         payload.text = text.trim();
@@ -134,6 +135,7 @@ export function ContractAiExtract({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(110_000),
       });
       const raw = await res.text();
       let data: { ok?: boolean; result?: ContractExtractResult; error?: string } = {};
@@ -160,7 +162,15 @@ export function ContractAiExtract({
       setPreview(null);
       setText("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : copy.aiExtractFailed);
+      const aborted =
+        e instanceof DOMException && (e.name === "TimeoutError" || e.name === "AbortError");
+      setError(
+        aborted
+          ? copy.aiExtractTimeout || copy.aiExtractFailed
+          : e instanceof Error
+            ? e.message
+            : copy.aiExtractFailed
+      );
     } finally {
       setExtracting(false);
       busyRef.current = false;

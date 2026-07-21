@@ -145,6 +145,7 @@ export default async function ContractDetailPage({
     aiExtractOrText: c.aiExtractOrText,
     aiExtractTextPlaceholder: c.aiExtractTextPlaceholder,
     aiExtractGatewayError: c.aiExtractGatewayError,
+    aiExtractTimeout: c.aiExtractTimeout,
     amount: m.common.amount,
     note: m.common.note,
     save: m.common.save,
