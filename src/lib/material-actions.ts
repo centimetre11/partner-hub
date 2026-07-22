@@ -16,6 +16,7 @@ import {
 } from "./ammo-config";
 import { getUploaderAccessToken } from "./google-oauth";
 import { saveLinkAsset } from "./link-assets";
+import { withActionTracking } from "./tracking/with-action-tracking";
 
 type EntityTarget = { partnerId?: string | null; customerId?: string | null };
 
@@ -38,27 +39,35 @@ function cleanFolderUrl(raw: FormDataEntryValue | null): string | null {
   return url || null;
 }
 
-export async function setPartnerGdriveFolderAction(partnerId: string, formData: FormData) {
-  await requireUser();
-  const gdriveFolderUrl = cleanFolderUrl(formData.get("gdriveFolderUrl"));
-  if (gdriveFolderUrl && !parseGdriveFolderId(gdriveFolderUrl)) {
-    return { ok: false as const, error: "Invalid Google Drive folder URL" };
-  }
-  await db.partner.update({ where: { id: partnerId }, data: { gdriveFolderUrl } });
-  revalidatePath(`/partners/${partnerId}`);
-  return { ok: true as const };
-}
+export const setPartnerGdriveFolderAction = withActionTracking(
+  "material.set_partner_gdrive_folder",
+  async (partnerId: string, formData: FormData) => {
+    await requireUser();
+    const gdriveFolderUrl = cleanFolderUrl(formData.get("gdriveFolderUrl"));
+    if (gdriveFolderUrl && !parseGdriveFolderId(gdriveFolderUrl)) {
+      return { ok: false as const, error: "Invalid Google Drive folder URL" };
+    }
+    await db.partner.update({ where: { id: partnerId }, data: { gdriveFolderUrl } });
+    revalidatePath(`/partners/${partnerId}`);
+    return { ok: true as const };
+  },
+  { targetType: "Partner", extractTargetId: (args) => args[0] }
+);
 
-export async function setCustomerGdriveFolderAction(customerId: string, formData: FormData) {
-  await requireUser();
-  const gdriveFolderUrl = cleanFolderUrl(formData.get("gdriveFolderUrl"));
-  if (gdriveFolderUrl && !parseGdriveFolderId(gdriveFolderUrl)) {
-    return { ok: false as const, error: "Invalid Google Drive folder URL" };
-  }
-  await db.customer.update({ where: { id: customerId }, data: { gdriveFolderUrl } });
-  revalidatePath(`/customers/${customerId}`);
-  return { ok: true as const };
-}
+export const setCustomerGdriveFolderAction = withActionTracking(
+  "material.set_customer_gdrive_folder",
+  async (customerId: string, formData: FormData) => {
+    await requireUser();
+    const gdriveFolderUrl = cleanFolderUrl(formData.get("gdriveFolderUrl"));
+    if (gdriveFolderUrl && !parseGdriveFolderId(gdriveFolderUrl)) {
+      return { ok: false as const, error: "Invalid Google Drive folder URL" };
+    }
+    await db.customer.update({ where: { id: customerId }, data: { gdriveFolderUrl } });
+    revalidatePath(`/customers/${customerId}`);
+    return { ok: true as const };
+  },
+  { targetType: "Customer", extractTargetId: (args) => args[0] }
+);
 
 export type MaterialFolderItem = { id: string; name: string; url: string; suggested: boolean };
 

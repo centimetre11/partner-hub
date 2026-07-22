@@ -31,6 +31,7 @@ model User {
   aiTokenUsages AiTokenUsage[]
   aiConversationLogs AiConversationLog[]
   systemEventLogs SystemEventLog[] @relation("SystemEventActor")
+  userBehaviorLogs UserBehaviorLog[] @relation("UserBehaviorActor")
   kmsCredential UserKmsCredential?
   googleMeetCredential UserGoogleMeetCredential?
   businessRecords BusinessRecord[]
@@ -1163,6 +1164,7 @@ model AiConversationLog {
 // 系统事件埋点（登录、建档、同步、配置变更等）
 model SystemEventLog {
   id          String   @id @default(cuid())
+  project     String   @default("partner-hub")
   category    String
   action      String
   actorId     String?
@@ -1174,13 +1176,44 @@ model SystemEventLog {
   summary     String?
   detail      String?
   meta        String?
+  ipHash      String?
+  durationMs  Int?
   status      String   @default("SUCCESS")
   createdAt   DateTime @default(now())
 
   @@index([createdAt])
+  @@index([project, createdAt])
   @@index([category, createdAt])
   @@index([action, createdAt])
   @@index([actorId, createdAt])
+}
+
+// 用户行为埋点（页面访问、点击、搜索、表单、停留时长、客户端错误等）
+model UserBehaviorLog {
+  id          String   @id @default(cuid())
+  project     String   @default("partner-hub")
+  userId      String?
+  user        User?    @relation("UserBehaviorActor", fields: [userId], references: [id], onDelete: SetNull)
+  sessionId   String?
+  eventType   String
+  action      String
+  pagePath    String?
+  targetType  String?
+  targetId    String?
+  targetLabel String?
+  meta        String?
+  ipHash      String?
+  durationMs  Int?
+  status      String   @default("SUCCESS")
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([project, createdAt])
+  @@index([eventType, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([pagePath, createdAt])
+  @@index([sessionId, createdAt])
 }
 
 // CRM 数据同步日志

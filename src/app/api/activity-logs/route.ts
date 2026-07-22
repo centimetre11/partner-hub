@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
   getActivityLogTotals,
+  getUserBehaviorTotals,
   queryAiConversationLogs,
   querySystemEventLogs,
+  queryUserBehaviorLogs,
 } from "@/lib/activity-log";
 import { requireSuperAdmin } from "@/lib/session";
 
@@ -18,6 +20,39 @@ export async function GET(req: Request) {
   if (type === "totals") {
     const totals = await getActivityLogTotals();
     return NextResponse.json(totals);
+  }
+
+  if (type === "behavior_totals") {
+    const totals = await getUserBehaviorTotals();
+    return NextResponse.json(totals);
+  }
+
+  if (type === "behavior") {
+    const eventType = url.searchParams.get("eventType") ?? "ALL";
+    const action = url.searchParams.get("action") ?? "";
+    const pagePath = url.searchParams.get("pagePath") ?? "";
+    const project = url.searchParams.get("project") ?? "ALL";
+    const result = await queryUserBehaviorLogs(page, { eventType, action, pagePath, search, project });
+    return NextResponse.json({
+      items: result.items.map((row) => ({
+        id: row.id,
+        project: row.project,
+        eventType: row.eventType,
+        action: row.action,
+        pagePath: row.pagePath,
+        targetType: row.targetType,
+        targetId: row.targetId,
+        targetLabel: row.targetLabel,
+        status: row.status,
+        durationMs: row.durationMs,
+        createdAt: row.createdAt.toISOString(),
+        user: row.user,
+      })),
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      totalPages: result.totalPages,
+    });
   }
 
   if (type === "system") {

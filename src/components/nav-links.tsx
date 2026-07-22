@@ -84,6 +84,9 @@ export function NavLinks({
       ? [{ href: "/inbox" as const, label: m.nav.inbox, icon: "✉", badge: "unread" as const }]
       : []),
     { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge", "/automations"] },
+    ...(showTeamSettings
+      ? [{ href: "/analytics" as const, label: "行为分析", icon: "◧" }]
+      : []),
     { href: "/settings", label: m.nav.teamSettings, icon: "⚙" },
   ];
 

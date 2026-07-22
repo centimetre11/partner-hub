@@ -10,6 +10,7 @@ import { getLocale } from "./i18n/locale-server";
 import type { AgentBuilderDraft } from "./agent-builder";
 import { createAgentFromDraft } from "./agent-create";
 import type { AgentFieldProposal } from "./skills";
+import { withActionTracking } from "./tracking/with-action-tracking";
 
 // ============ Agent CRUD ============
 
@@ -83,19 +84,23 @@ export async function deleteAgentAction(agentId: string) {
   redirect("/agents");
 }
 
-export async function toggleAgentAction(agentId: string) {
-  await requireUser();
-  const a = await db.agent.findUniqueOrThrow({ where: { id: agentId } });
-  await db.agent.update({
-    where: { id: agentId },
-    data: {
-      enabled: !a.enabled,
-      nextRunAt: !a.enabled && a.trigger === "SCHEDULE" ? computeNextRunAt(a) : a.nextRunAt,
-    },
-  });
-  revalidatePath("/agents");
-  revalidatePath(`/agents/${agentId}`);
-}
+export const toggleAgentAction = withActionTracking(
+  "agent.toggle",
+  async (agentId: string) => {
+    await requireUser();
+    const a = await db.agent.findUniqueOrThrow({ where: { id: agentId } });
+    await db.agent.update({
+      where: { id: agentId },
+      data: {
+        enabled: !a.enabled,
+        nextRunAt: !a.enabled && a.trigger === "SCHEDULE" ? computeNextRunAt(a) : a.nextRunAt,
+      },
+    });
+    revalidatePath("/agents");
+    revalidatePath(`/agents/${agentId}`);
+  },
+  { targetType: "Agent", extractTargetId: (args) => args[0] }
+);
 
 // 从模板或共享 Agent 克隆一个自己的
 export async function cloneAgentAction(sourceId: string) {

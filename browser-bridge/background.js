@@ -210,3 +210,53 @@ function arrayBufferToBase64(buf) {
   }
   return btoa(binary);
 }
+
+// ===== 埋点 =====
+const TRACKING_BUFFER = [];
+const TRACKING_FLUSH_SIZE = 10;
+const TRACKING_FLUSH_INTERVAL = 5000;
+const TRACKING_ENDPOINT = "http://localhost:3000/api/tracking/beacon";
+const TRACKING_SESSION_ID = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+function trackBrowserBridgeEvent(event) {
+  TRACKING_BUFFER.push({
+    project: "browser-bridge",
+    eventType: event.eventType || "CLICK",
+    action: event.action || "unknown",
+    pagePath: event.pagePath || null,
+    targetType: event.targetType || null,
+    targetId: event.targetId || null,
+    targetLabel: event.targetLabel || null,
+    meta: event.meta || null,
+    durationMs: event.durationMs || null,
+    status: event.status || "SUCCESS",
+  });
+  if (TRACKING_BUFFER.length >= TRACKING_FLUSH_SIZE) {
+    flushTracking();
+  }
+}
+
+async function flushTracking() {
+  if (TRACKING_BUFFER.length === 0) return;
+  const batch = TRACKING_BUFFER.splice(0, TRACKING_BUFFER.length);
+  try {
+    await fetch(TRACKING_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ events: batch, sessionId: TRACKING_SESSION_ID }),
+    });
+  } catch (err) {
+    console.error("[browser-bridge tracking] failed:", err);
+  }
+}
+
+setInterval(flushTracking, TRACKING_FLUSH_INTERVAL);
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "track") {
+    trackBrowserBridgeEvent(message.event || {});
+    sendResponse({ ok: true });
+    return false;
+  }
+  return false;
+});

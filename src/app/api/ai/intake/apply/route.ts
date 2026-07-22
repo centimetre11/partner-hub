@@ -3,8 +3,9 @@ import { revalidatePath } from "next/cache";
 import { getSessionUserId } from "@/lib/session";
 import { applyIntake, type IntakeScope, type IntakeProposal } from "@/lib/ai-intake";
 import { getLocale } from "@/lib/i18n/locale-server";
+import { withApiTracking } from "@/lib/tracking/with-api-tracking";
 
-export async function POST(req: NextRequest) {
+export const POST = withApiTracking("api.ai.intake.apply", async (req: NextRequest) => {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "Not signed in" }, { status: 401 });
 
@@ -35,4 +36,4 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: `Failed to save: ${e instanceof Error ? e.message : e}` }, { status: 500 });
   }
-}
+});
