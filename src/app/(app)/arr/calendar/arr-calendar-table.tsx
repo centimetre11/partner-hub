@@ -54,8 +54,63 @@ type Copy = {
   legacyTodoHint: string;
 };
 
+type SortKey = "customerName" | "arr" | "latestService" | "ownerName";
+type SortDir = "asc" | "desc";
+
 function formatArr(n: number) {
   return formatArrUsd(n);
+}
+
+function compareRows(a: CalendarRowData, b: CalendarRowData, key: SortKey, dir: SortDir): number {
+  const mul = dir === "asc" ? 1 : -1;
+  if (key === "arr") {
+    return (a.arr - b.arr) * mul;
+  }
+  if (key === "latestService") {
+    const av = a.latestService || "";
+    const bv = b.latestService || "";
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+    return av.localeCompare(bv) * mul;
+  }
+  if (key === "ownerName") {
+    return (a.ownerName || "").localeCompare(b.ownerName || "", "zh") * mul;
+  }
+  return a.customerName.localeCompare(b.customerName, "zh") * mul;
+}
+
+function SortableTh({
+  label,
+  active,
+  dir,
+  align = "left",
+  className = "",
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  align?: "left" | "right";
+  className?: string;
+  onClick: () => void;
+}) {
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex items-center gap-1 max-w-full font-medium hover:text-slate-800 ${
+          align === "right" ? "w-full justify-end" : ""
+        } ${active ? "text-slate-800" : "text-slate-500"}`}
+      >
+        <span className="leading-snug">{label}</span>
+        <span className="text-[10px] tabular-nums text-slate-400 shrink-0" aria-hidden>
+          {active ? (dir === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
 }
 
 export function ArrCalendarTable({
@@ -83,6 +138,8 @@ export function ArrCalendarTable({
 }) {
   const [rows, setRows] = useState(initialRows);
   const [pending, startTransition] = useTransition();
+  const [sortKey, setSortKey] = useState<SortKey>("arr");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [editing, setEditing] = useState<{
     customerId: string;
     month: number;
@@ -101,6 +158,22 @@ export function ArrCalendarTable({
     () => months.map((m) => ({ month: m, label: monthLabel(m, locale) })),
     [months, locale]
   );
+
+  const sortedRows = useMemo(
+    () => [...rows].sort((a, b) => compareRows(a, b, sortKey, sortDir)),
+    [rows, sortKey, sortDir]
+  );
+
+  const toggleSort = useCallback((key: SortKey) => {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setSortDir(key === "arr" || key === "latestService" ? "desc" : "asc");
+      return key;
+    });
+  }, []);
 
   const saveCell = useCallback(() => {
     if (!editing) return;
@@ -152,18 +225,35 @@ export function ArrCalendarTable({
         <table className="w-full text-sm border-collapse min-w-[1200px]">
           <thead>
             <tr className="bg-slate-50/80 text-left text-xs text-slate-500">
-              <th className="sticky left-0 z-20 bg-slate-50 px-3 py-2.5 font-medium min-w-[160px] border-b border-r border-slate-200">
-                {copy.colCustomer}
-              </th>
-              <th className="px-2 py-2.5 font-medium min-w-[72px] border-b border-slate-200 text-right">
-                {copy.colArr}
-              </th>
-              <th className="px-2 py-2.5 font-medium min-w-[100px] border-b border-slate-200">
-                {copy.colLatestService}
-              </th>
-              <th className="px-2 py-2.5 font-medium min-w-[100px] border-b border-slate-200">
-                {copy.colOwner}
-              </th>
+              <SortableTh
+                label={copy.colCustomer}
+                active={sortKey === "customerName"}
+                dir={sortDir}
+                onClick={() => toggleSort("customerName")}
+                className="sticky left-0 z-20 bg-slate-50 px-3 py-2.5 min-w-[160px] border-b border-r border-slate-200"
+              />
+              <SortableTh
+                label={copy.colArr}
+                active={sortKey === "arr"}
+                dir={sortDir}
+                align="right"
+                onClick={() => toggleSort("arr")}
+                className="px-2 py-2.5 min-w-[72px] border-b border-slate-200 text-right"
+              />
+              <SortableTh
+                label={copy.colLatestService}
+                active={sortKey === "latestService"}
+                dir={sortDir}
+                onClick={() => toggleSort("latestService")}
+                className="px-2 py-2.5 min-w-[100px] border-b border-slate-200"
+              />
+              <SortableTh
+                label={copy.colOwner}
+                active={sortKey === "ownerName"}
+                dir={sortDir}
+                onClick={() => toggleSort("ownerName")}
+                className="px-2 py-2.5 min-w-[100px] border-b border-slate-200"
+              />
               <th className="px-2 py-2.5 font-medium min-w-[180px] border-b border-slate-200">
                 {copy.colNotes}
               </th>
@@ -181,7 +271,7 @@ export function ArrCalendarTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {sortedRows.map((row) => (
               <tr key={row.customerId} className="align-top border-b border-slate-100 hover:bg-slate-50/40">
                 <td className="sticky left-0 z-10 bg-white px-3 py-2 border-r border-slate-100">
                   <Link
