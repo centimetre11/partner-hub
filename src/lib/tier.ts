@@ -71,6 +71,23 @@ export function resolveCustomerTier(customer: {
   return normalizePartnerTier(customer.tier) ?? tierFromLegacyIcp(customer.icpTier);
 }
 
+/** Tier A/B 进主列表；C 与未分级进折叠区（服务端/客户端均可调用） */
+export function splitByTierFocus<T>(
+  items: T[],
+  getTier: (item: T) => string | null | undefined,
+): { primary: T[]; folded: T[] } {
+  const primary: T[] = [];
+  const folded: T[] = [];
+  for (const item of items) {
+    const t = String(getTier(item) ?? "")
+      .trim()
+      .toUpperCase();
+    if (t === "A" || t === "B") primary.push(item);
+    else folded.push(item);
+  }
+  return { primary, folded };
+}
+
 export function formatTierLabel(tier: PartnerTier | string): string {
   const normalized = normalizePartnerTier(tier);
   return normalized ? `Tier ${normalized}` : "";

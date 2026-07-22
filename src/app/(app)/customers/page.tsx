@@ -12,8 +12,8 @@ import { getTaxonomyOptionsMany, loadTaxonomyLabelMaps, labelFromMap } from "@/l
 import { classifyCustomers, type CustomerBucketMeta, type GrowthProbability } from "@/lib/customer-bucket";
 import { toArrContractInput } from "@/lib/arr";
 import { OPEN_OPPORTUNITY_STATUSES, opportunityStatusLabel } from "@/lib/opportunity-status";
-import { PARTNER_TIERS, resolveCustomerTier } from "@/lib/tier";
-import { TierCFold, splitByTierFocus } from "@/components/tier-c-fold";
+import { PARTNER_TIERS, resolveCustomerTier, splitByTierFocus } from "@/lib/tier";
+import { TierCFold } from "@/components/tier-c-fold";
 import type { ReactNode } from "react";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {

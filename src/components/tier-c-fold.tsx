@@ -74,20 +74,3 @@ export function TierCFold({ count, storageKey, forceOpen = false, label, hint, c
     </div>
   );
 }
-
-/** Tier A/B 进主列表；C 与未分级进折叠区 */
-export function splitByTierFocus<T>(
-  items: T[],
-  getTier: (item: T) => string | null | undefined,
-): { primary: T[]; folded: T[] } {
-  const primary: T[] = [];
-  const folded: T[] = [];
-  for (const item of items) {
-    const t = String(getTier(item) ?? "")
-      .trim()
-      .toUpperCase();
-    if (t === "A" || t === "B") primary.push(item);
-    else folded.push(item);
-  }
-  return { primary, folded };
-}

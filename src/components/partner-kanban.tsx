@@ -17,8 +17,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Badge, ScoreBar, TierBadge } from "@/components/ui";
 import { setPipelineStageAction } from "@/lib/actions";
-import { normalizePartnerTier } from "@/lib/tier";
-import { TierCFold, splitByTierFocus } from "@/components/tier-c-fold";
+import { normalizePartnerTier, splitByTierFocus } from "@/lib/tier";
+import { TierCFold } from "@/components/tier-c-fold";
 
 export type KanbanPartnerCard = {
   id: string;
