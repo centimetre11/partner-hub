@@ -12,6 +12,8 @@ type Props = {
   transcriptStatus: string | null;
   transcriptError: string | null;
   disabled?: boolean;
+  /** API 前缀，默认过伙伴会议；过线索会议传 /api/lead-reviews/{id} */
+  apiBase?: string;
   onFlash: (ok?: string, err?: string) => void;
   /** 开录成功：会议进入 LIVE，recordingStartedAt 已锚定 */
   onRecordingStarted: (startedAt?: string) => void;
@@ -40,10 +42,12 @@ export function MeetingBatchRecorder({
   transcriptStatus,
   transcriptError,
   disabled,
+  apiBase,
   onFlash,
   onRecordingStarted,
   onTranscribed,
 }: Props) {
+  const base = apiBase ?? `/api/partner-reviews/${meetingId}`;
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsedSec, setElapsedSec] = useState(0);
   const [level, setLevel] = useState(0);
@@ -168,7 +172,7 @@ export function MeetingBatchRecorder({
       });
       streamRef.current = micStream;
 
-      const markRes = await fetch(`/api/partner-reviews/${meetingId}/recording/start`, {
+      const markRes = await fetch(`${base}/recording/start`, {
         method: "POST",
       });
       const mark = (await markRes.json()) as { ok?: boolean; error?: string; startedAt?: string };
@@ -282,7 +286,7 @@ export function MeetingBatchRecorder({
       if (startedAtIsoRef.current) form.append("startedAt", startedAtIsoRef.current);
       form.append("endedAt", endedAt);
 
-      const upRes = await fetch(`/api/partner-reviews/${meetingId}/recording`, {
+      const upRes = await fetch(`${base}/recording`, {
         method: "POST",
         body: form,
       });
@@ -293,7 +297,7 @@ export function MeetingBatchRecorder({
       setStatusLine("正在讯飞一次性转写（可能需要几分钟）…");
       onFlash("录音已上传，正在讯飞整段转写…");
 
-      const txRes = await fetch(`/api/partner-reviews/${meetingId}/recording/xfyun-batch`, {
+      const txRes = await fetch(`${base}/recording/xfyun-batch`, {
         method: "POST",
       });
       const tx = (await txRes.json()) as {
@@ -413,7 +417,7 @@ export function MeetingBatchRecorder({
               setBusy(true);
               setPhase("transcribing");
               setStatusLine("正在重试讯飞转写…");
-              void fetch(`/api/partner-reviews/${meetingId}/recording/xfyun-batch`, {
+              void fetch(`${base}/recording/xfyun-batch`, {
                 method: "POST",
               })
                 .then(async (r) => {

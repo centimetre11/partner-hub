@@ -7,14 +7,8 @@ import { DeleteLeadReviewButton } from "./delete-button";
 import { listLeadReviewSalesmen } from "@/lib/lead-review/select";
 import { getLeadReviewLastConfigAction } from "@/lib/lead-review/actions";
 import { parseLeadReviewConfig } from "@/lib/lead-review/types";
-
-const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
-  DRAFT: { label: "草稿", tone: "zinc" },
-  PREP: { label: "已准备", tone: "blue" },
-  LIVE: { label: "进行中", tone: "amber" },
-  PROCESSING: { label: "会后处理", tone: "purple" },
-  DONE: { label: "已完成", tone: "green" },
-};
+import { getLocale } from "@/lib/i18n/locale-server";
+import { formatMsg, getMessages } from "@/lib/i18n/messages";
 
 export default async function LeadReviewsPage({
   searchParams,
@@ -24,6 +18,16 @@ export default async function LeadReviewsPage({
   await requireUser();
   const sp = await searchParams;
   const tab = sp.tab === "history" ? "history" : "active";
+  const locale = await getLocale();
+  const m = getMessages(locale).leadReview;
+
+  const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
+    DRAFT: { label: m.statusDraft, tone: "zinc" },
+    PREP: { label: m.statusPrep, tone: "blue" },
+    LIVE: { label: m.statusLive, tone: "amber" },
+    PROCESSING: { label: m.statusProcessing, tone: "purple" },
+    DONE: { label: m.statusDone, tone: "green" },
+  };
 
   const [meetings, salesmen, lastConfig] = await Promise.all([
     db.leadReviewMeeting.findMany({
@@ -49,8 +53,8 @@ export default async function LeadReviewsPage({
   return (
     <div className="pb-16 space-y-0">
       <PageHeader
-        title="过线索会议"
-        desc="可配置销售范围、Channel / 培育条数，定期复盘最近消化过的线索，区分质量问题与消化能力问题。"
+        title={m.title}
+        desc={m.desc}
         actions={
           tab === "active" ? (
             <CreateLeadReviewForm salesmen={salesmen} initialConfig={lastConfig} />
@@ -61,55 +65,54 @@ export default async function LeadReviewsPage({
       <div className="px-4 sm:px-6 lg:px-8 space-y-4 max-w-7xl">
         <div className="flex gap-1 border-b border-slate-200">
           <Link href="/lead-reviews" className={tabClass(tab === "active")}>
-            进行中
+            {m.tabActive}
           </Link>
           <Link href="/lead-reviews?tab=history" className={tabClass(tab === "history")}>
-            历史会议
+            {m.tabHistory}
           </Link>
         </div>
 
-        <Card title={tab === "history" ? "历史会议" : "进行中的会议"}>
+        <Card title={tab === "history" ? m.cardHistory : m.cardActive}>
           {!meetings.length ? (
-            <EmptyState
-              text={
-                tab === "history"
-                  ? "还没有已完成的过线索会议。"
-                  : "还没有进行中的过线索会议。点击右上角新建并配置取样。"
-              }
-            />
+            <EmptyState text={tab === "history" ? m.emptyHistory : m.emptyActive} />
           ) : (
             <ul className="divide-y divide-slate-100">
-              {meetings.map((m) => {
-                const st = STATUS_LABEL[m.status] ?? STATUS_LABEL.DRAFT!;
-                const cfg = parseLeadReviewConfig(m.configJson);
-                const names = m.items.map((i) => i.displayName).filter(Boolean).slice(0, 4);
-                const more = m.items.length - names.length;
-                const channelN = m.items.filter((i) => i.source === "CHANNEL").length;
-                const nurtureN = m.items.filter((i) => i.source === "NURTURE").length;
+              {meetings.map((mtg) => {
+                const st = STATUS_LABEL[mtg.status] ?? STATUS_LABEL.DRAFT!;
+                const cfg = parseLeadReviewConfig(mtg.configJson);
+                const names = mtg.items.map((i) => i.displayName).filter(Boolean).slice(0, 4);
+                const more = mtg.items.length - names.length;
+                const channelN = mtg.items.filter((i) => i.source === "CHANNEL").length;
+                const nurtureN = mtg.items.filter((i) => i.source === "NURTURE").length;
                 return (
-                  <li key={m.id} className="flex flex-wrap items-center gap-3 py-3 px-1">
+                  <li key={mtg.id} className="flex flex-wrap items-center gap-3 py-3 px-1">
                     <Link
-                      href={`/lead-reviews/${m.id}`}
+                      href={`/lead-reviews/${mtg.id}`}
                       className="min-w-0 flex-1 flex flex-wrap items-center gap-3 hover:bg-slate-50/80 rounded-lg -mx-1 px-1 py-0.5"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="font-medium text-slate-900 truncate">{m.title}</div>
+                        <div className="font-medium text-slate-900 truncate">{mtg.title}</div>
                         <div className="text-xs text-slate-500 mt-0.5">
-                          Channel {channelN} · 培育 {nurtureN}
-                          {cfg.allSalesmen ? " · 全部销售" : ` · ${cfg.salesmanNames.length} 名销售`}
-                          {names.length ? ` · ${names.join("、")}${more > 0 ? " 等" : ""}` : ""}
+                          {formatMsg(m.channelN, { n: channelN })} ·{" "}
+                          {formatMsg(m.nurtureN, { n: nurtureN })}
+                          {cfg.allSalesmen
+                            ? ` · ${m.allSales}`
+                            : ` · ${formatMsg(m.salesCount, { n: cfg.salesmanNames.length })}`}
+                          {names.length
+                            ? ` · ${names.join(locale === "zh" ? "、" : ", ")}${more > 0 ? (locale === "zh" ? " 等" : "…") : ""}`
+                            : ""}
                           {" · "}
-                          {m.createdBy.name}
+                          {mtg.createdBy.name}
                           {" · "}
-                          {tab === "history" && m.endedAt
-                            ? `结束于 ${fmtDateTime(m.endedAt)}`
-                            : fmtDateTime(m.createdAt)}
+                          {tab === "history" && mtg.endedAt
+                            ? formatMsg(m.endedAt, { time: fmtDateTime(mtg.endedAt) })
+                            : fmtDateTime(mtg.createdAt)}
                         </div>
                       </div>
-                      <Badge tone={st.tone}>{tab === "history" ? "查看摘要" : st.label}</Badge>
+                      <Badge tone={st.tone}>{tab === "history" ? m.viewSummary : st.label}</Badge>
                     </Link>
                     {tab === "active" ? (
-                      <DeleteLeadReviewButton meetingId={m.id} meetingTitle={m.title} />
+                      <DeleteLeadReviewButton meetingId={mtg.id} meetingTitle={mtg.title} />
                     ) : null}
                   </li>
                 );

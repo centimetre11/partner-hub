@@ -7,14 +7,8 @@ import { LeadReviewWorkspace } from "./meeting-workspace";
 import { parseLeadReviewConfig } from "@/lib/lead-review/types";
 import { summarizeVerdicts } from "@/lib/lead-review/apply";
 import { loadMeetingItemFacts } from "@/lib/lead-review/brief";
-
-const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
-  DRAFT: { label: "草稿", tone: "zinc" },
-  PREP: { label: "已准备", tone: "blue" },
-  LIVE: { label: "进行中", tone: "amber" },
-  PROCESSING: { label: "会后处理", tone: "purple" },
-  DONE: { label: "已完成", tone: "green" },
-};
+import { getLocale } from "@/lib/i18n/locale-server";
+import { formatMsg, getMessages } from "@/lib/i18n/messages";
 
 export default async function LeadReviewDetailPage({
   params,
@@ -23,6 +17,16 @@ export default async function LeadReviewDetailPage({
 }) {
   await requireUser();
   const { id } = await params;
+  const locale = await getLocale();
+  const m = getMessages(locale).leadReview;
+
+  const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
+    DRAFT: { label: m.statusDraft, tone: "zinc" },
+    PREP: { label: m.statusPrep, tone: "blue" },
+    LIVE: { label: m.statusLive, tone: "amber" },
+    PROCESSING: { label: m.statusProcessing, tone: "purple" },
+    DONE: { label: m.statusDone, tone: "green" },
+  };
 
   const meeting = await db.leadReviewMeeting.findUnique({
     where: { id },
@@ -49,10 +53,15 @@ export default async function LeadReviewDetailPage({
           <PageHeader
             title={meeting.title}
             desc={[
-              `Channel ${cfg.channelCount} · 培育 ${cfg.nurtureCount}`,
-              cfg.allSalesmen ? "全部销售" : `销售 ${cfg.salesmanNames.join("、") || "—"}`,
+              formatMsg(m.metaChannel, { n: cfg.channelCount }),
+              formatMsg(m.metaNurture, { n: cfg.nurtureCount }),
+              cfg.allSalesmen
+                ? m.metaAllSales
+                : formatMsg(m.metaSales, { names: cfg.salesmanNames.join("、") || "—" }),
               meeting.createdBy.name,
-              meeting.startedAt ? `开始 ${fmtDateTime(meeting.startedAt)}` : null,
+              meeting.startedAt
+                ? formatMsg(m.metaStarted, { time: fmtDateTime(meeting.startedAt) })
+                : null,
             ]
               .filter(Boolean)
               .join(" · ")}
@@ -66,6 +75,15 @@ export default async function LeadReviewDetailPage({
           meetingId={meeting.id}
           status={meeting.status}
           liveNotes={meeting.liveNotes}
+          transcriptStatus={meeting.transcriptStatus}
+          transcriptError={meeting.transcriptError}
+          transcriptText={meeting.transcriptText ?? meeting.xfyunTranscriptText}
+          tencentTranscriptText={meeting.tencentTranscriptText}
+          tencentLiveNotes={meeting.tencentLiveNotes}
+          xfyunTranscriptText={meeting.xfyunTranscriptText}
+          xfyunLiveNotes={meeting.xfyunLiveNotes}
+          matchSource={meeting.matchSource}
+          startedAt={meeting.startedAt?.toISOString() ?? null}
           stats={stats}
           facts={facts}
           items={meeting.items.map((i) => ({
@@ -76,6 +94,7 @@ export default async function LeadReviewDetailPage({
             verdict: i.verdict,
             coreNotes: i.coreNotes,
             discussedAt: i.discussedAt?.toISOString() ?? null,
+            markerInsertedAt: i.markerInsertedAt?.toISOString() ?? null,
             prepBrief: i.prepBrief,
             channelId: i.channelId,
             leadId: i.leadId,

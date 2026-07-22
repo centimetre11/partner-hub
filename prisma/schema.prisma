@@ -1501,6 +1501,25 @@ model LeadReviewMeeting {
   liveNotes       String?
   prepGeneratedAt DateTime?
   previewToken    String?   @unique
+  /// 讯飞一次性录音
+  recordingPath        String?
+  recordingMimeType    String?
+  recordingBytes       Int?
+  recordingStartedAt   DateTime?
+  recordingEndedAt     DateTime?
+  /// idle | recording | uploaded | transcribing | ready | error
+  transcriptStatus     String?
+  transcriptError      String?
+  transcriptText       String?
+  transcriptJson       String?
+  xfyunTranscriptText  String?
+  xfyunTranscriptJson  String?
+  xfyunLiveNotes       String?
+  /// 路径 A：腾讯/粘贴纪要
+  tencentTranscriptText String?
+  tencentTranscriptJson String?
+  tencentLiveNotes      String?
+  matchSource          String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   items           LeadReviewItem[]
@@ -1523,6 +1542,7 @@ model LeadReviewItem {
   displayName       String?
   sortOrder         Int      @default(0)
   discussedAt       DateTime?
+  markerInsertedAt  DateTime?
   prepBrief         String?
   coreNotes         String?
   /// QUALITY | DIGESTION | NORMAL | WATCH
