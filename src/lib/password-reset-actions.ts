@@ -15,8 +15,12 @@ function hashResetToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function appBaseUrl() {
-  return (process.env.APP_BASE_URL || "http://localhost:3000").trim().replace(/\/+$/, "");
+/** 重置邮件里的对外域名（与企微用的 APP_BASE_URL 可不同） */
+function passwordResetBaseUrl() {
+  const raw =
+    process.env.PASSWORD_RESET_BASE_URL?.trim() ||
+    "https://camelusai.com";
+  return raw.replace(/\/+$/, "");
 }
 
 /** 请求找回密码：无论邮箱是否存在都返回同一成功文案，避免枚举账号 */
@@ -42,7 +46,7 @@ export async function requestPasswordResetAction(_: unknown, formData: FormData)
       },
     });
 
-    const resetUrl = `${appBaseUrl()}/reset-password?token=${token}`;
+    const resetUrl = `${passwordResetBaseUrl()}/reset-password?token=${token}`;
     try {
       await sendEmail({
         to: user.email,

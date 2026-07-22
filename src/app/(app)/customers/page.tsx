@@ -1,4 +1,3 @@
-import { NavLink } from "@/components/nav-link";
 import { ClickableCard } from "@/components/clickable-nav";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
@@ -10,16 +9,101 @@ import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
 import { getTaxonomyOptionsMany, loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
-import { CustomerBucketTabs } from "@/components/customer-bucket-tabs";
 import { classifyCustomers, type CustomerBucketMeta, type GrowthProbability } from "@/lib/customer-bucket";
-import { OPEN_OPPORTUNITY_STATUSES, opportunityStatusLabel, opportunityStatusTone } from "@/lib/opportunity-status";
-import { ListPagination } from "@/components/list-pagination";
-import { parseListPage } from "@/lib/list-pagination";
+import { OPEN_OPPORTUNITY_STATUSES, opportunityStatusLabel } from "@/lib/opportunity-status";
+import type { ReactNode } from "react";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
   if (status === "PROSPECT") return "blue";
   return "zinc";
+}
+
+function probabilityValue(code: GrowthProbability): number {
+  switch (code) {
+    case "P80":
+      return 80;
+    case "P50":
+      return 50;
+    case "P20":
+      return 20;
+  }
+}
+
+function columnTone(tone: "green" | "amber" | "blue", over = false) {
+  if (tone === "green") {
+    return over
+      ? "border-emerald-400 bg-emerald-50/80 ring-2 ring-emerald-200"
+      : "border-emerald-200/80 bg-emerald-50/40";
+  }
+  if (tone === "amber") {
+    return over
+      ? "border-amber-400 bg-amber-50/80 ring-2 ring-amber-200"
+      : "border-amber-200/80 bg-amber-50/40";
+  }
+  return over
+    ? "border-sky-400 bg-sky-50/80 ring-2 ring-sky-200"
+    : "border-sky-200/80 bg-sky-50/40";
+}
+
+function headerBadge(tone: "green" | "amber" | "blue") {
+  if (tone === "green") return "bg-emerald-700 text-white";
+  if (tone === "amber") return "bg-amber-600 text-white";
+  return "bg-sky-700 text-white";
+}
+
+function CustomerBucketColumn({
+  index,
+  title,
+  count,
+  desc,
+  tone,
+  emptyText,
+  children,
+}: {
+  index: number;
+  title: string;
+  count: number;
+  desc: string;
+  tone: "green" | "amber" | "blue";
+  emptyText: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`flex flex-col min-w-[260px] w-[min(100%,320px)] sm:min-w-[280px] lg:min-w-0 lg:flex-1 rounded-xl border ${columnTone(
+        tone,
+      )} max-h-[calc(100vh-14rem)]`}
+    >
+      <div className="px-3 pt-3 pb-2 shrink-0">
+        <div className="flex items-center gap-2">
+          <span
+            className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold ${headerBadge(tone)}`}
+          >
+            {index}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-slate-800 truncate">
+              {title}
+              <span className="ml-1.5 text-xs font-normal text-slate-500 tabular-nums">{count}</span>
+            </div>
+            <div className="text-[11px] text-slate-500 truncate" title={desc}>
+              {desc}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2.5 pb-3 space-y-2 min-h-[4rem]">
+        {count === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 bg-white/60 px-3 py-6 text-center text-xs text-slate-400">
+            {emptyText}
+          </div>
+        ) : (
+          children
+        )}
+      </div>
+    </div>
+  );
 }
 
 type CustomerBucketSearchParams = {
@@ -32,8 +116,6 @@ type CustomerBucketSearchParams = {
   add?: string;
   segment?: string;
   icpTier?: string;
-  bucket?: string;
-  page?: string;
 };
 
 export default async function CustomersPage({
@@ -46,7 +128,6 @@ export default async function CustomersPage({
   const c = m.customers;
   const sp = await searchParams;
   const nameFilter = nameContainsWhere(sp.q);
-  const { page, take, skip } = parseListPage(sp.page);
 
   const listWhere = {
     ...END_CUSTOMER_WHERE,
@@ -105,39 +186,28 @@ export default async function CustomersPage({
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? c.statusActive : s === "PROSPECT" ? c.statusProspect : c.statusInactive;
 
-  const validBuckets: (CustomerBucketMeta["bucket"] | "all")[] = ["base", "growth", "opportunity", "all"];
-  const currentBucket = validBuckets.includes(sp.bucket as CustomerBucketMeta["bucket"] | "all")
-    ? (sp.bucket as CustomerBucketMeta["bucket"] | "all")
-    : "base";
   const classified = classifyCustomers(bucketRows);
-  const bucketCounts = {
-    base: classified.filter((item) => item.meta.bucket === "base").length,
-    growth: classified.filter((item) => item.meta.bucket === "growth").length,
-    opportunity: classified.filter((item) => item.meta.bucket === "opportunity").length,
-    all: classified.length,
-  };
-  const filtered =
-    currentBucket === "all"
-      ? classified
-      : classified.filter((item) => item.meta.bucket === currentBucket);
+  const boardItems = classified.filter((item) => item.meta.bucket !== "other");
+  const boardIds = boardItems.map((item) => item.customer.id);
+  const metaById = new Map(boardItems.map((item) => [item.customer.id, item.meta]));
 
-  const pageSlice = filtered.slice(skip, skip + take);
-  const pageIds = pageSlice.map((item) => item.customer.id);
-  const metaById = new Map(pageSlice.map((item) => [item.customer.id, item.meta]));
-
-  const customers = pageIds.length
+  const customers = boardIds.length
     ? await db.customer.findMany({
-        where: { id: { in: pageIds } },
+        where: { id: { in: boardIds } },
         include: {
           partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
           owner: { select: { name: true } },
           presalesUser: { select: { name: true } },
-          contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
+          contacts: {
+            select: { name: true, title: true, contactInfo: true },
+            take: 1,
+            orderBy: { updatedAt: "desc" },
+          },
         },
       })
     : [];
   const customerById = new Map(customers.map((cust) => [cust.id, cust]));
-  const pageItems = pageIds
+  const items = boardIds
     .map((id) => {
       const cust = customerById.get(id);
       const meta = metaById.get(id);
@@ -146,173 +216,92 @@ export default async function CustomersPage({
     })
     .filter((x): x is { customer: (typeof customers)[number]; meta: CustomerBucketMeta } => !!x);
 
-  const bucketLabel =
-    currentBucket === "base" ? c.bucketBase
-    : currentBucket === "growth" ? c.bucketGrowth
-    : currentBucket === "opportunity" ? c.bucketOpportunity
-    : c.bucketAll;
-  const bucketDesc = c.bucketDesc.replace("{bucket}", bucketLabel).replace("{count}", String(filtered.length));
+  type BoardBucket = "base" | "growth" | "opportunity";
+  const columns: {
+    key: BoardBucket;
+    index: number;
+    title: string;
+    desc: string;
+    tone: "green" | "amber" | "blue";
+  }[] = [
+    { key: "base", index: 1, title: c.bucketBase, desc: c.bucketBaseDesc, tone: "green" },
+    { key: "growth", index: 2, title: c.bucketGrowth, desc: c.bucketGrowthDesc, tone: "amber" },
+    { key: "opportunity", index: 3, title: c.bucketOpportunity, desc: c.bucketOpportunityDesc, tone: "blue" },
+  ];
 
-  const growthProbabilityOrder: GrowthProbability[] = ["P80", "P50", "P20"];
-  const growthGroupLabel = (code: GrowthProbability) =>
-    code === "P80" ? c.growthP80Group : code === "P50" ? c.growthP50Group : c.growthP20Group;
+  const byBucket: Record<BoardBucket, typeof items> = {
+    base: items.filter((item) => item.meta.bucket === "base"),
+    growth: items.filter((item) => item.meta.bucket === "growth"),
+    opportunity: items.filter((item) => item.meta.bucket === "opportunity"),
+  };
 
-  function probabilityValue(code: GrowthProbability): number {
-    switch (code) {
-      case "P80": return 80;
-      case "P50": return 50;
-      case "P20": return 20;
-    }
-  }
-
-  function CustomerCard({ cust, meta }: { cust: (typeof customers)[number]; meta: CustomerBucketMeta }) {
-    const bucketBadge =
-      currentBucket === "all"
-        ? meta.bucket === "base"
-          ? c.bucketBase
-          : meta.bucket === "growth"
-            ? c.bucketGrowth
-            : meta.bucket === "opportunity"
-              ? c.bucketOpportunity
-              : c.bucketOther
-        : null;
+  function CustomerCard({
+    cust,
+    meta,
+  }: {
+    cust: (typeof customers)[number];
+    meta: CustomerBucketMeta;
+  }) {
     const segmentLabel = cust.customerSegment
       ? labelFromMap(labelMaps.CUSTOMER_SEGMENT, cust.customerSegment)
       : null;
     const icpLabel = cust.icpTier ? labelFromMap(labelMaps.ICP_TIER, cust.icpTier) : null;
     const region = [cust.city, cust.country].filter(Boolean).join(" · ") || null;
     const partnerNames = cust.partnerLinks.map((l) => l.partner.name).join(", ") || null;
+    const summaryBits = [
+      segmentLabel,
+      cust.industry,
+      region,
+      partnerNames ? `${c.colPartner}: ${partnerNames}` : c.noPartner,
+      meta.nextOpportunityName
+        ? `${c.openOpportunityCount.replace("{n}", String(meta.openOpportunityCount))} · ${meta.nextOpportunityName}`
+        : null,
+    ].filter(Boolean);
+
     return (
       <ClickableCard
         href={`/customers/${cust.id}`}
-        className="rounded-lg border border-slate-200/80 bg-white shadow-sm p-3 hover:border-slate-300 hover:shadow-md transition-shadow"
+        className="rounded-lg border border-slate-200/80 bg-white shadow-sm p-3 hover:border-slate-300"
       >
         <div className="flex items-start justify-between gap-2">
           <span className="font-semibold text-sm text-slate-900 min-w-0 break-words">{cust.name}</span>
-          <div className="flex flex-wrap justify-end gap-1 shrink-0 max-w-[50%]">
+          <div className="flex items-center gap-1 shrink-0">
             {meta.isArr && <Badge tone="purple">{c.arrCustomer}</Badge>}
             {meta.bucket === "base" && meta.hasOpenOpportunities && (
               <Badge tone="amber">{c.secondaryGrowth}</Badge>
             )}
-            {bucketBadge && <Badge tone="zinc">{bucketBadge}</Badge>}
+            {meta.bucket === "growth" && meta.growthProbability && (
+              <Badge tone="blue">
+                {opportunityStatusLabel(meta.growthProbability, bcp47 === "zh-CN" ? "zh" : "en")}
+              </Badge>
+            )}
           </div>
         </div>
-        <div className="text-[11px] text-slate-500 mt-1.5">
-          {c.createdAt} {fmtDate(cust.createdAt, bcp47)}
+        <div className="text-[11px] text-slate-500 mt-1.5 truncate">
+          {fmtDate(cust.createdAt, bcp47)}
+          {cust.owner?.name ? ` · ${cust.owner.name}` : ""}
         </div>
         <div className="text-[11px] text-slate-500 mt-1 truncate">
-          {segmentLabel ? <span className="text-slate-700">{segmentLabel}</span> : <span className="text-slate-300">—</span>}
-          {icpLabel && <span className="text-slate-400"> · {icpLabel}</span>}
+          {summaryBits.join(" · ") || "—"}
         </div>
-        <div className="text-[11px] text-slate-500 mt-1 truncate">
-          {cust.industry ?? "—"}
-          {region && <span> · {region}</span>}
-        </div>
-        <div className="text-[11px] text-slate-500 mt-1 truncate">
-          {c.colPartner}: {partnerNames ?? c.noPartner}
-        </div>
-        <div className="text-[11px] text-slate-500 mt-1 truncate">
-          {c.colOwner}: {cust.owner?.name ?? "—"} · {c.colPresales}: {cust.presalesUser?.name ?? "—"}
-        </div>
-        {meta.nextOpportunityName && (
-          <div className="text-[11px] text-slate-500 mt-1 truncate">
-            {c.openOpportunityCount.replace("{n}", String(meta.openOpportunityCount))}
-            {meta.openOpportunityCount === 1 ? "" : " · "}
-            {meta.nextOpportunityName}
+        {meta.growthProbability ? (
+          <div className="mt-2 w-full max-w-[7rem]">
+            <ScoreBar score={probabilityValue(meta.growthProbability)} />
+          </div>
+        ) : (
+          <div className="mt-2">
+            <Badge tone={statusTone(cust.status)}>{statusLabel(cust.status)}</Badge>
           </div>
         )}
-        <div className="mt-2">
-          {currentBucket === "growth" && meta.growthProbability ? (
-            <div className="flex items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <ScoreBar score={probabilityValue(meta.growthProbability)} />
-              </div>
-              <span className="text-xs text-slate-500 shrink-0">
-                {opportunityStatusLabel(meta.growthProbability, bcp47 === "zh-CN" ? "zh" : "en")}
-              </span>
-            </div>
-          ) : (
-            <Badge tone={statusTone(cust.status)}>{statusLabel(cust.status)}</Badge>
-          )}
-        </div>
       </ClickableCard>
     );
   }
-
-  const visibleBuckets: CustomerBucketMeta["bucket"][] =
-    currentBucket === "all"
-      ? ["base", "growth", "opportunity"]
-      : currentBucket === "base"
-        ? ["base"]
-        : currentBucket === "opportunity"
-          ? ["opportunity"]
-          : [];
-
-  function CustomerBucketColumn({
-    index,
-    title,
-    count,
-    desc,
-    tone,
-    children,
-  }: {
-    index: number;
-    title: string;
-    count: number;
-    desc: string;
-    tone: "green" | "amber" | "blue";
-    children: React.ReactNode;
-  }) {
-    const toneClasses = {
-      green: "border-emerald-200/80 bg-emerald-50/40",
-      amber: "border-amber-200/80 bg-amber-50/40",
-      blue: "border-sky-200/80 bg-sky-50/40",
-    }[tone];
-    const badgeClasses = {
-      green: "bg-emerald-700 text-white",
-      amber: "bg-amber-600 text-white",
-      blue: "bg-sky-700 text-white",
-    }[tone];
-    return (
-      <div className={`flex flex-col min-w-[260px] w-[min(100%,320px)] sm:min-w-[280px] lg:min-w-0 lg:flex-1 rounded-xl border ${toneClasses} max-h-[calc(100vh-14rem)]`}>
-        <div className="px-3 pt-3 pb-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold ${badgeClasses}`}>
-              {index}
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-slate-800 truncate">
-                {title}
-                <span className="ml-1.5 text-xs font-normal text-slate-500 tabular-nums">{count}</span>
-              </div>
-              <div className="text-[11px] text-slate-500 truncate" title={desc}>{desc}</div>
-            </div>
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto px-2.5 pb-3 space-y-2 min-h-[4rem]">
-          {children}
-        </div>
-      </div>
-    );
-  }
-
-  const filterParams = {
-    q: sp.q,
-    status: sp.status,
-    segment: sp.segment,
-    icpTier: sp.icpTier,
-    partner: sp.partner,
-    owner: sp.owner,
-    presales: sp.presales,
-    unbound: sp.unbound,
-    bucket: currentBucket === "base" ? undefined : currentBucket,
-  };
 
   return (
     <div className="pb-16">
       <PageHeader
         title={c.title}
-        desc={bucketDesc}
+        desc={c.desc.replace("{count}", String(items.length))}
         actions={
           <div className="flex gap-2">
             <AddCustomerForm
@@ -333,132 +322,113 @@ export default async function CustomersPage({
       />
       <div className="px-8">
         <form className="flex flex-wrap gap-2 mb-4" method="get">
-          <InstantSearchInput placeholder={c.searchPlaceholder} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-48" />
-          <select name="status" defaultValue={sp.status ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <InstantSearchInput
+            placeholder={c.searchPlaceholder}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm w-full sm:w-48"
+          />
+          <select
+            name="status"
+            defaultValue={sp.status ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{c.allStatuses}</option>
             <option value="ACTIVE">{c.statusActive}</option>
             <option value="PROSPECT">{c.statusProspect}</option>
             <option value="INACTIVE">{c.statusInactive}</option>
           </select>
-          <select name="segment" defaultValue={sp.segment ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="segment"
+            defaultValue={sp.segment ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{c.allSegments}</option>
             {segmentOptions.map((opt) => (
-              <option key={opt.code} value={opt.code}>{opt.label}</option>
+              <option key={opt.code} value={opt.code}>
+                {opt.label}
+              </option>
             ))}
           </select>
-          <select name="icpTier" defaultValue={sp.icpTier ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="icpTier"
+            defaultValue={sp.icpTier ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{c.allIcpTiers}</option>
             {icpTierOptions.map((opt) => (
-              <option key={opt.code} value={opt.code}>{opt.label}</option>
+              <option key={opt.code} value={opt.code}>
+                {opt.label}
+              </option>
             ))}
           </select>
-          <select name="partner" defaultValue={sp.partner ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="partner"
+            defaultValue={sp.partner ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{c.allPartners}</option>
             {partners.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
             ))}
           </select>
-          <select name="owner" defaultValue={sp.owner ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="owner"
+            defaultValue={sp.owner ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{c.allSalesOwners}</option>
             {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
             ))}
           </select>
-          <select name="presales" defaultValue={sp.presales ?? ""} className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm">
+          <select
+            name="presales"
+            defaultValue={sp.presales ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
             <option value="">{c.allPresalesOwners}</option>
             {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
             ))}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-slate-600 px-2">
             <input type="checkbox" name="unbound" value="1" defaultChecked={sp.unbound === "1"} />
             {c.unboundOnly}
           </label>
-          <input type="hidden" name="bucket" value={currentBucket} />
-          <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">{m.common.filter}</button>
+          <button className="rounded-lg bg-slate-900 text-white px-4 py-1.5 text-sm hover:bg-slate-700">
+            {m.common.filter}
+          </button>
         </form>
 
-        <CustomerBucketTabs
-          current={currentBucket}
-          tabs={[
-            { key: "base", label: c.bucketBase, count: bucketCounts.base },
-            { key: "growth", label: c.bucketGrowth, count: bucketCounts.growth },
-            { key: "opportunity", label: c.bucketOpportunity, count: bucketCounts.opportunity },
-            { key: "all", label: c.bucketAll, count: bucketCounts.all },
-          ]}
-          searchParams={{
-            q: sp.q,
-            status: sp.status,
-            segment: sp.segment,
-            icpTier: sp.icpTier,
-            partner: sp.partner,
-            owner: sp.owner,
-            presales: sp.presales,
-            unbound: sp.unbound,
-          }}
-        />
-
-        {pageItems.length === 0 ? (
+        {items.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm">
             <EmptyState text={c.empty} />
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4 overflow-hidden">
-            {currentBucket === "growth" ? (
-              <div className="flex gap-4 overflow-x-auto pb-2 items-stretch">
-                {growthProbabilityOrder.map((code) => {
-                  const groupItems = pageItems.filter((item) => item.meta.growthProbability === code);
-                  if (groupItems.length === 0) return null;
-                  return (
-                    <CustomerBucketColumn
-                      key={code}
-                      index={code === "P80" ? 3 : code === "P50" ? 2 : 1}
-                      title={growthGroupLabel(code)}
-                      count={groupItems.length}
-                      desc={c.growthProbabilityHint}
-                      tone={code === "P80" ? "green" : code === "P50" ? "amber" : "blue"}
-                    >
-                      {groupItems.map(({ customer: cust, meta }) => (
-                        <CustomerCard key={cust.id} cust={cust} meta={meta} />
-                      ))}
-                    </CustomerBucketColumn>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex gap-4 overflow-x-auto pb-2 items-stretch">
-                {visibleBuckets.map((bucket) => {
-                  const bucketItems = pageItems.filter((item) => item.meta.bucket === bucket);
-                  if (bucketItems.length === 0) return null;
-                  return (
-                    <CustomerBucketColumn
-                      key={bucket}
-                      index={bucket === "base" ? 1 : bucket === "growth" ? 2 : 3}
-                      title={bucket === "base" ? c.bucketBase : bucket === "growth" ? c.bucketGrowth : c.bucketOpportunity}
-                      count={bucketItems.length}
-                      desc={bucket === "base" ? c.bucketBaseDesc : bucket === "growth" ? c.bucketGrowthDesc : c.bucketOpportunityDesc}
-                      tone={bucket === "base" ? "green" : bucket === "growth" ? "amber" : "blue"}
-                    >
-                      {bucketItems.map(({ customer: cust, meta }) => (
-                        <CustomerCard key={cust.id} cust={cust} meta={meta} />
-                      ))}
-                    </CustomerBucketColumn>
-                  );
-                })}
-              </div>
-            )}
-            <ListPagination
-              pathname="/customers"
-              searchParams={filterParams}
-              page={page}
-              total={filtered.length}
-              pageSize={take}
-              labels={{
-                prevPage: m.common.prevPage,
-                nextPage: m.common.nextPage,
-                pageOf: m.common.pageOf,
-              }}
-            />
+          <div className="flex gap-3 overflow-x-auto pb-2 items-stretch">
+            {columns.map((col) => {
+              const colItems = byBucket[col.key];
+              return (
+                <CustomerBucketColumn
+                  key={col.key}
+                  index={col.index}
+                  title={col.title}
+                  count={colItems.length}
+                  desc={col.desc}
+                  tone={col.tone}
+                  emptyText={c.empty}
+                >
+                  {colItems.map(({ customer: cust, meta }) => (
+                    <CustomerCard key={cust.id} cust={cust} meta={meta} />
+                  ))}
+                </CustomerBucketColumn>
+              );
+            })}
           </div>
         )}
       </div>
