@@ -307,8 +307,12 @@ export function TodoCompleteButton({
   async function reopen() {
     setLoading(true);
     try {
-      await toggleTodoAction(todoId);
       onStatusChange?.("OPEN");
+      await toggleTodoAction(todoId);
+      // Prefer local callback update; only full-refresh when parent has no optimistic handler
+      if (!onStatusChange) router.refresh();
+    } catch {
+      if (onStatusChange) onStatusChange("DONE");
       router.refresh();
     } finally {
       setLoading(false);

@@ -28,17 +28,24 @@ export async function BoardOverview() {
   const b = m.dashboard.board;
   const L = labelConstants(labels);
 
-  const all = await db.partner.findMany({
-    where: { status: { in: ["ACTIVE", "PROSPECT"] } },
-    include: { contacts: true, opportunities: true, events: true, trainings: true },
-  });
-  const segmentSummary = await loadSegmentInsightSummary();
-  const labelMaps = await loadTaxonomyLabelMaps();
-  const openTodos = await db.todoItem.count({ where: { status: "OPEN" } });
-  const overdueTodos = await db.todoItem.count({ where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } } });
-  const activeOppCount = await db.opportunity.count({
-    where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] }, partner: { status: "ACTIVE" } },
-  });
+  const [all, segmentSummary, labelMaps, openTodos, overdueTodos, activeOppCount] = await Promise.all([
+    db.partner.findMany({
+      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
+      include: {
+        contacts: { select: { role: true, contactInfo: true } },
+        opportunities: { select: { id: true } },
+        events: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 5 },
+        trainings: { select: { status: true } },
+      },
+    }),
+    loadSegmentInsightSummary(),
+    loadTaxonomyLabelMaps(),
+    db.todoItem.count({ where: { status: "OPEN" } }),
+    db.todoItem.count({ where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore() } } }),
+    db.opportunity.count({
+      where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] }, partner: { status: "ACTIVE" } },
+    }),
+  ]);
 
   const active = all.filter((p) => p.status === "ACTIVE");
   const prospects = all.filter((p) => p.status === "PROSPECT");
@@ -77,7 +84,11 @@ export async function BoardOverview() {
     .slice(0, 8);
 
   const ranked = active
-    .map((p) => ({ p, c: computeCompleteness(p, labels), stale: staleDays(p) }))
+    .map((p) => ({
+      p,
+      c: computeCompleteness(p as Parameters<typeof computeCompleteness>[0], labels),
+      stale: staleDays(p),
+    }))
     .sort((a, b) => a.c.score - b.c.score)
     .slice(0, 10);
 

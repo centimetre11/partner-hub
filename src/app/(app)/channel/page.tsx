@@ -13,6 +13,8 @@ import {
 import { InstantSearchInput } from "@/components/instant-search-input";
 import { ChannelSyncButton } from "@/components/channel/channel-sync-button";
 import { formatMsg } from "@/lib/i18n/messages";
+import { ListPagination } from "@/components/list-pagination";
+import { parseListPage } from "@/lib/list-pagination";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -25,7 +27,7 @@ function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
 export default async function ChannelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; type?: string; salesman?: string }>;
+  searchParams: Promise<{ q?: string; type?: string; salesman?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
@@ -33,12 +35,17 @@ export default async function ChannelPage({
   const sp = await searchParams;
   const effectiveSalesman = resolveChannelSalesmanFilter(sp.salesman, user.crmSalesmanName);
   const salesmanSelectValue = sp.salesman ?? (effectiveSalesman || "all");
+  const { page, take, skip } = parseListPage(sp.page);
+  const where = buildChannelWhere(sp, user.crmSalesmanName);
 
-  const [rows, lastSyncAt, salesmen, types, backfill] = await Promise.all([
+  const [rows, total, lastSyncAt, salesmen, types, backfill] = await Promise.all([
     db.crmChannel.findMany({
-      where: buildChannelWhere(sp, user.crmSalesmanName),
+      where,
       orderBy: [{ staRecdate: "desc" }, { name: "asc" }],
+      skip,
+      take,
     }),
+    db.crmChannel.count({ where }),
     getChannelLastSyncAt(),
     getChannelSalesmen(),
     getChannelTypeDetails(),
@@ -52,11 +59,17 @@ export default async function ChannelPage({
     ? l.backfillDone
     : formatMsg(l.backfillProgress, { cursor: backfill.cursor });
 
+  const pageLabels = {
+    prevPage: m.common.prevPage,
+    nextPage: m.common.nextPage,
+    pageOf: m.common.pageOf,
+  };
+
   return (
     <div className="pb-16">
       <PageHeader
         title={l.title}
-        desc={`${formatMsg(l.desc, { count: rows.length })} · ${syncedLabel} · ${backfillLabel}`}
+        desc={`${formatMsg(l.desc, { count: total })} · ${syncedLabel} · ${backfillLabel}`}
         actions={<ChannelSyncButton />}
       />
       <div className="px-8">
@@ -145,6 +158,14 @@ export default async function ChannelPage({
                 </tbody>
               </table>
             </div>
+            <ListPagination
+              pathname="/channel"
+              searchParams={{ q: sp.q, type: sp.type, salesman: sp.salesman }}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
           </div>
         )}
       </div>

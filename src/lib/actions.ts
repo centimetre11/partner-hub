@@ -50,6 +50,31 @@ import {
   type StatusLevel,
 } from "./partner-status";
 
+function revalidateTodoPaths(opts: {
+  partnerId?: string | null;
+  customerId?: string | null;
+  source?: string | null;
+  alsoMobile?: boolean;
+  previousPartnerId?: string | null;
+  previousCustomerId?: string | null;
+}) {
+  revalidatePath("/todos");
+  revalidatePath("/");
+  if (opts.alsoMobile) revalidatePath("/mobile");
+  if (opts.source === "ARR") {
+    revalidatePath("/arr");
+    revalidatePath("/arr/calendar");
+  }
+  if (opts.partnerId) revalidatePath(`/partners/${opts.partnerId}`);
+  if (opts.customerId) revalidatePath(`/customers/${opts.customerId}`);
+  if (opts.previousPartnerId && opts.previousPartnerId !== opts.partnerId) {
+    revalidatePath(`/partners/${opts.previousPartnerId}`);
+  }
+  if (opts.previousCustomerId && opts.previousCustomerId !== opts.customerId) {
+    revalidatePath(`/customers/${opts.previousCustomerId}`);
+  }
+}
+
 // ============ 认证 ============
 
 export async function loginAction(_: unknown, formData: FormData) {
@@ -1530,13 +1555,7 @@ export async function createTodoAction(formData: FormData) {
     title: `新建待办：${todo.title}`,
     meta: { entity: "todo", todoId: todo.id },
   });
-  revalidatePath("/todos");
-  revalidatePath("/");
-  revalidatePath("/mobile");
-  revalidatePath("/arr");
-  revalidatePath("/arr/calendar");
-  if (partnerId) revalidatePath(`/partners/${partnerId}`);
-  if (customerId) revalidatePath(`/customers/${customerId}`);
+  revalidateTodoPaths({ partnerId, customerId, source: todo.source, alsoMobile: true });
 }
 
 export async function toggleTodoAction(todoId: string) {
@@ -1564,12 +1583,7 @@ export async function toggleTodoAction(todoId: string) {
     title: done ? `完成待办：${t.title}` : `重新打开待办：${t.title}`,
     meta: { entity: "todo", todoId },
   });
-  revalidatePath("/todos");
-  revalidatePath("/");
-  revalidatePath("/arr");
-  revalidatePath("/arr/calendar");
-  if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
-  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
+  revalidateTodoPaths({ partnerId: t.partnerId, customerId: t.customerId, source: t.source });
 }
 
 export async function completeTodoWithNoteAction(formData: FormData) {
@@ -1633,12 +1647,7 @@ export async function completeTodoWithNoteAction(formData: FormData) {
     });
   }
 
-  revalidatePath("/todos");
-  revalidatePath("/");
-  revalidatePath("/arr");
-  revalidatePath("/arr/calendar");
-  if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
-  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
+  revalidateTodoPaths({ partnerId: t.partnerId, customerId: t.customerId, source: t.source });
 
   void recordSystemEvent({
     category: "TODO",
@@ -1684,12 +1693,7 @@ export async function deleteTodoAction(todoId: string) {
     title: `删除待办：${t.title}`,
     meta: { entity: "todo", todoId },
   });
-  revalidatePath("/todos");
-  revalidatePath("/");
-  revalidatePath("/arr");
-  revalidatePath("/arr/calendar");
-  if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
-  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
+  revalidateTodoPaths({ partnerId: t.partnerId, customerId: t.customerId, source: t.source });
 }
 
 export async function updateTodoAction(todoId: string, formData: FormData) {
@@ -1741,18 +1745,13 @@ export async function updateTodoAction(todoId: string, formData: FormData) {
     title: `更新待办：${t.title}`,
     meta: { entity: "todo", todoId: t.id },
   });
-  revalidatePath("/todos");
-  revalidatePath("/");
-  revalidatePath("/arr");
-  revalidatePath("/arr/calendar");
-  if (t.partnerId) revalidatePath(`/partners/${t.partnerId}`);
-  if (t.customerId) revalidatePath(`/customers/${t.customerId}`);
-  if (existing.partnerId && existing.partnerId !== t.partnerId) {
-    revalidatePath(`/partners/${existing.partnerId}`);
-  }
-  if (existing.customerId && existing.customerId !== t.customerId) {
-    revalidatePath(`/customers/${existing.customerId}`);
-  }
+  revalidateTodoPaths({
+    partnerId: t.partnerId,
+    customerId: t.customerId,
+    source: t.source,
+    previousPartnerId: existing.partnerId,
+    previousCustomerId: existing.customerId,
+  });
 }
 
 // ============ 培训 ============

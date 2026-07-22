@@ -8,6 +8,7 @@ export type LeadsListParams = {
   rank?: string;
   salesman?: string;
   view?: string;
+  page?: string;
 };
 
 export function resolveLeadView(raw?: string): LeadView {
@@ -62,6 +63,8 @@ export function buildLeadsSearchParams(
   if (next.q?.trim()) params.set("q", next.q.trim());
   if (next.rank?.trim()) params.set("rank", next.rank.trim());
   if (next.salesman?.trim()) params.set("salesman", next.salesman.trim());
+  // Only keep page when explicitly requested (tab/filter patches omit it → reset to 1)
+  if (patch.page?.trim() && patch.page.trim() !== "1") params.set("page", patch.page.trim());
   const qs = params.toString();
   return qs ? `?${qs}` : "";
 }

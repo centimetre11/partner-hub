@@ -31,6 +31,8 @@ function InstantSearchInputInner({
       const trimmed = next.trim();
       if (trimmed) params.set(param, trimmed);
       else params.delete(param);
+      // New search should restart at page 1
+      params.delete("page");
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },

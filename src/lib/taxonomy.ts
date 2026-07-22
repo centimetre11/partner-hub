@@ -200,26 +200,50 @@ function displayLabel(
 }
 
 export async function getTaxonomyOptions(dimension: TaxonomyDimension, locale?: Locale): Promise<TaxonomyOptionRow[]> {
+  const map = await getTaxonomyOptionsMany([dimension], locale);
+  return map[dimension] ?? [];
+}
+
+/** Load multiple taxonomy dimensions in one DB round-trip. */
+export async function getTaxonomyOptionsMany(
+  dimensions: TaxonomyDimension[],
+  locale?: Locale,
+): Promise<Partial<Record<TaxonomyDimension, TaxonomyOptionRow[]>>> {
+  const uniq = [...new Set(dimensions)];
+  if (uniq.length === 0) return {};
   await syncBuiltinTaxonomyLabels();
   const loc = locale ?? (await getLocale());
   const ui = getLabels(loc);
   const rows = await db.taxonomyOption.findMany({
-    where: { dimension },
+    where: { dimension: { in: uniq } },
     orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
   });
-  if (rows.length === 0) {
-    return Object.entries(builtinMapForLocale(ui)[dimension]).map(([code, label]) => ({
-      code,
-      label,
-      isBuiltin: true,
+  const byDim = new Map<TaxonomyDimension, typeof rows>();
+  for (const r of rows) {
+    const dim = r.dimension as TaxonomyDimension;
+    const list = byDim.get(dim) ?? [];
+    list.push(r);
+    byDim.set(dim, list);
+  }
+  const out: Partial<Record<TaxonomyDimension, TaxonomyOptionRow[]>> = {};
+  for (const dimension of uniq) {
+    const dimRows = byDim.get(dimension) ?? [];
+    if (dimRows.length === 0) {
+      out[dimension] = Object.entries(builtinMapForLocale(ui)[dimension]).map(([code, label]) => ({
+        code,
+        label,
+        isBuiltin: true,
+      }));
+      continue;
+    }
+    out[dimension] = dimRows.map((r) => ({
+      code: r.code,
+      label: displayLabel(ui, dimension, r),
+      description: r.description,
+      isBuiltin: r.isBuiltin,
     }));
   }
-  return rows.map((r) => ({
-    code: r.code,
-    label: displayLabel(ui, dimension, r),
-    description: r.description,
-    isBuiltin: r.isBuiltin,
-  }));
+  return out;
 }
 
 export async function loadTaxonomyLabelMaps(locale?: Locale): Promise<Record<TaxonomyDimension, Record<string, string>>> {

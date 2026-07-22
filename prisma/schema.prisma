@@ -148,6 +148,12 @@ model Partner {
 
   @@index([parentId])
   @@index([isDistributor])
+  @@index([status])
+  @@index([status, pipelineStage])
+  @@index([status, tier])
+  @@index([status, poolFlag])
+  @@index([ownerId])
+  @@index([updatedAt])
 }
 
 // 客户：伙伴服务的终端客户（手动维护，可归属到某个伙伴）
@@ -635,6 +641,11 @@ model TodoItem {
 
   @@index([opportunityId])
   @@index([projectId])
+  @@index([partnerId])
+  @@index([customerId])
+  @@index([status, dueDate])
+  @@index([status, source])
+  @@index([assigneeId, status])
 }
 
 model TimelineEvent {

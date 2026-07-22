@@ -372,7 +372,7 @@ export function PartnerKanbanBoard({
       );
       try {
         await setPipelineStageAction(partnerId, toStage);
-        router.refresh();
+        // Keep optimistic board state; skip full RSC refresh for snappier drag UX
       } catch {
         setCards(prev);
         router.refresh();

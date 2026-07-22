@@ -85,9 +85,22 @@ export function NavLinks({
       : []),
     { href: "/ai", label: m.nav.aiHub, icon: "✦", aliases: ["/agents", "/tools", "/skills", "/knowledge", "/automations"] },
     ...(showTeamSettings
-      ? [{ href: "/analytics" as const, label: "行为分析", icon: "◧" }]
+      ? [
+          {
+            id: "settings",
+            label: m.nav.teamSettings,
+            icon: "⚙",
+            children: [
+              { href: "/settings/team", label: "团队", icon: "◧" },
+              { href: "/settings/ai", label: "AI 配置", icon: "✦" },
+              { href: "/settings/logs", label: "活动日志", icon: "◫" },
+              { href: "/settings/knowledge", label: "知识库", icon: "🔍" },
+              { href: "/settings/integrations", label: "集成", icon: "▦" },
+              { href: "/settings/analytics", label: "行为分析", icon: "◧" },
+            ],
+          },
+        ]
       : []),
-    { href: "/settings", label: m.nav.teamSettings, icon: "⚙" },
   ];
 
   const leafActive = (l: Leaf) => {
@@ -99,7 +112,7 @@ export function NavLinks({
   return (
     <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
       {nav
-        .filter((entry) => !isGroup(entry) && entry.href === "/settings" ? showTeamSettings : true)
+        .filter((entry) => (isGroup(entry) && entry.id === "settings" ? showTeamSettings : true))
         .map((entry) =>
         isGroup(entry) ? (
           <NavGroup key={entry.id} group={entry} leafActive={leafActive} unread={unread} onNavigate={onNavigate} />

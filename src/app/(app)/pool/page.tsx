@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, ScoreBar, TierBadge, EmptyState, tierTone } from "@/components/ui";
 import { normalizePartnerTier } from "@/lib/tier";
-import { getTaxonomyOptions, labelFromMap, loadTaxonomyLabelMaps } from "@/lib/taxonomy";
+import { labelFromMap, loadTaxonomyLabelMaps, getTaxonomyOptionsMany } from "@/lib/taxonomy";
 import { computeCompleteness } from "@/lib/completeness";
 import { deletePartnerAction, promotePartnerAction, restorePartnerAction, setPoolFlagAction } from "@/lib/actions";
 import { getPoolReviewCounts, poolReviewListFilter } from "@/lib/pool-review";
@@ -12,20 +12,20 @@ import { DeletePartnerButton } from "./delete-partner-button";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { ListPagination } from "@/components/list-pagination";
+import { parseListPage } from "@/lib/list-pagination";
 
 export default async function PoolPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; category?: string; country?: string; tier?: string; flag?: string; view?: string; review?: string }>;
+  searchParams: Promise<{ q?: string; category?: string; country?: string; tier?: string; flag?: string; view?: string; review?: string; page?: string }>;
 }) {
   await requireUser();
   const { labels, messages: m } = await getServerI18n();
   const L = labelConstants(labels);
   const sp = await searchParams;
-  const labelMaps = await loadTaxonomyLabelMaps();
-  const categoryOptions = await getTaxonomyOptions("CATEGORY");
-  const industryOptions = await getTaxonomyOptions("INDUSTRY");
   const view = ["prospect", "archived", "all"].includes(sp.view ?? "") ? sp.view! : "prospect";
+  const { page, take, skip } = parseListPage(sp.page);
 
   const VIEWS = [
     { k: "prospect", label: m.pool.prospects },
@@ -38,32 +38,44 @@ export default async function PoolPage({
 
   const reviewFilter = view !== "archived" ? poolReviewListFilter(sp.review, view as "prospect" | "all") : null;
   const nameFilter = nameContainsWhere(sp.q);
-
-  const partners = await db.partner.findMany({
-    where: {
-      ...(reviewFilter ?? { status: statusWhere as never }),
-      ...(nameFilter ? { name: nameFilter } : {}),
-      ...(sp.category ? { category: sp.category } : {}),
-      ...(sp.tier ? { tier: sp.tier } : {}),
-      ...(sp.flag && view !== "archived" && !reviewFilter ? { poolFlag: sp.flag } : {}),
-      ...(sp.country ? { country: { contains: sp.country } } : {}),
-    },
-    include: { contacts: true, opportunities: true, events: true, trainings: true },
-    orderBy: [{ status: "asc" }, { tier: "asc" }, { name: "asc" }],
-  });
-
-  const counts = {
-    prospect: await db.partner.count({ where: { status: "PROSPECT" } }),
-    archived: await db.partner.count({ where: { status: "ARCHIVED" } }),
+  const listWhere = {
+    ...(reviewFilter ?? { status: statusWhere as never }),
+    ...(nameFilter ? { name: nameFilter } : {}),
+    ...(sp.category ? { category: sp.category } : {}),
+    ...(sp.tier ? { tier: sp.tier } : {}),
+    ...(sp.flag && view !== "archived" && !reviewFilter ? { poolFlag: sp.flag } : {}),
+    ...(sp.country ? { country: { contains: sp.country } } : {}),
   };
 
-  const reviewCounts = await getPoolReviewCounts();
-
-  const countries = await db.partner.findMany({
-    where: { status: { in: ["PROSPECT", "ARCHIVED"] } },
-    select: { country: true },
-    distinct: ["country"],
-  });
+  const [labelMaps, taxonomy, partners, total, counts, reviewCounts, countries] = await Promise.all([
+    loadTaxonomyLabelMaps(),
+    getTaxonomyOptionsMany(["CATEGORY", "INDUSTRY"]),
+    db.partner.findMany({
+      where: listWhere,
+      include: {
+        contacts: { select: { role: true, contactInfo: true } },
+        opportunities: { select: { id: true } },
+        events: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 5 },
+        trainings: { select: { status: true } },
+      },
+      orderBy: [{ status: "asc" }, { tier: "asc" }, { name: "asc" }],
+      skip,
+      take,
+    }),
+    db.partner.count({ where: listWhere }),
+    Promise.all([
+      db.partner.count({ where: { status: "PROSPECT" } }),
+      db.partner.count({ where: { status: "ARCHIVED" } }),
+    ]).then(([prospect, archived]) => ({ prospect, archived })),
+    getPoolReviewCounts(),
+    db.partner.findMany({
+      where: { status: { in: ["PROSPECT", "ARCHIVED"] } },
+      select: { country: true },
+      distinct: ["country"],
+    }),
+  ]);
+  const categoryOptions = taxonomy.CATEGORY ?? [];
+  const industryOptions = taxonomy.INDUSTRY ?? [];
 
   const flagTone = (f: string) =>
     f === "ADVANCING" ? "green" : f === "WATCHING" ? "amber" : f === "DROPPED" ? "zinc" : "blue";
@@ -71,7 +83,11 @@ export default async function PoolPage({
   const qs = (next: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
     const merged = { q: sp.q, category: sp.category, tier: sp.tier, country: sp.country, review: sp.review, view, ...next };
-    for (const [k, v] of Object.entries(merged)) if (v) params.set(k, v);
+    for (const [k, v] of Object.entries(merged)) {
+      if (k === "page") continue;
+      if (v) params.set(k, v);
+    }
+    if (next.page && next.page !== "1") params.set("page", next.page);
     return `/pool?${params.toString()}`;
   };
 
@@ -190,7 +206,7 @@ export default async function PoolPage({
             </thead>
             <tbody>
               {partners.map((p) => {
-                const c = computeCompleteness(p, labels);
+                const c = computeCompleteness(p as Parameters<typeof computeCompleteness>[0], labels);
                 const archived = p.status === "ARCHIVED";
                 return (
                   <tr key={p.id} className={`border-b border-slate-50 hover:bg-slate-50/60 ${archived ? "opacity-70" : ""}`}>
@@ -269,6 +285,26 @@ export default async function PoolPage({
           </table>
           {partners.length === 0 && <EmptyState text={view === "archived" ? m.pool.emptyArchived : m.pool.emptyFiltered} />}
           </div>
+          <ListPagination
+            pathname="/pool"
+            searchParams={{
+              q: sp.q,
+              category: sp.category,
+              country: sp.country,
+              tier: sp.tier,
+              flag: sp.flag,
+              view: view === "prospect" ? undefined : view,
+              review: sp.review,
+            }}
+            page={page}
+            total={total}
+            pageSize={take}
+            labels={{
+              prevPage: m.common.prevPage,
+              nextPage: m.common.nextPage,
+              pageOf: m.common.pageOf,
+            }}
+          />
         </div>
       </div>
     </div>

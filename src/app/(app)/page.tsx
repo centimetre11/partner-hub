@@ -86,7 +86,7 @@ type WorkProps = {
 };
 
 async function WorkOverview({ userId, userName, now, todoView, m, bcp47, labels }: WorkProps) {
-  const [overdueTodos, activePartners, activeCount, openTodoCount, activeOppCount, unreadNotifications, meetingCtx, partners, customers, users] =
+  const [overdueTodos, activePartners, openTodoCount, activeOppCount, unreadNotifications, meetingCtx, customers, users] =
     await Promise.all([
     db.todoItem.findMany({
       where: { status: "OPEN", dueDate: { lt: overdueDueDateBefore(now) } },
@@ -102,9 +102,16 @@ async function WorkOverview({ userId, userName, now, todoView, m, bcp47, labels 
     }),
     db.partner.findMany({
       where: { status: "ACTIVE" },
-      include: { events: { orderBy: { createdAt: "desc" }, take: 1 } },
+      select: {
+        id: true,
+        name: true,
+        tier: true,
+        pipelineStage: true,
+        updatedAt: true,
+        events: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+      },
+      orderBy: { name: "asc" },
     }),
-    db.partner.count({ where: { status: "ACTIVE" } }),
     db.todoItem.count({ where: { status: "OPEN" } }),
     db.opportunity.count({ where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] }, partner: { status: "ACTIVE" } } }),
     INBOX_NAV_ENABLED
@@ -116,11 +123,6 @@ async function WorkOverview({ userId, userName, now, todoView, m, bcp47, labels 
         })
       : Promise.resolve([]),
     getMeetingSchedulerContext(userId),
-    db.partner.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
     db.customer.findMany({
       where: { status: { in: ["ACTIVE", "PROSPECT"] } },
       select: { id: true, name: true, contactEmail: true, contactName: true },
@@ -128,6 +130,9 @@ async function WorkOverview({ userId, userName, now, todoView, m, bcp47, labels 
     }),
     db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
+
+  const partners = activePartners.map((p) => ({ id: p.id, name: p.name }));
+  const activeCount = activePartners.length;
 
   const stalePartners = activePartners
     .map((p) => ({ p, days: staleDays({ events: p.events, updatedAt: p.updatedAt }) }))

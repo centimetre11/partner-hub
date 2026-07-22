@@ -28,13 +28,15 @@ export type CustomerBucketMeta = {
   growthProbability: GrowthProbability | null;
   /** 是否存在推进中商机 */
   hasOpenOpportunities: boolean;
+  /** 最高概率商机的名称（用于卡片摘要） */
+  nextOpportunityName: string | null;
 };
 
 export type CustomerBucketInput = {
   id: string;
   status: string;
   contracts: ArrContractInput[];
-  opportunities: { status: string | null }[];
+  opportunities: { id: string; status: string | null; name: string | null }[];
 };
 
 export function classifyCustomer(customer: CustomerBucketInput): CustomerBucketMeta {
@@ -45,8 +47,10 @@ export function classifyCustomer(customer: CustomerBucketInput): CustomerBucketM
     isOpenOpportunityStatus(o.status ?? "")
   );
   const hasOpenOpportunities = openOpportunities.length > 0;
-  const growthProbability = hasOpenOpportunities
-    ? highestProbability(openOpportunities.map((o) => normalizeOpportunityStatus(o.status)))
+  const normalizedStatuses = openOpportunities.map((o) => normalizeOpportunityStatus(o.status));
+  const growthProbability = hasOpenOpportunities ? highestProbability(normalizedStatuses) : null;
+  const nextOpportunity = hasOpenOpportunities
+    ? pickHighestProbabilityOpportunity(openOpportunities)
     : null;
 
   let bucket: CustomerBucket;
@@ -66,7 +70,23 @@ export function classifyCustomer(customer: CustomerBucketInput): CustomerBucketM
     openOpportunityCount: openOpportunities.length,
     growthProbability,
     hasOpenOpportunities,
+    nextOpportunityName: nextOpportunity?.name ?? null,
   };
+}
+
+function pickHighestProbabilityOpportunity(
+  opportunities: { id: string; status: string | null; name: string | null }[],
+) {
+  let best: (typeof opportunities)[number] | null = null;
+  let bestScore = -1;
+  for (const o of opportunities) {
+    const score = probabilityValue(normalizeOpportunityStatus(o.status));
+    if (score > bestScore) {
+      bestScore = score;
+      best = o;
+    }
+  }
+  return best;
 }
 
 export function classifyCustomers<T extends CustomerBucketInput>(

@@ -42,13 +42,6 @@ export default async function ArrCalendarPage({
           name: true,
           ownerId: true,
           owner: { select: { id: true, name: true } },
-          arrProfile: {
-            include: {
-              cells: {
-                where: { year, month: { gte: fromMonth, lte: toMonth } },
-              },
-            },
-          },
         },
       },
     },
@@ -58,12 +51,14 @@ export default async function ArrCalendarPage({
   const customerIds = [...new Set(active.map((c) => c.customerId))];
 
   const [profiles, openTodos, owners, partners, customers, users] = await Promise.all([
-    db.arrCustomerProfile.findMany({
-      where: { customerId: { in: customerIds } },
-      include: {
-        cells: { where: { year, month: { gte: fromMonth, lte: toMonth } } },
-      },
-    }),
+    customerIds.length
+      ? db.arrCustomerProfile.findMany({
+          where: { customerId: { in: customerIds } },
+          include: {
+            cells: { where: { year, month: { gte: fromMonth, lte: toMonth } } },
+          },
+        })
+      : Promise.resolve([]),
     customerIds.length
       ? db.todoItem.findMany({
           where: {
@@ -82,17 +77,21 @@ export default async function ArrCalendarPage({
           orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
         })
       : Promise.resolve([]),
-    db.user.findMany({
-      where: { ownedCustomers: { some: { id: { in: customerIds } } } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+    customerIds.length
+      ? db.user.findMany({
+          where: { ownedCustomers: { some: { id: { in: customerIds } } } },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
     Promise.resolve([] as { id: string; name: string }[]),
-    db.customer.findMany({
-      where: { id: { in: customerIds } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+    customerIds.length
+      ? db.customer.findMany({
+          where: { id: { in: customerIds } },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      : Promise.resolve([]),
     db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
@@ -110,7 +109,7 @@ export default async function ArrCalendarPage({
     if (sp.owner && ct.customer.ownerId !== sp.owner) continue;
     let row = byCustomer.get(ct.customerId);
     if (!row) {
-      const profile = profileByCustomer.get(ct.customerId) ?? ct.customer.arrProfile;
+      const profile = profileByCustomer.get(ct.customerId);
       const cells: CalendarRowData["cells"] = {};
       for (const cell of profile?.cells ?? []) {
         cells[cell.month] = { content: cell.content };

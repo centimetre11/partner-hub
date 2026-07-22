@@ -4,13 +4,13 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, ScoreBar, fmtDateTime } from "@/components/ui";
 import { formatTierLabel, normalizePartnerTier } from "@/lib/tier";
-import { PowerMapSection } from "@/components/power-map-flow";
+import { PowerMapLazy } from "@/components/power-map-lazy";
 import { computeCompleteness } from "@/lib/completeness";
 import { computePartnerStatus, type StatusCopy } from "@/lib/partner-status";
 import { buildPartnerInstanceMap, getStageGuidance } from "@/lib/partner-framework";
 import { PartnerStatusOverview } from "@/components/partner-status-overview";
 import {
-  getTaxonomyOptions,
+  getTaxonomyOptionsMany,
   labelFromMap,
   labelsFromMap,
   loadTaxonomyLabelMaps,
@@ -128,17 +128,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     matchedCrmCustomer,
     agentTemplates,
     labelMaps,
-    taxonomyArchetype,
-    taxonomyIndustry,
-    taxonomyValuePattern,
-    taxonomyCategory,
-    taxonomyCapability,
-    taxonomyCustomerSegment,
-    taxonomyBuyingTrigger,
-    taxonomyEntryPath,
-    taxonomyIcpTier,
-    taxonomyWinFactor,
-    taxonomyLossReason,
+    taxonomyByDim,
     allPartners,
     allCustomers,
     distributorOptions,
@@ -187,17 +177,19 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       orderBy: { name: "asc" },
     }),
     loadTaxonomyLabelMaps(),
-    getTaxonomyOptions("ARCHETYPE"),
-    getTaxonomyOptions("INDUSTRY"),
-    getTaxonomyOptions("VALUE_PATTERN"),
-    getTaxonomyOptions("CATEGORY"),
-    getTaxonomyOptions("CAPABILITY"),
-    getTaxonomyOptions("CUSTOMER_SEGMENT"),
-    getTaxonomyOptions("BUYING_TRIGGER"),
-    getTaxonomyOptions("ENTRY_PATH"),
-    getTaxonomyOptions("ICP_TIER"),
-    getTaxonomyOptions("WIN_FACTOR"),
-    getTaxonomyOptions("LOSS_REASON"),
+    getTaxonomyOptionsMany([
+      "ARCHETYPE",
+      "INDUSTRY",
+      "VALUE_PATTERN",
+      "CATEGORY",
+      "CAPABILITY",
+      "CUSTOMER_SEGMENT",
+      "BUYING_TRIGGER",
+      "ENTRY_PATH",
+      "ICP_TIER",
+      "WIN_FACTOR",
+      "LOSS_REASON",
+    ]),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.customer.findMany({
       where: { status: { in: ["ACTIVE", "PROSPECT"] } },
@@ -244,6 +236,18 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       take: 20,
     }),
   ]);
+
+  const taxonomyArchetype = taxonomyByDim.ARCHETYPE ?? [];
+  const taxonomyIndustry = taxonomyByDim.INDUSTRY ?? [];
+  const taxonomyValuePattern = taxonomyByDim.VALUE_PATTERN ?? [];
+  const taxonomyCategory = taxonomyByDim.CATEGORY ?? [];
+  const taxonomyCapability = taxonomyByDim.CAPABILITY ?? [];
+  const taxonomyCustomerSegment = taxonomyByDim.CUSTOMER_SEGMENT ?? [];
+  const taxonomyBuyingTrigger = taxonomyByDim.BUYING_TRIGGER ?? [];
+  const taxonomyEntryPath = taxonomyByDim.ENTRY_PATH ?? [];
+  const taxonomyIcpTier = taxonomyByDim.ICP_TIER ?? [];
+  const taxonomyWinFactor = taxonomyByDim.WIN_FACTOR ?? [];
+  const taxonomyLossReason = taxonomyByDim.LOSS_REASON ?? [];
 
   const statusCopy: StatusCopy = {
     evidence: m.partnerStatus.evidenceCopy,
@@ -548,7 +552,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
         relationship={
           <div className="space-y-5">
             <Card title={m.partnerDetail.powerMap.replace("{count}", String(p.contacts.length))}>
-              <PowerMapSection
+              <PowerMapLazy
                 owner={{ kind: "partner", id: p.id }}
                 toolbarExtra={
                   <AiAddButton scope="powermap" partnerId={p.id} label={m.partnerDetail.aiAddContact} variant="soft" />

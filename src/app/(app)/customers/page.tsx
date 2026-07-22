@@ -1,18 +1,20 @@
 import { NavLink } from "@/components/nav-link";
-import { ClickableRow } from "@/components/clickable-nav";
+import { ClickableCard } from "@/components/clickable-nav";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
+import { Badge, PageHeader, EmptyState, fmtDate, ScoreBar } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddCustomerForm } from "./add-customer-form";
 import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
-import { getTaxonomyOptions, loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
+import { getTaxonomyOptionsMany, loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
 import { CustomerBucketTabs } from "@/components/customer-bucket-tabs";
 import { classifyCustomers, type CustomerBucketMeta, type GrowthProbability } from "@/lib/customer-bucket";
 import { OPEN_OPPORTUNITY_STATUSES, opportunityStatusLabel, opportunityStatusTone } from "@/lib/opportunity-status";
+import { ListPagination } from "@/components/list-pagination";
+import { parseListPage } from "@/lib/list-pagination";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -31,6 +33,7 @@ type CustomerBucketSearchParams = {
   segment?: string;
   icpTier?: string;
   bucket?: string;
+  page?: string;
 };
 
 export default async function CustomersPage({
@@ -43,28 +46,30 @@ export default async function CustomersPage({
   const c = m.customers;
   const sp = await searchParams;
   const nameFilter = nameContainsWhere(sp.q);
+  const { page, take, skip } = parseListPage(sp.page);
 
-  const [customers, partners, users, segmentOptions, icpTierOptions, buyingTriggerOptions, entryPathOptions, labelMaps] = await Promise.all([
+  const listWhere = {
+    ...END_CUSTOMER_WHERE,
+    ...(nameFilter ? { name: nameFilter } : {}),
+    ...(sp.status ? { status: sp.status } : {}),
+    ...(sp.segment ? { customerSegment: sp.segment } : {}),
+    ...(sp.icpTier ? { icpTier: sp.icpTier } : {}),
+    ...(sp.owner ? { ownerId: sp.owner } : {}),
+    ...(sp.presales ? { presalesUserId: sp.presales } : {}),
+    ...(sp.unbound === "1"
+      ? { partnerLinks: { none: {} } }
+      : sp.partner
+        ? { partnerLinks: { some: { partnerId: sp.partner } } }
+        : {}),
+  };
+
+  const [bucketRows, partners, users, taxonomy, labelMaps] = await Promise.all([
     db.customer.findMany({
-      where: {
-        ...END_CUSTOMER_WHERE,
-        ...(nameFilter ? { name: nameFilter } : {}),
-        ...(sp.status ? { status: sp.status } : {}),
-        ...(sp.segment ? { customerSegment: sp.segment } : {}),
-        ...(sp.icpTier ? { icpTier: sp.icpTier } : {}),
-        ...(sp.owner ? { ownerId: sp.owner } : {}),
-        ...(sp.presales ? { presalesUserId: sp.presales } : {}),
-        ...(sp.unbound === "1"
-          ? { partnerLinks: { none: {} } }
-          : sp.partner
-            ? { partnerLinks: { some: { partnerId: sp.partner } } }
-            : {}),
-      },
-      include: {
-        partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
-        owner: { select: { name: true } },
-        presalesUser: { select: { name: true } },
-        contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
+      where: listWhere,
+      select: {
+        id: true,
+        status: true,
+        updatedAt: true,
         contracts: {
           select: {
             id: true,
@@ -81,19 +86,21 @@ export default async function CustomersPage({
         },
         opportunities: {
           where: { status: { in: [...OPEN_OPPORTUNITY_STATUSES] } },
-          select: { status: true },
+          select: { id: true, status: true, name: true },
         },
       },
       orderBy: { updatedAt: "desc" },
     }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
-    getTaxonomyOptions("CUSTOMER_SEGMENT"),
-    getTaxonomyOptions("ICP_TIER"),
-    getTaxonomyOptions("BUYING_TRIGGER"),
-    getTaxonomyOptions("ENTRY_PATH"),
+    getTaxonomyOptionsMany(["CUSTOMER_SEGMENT", "ICP_TIER", "BUYING_TRIGGER", "ENTRY_PATH"]),
     loadTaxonomyLabelMaps(),
   ]);
+
+  const segmentOptions = taxonomy.CUSTOMER_SEGMENT ?? [];
+  const icpTierOptions = taxonomy.ICP_TIER ?? [];
+  const buyingTriggerOptions = taxonomy.BUYING_TRIGGER ?? [];
+  const entryPathOptions = taxonomy.ENTRY_PATH ?? [];
 
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? c.statusActive : s === "PROSPECT" ? c.statusProspect : c.statusInactive;
@@ -102,7 +109,7 @@ export default async function CustomersPage({
   const currentBucket = validBuckets.includes(sp.bucket as CustomerBucketMeta["bucket"] | "all")
     ? (sp.bucket as CustomerBucketMeta["bucket"] | "all")
     : "base";
-  const classified = classifyCustomers(customers);
+  const classified = classifyCustomers(bucketRows);
   const bucketCounts = {
     base: classified.filter((item) => item.meta.bucket === "base").length,
     growth: classified.filter((item) => item.meta.bucket === "growth").length,
@@ -113,6 +120,31 @@ export default async function CustomersPage({
     currentBucket === "all"
       ? classified
       : classified.filter((item) => item.meta.bucket === currentBucket);
+
+  const pageSlice = filtered.slice(skip, skip + take);
+  const pageIds = pageSlice.map((item) => item.customer.id);
+  const metaById = new Map(pageSlice.map((item) => [item.customer.id, item.meta]));
+
+  const customers = pageIds.length
+    ? await db.customer.findMany({
+        where: { id: { in: pageIds } },
+        include: {
+          partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
+          owner: { select: { name: true } },
+          presalesUser: { select: { name: true } },
+          contacts: { select: { name: true, title: true, contactInfo: true }, take: 1, orderBy: { updatedAt: "desc" } },
+        },
+      })
+    : [];
+  const customerById = new Map(customers.map((cust) => [cust.id, cust]));
+  const pageItems = pageIds
+    .map((id) => {
+      const cust = customerById.get(id);
+      const meta = metaById.get(id);
+      if (!cust || !meta) return null;
+      return { customer: cust, meta };
+    })
+    .filter((x): x is { customer: (typeof customers)[number]; meta: CustomerBucketMeta } => !!x);
 
   const bucketLabel =
     currentBucket === "base" ? c.bucketBase
@@ -125,7 +157,15 @@ export default async function CustomersPage({
   const growthGroupLabel = (code: GrowthProbability) =>
     code === "P80" ? c.growthP80Group : code === "P50" ? c.growthP50Group : c.growthP20Group;
 
-  function CustomerRow({ cust, meta }: { cust: (typeof customers)[number]; meta: CustomerBucketMeta }) {
+  function probabilityValue(code: GrowthProbability): number {
+    switch (code) {
+      case "P80": return 80;
+      case "P50": return 50;
+      case "P20": return 20;
+    }
+  }
+
+  function CustomerCard({ cust, meta }: { cust: (typeof customers)[number]; meta: CustomerBucketMeta }) {
     const bucketBadge =
       currentBucket === "all"
         ? meta.bucket === "base"
@@ -136,69 +176,80 @@ export default async function CustomersPage({
               ? c.bucketOpportunity
               : c.bucketOther
         : null;
+    const segmentLabel = cust.customerSegment
+      ? labelFromMap(labelMaps.CUSTOMER_SEGMENT, cust.customerSegment)
+      : null;
+    const icpLabel = cust.icpTier ? labelFromMap(labelMaps.ICP_TIER, cust.icpTier) : null;
+    const region = [cust.city, cust.country].filter(Boolean).join(" · ") || null;
+    const partnerNames = cust.partnerLinks.map((l) => l.partner.name).join(", ") || null;
     return (
-      <ClickableRow key={cust.id} href={`/customers/${cust.id}`} className="hover:bg-slate-50/60">
-        <td className="px-4 py-3">
-          <span className="font-medium text-slate-900">{cust.name}</span>
-          <div className="flex flex-wrap gap-1 mt-1">
+      <ClickableCard
+        href={`/customers/${cust.id}`}
+        className="rounded-lg border border-slate-200/80 bg-white shadow-sm p-3 hover:border-slate-300 hover:shadow-md transition-shadow"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <span className="font-semibold text-sm text-slate-900 min-w-0 break-words">{cust.name}</span>
+          <div className="flex flex-wrap justify-end gap-1 shrink-0 max-w-[50%]">
             {meta.isArr && <Badge tone="purple">{c.arrCustomer}</Badge>}
             {meta.bucket === "base" && meta.hasOpenOpportunities && (
               <Badge tone="amber">{c.secondaryGrowth}</Badge>
             )}
             {bucketBadge && <Badge tone="zinc">{bucketBadge}</Badge>}
           </div>
-          <div className="text-[11px] text-slate-400 mt-0.5">{c.createdAt} {fmtDate(cust.createdAt, bcp47)}</div>
-        </td>
-        <td className="px-4 py-3">
-          {cust.customerSegment ? (
-            <span className="text-slate-700">{labelFromMap(labelMaps.CUSTOMER_SEGMENT, cust.customerSegment)}</span>
-          ) : (
-            <span className="text-slate-300">—</span>
-          )}
-          {cust.icpTier && (
-            <div className="text-[11px] text-slate-400 mt-0.5">{labelFromMap(labelMaps.ICP_TIER, cust.icpTier)}</div>
-          )}
-        </td>
-        <td className="px-4 py-3 text-slate-600">{cust.industry ?? "—"}</td>
-        <td className="px-4 py-3 text-slate-600">{[cust.city, cust.country].filter(Boolean).join(" · ") || "—"}</td>
-        <td className="px-4 py-3">
-          {cust.partnerLinks.length > 0 ? (
-            <span className="flex flex-wrap gap-x-1.5 gap-y-0.5">
-              {cust.partnerLinks.map((link, i) => (
-                <span key={link.partner.id}>
-                  <NavLink href={`/partners/${link.partner.id}`} className="text-sky-600 hover:underline">{link.partner.name}</NavLink>
-                  {i < cust.partnerLinks.length - 1 && <span className="text-slate-300">,</span>}
-                </span>
-              ))}
-            </span>
-          ) : (
-            <span className="text-slate-300">{c.noPartner}</span>
-          )}
-        </td>
-        <td className="px-4 py-3 text-slate-600">
-          {cust.contacts[0] ? (
-            <span>
-              {cust.contacts[0].name}
-              {cust.contacts[0].title ? (
-                <span className="text-slate-400"> · {cust.contacts[0].title}</span>
-              ) : null}
-            </span>
-          ) : "—"}
-        </td>
-        <td className="px-4 py-3 text-slate-600">{cust.owner?.name ?? "—"}</td>
-        <td className="px-4 py-3 text-slate-600">{cust.presalesUser?.name ?? "—"}</td>
-        <td className="px-4 py-3">
+        </div>
+        <div className="text-[11px] text-slate-500 mt-1.5">
+          {c.createdAt} {fmtDate(cust.createdAt, bcp47)}
+        </div>
+        <div className="text-[11px] text-slate-500 mt-1 truncate">
+          {segmentLabel ? <span className="text-slate-700">{segmentLabel}</span> : <span className="text-slate-300">—</span>}
+          {icpLabel && <span className="text-slate-400"> · {icpLabel}</span>}
+        </div>
+        <div className="text-[11px] text-slate-500 mt-1 truncate">
+          {cust.industry ?? "—"}
+          {region && <span> · {region}</span>}
+        </div>
+        <div className="text-[11px] text-slate-500 mt-1 truncate">
+          {c.colPartner}: {partnerNames ?? c.noPartner}
+        </div>
+        <div className="text-[11px] text-slate-500 mt-1 truncate">
+          {c.colOwner}: {cust.owner?.name ?? "—"} · {c.colPresales}: {cust.presalesUser?.name ?? "—"}
+        </div>
+        {meta.nextOpportunityName && (
+          <div className="text-[11px] text-slate-500 mt-1 truncate">
+            {c.openOpportunityCount.replace("{n}", String(meta.openOpportunityCount))}
+            {meta.openOpportunityCount === 1 ? "" : " · "}
+            {meta.nextOpportunityName}
+          </div>
+        )}
+        <div className="mt-2">
           {currentBucket === "growth" && meta.growthProbability ? (
-            <Badge tone={opportunityStatusTone(meta.growthProbability)}>
-              {opportunityStatusLabel(meta.growthProbability, bcp47 === "zh-CN" ? "zh" : "en")}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <ScoreBar score={probabilityValue(meta.growthProbability)} />
+              </div>
+              <span className="text-xs text-slate-500 shrink-0">
+                {opportunityStatusLabel(meta.growthProbability, bcp47 === "zh-CN" ? "zh" : "en")}
+              </span>
+            </div>
           ) : (
             <Badge tone={statusTone(cust.status)}>{statusLabel(cust.status)}</Badge>
           )}
-        </td>
-      </ClickableRow>
+        </div>
+      </ClickableCard>
     );
   }
+
+  const filterParams = {
+    q: sp.q,
+    status: sp.status,
+    segment: sp.segment,
+    icpTier: sp.icpTier,
+    partner: sp.partner,
+    owner: sp.owner,
+    presales: sp.presales,
+    unbound: sp.unbound,
+    bucket: currentBucket === "base" ? undefined : currentBucket,
+  };
 
   return (
     <div className="pb-16">
@@ -290,51 +341,52 @@ export default async function CustomersPage({
           }}
         />
 
-        {filtered.length === 0 ? (
+        {pageItems.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm">
             <EmptyState text={c.empty} />
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/50 text-left text-xs text-slate-500">
-                    <th className="px-4 py-2.5 font-medium">{c.colName}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colSegment}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colIndustry}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colRegion}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colPartner}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colContact}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colOwner}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colPresales}</th>
-                    <th className="px-4 py-2.5 font-medium">{c.colStatus}</th>
-                  </tr>
-                </thead>
-                {currentBucket === "growth" ? (
-                  growthProbabilityOrder.map((code) => {
-                    const groupItems = filtered.filter((item) => item.meta.growthProbability === code);
-                    if (groupItems.length === 0) return null;
-                    return (
-                      <tbody key={code} className="divide-y divide-slate-50">
-                        <tr className="bg-slate-50/80 text-xs text-slate-500">
-                          <td colSpan={9} className="px-4 py-2 font-medium">{growthGroupLabel(code)}</td>
-                        </tr>
-                        {groupItems.map(({ customer: cust, meta }) => (
-                          <CustomerRow key={cust.id} cust={cust} meta={meta} />
-                        ))}
-                      </tbody>
-                    );
-                  })
-                ) : (
-                  <tbody className="divide-y divide-slate-50">
-                    {filtered.map(({ customer: cust, meta }) => (
-                      <CustomerRow key={cust.id} cust={cust} meta={meta} />
-                    ))}
-                  </tbody>
-                )}
-              </table>
-            </div>
+          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4 overflow-hidden">
+            {currentBucket === "growth" ? (
+              growthProbabilityOrder.map((code) => {
+                const groupItems = pageItems.filter((item) => item.meta.growthProbability === code);
+                if (groupItems.length === 0) return null;
+                return (
+                  <div key={code} className="mb-5 last:mb-0">
+                    <div className="flex items-center gap-2 px-2 py-1.5 mb-2 bg-slate-50/80 rounded-md">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white bg-slate-600">
+                        {code === "P80" ? "3" : code === "P50" ? "2" : "1"}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-600">{growthGroupLabel(code)}</span>
+                      <span className="text-xs text-slate-400 tabular-nums">{groupItems.length}</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      {groupItems.map(({ customer: cust, meta }) => (
+                        <CustomerCard key={cust.id} cust={cust} meta={meta} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {pageItems.map(({ customer: cust, meta }) => (
+                  <CustomerCard key={cust.id} cust={cust} meta={meta} />
+                ))}
+              </div>
+            )}
+            <ListPagination
+              pathname="/customers"
+              searchParams={filterParams}
+              page={page}
+              total={filtered.length}
+              pageSize={take}
+              labels={{
+                prevPage: m.common.prevPage,
+                nextPage: m.common.nextPage,
+                pageOf: m.common.pageOf,
+              }}
+            />
           </div>
         )}
       </div>

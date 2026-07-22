@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
-import { PowerMapSection } from "@/components/power-map-flow";
+import { PowerMapLazy } from "@/components/power-map-lazy";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { BUSINESS_RECORD_PAGE_SIZE } from "@/lib/business-record-core";
 import { CustomerWorkspaceShell, type CustomerTab } from "@/components/customer-workspace-shell";
@@ -44,7 +44,7 @@ import {
 import { MossCustomerSection } from "@/components/moss/moss-workflow-sections";
 import { getMossConfigStatus } from "@/lib/moss";
 import { parseMossDossier } from "@/lib/moss-dossier";
-import { getTaxonomyOptions } from "@/lib/taxonomy";
+import { getTaxonomyOptionsMany } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
 import { CustomerContractForm } from "@/components/customer-contract-form";
 import { AmountInput } from "@/components/amount-input";
@@ -117,44 +117,49 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   const mossStatus = await getMossConfigStatus();
   const initialMossDossier = parseMossDossier(customer.mossSnapshot);
 
-  const [segmentOptions, winFactorOptions, lossReasonOptions] = await Promise.all([
-    getTaxonomyOptions("CUSTOMER_SEGMENT"),
-    getTaxonomyOptions("WIN_FACTOR"),
-    getTaxonomyOptions("LOSS_REASON"),
-  ]);
-  const [buyingTriggerOptions, entryPathOptions, icpTierOptions] = await Promise.all([
-    getTaxonomyOptions("BUYING_TRIGGER"),
-    getTaxonomyOptions("ENTRY_PATH"),
-    getTaxonomyOptions("ICP_TIER"),
-  ]);
+  const [taxonomyByDim, partners, customers, users, wecomChat, matchedCrmCustomer, ammoConfig, linkedSolutions] =
+    await Promise.all([
+      getTaxonomyOptionsMany([
+        "CUSTOMER_SEGMENT",
+        "WIN_FACTOR",
+        "LOSS_REASON",
+        "BUYING_TRIGGER",
+        "ENTRY_PATH",
+        "ICP_TIER",
+      ]),
+      db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      db.customer.findMany({
+        where: { status: { in: ["ACTIVE", "PROSPECT"] } },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      }),
+      db.user.findMany({ select: { id: true, name: true, role: true } }),
+      getWecomChatForCustomer(id),
+      customer.crmCustomerId
+        ? db.crmCustomer.findUnique({
+            where: { id: customer.crmCustomerId },
+            select: { id: true, name: true, city: true, status: true, salesman: true, presales: true },
+          })
+        : Promise.resolve(null),
+      getAmmoConfigForClient(),
+      db.solution.findMany({
+        where: { partnerId: { in: customer.partnerLinks.map((l) => l.partner.id) } },
+        orderBy: { updatedAt: "desc" },
+        include: { assets: { include: { asset: true } } },
+      }),
+    ]);
+
+  const segmentOptions = taxonomyByDim.CUSTOMER_SEGMENT ?? [];
+  const winFactorOptions = taxonomyByDim.WIN_FACTOR ?? [];
+  const lossReasonOptions = taxonomyByDim.LOSS_REASON ?? [];
+  const buyingTriggerOptions = taxonomyByDim.BUYING_TRIGGER ?? [];
+  const entryPathOptions = taxonomyByDim.ENTRY_PATH ?? [];
+  const icpTierOptions = taxonomyByDim.ICP_TIER ?? [];
 
   const oppStatusOptions = OPPORTUNITY_STATUS_CODES.map((code) => ({
     value: code,
     label: opportunityStatusLabel(code, locale),
   }));
-
-  const [partners, customers, users, wecomChat, matchedCrmCustomer, ammoConfig, linkedSolutions] = await Promise.all([
-    db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    db.customer.findMany({
-      where: { status: { in: ["ACTIVE", "PROSPECT"] } },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    db.user.findMany({ select: { id: true, name: true, role: true } }),
-    getWecomChatForCustomer(id),
-    customer.crmCustomerId
-      ? db.crmCustomer.findUnique({
-          where: { id: customer.crmCustomerId },
-          select: { id: true, name: true, city: true, status: true, salesman: true, presales: true },
-        })
-      : Promise.resolve(null),
-    getAmmoConfigForClient(),
-    db.solution.findMany({
-      where: { partnerId: { in: customer.partnerLinks.map((l) => l.partner.id) } },
-      orderBy: { updatedAt: "desc" },
-      include: { assets: { include: { asset: true } } },
-    }),
-  ]);
 
   const owner = { kind: "customer" as const, id: customer.id };
   const contactOptions = customer.contacts.map((ct) => ({ id: ct.id, name: ct.name }));
@@ -741,7 +746,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   const relationshipPanel = (
     <div className="space-y-6">
       <Card title={pd.powerMap.replace("{count}", String(customer.contacts.length))}>
-        <PowerMapSection
+        <PowerMapLazy
           owner={owner}
           toolbarExtra={
             <AiAddButton

@@ -146,7 +146,7 @@ function bindingBadge(label: string, ok: boolean) {
 }
 
 export function MemberRow({ user, salesmen }: { user: MemberUser; salesmen: string[] }) {
-  const { settings: s, common } = useMessages();
+  const { settings: s } = useMessages();
   const [open, setOpen] = useState(false);
   const role = normalizeUserRole(user.role);
 

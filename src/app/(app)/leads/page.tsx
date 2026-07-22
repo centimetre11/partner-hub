@@ -11,10 +11,12 @@ import {
   resolveLeadView,
   resolveSalesmanFilter,
 } from "@/lib/leads-query";
-import { compareKpiDeadline, isKpiDeadlineUrgent } from "@/lib/leads";
+import { isKpiDeadlineUrgent } from "@/lib/leads";
 import { InstantSearchInput } from "@/components/instant-search-input";
 import { LeadsSyncButton } from "@/components/leads/leads-sync-button";
 import { LeadsRemovedNotice } from "@/components/leads/leads-removed-notice";
+import { ListPagination } from "@/components/list-pagination";
+import { parseListPage } from "@/lib/list-pagination";
 
 function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
   const r = rank?.trim().toUpperCase();
@@ -27,7 +29,7 @@ function rankTone(rank?: string | null): "red" | "amber" | "blue" | "zinc" {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; rank?: string; salesman?: string; view?: string; removed?: string }>;
+  searchParams: Promise<{ q?: string; rank?: string; salesman?: string; view?: string; removed?: string; page?: string }>;
 }) {
   const user = await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
@@ -36,18 +38,24 @@ export default async function LeadsPage({
   const view = resolveLeadView(sp.view);
   const effectiveSalesman = resolveSalesmanFilter(sp.salesman, user.crmSalesmanName);
   const salesmanSelectValue = sp.salesman ?? (effectiveSalesman || "all");
+  const { page, take, skip } = parseListPage(sp.page);
+  const where = buildLeadsWhere(sp, user.crmSalesmanName);
+  const orderBy =
+    view === "nurture"
+      ? [{ recdate: "desc" as const }, { name: "asc" as const }]
+      : [{ jzDate: "asc" as const }, { recdate: "desc" as const }];
 
-  const [rawLeads, lastSyncAt, salesmen] = await Promise.all([
+  const [leads, total, lastSyncAt, salesmen] = await Promise.all([
     db.crmLead.findMany({
-      where: buildLeadsWhere(sp, user.crmSalesmanName),
+      where,
+      orderBy,
+      skip,
+      take,
     }),
+    db.crmLead.count({ where }),
     getLeadsLastSyncAt(),
     getLeadSalesmen(),
   ]);
-  const leads =
-    view === "nurture"
-      ? [...rawLeads].sort((a, b) => (b.recdate?.getTime() ?? 0) - (a.recdate?.getTime() ?? 0))
-      : [...rawLeads].sort(compareKpiDeadline);
   const showKpiDeadline = view === "new";
 
   const syncedLabel = lastSyncAt
@@ -61,24 +69,36 @@ export default async function LeadsPage({
         : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200"
     }`;
 
+  const pageLabels = {
+    prevPage: m.common.prevPage,
+    nextPage: m.common.nextPage,
+    pageOf: m.common.pageOf,
+  };
+  const filterParams = {
+    q: sp.q,
+    rank: sp.rank,
+    salesman: sp.salesman,
+    view: view === "nurture" ? "nurture" : undefined,
+  };
+
   return (
     <div className="pb-16">
       <PageHeader
         title={l.title}
-        desc={`${l.desc.replace("{count}", String(leads.length))} · ${syncedLabel}`}
+        desc={`${l.desc.replace("{count}", String(total))} · ${syncedLabel}`}
         actions={<LeadsSyncButton />}
       />
       <div className="px-8">
         <LeadsRemovedNotice show={sp.removed === "1"} />
         <div className="flex gap-1 border-b border-slate-200 mb-4">
           <Link
-            href={`/leads${buildLeadsSearchParams(sp, { view: "new" })}`}
+            href={`/leads${buildLeadsSearchParams(sp, { view: "new", page: undefined })}`}
             className={tabClass(view === "new")}
           >
             {l.tabNew}
           </Link>
           <Link
-            href={`/leads${buildLeadsSearchParams(sp, { view: "nurture" })}`}
+            href={`/leads${buildLeadsSearchParams(sp, { view: "nurture", page: undefined })}`}
             className={tabClass(view === "nurture")}
           >
             {l.tabNurture}
@@ -181,6 +201,14 @@ export default async function LeadsPage({
                 </tbody>
               </table>
             </div>
+            <ListPagination
+              pathname="/leads"
+              searchParams={filterParams}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
           </div>
         )}
       </div>

@@ -5,12 +5,13 @@ import { requireUser } from "@/lib/session";
 import { PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { staleDays } from "@/lib/completeness";
 import { computePartnerStatus, type StatusCopy } from "@/lib/partner-status";
-import { getTaxonomyOptions } from "@/lib/taxonomy";
+import { getTaxonomyOptionsMany } from "@/lib/taxonomy";
 import { AddPartnerForm } from "../pool/add-partner-form";
 import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { getServerI18n } from "@/lib/server-i18n";
 import { isTodoOverdue } from "@/lib/todo-dates";
-import { PartnerKanbanBoard, type KanbanPartnerCard } from "@/components/partner-kanban";
+import { PartnerKanbanBoardLazy } from "@/components/partner-kanban-lazy";
+import type { KanbanPartnerCard } from "@/components/partner-kanban";
 import { PartnerCoverageMap } from "@/components/partner-coverage-map";
 import { indexOpenOpportunitiesByPartner } from "@/lib/partner-opportunities";
 import { OPEN_OPPORTUNITY_STATUSES } from "@/lib/opportunity-status";
@@ -88,11 +89,9 @@ export default async function PartnersPage({
         ? { parentId: { not: null } }
         : {};
 
-  const [industryOptions, capabilityOptions, categoryOptions, users, distributorOptions, partners] =
+  const [taxonomyByDim, users, distributorOptions, partners] =
     await Promise.all([
-      getTaxonomyOptions("INDUSTRY"),
-      getTaxonomyOptions("CAPABILITY"),
-      getTaxonomyOptions("CATEGORY"),
+      getTaxonomyOptionsMany(["INDUSTRY", "CAPABILITY", "CATEGORY"]),
       db.user.findMany({ select: { id: true, name: true } }),
       db.partner.findMany({
         where: { isDistributor: true, parentId: null, status: { in: ["ACTIVE", "PROSPECT"] } },
@@ -134,7 +133,7 @@ export default async function PartnersPage({
           businessRecords: {
             select: { occurredAt: true },
             orderBy: { occurredAt: "desc" },
-            take: 30,
+            take: 12,
           },
           owner: { select: { name: true } },
           salesUser: { select: { name: true } },
@@ -145,6 +144,10 @@ export default async function PartnersPage({
         orderBy: [{ pipelineStage: "desc" }, { name: "asc" }],
       }),
     ]);
+
+  const industryOptions = taxonomyByDim.INDUSTRY ?? [];
+  const capabilityOptions = taxonomyByDim.CAPABILITY ?? [];
+  const categoryOptions = taxonomyByDim.CATEGORY ?? [];
 
   const partnerIds = partners.map((p) => p.id);
   const reviewSince = new Date(Date.now() - 90 * 24 * 3600 * 1000);
@@ -422,7 +425,7 @@ export default async function PartnersPage({
             }}
           />
         ) : (
-          <PartnerKanbanBoard
+          <PartnerKanbanBoardLazy
             initialCards={kanbanCards}
             stages={labels.pipelineStages.map((s) => ({
               stage: s.stage,
