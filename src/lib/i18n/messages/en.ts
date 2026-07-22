@@ -922,7 +922,6 @@ export const messagesEn = {
     contractRenewsAt: "Next renewal",
     contractBillingCycle: "Billing cycle",
     contractTermYears: "Term years",
-    contractTermYearsHint: "ARR ≈ amount ÷ term years (then annualized by billing cycle). For multi-year totals, enter e.g. 5.",
     contractBillingNone: "No billing cycle",
     contractBillingMonthly: "Monthly",
     contractBillingQuarterly: "Quarterly",

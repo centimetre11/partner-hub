@@ -54,7 +54,9 @@ function mapContractType(row: Record<string, unknown>): ContractTypeCode | "" {
     return "PROJECT_MAINTENANCE";
   }
   if (/维保|维护|运维|maintenance|yw_/i.test(blob)) return "PRODUCT_MAINTENANCE";
-  if (/订阅|年费|subscription|saas/i.test(blob)) return "SUBSCRIPTION";
+  if (/订阅|年费|续费|subscription|saas/i.test(blob)) return "SUBSCRIPTION";
+  // CRM target_type 常见「产品,技术支持服务」——按订阅/维保类服务期合同处理
+  if (/技术支持/i.test(blob) && !/项目|实施|impl|project/i.test(blob)) return "SUBSCRIPTION";
   if (/买断|buyout|永久/i.test(blob)) return "BUYOUT";
   if (/项目|实施|impl|project/i.test(blob)) return "PROJECT";
   const typed = normalizeContractType(blob);
@@ -69,6 +71,101 @@ function mapContractStatus(row: Record<string, unknown>): ContractStatusCode {
   if (/草稿|draft/i.test(raw)) return "DRAFT";
   if (/续约|renew/i.test(raw)) return "RENEWED";
   return normalizeContractStatus(raw) ?? "ACTIVE";
+}
+
+/** CRM 表「技术支持服务开始/结束时间」等候选字段（MCP 目前常未开放，预留兼容）。 */
+const SERVICE_START_KEYS = [
+  "tech_support_service_start",
+  "tech_support_start_time",
+  "tech_support_start",
+  "ctr_ts_start_date",
+  "ctr_service_start",
+  "service_start_date",
+  "ts_start_date",
+  "support_start_date",
+] as const;
+
+const SERVICE_END_KEYS = [
+  "tech_support_service_end",
+  "tech_support_end_time",
+  "tech_support_end",
+  "ctr_ts_end_date",
+  "ctr_service_end",
+  "service_end_date",
+  "ts_end_date",
+  "support_end_date",
+] as const;
+
+function pickFirstDate(row: Record<string, unknown>, keys: readonly string[]): string {
+  for (const k of keys) {
+    const d = toDateInput(row[k]);
+    if (d) return d;
+  }
+  return "";
+}
+
+/** 从合同名解析服务年，如「PureCS FineReport 2026年续费」→ 2026；「2024-2026年」→ 起止年。 */
+function serviceYearsFromName(name: string): { startYear: number; endYear: number } | null {
+  const range = name.match(/(20\d{2})\s*[-~～至到]\s*(20\d{2})\s*年/);
+  if (range) {
+    const a = Number(range[1]);
+    const b = Number(range[2]);
+    if (a >= 2000 && b >= a && b <= 2100) return { startYear: a, endYear: b };
+  }
+  const single = name.match(/(20\d{2})\s*年/);
+  if (single) {
+    const y = Number(single[1]);
+    if (y >= 2000 && y <= 2100) return { startYear: y, endYear: y };
+  }
+  return null;
+}
+
+function isServicePeriodContract(row: Record<string, unknown>, contractType: ContractTypeCode | ""): boolean {
+  if (
+    contractType === "SUBSCRIPTION" ||
+    contractType === "PRODUCT_MAINTENANCE" ||
+    contractType === "PROJECT_MAINTENANCE"
+  ) {
+    return true;
+  }
+  const blob = [pickString(row.target_type), pickString(row.ctr_name), pickString(row.productline)]
+    .filter(Boolean)
+    .join(" ");
+  return /技术支持|运维|维保|维护|订阅|续费|年费|maintenance|subscription/i.test(blob);
+}
+
+/**
+ * Start/End 应对齐 CRM「技术支持服务开始/结束时间」，而不是「签单日期」。
+ * MCP 合同视图目前往往只有 ctr_sign_date / ctr_new_end_date（后者更像收回等行政日期），不可当作服务期。
+ */
+function mapContractServiceDates(
+  row: Record<string, unknown>,
+  contractType: ContractTypeCode | "",
+): { startDate: string; endDate: string } {
+  const fromFieldsStart = pickFirstDate(row, SERVICE_START_KEYS);
+  const fromFieldsEnd = pickFirstDate(row, SERVICE_END_KEYS);
+  if (fromFieldsStart || fromFieldsEnd) {
+    return { startDate: fromFieldsStart, endDate: fromFieldsEnd };
+  }
+
+  const name = pickString(row.ctr_name);
+  if (isServicePeriodContract(row, contractType)) {
+    const years = serviceYearsFromName(name);
+    if (years) {
+      return {
+        startDate: `${years.startYear}-01-01`,
+        endDate: `${years.endYear}-12-31`,
+      };
+    }
+    // 服务类合同：宁可留空，也不要用签单日误填
+    return { startDate: "", endDate: "" };
+  }
+
+  // 买断/项目等：开始日可回退签单日；结束日不用 ctr_new_end_date（易与服务结束混淆）
+  return {
+    startDate: toDateInput(row.ctr_sign_date) || toDateInput(row.ctr_upload_date),
+    endDate: "",
+  };
 }
 
 function mapProjectStatus(row: Record<string, unknown>): string {
@@ -210,8 +307,7 @@ export function mapContractHit(row: Record<string, unknown>): CrmContractHit | n
     "";
   const status = mapContractStatus(row);
   const contractType = mapContractType(row);
-  const startDate = toDateInput(row.ctr_sign_date) || toDateInput(row.ctr_upload_date);
-  const endDate = toDateInput(row.ctr_new_end_date);
+  const { startDate, endDate } = mapContractServiceDates(row, contractType);
   const salesman = pickString(row.ctr_salesman);
   return {
     id: id || name,
@@ -281,9 +377,11 @@ export function contractHitToDraft(hit: CrmContractHit): CrmContractDraft {
     contractType === "PROJECT_MAINTENANCE"
       ? normalizeBillingCycle(pickString(hit.raw.pro_bitype)) || "YEARLY"
       : "";
+  const signDate = toDateInput(hit.raw.ctr_sign_date) || toDateInput(hit.raw.ctr_upload_date);
   const noteBits = [
     hit.salesman ? `CRM销售：${hit.salesman}` : "",
     pickString(hit.raw.productline) ? `产品线：${pickString(hit.raw.productline)}` : "",
+    signDate ? `CRM签单日期：${signDate}` : "",
   ].filter(Boolean);
   return {
     crmContractId: hit.id,

@@ -921,7 +921,6 @@ export const messagesZh: Messages = {
     contractRenewsAt: "下次续约",
     contractBillingCycle: "计费周期",
     contractTermYears: "订阅年数",
-    contractTermYearsHint: "ARR ≈ 合同金额 ÷ 订阅年数（再按计费周期年化）。多年总价请填总年数，如 5。",
     contractBillingNone: "无计费周期",
     contractBillingMonthly: "按月",
     contractBillingQuarterly: "按季",

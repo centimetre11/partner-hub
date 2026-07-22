@@ -97,7 +97,6 @@ export default async function ContractDetailPage({
     contractStatus: c.contractStatus,
     contractBillingCycle: c.contractBillingCycle,
     contractTermYears: c.contractTermYears,
-    contractTermYearsHint: c.contractTermYearsHint,
     contractBillingNone: c.contractBillingNone,
     contractStartDate: c.contractStartDate,
     contractEndDate: c.contractEndDate,

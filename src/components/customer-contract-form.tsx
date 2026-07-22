@@ -41,7 +41,6 @@ export type ContractFormCopy = {
   contractStatus: string;
   contractBillingCycle: string;
   contractTermYears: string;
-  contractTermYearsHint: string;
   contractBillingNone: string;
   contractStartDate: string;
   contractEndDate: string;
@@ -539,7 +538,6 @@ export function CustomerContractForm({
             className={inputClassName}
             aria-label={copy.contractTermYears}
           />
-          <span className="text-[10px] text-slate-400 leading-snug">{copy.contractTermYearsHint}</span>
         </label>
       ) : (
         <input type="hidden" name="termYears" value="" />
