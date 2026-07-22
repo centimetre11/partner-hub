@@ -50,6 +50,7 @@ import { CustomerContractForm } from "@/components/customer-contract-form";
 import { AmountInput } from "@/components/amount-input";
 import { CustomerAddOpportunityForm } from "@/components/customer-add-opportunity-form";
 import { CustomerAddProjectForm } from "@/components/customer-add-project-form";
+import { CustomerAddContractForm } from "@/components/customer-add-contract-form";
 import { PendingButton } from "@/components/pending-button";
 import { formatAmountDisplay } from "@/lib/amount";
 import {
@@ -640,32 +641,21 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         );
       })}
       {customer.contracts.length === 0 && <EmptyState text={c.noContracts} />}
-      <details className="rounded-lg border border-dashed border-slate-200">
-        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addContract}</summary>
-        <div className="px-4 pb-4">
-          <CustomerContractForm
-            action={upsertContractAction.bind(null, owner)}
-            mode="create"
-            locale={locale}
-            copy={contractFormCopy}
-            inputClassName={input}
-            customerNameHint={customer.name}
-            partners={contractPartners}
-            opportunities={contractOpps}
-            projects={contractProjects}
-            buyouts={buyoutOptions}
-            projectContracts={projectContractOptions}
-            defaults={{
-              partnerId: customer.partnerLinks[0]?.partner.id ?? "",
-              productMaintIncludedY1: true,
-              productMaintRatePct: 15,
-              projectMaintIncludedY1: true,
-              projectMaintRatePct: 15,
-            }}
-            crmCustomerId={customer.crmCustomerId}
-          />
-        </div>
-      </details>
+      <CustomerAddContractForm
+        owner={owner}
+        action={upsertContractAction}
+        locale={locale}
+        copy={contractFormCopy}
+        inputClassName={input}
+        customerName={customer.name}
+        customerCrmId={customer.crmCustomerId}
+        defaultPartnerId={customer.partnerLinks[0]?.partner.id ?? ""}
+        partners={contractPartners}
+        opportunities={contractOpps}
+        projects={contractProjects}
+        buyouts={buyoutOptions}
+        projectContracts={projectContractOptions}
+      />
     </div>
   );
 

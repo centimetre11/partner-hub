@@ -200,6 +200,7 @@ export function CustomerContractForm({
   mode,
   customerNameHint,
   crmCustomerId,
+  hideCrmImport = false,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   deleteAction?: (formData: FormData) => void | Promise<void>;
@@ -217,6 +218,8 @@ export function CustomerContractForm({
   customerNameHint?: string | null;
   /** FanRuan CRM com_id — enables listing contracts via CRM MCP. */
   crmCustomerId?: string | null;
+  /** 外层已放「从 CRM 获取」时隐藏表单内入口，避免重复 */
+  hideCrmImport?: boolean;
 }) {
   const m = useMessages();
   const [name, setName] = useState(defaults?.name ?? "");
@@ -398,7 +401,7 @@ export function CustomerContractForm({
       {defaults?.id && <input type="hidden" name="id" value={defaults.id} />}
       <input type="hidden" name="lineItems" value={lineItemsJson} />
 
-      {mode === "create" && crmCustomerId?.trim() && (
+      {mode === "create" && !hideCrmImport && crmCustomerId?.trim() && (
         <div className="col-span-2 md:col-span-3 flex items-center justify-between gap-2">
           <span className="text-xs text-slate-500">{m.crm.importFromCrm.contractHint}</span>
           <CrmImportPicker
@@ -410,7 +413,7 @@ export function CustomerContractForm({
           />
         </div>
       )}
-      {mode === "create" && !crmCustomerId?.trim() && (
+      {mode === "create" && !hideCrmImport && !crmCustomerId?.trim() && (
         <p className="col-span-2 md:col-span-3 text-[11px] text-slate-400">
           {m.crm.importFromCrm.requiresBound}
         </p>
