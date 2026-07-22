@@ -293,102 +293,172 @@ export type UserBehaviorLogFilters = {
 };
 
 export async function queryUserBehaviorLogs(page: number, filters: UserBehaviorLogFilters = {}) {
-  const where: Record<string, unknown> = {};
-  if (filters.eventType && filters.eventType !== "ALL") where.eventType = filters.eventType;
-  if (filters.action?.trim()) where.action = { contains: filters.action.trim() };
-  if (filters.pagePath?.trim()) where.pagePath = { contains: filters.pagePath.trim() };
-  if (filters.project && filters.project !== "ALL") where.project = filters.project;
-  if (filters.search?.trim()) {
-    const q = filters.search.trim();
-    where.OR = [
-      { action: { contains: q } },
-      { pagePath: { contains: q } },
-      { targetLabel: { contains: q } },
-      { targetId: { contains: q } },
-    ];
-  }
-
-  const skip = Math.max(0, (page - 1) * PAGE_SIZE);
-  const [items, total] = await Promise.all([
-    db.userBehaviorLog.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip,
-      take: PAGE_SIZE,
-      include: { user: { select: { name: true, email: true } } },
-    }),
-    db.userBehaviorLog.count({ where }),
-  ]);
-
-  return {
-    items,
-    total,
+  type BehaviorItem = {
+    id: string;
+    project: string;
+    eventType: string;
+    action: string;
+    pagePath: string | null;
+    targetType: string | null;
+    targetId: string | null;
+    targetLabel: string | null;
+    status: string;
+    durationMs: number | null;
+    createdAt: Date;
+    user: { name: string; email: string } | null;
+  };
+  const empty = {
+    items: [] as BehaviorItem[],
+    total: 0,
     page,
     pageSize: PAGE_SIZE,
-    totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    totalPages: 1,
   };
+  try {
+    const where: Record<string, unknown> = {};
+    if (filters.eventType && filters.eventType !== "ALL") where.eventType = filters.eventType;
+    if (filters.action?.trim()) where.action = { contains: filters.action.trim() };
+    if (filters.pagePath?.trim()) where.pagePath = { contains: filters.pagePath.trim() };
+    if (filters.project && filters.project !== "ALL") where.project = filters.project;
+    if (filters.search?.trim()) {
+      const q = filters.search.trim();
+      where.OR = [
+        { action: { contains: q } },
+        { pagePath: { contains: q } },
+        { targetLabel: { contains: q } },
+        { targetId: { contains: q } },
+      ];
+    }
+
+    const skip = Math.max(0, (page - 1) * PAGE_SIZE);
+    const [items, total] = await Promise.all([
+      db.userBehaviorLog.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: PAGE_SIZE,
+        include: { user: { select: { name: true, email: true } } },
+      }),
+      db.userBehaviorLog.count({ where }),
+    ]);
+
+    return {
+      items: items as BehaviorItem[],
+      total,
+      page,
+      pageSize: PAGE_SIZE,
+      totalPages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    };
+  } catch (e) {
+    console.error("[activity-log] queryUserBehaviorLogs failed:", e);
+    return empty;
+  }
 }
 
 export async function getUserBehaviorTotals() {
-  const [total, today, week] = await Promise.all([
-    db.userBehaviorLog.count(),
-    db.userBehaviorLog.count({
-      where: { createdAt: { gte: new Date(new Date().toISOString().slice(0, 10)) } },
-    }),
-    db.userBehaviorLog.count({
-      where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
-    }),
-  ]);
-  return { total, today, week };
+  try {
+    const [total, today, week] = await Promise.all([
+      db.userBehaviorLog.count(),
+      db.userBehaviorLog.count({
+        where: { createdAt: { gte: new Date(new Date().toISOString().slice(0, 10)) } },
+      }),
+      db.userBehaviorLog.count({
+        where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+      }),
+    ]);
+    return { total, today, week };
+  } catch (e) {
+    console.error("[activity-log] getUserBehaviorTotals failed:", e);
+    return { total: 0, today: 0, week: 0 };
+  }
+}
+
+function dayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 export async function getBehaviorStats(days = 7) {
   const since = new Date();
   since.setDate(since.getDate() - (days - 1));
   since.setHours(0, 0, 0, 0);
-  const sinceIso = since.toISOString();
 
-  const [total, totalUsers, totalSessions, dailyRows, topPages, topActions, eventTypes] = await Promise.all([
-    db.userBehaviorLog.count({ where: { createdAt: { gte: since } } }),
-    db.userBehaviorLog.groupBy({
-      by: ["userId"],
-      where: { createdAt: { gte: since }, userId: { not: null } },
-      _count: { userId: true },
-    }).then((rows) => rows.length),
-    db.userBehaviorLog.groupBy({
-      by: ["sessionId"],
-      where: { createdAt: { gte: since }, sessionId: { not: null } },
-      _count: { sessionId: true },
-    }).then((rows) => rows.length),
-    db.$queryRawUnsafe<Array<{ day: string; count: number; users: number }>>(
-      `SELECT strftime('%Y-%m-%d', createdAt) as day, COUNT(*) as count, COUNT(DISTINCT userId) as users
-       FROM UserBehaviorLog
-       WHERE createdAt >= ?
-       GROUP BY day
-       ORDER BY day ASC`,
-      sinceIso
-    ),
-    db.userBehaviorLog.groupBy({
-      by: ["pagePath"],
-      where: { createdAt: { gte: since }, eventType: "PAGE_VIEW" },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 20,
-    }),
-    db.userBehaviorLog.groupBy({
-      by: ["action"],
-      where: { createdAt: { gte: since } },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 20,
-    }),
-    db.userBehaviorLog.groupBy({
-      by: ["eventType"],
-      where: { createdAt: { gte: since } },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-    }),
-  ]);
+  try {
+    const [total, userRows, sessionRows, recentEvents, topPages, topActions, eventTypes] = await Promise.all([
+      db.userBehaviorLog.count({ where: { createdAt: { gte: since } } }),
+      db.userBehaviorLog.groupBy({
+        by: ["userId"],
+        where: { createdAt: { gte: since }, userId: { not: null } },
+        _count: { userId: true },
+      }),
+      db.userBehaviorLog.groupBy({
+        by: ["sessionId"],
+        where: { createdAt: { gte: since }, sessionId: { not: null } },
+        _count: { sessionId: true },
+      }),
+      // 用 Prisma 拉取近期事件再按天聚合，兼容 SQLite / PostgreSQL
+      db.userBehaviorLog.findMany({
+        where: { createdAt: { gte: since } },
+        select: { createdAt: true, userId: true },
+        take: 50000,
+      }),
+      db.userBehaviorLog.groupBy({
+        by: ["pagePath"],
+        where: { createdAt: { gte: since }, eventType: "PAGE_VIEW" },
+        _count: { id: true },
+        orderBy: { _count: { id: "desc" } },
+        take: 20,
+      }),
+      db.userBehaviorLog.groupBy({
+        by: ["action"],
+        where: { createdAt: { gte: since } },
+        _count: { id: true },
+        orderBy: { _count: { id: "desc" } },
+        take: 20,
+      }),
+      db.userBehaviorLog.groupBy({
+        by: ["eventType"],
+        where: { createdAt: { gte: since } },
+        _count: { id: true },
+        orderBy: { _count: { id: "desc" } },
+      }),
+    ]);
 
-  return { total, totalUsers, totalSessions, dailyRows, topPages, topActions, eventTypes };
+    const byDay = new Map<string, { count: number; users: Set<string> }>();
+    for (let i = 0; i < days; i++) {
+      const d = new Date(since);
+      d.setDate(since.getDate() + i);
+      byDay.set(dayKey(d), { count: 0, users: new Set() });
+    }
+    for (const row of recentEvents) {
+      const key = dayKey(row.createdAt);
+      const bucket = byDay.get(key);
+      if (!bucket) continue;
+      bucket.count += 1;
+      if (row.userId) bucket.users.add(row.userId);
+    }
+    const dailyRows = [...byDay.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, v]) => ({ day, count: v.count, users: v.users.size }));
+
+    return {
+      total,
+      totalUsers: userRows.length,
+      totalSessions: sessionRows.length,
+      dailyRows,
+      topPages,
+      topActions,
+      eventTypes,
+    };
+  } catch (e) {
+    console.error("[activity-log] getBehaviorStats failed:", e);
+    return {
+      total: 0,
+      totalUsers: 0,
+      totalSessions: 0,
+      dailyRows: [] as Array<{ day: string; count: number; users: number }>,
+      topPages: [] as Array<{ pagePath: string | null; _count: { id: number } }>,
+      topActions: [] as Array<{ action: string; _count: { id: number } }>,
+      eventTypes: [] as Array<{ eventType: string; _count: { id: number } }>,
+    };
+  }
 }
