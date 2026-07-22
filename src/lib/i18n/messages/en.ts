@@ -2140,6 +2140,7 @@ export const messagesEn = {
     enable: "Enable",
     disable: "Disable",
     delete: "Delete",
+    deleteConfirm: "Delete this automation? This cannot be undone.",
     nextSchedule: "Schedule",
     nextRunAt: "Next run {time}",
   },

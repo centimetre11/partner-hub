@@ -227,6 +227,24 @@ export function AutomationForm({
     });
   }
 
+  // 禁用/删除不能用嵌套 <form>：外层已是编辑表单，浏览器会忽略内层 form，
+  // 导致「删除」实际触发保存而不是 deleteAutomationAction。
+  function handleToggle() {
+    if (!initial.id) return;
+    startTransition(async () => {
+      await toggleAutomationAction(initial.id!);
+      router.refresh();
+    });
+  }
+
+  function handleDelete() {
+    if (!initial.id) return;
+    if (!window.confirm(a.deleteConfirm)) return;
+    startTransition(async () => {
+      await deleteAutomationAction(initial.id!);
+    });
+  }
+
   return (
     <form id="automation-edit-form" onSubmit={handleSubmit} className="min-h-[calc(100vh-7rem)] flex flex-col">
       {initial.id && <input type="hidden" name="id" value={initial.id} />}
@@ -262,22 +280,22 @@ export function AutomationForm({
             {isEdit && initial.id && (
               <>
                 <RunButton agentId={initial.id} compact formId="automation-edit-form" />
-                <form action={toggleAutomationAction.bind(null, initial.id)}>
-                  <button
-                    type="submit"
-                    className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
-                  >
-                    {initial.enabled ? a.disable : a.enable}
-                  </button>
-                </form>
-                <form action={deleteAutomationAction.bind(null, initial.id)}>
-                  <button
-                    type="submit"
-                    className="rounded-md border border-red-100 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50"
-                  >
-                    {a.delete}
-                  </button>
-                </form>
+                <button
+                  type="button"
+                  onClick={handleToggle}
+                  disabled={pending}
+                  className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {initial.enabled ? a.disable : a.enable}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={pending}
+                  className="rounded-md border border-red-100 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {a.delete}
+                </button>
               </>
             )}
             <button

@@ -2132,6 +2132,7 @@ export const messagesZh: Messages = {
     enable: "启用",
     disable: "禁用",
     delete: "删除",
+    deleteConfirm: "确定删除该自动化？此操作不可撤销。",
     nextSchedule: "调度",
     nextRunAt: "下次运行 {time}",
   },
