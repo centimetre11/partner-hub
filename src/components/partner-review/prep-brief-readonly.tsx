@@ -1,7 +1,7 @@
 "use client";
 
 import type { PartnerPrepBrief } from "@/lib/partner-review/types";
-import { categoryLabel, tidyProgressText } from "@/lib/partner-review/brief";
+import { categoryLabel, tidyProgressText } from "@/lib/partner-review/brief-text";
 import { MossPrepCustomerBadge } from "@/components/moss/moss-workflow-sections";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
