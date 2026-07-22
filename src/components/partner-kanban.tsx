@@ -292,10 +292,12 @@ function KanbanColumn({
               {name}
               <span className="ml-1.5 text-xs font-normal text-slate-500 tabular-nums">{cards.length}</span>
             </div>
-            <div className="text-[11px] text-slate-500 truncate" title={desc}>
-              {desc}
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+              <div className="text-[11px] text-slate-500 truncate min-w-0" title={desc}>
+                {desc}
+              </div>
+              {cards.length > 0 ? <TierCountSummary counts={tierCounts} className="shrink-0" /> : null}
             </div>
-            {cards.length > 0 ? <TierCountSummary counts={tierCounts} className="mt-1" /> : null}
           </div>
         </div>
       </div>

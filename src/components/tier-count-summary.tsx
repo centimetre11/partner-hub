@@ -12,7 +12,7 @@ export function TierCountSummary({
 }) {
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] tabular-nums leading-tight ${className}`}
+      className={`inline-flex flex-wrap items-center gap-x-1.5 gap-y-0 text-[11px] tabular-nums leading-tight ${className}`}
     >
       <span className="text-red-600/90">
         A <span className="font-semibold">{counts.A}</span>
