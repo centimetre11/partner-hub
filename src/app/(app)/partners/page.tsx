@@ -17,6 +17,8 @@ import { indexOpenOpportunitiesByPartner } from "@/lib/partner-opportunities";
 import { OPEN_OPPORTUNITY_STATUSES } from "@/lib/opportunity-status";
 import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { TierCountSummary } from "@/components/tier-count-summary";
+import { countTiersFromItems, resolvePartnerTier } from "@/lib/tier";
 
 function lastActivityAt(p: { events: { createdAt: Date }[]; updatedAt: Date }) {
   return p.events.length ? new Date(p.events[0].createdAt) : new Date(p.updatedAt);
@@ -360,6 +362,15 @@ export default async function PartnersPage({
             {m.common.filter}
           </button>
         </form>
+
+        {partners.length > 0 && view === "coverage" ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span>{m.common.tier}</span>
+            <TierCountSummary
+              counts={countTiersFromItems(partners, (p) => resolvePartnerTier(p))}
+            />
+          </div>
+        ) : null}
 
         {partners.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm">

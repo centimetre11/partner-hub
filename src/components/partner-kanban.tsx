@@ -17,8 +17,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Badge, ScoreBar, TierBadge } from "@/components/ui";
 import { setPipelineStageAction } from "@/lib/actions";
-import { normalizePartnerTier, splitByTierFocus } from "@/lib/tier";
+import { normalizePartnerTier, splitByTierFocus, countTiersFromItems } from "@/lib/tier";
 import { TierCFold } from "@/components/tier-c-fold";
+import { TierCountSummary } from "@/components/tier-count-summary";
 
 export type KanbanPartnerCard = {
   id: string;
@@ -269,6 +270,7 @@ function KanbanColumn({
   });
 
   const { primary, folded } = splitByTierFocus(cards, (c) => normalizePartnerTier(c.tier));
+  const tierCounts = countTiersFromItems(cards, (c) => normalizePartnerTier(c.tier));
 
   return (
     <div
@@ -293,6 +295,7 @@ function KanbanColumn({
             <div className="text-[11px] text-slate-500 truncate" title={desc}>
               {desc}
             </div>
+            {cards.length > 0 ? <TierCountSummary counts={tierCounts} className="mt-1" /> : null}
           </div>
         </div>
       </div>
@@ -378,6 +381,10 @@ export function PartnerKanbanBoard({
   }, [cards, visibleStages]);
 
   const activeCard = activeId ? cards.find((c) => c.id === activeId) ?? null : null;
+  const boardTierCounts = useMemo(
+    () => countTiersFromItems(cards, (c) => normalizePartnerTier(c.tier)),
+    [cards],
+  );
 
   const onDragStart = useCallback((e: DragStartEvent) => {
     setActiveId(String(e.active.id));
@@ -409,7 +416,15 @@ export function PartnerKanbanBoard({
 
   return (
     <div>
-      <p className="text-[11px] text-slate-400 mb-2">{copy.dragHint}</p>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-slate-400">{copy.dragHint}</p>
+        {cards.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span>Tier</span>
+            <TierCountSummary counts={boardTierCounts} />
+          </div>
+        ) : null}
+      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}

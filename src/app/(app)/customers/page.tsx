@@ -12,8 +12,9 @@ import { getTaxonomyOptionsMany, loadTaxonomyLabelMaps, labelFromMap } from "@/l
 import { classifyCustomers, type CustomerBucketMeta, type GrowthProbability } from "@/lib/customer-bucket";
 import { toArrContractInput } from "@/lib/arr";
 import { OPEN_OPPORTUNITY_STATUSES, opportunityStatusLabel } from "@/lib/opportunity-status";
-import { PARTNER_TIERS, resolveCustomerTier, splitByTierFocus } from "@/lib/tier";
+import { PARTNER_TIERS, resolveCustomerTier, splitByTierFocus, countTiersFromItems } from "@/lib/tier";
 import { TierCFold } from "@/components/tier-c-fold";
+import { TierCountSummary } from "@/components/tier-count-summary";
 import type { ReactNode } from "react";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
@@ -70,6 +71,7 @@ function CustomerBucketColumn({
   desc,
   tone,
   emptyText,
+  tierCounts,
   children,
 }: {
   index: number;
@@ -78,6 +80,7 @@ function CustomerBucketColumn({
   desc: string;
   tone: "green" | "amber" | "blue";
   emptyText: string;
+  tierCounts: { A: number; B: number; C: number; unset: number };
   children: ReactNode;
 }) {
   return (
@@ -101,6 +104,7 @@ function CustomerBucketColumn({
             <div className="text-[11px] text-slate-500 truncate" title={desc}>
               {desc}
             </div>
+            {count > 0 ? <TierCountSummary counts={tierCounts} className="mt-1" /> : null}
           </div>
         </div>
       </div>
@@ -435,6 +439,15 @@ export default async function CustomersPage({
           </button>
         </form>
 
+        {items.length > 0 ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span>{m.common.tier}</span>
+            <TierCountSummary
+              counts={countTiersFromItems(items, (item) => resolveCustomerTier(item.customer))}
+            />
+          </div>
+        ) : null}
+
         {items.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm">
             <EmptyState text={c.empty} />
@@ -449,6 +462,9 @@ export default async function CustomersPage({
                 resolveCustomerTier(item.customer),
               );
               const forceOpenTierC = String(sp.tier ?? "").trim().toUpperCase() === "C";
+              const tierCounts = countTiersFromItems(colItems, (item) =>
+                resolveCustomerTier(item.customer),
+              );
               return (
                 <CustomerBucketColumn
                   key={col.key}
@@ -458,6 +474,7 @@ export default async function CustomersPage({
                   desc={col.desc}
                   tone={col.tone}
                   emptyText={c.empty}
+                  tierCounts={tierCounts}
                 >
                   {primary.map(({ customer: cust, meta }) => (
                     <CustomerCard key={cust.id} cust={cust} meta={meta} />

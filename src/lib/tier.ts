@@ -88,6 +88,29 @@ export function splitByTierFocus<T>(
   return { primary, folded };
 }
 
+export type TierCounts = { A: number; B: number; C: number; unset: number };
+
+export function emptyTierCounts(): TierCounts {
+  return { A: 0, B: 0, C: 0, unset: 0 };
+}
+
+export function countTiers(tiers: Array<PartnerTier | string | null | undefined>): TierCounts {
+  const out = emptyTierCounts();
+  for (const raw of tiers) {
+    const t = normalizePartnerTier(raw);
+    if (t === "A" || t === "B" || t === "C") out[t] += 1;
+    else out.unset += 1;
+  }
+  return out;
+}
+
+export function countTiersFromItems<T>(
+  items: T[],
+  getTier: (item: T) => PartnerTier | string | null | undefined,
+): TierCounts {
+  return countTiers(items.map(getTier));
+}
+
 export function formatTierLabel(tier: PartnerTier | string): string {
   const normalized = normalizePartnerTier(tier);
   return normalized ? `Tier ${normalized}` : "";
