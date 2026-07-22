@@ -48,6 +48,7 @@ import { getTaxonomyOptionsMany } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
 import { CustomerContractForm } from "@/components/customer-contract-form";
 import { AmountInput } from "@/components/amount-input";
+import { PendingButton } from "@/components/pending-button";
 import { formatAmountDisplay } from "@/lib/amount";
 import {
   billingCycleLabel,
@@ -344,6 +345,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               <input type="hidden" name="id" value={o.id} />
               <input name="name" defaultValue={o.name} className={input} />
               <AmountInput
+                key={`opp-${o.id}-${o.amount ?? ""}-${o.currency ?? ""}`}
                 inputClassName={input}
                 amountPlaceholder={m.common.amount}
                 amountAriaLabel={m.common.amount}
@@ -391,7 +393,10 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               />
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
                 <button formAction={deleteOpportunityAction.bind(null, owner, o.id)} className="text-xs text-slate-400 hover:text-red-600">{m.common.delete}</button>
-                <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.save}</button>
+                <PendingButton
+                  label={m.common.save}
+                  className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs"
+                />
               </div>
             </form>
             {!o.project && o.dealType !== "PRODUCT" && (

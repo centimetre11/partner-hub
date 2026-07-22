@@ -221,13 +221,16 @@ export function CustomerProjectCard({
             </dl>
           ) : (
             <form
-              action={upsertProjectAction.bind(null, owner)}
+              action={async (formData) => {
+                await upsertProjectAction(owner, formData);
+                setEditing(false);
+              }}
               className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm"
-              onSubmit={() => setEditing(false)}
             >
               <input type="hidden" name="id" value={project.id} />
               <input name="name" defaultValue={project.name} className={input} />
               <AmountInput
+                key={`project-${project.id}-${project.amount ?? ""}-${project.currency ?? ""}`}
                 inputClassName={input}
                 amountPlaceholder={m.common.amount}
                 amountAriaLabel={m.common.amount}

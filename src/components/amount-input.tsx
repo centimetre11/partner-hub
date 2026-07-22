@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AMOUNT_CURRENCIES,
   type AmountCurrency,
@@ -31,6 +31,12 @@ type AmountInputProps = {
   nameCurrency?: string;
 };
 
+function legacyPreserveFrom(defaultAmount?: string | null) {
+  return defaultAmount?.trim() && normalizeAmountInput(defaultAmount) == null
+    ? defaultAmount.trim()
+    : "";
+}
+
 export function AmountInput({
   className,
   inputClassName,
@@ -50,8 +56,7 @@ export function AmountInput({
 }: AmountInputProps) {
   const isControlled = controlledAmount !== undefined;
   const parts = parseAmountParts(defaultAmount, defaultCurrency);
-  const legacyPreserve =
-    defaultAmount?.trim() && normalizeAmountInput(defaultAmount) == null ? defaultAmount.trim() : "";
+  const legacyPreserve = legacyPreserveFrom(defaultAmount);
   const [innerAmount, setInnerAmount] = useState(parts.amount);
   const [innerCurrency, setInnerCurrency] = useState<AmountCurrency>(parts.currency);
   const [display, setDisplay] = useState(() => {
@@ -62,11 +67,31 @@ export function AmountInput({
   const [focused, setFocused] = useState(false);
   const [preserve, setPreserve] = useState(legacyPreserve);
   const amountId = useId();
+  const defaultsKeyRef = useRef(`${defaultAmount ?? ""}\0${defaultCurrency ?? ""}`);
 
   const amountValue = isControlled ? controlledAmount ?? "" : innerAmount;
   const currencyValue = isControlled
     ? currencyForInput(controlledCurrency)
     : innerCurrency;
+
+  // After server-action revalidation, defaults change but useState keeps stale
+  // client currency (e.g. header shows USD while select still shows CNY).
+  useEffect(() => {
+    if (isControlled) return;
+    const key = `${defaultAmount ?? ""}\0${defaultCurrency ?? ""}`;
+    if (key === defaultsKeyRef.current) return;
+    defaultsKeyRef.current = key;
+    const next = parseAmountParts(defaultAmount, defaultCurrency);
+    const nextPreserve = legacyPreserveFrom(defaultAmount);
+    setInnerAmount(next.amount);
+    setInnerCurrency(next.currency);
+    setPreserve(nextPreserve);
+    if (!focused) {
+      if (next.amount) setDisplay(formatAmountTyping(next.amount, locale));
+      else if (nextPreserve) setDisplay(nextPreserve);
+      else setDisplay("");
+    }
+  }, [defaultAmount, defaultCurrency, isControlled, focused, locale]);
 
   useEffect(() => {
     if (focused) return;
@@ -139,6 +164,9 @@ export function AmountInput({
   return (
     <div className={className ?? "grid grid-cols-[minmax(0,1fr)_4.75rem] gap-1.5 w-full min-w-0"}>
       <input type="hidden" name={nameAmount} value={submitAmount} readOnly />
+      {/* Hidden currency ensures FormData matches React state even if the native
+          <select> is mid-interaction (open dropdown) during submit. */}
+      <input type="hidden" name={nameCurrency} value={currencyValue} readOnly />
       {submitPreserve ? (
         <input type="hidden" name="amountPreserve" value={submitPreserve} readOnly />
       ) : null}
@@ -157,7 +185,6 @@ export function AmountInput({
         className={`${inputClassName} w-full min-w-0 tabular-nums`}
       />
       <select
-        name={nameCurrency}
         disabled={disabled}
         aria-label={currencyAriaLabel}
         value={currencyValue}
