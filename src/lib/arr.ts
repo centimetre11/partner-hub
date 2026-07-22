@@ -1,6 +1,8 @@
 /**
  * ARR (Annual Recurring Revenue) helpers.
  * Counts: product subscription, product maintenance, project maintenance.
+ * Active buyouts with a product-maint rate also contribute implied product-maint ARR
+ * until a linked ACTIVE PRODUCT_MAINTENANCE child exists.
  * All totals are converted to USD for reporting.
  */
 
@@ -15,7 +17,7 @@ import {
 } from "@/lib/contract-types";
 import { toArrUsd } from "@/lib/arr-fx";
 
-/** Contract types that contribute to ARR. */
+/** Classic recurring contract types that contribute to ARR. */
 export const ARR_CONTRACT_TYPES = [
   "SUBSCRIPTION",
   "PRODUCT_MAINTENANCE",
@@ -29,6 +31,29 @@ export function isArrContractType(type: string | null | undefined): type is ArrC
   const code = normalizeContractType(type);
   return !!code && ARR_TYPE_SET.has(code);
 }
+
+/**
+ * Prisma where: ACTIVE classic ARR types OR buyouts with product-maint rate.
+ * Pair with {@link ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE} for buyout dedup.
+ */
+export function arrSourceContractWhere() {
+  return {
+    status: "ACTIVE" as const,
+    OR: [
+      { contractType: { in: [...ARR_CONTRACT_TYPES] } },
+      { contractType: "BUYOUT", productMaintRatePct: { gt: 0 } },
+    ],
+  };
+}
+
+/** Include ACTIVE product-maint children (for buyout implied-ARR dedup). */
+export const ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE = {
+  childContracts: {
+    where: { contractType: "PRODUCT_MAINTENANCE" as const, status: "ACTIVE" as const },
+    select: { id: true },
+    take: 1,
+  },
+};
 
 /** Convert a contract amount + billing cycle into annualized value (native currency). */
 export function annualizeContractAmount(
@@ -65,6 +90,10 @@ export type ArrContractInput = {
   billingCycle: string | null;
   /** Years the header amount covers; ARR divides by this when > 1. */
   termYears?: number | null;
+  /** Buyout: embedded product-maintenance rate (e.g. 15). */
+  productMaintRatePct?: number | null;
+  /** True when an ACTIVE PRODUCT_MAINTENANCE child is linked (suppresses buyout implied ARR). */
+  hasActiveProductMaintChild?: boolean;
   endDate: Date | string | null;
   renewsAt?: Date | string | null;
   startDate?: Date | string | null;
@@ -97,20 +126,80 @@ export function termYearsFromDateRange(
   return normalizeTermYears(Math.max(1, Math.round(years)));
 }
 
-/** Whether a contract currently counts toward ARR. */
-export function isActiveArrContract(ct: ArrContractInput): boolean {
-  if (!isArrContractType(ct.contractType)) return false;
+/**
+ * Map Prisma row (+ optional childContracts) into ArrContractInput for ARR math.
+ * When `hasActiveProductMaintChild` is set explicitly, it wins.
+ * Otherwise, if `childContracts` came from {@link ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE},
+ * any listed child means an active product-maint child exists.
+ */
+export function toArrContractInput(
+  ct: ArrContractInput & { childContracts?: { id: string }[] | null }
+): ArrContractInput {
+  const hasChild =
+    ct.hasActiveProductMaintChild !== undefined
+      ? !!ct.hasActiveProductMaintChild
+      : (ct.childContracts?.length ?? 0) > 0;
+  return {
+    id: ct.id,
+    contractType: ct.contractType,
+    status: ct.status,
+    amount: ct.amount,
+    currency: ct.currency,
+    billingCycle: ct.billingCycle,
+    termYears: ct.termYears,
+    productMaintRatePct: ct.productMaintRatePct,
+    hasActiveProductMaintChild: hasChild,
+    endDate: ct.endDate,
+    renewsAt: ct.renewsAt,
+    startDate: ct.startDate,
+    name: ct.name,
+    customerId: ct.customerId,
+    lineItems: ct.lineItems,
+  };
+}
+
+/**
+ * Buyout contributes implied product-maint ARR when ACTIVE, rate > 0,
+ * not past end, and no ACTIVE product-maint child.
+ */
+export function isBuyoutImpliedArr(ct: ArrContractInput): boolean {
+  if (normalizeContractType(ct.contractType) !== "BUYOUT") return false;
   if (normalizeContractStatus(ct.status) !== "ACTIVE") return false;
   if (isContractPastEnd(ct.endDate, ct.status)) return false;
+  const rate = ct.productMaintRatePct;
+  if (rate == null || !Number.isFinite(rate) || rate <= 0) return false;
+  if (ct.hasActiveProductMaintChild) return false;
   return true;
+}
+
+/** Whether a contract currently counts toward ARR. */
+export function isActiveArrContract(ct: ArrContractInput): boolean {
+  if (normalizeContractStatus(ct.status) !== "ACTIVE") return false;
+  if (isContractPastEnd(ct.endDate, ct.status)) return false;
+  if (isArrContractType(ct.contractType)) return true;
+  return isBuyoutImpliedArr(ct);
+}
+
+/** Type used for ARR breakdown buckets (buyout implied → product maintenance). */
+export function arrBreakdownType(ct: ArrContractInput): string {
+  if (normalizeContractType(ct.contractType) === "BUYOUT") return "PRODUCT_MAINTENANCE";
+  return ct.contractType;
 }
 
 /**
  * ARR contribution in USD.
- * Prefers header amount ÷ termYears; if header empty, sums line items (amount / cycleYears).
+ * - Classic types: header amount ÷ termYears (or line items).
+ * - Buyout implied: amount × productMaintRatePct / 100 (until child maint exists).
  */
 export function contractArrAmount(ct: ArrContractInput): number {
   if (!isActiveArrContract(ct)) return 0;
+
+  if (isBuyoutImpliedArr(ct)) {
+    const header = parseContractAmountNumber(ct.amount);
+    if (header == null || header <= 0) return 0;
+    const rate = ct.productMaintRatePct!;
+    return toArrUsd((header * rate) / 100, ct.currency);
+  }
 
   const header = parseContractAmountNumber(ct.amount);
   if (header != null && header > 0) {
@@ -150,6 +239,7 @@ export function addToBreakdown(b: ArrBreakdown, type: ContractTypeCode | string,
   if (code === "SUBSCRIPTION") b.subscription += amount;
   else if (code === "PRODUCT_MAINTENANCE") b.productMaintenance += amount;
   else if (code === "PROJECT_MAINTENANCE") b.projectMaintenance += amount;
+  else if (code === "BUYOUT") b.productMaintenance += amount;
   b.total = b.subscription + b.productMaintenance + b.projectMaintenance;
 }
 
@@ -157,7 +247,7 @@ export function sumArrBreakdown(contracts: ArrContractInput[]): ArrBreakdown {
   const b = emptyArrBreakdown();
   for (const ct of contracts) {
     const amt = contractArrAmount(ct);
-    if (amt > 0) addToBreakdown(b, ct.contractType, amt);
+    if (amt > 0) addToBreakdown(b, arrBreakdownType(ct), amt);
   }
   return b;
 }
@@ -196,7 +286,7 @@ export function formatArrUsd(n: number, digits = 2): string {
 export function arrTypeBucket(type: string | null | undefined): keyof Omit<ArrBreakdown, "total"> | null {
   const code = normalizeContractType(type);
   if (code === "SUBSCRIPTION") return "subscription";
-  if (code === "PRODUCT_MAINTENANCE") return "productMaintenance";
+  if (code === "PRODUCT_MAINTENANCE" || code === "BUYOUT") return "productMaintenance";
   if (code === "PROJECT_MAINTENANCE") return "projectMaintenance";
   return null;
 }

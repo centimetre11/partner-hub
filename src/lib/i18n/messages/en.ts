@@ -1118,7 +1118,7 @@ export const messagesEn = {
     title: "ARR",
     desc: "Annual recurring revenue from subscriptions, product maintenance, and project maintenance",
     scopeHint:
-      "ARR = active Subscription + Product maintenance + Project maintenance. Header amount is divided by term years, then annualized by billing cycle, and converted to USD. If the header amount is empty, line items are summed (amount ÷ cycle years). Missing currency is treated as USD. Buyout and project primary contracts are excluded.",
+      "ARR = active Subscription + Product maintenance + Project maintenance. Header amount is divided by term years, then annualized by billing cycle, and converted to USD. If the header amount is empty, line items are summed (amount ÷ cycle years). Active buyouts with a product-maintenance rate count as product-maint ARR (amount × rate) until a linked active product-maint child exists (no double count). Missing currency is treated as USD. Plain buyouts and project primary contracts are excluded.",
     linkCalendar: "Calendar",
     linkOverview: "Overview",
     statTotalArr: "Total ARR (USD)",

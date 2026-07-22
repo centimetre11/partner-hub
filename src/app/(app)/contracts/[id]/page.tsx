@@ -13,7 +13,12 @@ import {
   contractTypeTone,
   isContractPastEnd,
 } from "@/lib/contract-types";
-import { contractArrAmount, formatArrUsd, isArrContractType } from "@/lib/arr";
+import {
+  contractArrAmount,
+  formatArrUsd,
+  isActiveArrContract,
+  toArrContractInput,
+} from "@/lib/arr";
 import { formatAmountDisplay } from "@/lib/amount";
 import { CustomerContractForm } from "@/components/customer-contract-form";
 import {
@@ -86,7 +91,14 @@ export default async function ContractDetailPage({
   if (!ct) notFound();
 
   const pastEnd = isContractPastEnd(ct.endDate, ct.status);
-  const arr = contractArrAmount(ct);
+  const arrInput = toArrContractInput({
+    ...ct,
+    hasActiveProductMaintChild: ct.childContracts.some(
+      (child) => child.contractType === "PRODUCT_MAINTENANCE" && child.status === "ACTIVE"
+    ),
+  });
+  const arr = contractArrAmount(arrInput);
+  const showsArr = isActiveArrContract(arrInput);
   const owner: OwnerRef = { kind: "customer", id: ct.customerId };
   const input =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30";
@@ -221,7 +233,7 @@ export default async function ContractDetailPage({
             {contractStatusLabel(ct.status, locale)}
           </Badge>
           {pastEnd && <Badge tone="amber">{t.pastEnd}</Badge>}
-          {isArrContractType(ct.contractType) && <Badge tone="green">ARR</Badge>}
+          {showsArr && <Badge tone="green">ARR</Badge>}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

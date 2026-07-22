@@ -4,7 +4,9 @@ import { ArrViewSwitch } from "@/components/arr-view-switch";
 import { EmptyState, PageHeader, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import {
-  ARR_CONTRACT_TYPES,
+  ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
+  arrSourceContractWhere,
+  toArrContractInput,
   contractArrAmount,
   isActiveArrContract,
   latestServiceDateFromContracts,
@@ -29,13 +31,11 @@ export default async function ArrCalendarPage({
   const toMonth = Math.min(12, Math.max(fromMonth, Number(sp.to) || 12));
   const months = Array.from({ length: toMonth - fromMonth + 1 }, (_, i) => fromMonth + i);
 
-  const contracts = await db.contract.findMany({
-    where: {
-      contractType: { in: [...ARR_CONTRACT_TYPES] },
-      status: "ACTIVE",
-    },
+  const contractsRaw = await db.contract.findMany({
+    where: arrSourceContractWhere(),
     include: {
       lineItems: { select: { amount: true, currency: true, cycleYears: true } },
+      ...ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
       customer: {
         select: {
           id: true,
@@ -47,6 +47,10 @@ export default async function ArrCalendarPage({
     },
   });
 
+  const contracts = contractsRaw.map((ct) => ({
+    ...ct,
+    ...toArrContractInput(ct),
+  }));
   const active = contracts.filter(isActiveArrContract);
   const customerIds = [...new Set(active.map((c) => c.customerId))];
 

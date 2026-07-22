@@ -5,7 +5,9 @@ import { ArrViewSwitch } from "@/components/arr-view-switch";
 import { Badge, Card, EmptyState, PageHeader, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import {
-  ARR_CONTRACT_TYPES,
+  ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
+  arrBreakdownType,
+  arrSourceContractWhere,
   contractArrAmount,
   emptyArrBreakdown,
   formatArrUsd,
@@ -13,6 +15,7 @@ import {
   latestServiceDateFromContracts,
   sumArrBreakdown,
   addToBreakdown,
+  toArrContractInput,
 } from "@/lib/arr";
 import { contractTypeLabel, contractTypeTone } from "@/lib/contract-types";
 
@@ -41,13 +44,11 @@ export default async function ArrPage() {
   const { messages: m, bcp47, locale } = await getServerI18n();
   const t = m.arr;
 
-  const contracts = await db.contract.findMany({
-    where: {
-      contractType: { in: [...ARR_CONTRACT_TYPES] },
-      status: "ACTIVE",
-    },
+  const contractsRaw = await db.contract.findMany({
+    where: arrSourceContractWhere(),
     include: {
       lineItems: { select: { amount: true, currency: true, cycleYears: true } },
+      ...ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
       customer: {
         select: {
           id: true,
@@ -64,6 +65,10 @@ export default async function ArrPage() {
     orderBy: { updatedAt: "desc" },
   });
 
+  const contracts = contractsRaw.map((ct) => ({
+    ...ct,
+    ...toArrContractInput(ct),
+  }));
   const active = contracts.filter(isActiveArrContract);
   const breakdown = sumArrBreakdown(active);
 
@@ -100,7 +105,7 @@ export default async function ArrPage() {
     }
     const amt = contractArrAmount(ct);
     const b = emptyArrBreakdown();
-    addToBreakdown(b, ct.contractType, amt);
+    addToBreakdown(b, arrBreakdownType(ct), amt);
     row.subscription += b.subscription;
     row.productMaintenance += b.productMaintenance;
     row.projectMaintenance += b.projectMaintenance;

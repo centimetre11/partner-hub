@@ -15,7 +15,14 @@ import {
   contractTypeTone,
   isContractPastEnd,
 } from "@/lib/contract-types";
-import { contractArrAmount, formatArrUsd, isArrContractType } from "@/lib/arr";
+import {
+  ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
+  arrSourceContractWhere,
+  contractArrAmount,
+  formatArrUsd,
+  isActiveArrContract,
+  toArrContractInput,
+} from "@/lib/arr";
 import { formatAmountDisplay } from "@/lib/amount";
 
 export default async function ContractsPage({
@@ -38,25 +45,31 @@ export default async function ContractsPage({
   const arrOnly = sp.arrOnly === "1";
   const nameFilter = nameContainsWhere(sp.q);
 
-  const contracts = await db.contract.findMany({
+  const contractsRaw = await db.contract.findMany({
     where: {
       ...(nameFilter ? { name: nameFilter } : {}),
-      ...(statusFilter ? { status: statusFilter } : {}),
       ...(sp.customer ? { customerId: sp.customer } : {}),
       ...(arrOnly
-        ? { contractType: { in: ["SUBSCRIPTION", "PRODUCT_MAINTENANCE", "PROJECT_MAINTENANCE"] } }
-        : typeFilter
-          ? { contractType: typeFilter }
-          : {}),
+        ? arrSourceContractWhere()
+        : {
+            ...(statusFilter ? { status: statusFilter } : {}),
+            ...(typeFilter ? { contractType: typeFilter } : {}),
+          }),
     },
     include: {
       customer: { select: { id: true, name: true, owner: { select: { name: true } } } },
       partner: { select: { id: true, name: true } },
       parentContract: { select: { id: true, name: true } },
       lineItems: { select: { amount: true, currency: true, cycleYears: true } },
+      ...ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
     },
     orderBy: [{ endDate: "asc" }, { updatedAt: "desc" }],
   });
+
+  const contracts = contractsRaw.map((ct) => ({
+    ...ct,
+    ...toArrContractInput(ct),
+  }));
 
   const customers = await db.customer.findMany({
     select: { id: true, name: true },
@@ -64,7 +77,7 @@ export default async function ContractsPage({
     take: 500,
   });
 
-  const activeArr = contracts.filter((c) => isArrContractType(c.contractType) && c.status === "ACTIVE");
+  const activeArr = contracts.filter(isActiveArrContract);
   const totalArr = activeArr.reduce((sum, c) => sum + contractArrAmount(c), 0);
 
   return (
