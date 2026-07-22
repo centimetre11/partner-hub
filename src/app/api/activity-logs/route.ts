@@ -32,7 +32,8 @@ export async function GET(req: Request) {
     const action = url.searchParams.get("action") ?? "";
     const pagePath = url.searchParams.get("pagePath") ?? "";
     const project = url.searchParams.get("project") ?? "ALL";
-    const result = await queryUserBehaviorLogs(page, { eventType, action, pagePath, search, project });
+    const userId = url.searchParams.get("userId") ?? "";
+    const result = await queryUserBehaviorLogs(page, { eventType, action, pagePath, search, project, userId });
     return NextResponse.json({
       items: result.items.map((row) => ({
         id: row.id,

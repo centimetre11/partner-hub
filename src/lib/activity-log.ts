@@ -290,6 +290,7 @@ export type UserBehaviorLogFilters = {
   pagePath?: string;
   search?: string;
   project?: string;
+  userId?: string;
 };
 
 export async function queryUserBehaviorLogs(page: number, filters: UserBehaviorLogFilters = {}) {
@@ -320,6 +321,7 @@ export async function queryUserBehaviorLogs(page: number, filters: UserBehaviorL
     if (filters.action?.trim()) where.action = { contains: filters.action.trim() };
     if (filters.pagePath?.trim()) where.pagePath = { contains: filters.pagePath.trim() };
     if (filters.project && filters.project !== "ALL") where.project = filters.project;
+    if (filters.userId?.trim()) where.userId = filters.userId.trim();
     if (filters.search?.trim()) {
       const q = filters.search.trim();
       where.OR = [
@@ -460,5 +462,187 @@ export async function getBehaviorStats(days = 7) {
       topActions: [] as Array<{ action: string; _count: { id: number } }>,
       eventTypes: [] as Array<{ eventType: string; _count: { id: number } }>,
     };
+  }
+}
+
+export type UserActivitySummary = {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  behaviorCount: number;
+  pageViewCount: number;
+  systemEventCount: number;
+  lastActiveAt: Date | null;
+};
+
+/** 近 N 天按用户汇总：行为数、页面访问、服务端操作、最近活跃时间 */
+export async function getUserActivitySummaries(days = 7): Promise<UserActivitySummary[]> {
+  const since = new Date();
+  since.setDate(since.getDate() - (days - 1));
+  since.setHours(0, 0, 0, 0);
+
+  try {
+    const [users, behaviorGroups, pageViewGroups, systemGroups, lastBehavior, lastSystem] = await Promise.all([
+      db.user.findMany({
+        select: { id: true, name: true, email: true, role: true },
+        orderBy: { name: "asc" },
+      }),
+      db.userBehaviorLog.groupBy({
+        by: ["userId"],
+        where: { createdAt: { gte: since }, userId: { not: null } },
+        _count: { id: true },
+      }),
+      db.userBehaviorLog.groupBy({
+        by: ["userId"],
+        where: { createdAt: { gte: since }, userId: { not: null }, eventType: "PAGE_VIEW" },
+        _count: { id: true },
+      }),
+      db.systemEventLog.groupBy({
+        by: ["actorId"],
+        where: { createdAt: { gte: since }, actorId: { not: null } },
+        _count: { id: true },
+      }),
+      db.userBehaviorLog.groupBy({
+        by: ["userId"],
+        where: { createdAt: { gte: since }, userId: { not: null } },
+        _max: { createdAt: true },
+      }),
+      db.systemEventLog.groupBy({
+        by: ["actorId"],
+        where: { createdAt: { gte: since }, actorId: { not: null } },
+        _max: { createdAt: true },
+      }),
+    ]);
+
+    const behaviorMap = new Map(behaviorGroups.map((r) => [r.userId!, r._count.id]));
+    const pageViewMap = new Map(pageViewGroups.map((r) => [r.userId!, r._count.id]));
+    const systemMap = new Map(systemGroups.map((r) => [r.actorId!, r._count.id]));
+    const lastBehaviorMap = new Map(lastBehavior.map((r) => [r.userId!, r._max.createdAt]));
+    const lastSystemMap = new Map(lastSystem.map((r) => [r.actorId!, r._max.createdAt]));
+
+    const rows: UserActivitySummary[] = users.map((u) => {
+      const bAt = lastBehaviorMap.get(u.id) ?? null;
+      const sAt = lastSystemMap.get(u.id) ?? null;
+      let lastActiveAt: Date | null = null;
+      if (bAt && sAt) lastActiveAt = bAt > sAt ? bAt : sAt;
+      else lastActiveAt = bAt ?? sAt;
+
+      return {
+        userId: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        behaviorCount: behaviorMap.get(u.id) ?? 0,
+        pageViewCount: pageViewMap.get(u.id) ?? 0,
+        systemEventCount: systemMap.get(u.id) ?? 0,
+        lastActiveAt,
+      };
+    });
+
+    return rows
+      .filter((r) => r.behaviorCount > 0 || r.systemEventCount > 0)
+      .sort((a, b) => {
+        const aTime = a.lastActiveAt?.getTime() ?? 0;
+        const bTime = b.lastActiveAt?.getTime() ?? 0;
+        return bTime - aTime;
+      });
+  } catch (e) {
+    console.error("[activity-log] getUserActivitySummaries failed:", e);
+    return [];
+  }
+}
+
+export type UserTimelineItem = {
+  id: string;
+  source: "behavior" | "system";
+  eventType: string;
+  action: string;
+  pagePath: string | null;
+  targetLabel: string | null;
+  summary: string | null;
+  status: string;
+  durationMs: number | null;
+  createdAt: Date;
+};
+
+/** 某用户的行为 + 系统操作时间线（按时间倒序） */
+export async function getUserActivityTimeline(userId: string, limit = 80): Promise<{
+  user: { id: string; name: string; email: string; role: string } | null;
+  items: UserTimelineItem[];
+}> {
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, role: true },
+    });
+    if (!user) return { user: null, items: [] };
+
+    const [behaviors, systems] = await Promise.all([
+      db.userBehaviorLog.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        select: {
+          id: true,
+          eventType: true,
+          action: true,
+          pagePath: true,
+          targetLabel: true,
+          status: true,
+          durationMs: true,
+          createdAt: true,
+        },
+      }),
+      db.systemEventLog.findMany({
+        where: { actorId: userId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        select: {
+          id: true,
+          category: true,
+          action: true,
+          targetLabel: true,
+          summary: true,
+          status: true,
+          durationMs: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    const items: UserTimelineItem[] = [
+      ...behaviors.map((b) => ({
+        id: `b-${b.id}`,
+        source: "behavior" as const,
+        eventType: b.eventType,
+        action: b.action,
+        pagePath: b.pagePath,
+        targetLabel: b.targetLabel,
+        summary: null,
+        status: b.status,
+        durationMs: b.durationMs,
+        createdAt: b.createdAt,
+      })),
+      ...systems.map((s) => ({
+        id: `s-${s.id}`,
+        source: "system" as const,
+        eventType: s.category,
+        action: s.action,
+        pagePath: null,
+        targetLabel: s.targetLabel,
+        summary: s.summary,
+        status: s.status,
+        durationMs: s.durationMs,
+        createdAt: s.createdAt,
+      })),
+    ]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+
+    return { user, items };
+  } catch (e) {
+    console.error("[activity-log] getUserActivityTimeline failed:", e);
+    return { user: null, items: [] };
   }
 }

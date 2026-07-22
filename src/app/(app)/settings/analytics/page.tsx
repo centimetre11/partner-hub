@@ -1,17 +1,24 @@
+import Link from "next/link";
 import { requireSuperAdmin } from "@/lib/session";
 import { getServerI18n } from "@/lib/server-i18n";
-import { getBehaviorStats, getUserBehaviorTotals, queryUserBehaviorLogs } from "@/lib/activity-log";
+import {
+  getBehaviorStats,
+  getUserActivitySummaries,
+  getUserBehaviorTotals,
+  queryUserBehaviorLogs,
+} from "@/lib/activity-log";
 import { Badge, Card, EmptyState, fmtDateTime } from "@/components/ui";
 
 export default async function AnalyticsSettingsPage() {
   await requireSuperAdmin();
   const { bcp47 } = await getServerI18n();
 
-  const [totals, stats7, stats30, recent] = await Promise.all([
+  const [totals, stats7, stats30, recent, userSummaries] = await Promise.all([
     getUserBehaviorTotals(),
     getBehaviorStats(7),
     getBehaviorStats(30),
     queryUserBehaviorLogs(1, {}),
+    getUserActivitySummaries(7),
   ]);
 
   const top7Pages = stats7.topPages.slice(0, 10);
@@ -87,6 +94,51 @@ export default async function AnalyticsSettingsPage() {
           )}
         </Card>
       </div>
+
+      <Card title="按用户查看（近 7 天）" className="lg:col-span-2">
+        {userSummaries.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-slate-400">
+                <tr className="border-b border-slate-100">
+                  <th className="py-2 text-left font-medium">用户</th>
+                  <th className="py-2 text-right font-medium">页面访问</th>
+                  <th className="py-2 text-right font-medium">行为事件</th>
+                  <th className="py-2 text-right font-medium">服务端操作</th>
+                  <th className="py-2 text-right font-medium">最近活跃</th>
+                  <th className="py-2 text-right font-medium"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {userSummaries.map((row) => (
+                  <tr key={row.userId}>
+                    <td className="py-2.5">
+                      <div className="font-medium text-slate-800">{row.name}</div>
+                      <div className="text-xs text-slate-400">{row.email}</div>
+                    </td>
+                    <td className="py-2.5 text-right tabular-nums text-slate-600">{row.pageViewCount}</td>
+                    <td className="py-2.5 text-right tabular-nums text-slate-600">{row.behaviorCount}</td>
+                    <td className="py-2.5 text-right tabular-nums text-slate-600">{row.systemEventCount}</td>
+                    <td className="py-2.5 text-right text-xs text-slate-500 tabular-nums">
+                      {row.lastActiveAt ? fmtDateTime(row.lastActiveAt, bcp47) : "—"}
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <Link
+                        href={`/settings/analytics/users/${row.userId}`}
+                        className="text-sky-600 hover:underline text-xs"
+                      >
+                        查看详情
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState text="近 7 天暂无用户活动" />
+        )}
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card title="页面访问 Top 10（近 7 天）">
