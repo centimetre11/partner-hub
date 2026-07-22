@@ -13,6 +13,7 @@ import {
   type CrmCustomerDetail,
   type CrmDupMatch,
 } from "@/lib/crm-create";
+import { recoverFromStaleServerAction } from "@/lib/stale-server-action";
 import { AiIntakePanel } from "@/components/ai-intake-panel";
 
 type Entity = "partner" | "customer";
@@ -90,12 +91,20 @@ export function CreateFromCrmButton({
     setResults([]);
     setQuery("");
     startDetail(async () => {
-      const [d, dup] = await Promise.all([
-        getCrmCustomerDetailAction(c.id),
-        findEntitiesByCrmCustomerAction(c.id, c.name),
-      ]);
-      setDetail(d);
-      setDups(dup);
+      try {
+        const [d, dup] = await Promise.all([
+          getCrmCustomerDetailAction(c.id),
+          findEntitiesByCrmCustomerAction(c.id, c.name),
+        ]);
+        setDetail(d);
+        setDups(dup);
+      } catch (e) {
+        if (recoverFromStaleServerAction(e)) return;
+        setSelected(null);
+        setDetail(null);
+        setDups(null);
+        setError(e instanceof Error ? e.message : String(e));
+      }
     });
   }
 
@@ -103,16 +112,21 @@ export function CreateFromCrmButton({
     if (!selected) return;
     setError(null);
     startCreate(async () => {
-      const res =
-        entity === "partner"
-          ? await createPartnerFromCrmAction(selected.id, parentId ? { parentId } : undefined)
-          : await createCustomerFromCrmAction(selected.id);
-      if ("error" in res) {
-        setError(res.error);
-        return;
+      try {
+        const res =
+          entity === "partner"
+            ? await createPartnerFromCrmAction(selected.id, parentId ? { parentId } : undefined)
+            : await createCustomerFromCrmAction(selected.id);
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
+        close();
+        router.push(detailPath(res.id));
+      } catch (e) {
+        if (recoverFromStaleServerAction(e)) return;
+        setError(e instanceof Error ? e.message : String(e));
       }
-      close();
-      router.push(detailPath(res.id));
     });
   }
 

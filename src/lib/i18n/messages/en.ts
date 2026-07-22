@@ -2882,6 +2882,8 @@ export const messagesEn = {
       boundCustomerHint: "Scoped to CRM customer {id}",
       unboundCustomerHint: "CRM customer is not linked — this feature is unavailable",
       empty: "No results. Try another keyword.",
+      emptyContract:
+        "No contracts for this CRM customer (queried by customer ID). If the CRM website shows contracts, the MCP warehouse may not be synced yet — enter manually or try later.",
       applying: "Filling the form…",
       filledFromCrm: "Selected from CRM",
       notConfigured: "CRM_MCP_TOKEN is not set",

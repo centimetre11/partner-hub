@@ -206,7 +206,9 @@ export function CrmImportPicker({
                 </li>
               ))}
               {!searching && !error && items.length === 0 && (
-                <li className="text-xs text-slate-400 py-4 text-center">{t.empty}</li>
+                <li className="text-xs text-slate-400 py-4 text-center leading-relaxed px-2">
+                  {kind === "contract" ? t.emptyContract : t.empty}
+                </li>
               )}
             </ul>
 

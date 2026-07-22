@@ -10,6 +10,7 @@ import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
 import { getTaxonomyOptionsMany, loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
 import { classifyCustomers, type CustomerBucketMeta, type GrowthProbability } from "@/lib/customer-bucket";
+import { toArrContractInput } from "@/lib/arr";
 import { OPEN_OPPORTUNITY_STATUSES, opportunityStatusLabel } from "@/lib/opportunity-status";
 import type { ReactNode } from "react";
 
@@ -163,6 +164,12 @@ export default async function CustomersPage({
             currency: true,
             billingCycle: true,
             termYears: true,
+            productMaintRatePct: true,
+            childContracts: {
+              where: { contractType: "PRODUCT_MAINTENANCE", status: "ACTIVE" },
+              select: { id: true },
+              take: 1,
+            },
           },
         },
         opportunities: {
@@ -186,7 +193,12 @@ export default async function CustomersPage({
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? c.statusActive : s === "PROSPECT" ? c.statusProspect : c.statusInactive;
 
-  const classified = classifyCustomers(bucketRows);
+  const classified = classifyCustomers(
+    bucketRows.map((row) => ({
+      ...row,
+      contracts: row.contracts.map((ct) => toArrContractInput(ct)),
+    }))
+  );
   const boardItems = classified.filter((item) => item.meta.bucket !== "other");
   const boardIds = boardItems.map((item) => item.customer.id);
   const metaById = new Map(boardItems.map((item) => [item.customer.id, item.meta]));

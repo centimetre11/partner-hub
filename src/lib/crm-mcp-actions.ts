@@ -131,7 +131,8 @@ export async function searchCrmContractsAction(input: {
 
   try {
     const items = await withCrmMcpSession(async (call) => {
-      if (q && looksLikeUuid(q)) {
+      // UUID that equals the bound customer id is not a contract id — list by com_id.
+      if (q && looksLikeUuid(q) && q.toLowerCase() !== comId.toLowerCase()) {
         const rows = await queryView(
           call,
           "contract_detail",
@@ -143,8 +144,9 @@ export async function searchCrmContractsAction(input: {
           .filter((x): x is CrmContractHit => !!x && (!x.crmCustomerId || x.crmCustomerId === comId));
       }
 
+      // Always scope by bound CRM customer id. Optional keyword filters contract name only.
       const filters: Record<string, unknown> = { com_id: { op: "eq", value: comId } };
-      if (q) filters.ctr_name = { op: "ilike", value: q };
+      if (q && !looksLikeUuid(q)) filters.ctr_name = { op: "ilike", value: q };
       const rows = await queryView(call, "contract_list", filters, {
         limit,
         responseMode: "sample",

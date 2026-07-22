@@ -2870,6 +2870,8 @@ export const messagesZh: Messages = {
       boundCustomerHint: "已按 CRM 客户 {id} 收口查询",
       unboundCustomerHint: "未绑定 CRM 客户，不支持此功能",
       empty: "暂无结果，可调整关键词后重试",
+      emptyContract:
+        "该 CRM 客户下暂无合同（已按客户 ID 查询）。若网页 CRM 能看到合同，多为 MCP 数仓尚未同步，可先手工录入或稍后再试。",
       applying: "正在回填表单…",
       filledFromCrm: "已从 CRM 选中",
       notConfigured: "未配置 CRM_MCP_TOKEN，无法从 CRM 拉取",

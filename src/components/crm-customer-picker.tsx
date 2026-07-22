@@ -9,6 +9,7 @@ import {
   type CrmCustomerSuggestion,
 } from "@/lib/crm-actions";
 import { buildCrmCustomerViewUrl } from "@/lib/crm";
+import { recoverFromStaleServerAction } from "@/lib/stale-server-action";
 
 export type CrmCustomerOption = {
   id: string;
@@ -92,20 +93,26 @@ export function CrmCustomerPicker({
     setSuggestMsg(null);
     setSuggestOpen(true);
     startTransition(async () => {
-      const res = partnerId
-        ? await suggestCrmCustomersForPartnerAction(partnerId, 8)
-        : await suggestCrmCustomersForCustomerAction(customerId!, 8);
-      const name =
-        ("partnerName" in res ? res.partnerName : res.customerName) || entityName;
-      setSuggestions(res.candidates);
-      if (res.candidates.length === 0) {
-        setSuggestMsg(crm.suggestEmpty.replace("{name}", name));
-      } else {
-        setSuggestMsg(
-          crm.suggestFound
-            .replace("{count}", String(res.candidates.length))
-            .replace("{name}", name),
-        );
+      try {
+        const res = partnerId
+          ? await suggestCrmCustomersForPartnerAction(partnerId, 8)
+          : await suggestCrmCustomersForCustomerAction(customerId!, 8);
+        const name =
+          ("partnerName" in res ? res.partnerName : res.customerName) || entityName;
+        setSuggestions(res.candidates);
+        if (res.candidates.length === 0) {
+          setSuggestMsg(crm.suggestEmpty.replace("{name}", name));
+        } else {
+          setSuggestMsg(
+            crm.suggestFound
+              .replace("{count}", String(res.candidates.length))
+              .replace("{name}", name),
+          );
+        }
+      } catch (e) {
+        if (recoverFromStaleServerAction(e)) return;
+        setSuggestions([]);
+        setSuggestMsg(e instanceof Error ? e.message : String(e));
       }
     });
   }
