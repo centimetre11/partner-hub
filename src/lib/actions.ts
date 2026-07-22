@@ -779,6 +779,9 @@ export async function upsertOpportunityAction(owner: OwnerRef, formData: FormDat
   if (formData.has("lossReason")) {
     data.lossReason = String(formData.get("lossReason") ?? "").trim() || null;
   }
+  if (formData.has("crmOpportunityId")) {
+    data.crmOpportunityId = String(formData.get("crmOpportunityId") ?? "").trim() || null;
+  }
   if (!data.name) return;
   // 商机以客户为主体，伙伴为可选关联（带单/交付方）；反之亦然
   const crossPartnerId = formData.has("partnerId") ? String(formData.get("partnerId") ?? "").trim() || null : undefined;
@@ -897,6 +900,12 @@ export async function upsertProjectAction(owner: OwnerRef, formData: FormData) {
     endDate: end ? new Date(end) : null,
     notes: String(formData.get("notes") ?? "") || null,
   };
+  if (formData.has("crmProjectId")) {
+    data.crmProjectId = String(formData.get("crmProjectId") ?? "").trim() || null;
+  }
+  if (formData.has("crmPrjNumber")) {
+    data.crmPrjNumber = String(formData.get("crmPrjNumber") ?? "").trim() || null;
+  }
   if (!data.name) return;
   // 项目以客户为主体，伙伴为可选交付方
   const crossPartnerId = formData.has("partnerId")

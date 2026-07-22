@@ -5,8 +5,10 @@ import { useFormStatus } from "react-dom";
 import { createProjectFromListAction } from "@/lib/actions";
 import { useMessages, useLocale } from "@/lib/i18n/context";
 import { AmountInput } from "@/components/amount-input";
+import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
+import type { CrmProjectDraft } from "@/lib/crm-mcp-map";
 
-type Option = { id: string; name: string };
+type Option = { id: string; name: string; crmCustomerId?: string | null };
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -29,11 +31,35 @@ export function AddProjectForm({
   partners: Option[];
 }) {
   const [open, setOpen] = useState(false);
+  const [formKey, setFormKey] = useState(0);
+  const [draft, setDraft] = useState<CrmProjectDraft | null>(null);
+  const [customerId, setCustomerId] = useState("");
   const m = useMessages();
   const locale = useLocale();
   const p = m.projects;
   const c = m.customers;
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
+
+  const selectedCrmId = customers.find((cust) => cust.id === customerId)?.crmCustomerId?.trim() || "";
+  const selectedCustomer = customers.find((cust) => cust.id === customerId);
+
+  function onCrmPicked(result: CrmImportResult) {
+    if (result.kind !== "project") return;
+    setDraft(result.draft);
+    if (result.localCustomerId) setCustomerId(result.localCustomerId);
+    else if (result.draft.crmCustomerId) {
+      const match = customers.find((cust) => cust.crmCustomerId === result.draft.crmCustomerId);
+      if (match) setCustomerId(match.id);
+    }
+    setFormKey((k) => k + 1);
+  }
+
+  function close() {
+    setOpen(false);
+    setDraft(null);
+    setCustomerId("");
+    setFormKey((k) => k + 1);
+  }
 
   return (
     <>
@@ -46,14 +72,45 @@ export function AddProjectForm({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={() => setOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={close}>
           <div
             className="bg-white rounded-lg w-full border border-slate-200 max-w-lg p-6 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-base font-semibold mb-4">{p.addTitle}</h3>
-            <form action={createProjectFromListAction} className="space-y-3">
-              <select name="customerId" required defaultValue="" className={input} aria-label={p.selectCustomer}>
+            <div className="flex items-center justify-between mb-4 gap-2">
+              <h3 className="text-base font-semibold">{p.addTitle}</h3>
+              {selectedCrmId ? (
+                <CrmImportPicker
+                  kind="project"
+                  crmCustomerId={selectedCrmId}
+                  customerNameHint={selectedCustomer?.name}
+                  onPicked={onCrmPicked}
+                  compact
+                />
+              ) : customerId ? (
+                <span className="text-[11px] text-slate-400">{m.crm.importFromCrm.requiresBound}</span>
+              ) : null}
+            </div>
+            {draft?.crmProjectId && (
+              <p className="text-[11px] text-sky-700 mb-3">
+                {m.crm.importFromCrm.filledFromCrm}: {draft.crmPrjNumber || draft.crmProjectId}
+              </p>
+            )}
+            <form key={formKey} action={createProjectFromListAction} className="space-y-3">
+              {draft?.crmProjectId && (
+                <input type="hidden" name="crmProjectId" value={draft.crmProjectId} />
+              )}
+              {draft?.crmPrjNumber && (
+                <input type="hidden" name="crmPrjNumber" value={draft.crmPrjNumber} />
+              )}
+              <select
+                name="customerId"
+                required
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+                className={input}
+                aria-label={p.selectCustomer}
+              >
                 <option value="" disabled>
                   {p.selectCustomer}
                 </option>
@@ -63,15 +120,27 @@ export function AddProjectForm({
                   </option>
                 ))}
               </select>
-              <input name="name" required placeholder={c.projectName} className={input} />
+              <input
+                name="name"
+                required
+                defaultValue={draft?.name ?? ""}
+                placeholder={c.projectName}
+                className={input}
+              />
               <AmountInput
+                key={`amt-${formKey}`}
                 inputClassName={input}
                 amountPlaceholder={m.common.amount}
                 amountAriaLabel={m.common.amount}
                 currencyAriaLabel={m.common.currency}
                 locale={locale}
               />
-              <select name="phase" defaultValue="KICKOFF" className={input} aria-label={p.colPhase}>
+              <select
+                name="phase"
+                defaultValue={draft?.phase ?? "KICKOFF"}
+                className={input}
+                aria-label={p.colPhase}
+              >
                 <option value="KICKOFF">{c.phaseKICKOFF}</option>
                 <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>
                 <option value="ACCEPTANCE">{c.phaseACCEPTANCE}</option>
@@ -79,8 +148,20 @@ export function AddProjectForm({
                 <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
               </select>
               <div className="flex gap-2">
-                <input name="startDate" type="date" className={input} aria-label={c.projectStartDate} />
-                <input name="endDate" type="date" className={input} aria-label={c.projectEndDate} />
+                <input
+                  name="startDate"
+                  type="date"
+                  defaultValue={draft?.startDate ?? ""}
+                  className={input}
+                  aria-label={c.projectStartDate}
+                />
+                <input
+                  name="endDate"
+                  type="date"
+                  defaultValue={draft?.endDate ?? ""}
+                  className={input}
+                  aria-label={c.projectEndDate}
+                />
               </div>
               <select name="partnerId" defaultValue="" className={input} aria-label={p.colPartner}>
                 <option value="">{c.deliveryPartnerNone}</option>
@@ -90,10 +171,19 @@ export function AddProjectForm({
                   </option>
                 ))}
               </select>
+              {draft?.notes ? (
+                <textarea
+                  name="notes"
+                  rows={2}
+                  defaultValue={draft.notes}
+                  className={input}
+                  aria-label={m.common.note}
+                />
+              ) : null}
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={close}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600"
                 >
                   {m.common.cancel}

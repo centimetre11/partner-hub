@@ -74,6 +74,7 @@ export default async function LeadReviewDetailPage({
         <LeadReviewWorkspace
           meetingId={meeting.id}
           status={meeting.status}
+          previewToken={meeting.previewToken}
           liveNotes={meeting.liveNotes}
           transcriptStatus={meeting.transcriptStatus}
           transcriptError={meeting.transcriptError}

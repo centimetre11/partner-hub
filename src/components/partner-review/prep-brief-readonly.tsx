@@ -1,15 +1,12 @@
+"use client";
+
 import type { PartnerPrepBrief } from "@/lib/partner-review/types";
 import { categoryLabel, tidyProgressText } from "@/lib/partner-review/brief";
 import { MossPrepCustomerBadge } from "@/components/moss/moss-workflow-sections";
-
-const CATEGORY_LABEL: Record<string, string> = {
-  VISIT: "拜访",
-  TRAINING: "培训",
-  NEGOTIATION: "谈判",
-  DELIVERY: "交付",
-  RELATIONSHIP: "关系",
-  OTHER: "进展",
-};
+import { useMessages } from "@/lib/i18n/context";
+import { formatMsg } from "@/lib/i18n/messages";
+import { useLocale } from "@/lib/i18n/context";
+import { localeToBcp47 } from "@/lib/i18n/locale";
 
 function tidyClientText(text: string): string {
   return tidyProgressText(text, 360);
@@ -24,10 +21,25 @@ export function PrepBriefReadonly({
   compact?: boolean;
   mossConfigured?: boolean;
 }) {
+  const t = useMessages().partnerReview;
+  const locale = useLocale();
+  const catLabel: Record<string, string> = {
+    VISIT: t.catVisit,
+    TRAINING: t.catTraining,
+    NEGOTIATION: t.catNegotiation,
+    DELIVERY: t.catDelivery,
+    RELATIONSHIP: t.catRelationship,
+    OTHER: t.catOther,
+  };
+
   const todos = brief.todos?.length
     ? brief.todos
-    : (brief.openTodos ?? []).map((t) => ({ ...t, done: false }));
-  const openCount = todos.filter((t) => !t.done).length;
+    : (brief.openTodos ?? []).map((todo) => ({ ...todo, done: false }));
+  const openCount = todos.filter((todo) => !todo.done).length;
+  const activeOppCount = brief.customerOpportunities?.reduce(
+    (n, g) => n + g.opportunities.length,
+    0,
+  ) ?? 0;
 
   return (
     <div className="space-y-4 text-sm">
@@ -37,10 +49,10 @@ export function PrepBriefReadonly({
 
       {brief.aiTopics.length ? (
         <div>
-          <div className="text-xs font-medium text-slate-500 mb-1.5">AI 推荐议题</div>
+          <div className="text-xs font-medium text-slate-500 mb-1.5">{t.topics}</div>
           <ul className="list-disc pl-5 space-y-1 text-slate-700">
-            {brief.aiTopics.map((t) => (
-              <li key={t}>{t}</li>
+            {brief.aiTopics.map((topic) => (
+              <li key={topic}>{topic}</li>
             ))}
           </ul>
         </div>
@@ -49,10 +61,10 @@ export function PrepBriefReadonly({
       {brief.customerOpportunities?.length ? (
         <div>
           <div className="text-xs font-semibold text-slate-700 mb-2">
-            该伙伴下客户商机
+            {t.customerOpportunities}
             <span className="font-normal text-slate-400">
               {" "}
-              · {brief.customerOpportunities.reduce((n, g) => n + g.opportunities.length, 0)} 个进行中
+              · {formatMsg(t.activeCount, { n: activeOppCount })}
             </span>
           </div>
           <div className="space-y-3">
@@ -74,7 +86,9 @@ export function PrepBriefReadonly({
                         configured={mossConfigured}
                       />
                     ) : null}
-                    <span className="text-[11px] text-slate-500">{group.opportunities.length} 个商机</span>
+                    <span className="text-[11px] text-slate-500">
+                      {formatMsg(t.opportunityCount, { n: group.opportunities.length })}
+                    </span>
                   </div>
                 </div>
                 <ul className="space-y-1.5">
@@ -101,18 +115,21 @@ export function PrepBriefReadonly({
       {!compact && todos.length ? (
         <div>
           <div className="text-xs font-medium text-slate-500 mb-1.5">
-            待办摘录
-            <span className="font-normal text-slate-400"> · 待完成 {openCount}</span>
+            {t.todoExcerpt}
+            <span className="font-normal text-slate-400">
+              {" "}
+              · {formatMsg(t.openCount, { n: openCount })}
+            </span>
           </div>
           <ul className="space-y-1.5">
-            {todos.slice(0, 10).map((t) => (
+            {todos.slice(0, 10).map((todo) => (
               <li
-                key={t.id}
-                className={`text-sm ${t.done ? "text-slate-400 line-through" : "text-slate-800"}`}
+                key={todo.id}
+                className={`text-sm ${todo.done ? "text-slate-400 line-through" : "text-slate-800"}`}
               >
-                {t.title}
-                {!t.done && t.overdue ? (
-                  <span className="ml-1.5 text-[11px] text-red-600">逾期</span>
+                {todo.title}
+                {!todo.done && todo.overdue ? (
+                  <span className="ml-1.5 text-[11px] text-red-600">{t.overdue}</span>
                 ) : null}
               </li>
             ))}
@@ -122,13 +139,17 @@ export function PrepBriefReadonly({
 
       {!compact && brief.progress.length ? (
         <div>
-          <div className="text-xs font-medium text-slate-500 mb-1.5">近两周进展</div>
+          <div className="text-xs font-medium text-slate-500 mb-1.5">{t.recentProgress}</div>
           <ul className="space-y-2.5">
             {brief.progress.slice(0, compact ? 4 : 8).map((p, i) => {
-              const label = p.categoryLabel || CATEGORY_LABEL[p.category] || categoryLabel(p.category);
+              const label =
+                p.categoryLabel || catLabel[p.category] || categoryLabel(p.category);
               const body = tidyClientText(p.contentPreview || "");
               const dateLabel = p.occurredAt
-                ? new Date(p.occurredAt).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" })
+                ? new Date(p.occurredAt).toLocaleDateString(localeToBcp47(locale), {
+                    month: "numeric",
+                    day: "numeric",
+                  })
                 : "";
               return (
                 <li

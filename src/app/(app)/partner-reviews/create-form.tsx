@@ -3,10 +3,13 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createPartnerReviewMeetingAction } from "@/lib/partner-review/actions";
+import { useMessages } from "@/lib/i18n/context";
+import { formatMsg } from "@/lib/i18n/messages";
 
 type PartnerOption = { id: string; name: string; tier: string | null };
 
 export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[] }) {
+  const t = useMessages().partnerReview;
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -59,7 +62,7 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
         onClick={() => setOpen(true)}
         className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800"
       >
-        新建过伙伴会议
+        {t.create}
       </button>
     );
   }
@@ -67,24 +70,24 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-slate-800">新建过伙伴会议</h3>
+        <h3 className="text-sm font-semibold text-slate-800">{t.createTitle}</h3>
         <button type="button" className="text-xs text-slate-500 hover:text-slate-800" onClick={() => setOpen(false)}>
-          取消
+          {t.cancel}
         </button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block space-y-1 sm:col-span-2">
-          <span className="text-xs text-slate-500">会议标题</span>
+          <span className="text-xs text-slate-500">{t.meetingTitle}</span>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="例如：周会过伙伴 7/14"
+            placeholder={t.meetingTitlePh}
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-slate-500">计划时间（可选）</span>
+          <span className="text-xs text-slate-500">{t.scheduledAt}</span>
           <input
             type="datetime-local"
             value={scheduledAt}
@@ -93,11 +96,11 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs text-slate-500">搜索伙伴</span>
+          <span className="text-xs text-slate-500">{t.searchPartners}</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="输入名称筛选"
+            placeholder={t.searchPh}
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
           />
         </label>
@@ -114,10 +117,10 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
             </label>
           );
         })}
-        {!filtered.length && <p className="px-3 py-4 text-xs text-slate-400">没有匹配的正式伙伴</p>}
+        {!filtered.length && <p className="px-3 py-4 text-xs text-slate-400">{t.noMatch}</p>}
       </div>
 
-      <p className="text-xs text-slate-500">已选 {selected.length} 个伙伴</p>
+      <p className="text-xs text-slate-500">{formatMsg(t.selectedCount, { n: selected.length })}</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
       <button
@@ -126,7 +129,7 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
         onClick={submit}
         className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
       >
-        {busy ? "创建中…" : "创建并进入工作台"}
+        {busy ? t.submitting : t.submit}
       </button>
     </div>
   );

@@ -4,14 +4,8 @@ import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
 import { CreateReviewMeetingForm } from "./create-form";
 import { DeleteMeetingButton } from "./delete-meeting-button";
-
-const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
-  DRAFT: { label: "草稿", tone: "zinc" },
-  PREP: { label: "已准备", tone: "blue" },
-  LIVE: { label: "进行中", tone: "amber" },
-  PROCESSING: { label: "会后处理", tone: "purple" },
-  DONE: { label: "已完成", tone: "green" },
-};
+import { getLocale } from "@/lib/i18n/locale-server";
+import { formatMsg, getMessages } from "@/lib/i18n/messages";
 
 export default async function PartnerReviewsPage({
   searchParams,
@@ -19,6 +13,13 @@ export default async function PartnerReviewsPage({
   searchParams: Promise<{ tab?: string }>;
 }) {
   await requireUser();
+  const locale = await getLocale();
+  const t = getMessages(locale).partnerReview;
+  const statusLabel = {
+    DRAFT: { label: t.statusDraft, tone: "zinc" as const }, PREP: { label: t.statusPrep, tone: "blue" as const },
+    LIVE: { label: t.statusLive, tone: "amber" as const }, PROCESSING: { label: t.statusProcessing, tone: "purple" as const },
+    DONE: { label: t.statusDone, tone: "green" as const },
+  };
   const sp = await searchParams;
   const tab = sp.tab === "history" ? "history" : "active";
 
@@ -55,34 +56,34 @@ export default async function PartnerReviewsPage({
   return (
     <div className="pb-16 space-y-0">
       <PageHeader
-        title="过伙伴会议"
-        desc="选一批伙伴开会：先开会准备拉取近 2 周进展，再开始开会打标；已确认的可在历史中回看。"
+        title={t.title}
+        desc={t.desc}
         actions={tab === "active" ? <CreateReviewMeetingForm partners={partners} /> : undefined}
       />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-4 max-w-7xl">
         <div className="flex gap-1 border-b border-slate-200">
           <Link href="/partner-reviews" className={tabClass(tab === "active")}>
-            进行中
+            {t.tabActive}
           </Link>
           <Link href="/partner-reviews?tab=history" className={tabClass(tab === "history")}>
-            历史会议
+            {t.tabHistory}
           </Link>
         </div>
 
-        <Card title={tab === "history" ? "历史会议" : "进行中的会议"}>
+        <Card title={tab === "history" ? t.cardHistory : t.cardActive}>
           {!meetings.length ? (
             <EmptyState
               text={
                 tab === "history"
-                  ? "还没有已确认的历史会议。确认写入商务记录与待办后，会出现在这里。"
-                  : "还没有进行中的过伙伴会议。点击右上角「新建过伙伴会议」开始。"
+                  ? t.emptyHistory
+                  : t.emptyActive
               }
             />
           ) : (
             <ul className="divide-y divide-slate-100">
               {meetings.map((m) => {
-                const st = STATUS_LABEL[m.status] ?? STATUS_LABEL.DRAFT!;
+                const st = statusLabel[m.status as keyof typeof statusLabel] ?? statusLabel.DRAFT;
                 const partnerNames = m.items.map((i) => i.partner.name).slice(0, 4);
                 const more = m.items.length - partnerNames.length;
                 return (
@@ -94,19 +95,19 @@ export default async function PartnerReviewsPage({
                       <div className="min-w-0 flex-1">
                         <div className="font-medium text-slate-900 truncate">{m.title}</div>
                         <div className="text-xs text-slate-500 mt-0.5">
-                          {m.items.length} 个伙伴
+                          {formatMsg(t.partnersUnit, { n: m.items.length })}
                           {partnerNames.length
-                            ? ` · ${partnerNames.join("、")}${more > 0 ? ` 等` : ""}`
+                            ? ` · ${partnerNames.join(locale === "zh" ? "、" : ", ")}${more > 0 ? ` ${t.moreSuffix}` : ""}`
                             : ""}
                           {" · "}
                           {m.createdBy.name}
                           {" · "}
                           {tab === "history" && m.endedAt
-                            ? `结束于 ${fmtDateTime(m.endedAt)}`
+                            ? formatMsg(t.endedAt, { time: fmtDateTime(m.endedAt) })
                             : fmtDateTime(m.createdAt)}
                         </div>
                       </div>
-                      <Badge tone={st.tone}>{tab === "history" ? "查看摘要" : st.label}</Badge>
+                      <Badge tone={st.tone}>{tab === "history" ? t.viewSummary : st.label}</Badge>
                     </Link>
                     {tab === "active" ? (
                       <DeleteMeetingButton meetingId={m.id} meetingTitle={m.title} />

@@ -48,6 +48,8 @@ import { getTaxonomyOptionsMany } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
 import { CustomerContractForm } from "@/components/customer-contract-form";
 import { AmountInput } from "@/components/amount-input";
+import { CustomerAddOpportunityForm } from "@/components/customer-add-opportunity-form";
+import { CustomerAddProjectForm } from "@/components/customer-add-project-form";
 import { PendingButton } from "@/components/pending-button";
 import { formatAmountDisplay } from "@/lib/amount";
 import {
@@ -423,50 +425,19 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         </details>
       ))}
       {customer.opportunities.length === 0 && <EmptyState text={c.noOpportunities} />}
-      <details className="rounded-lg border border-dashed border-slate-200">
-        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addOpportunity}</summary>
-        <form action={upsertOpportunityAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-          <input name="name" required placeholder={c.opportunityName} className={input} />
-          <AmountInput
-            inputClassName={input}
-            amountPlaceholder={m.common.amount}
-            amountAriaLabel={m.common.amount}
-            currencyAriaLabel={m.common.currency}
-            locale={locale}
-          />
-          <OpportunityProcessFields key="add-opp" />
-          <OpportunityStatusWithOutcome
-            defaultStatus="P20"
-            segmentOptions={segmentOptions}
-            winFactorOptions={winFactorOptions}
-            lossReasonOptions={lossReasonOptions}
-            customerDefaultSegment={customer.customerSegment}
-            statusOptions={oppStatusOptions}
-          />
-          <input name="followUpAt" type="date" className={input} />
-          <select name="dealType" defaultValue="" className={input}>
-            <option value="">{c.dealTypeNone}</option>
-            <option value="PROJECT">{c.dealTypeProject}</option>
-            <option value="PRODUCT">{c.dealTypeProduct}</option>
-          </select>
-          <select name="partnerId" defaultValue={customer.partnerLinks[0]?.partner.id ?? ""} className={input}>
-            <option value="">{c.viaPartnerNone}</option>
-            {partners.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <textarea
-            name="notes"
-            rows={2}
-            placeholder={m.opportunities.notesPlaceholder}
-            className={`${input} col-span-2 md:col-span-3`}
-            aria-label={m.common.note}
-          />
-          <div className="col-span-2 md:col-span-3 flex justify-end">
-            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
-          </div>
-        </form>
-      </details>
+      <CustomerAddOpportunityForm
+        owner={owner}
+        action={upsertOpportunityAction}
+        partners={partners.map((p) => ({ id: p.id, name: p.name }))}
+        defaultPartnerId={customer.partnerLinks[0]?.partner.id ?? ""}
+        customerCrmId={customer.crmCustomerId}
+        customerName={customer.name}
+        customerDefaultSegment={customer.customerSegment}
+        segmentOptions={segmentOptions}
+        winFactorOptions={winFactorOptions}
+        lossReasonOptions={lossReasonOptions}
+        statusOptions={oppStatusOptions}
+      />
     </div>
   );
 
@@ -691,6 +662,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
               projectMaintIncludedY1: true,
               projectMaintRatePct: 15,
             }}
+            crmCustomerId={customer.crmCustomerId}
           />
         </div>
       </details>
@@ -713,37 +685,14 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         />
       ))}
       {customer.projects.length === 0 && <EmptyState text={c.noProjects} />}
-      <details className="rounded-lg border border-dashed border-slate-200">
-        <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none">{c.addProject}</summary>
-        <form action={upsertProjectAction.bind(null, owner)} className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-          <input name="name" required placeholder={c.projectName} className={input} />
-          <AmountInput
-            inputClassName={input}
-            amountPlaceholder={m.common.amount}
-            amountAriaLabel={m.common.amount}
-            currencyAriaLabel={m.common.currency}
-            locale={locale}
-          />
-          <select name="phase" defaultValue="KICKOFF" className={input}>
-            <option value="KICKOFF">{c.phaseKICKOFF}</option>
-            <option value="IMPLEMENT">{c.phaseIMPLEMENT}</option>
-            <option value="ACCEPTANCE">{c.phaseACCEPTANCE}</option>
-            <option value="GOLIVE">{c.phaseGOLIVE}</option>
-            <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
-          </select>
-          <input name="startDate" type="date" className={input} placeholder={c.projectStartDate} />
-          <input name="endDate" type="date" className={input} placeholder={c.projectEndDate} />
-          <select name="partnerId" defaultValue={customer.partnerLinks[0]?.partner.id ?? ""} className={input}>
-            <option value="">{c.deliveryPartnerNone}</option>
-            {partners.map((pp) => (
-              <option key={pp.id} value={pp.id}>{pp.name}</option>
-            ))}
-          </select>
-          <div className="col-span-2 md:col-span-3 flex justify-end">
-            <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
-          </div>
-        </form>
-      </details>
+      <CustomerAddProjectForm
+        owner={owner}
+        action={upsertProjectAction}
+        partners={partners.map((pp) => ({ id: pp.id, name: pp.name }))}
+        defaultPartnerId={customer.partnerLinks[0]?.partner.id ?? ""}
+        customerCrmId={customer.crmCustomerId}
+        customerName={customer.name}
+      />
     </div>
   );
 

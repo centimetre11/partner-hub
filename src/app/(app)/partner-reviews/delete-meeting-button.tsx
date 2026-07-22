@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type MouseEvent } from "react";
 import { deletePartnerReviewMeetingAction } from "@/lib/partner-review/actions";
+import { useMessages } from "@/lib/i18n/context";
+import { formatMsg } from "@/lib/i18n/messages";
 
 export function DeleteMeetingButton({
   meetingId,
@@ -16,6 +18,7 @@ export function DeleteMeetingButton({
   redirectTo?: string;
   className?: string;
 }) {
+  const t = useMessages().partnerReview;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +26,7 @@ export function DeleteMeetingButton({
   function onDelete(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (!window.confirm(`确定删除会议「${meetingTitle}」？删除后不可恢复。`)) return;
+    if (!window.confirm(formatMsg(t.deleteConfirm, { title: meetingTitle }))) return;
     startTransition(async () => {
       setError(null);
       const res = await deletePartnerReviewMeetingAction(meetingId);
@@ -47,7 +50,7 @@ export function DeleteMeetingButton({
           "rounded-lg border border-red-200 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-40"
         }
       >
-        {pending ? "删除中…" : "删除"}
+        {pending ? t.deleting : t.delete}
       </button>
       {error ? <p className="text-[11px] text-red-600 mt-1">{error}</p> : null}
     </div>

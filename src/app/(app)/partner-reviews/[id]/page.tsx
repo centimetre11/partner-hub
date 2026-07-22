@@ -7,20 +7,16 @@ import { toMeetingClient } from "@/lib/partner-review/meeting-client";
 import { DeleteMeetingButton } from "../delete-meeting-button";
 import { MeetingWorkspace } from "./meeting-workspace";
 import { isMossConfigured } from "@/lib/moss";
+import { getLocale } from "@/lib/i18n/locale-server";
+import { formatMsg, getMessages } from "@/lib/i18n/messages";
 
 /** 会后提炼会并行调多次 AI，避免默认超时导致「点了没写入」 */
 export const maxDuration = 300;
 
-const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
-  DRAFT: { label: "草稿", tone: "zinc" },
-  PREP: { label: "已准备", tone: "blue" },
-  LIVE: { label: "进行中", tone: "amber" },
-  PROCESSING: { label: "会后处理", tone: "purple" },
-  DONE: { label: "已完成", tone: "green" },
-};
-
 export default async function PartnerReviewDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
+  const locale = await getLocale();
+  const t = getMessages(locale).partnerReview;
   const { id } = await params;
 
   const meeting = await db.partnerReviewMeeting.findUnique({
@@ -39,7 +35,12 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
 
   if (!meeting) notFound();
 
-  const st = STATUS_LABEL[meeting.status] ?? STATUS_LABEL.DRAFT!;
+  const statusLabel = {
+    DRAFT: { label: t.statusDraft, tone: "zinc" as const }, PREP: { label: t.statusPrep, tone: "blue" as const },
+    LIVE: { label: t.statusLive, tone: "amber" as const }, PROCESSING: { label: t.statusProcessing, tone: "purple" as const },
+    DONE: { label: t.statusDone, tone: "green" as const },
+  };
+  const st = statusLabel[meeting.status as keyof typeof statusLabel] ?? statusLabel.DRAFT;
   const client = toMeetingClient(meeting);
   const allPartners = await db.partner.findMany({
     where: { status: "ACTIVE" },
@@ -52,7 +53,7 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
     <div className="pb-16">
       <PageHeader
         title={meeting.title}
-        desc={`${meeting.items.length} 个伙伴 · ${meeting.createdBy.name}`}
+        desc={formatMsg(t.partnersMeta, { n: meeting.items.length, name: meeting.createdBy.name })}
         actions={
           <div className="flex items-center gap-2">
             <Badge tone={st.tone}>{st.label}</Badge>
@@ -70,15 +71,15 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
       <div className="px-4 sm:px-6 lg:px-8 space-y-3 max-w-7xl">
         <div className="text-xs text-slate-500">
           <Link href="/ops" className="hover:text-slate-800">
-            经营
+            {t.crumbOps}
           </Link>
           <span className="mx-2">·</span>
           <Link href="/partner-reviews" className="hover:text-slate-800">
-            过伙伴会议
+            {t.crumbReviews}
           </Link>
           <span className="mx-2">·</span>
           <Link href="/settings#integrations" className="hover:text-slate-800">
-            钉钉 / 集成配置
+            {t.crumbIntegrations}
           </Link>
         </div>
 

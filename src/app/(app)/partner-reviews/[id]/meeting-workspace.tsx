@@ -38,6 +38,8 @@ import {
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { MossPrepCustomerBadge } from "@/components/moss/moss-workflow-sections";
 import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
+import { useMessages } from "@/lib/i18n/context";
+import { formatMsg } from "@/lib/i18n/messages";
 
 export type { MeetingClient, ReviewItemClient };
 
@@ -48,39 +50,39 @@ const RAPID_CLICK_WARN_COUNT = 3;
 type PostStep = "paste" | "assign" | "extract";
 type WorkStage = "idle" | "saving" | "matching" | "extracting" | "done";
 
-function matchMethodFlash(method?: string): string {
+function matchMethodFlash(method: string | undefined, t: ReturnType<typeof useMessages>["partnerReview"]): string {
   switch (method) {
     case "summary_sections":
-      return "已按「小结」整段对齐讨论顺序 · 请核对切点后提炼";
+      return t.matchSummary;
     case "duration":
-      return "已按时长兜底切分 · 请重点核对中间空段";
+      return t.matchDuration;
     case "sequential":
-      return "已按 next/下一个换话题整段切分（时长仅辅助）· 请微调切点后提炼";
+      return t.matchSequential;
     case "ai":
-      return "已按 next/换话题整段切分 · 请核对切点后提炼";
+      return t.matchAi;
     case "name":
-      return "名称匹配可能打散段落 · 请按顺序整段核对切点后再提炼";
+      return t.matchName;
     case "timeline":
-      return "已按打点与讯飞录音时间轴对齐 · 请核对切点后提炼";
+      return t.matchTimeline;
     case "timeline_fallback":
-      return "时间戳仅弱参考 · 请按顺序整段核对切点后再提炼";
+      return t.matchTimelineFallback;
     case "ai_fallback":
-      return "已初步整段切分 · 请核对切点后提炼";
+      return t.matchAiFallback;
     default:
-      return "已按顺序整段匹配 · 请在时间线核对切点后再提炼";
+      return t.matchDefault;
   }
 }
 
-function workStageLabel(stage: WorkStage): string {
+function workStageLabel(stage: WorkStage, t: ReturnType<typeof useMessages>["partnerReview"]): string {
   switch (stage) {
     case "saving":
-      return "正在保存纪要…";
+      return t.workSaving;
     case "matching":
-      return "正在匹配归属到各伙伴…";
+      return t.workMatching;
     case "extracting":
-      return "正在提炼近两周进展与后续待办…";
+      return t.workExtracting;
     case "done":
-      return "完成";
+      return t.workDone;
     default:
       return "";
   }
@@ -206,7 +208,7 @@ function draftsFromItems(items: ReviewItemClient[]): Record<string, ConfirmDraft
     if (!item.coreNotes && !item.todoDrafts.length) continue;
     drafts[item.id] = {
       coreNotes: item.coreNotes ?? "",
-      businessRecordTitle: `${item.partnerName} 过伙伴讨论`,
+      businessRecordTitle: `${item.partnerName} partner review discussion`,
       businessRecordContent: item.coreNotes ?? "",
       skipBusinessRecord: false,
       todos: item.todoDrafts.map((t) => ({
@@ -230,6 +232,7 @@ export function MeetingWorkspace({
   allPartners: { id: string; name: string; tier: string | null }[];
   mossConfigured?: boolean;
 }) {
+  const t = useMessages().partnerReview;
   const router = useRouter();
   const [meeting, setMeeting] = useState(initial);
   const [activeItemId, setActiveItemId] = useState<string | null>(initial.items[0]?.id ?? null);
@@ -334,7 +337,7 @@ export function MeetingWorkspace({
     }));
 
     const relLabel = formatRelativeMeetingTime(nowIso, anchor);
-    flash(`✓ 已开始过 ${partnerName}${relLabel ? ` · ${relLabel}` : ""}`);
+    flash(formatMsg(t.markedDiscuss, { name: partnerName, relative: relLabel ? ` · ${relLabel}` : "" }));
 
     void (async () => {
       try {
@@ -351,7 +354,7 @@ export function MeetingWorkspace({
           relativeMs?: number | null;
         };
         if (!res.ok || data.error) {
-          flash(undefined, data.error || `伙伴打点失败 HTTP ${res.status}`);
+          flash(undefined, data.error || `Partner marker failed (HTTP ${res.status})`);
           return;
         }
         if (data.markerInsertedAt || data.discussedAt) {
@@ -382,7 +385,7 @@ export function MeetingWorkspace({
     ];
     const unique = new Set(recentDiscussClicks.current.map((c) => c.itemId));
     if (unique.size >= RAPID_CLICK_WARN_COUNT) {
-      flash(undefined, "请按讨论顺序点伙伴：开始聊谁再点谁，勿提前把议程全点完，否则转写难以按伙伴切开。");
+      flash(undefined, "Click partners in discussion order. Do not mark the full agenda before discussing it, or the transcript cannot be reliably split by partner.");
     }
   }
 
@@ -427,7 +430,7 @@ export function MeetingWorkspace({
       const res = await runMeetingPrepAction(meeting.id);
       if (res.error) flash(undefined, res.error);
       else {
-        flash(res.message ?? "开会准备已完成");
+        flash(res.message ?? t.prepDone);
         setMeeting((m) => ({
           ...m,
           status: m.status === "DRAFT" ? "PREP" : m.status,
@@ -447,7 +450,7 @@ export function MeetingWorkspace({
             onClick={runPrep}
             className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
           >
-            {needsPrep ? "开会准备（拉取近 2 周进展）" : "刷新会前简报"}
+            {needsPrep ? t.prep : t.refreshBrief}
           </button>
         )}
         {phase === "prep" && (
@@ -462,13 +465,13 @@ export function MeetingWorkspace({
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "LIVE", startedAt: new Date().toISOString() }));
-                    flash("会议已开始 · 讨论谁点左侧谁，会后在右侧粘贴腾讯会议总结");
+                    flash(t.started);
                   }
                 }, { refresh: false })
               }
               className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
             >
-              开始开会
+              {t.startMeeting}
             </button>
           </>
         )}
@@ -476,11 +479,11 @@ export function MeetingWorkspace({
           <>
             {currentDiscussItem ? (
               <span className="rounded-lg bg-sky-50 text-sky-800 border border-sky-100 px-3 py-1.5 text-xs font-medium">
-                当前过：{currentDiscussItem.partnerName}
+                {formatMsg(t.currentPartner, { name: currentDiscussItem.partnerName })}
               </span>
             ) : (
               <span className="rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-3 py-1.5 text-xs">
-                尚未打标 · 讨论谁就点左侧谁
+                {t.noMarker}
               </span>
             )}
             <button
@@ -492,13 +495,13 @@ export function MeetingWorkspace({
                   if (res.error) flash(undefined, res.error);
                   else {
                     setMeeting((m) => ({ ...m, status: "PROCESSING", endedAt: new Date().toISOString() }));
-                    flash("会议已结束 · 请粘贴腾讯会议智能纪要并解析拆分");
+                    flash(t.ended);
                   }
                 }, { refresh: false })
               }
               className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-40"
             >
-              结束会议
+              {t.endMeeting}
             </button>
           </>
         )}
@@ -509,7 +512,7 @@ export function MeetingWorkspace({
             onClick={() => {
               if (
                 !window.confirm(
-                  "确定回到会前？将清空本次打点时间、粘贴的纪要、解析结果与待确认草案；议程与会前简报会保留。",
+                  t.resetConfirm,
                 )
               ) {
                 return;
@@ -545,13 +548,13 @@ export function MeetingWorkspace({
                   setUnassignedDraft("");
                   setCurrentDiscussItemId(null);
                   setConfirmDrafts({});
-                  flash("已回到会前 · 可重新开始开会");
+                  flash(t.resetDone);
                 }
               }, { refresh: false });
             }}
             className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-3 py-1.5 text-sm hover:bg-amber-100 disabled:opacity-40"
           >
-            回到会前
+            {t.backToPrep}
           </button>
         )}
       </div>
@@ -570,8 +573,7 @@ export function MeetingWorkspace({
 
       {phase === "prep" ? (
         <p className="text-xs text-slate-500 leading-relaxed">
-          建议：开会准备 → 开始开会 →（可选）路径 B 开始录音并按顺序打点 → 结束 →
-          路径 A 粘贴腾讯纪要 与/或 路径 B 讯飞转写 → 对比校准 → 提炼入库。
+          {t.prepHint}
         </p>
       ) : null}
 
@@ -616,7 +618,7 @@ export function MeetingWorkspace({
                 lockAssignStep.current = true;
                 setPostStep("assign");
               }
-              flash(`${matchMethodFlash(matchMethod)}（路径 B · 讯飞）· 腾讯粘贴仍可并行对比`);
+              flash(`${matchMethodFlash(matchMethod, t)} (${t.sourceXfyun}) · ${t.sourceHint}`);
             }}
           />
         </>
@@ -627,7 +629,7 @@ export function MeetingWorkspace({
         <div className="space-y-3">
           {(meeting.tencentLiveNotes || meeting.xfyunLiveNotes) && phase === "post" ? (
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px]">
-              <span className="font-medium text-slate-700">当前生效：</span>
+              <span className="font-medium text-slate-700">{t.activeSource}</span>
               <button
                 type="button"
                 disabled={busy || !meeting.tencentLiveNotes}
@@ -649,7 +651,7 @@ export function MeetingWorkspace({
                     );
                     lockAssignStep.current = true;
                     setPostStep("assign");
-                    flash("已切换到路径 A（腾讯纪要）");
+                    flash(t.switchedTencent);
                   }, { refresh: false })
                 }
                 className={`rounded-full border px-2.5 py-1 ${
@@ -658,7 +660,7 @@ export function MeetingWorkspace({
                     : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 } disabled:opacity-40`}
               >
-                A 腾讯纪要
+                {t.sourceTencent}
               </button>
               <button
                 type="button"
@@ -681,7 +683,7 @@ export function MeetingWorkspace({
                     );
                     lockAssignStep.current = true;
                     setPostStep("assign");
-                    flash("已切换到路径 B（讯飞录音）");
+                    flash(t.switchedXfyun);
                   }, { refresh: false })
                 }
                 className={`rounded-full border px-2.5 py-1 ${
@@ -690,9 +692,9 @@ export function MeetingWorkspace({
                     : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 } disabled:opacity-40`}
               >
-                B 讯飞录音
+                {t.sourceXfyun}
               </button>
-              <span className="text-slate-400">两边结果都保留，可对照后选一边继续提炼</span>
+              <span className="text-slate-400">{t.sourceHint}</span>
             </div>
           ) : null}
 
@@ -712,7 +714,7 @@ export function MeetingWorkspace({
               onMatch={() =>
                 run(async () => {
                   setWorkStage("saving");
-                  const t = window.setTimeout(() => setWorkStage("matching"), 400);
+                  const matchingTimer = window.setTimeout(() => setWorkStage("matching"), 400);
                   try {
                     const res = await matchMeetingMinutesAction(meeting.id, transcript);
                     if (res.error) {
@@ -740,7 +742,7 @@ export function MeetingWorkspace({
                     lockAssignStep.current = true;
                     setPostStep("assign");
                     setWorkStage("done");
-                    flash(`${matchMethodFlash(res.matchMethod)}（路径 A · 腾讯）`);
+                    flash(`${matchMethodFlash(res.matchMethod, t)} (${t.sourceTencent})`);
                     requestAnimationFrame(() => {
                       document.getElementById("assignment-timeline")?.scrollIntoView({
                         behavior: "smooth",
@@ -748,7 +750,7 @@ export function MeetingWorkspace({
                       });
                     });
                   } finally {
-                    window.clearTimeout(t);
+                    window.clearTimeout(matchingTimer);
                   }
                 }, { refresh: false })
               }
@@ -758,7 +760,7 @@ export function MeetingWorkspace({
                 setProposal(null);
                 setConfirmDrafts({});
                 setWorkStage("idle");
-                flash("请在下方时间线核对各伙伴段落，改完后点紫色按钮提炼");
+                flash(t.postAssignHint);
                 requestAnimationFrame(() => {
                   document.getElementById("assignment-timeline")?.scrollIntoView({
                     behavior: "smooth",
@@ -801,7 +803,7 @@ export function MeetingWorkspace({
                     lockAssignStep.current = true;
                     setPostStep("assign");
                     setWorkStage("done");
-                    flash(`${matchMethodFlash(res.matchMethod)}（路径 B · 讯飞）`);
+                    flash(`${matchMethodFlash(res.matchMethod, t)} (${t.sourceXfyun})`);
                     requestAnimationFrame(() => {
                       document.getElementById("assignment-timeline")?.scrollIntoView({
                         behavior: "smooth",
@@ -914,13 +916,13 @@ export function MeetingWorkspace({
               );
               await saveMatchedNotesAction(meeting.id, notes);
               setLiveNotes(notes);
-              flash("归属已保存（尚未提炼）");
+              flash("Ownership saved (not extracted yet)");
             }, { refresh: false })
           }
           onConfirmExtract={() =>
             run(async () => {
               setWorkStage("extracting");
-              flash("正在提炼各伙伴进展与待办，请稍候（伙伴多时约 1–2 分钟）…");
+              flash(t.workExtracting);
               try {
                 const notes = buildLiveNotesFromSegments(
                   segmentsFromDrafts(orderedForTimeline, matchDrafts, unassignedDraft),
@@ -965,7 +967,7 @@ export function MeetingWorkspace({
                   if (first) setActiveItemId(first.itemId);
                 }
                 setWorkStage("done");
-                flash("已写入各伙伴进展与待办草案 · 请在两栏中确认后入库");
+                flash("Partner progress and todo drafts are ready. Review them in both panels, then save.");
                 requestAnimationFrame(() => {
                   document.getElementById("post-extract-workspace")?.scrollIntoView({
                     behavior: "smooth",
@@ -987,9 +989,9 @@ export function MeetingWorkspace({
       <div id="post-extract-workspace" className="space-y-3">
       {phase === "post" && postStep === "extract" ? (
         <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3">
-          <p className="text-sm font-semibold text-violet-950">3. 确认进展与待办</p>
+          <p className="text-sm font-semibold text-violet-950">{t.extractTitle}</p>
           <p className="mt-1 text-[11px] text-violet-900/80 leading-relaxed">
-            提炼结果已写入各伙伴草案。左侧选伙伴，中间/右侧改进展与待办，确认无误后在下方入库。
+            {t.extractHint}
           </p>
         </div>
       ) : null}
@@ -997,9 +999,9 @@ export function MeetingWorkspace({
         {/* Partner list */}
         <aside className="rounded-xl border border-slate-200 bg-white overflow-hidden">
           <div className="px-3 py-2 border-b border-slate-100 text-xs font-medium text-slate-500">
-            伙伴议程
+            {t.agenda}
             {phase === "live" ? (
-              <span className="font-normal text-slate-400"> · 讨论谁点谁</span>
+              <span className="font-normal text-slate-400">{t.agendaHint}</span>
             ) : null}
           </div>
           <ul className="divide-y divide-slate-50 max-h-[70vh] overflow-y-auto">
@@ -1032,20 +1034,20 @@ export function MeetingWorkspace({
                     {isDiscussing ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5">
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        讨论中
+                        {t.discussing}
                       </span>
                     ) : null}
                   </div>
                   <div className="mt-0.5 text-[11px] text-slate-400 pl-6">
                     {item.status === "CONFIRMED"
-                      ? "已确认入库"
+                      ? t.confirmed
                       : item.status === "DISCUSSED"
                         ? isDiscussing
-                          ? "当前正在过"
-                          : "已讨论"
+                          ? t.nowDiscussing
+                          : t.discussed
                         : phase === "live"
-                          ? "待讨论 · 点击开始"
-                          : "待讨论"}
+                          ? t.pendingDiscuss
+                          : t.pending}
                     {item.partnerTier ? ` · Tier ${item.partnerTier}` : ""}
                     {isDiscussing && item.markerInsertedAt && meeting.startedAt ? (
                       <span className="ml-1 font-mono text-emerald-700">
@@ -1075,7 +1077,7 @@ export function MeetingWorkspace({
               onAdded={(items) => {
                 setMeeting((m) => ({ ...m, items: [...m.items, ...items] }));
                 if (items[0]) setActiveItemId(items[0].id);
-                flash(`已追加 ${items.length} 个伙伴 · 点左侧开始讨论`);
+                flash(formatMsg(t.addedPartners, { n: items.length }));
               }}
               onError={(err) => flash(undefined, err)}
             />
@@ -1085,7 +1087,7 @@ export function MeetingWorkspace({
         {/* 伙伴详情 · 左栏：概览与商机 */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
           {!activeItem ? (
-            <p className="text-sm text-slate-400">选择左侧伙伴查看详情</p>
+            <p className="text-sm text-slate-400">{t.noPartnerSelected}</p>
           ) : (
             <>
               <PartnerDetailHeader activeItem={activeItem} phase={phase} />
@@ -1096,7 +1098,7 @@ export function MeetingWorkspace({
                   {!activeItem.prepBrief && canRunPrep ? (
                     <div className="rounded-lg border border-sky-100 bg-sky-50/80 px-3 py-3 space-y-2">
                       <p className="text-sm text-slate-700">
-                        会前简报会汇总该伙伴近 2 周商务记录、待办，并按<strong>终端客户</strong>列出进行中商机，同时给出讨论议题。
+                        {t.briefExplain}
                       </p>
                       <button
                         type="button"
@@ -1104,7 +1106,7 @@ export function MeetingWorkspace({
                         onClick={runPrep}
                         className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
                       >
-                        立即生成会前简报
+                        {t.generateBrief}
                       </button>
                     </div>
                   ) : null}
@@ -1119,9 +1121,9 @@ export function MeetingWorkspace({
                   ) : activeItem.prepBrief ? (
                     <PrepBriefOverview brief={activeItem.prepBrief} mossConfigured={mossConfigured} />
                   ) : phase === "post" && postStep === "assign" ? (
-                    <p className="text-xs text-slate-400">请先在上方时间线确认纪要归属，再提炼进展总结</p>
+                    <p className="text-xs text-slate-400">{t.needAssignProgress}</p>
                   ) : phase === "post" ? (
-                    <p className="text-xs text-slate-400">粘贴纪要并匹配归属后，此处确认进展总结</p>
+                    <p className="text-xs text-slate-400">{t.needMatchProgress}</p>
                   ) : null}
                 </>
               )}
@@ -1132,7 +1134,7 @@ export function MeetingWorkspace({
         {/* 伙伴详情 · 右栏：待办与进展 */}
         <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
           {!activeItem ? (
-            <p className="text-sm text-slate-400">议题、待办与近两周进展将显示在这里</p>
+            <p className="text-sm text-slate-400">{t.noBriefActivity}</p>
           ) : (
             <>
               {phase === "done" ? (
@@ -1150,11 +1152,11 @@ export function MeetingWorkspace({
                   ) : activeItem.prepBrief ? (
                     <PrepBriefActivity brief={activeItem.prepBrief} />
                   ) : phase === "post" && postStep === "assign" ? (
-                    <p className="text-xs text-slate-400">请先在上方时间线确认纪要归属，再提炼待办</p>
+                    <p className="text-xs text-slate-400">{t.needAssignTodos}</p>
                   ) : phase === "post" ? (
-                    <p className="text-xs text-slate-400">粘贴纪要并匹配归属后，此处确认后续待办</p>
+                    <p className="text-xs text-slate-400">{t.needMatchTodos}</p>
                   ) : (
-                    <p className="text-xs text-slate-400">生成简报后，此处显示待办与近两周进展</p>
+                    <p className="text-xs text-slate-400">{t.noBriefActivity}</p>
                   )}
                 </>
               )}
@@ -1195,7 +1197,7 @@ export function MeetingWorkspace({
               const res = await confirmMeetingItemsAction(meeting.id, items);
               if (res.error) flash(undefined, res.error);
               else {
-                flash(`已确认入库 ${res.results?.length ?? 0} 个伙伴 · 会议报告已记入历史`);
+                flash(`Saved ${res.results?.length ?? 0} partners · meeting report added to history`);
                 setMeeting((m) => ({
                   ...m,
                   status: "DONE",
@@ -1249,10 +1251,11 @@ export function MeetingWorkspace({
 }
 
 function PostStepIndicator({ step }: { step: PostStep }) {
+  const t = useMessages().partnerReview;
   const steps: { id: PostStep; label: string }[] = [
-    { id: "paste", label: "① 粘贴纪要" },
-    { id: "assign", label: "② 确认归属" },
-    { id: "extract", label: "③ 提炼入库" },
+    { id: "paste", label: t.postStepPaste },
+    { id: "assign", label: t.postStepAssign },
+    { id: "extract", label: t.postStepExtract },
   ];
   const order = { paste: 0, assign: 1, extract: 2 } as const;
   const cur = order[step];
@@ -1291,37 +1294,38 @@ function XfyunPathPanel({
   meeting: MeetingClient;
   onMatchXfyun: () => void;
 }) {
+  const t = useMessages().partnerReview;
   const hasXfyun = !!(meeting.xfyunTranscriptText?.trim() || meeting.transcriptStatus === "ready");
   const preview = (meeting.xfyunTranscriptText || "").trim();
 
   return (
     <section className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
       <div>
-        <div className="text-sm font-semibold text-slate-900">路径 B · 讯飞一次性录音</div>
+        <div className="text-sm font-semibold text-slate-900">{t.pathBTitle}</div>
         <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-          会中录音 + 打点（开录时刻对齐）→ 会后整段讯飞转写 → 按时间轴匹配。不替换路径 A。
+          {t.pathBHint}
         </p>
       </div>
       {phase === "done" ? (
         <p className="text-xs text-slate-500">
-          {preview ? `讯飞转写 ${preview.length} 字` : "本场未使用讯飞路径"}
+          {preview ? formatMsg(t.pathBPreview, { n: preview.length }) : t.pathBUnused}
         </p>
       ) : (
         <>
           <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-[11px] text-slate-600 space-y-1">
             <p>
-              状态：{" "}
+              {t.status}{" "}
               <span className="font-medium text-slate-800">
                 {meeting.transcriptStatus || "idle"}
               </span>
               {meeting.recordingBytes
-                ? ` · 录音 ${(meeting.recordingBytes / 1024 / 1024).toFixed(1)} MB`
+                ? ` · ${formatMsg(t.recordingSize, { n: (meeting.recordingBytes / 1024 / 1024).toFixed(1) })}`
                 : ""}
             </p>
             {meeting.recordingStartedAt ? (
-              <p>开录：{new Date(meeting.recordingStartedAt).toLocaleString()}</p>
+              <p>{formatMsg(t.recordingStarted, { time: new Date(meeting.recordingStartedAt).toLocaleString() })}</p>
             ) : (
-              <p className="text-amber-800">会中未开录则无法走本路径；可先结束会议后仍用路径 A。</p>
+              <p className="text-amber-800">{t.noRecordingHint}</p>
             )}
             {meeting.transcriptError ? (
               <p className="text-red-600">{meeting.transcriptError}</p>
@@ -1330,7 +1334,7 @@ function XfyunPathPanel({
           {preview ? (
             <details className="text-xs">
               <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
-                讯飞转写预览（{preview.length} 字）
+                {formatMsg(t.pathBPreview, { n: preview.length })}
               </summary>
               <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-100 bg-white px-2 py-1.5 font-mono text-[11px]">
                 {preview.slice(0, 4000)}
@@ -1345,11 +1349,11 @@ function XfyunPathPanel({
               onClick={onMatchXfyun}
               className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-800 disabled:opacity-40"
             >
-              {meeting.xfyunLiveNotes ? "重新匹配讯飞归属" : "用讯飞转写匹配归属"}
+              {meeting.xfyunLiveNotes ? t.rematchXfyun : t.matchXfyun}
             </button>
             {!hasXfyun ? (
               <span className="text-[11px] text-slate-400 self-center">
-                请在开会中使用「开始录音」
+                {t.needRecording}
               </span>
             ) : null}
           </div>
@@ -1380,6 +1384,7 @@ function MinutesPastePanel({
   onMatch: () => void;
   onRematch: () => void;
 }) {
+  const t = useMessages().partnerReview;
   const matching = busy && (workStage === "saving" || workStage === "matching");
   const collapsed = postStep === "assign";
 
@@ -1389,33 +1394,33 @@ function MinutesPastePanel({
         <div>
           <div className="text-sm font-semibold text-slate-900">
             {phase === "done"
-              ? "路径 A · 腾讯纪要（只读）"
+              ? t.postPasteReadonly
               : collapsed
-                ? "路径 A · 腾讯纪要（已匹配）"
-                : "路径 A · 粘贴腾讯纪要"}
+                ? t.postPasteMatched
+                : t.postPasteTitle}
           </div>
           {phase === "post" && !collapsed ? (
             <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-              原有流程：粘贴腾讯会议纪要 → 按 next/讨论顺序匹配。与路径 B 并行保留，可对比校准。
+              {t.postPasteHint}
             </p>
           ) : null}
           {phase === "post" && collapsed ? (
             <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-              请向下查看<strong>讨论顺序时间线</strong>：核对每段是否挂对伙伴，改完后点紫色按钮「确认归属并提炼」。
+              {t.postAssignHint}
             </p>
           ) : null}
         </div>
         {matching ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-800">
             <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
-            {workStageLabel(workStage)}
+            {workStageLabel(workStage, t)}
           </span>
         ) : postStep === "assign" ? (
           <span className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
-            当前：请确认归属
+            {t.postCurrentAssign}
           </span>
         ) : postStep === "extract" ? (
-          <span className="text-xs font-medium text-emerald-700">已提炼 · 可改归属后重来</span>
+          <span className="text-xs font-medium text-emerald-700">{t.postExtractedRedo}</span>
         ) : null}
       </div>
 
@@ -1427,13 +1432,13 @@ function MinutesPastePanel({
               onChange={(e) => onTranscriptChange(e.target.value)}
               rows={7}
               disabled={matching}
-              placeholder="粘贴腾讯会议纪要全文（智能纪要或发言人逐字稿）…"
+              placeholder={t.postPastePh}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono leading-relaxed disabled:opacity-60"
             />
           ) : (
             <details className="text-xs">
               <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
-                展开查看已粘贴纪要（{transcript.length} 字）
+                {formatMsg(t.postExpand, { n: transcript.length })}
               </summary>
               <textarea
                 value={transcript}
@@ -1448,8 +1453,8 @@ function MinutesPastePanel({
             <ol className="flex flex-wrap gap-2 text-[11px]">
               {(
                 [
-                  ["saving", "① 保存"],
-                  ["matching", "② 匹配归属"],
+                  ["saving", t.workSaving],
+                  ["matching", t.workMatching],
                 ] as const
               ).map(([key, label], idx) => {
                 const order = { saving: 0, matching: 1, extracting: 2, done: 3, idle: -1 } as const;
@@ -1482,10 +1487,10 @@ function MinutesPastePanel({
                 className="rounded-lg bg-sky-700 text-white px-4 py-2 text-sm font-medium hover:bg-sky-800 disabled:opacity-40"
               >
                 {matching
-                  ? workStageLabel(workStage)
+                  ? workStageLabel(workStage, t)
                   : postStep === "paste"
-                    ? "自动匹配归属"
-                    : "重新匹配归属"}
+                    ? t.postMatch
+                    : t.postRematch}
               </button>
             ) : (
               <button
@@ -1494,7 +1499,7 @@ function MinutesPastePanel({
                 onClick={onMatch}
                 className="rounded-lg border border-sky-300 bg-white text-sky-800 px-3 py-1.5 text-xs hover:bg-sky-50 disabled:opacity-40"
               >
-                {matching ? workStageLabel(workStage) : "重新跑匹配"}
+                {matching ? workStageLabel(workStage, t) : t.postRunMatch}
               </button>
             )}
             {postStep === "extract" ? (
@@ -1504,11 +1509,11 @@ function MinutesPastePanel({
                 onClick={onRematch}
                 className="rounded-lg bg-amber-600 text-white px-4 py-2 text-sm font-medium hover:bg-amber-700 disabled:opacity-40"
               >
-                打开归属时间线
+                {t.postOpenTimeline}
               </button>
             ) : null}
             {postStep === "paste" && !matching ? (
-              <span className="text-[11px] text-slate-500">下一步：在时间线上确认每段属于谁</span>
+              <span className="text-[11px] text-slate-500">{t.postNext}</span>
             ) : null}
           </div>
         </>
@@ -1561,6 +1566,7 @@ function AssignmentTimelinePanel({
   onSave: () => void;
   onConfirmExtract: () => void;
 }) {
+  const t = useMessages().partnerReview;
   const extracting = busy && workStage === "extracting";
   const [editRaw, setEditRaw] = useState<Record<string, boolean>>({});
   const [activeNavId, setActiveNavId] = useState<string | null>(items[0]?.id ?? null);
@@ -1633,7 +1639,7 @@ function AssignmentTimelinePanel({
               <span className="min-w-0 flex-1">
                 <span className="line-clamp-2 font-medium">{it.partnerName}</span>
                 {!hasText ? (
-                  <span className="mt-0.5 block text-[10px] text-slate-400">暂无内容</span>
+                  <span className="mt-0.5 block text-[10px] text-slate-400">{t.noContent}</span>
                 ) : null}
               </span>
             </button>
@@ -1650,21 +1656,19 @@ function AssignmentTimelinePanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-slate-900">2. 确认归属 · 按顺序整段切分</div>
+          <div className="text-sm font-semibold text-slate-900">{t.assignTitle}</div>
           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-            过伙伴会议按顺序整段讨论。切点偏了时，在分界处那条发言上点：
-            <strong>↑ 放到上一段</strong>（本条及以上整块上移）、
-            <strong>↓ 放到下一段</strong>（本条及以下整块下移）；也可整段改挂。核对完再提炼。
+            {t.assignHint}
           </p>
         </div>
         {extracting ? (
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-violet-800">
             <span className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
-            {workStageLabel("extracting")}
+            {workStageLabel("extracting", t)}
           </span>
         ) : (
           <span className="text-[11px] font-medium text-amber-900 bg-amber-100 border border-amber-200 rounded-full px-2.5 py-1">
-            必做步骤
+            {t.requiredStep}
           </span>
         )}
       </div>
@@ -1673,11 +1677,11 @@ function AssignmentTimelinePanel({
       <aside
         className="fixed right-3 top-20 z-40 hidden w-44 flex-col rounded-xl border border-slate-200 bg-white/95 shadow-lg backdrop-blur lg:flex"
         style={{ maxHeight: "calc(100vh - 9.5rem)" }}
-        aria-label="伙伴目录"
+        aria-label={t.partnerDirectory}
       >
         <div className="shrink-0 border-b border-slate-100 px-3 py-2">
-          <p className="text-[11px] font-semibold text-slate-800">伙伴目录</p>
-          <p className="text-[10px] text-slate-400">滚动时保持可见 · {items.length} 位</p>
+          <p className="text-[11px] font-semibold text-slate-800">{t.partnerDirectory}</p>
+          <p className="text-[10px] text-slate-400">{formatMsg(t.directoryVisible, { n: items.length })}</p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5">{navList}</div>
       </aside>
@@ -1689,11 +1693,11 @@ function AssignmentTimelinePanel({
           onClick={() => setMobileNavOpen((v) => !v)}
           className="fixed bottom-[4.75rem] right-3 z-40 rounded-full border border-sky-200 bg-white px-3 py-2 text-xs font-semibold text-sky-800 shadow-lg"
         >
-          {mobileNavOpen ? "收起目录" : "伙伴目录"}
+          {mobileNavOpen ? t.collapseDirectory : t.partnerDirectory}
         </button>
         {mobileNavOpen ? (
           <div className="fixed inset-x-3 bottom-[7.5rem] z-40 max-h-[50vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
-            <p className="px-2 py-1 text-[11px] font-semibold text-slate-700">跳转到伙伴</p>
+            <p className="px-2 py-1 text-[11px] font-semibold text-slate-700">{t.jumpPartner}</p>
             {navList}
           </div>
         ) : null}
@@ -1705,7 +1709,7 @@ function AssignmentTimelinePanel({
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-[10px] font-bold text-amber-900">
               —
             </span>
-            <p className="text-xs font-medium text-amber-900">未归属 / 开场</p>
+            <p className="text-xs font-medium text-amber-900">{t.unassigned}</p>
           </div>
           <button
             type="button"
@@ -1713,7 +1717,7 @@ function AssignmentTimelinePanel({
             onClick={() => setEditRaw((p) => ({ ...p, __unassigned: !p.__unassigned }))}
             className="text-[11px] text-slate-500 underline-offset-2 hover:underline disabled:opacity-40"
           >
-            {editRaw.__unassigned ? "按条调整" : "编辑全文"}
+            {editRaw.__unassigned ? t.adjustTurns : t.editFull}
           </button>
         </div>
         {editRaw.__unassigned ? (
@@ -1722,7 +1726,7 @@ function AssignmentTimelinePanel({
             onChange={(e) => onChangeUnassigned(e.target.value)}
             rows={3}
             disabled={extracting}
-            placeholder="无法归属到具体伙伴的开场或串场…"
+            placeholder={t.unassignedPh}
             className="w-full rounded border border-amber-100 bg-white px-2 py-1.5 text-xs font-mono leading-relaxed disabled:opacity-50"
           />
         ) : unassignedTurns.length ? (
@@ -1735,7 +1739,7 @@ function AssignmentTimelinePanel({
             onMoveTurns={onMoveTurns}
           />
         ) : (
-          <p className="text-[11px] text-amber-800/70 px-1">无开场内容（可点「编辑全文」补充）</p>
+          <p className="text-[11px] text-amber-800/70 px-1">{t.noOpening}</p>
         )}
       </div>
 
@@ -1766,9 +1770,9 @@ function AssignmentTimelinePanel({
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{it.partnerName}</p>
                     <p className="text-[11px] text-slate-400">
-                      讨论顺序第 {idx + 1}
+                      {formatMsg(t.discussOrder, { n: idx + 1 })}
                       {it.partnerTier ? ` · Tier ${it.partnerTier}` : ""}
-                      {hasText ? ` · ${turns.length || 1} 条` : " · 暂无内容"}
+                      {hasText ? ` · ${formatMsg(t.turns, { n: turns.length || 1 })}` : ` · ${t.noContent}`}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -1777,21 +1781,21 @@ function AssignmentTimelinePanel({
                       disabled={extracting || !hasText || idx === 0}
                       onClick={() => onMergeAdjacent(idx, "up")}
                       className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                      title="整段并入上一位伙伴"
+                      title={t.mergePrevious}
                     >
-                      整段↑
+                      {t.mergeUp}
                     </button>
                     <button
                       type="button"
                       disabled={extracting || !hasText || idx === items.length - 1}
                       onClick={() => onMergeAdjacent(idx, "down")}
                       className="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                      title="整段并入下一位伙伴"
+                      title={t.mergeNext}
                     >
-                      整段↓
+                      {t.mergeDown}
                     </button>
                     <label className="flex items-center gap-1 text-[11px] text-slate-500">
-                      改挂
+                      {t.reassign}
                       <select
                         disabled={extracting || !hasText}
                         className="rounded border border-slate-200 bg-white px-1.5 py-1 text-xs disabled:opacity-40"
@@ -1819,7 +1823,7 @@ function AssignmentTimelinePanel({
                       onClick={() => setEditRaw((p) => ({ ...p, [rawKey]: !p[rawKey] }))}
                       className="text-[11px] text-slate-500 underline-offset-2 hover:underline disabled:opacity-40"
                     >
-                      {showRaw ? "按条调整" : "编辑全文"}
+                      {showRaw ? t.adjustTurns : t.editFull}
                     </button>
                   </div>
                 </div>
@@ -1829,7 +1833,7 @@ function AssignmentTimelinePanel({
                     onChange={(e) => onChangePartner(it.partnerId, e.target.value)}
                     rows={5}
                     disabled={extracting}
-                    placeholder="该伙伴对应的纪要段落，可手动增删…"
+                    placeholder={t.segmentPh}
                     className="w-full rounded border border-slate-100 px-2 py-1.5 text-xs font-mono leading-relaxed disabled:opacity-50"
                   />
                 ) : hasText ? (
@@ -1842,7 +1846,7 @@ function AssignmentTimelinePanel({
                     onMoveTurns={onMoveTurns}
                   />
                 ) : (
-                  <p className="text-[11px] text-slate-400 px-1">暂无内容 · 可从相邻段把发言挪过来</p>
+                  <p className="text-[11px] text-slate-400 px-1">{t.noSegment}</p>
                 )}
               </div>
             </li>
@@ -1868,7 +1872,7 @@ function AssignmentTimelinePanel({
             onClick={onConfirmExtract}
             className="rounded-lg bg-violet-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-violet-800 disabled:opacity-40"
           >
-            {extracting ? workStageLabel("extracting") : "确认归属无误，开始提炼"}
+            {extracting ? workStageLabel("extracting", t) : t.confirmExtract}
           </button>
           <button
             type="button"
@@ -1876,10 +1880,10 @@ function AssignmentTimelinePanel({
             onClick={onSave}
             className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-40"
           >
-            仅保存归属
+            {t.saveOwnership}
           </button>
           <span className="text-[11px] text-slate-500">
-            提炼会写入各伙伴「进展总结 / 待办草案」，再在两栏确认入库
+            {t.extractHelp}
           </span>
         </div>
       </div>
@@ -1907,6 +1911,7 @@ function TurnAdjustList({
     direction: "up" | "down",
   ) => void;
 }) {
+  const t = useMessages().partnerReview;
   return (
     <ul className="space-y-1.5">
       {turns.map((turn, ti) => (
@@ -1920,18 +1925,18 @@ function TurnAdjustList({
               disabled={disabled || !canMoveUp}
               onClick={() => onMoveTurns(segmentIdx, 0, ti, "up")}
               className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 hover:bg-slate-50 disabled:opacity-25"
-              title="本条及以上整块并入上一段"
+              title={t.mergePrevious}
             >
-              ↑ 放到上一段
+              {t.movePrevious}
             </button>
             <button
               type="button"
               disabled={disabled || !canMoveDown}
               onClick={() => onMoveTurns(segmentIdx, ti, turns.length - 1, "down")}
               className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700 hover:bg-slate-50 disabled:opacity-25"
-              title="本条及以下整块并入下一段"
+              title={t.mergeNext}
             >
-              ↓ 放到下一段
+              {t.moveNext}
             </button>
           </div>
           <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-slate-800">
@@ -1960,6 +1965,7 @@ function FinalReportPanel({
   onConfirmAll?: () => void;
   onFlash: (ok?: string, err?: string) => void;
 }) {
+  const t = useMessages().partnerReview;
   const [sharing, setSharing] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
@@ -2006,7 +2012,7 @@ function FinalReportPanel({
 
   async function copyReport() {
     const ok = await copyTextToClipboard(reportMd);
-    onFlash(ok ? "会议报告已复制" : undefined, ok ? undefined : "复制失败，请手动选择文本");
+    onFlash(ok ? t.reportCopied : undefined, ok ? undefined : t.copyFailed);
   }
 
   async function shareReport() {
@@ -2014,13 +2020,13 @@ function FinalReportPanel({
     try {
       const res = await getMeetingPreviewPathAction(meeting.id);
       if (!res.path) {
-        onFlash(undefined, "无法生成分享链接");
+        onFlash(undefined, t.shareUnavailable);
         return;
       }
       const url = `${window.location.origin}${res.path}`;
       setShareUrl(url);
       const ok = await copyTextToClipboard(url);
-      onFlash(ok ? "分享链接已复制" : undefined, ok ? undefined : "链接已生成，请手动复制");
+      onFlash(ok ? t.shareCopied : undefined, ok ? undefined : t.shareManual);
     } finally {
       setSharing(false);
     }
@@ -2031,10 +2037,10 @@ function FinalReportPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-sm font-semibold text-slate-900">
-            {readonly ? "会议报告（已入库）" : "3. 会议报告 · 确认入库"}
+            {readonly ? t.reportSaved : t.reportTitle}
           </div>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            含会前摘要、近两周进展总结与后续待办；入库后写入历史，并可分享链接。
+            {t.reportHint}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -2043,7 +2049,7 @@ function FinalReportPanel({
             onClick={() => void copyReport()}
             className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
           >
-            复制报告
+            {t.copyReport}
           </button>
           <button
             type="button"
@@ -2051,7 +2057,7 @@ function FinalReportPanel({
             onClick={() => void shareReport()}
             className="rounded-lg border border-sky-200 bg-sky-50 text-sky-900 px-3 py-1.5 text-xs hover:bg-sky-100 disabled:opacity-40"
           >
-            {sharing ? "生成中…" : "分享报告链接"}
+            {sharing ? t.creatingLink : t.shareLink}
           </button>
           {!readonly && onConfirmAll ? (
             <button
@@ -2060,7 +2066,7 @@ function FinalReportPanel({
               onClick={onConfirmAll}
               className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium hover:bg-emerald-800 disabled:opacity-40"
             >
-              确认入库到历史
+              {t.saveHistory}
             </button>
           ) : null}
         </div>
@@ -2098,18 +2104,18 @@ function FinalReportPanel({
               </h3>
               {it.prepBrief?.summaryLine ? (
                 <div className="mt-2">
-                  <div className="text-[11px] font-medium text-slate-400">会前摘要</div>
+                  <div className="text-[11px] font-medium text-slate-400">{t.preMeetingSummary}</div>
                   <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{it.prepBrief.summaryLine}</p>
                 </div>
               ) : null}
               <div className="mt-2">
-                <div className="text-[11px] font-medium text-slate-400">近两周进展总结</div>
+                <div className="text-[11px] font-medium text-slate-400">{t.progressSummary}</div>
                 <p className="text-xs text-slate-800 mt-0.5 leading-relaxed whitespace-pre-wrap">
-                  {progress.trim() || "（暂无）"}
+                  {progress.trim() || t.none}
                 </p>
               </div>
               <div className="mt-2">
-                <div className="text-[11px] font-medium text-slate-400">后续待办</div>
+                <div className="text-[11px] font-medium text-slate-400">{t.followUpTodos}</div>
                 {todos.length ? (
                   <ul className="mt-0.5 space-y-1">
                     {todos.map((t, i) => (
@@ -2125,7 +2131,7 @@ function FinalReportPanel({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs text-slate-400 mt-0.5">（无）</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{t.none}</p>
                 )}
               </div>
             </article>
@@ -2151,6 +2157,7 @@ function AddPartnersPanel({
   onAdded: (items: ReviewItemClient[]) => void;
   onError: (message: string) => void;
 }) {
+  const t = useMessages().partnerReview;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -2205,12 +2212,12 @@ function AddPartnersPanel({
           onClick={() => setOpen(true)}
           className="w-full rounded-lg border border-dashed border-slate-300 px-2 py-2 text-xs text-slate-600 hover:border-sky-300 hover:text-sky-800 hover:bg-white"
         >
-          + 追加讨论伙伴
+          {t.addPartners}
         </button>
       ) : (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium text-slate-700">追加讨论伙伴</span>
+            <span className="text-xs font-medium text-slate-700">{t.addPartnersTitle}</span>
             <button
               type="button"
               className="text-[11px] text-slate-400 hover:text-slate-700"
@@ -2220,16 +2227,16 @@ function AddPartnersPanel({
                 setQuery("");
               }}
             >
-              收起
+              {t.close}
             </button>
           </div>
           <p className="text-[11px] text-slate-500 leading-relaxed">
-            临时决定多过几个伙伴时使用；会自动拉取近 2 周简报，加入后点左侧即可打标。
+            {t.addPartnersHint}
           </p>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索伙伴…"
+            placeholder={t.searchPartnersPh}
             className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs"
           />
           <div className="max-h-36 overflow-y-auto rounded-md border border-slate-100 bg-white divide-y divide-slate-50">
@@ -2248,7 +2255,7 @@ function AddPartnersPanel({
               </label>
             ))}
             {!filtered.length ? (
-              <p className="px-2 py-3 text-[11px] text-slate-400">没有可追加的伙伴</p>
+              <p className="px-2 py-3 text-[11px] text-slate-400">{t.noAvailablePartners}</p>
             ) : null}
           </div>
           <button
@@ -2257,7 +2264,7 @@ function AddPartnersPanel({
             onClick={submit}
             className="w-full rounded-lg bg-sky-700 text-white px-2 py-1.5 text-xs hover:bg-sky-800 disabled:opacity-40"
           >
-            {adding ? `正在加入并拉取简报（${selected.length}）…` : `加入议程（${selected.length || 0}）`}
+            {adding ? formatMsg(t.addingPartners, { n: selected.length }) : formatMsg(t.addToAgenda, { n: selected.length || 0 })}
           </button>
         </div>
       )}
@@ -2272,6 +2279,7 @@ function MeetingPreviewActions({
   meetingId: string;
   previewToken: string | null;
 }) {
+  const t = useMessages().partnerReview;
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [manualUrl, setManualUrl] = useState<string | null>(null);
@@ -2288,12 +2296,12 @@ function MeetingPreviewActions({
     try {
       const path = await resolvePreviewPath();
       if (!path) {
-        setCopyError("无法获取预览链接，请刷新页面后重试");
+        setCopyError(t.previewUnavailable);
         return;
       }
       window.open(path, "_blank", "noopener,noreferrer");
     } catch (e) {
-      setCopyError(e instanceof Error ? e.message : "打开预览失败");
+      setCopyError(e instanceof Error ? e.message : t.previewOpenFailed);
     }
   }
 
@@ -2303,7 +2311,7 @@ function MeetingPreviewActions({
     try {
       const path = await resolvePreviewPath();
       if (!path) {
-        setCopyError("无法获取预览链接，请刷新页面后重试");
+        setCopyError(t.previewUnavailable);
         return;
       }
       const url = `${window.location.origin}${path}`;
@@ -2314,9 +2322,9 @@ function MeetingPreviewActions({
         return;
       }
       setManualUrl(url);
-      setCopyError("浏览器不允许自动复制，请手动选中下方链接复制");
+      setCopyError(t.browserCopyBlocked);
     } catch (e) {
-      setCopyError(e instanceof Error ? e.message : "复制失败");
+      setCopyError(e instanceof Error ? e.message : t.copyFailed);
     }
   }
 
@@ -2328,17 +2336,17 @@ function MeetingPreviewActions({
           onClick={() => void openPreview()}
           className="rounded-lg border border-sky-200 bg-sky-50 text-sky-800 px-3 py-1.5 text-sm hover:bg-sky-100"
         >
-          打开会前预览
+          {t.openPreview}
         </button>
         <button
           type="button"
           onClick={() => void copyLink()}
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
         >
-          {copied ? "已复制链接" : "复制预览链接"}
+          {copied ? t.copiedLink : t.copyPreviewLink}
         </button>
         {previewToken ? null : (
-          <span className="text-[11px] text-slate-400 self-center">首次复制会生成分享链接</span>
+          <span className="text-[11px] text-slate-400 self-center">{t.firstCopyCreates}</span>
         )}
       </div>
       {copyError ? <p className="text-xs text-amber-700">{copyError}</p> : null}
@@ -2362,6 +2370,7 @@ function PartnerDetailHeader({
   activeItem: ReviewItemClient;
   phase: string;
 }) {
+  const t = useMessages().partnerReview;
   return (
     <div className="pb-2 border-b border-slate-100">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -2372,10 +2381,10 @@ function PartnerDetailHeader({
       </div>
       <p className="text-xs text-slate-500 mt-0.5">
         {phase === "done"
-          ? "已确认摘要（历史回看）"
+          ? t.historyConfirmed
           : activeItem.prepBrief?.windowLabel
-            ? `简报窗口 ${activeItem.prepBrief.windowLabel}`
-            : "尚未拉取近 2 周进展，请点上方「开会准备」"}
+            ? formatMsg(t.briefWindow, { label: activeItem.prepBrief.windowLabel })
+            : t.noBriefYet}
       </p>
     </div>
   );
@@ -2392,7 +2401,7 @@ function formatRelativeMeetingTime(
   const relSec = Math.max(0, Math.round((at - anchor) / 1000));
   const m = Math.floor(relSec / 60);
   const s = relSec % 60;
-  return `会议 +${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `+${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 function DiscussingNowBanner({
@@ -2404,6 +2413,7 @@ function DiscussingNowBanner({
   meetingStartedAt: string | null;
   markJustAt: number;
 }) {
+  const t = useMessages().partnerReview;
   const justMarked = markJustAt > 0 && Date.now() - markJustAt < 3000;
   if (currentDiscussItem) {
     const rel = formatRelativeMeetingTime(
@@ -2419,13 +2429,13 @@ function DiscussingNowBanner({
         }`}
       >
         <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">
-          当前讨论伙伴
+          {t.currentPartnerBanner}
         </p>
         <p className="text-xl font-bold text-emerald-950 mt-0.5">
           {currentDiscussItem.partnerName}
         </p>
         <p className="text-xs text-emerald-800 mt-1">
-          实际讨论在腾讯会议进行 · 此处仅记时间线 · {rel || "刚刚打点"}
+          {t.timelineOnly} · {rel || t.justMarked}
         </p>
       </div>
     );
@@ -2434,13 +2444,13 @@ function DiscussingNowBanner({
   return (
     <div className="rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
       <p className="text-[11px] font-medium uppercase tracking-wide text-amber-800">
-        会议进行中 · 尚未选定伙伴
+        {t.noPartnerBanner}
       </p>
       <p className="text-base font-semibold text-amber-950 mt-0.5">
-        开始过某位伙伴时，请点左侧该伙伴名称
+        {t.markPartnerHint}
       </p>
       <p className="text-xs text-amber-800 mt-1">
-        实际讨论在腾讯会议进行；本页只记录讨论顺序与时间线，便于会后与腾讯纪要匹配
+        {t.timelineOnly}
       </p>
     </div>
   );
@@ -2473,6 +2483,7 @@ function LiveAgendaPanel({
   meetingStartedAt: string | null;
   compact?: boolean;
 }) {
+  const t = useMessages().partnerReview;
   const marked = items
     .filter((it) => it.markerInsertedAt || it.discussedAt)
     .sort((a, b) => {
@@ -2489,14 +2500,14 @@ function LiveAgendaPanel({
           : "rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-3 min-h-[200px]"
       }
     >
-      <p className="text-xs font-medium text-slate-700">讨论顺序</p>
+      <p className="text-xs font-medium text-slate-700">{t.discussionOrder}</p>
       {!compact ? (
         <p className="text-xs text-slate-600 leading-relaxed">
-          腾讯会议中进行实际讨论；此处<strong>只记录</strong>你何时开始过哪位伙伴（相对「开始开会」的时刻）。
+          {t.timelineHint}
         </p>
       ) : null}
       {!marked.length ? (
-        <p className="text-[11px] text-slate-400">尚未打点 · 点上方伙伴开始</p>
+        <p className="text-[11px] text-slate-400">{t.noMarkers}</p>
       ) : (
         <ol className="space-y-1.5">
           {marked.map((it, idx) => (
@@ -2525,12 +2536,12 @@ function LiveAgendaPanel({
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
-  VISIT: "拜访",
-  TRAINING: "培训",
-  NEGOTIATION: "谈判",
-  DELIVERY: "交付",
-  RELATIONSHIP: "关系",
-  OTHER: "进展",
+  VISIT: "Visit",
+  TRAINING: "Training",
+  NEGOTIATION: "Negotiation",
+  DELIVERY: "Delivery",
+  RELATIONSHIP: "Relationship",
+  OTHER: "Progress",
 };
 
 function tidyClientText(text: string) {
@@ -2548,6 +2559,7 @@ function PrepBriefOverview({
   brief: PartnerPrepBrief;
   mossConfigured?: boolean;
 }) {
+  const t = useMessages().partnerReview;
   return (
     <div className="space-y-4 text-sm">
       {brief.summaryLine ? (
@@ -2555,7 +2567,7 @@ function PrepBriefOverview({
       ) : null}
 
       <div>
-        <div className="text-xs font-medium text-slate-500 mb-1.5">AI 推荐议题</div>
+        <div className="text-xs font-medium text-slate-500 mb-1.5">{t.topics}</div>
         <ul className="list-disc pl-5 space-y-1 text-slate-700">
           {brief.aiTopics.map((t) => (
             <li key={t}>{t}</li>
@@ -2566,11 +2578,11 @@ function PrepBriefOverview({
       <div>
         <div className="flex items-center justify-between gap-2 mb-2">
           <div className="text-xs font-semibold text-slate-700">
-            该伙伴下客户商机
+            {t.customerOpportunities}
             {brief.customerOpportunities?.length ? (
               <span className="font-normal text-slate-400">
                 {" "}
-                · {brief.customerOpportunities.reduce((n, g) => n + g.opportunities.length, 0)} 个进行中
+                · {formatMsg(t.activeCount, { n: brief.customerOpportunities.reduce((n, g) => n + g.opportunities.length, 0) })}
               </span>
             ) : null}
           </div>
@@ -2578,7 +2590,7 @@ function PrepBriefOverview({
             href={`/partners/${brief.partnerId}`}
             className="text-[11px] text-sky-700 hover:underline shrink-0"
           >
-            在伙伴页查看
+            {t.viewPartner}
           </Link>
         </div>
         {brief.customerOpportunities?.length ? (
@@ -2610,7 +2622,7 @@ function PrepBriefOverview({
                         configured={mossConfigured}
                       />
                     ) : null}
-                    <span className="text-[11px] text-slate-500">{group.opportunities.length} 个商机</span>
+                    <span className="text-[11px] text-slate-500">{formatMsg(t.opportunityCount, { n: group.opportunities.length })}</span>
                   </div>
                 </div>
                 <ul className="space-y-1.5">
@@ -2634,7 +2646,7 @@ function PrepBriefOverview({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-slate-400">暂无该伙伴关联客户的进行中商机</p>
+          <p className="text-xs text-slate-400">{t.noOpportunities}</p>
         )}
       </div>
     </div>
@@ -2642,6 +2654,7 @@ function PrepBriefOverview({
 }
 
 function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
+  const t = useMessages().partnerReview;
   const baseTodos =
     brief.todos?.length
       ? brief.todos
@@ -2667,12 +2680,12 @@ function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
       <div>
         <div className="flex items-center justify-between gap-2 mb-1.5">
           <div className="text-xs font-medium text-slate-500">
-            待办摘录
+            {t.todoExcerpt}
             {todos.length ? (
               <span className="font-normal text-slate-400">
                 {" "}
-                · 待完成 {openCount}
-                {doneCount ? ` · 已完成 ${doneCount}` : ""}
+                · {formatMsg(t.openCount, { n: openCount })}
+                {doneCount ? ` · ${formatMsg(t.doneCount, { n: doneCount })}` : ""}
               </span>
             ) : null}
           </div>
@@ -2680,7 +2693,7 @@ function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
             href={`/partners/${brief.partnerId}`}
             className="text-[11px] text-sky-700 hover:underline shrink-0"
           >
-            在伙伴页处理
+            {t.managePartner}
           </Link>
         </div>
         {todos.length ? (
@@ -2709,23 +2722,23 @@ function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
                     {t.title}
                   </Link>
                   {!t.done && t.overdue ? (
-                    <span className="ml-1.5 text-[11px] text-red-600">逾期</span>
+                    <span className="ml-1.5 text-[11px] text-red-600">{t.overdue}</span>
                   ) : null}
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-slate-400">暂无相关待办</p>
+          <p className="text-xs text-slate-400">{t.noTodos}</p>
         )}
       </div>
 
       <div>
-        <div className="text-xs font-medium text-slate-500 mb-1.5">近两周进展</div>
+        <div className="text-xs font-medium text-slate-500 mb-1.5">{t.recentProgress}</div>
         {brief.progress.length ? (
           <ul className="space-y-2.5">
             {brief.progress.slice(0, 8).map((p, i) => {
-              const label = p.categoryLabel || CATEGORY_LABEL[p.category] || "进展";
+              const label = p.categoryLabel || CATEGORY_LABEL[p.category] || t.recentProgress;
               const body = tidyClientText(p.contentPreview || "");
               const dateLabel = p.occurredAt
                 ? new Date(p.occurredAt).toLocaleDateString("zh-CN", {
@@ -2744,7 +2757,7 @@ function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
                     </span>
                     {dateLabel ? <span className="text-[11px] text-slate-400">{dateLabel}</span> : null}
                     {p.contactName ? (
-                      <span className="text-[11px] text-sky-700">联系人 {p.contactName}</span>
+                      <span className="text-[11px] text-sky-700">{formatMsg(t.contact, { name: p.contactName })}</span>
                     ) : null}
                   </div>
                   <div className="text-sm font-medium text-slate-900 leading-snug">{p.title}</div>
@@ -2756,7 +2769,7 @@ function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
             })}
           </ul>
         ) : (
-          <p className="text-xs text-slate-400">近两周无商务记录</p>
+          <p className="text-xs text-slate-400">{t.noRecords}</p>
         )}
       </div>
     </div>
@@ -2764,6 +2777,7 @@ function PrepBriefActivity({ brief }: { brief: PartnerPrepBrief }) {
 }
 
 function ConfirmedHistoryPanel({ item, part }: { item: ReviewItemClient; part: "left" | "right" }) {
+  const t = useMessages().partnerReview;
   const snap =
     item.confirmedSnapshot ??
     ({
@@ -2787,18 +2801,18 @@ function ConfirmedHistoryPanel({ item, part }: { item: ReviewItemClient; part: "
     return (
       <div className="space-y-4 text-sm">
         <div>
-          <div className="text-xs font-medium text-slate-500 mb-1">进展总结</div>
+          <div className="text-xs font-medium text-slate-500 mb-1">{t.progressSummary}</div>
           <p className="text-slate-800 leading-relaxed whitespace-pre-wrap">
-            {snap.coreNotes.trim() || "（无）"}
+            {snap.coreNotes.trim() || t.none}
           </p>
         </div>
         <div>
-          <div className="text-xs font-medium text-slate-500 mb-1">商务记录</div>
+          <div className="text-xs font-medium text-slate-500 mb-1">{t.businessRecord}</div>
           {snap.skipBusinessRecord || !snap.wroteBusinessRecord ? (
-            <p className="text-xs text-slate-400">确认时未写入商务记录</p>
+            <p className="text-xs text-slate-400">{t.noBusinessRecord}</p>
           ) : (
             <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 space-y-1">
-              <div className="font-medium text-slate-900">{snap.businessRecordTitle || "（无标题）"}</div>
+              <div className="font-medium text-slate-900">{snap.businessRecordTitle || t.untitled}</div>
               {snap.businessRecordContent ? (
                 <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">
                   {snap.businessRecordContent}
@@ -2809,7 +2823,7 @@ function ConfirmedHistoryPanel({ item, part }: { item: ReviewItemClient; part: "
         </div>
         {snap.confirmedAt ? (
           <p className="text-[11px] text-slate-400">
-            确认于 {new Date(snap.confirmedAt).toLocaleString("zh-CN", { hour12: false })}
+            {formatMsg(t.confirmedAt, { time: new Date(snap.confirmedAt).toLocaleString() })}
           </p>
         ) : null}
       </div>
@@ -2819,19 +2833,19 @@ function ConfirmedHistoryPanel({ item, part }: { item: ReviewItemClient; part: "
   return (
     <div className="space-y-4 text-sm">
       <div>
-        <div className="text-xs font-medium text-slate-500 mb-1">已入库待办</div>
+        <div className="text-xs font-medium text-slate-500 mb-1">{t.savedTodos}</div>
         {snap.todos.length ? (
           <ul className="space-y-2">
             {snap.todos.map((t, i) => (
               <li key={`${t.title}-${i}`} className="rounded-lg border border-slate-100 px-3 py-2">
                 <div className="font-medium text-slate-800">{t.title}</div>
                 {t.detail ? <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-wrap">{t.detail}</p> : null}
-                {t.dueDate ? <p className="text-[11px] text-slate-400 mt-1">截止日期 {t.dueDate.slice(0, 10)}</p> : null}
+                {t.dueDate ? <p className="text-[11px] text-slate-400 mt-1">{formatMsg(t.dueDate, { date: t.dueDate.slice(0, 10) })}</p> : null}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-slate-400">无待办</p>
+          <p className="text-xs text-slate-400">{t.none}</p>
         )}
       </div>
     </div>
@@ -2857,11 +2871,12 @@ function PostConfirmPanel({
   proposalItem?: SplitProposal["items"][number];
   part?: "left" | "right";
 }) {
+  const t = useMessages().partnerReview;
   const d =
     draft ??
     ({
       coreNotes: proposalItem?.coreNotes || item.coreNotes || "",
-      businessRecordTitle: proposalItem?.businessRecordTitle || `${item.partnerName} 过伙伴讨论`,
+      businessRecordTitle: proposalItem?.businessRecordTitle || `${item.partnerName} partner review discussion`,
       businessRecordContent: proposalItem?.businessRecordContent || item.coreNotes || "",
       skipBusinessRecord: false,
       todos:
@@ -2891,10 +2906,10 @@ function PostConfirmPanel({
   if (part === "right") {
     return (
       <div className="space-y-2" onFocus={ensure}>
-        <div className="text-xs font-medium text-slate-700">后续待办 · 确认修改</div>
+        <div className="text-xs font-medium text-slate-700">{t.todoEditTitle}</div>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-slate-500">勾选纳入 · 可改/删/加</span>
+            <span className="text-[11px] text-slate-500">{t.todoEditHint}</span>
             <button
               type="button"
               className="text-[11px] text-sky-700"
@@ -2905,49 +2920,49 @@ function PostConfirmPanel({
                 })
               }
             >
-              + 添加待办
+              {t.addTodo}
             </button>
           </div>
-          {d.todos.map((t, idx) => (
-            <div key={t.id ?? idx} className="rounded-lg border border-slate-100 p-2 space-y-1">
+          {d.todos.map((todo, idx) => (
+            <div key={todo.id ?? idx} className="rounded-lg border border-slate-100 p-2 space-y-1">
               <label className="flex items-center gap-2 text-xs">
                 <input
                   type="checkbox"
-                  checked={t.include}
+                  checked={todo.include}
                   onChange={(e) => {
                     const todos = [...d.todos];
-                    todos[idx] = { ...t, include: e.target.checked };
+                    todos[idx] = { ...todo, include: e.target.checked };
                     onChange({ ...d, todos });
                   }}
                 />
-                纳入
+                {t.include}
               </label>
               <input
-                value={t.title}
+                value={todo.title}
                 onChange={(e) => {
                   const todos = [...d.todos];
-                  todos[idx] = { ...t, title: e.target.value };
+                  todos[idx] = { ...todo, title: e.target.value };
                   onChange({ ...d, todos });
                 }}
-                placeholder="待办标题"
+                placeholder={t.todoTitlePh}
                 className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
               />
               <input
-                value={t.detail}
+                value={todo.detail}
                 onChange={(e) => {
                   const todos = [...d.todos];
-                  todos[idx] = { ...t, detail: e.target.value };
+                  todos[idx] = { ...todo, detail: e.target.value };
                   onChange({ ...d, todos });
                 }}
-                placeholder="详情（可选）"
+                placeholder={t.todoDetailPh}
                 className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
               />
               <input
                 type="date"
-                value={t.dueDate}
+                value={todo.dueDate}
                 onChange={(e) => {
                   const todos = [...d.todos];
-                  todos[idx] = { ...t, dueDate: e.target.value };
+                  todos[idx] = { ...todo, dueDate: e.target.value };
                   onChange({ ...d, todos });
                 }}
                 className="rounded border border-slate-200 px-2 py-1 text-xs"
@@ -2961,12 +2976,12 @@ function PostConfirmPanel({
 
   return (
     <div className="space-y-2" onFocus={ensure}>
-      <div className="text-xs font-medium text-slate-700">近两周进展总结 · 确认修改</div>
+      <div className="text-xs font-medium text-slate-700">{t.progressEditTitle}</div>
       {proposalItem ? (
         <details className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2">
           <summary className="text-[11px] font-medium text-slate-600 cursor-pointer">
-            查看原始匹配片段
-            <span className="font-normal text-slate-400"> · {segmentChars} 字</span>
+            {t.viewMatched}
+            <span className="font-normal text-slate-400"> · {segmentChars}</span>
           </summary>
           {segmentChars ? (
             <p className="mt-2 text-xs text-slate-600 whitespace-pre-wrap leading-relaxed max-h-36 overflow-y-auto">
@@ -2975,13 +2990,13 @@ function PostConfirmPanel({
             </p>
           ) : (
             <p className="mt-2 text-xs text-amber-800">
-              本段暂无归属内容。请检查会中是否按讨论顺序打标，或重新解析纪要。
+              {t.noAssignedSegment}
             </p>
           )}
         </details>
       ) : null}
       <label className="block space-y-1">
-        <span className="text-[11px] text-slate-400">进展总结（将写入商务记录）</span>
+        <span className="text-[11px] text-slate-400">{t.progressRecordHint}</span>
         <textarea
           value={d.coreNotes}
           onChange={(e) => {
@@ -2994,7 +3009,7 @@ function PostConfirmPanel({
           }}
           rows={6}
           className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm leading-relaxed"
-          placeholder="AI 提炼的进展总结，可在此修改…"
+          placeholder={t.progressPh}
         />
       </label>
       <label className="flex items-center gap-2 text-xs text-slate-600">
@@ -3009,7 +3024,7 @@ function PostConfirmPanel({
             })
           }
         />
-        确认后写入商务记录
+        {t.writeBusinessRecord}
       </label>
     </div>
   );

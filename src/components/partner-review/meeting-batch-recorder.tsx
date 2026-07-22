@@ -6,6 +6,8 @@ import {
   encodeWavMono,
   meterLevel,
 } from "@/lib/asr/wav";
+import { useMessages } from "@/lib/i18n/context";
+import { formatMsg } from "@/lib/i18n/messages";
 
 type Props = {
   meetingId: string;
@@ -47,11 +49,12 @@ export function MeetingBatchRecorder({
   onRecordingStarted,
   onTranscribed,
 }: Props) {
+  const t = useMessages().meetingRecorder;
   const base = apiBase ?? `/api/partner-reviews/${meetingId}`;
   const [phase, setPhase] = useState<Phase>("idle");
   const [elapsedSec, setElapsedSec] = useState(0);
   const [level, setLevel] = useState(0);
-  const [statusLine, setStatusLine] = useState("未开始录音");
+  const [statusLine, setStatusLine] = useState(t.statusIdle);
   const [localError, setLocalError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [captureSystemAudio, setCaptureSystemAudio] = useState(true);
@@ -148,7 +151,7 @@ export function MeetingBatchRecorder({
   async function start() {
     if (busy || recording || disabled) return;
     if (typeof window !== "undefined" && !window.isSecureContext) {
-      const msg = "需要 HTTPS 才能使用麦克风";
+      const msg = t.needHttps;
       setLocalError(msg);
       setPhase("error");
       onFlash(undefined, msg);
@@ -159,7 +162,7 @@ export function MeetingBatchRecorder({
     setPhase("mic");
     setLocalError(null);
     setElapsedSec(0);
-    setStatusLine("正在请求麦克风…");
+    setStatusLine(t.statusMic);
 
     try {
       const micStream = await navigator.mediaDevices.getUserMedia({
@@ -176,7 +179,7 @@ export function MeetingBatchRecorder({
         method: "POST",
       });
       const mark = (await markRes.json()) as { ok?: boolean; error?: string; startedAt?: string };
-      if (!markRes.ok || mark.error) throw new Error(mark.error || `开录失败 HTTP ${markRes.status}`);
+      if (!markRes.ok || mark.error) throw new Error(mark.error || formatMsg(t.startFailedHttp, { status: markRes.status }));
       startedAtIsoRef.current = mark.startedAt ?? new Date().toISOString();
       onRecordingStarted(mark.startedAt);
 
@@ -187,7 +190,7 @@ export function MeetingBatchRecorder({
 
       let displayStream: MediaStream | null = null;
       if (captureSystemAudio) {
-        setStatusLine("录音中 · 可选：共享会议标签页并勾选「分享音频」…");
+        setStatusLine(t.statusShareHint);
         try {
           displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
@@ -203,7 +206,7 @@ export function MeetingBatchRecorder({
           if (!displayStream.getAudioTracks().length) {
             displayStream.getTracks().forEach((t) => t.stop());
             displayStream = null;
-            setLocalError("未拿到会议音频轨（本次只录麦克风）。请选 Chrome 标签页并勾选分享音频。");
+            setLocalError(t.noTabAudio);
           } else {
             displayStreamRef.current = displayStream;
             try {
@@ -220,26 +223,26 @@ export function MeetingBatchRecorder({
             ]);
           }
         } catch {
-          setLocalError("已取消屏幕共享（本次只录麦克风）。");
+          setLocalError(t.shareCancelled);
         }
       }
 
       const mixed = Boolean(displayStream?.getAudioTracks().length);
       setStatusLine(
         mixed
-          ? "录音中（麦克风 + 会议声）· 不实时转写 · 讨论谁点左侧谁"
-          : "录音中 · 不实时转写 · 讨论谁点左侧谁",
+          ? t.statusRecordingMixed
+          : t.statusRecordingMic,
       );
       onFlash(
         mixed
-          ? "已开始一次性录音。过伙伴时请打点；结束后再整段讯飞转写。"
-          : "已开始一次性录音（麦克风）。过伙伴时请打点；结束后再整段讯飞转写。",
+          ? t.flashStartedMixed
+          : t.flashStartedMic,
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "无法开始录音";
+      const msg = e instanceof Error ? e.message : t.cannotStart;
       setLocalError(msg);
       setPhase("error");
-      setStatusLine("开录失败");
+      setStatusLine(t.statusStartFail);
       onFlash(undefined, msg);
       await teardown();
     } finally {
@@ -251,7 +254,7 @@ export function MeetingBatchRecorder({
     if (!recording && phase !== "error") return;
     setBusy(true);
     setPhase("uploading");
-    setStatusLine("正在打包上传录音…");
+    setStatusLine(t.statusPacking);
     setLocalError(null);
 
     try {
@@ -276,7 +279,7 @@ export function MeetingBatchRecorder({
       const flat = flattenPcm();
       pcmChunksRef.current = [];
       if (flat.length < rate * 2) {
-        throw new Error("录音太短，请至少录几秒有效声音");
+        throw new Error(t.tooShort);
       }
       const pcm16k = downsampleFloat32(flat, rate, 16000);
       const wav = encodeWavMono(pcm16k, 16000);
@@ -291,11 +294,11 @@ export function MeetingBatchRecorder({
         body: form,
       });
       const up = (await upRes.json()) as { ok?: boolean; error?: string };
-      if (!upRes.ok || up.error) throw new Error(up.error || `上传失败 HTTP ${upRes.status}`);
+      if (!upRes.ok || up.error) throw new Error(up.error || formatMsg(t.uploadFailedHttp, { status: upRes.status }));
 
       setPhase("transcribing");
-      setStatusLine("正在讯飞一次性转写（可能需要几分钟）…");
-      onFlash("录音已上传，正在讯飞整段转写…");
+      setStatusLine(t.statusTranscribing);
+      onFlash(t.flashUploaded);
 
       const txRes = await fetch(`${base}/recording/xfyun-batch`, {
         method: "POST",
@@ -308,22 +311,22 @@ export function MeetingBatchRecorder({
         matchMethod?: string;
         sentences?: number;
       };
-      if (!txRes.ok || tx.error) throw new Error(tx.error || `转写失败 HTTP ${txRes.status}`);
+      if (!txRes.ok || tx.error) throw new Error(tx.error || formatMsg(t.transcribeFailedHttp, { status: txRes.status }));
 
       setPhase("idle");
       setLevel(0);
-      setStatusLine(`讯飞转写完成 · ${tx.sentences ?? 0} 句 · 可与腾讯纪要对比校准`);
-      onFlash(`讯飞转写完成（${tx.sentences ?? 0} 句）。腾讯粘贴路径仍保留，可两边对比。`);
+      setStatusLine(formatMsg(t.statusDone, { n: tx.sentences ?? 0 }));
+      onFlash(formatMsg(t.flashDone, { n: tx.sentences ?? 0 }));
       onTranscribed({
         plain: tx.plain ?? "",
         liveNotes: tx.liveNotes ?? null,
         matchMethod: tx.matchMethod,
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "结束失败";
+      const msg = e instanceof Error ? e.message : t.endFailed;
       setLocalError(msg);
       setPhase("error");
-      setStatusLine("失败");
+      setStatusLine(t.statusFail);
       onFlash(undefined, msg);
     } finally {
       setBusy(false);
@@ -334,9 +337,9 @@ export function MeetingBatchRecorder({
   const levelPct = Math.round(level * 100);
   const readyHint =
     transcriptStatus === "ready"
-      ? "已有讯飞转写"
+      ? t.readyHasTranscript
       : transcriptStatus === "uploaded"
-        ? "录音已上传，可点下方重试转写"
+        ? t.readyUploadedRetry
         : null;
 
   return (
@@ -351,10 +354,9 @@ export function MeetingBatchRecorder({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold text-slate-900">路径 B · 讯飞一次性录音</p>
+          <p className="text-sm font-semibold text-slate-900">{t.title}</p>
           <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
-            会中只录音 + 打点（不实时出字）；结束后整段讯飞转写。开录时刻与打点同钟，便于对齐。
-            腾讯粘贴路径不受影响，可会后对比校准。
+            {t.desc}
           </p>
         </div>
         {recording ? (
@@ -372,7 +374,7 @@ export function MeetingBatchRecorder({
           disabled={busy || recording}
           onChange={(e) => setCaptureSystemAudio(e.target.checked)}
         />
-        同时采集会议标签页声音（推荐）
+        {t.captureTabAudio}
       </label>
 
       <div className="flex items-center gap-3">
@@ -397,7 +399,7 @@ export function MeetingBatchRecorder({
             onClick={() => void start()}
             className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-800 disabled:opacity-40"
           >
-            {phase === "mic" ? "准备中…" : "开始录音"}
+            {phase === "mic" ? t.preparing : t.start}
           </button>
         ) : (
           <button
@@ -406,7 +408,7 @@ export function MeetingBatchRecorder({
             onClick={() => void stopAndTranscribe()}
             className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-rose-800 disabled:opacity-40"
           >
-            结束并讯飞转写
+            {t.stopAndTranscribe}
           </button>
         )}
         {transcriptStatus === "uploaded" || transcriptStatus === "error" ? (
@@ -416,7 +418,7 @@ export function MeetingBatchRecorder({
             onClick={() => {
               setBusy(true);
               setPhase("transcribing");
-              setStatusLine("正在重试讯飞转写…");
+              setStatusLine(t.statusRetrying);
               void fetch(`${base}/recording/xfyun-batch`, {
                 method: "POST",
               })
@@ -431,8 +433,8 @@ export function MeetingBatchRecorder({
                   };
                   if (!r.ok || tx.error) throw new Error(tx.error || r.statusText);
                   setPhase("idle");
-                  setStatusLine(`讯飞转写完成 · ${tx.sentences ?? 0} 句`);
-                  onFlash("讯飞转写完成");
+                  setStatusLine(formatMsg(t.statusDoneShort, { n: tx.sentences ?? 0 }));
+                  onFlash(t.flashDoneShort);
                   onTranscribed({
                     plain: tx.plain ?? "",
                     liveNotes: tx.liveNotes ?? null,
@@ -449,7 +451,7 @@ export function MeetingBatchRecorder({
             }}
             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-40"
           >
-            重试讯飞转写
+            {t.retryTranscribe}
           </button>
         ) : null}
       </div>

@@ -51,7 +51,10 @@ export default async function ProjectsPage({
       },
       orderBy: { updatedAt: "desc" },
     }),
-    db.customer.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.customer.findMany({
+      select: { id: true, name: true, crmCustomerId: true },
+      orderBy: { name: "asc" },
+    }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);

@@ -32,6 +32,8 @@ import {
 import { ContractAiExtract } from "@/components/contract-ai-extract";
 import type { ContractExtractResult } from "@/lib/contract-extract-types";
 import { termYearsFromDateRange } from "@/lib/arr";
+import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
+import { useMessages } from "@/lib/i18n/context";
 
 export type ContractFormCopy = {
   contractName: string;
@@ -197,6 +199,7 @@ export function CustomerContractForm({
   inputClassName,
   mode,
   customerNameHint,
+  crmCustomerId,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   deleteAction?: (formData: FormData) => void | Promise<void>;
@@ -212,7 +215,10 @@ export function CustomerContractForm({
   mode: "create" | "edit";
   /** Helps AI match CRM screenshot to the current customer. */
   customerNameHint?: string | null;
+  /** FanRuan CRM com_id — enables listing contracts via CRM MCP. */
+  crmCustomerId?: string | null;
 }) {
+  const m = useMessages();
   const [name, setName] = useState(defaults?.name ?? "");
   const [contractType, setContractType] = useState<ContractTypeCode>(
     (defaults?.contractType as ContractTypeCode) || "SUBSCRIPTION"
@@ -341,6 +347,42 @@ export function CustomerContractForm({
     }
   }
 
+  function applyCrmImport(result: CrmImportResult) {
+    if (result.kind !== "contract") return;
+    const d = result.draft;
+    if (d.name?.trim()) setName(d.name.trim());
+    if (d.contractType) {
+      setContractType(d.contractType);
+      if (isPrimaryCommercialType(d.contractType)) setBillingCycle("");
+      else if (d.billingCycle) setBillingCycle(d.billingCycle);
+      else setBillingCycle("YEARLY");
+    }
+    if (d.status) setStatus(d.status);
+    if (d.amount) setAmount(d.amount);
+    if (d.currency) setCurrency(currencyForInput(d.currency));
+    if (d.crmContractId) setCrmContractId(d.crmContractId);
+    if (d.startDate) setStartDate(d.startDate);
+    if (d.endDate) setEndDate(d.endDate);
+    if (d.renewsAt) setRenewsAt(d.renewsAt);
+    if (d.startDate && d.endDate) {
+      const inferred = termYearsFromDateRange(d.startDate, d.endDate);
+      if (inferred != null) setTermYears(String(inferred));
+    }
+    if (d.crmOpportunityId) {
+      // Hub 商机可能尚未同步；先尝试按名称匹配
+      const opp = opportunities.find((o) => o.name.trim() === d.name.trim());
+      if (opp) setOpportunityId(opp.id);
+    }
+    if (d.notes?.trim()) {
+      setNotes((prev) => {
+        const extra = d.notes.trim();
+        if (!prev?.trim()) return extra;
+        if (prev.includes(extra)) return prev;
+        return `${prev.trim()}\n${extra}`;
+      });
+    }
+  }
+
   async function handleAction(formData: FormData) {
     setSavedFlash(false);
     await action(formData);
@@ -355,6 +397,24 @@ export function CustomerContractForm({
     <form action={handleAction} className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
       {defaults?.id && <input type="hidden" name="id" value={defaults.id} />}
       <input type="hidden" name="lineItems" value={lineItemsJson} />
+
+      {mode === "create" && crmCustomerId?.trim() && (
+        <div className="col-span-2 md:col-span-3 flex items-center justify-between gap-2">
+          <span className="text-xs text-slate-500">{m.crm.importFromCrm.contractHint}</span>
+          <CrmImportPicker
+            kind="contract"
+            crmCustomerId={crmCustomerId}
+            customerNameHint={customerNameHint}
+            onPicked={applyCrmImport}
+            compact
+          />
+        </div>
+      )}
+      {mode === "create" && !crmCustomerId?.trim() && (
+        <p className="col-span-2 md:col-span-3 text-[11px] text-slate-400">
+          {m.crm.importFromCrm.requiresBound}
+        </p>
+      )}
 
       <ContractAiExtract
         key={aiKey}

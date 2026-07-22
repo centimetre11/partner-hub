@@ -25,7 +25,11 @@ import {
   type LeadEmailTemplate,
   type LeadEmailTemplateVars,
 } from "@/lib/lead-email";
-import { composeEmailViaBridge, isBridgeAvailable } from "@/lib/browser-bridge";
+import {
+  composeEmailViaBridge,
+  detectBridgeBrowser,
+  isBridgeAvailable,
+} from "@/lib/browser-bridge";
 import { LeadEmailBodyEditor } from "./lead-email-body-editor";
 
 const chipClass =
@@ -84,12 +88,14 @@ export function LeadEmail({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [bridgeReady, setBridgeReady] = useState(false);
+  const [bridgeBrowser, setBridgeBrowser] = useState<ReturnType<typeof detectBridgeBrowser>>("other");
   const [sending, setSending] = useState(false);
   const [bridgeNotice, setBridgeNotice] = useState<{ kind: "ok" | "warn" | "error"; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    setBridgeBrowser(detectBridgeBrowser());
     let cancelled = false;
     isBridgeAvailable().then((ok) => {
       if (!cancelled) setBridgeReady(ok);
@@ -98,6 +104,13 @@ export function LeadEmail({
       cancelled = true;
     };
   }, []);
+
+  const mailtoHintText =
+    bridgeBrowser === "chrome"
+      ? l.mailtoHintChrome
+      : bridgeBrowser === "edge"
+        ? l.mailtoHintEdge
+        : l.mailtoHint;
 
   useEffect(() => {
     try {
@@ -651,7 +664,7 @@ export function LeadEmail({
         <p className="text-xs text-slate-400 mt-2">{l.bridgeHint}</p>
       ) : (
         <p className="text-xs text-slate-400 mt-2">
-          {l.mailtoHint}{" "}
+          {mailtoHintText}{" "}
           <a href="/downloads/browser-bridge.zip" className="text-sky-600 hover:underline" download>
             {l.installBridge}
           </a>

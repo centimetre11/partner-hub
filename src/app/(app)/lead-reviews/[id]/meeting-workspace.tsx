@@ -6,6 +6,7 @@ import { Badge, Card } from "@/components/ui";
 import {
   confirmLeadReviewItemsAction,
   endLeadReviewMeetingAction,
+  getLeadReviewPreviewPathAction,
   matchLeadReviewMinutesAction,
   matchLeadReviewXfyunAction,
   resetLeadReviewToPrepAction,
@@ -22,6 +23,7 @@ import { parseLeadSectionsFromLiveNotes } from "@/lib/lead-review/markers";
 import { MeetingBatchRecorder } from "@/components/partner-review/meeting-batch-recorder";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 
 type PostStep = "paste" | "assign" | "tag";
 
@@ -69,6 +71,7 @@ function applySegmentsToDrafts(
 export function LeadReviewWorkspace({
   meetingId,
   status: initialStatus,
+  previewToken: initialPreviewToken,
   liveNotes,
   transcriptStatus: initialTranscriptStatus,
   transcriptError: initialTranscriptError,
@@ -85,6 +88,7 @@ export function LeadReviewWorkspace({
 }: {
   meetingId: string;
   status: string;
+  previewToken: string | null;
   liveNotes: string | null;
   transcriptStatus: string | null;
   transcriptError: string | null;
@@ -110,6 +114,7 @@ export function LeadReviewWorkspace({
   const [flashOk, setFlashOk] = useState<string | null>(null);
   const [notes, setNotes] = useState(liveNotes ?? "");
   const [status, setStatus] = useState(initialStatus);
+  const [previewToken] = useState(initialPreviewToken);
   const [startedAt, setStartedAt] = useState(initialStartedAt);
   const [transcriptStatus, setTranscriptStatus] = useState(initialTranscriptStatus);
   const [transcriptError, setTranscriptError] = useState(initialTranscriptError);
@@ -344,6 +349,8 @@ export function LeadReviewWorkspace({
           </button>
         )}
       </div>
+
+      <LeadMeetingPreviewActions meetingId={meetingId} previewToken={previewToken} />
 
       {status !== "DONE" && status !== "PROCESSING" && (
         <Card title={m.recordingTitle}>
@@ -994,6 +1001,97 @@ export function LeadReviewWorkspace({
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function LeadMeetingPreviewActions({
+  meetingId,
+  previewToken,
+}: {
+  meetingId: string;
+  previewToken: string | null;
+}) {
+  const t = useMessages().leadReview;
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [manualUrl, setManualUrl] = useState<string | null>(null);
+
+  async function resolvePreviewPath(): Promise<string | null> {
+    if (previewToken) return `/lead-reviews/preview/${previewToken}`;
+    const res = await getLeadReviewPreviewPathAction(meetingId);
+    if (!res.ok || !res.path) return null;
+    return res.path;
+  }
+
+  async function openPreview() {
+    setCopyError(null);
+    try {
+      const path = await resolvePreviewPath();
+      if (!path) {
+        setCopyError(t.previewUnavailable);
+        return;
+      }
+      window.open(path, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : t.previewOpenFailed);
+    }
+  }
+
+  async function copyLink() {
+    setCopyError(null);
+    setManualUrl(null);
+    try {
+      const path = await resolvePreviewPath();
+      if (!path) {
+        setCopyError(t.previewUnavailable);
+        return;
+      }
+      const url = `${window.location.origin}${path}`;
+      const ok = await copyTextToClipboard(url);
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      }
+      setManualUrl(url);
+      setCopyError(t.browserCopyBlocked);
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : t.copyFailed);
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => void openPreview()}
+          className="rounded-lg border border-sky-200 bg-sky-50 text-sky-800 px-3 py-1.5 text-sm hover:bg-sky-100"
+        >
+          {t.openPreview}
+        </button>
+        <button
+          type="button"
+          onClick={() => void copyLink()}
+          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
+        >
+          {copied ? t.copiedLink : t.copyPreviewLink}
+        </button>
+        {previewToken ? null : (
+          <span className="text-[11px] text-slate-400 self-center">{t.firstCopyCreates}</span>
+        )}
+      </div>
+      {copyError ? <p className="text-xs text-amber-700">{copyError}</p> : null}
+      {manualUrl ? (
+        <input
+          type="text"
+          readOnly
+          value={manualUrl}
+          onFocus={(e) => e.currentTarget.select()}
+          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono text-slate-700 bg-slate-50"
+        />
+      ) : null}
     </div>
   );
 }

@@ -89,6 +89,17 @@ function versionGte(version: string | null, min: string): boolean {
   return true;
 }
 
+/** 当前浏览器（用于安装/mailto 指引文案）。Edge UA 含 Edg/，需优先于 Chrome 判断。 */
+export type BridgeBrowser = "chrome" | "edge" | "other";
+
+export function detectBridgeBrowser(): BridgeBrowser {
+  if (typeof navigator === "undefined") return "other";
+  const ua = navigator.userAgent;
+  if (/Edg\//.test(ua)) return "edge";
+  if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) return "chrome";
+  return "other";
+}
+
 /** 检测浏览器助手扩展是否已安装（1.5s 超时视为未安装）。 */
 export async function isBridgeAvailable(): Promise<boolean> {
   const s = await getBridgeStatus();

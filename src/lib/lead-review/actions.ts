@@ -102,11 +102,20 @@ export async function runLeadReviewPrepAction(meetingId: string) {
   await requireUser();
   try {
     await generateMeetingPrepBriefs(meetingId);
+    const { ensureLeadReviewPreviewToken } = await import("./preview-token");
+    await ensureLeadReviewPreviewToken(meetingId);
     revalidateMeeting(meetingId);
     return { ok: true as const };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+export async function getLeadReviewPreviewPathAction(meetingId: string) {
+  await requireUser();
+  const { ensureLeadReviewPreviewToken } = await import("./preview-token");
+  const token = await ensureLeadReviewPreviewToken(meetingId);
+  return { ok: true as const, path: `/lead-reviews/preview/${token}` };
 }
 
 export async function startLeadReviewMeetingAction(meetingId: string) {

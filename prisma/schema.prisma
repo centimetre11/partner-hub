@@ -437,6 +437,8 @@ model Opportunity {
   winFactor       String?
   lossReason      String?
   notes      String?
+  // 帆软 CRM 商机 ID（opp_id），从 CRM MCP 导入时写入
+  crmOpportunityId String?
   // 赢单后转化生成的合作项目（一对一）
   project    Project?  @relation("OpportunityProject")
   contracts  Contract[]
@@ -446,6 +448,7 @@ model Opportunity {
 
   @@index([customerId])
   @@index([partnerId])
+  @@index([crmOpportunityId])
 }
 
 // 已合作项目：机会赢单后转化生成的交付/合作项目（以客户为主体）
@@ -472,6 +475,9 @@ model Project {
   ownerId             String?
   owner               User?        @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   notes               String?
+  // 帆软 CRM 项目主键（key_id）/ 业务编号（prj_number）
+  crmProjectId        String?
+  crmPrjNumber        String?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
   todos               TodoItem[]
@@ -481,6 +487,8 @@ model Project {
 
   @@index([customerId])
   @@index([partnerId])
+  @@index([crmProjectId])
+  @@index([crmPrjNumber])
 }
 
 // 合同：客户已签约的商务合同（订阅 / 买断+产品维保 / 项目合同+项目维保）
