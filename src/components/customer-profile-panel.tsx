@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, Badge } from "@/components/ui";
+import { Card, Badge, TierBadge, tierSelectValue } from "@/components/ui";
 import { AiAddButton } from "@/components/ai-add-button";
 import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
 import { TaxonomySelectField } from "@/components/taxonomy-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { profileEnrichSeedMessage } from "@/lib/intake-profile-enrich";
 import { useMessages, useLabels, useLocale } from "@/lib/i18n/context";
+import { formatTierLabel, resolveCustomerTier } from "@/lib/tier";
 
 type Option = { id: string; name: string; role?: string };
 
@@ -19,7 +20,6 @@ type SegmentOptions = {
   customerSegment: TaxonomyOptionRow[];
   buyingTrigger: TaxonomyOptionRow[];
   entryPath: TaxonomyOptionRow[];
-  icpTier: TaxonomyOptionRow[];
 };
 
 type CustomerProfile = {
@@ -30,6 +30,7 @@ type CustomerProfile = {
   customerSegment: string | null;
   buyingTrigger: string | null;
   entryPath: string | null;
+  tier: string | null;
   icpTier: string | null;
   scale: string | null;
   city: string | null;
@@ -46,11 +47,6 @@ type CustomerProfile = {
 
 const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
 
-function icpTone(tier: string | null | undefined): "green" | "amber" | "zinc" {
-  if (tier === "PRIMARY") return "green";
-  if (tier === "NURTURE") return "amber";
-  return "zinc";
-}
 
 export function CustomerProfilePanel({
   customer,
@@ -77,6 +73,8 @@ export function CustomerProfilePanel({
 
   const boundIds = new Set(customer.boundPartners.map((bp) => bp.id));
   const availablePartners = partners.filter((p) => !boundIds.has(p.id));
+  const resolvedTier = resolveCustomerTier(customer);
+  const pe = m.profileEditor;
 
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? c.statusActive : s === "PROSPECT" ? c.statusProspect : c.statusInactive;
@@ -90,7 +88,7 @@ export function CustomerProfilePanel({
     [c.salesOwnerLabel, customer.owner?.name ?? null],
     [c.presalesOwnerLabel, customer.presalesUser?.name ?? null],
     [c.customerSegmentLabel, mapLabel(labels.customerSegmentLabels, customer.customerSegment)],
-    [c.icpTierLabel, mapLabel(labels.icpTierLabels, customer.icpTier)],
+    [m.common.tier, resolvedTier ? formatTierLabel(resolvedTier) : null],
     [c.buyingTriggerLabel, mapLabel(labels.buyingTriggerLabels, customer.buyingTrigger)],
     [c.entryPathLabel, mapLabel(labels.entryPathLabels, customer.entryPath)],
     [c.industryLabel, customer.industry],
@@ -109,9 +107,7 @@ export function CustomerProfilePanel({
             {customer.customerSegment && (
               <Badge tone="blue">{mapLabel(labels.customerSegmentLabels, customer.customerSegment)}</Badge>
             )}
-            {customer.icpTier && (
-              <Badge tone={icpTone(customer.icpTier)}>{mapLabel(labels.icpTierLabels, customer.icpTier)}</Badge>
-            )}
+            <TierBadge tier={resolvedTier} />
           </div>
           <div className="flex items-center justify-end gap-2 shrink-0">
             <AiAddButton
@@ -272,12 +268,15 @@ export function CustomerProfilePanel({
                     value={customer.customerSegment ?? ""}
                     options={segmentOptions.customerSegment}
                   />
-                  <TaxonomySelectField
-                    dimension="ICP_TIER"
-                    name="icpTier"
-                    value={customer.icpTier ?? ""}
-                    options={segmentOptions.icpTier}
-                  />
+                  <label className="text-sm">
+                    <span className="text-xs text-slate-500">{m.common.tier}</span>
+                    <select name="tier" defaultValue={tierSelectValue(resolvedTier)} className={input}>
+                      <option value="">{pe.notTiered}</option>
+                      <option value="A">{pe.tierA}</option>
+                      <option value="B">{pe.tierB}</option>
+                      <option value="C">{pe.tierC}</option>
+                    </select>
+                  </label>
                   <TaxonomySelectField
                     dimension="BUYING_TRIGGER"
                     name="buyingTrigger"

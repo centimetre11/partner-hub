@@ -7,6 +7,7 @@ import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { TaxonomySelectField } from "@/components/taxonomy-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { useMessages } from "@/lib/i18n/context";
+import { PARTNER_TIERS } from "@/lib/tier";
 
 type Option = { id: string; name: string; role?: string };
 
@@ -38,12 +39,12 @@ export function AddCustomerForm({
     customerSegment: TaxonomyOptionRow[];
     buyingTrigger: TaxonomyOptionRow[];
     entryPath: TaxonomyOptionRow[];
-    icpTier: TaxonomyOptionRow[];
   };
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const messages = useMessages();
   const c = messages.customers;
+  const pe = messages.profileEditor;
   const p = messages.pool;
   const cancelLabel = messages.common.cancel;
   const input = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
@@ -85,7 +86,17 @@ export function AddCustomerForm({
               {segmentOptions && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <TaxonomySelectField dimension="CUSTOMER_SEGMENT" name="customerSegment" value="" options={segmentOptions.customerSegment} />
-                  <TaxonomySelectField dimension="ICP_TIER" name="icpTier" value="" options={segmentOptions.icpTier} />
+                  <label className="text-sm">
+                    <span className="text-xs text-slate-500">{messages.common.tier}</span>
+                    <select name="tier" defaultValue="" className={input}>
+                      <option value="">{pe.notTiered}</option>
+                      {PARTNER_TIERS.map((t) => (
+                        <option key={t} value={t}>
+                          {t === "A" ? pe.tierA : t === "B" ? pe.tierB : pe.tierC}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               )}
               <input name="website" placeholder={c.websitePlaceholder} className={input} />

@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { Badge, fmtDate } from "@/components/ui";
+import { Badge, fmtDate, TierBadge } from "@/components/ui";
 import { BackButton } from "@/components/back-button";
 import { EntityNameEditor } from "@/components/entity-name-editor";
 import { getServerI18n } from "@/lib/server-i18n";
 import { buildCrmCustomerViewUrl } from "@/lib/crm";
 import { deleteCustomerAction, updateCustomerAction } from "@/lib/customer-actions";
+import { resolveCustomerTier } from "@/lib/tier";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -28,6 +29,8 @@ export async function CustomerDetailHeader({ id }: { id: string }) {
         createdAt: true,
         crmCustomerId: true,
         partnerRelation: true,
+        tier: true,
+        icpTier: true,
         createdBy: { select: { name: true } },
         partnerLinks: { include: { partner: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
       },
@@ -36,6 +39,7 @@ export async function CustomerDetailHeader({ id }: { id: string }) {
   if (!customer) notFound();
 
   const c = m.customers;
+  const resolvedTier = resolveCustomerTier(customer);
   const statusLabel = (s: string) =>
     s === "ACTIVE" ? c.statusActive : s === "PROSPECT" ? c.statusProspect : c.statusInactive;
 
@@ -48,6 +52,7 @@ export async function CustomerDetailHeader({ id }: { id: string }) {
             <div className="flex items-center gap-2 flex-wrap">
               <EntityNameEditor entityId={customer.id} name={customer.name} updateAction={updateCustomerAction} />
               <Badge tone={statusTone(customer.status)}>{statusLabel(customer.status)}</Badge>
+              <TierBadge tier={resolvedTier} />
               {customer.partnerRelation === "SELF" ? (
                 <Badge tone="indigo">{c.selfBadge}</Badge>
               ) : (

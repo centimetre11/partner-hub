@@ -433,6 +433,7 @@ export default async function PartnersPage({
               desc: s.desc,
             }))}
             filterStage={filterStage}
+            filterTier={sp.tier ?? null}
             copy={{
               emptyColumn: m.partners.kanbanEmptyColumn,
               dragHint: m.partners.kanbanDragHint,
@@ -440,6 +441,8 @@ export default async function PartnersPage({
               openTodosCount: m.partners.openTodosCount,
               noOpenTodos: m.partners.noOpenTodos,
               noActiveDeal: m.partners.noActiveDeal,
+              tierCFoldLabel: m.common.tierCFoldLabel,
+              tierCFoldHint: m.common.tierCFoldHint,
             }}
           />
         )}

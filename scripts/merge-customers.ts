@@ -197,6 +197,7 @@ async function main() {
       "buyingTrigger",
       "entryPath",
       "icpTier",
+      "tier",
       "ownerId",
       "presalesUserId",
       "partnerId",

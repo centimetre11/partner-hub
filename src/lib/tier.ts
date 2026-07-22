@@ -54,6 +54,23 @@ export function resolvePartnerTier(partner: {
   );
 }
 
+/** 旧客户 ICP 优先级 → Tier（PRIMARY=重点对待）。 */
+export function tierFromLegacyIcp(icpTier: string | null | undefined): PartnerTier | null {
+  const u = icpTier?.trim().toUpperCase();
+  if (u === "PRIMARY") return "A";
+  if (u === "NURTURE") return "B";
+  if (u === "WATCH") return "C";
+  return null;
+}
+
+/** 客户 Tier：优先新字段，回退旧 icpTier。 */
+export function resolveCustomerTier(customer: {
+  tier?: string | null;
+  icpTier?: string | null;
+}): PartnerTier | null {
+  return normalizePartnerTier(customer.tier) ?? tierFromLegacyIcp(customer.icpTier);
+}
+
 export function formatTierLabel(tier: PartnerTier | string): string {
   const normalized = normalizePartnerTier(tier);
   return normalized ? `Tier ${normalized}` : "";

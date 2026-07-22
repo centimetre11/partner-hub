@@ -62,9 +62,9 @@ import {
   type TodoProposal,
 } from "./proposals";
 import { CUSTOMER_FIELD_LABELS, PARTNER_FIELD_LABELS, SOLUTION_STATUS_LABELS } from "./constants";
+import { normalizePartnerTier, partnerFieldValueFromText, tierFromLegacyIcp } from "./tier";
 
 import { ACTIVE_PARTNER_DEFAULTS } from "./partner-onboarding";
-import { partnerFieldValueFromText } from "./tier";
 import {
   finalizeFastIntakeTurn,
   heuristicFastIntakeTurn,
@@ -846,13 +846,12 @@ async function runIntakeTurnCore(opts: {
   const fast = isFastIntakeScope(opts.scope);
   let taxonomyHint = "";
   if (!fast && customerScope) {
-    const [segmentList, triggerList, entryList, icpList] = await Promise.all([
+    const [segmentList, triggerList, entryList] = await Promise.all([
       taxonomyListForAi("CUSTOMER_SEGMENT"),
       taxonomyListForAi("BUYING_TRIGGER"),
       taxonomyListForAi("ENTRY_PATH"),
-      taxonomyListForAi("ICP_TIER"),
     ]);
-    taxonomyHint = `Customer taxonomy codes (use codes only): customerSegment=${segmentList}; buyingTrigger=${triggerList}; entryPath=${entryList}; icpTier=${icpList}`;
+    taxonomyHint = `Customer taxonomy codes (use codes only): customerSegment=${segmentList}; buyingTrigger=${triggerList}; entryPath=${entryList}. Customer tier (investment focus, same as partner): A | B | C`;
   } else if (!fast) {
     const [categoryList, industryList, archetypeList, valuePatternList] = await Promise.all([
       taxonomyListForAi("CATEGORY"),
@@ -1306,6 +1305,14 @@ function customerWritableFromData(data: Record<string, unknown>): Record<string,
   for (const key of Object.keys(CUSTOMER_FIELD_LABELS)) {
     if (key === "name") continue;
     if (data[key] !== undefined) out[key] = data[key];
+  }
+  // 兼容旧提案字段 icpTier → tier
+  if (out.tier == null && data.icpTier !== undefined) {
+    const fromIcp = tierFromLegacyIcp(asTrimmedString(data.icpTier));
+    const fromRaw = normalizePartnerTier(asTrimmedString(data.icpTier));
+    out.tier = fromIcp ?? fromRaw ?? null;
+  } else if (out.tier != null) {
+    out.tier = normalizePartnerTier(asTrimmedString(out.tier)) ?? null;
   }
   for (const key of CUSTOMER_INTAKE_EXTRA_FIELDS) {
     if (data[key] !== undefined) out[key] = data[key];

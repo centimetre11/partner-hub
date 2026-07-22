@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "./db";
 import { requireUser } from "./session";
 import { recordSystemEvent } from "./activity-log";
+import { normalizePartnerTier } from "./tier";
 
 const CUSTOMER_STATUSES = ["ACTIVE", "PROSPECT", "INACTIVE"] as const;
 
@@ -19,12 +20,13 @@ function str(formData: FormData, key: string): string | null {
 }
 
 function readCustomerFields(formData: FormData) {
+  const tierRaw = str(formData, "tier");
   return {
     industry: str(formData, "industry"),
     customerSegment: str(formData, "customerSegment"),
     buyingTrigger: str(formData, "buyingTrigger"),
     entryPath: str(formData, "entryPath"),
-    icpTier: str(formData, "icpTier"),
+    tier: tierRaw ? normalizePartnerTier(tierRaw) : null,
     city: str(formData, "city"),
     country: str(formData, "country"),
     website: str(formData, "website"),
@@ -108,12 +110,16 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
     data.status = normalizeStatus(formData.get("status") as string | null);
   }
   for (const key of [
-    "industry", "customerSegment", "buyingTrigger", "entryPath", "icpTier",
+    "industry", "customerSegment", "buyingTrigger", "entryPath",
     "city", "country", "website", "scale",
     "contactName", "contactTitle", "contactPhone", "contactEmail",
     "notes", "ownerId", "presalesUserId",
   ] as const) {
     if (formData.has(key)) data[key] = str(formData, key);
+  }
+  if (formData.has("tier")) {
+    const tierRaw = str(formData, "tier");
+    data.tier = tierRaw ? normalizePartnerTier(tierRaw) : null;
   }
   if (!Object.keys(data).length) return { ok: true as const };
 

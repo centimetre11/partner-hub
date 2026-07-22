@@ -70,7 +70,7 @@ export default async function SegmentsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Stat label={s.statTotalCustomers} value={summary.totalEndCustomers} />
           <Stat label={s.statTaggedRate} value={`${summary.taggedRate}%`} tone="text-sky-600" />
-          <Stat label={s.statPrimaryIcp} value={summary.primaryIcpCount} tone="text-emerald-600" />
+          <Stat label={s.statTierA} value={summary.tierACount} tone="text-emerald-600" />
           <Stat
             label={s.statOpenOpps}
             value={summary.segments.reduce((n, x) => n + x.openOpps, 0)}
@@ -122,16 +122,16 @@ export default async function SegmentsPage() {
         </Card>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          <Card title={s.icpTierTitle}>
+          <Card title={s.customerTierTitle}>
             <div className="flex flex-wrap gap-3">
-              {summary.icpTiers.map((t) => (
+              {summary.tiers.map((t) => (
                 <Link
                   key={t.code}
-                  href={`/customers?icpTier=${t.code}`}
+                  href={`/customers?tier=${t.code}`}
                   className="flex-1 min-w-[100px] rounded-lg border border-slate-100 p-3 text-center hover:border-slate-300"
                 >
-                  <Badge tone={t.code === "PRIMARY" ? "green" : t.code === "NURTURE" ? "amber" : "zinc"}>
-                    {labelFromMap(labelMaps.ICP_TIER, t.code, t.label)}
+                  <Badge tone={t.code === "A" ? "green" : t.code === "B" ? "amber" : "blue"}>
+                    {t.label}
                   </Badge>
                   <div className="text-xl font-bold mt-1.5 tabular-nums">{t.count}</div>
                 </Link>

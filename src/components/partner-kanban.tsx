@@ -18,6 +18,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Badge, ScoreBar, TierBadge } from "@/components/ui";
 import { setPipelineStageAction } from "@/lib/actions";
 import { normalizePartnerTier } from "@/lib/tier";
+import { TierCFold, splitByTierFocus } from "@/components/tier-c-fold";
 
 export type KanbanPartnerCard = {
   id: string;
@@ -47,6 +48,8 @@ type Copy = {
   openTodosCount: string;
   noOpenTodos: string;
   noActiveDeal: string;
+  tierCFoldLabel: string;
+  tierCFoldHint: string;
 };
 
 function stageColumnId(stage: number) {
@@ -249,6 +252,7 @@ function KanbanColumn({
   cards,
   copy,
   highlight,
+  forceOpenTierC,
 }: {
   stage: number;
   name: string;
@@ -256,12 +260,15 @@ function KanbanColumn({
   cards: KanbanPartnerCard[];
   copy: Copy;
   highlight: boolean;
+  forceOpenTierC: boolean;
 }) {
   const id = stageColumnId(stage);
   const { setNodeRef, isOver } = useDroppable({
     id,
     data: { stage, type: "column" },
   });
+
+  const { primary, folded } = splitByTierFocus(cards, (c) => normalizePartnerTier(c.tier));
 
   return (
     <div
@@ -295,7 +302,22 @@ function KanbanColumn({
             {copy.emptyColumn}
           </div>
         ) : (
-          cards.map((card) => <PartnerKanbanCard key={card.id} card={card} copy={copy} />)
+          <>
+            {primary.map((card) => (
+              <PartnerKanbanCard key={card.id} card={card} copy={copy} />
+            ))}
+            <TierCFold
+              count={folded.length}
+              storageKey="partner-kanban-show-c"
+              forceOpen={forceOpenTierC}
+              label={copy.tierCFoldLabel.replace("{n}", String(folded.length))}
+              hint={copy.tierCFoldHint}
+            >
+              {folded.map((card) => (
+                <PartnerKanbanCard key={card.id} card={card} copy={copy} />
+              ))}
+            </TierCFold>
+          </>
         )}
       </div>
     </div>
@@ -307,17 +329,21 @@ export function PartnerKanbanBoard({
   stages,
   copy,
   filterStage,
+  filterTier,
 }: {
   initialCards: KanbanPartnerCard[];
   stages: KanbanStageMeta[];
   copy: Copy;
   /** When set (legacy ?stage=), show only that column */
   filterStage?: number | null;
+  /** URL ?tier= — C 时强制展开折叠区 */
+  filterTier?: string | null;
 }) {
   const router = useRouter();
   const [cards, setCards] = useState(initialCards);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overStage, setOverStage] = useState<number | null>(null);
+  const forceOpenTierC = String(filterTier ?? "").trim().toUpperCase() === "C";
 
   useEffect(() => {
     setCards(initialCards);
@@ -407,6 +433,7 @@ export function PartnerKanbanBoard({
               cards={byStage.get(s.stage) ?? []}
               copy={copy}
               highlight={overStage === s.stage}
+              forceOpenTierC={forceOpenTierC}
             />
           ))}
         </div>

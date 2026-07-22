@@ -22,7 +22,6 @@ const DIMS: TaxonomyDimension[] = [
   "CUSTOMER_SEGMENT",
   "BUYING_TRIGGER",
   "ENTRY_PATH",
-  "ICP_TIER",
   "WIN_FACTOR",
   "LOSS_REASON",
 ];

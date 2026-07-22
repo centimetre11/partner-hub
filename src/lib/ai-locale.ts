@@ -572,7 +572,7 @@ Identity: only emit a tier:"required" identity clarification when the company is
     intro:
       "The user wants to fill or update an existing END-CUSTOMER profile. The system injects the current archive below — combine it with tool research. Prefer filling blanks; do not overwrite accurate existing values.",
     guide:
-      "Start from [existing customer archive] fields (empty/null = blank). Research via tools, then emit FieldUpdates only for blanks or clear corrections (industry, scale, city, country, website, customerSegment, buyingTrigger, entryPath, icpTier, contacts). Use customer taxonomy codes from the library. Add new people to contacts. Ask clarifications when unsure instead of guessing over good data.",
+      "Start from [existing customer archive] fields (empty/null = blank). Research via tools, then emit FieldUpdates only for blanks or clear corrections (industry, scale, city, country, website, customerSegment, buyingTrigger, entryPath, tier, contacts). Use customer taxonomy codes from the library for segments/triggers/paths; tier must be A, B, or C (investment focus, same as partner Tier). Add new people to contacts. Ask clarifications when unsure instead of guessing over good data.",
   },
 };
 

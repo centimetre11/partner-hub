@@ -163,10 +163,13 @@ model Customer {
   // ACTIVE 合作中 / PROSPECT 潜在 / INACTIVE 已停止
   status       String   @default("ACTIVE")
   industry     String?  // 行业（自由文本）
-  // 细分客群 taxonomy codes — CUSTOMER_SEGMENT / BUYING_TRIGGER / ENTRY_PATH / ICP_TIER
+  // 细分客群 taxonomy codes — CUSTOMER_SEGMENT / BUYING_TRIGGER / ENTRY_PATH
   customerSegment String?
   buyingTrigger   String?
   entryPath       String?
+  // 投资强度：A / B / C（与伙伴 Tier 同语义：要不要重点对待）
+  tier            String?
+  // 遗留：旧 ICP 优先级 PRIMARY/NURTURE/WATCH，已迁移到 tier
   icpTier         String?
   city         String?
   country      String?
@@ -226,6 +229,7 @@ model Customer {
   @@index([name])
   @@index([status])
   @@index([customerSegment])
+  @@index([tier])
   @@index([icpTier])
 }
 

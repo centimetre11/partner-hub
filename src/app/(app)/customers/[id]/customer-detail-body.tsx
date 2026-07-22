@@ -129,7 +129,6 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         "LOSS_REASON",
         "BUYING_TRIGGER",
         "ENTRY_PATH",
-        "ICP_TIER",
       ]),
       db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
       db.customer.findMany({
@@ -158,7 +157,6 @@ export async function CustomerDetailBody({ id }: { id: string }) {
   const lossReasonOptions = taxonomyByDim.LOSS_REASON ?? [];
   const buyingTriggerOptions = taxonomyByDim.BUYING_TRIGGER ?? [];
   const entryPathOptions = taxonomyByDim.ENTRY_PATH ?? [];
-  const icpTierOptions = taxonomyByDim.ICP_TIER ?? [];
 
   const oppStatusOptions = OPPORTUNITY_STATUS_CODES.map((code) => ({
     value: code,
@@ -191,6 +189,7 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         customerSegment: customer.customerSegment,
         buyingTrigger: customer.buyingTrigger,
         entryPath: customer.entryPath,
+        tier: customer.tier,
         icpTier: customer.icpTier,
         scale: customer.scale,
         city: customer.city,
@@ -210,7 +209,6 @@ export async function CustomerDetailBody({ id }: { id: string }) {
         customerSegment: segmentOptions,
         buyingTrigger: buyingTriggerOptions,
         entryPath: entryPathOptions,
-        icpTier: icpTierOptions,
       }}
     />
   );

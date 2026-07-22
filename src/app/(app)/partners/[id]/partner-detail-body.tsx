@@ -186,7 +186,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       "CUSTOMER_SEGMENT",
       "BUYING_TRIGGER",
       "ENTRY_PATH",
-      "ICP_TIER",
       "WIN_FACTOR",
       "LOSS_REASON",
     ]),
@@ -245,7 +244,6 @@ export async function PartnerDetailBody({ id }: { id: string }) {
   const taxonomyCustomerSegment = taxonomyByDim.CUSTOMER_SEGMENT ?? [];
   const taxonomyBuyingTrigger = taxonomyByDim.BUYING_TRIGGER ?? [];
   const taxonomyEntryPath = taxonomyByDim.ENTRY_PATH ?? [];
-  const taxonomyIcpTier = taxonomyByDim.ICP_TIER ?? [];
   const taxonomyWinFactor = taxonomyByDim.WIN_FACTOR ?? [];
   const taxonomyLossReason = taxonomyByDim.LOSS_REASON ?? [];
 
@@ -287,7 +285,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     CUSTOMER_SEGMENT: taxonomyCustomerSegment,
     BUYING_TRIGGER: taxonomyBuyingTrigger,
     ENTRY_PATH: taxonomyEntryPath,
-    ICP_TIER: taxonomyIcpTier,
+    ICP_TIER: [],
     WIN_FACTOR: taxonomyWinFactor,
     LOSS_REASON: taxonomyLossReason,
   };

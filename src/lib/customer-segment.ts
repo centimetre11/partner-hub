@@ -5,12 +5,12 @@ import { END_CUSTOMER_WHERE } from "./customer-filters";
 import { OPEN_OPPORTUNITY_STATUSES } from "./opportunity-status";
 import type { TaxonomyDimension } from "./taxonomy";
 import { labelsEn } from "./i18n/labels";
+import { PARTNER_TIERS, resolveCustomerTier, type PartnerTier } from "./tier";
 
 export const CUSTOMER_SEGMENT_DIMS = [
   "CUSTOMER_SEGMENT",
   "BUYING_TRIGGER",
   "ENTRY_PATH",
-  "ICP_TIER",
 ] as const satisfies readonly TaxonomyDimension[];
 
 /** Map partner category → default customer entry path */
@@ -72,8 +72,13 @@ export type SegmentInsightSummary = {
   totalEndCustomers: number;
   taggedCustomers: number;
   taggedRate: number;
+  /** Tier A 客户数（重点对待） */
+  tierACount: number;
+  /** @deprecated 使用 tierACount */
   primaryIcpCount: number;
   segments: SegmentInsightRow[];
+  tiers: { code: PartnerTier; label: string; count: number }[];
+  /** @deprecated 使用 tiers */
   icpTiers: { code: string; label: string; count: number }[];
   winFactors: { code: string; label: string; count: number }[];
   lossReasons: { code: string; label: string; count: number }[];
@@ -81,10 +86,6 @@ export type SegmentInsightSummary = {
 
 function segmentLabel(code: string): string {
   return labelsEn.customerSegmentLabels[code] ?? code;
-}
-
-function icpLabel(code: string): string {
-  return labelsEn.icpTierLabels[code] ?? code;
 }
 
 function winLabel(code: string): string {
@@ -103,6 +104,7 @@ export async function loadSegmentInsightSummary(): Promise<SegmentInsightSummary
         id: true,
         status: true,
         customerSegment: true,
+        tier: true,
         icpTier: true,
         buyingTrigger: true,
         entryPath: true,
@@ -129,9 +131,10 @@ export async function loadSegmentInsightSummary(): Promise<SegmentInsightSummary
 
   const totalEndCustomers = customers.length;
   const taggedCount = customers.filter(
-    (c) => !!c.customerSegment || !!c.icpTier || !!c.buyingTrigger || !!c.entryPath,
+    (c) => !!c.customerSegment || !!resolveCustomerTier(c) || !!c.buyingTrigger || !!c.entryPath,
   ).length;
-  const primaryIcpCount = customers.filter((c) => c.icpTier === "PRIMARY").length;
+  const resolvedTiers = customers.map((c) => resolveCustomerTier(c));
+  const tierACount = resolvedTiers.filter((t) => t === "A").length;
 
   const segmentCodes = Object.keys(labelsEn.customerSegmentLabels);
   const partnerCoverageBySegment = new Map<string, Set<string>>();
@@ -180,10 +183,10 @@ export async function loadSegmentInsightSummary(): Promise<SegmentInsightSummary
       b.openOpps + b.won + b.active + b.prospects - (a.openOpps + a.won + a.active + a.prospects),
   );
 
-  const icpTiers = Object.keys(labelsEn.icpTierLabels).map((code) => ({
+  const tiers = PARTNER_TIERS.map((code) => ({
     code,
-    label: icpLabel(code),
-    count: customers.filter((c) => c.icpTier === code).length,
+    label: `Tier ${code}`,
+    count: resolvedTiers.filter((t) => t === code).length,
   }));
 
   const winFactors = Object.keys(labelsEn.winFactorLabels)
@@ -208,9 +211,11 @@ export async function loadSegmentInsightSummary(): Promise<SegmentInsightSummary
     totalEndCustomers,
     taggedCustomers: taggedCount,
     taggedRate: totalEndCustomers ? Math.round((taggedCount / totalEndCustomers) * 100) : 0,
-    primaryIcpCount,
+    tierACount,
+    primaryIcpCount: tierACount,
     segments,
-    icpTiers,
+    tiers,
+    icpTiers: tiers,
     winFactors,
     lossReasons,
   };

@@ -1,7 +1,7 @@
 import { ClickableCard } from "@/components/clickable-nav";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
-import { Badge, PageHeader, EmptyState, fmtDate, ScoreBar } from "@/components/ui";
+import { Badge, PageHeader, EmptyState, fmtDate, ScoreBar, TierBadge } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddCustomerForm } from "./add-customer-form";
 import { CreateFromCrmButton } from "@/components/create-from-crm-button";
@@ -12,6 +12,8 @@ import { getTaxonomyOptionsMany, loadTaxonomyLabelMaps, labelFromMap } from "@/l
 import { classifyCustomers, type CustomerBucketMeta, type GrowthProbability } from "@/lib/customer-bucket";
 import { toArrContractInput } from "@/lib/arr";
 import { OPEN_OPPORTUNITY_STATUSES, opportunityStatusLabel } from "@/lib/opportunity-status";
+import { PARTNER_TIERS, resolveCustomerTier } from "@/lib/tier";
+import { TierCFold, splitByTierFocus } from "@/components/tier-c-fold";
 import type { ReactNode } from "react";
 
 function statusTone(status: string): "green" | "blue" | "zinc" {
@@ -51,6 +53,14 @@ function headerBadge(tone: "green" | "amber" | "blue") {
   if (tone === "green") return "bg-emerald-700 text-white";
   if (tone === "amber") return "bg-amber-600 text-white";
   return "bg-sky-700 text-white";
+}
+
+function customerTierRank(cust: { tier?: string | null; icpTier?: string | null }): number {
+  const t = resolveCustomerTier(cust);
+  if (t === "A") return 0;
+  if (t === "B") return 1;
+  if (t === "C") return 2;
+  return 3;
 }
 
 function CustomerBucketColumn({
@@ -116,7 +126,7 @@ type CustomerBucketSearchParams = {
   unbound?: string;
   add?: string;
   segment?: string;
-  icpTier?: string;
+  tier?: string;
 };
 
 export default async function CustomersPage({
@@ -127,15 +137,26 @@ export default async function CustomersPage({
   await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
   const c = m.customers;
+  const pe = m.profileEditor;
   const sp = await searchParams;
   const nameFilter = nameContainsWhere(sp.q);
+  const tierFilter = sp.tier?.trim().toUpperCase();
+  const legacyIcp =
+    tierFilter === "A" ? "PRIMARY" : tierFilter === "B" ? "NURTURE" : tierFilter === "C" ? "WATCH" : null;
 
   const listWhere = {
     ...END_CUSTOMER_WHERE,
     ...(nameFilter ? { name: nameFilter } : {}),
     ...(sp.status ? { status: sp.status } : {}),
     ...(sp.segment ? { customerSegment: sp.segment } : {}),
-    ...(sp.icpTier ? { icpTier: sp.icpTier } : {}),
+    ...(tierFilter && PARTNER_TIERS.includes(tierFilter as (typeof PARTNER_TIERS)[number])
+      ? {
+          OR: [
+            { tier: tierFilter },
+            ...(legacyIcp ? [{ tier: null, icpTier: legacyIcp }] : []),
+          ],
+        }
+      : {}),
     ...(sp.owner ? { ownerId: sp.owner } : {}),
     ...(sp.presales ? { presalesUserId: sp.presales } : {}),
     ...(sp.unbound === "1"
@@ -181,12 +202,11 @@ export default async function CustomersPage({
     }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     db.user.findMany({ select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
-    getTaxonomyOptionsMany(["CUSTOMER_SEGMENT", "ICP_TIER", "BUYING_TRIGGER", "ENTRY_PATH"]),
+    getTaxonomyOptionsMany(["CUSTOMER_SEGMENT", "BUYING_TRIGGER", "ENTRY_PATH"]),
     loadTaxonomyLabelMaps(),
   ]);
 
   const segmentOptions = taxonomy.CUSTOMER_SEGMENT ?? [];
-  const icpTierOptions = taxonomy.ICP_TIER ?? [];
   const buyingTriggerOptions = taxonomy.BUYING_TRIGGER ?? [];
   const entryPathOptions = taxonomy.ENTRY_PATH ?? [];
 
@@ -257,7 +277,7 @@ export default async function CustomersPage({
     const segmentLabel = cust.customerSegment
       ? labelFromMap(labelMaps.CUSTOMER_SEGMENT, cust.customerSegment)
       : null;
-    const icpLabel = cust.icpTier ? labelFromMap(labelMaps.ICP_TIER, cust.icpTier) : null;
+    const resolvedTier = resolveCustomerTier(cust);
     const region = [cust.city, cust.country].filter(Boolean).join(" · ") || null;
     const partnerNames = cust.partnerLinks.map((l) => l.partner.name).join(", ") || null;
     const summaryBits = [
@@ -278,6 +298,7 @@ export default async function CustomersPage({
         <div className="flex items-start justify-between gap-2">
           <span className="font-semibold text-sm text-slate-900 min-w-0 break-words">{cust.name}</span>
           <div className="flex items-center gap-1 shrink-0">
+            <TierBadge tier={resolvedTier} />
             {meta.isArr && <Badge tone="purple">{c.arrCustomer}</Badge>}
             {meta.bucket === "base" && meta.hasOpenOpportunities && (
               <Badge tone="amber">{c.secondaryGrowth}</Badge>
@@ -325,7 +346,6 @@ export default async function CustomersPage({
                 customerSegment: segmentOptions,
                 buyingTrigger: buyingTriggerOptions,
                 entryPath: entryPathOptions,
-                icpTier: icpTierOptions,
               }}
             />
             <CreateFromCrmButton entity="customer" />
@@ -361,16 +381,14 @@ export default async function CustomersPage({
             ))}
           </select>
           <select
-            name="icpTier"
-            defaultValue={sp.icpTier ?? ""}
+            name="tier"
+            defaultValue={sp.tier ?? ""}
             className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
           >
-            <option value="">{c.allIcpTiers}</option>
-            {icpTierOptions.map((opt) => (
-              <option key={opt.code} value={opt.code}>
-                {opt.label}
-              </option>
-            ))}
+            <option value="">{c.allTiers}</option>
+            <option value="A">{pe.tierA}</option>
+            <option value="B">{pe.tierB}</option>
+            <option value="C">{pe.tierC}</option>
           </select>
           <select
             name="partner"
@@ -424,7 +442,13 @@ export default async function CustomersPage({
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-2 items-stretch">
             {columns.map((col) => {
-              const colItems = byBucket[col.key];
+              const colItems = [...byBucket[col.key]].sort(
+                (a, b) => customerTierRank(a.customer) - customerTierRank(b.customer),
+              );
+              const { primary, folded } = splitByTierFocus(colItems, (item) =>
+                resolveCustomerTier(item.customer),
+              );
+              const forceOpenTierC = String(sp.tier ?? "").trim().toUpperCase() === "C";
               return (
                 <CustomerBucketColumn
                   key={col.key}
@@ -435,9 +459,20 @@ export default async function CustomersPage({
                   tone={col.tone}
                   emptyText={c.empty}
                 >
-                  {colItems.map(({ customer: cust, meta }) => (
+                  {primary.map(({ customer: cust, meta }) => (
                     <CustomerCard key={cust.id} cust={cust} meta={meta} />
                   ))}
+                  <TierCFold
+                    count={folded.length}
+                    storageKey="customers-board-show-c"
+                    forceOpen={forceOpenTierC}
+                    label={m.common.tierCFoldLabel.replace("{n}", String(folded.length))}
+                    hint={m.common.tierCFoldHint}
+                  >
+                    {folded.map(({ customer: cust, meta }) => (
+                      <CustomerCard key={cust.id} cust={cust} meta={meta} />
+                    ))}
+                  </TierCFold>
                 </CustomerBucketColumn>
               );
             })}

@@ -136,7 +136,7 @@ export async function BoardOverview() {
           <p className="text-xs text-slate-500 mb-3">
             {b.segmentTaggedRate.replace("{rate}", String(segmentSummary.taggedRate))}
             {" · "}
-            {m.segments.statPrimaryIcp}: {segmentSummary.primaryIcpCount}
+            {m.segments.statTierA}: {segmentSummary.tierACount}
           </p>
           <div className="space-y-2">
             {segmentSummary.segments
