@@ -239,6 +239,63 @@ export default async function CustomersPage({
     );
   }
 
+  const visibleBuckets: CustomerBucketMeta["bucket"][] =
+    currentBucket === "all"
+      ? ["base", "growth", "opportunity"]
+      : currentBucket === "base"
+        ? ["base"]
+        : currentBucket === "opportunity"
+          ? ["opportunity"]
+          : [];
+
+  function CustomerBucketColumn({
+    index,
+    title,
+    count,
+    desc,
+    tone,
+    children,
+  }: {
+    index: number;
+    title: string;
+    count: number;
+    desc: string;
+    tone: "green" | "amber" | "blue";
+    children: React.ReactNode;
+  }) {
+    const toneClasses = {
+      green: "border-emerald-200/80 bg-emerald-50/40",
+      amber: "border-amber-200/80 bg-amber-50/40",
+      blue: "border-sky-200/80 bg-sky-50/40",
+    }[tone];
+    const badgeClasses = {
+      green: "bg-emerald-700 text-white",
+      amber: "bg-amber-600 text-white",
+      blue: "bg-sky-700 text-white",
+    }[tone];
+    return (
+      <div className={`flex flex-col min-w-[260px] w-[min(100%,320px)] sm:min-w-[280px] lg:min-w-0 lg:flex-1 rounded-xl border ${toneClasses} max-h-[calc(100vh-14rem)]`}>
+        <div className="px-3 pt-3 pb-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold ${badgeClasses}`}>
+              {index}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold text-slate-800 truncate">
+                {title}
+                <span className="ml-1.5 text-xs font-normal text-slate-500 tabular-nums">{count}</span>
+              </div>
+              <div className="text-[11px] text-slate-500 truncate" title={desc}>{desc}</div>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-2.5 pb-3 space-y-2 min-h-[4rem]">
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   const filterParams = {
     q: sp.q,
     status: sp.status,
@@ -348,31 +405,46 @@ export default async function CustomersPage({
         ) : (
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4 overflow-hidden">
             {currentBucket === "growth" ? (
-              growthProbabilityOrder.map((code) => {
-                const groupItems = pageItems.filter((item) => item.meta.growthProbability === code);
-                if (groupItems.length === 0) return null;
-                return (
-                  <div key={code} className="mb-5 last:mb-0">
-                    <div className="flex items-center gap-2 px-2 py-1.5 mb-2 bg-slate-50/80 rounded-md">
-                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white bg-slate-600">
-                        {code === "P80" ? "3" : code === "P50" ? "2" : "1"}
-                      </span>
-                      <span className="text-xs font-semibold text-slate-600">{growthGroupLabel(code)}</span>
-                      <span className="text-xs text-slate-400 tabular-nums">{groupItems.length}</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div className="flex gap-4 overflow-x-auto pb-2 items-stretch">
+                {growthProbabilityOrder.map((code) => {
+                  const groupItems = pageItems.filter((item) => item.meta.growthProbability === code);
+                  if (groupItems.length === 0) return null;
+                  return (
+                    <CustomerBucketColumn
+                      key={code}
+                      index={code === "P80" ? 3 : code === "P50" ? 2 : 1}
+                      title={growthGroupLabel(code)}
+                      count={groupItems.length}
+                      desc={c.growthProbabilityHint}
+                      tone={code === "P80" ? "green" : code === "P50" ? "amber" : "blue"}
+                    >
                       {groupItems.map(({ customer: cust, meta }) => (
                         <CustomerCard key={cust.id} cust={cust} meta={meta} />
                       ))}
-                    </div>
-                  </div>
-                );
-              })
+                    </CustomerBucketColumn>
+                  );
+                })}
+              </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {pageItems.map(({ customer: cust, meta }) => (
-                  <CustomerCard key={cust.id} cust={cust} meta={meta} />
-                ))}
+              <div className="flex gap-4 overflow-x-auto pb-2 items-stretch">
+                {visibleBuckets.map((bucket) => {
+                  const bucketItems = pageItems.filter((item) => item.meta.bucket === bucket);
+                  if (bucketItems.length === 0) return null;
+                  return (
+                    <CustomerBucketColumn
+                      key={bucket}
+                      index={bucket === "base" ? 1 : bucket === "growth" ? 2 : 3}
+                      title={bucket === "base" ? c.bucketBase : bucket === "growth" ? c.bucketGrowth : c.bucketOpportunity}
+                      count={bucketItems.length}
+                      desc={bucket === "base" ? c.bucketBaseDesc : bucket === "growth" ? c.bucketGrowthDesc : c.bucketOpportunityDesc}
+                      tone={bucket === "base" ? "green" : bucket === "growth" ? "amber" : "blue"}
+                    >
+                      {bucketItems.map(({ customer: cust, meta }) => (
+                        <CustomerCard key={cust.id} cust={cust} meta={meta} />
+                      ))}
+                    </CustomerBucketColumn>
+                  );
+                })}
               </div>
             )}
             <ListPagination
