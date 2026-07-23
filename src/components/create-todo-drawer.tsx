@@ -177,8 +177,42 @@ export function CreateTodoDrawer({
                   />
                 </label>
 
-                {lockOwner && defaultOwnerRef ? (
-                  <input type="hidden" name="ownerRef" value={ownerRef || defaultOwnerRef} />
+                {lockOwner && (ownerRef || defaultOwnerRef) ? (
+                  <>
+                    <input type="hidden" name="ownerRef" value={ownerRef || defaultOwnerRef} />
+                    <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700 space-y-1">
+                      <div>
+                        <span className="text-slate-400">{m.todos.fieldRelated}：</span>
+                        {parsedOwner.customerId
+                          ? (customers.find((c) => c.id === parsedOwner.customerId)?.name ??
+                            parsedOwner.customerId)
+                          : parsedOwner.partnerId
+                            ? (partners.find((p) => p.id === parsedOwner.partnerId)?.name ??
+                              parsedOwner.partnerId)
+                            : "—"}
+                        {source === "ARR" ? (
+                          <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">
+                            ARR
+                          </span>
+                        ) : null}
+                      </div>
+                      {link ? (
+                        <div>
+                          <span className="text-slate-400">{m.todos.fieldLink}：</span>
+                          {linkLoading
+                            ? m.common.loading
+                            : link.startsWith("proj:")
+                              ? (linkOptions?.projects.find((p) => p.id === link.slice(5))?.name ??
+                                link.slice(5))
+                              : link.startsWith("opp:")
+                                ? (linkOptions?.opportunities.find((o) => o.id === link.slice(4))
+                                    ?.name ?? link.slice(4))
+                                : link}
+                        </div>
+                      ) : null}
+                    </div>
+                    {link ? <input type="hidden" name="link" value={link} /> : null}
+                  </>
                 ) : (
                   <label className="block min-w-0">
                     <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
@@ -211,18 +245,7 @@ export function CreateTodoDrawer({
                   </label>
                 )}
 
-                {lockOwner && customerId ? (
-                  <p className="text-[11px] text-slate-500">
-                    {customers.find((c) => c.id === customerId)?.name ?? customerId}
-                    {source === "ARR" ? (
-                      <span className="ml-1.5 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">
-                        ARR
-                      </span>
-                    ) : null}
-                  </p>
-                ) : null}
-
-                {customerId && (
+                {!lockOwner && customerId && (
                   <label className="block min-w-0">
                     <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldLink}</span>
                     {linkLoading ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   MeetingAgendaPanel,
@@ -38,6 +38,7 @@ import {
 } from "@/lib/presales-meeting/markers";
 import type { SplitProposal } from "@/lib/presales-meeting/split-types";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
+import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
 import { Badge } from "@/components/ui";
 import { useMessages } from "@/lib/i18n/context";
@@ -641,15 +642,12 @@ export function PresalesMeetingWorkspace({
 
                 {(phase === "prep" || phase === "live") && facts ? (
                   <div className="grid gap-3 md:grid-cols-3">
-                    <FactList
+                    <PrepTodosPanel
                       title={m.openTodos}
                       empty={m.noTodos}
-                      lines={facts.openTodos.map(
-                        (t) =>
-                          `${t.title}${t.assigneeName ? ` · ${t.assigneeName}` : ""}${
-                            t.dueDate ? ` · ${t.dueDate.slice(0, 10)}` : ""
-                          }`,
-                      )}
+                      todos={facts.openTodos}
+                      customerId={active.customerId}
+                      partnerId={active.partnerId}
                     />
                     <FactList
                       title={m.businessRecords}
@@ -671,12 +669,23 @@ export function PresalesMeetingWorkspace({
 
                 {phase === "live" || phase === "post" || phase === "prep" ? (
                   <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-xs font-medium text-emerald-900">{m.addTodo}</div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-emerald-900">{m.addTodo}</div>
+                      {activeTodoDefaults?.defaultOwnerRef ? (
+                        <p className="text-[11px] text-emerald-800/70 mt-0.5 truncate">
+                          {active.customerName || active.partnerName || "—"}
+                          {active.projectName
+                            ? ` / ${active.projectName}`
+                            : active.opportunityName
+                              ? ` / ${active.opportunityName}`
+                              : ""}
+                        </p>
+                      ) : null}
+                    </div>
                     {activeTodoDefaults ? (
                       <CreateTodoDrawer
-                        userId={
-                          active.userId || todoContext.currentUserId
-                        }
+                        key={`${active.id}-${activeTodoDefaults.defaultOwnerRef}-${activeTodoDefaults.defaultLink}`}
+                        userId={active.userId || todoContext.currentUserId}
                         users={todoContext.users}
                         partners={todoContext.partners}
                         customers={todoContext.customers}
@@ -858,6 +867,76 @@ function FactList({
               · {line}
             </li>
           ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PrepTodosPanel({
+  title,
+  empty,
+  todos,
+  customerId,
+  partnerId,
+}: {
+  title: string;
+  empty: string;
+  todos: PrepFacts["openTodos"];
+  customerId: string | null;
+  partnerId: string | null;
+}) {
+  const [doneMap, setDoneMap] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(todos.map((t) => [t.id, false])),
+  );
+
+  useEffect(() => {
+    setDoneMap(Object.fromEntries(todos.map((t) => [t.id, false])));
+  }, [todos.map((t) => t.id).join("|")]);
+
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-1.5">
+      <div className="text-[11px] font-medium text-slate-600">{title}</div>
+      {!todos.length ? (
+        <p className="text-[11px] text-slate-400">{empty}</p>
+      ) : (
+        <ul className="space-y-2">
+          {todos.slice(0, 12).map((t) => {
+            const done = doneMap[t.id] ?? false;
+            return (
+              <li key={t.id} className="flex items-start gap-2 text-sm">
+                <TodoCompleteButton
+                  todoId={t.id}
+                  title={t.title}
+                  status={done ? "DONE" : "OPEN"}
+                  customerId={customerId}
+                  partnerId={partnerId}
+                  size="sm"
+                  onStatusChange={(next) =>
+                    setDoneMap((prev) => ({ ...prev, [t.id]: next === "DONE" }))
+                  }
+                />
+                <div className="min-w-0 flex-1">
+                  <span
+                    className={
+                      done
+                        ? "text-[11px] text-slate-400 line-through decoration-slate-400"
+                        : "text-[11px] text-slate-800"
+                    }
+                  >
+                    {t.title}
+                  </span>
+                  {(t.assigneeName || t.dueDate) && !done ? (
+                    <span className="block text-[10px] text-slate-400 mt-0.5">
+                      {[t.assigneeName, t.dueDate ? t.dueDate.slice(0, 10) : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
