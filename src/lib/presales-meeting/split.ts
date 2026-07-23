@@ -11,8 +11,7 @@ export type { SplitProposal, SplitProposalItem } from "./split-types";
 
 async function summarizeSegment(opts: {
   label: string;
-  customerName: string;
-  projectName: string;
+  subjectTitle: string;
   segmentText: string;
   userId?: string;
 }): Promise<{
@@ -22,10 +21,11 @@ async function summarizeSegment(opts: {
   projectWorkLogContent: string;
   todos: { title: string; detail?: string; dueDate?: string | null }[];
 }> {
+  const titleBase = opts.subjectTitle || opts.label;
   if (!opts.segmentText.trim()) {
     return {
       coreNotes: "",
-      businessRecordTitle: `${opts.customerName} · ${opts.projectName} 售前项目讨论`,
+      businessRecordTitle: `${titleBase} 售前讨论`,
       businessRecordContent: "",
       projectWorkLogContent: "",
       todos: [],
@@ -39,13 +39,13 @@ async function summarizeSegment(opts: {
       projectWorkLog?: string;
       todos?: { title?: string; detail?: string; dueDate?: string | null }[];
     }>(
-      `你是售前项目助理。售前项目会议已按「同事+客户+项目」归属纪要。请提炼：
-1. progressSummary：本次讨论结论与客户侧进展（150-350字，适合写入客户商务记录；只写片段中有的内容）
-2. projectWorkLog：适合写入项目工作记录的实施/推进要点（可与 progressSummary 相近或更偏交付）
+      `你是售前项目助理。售前项目会议已按「同事 + 项目/商机/伙伴」归属纪要。请提炼：
+1. progressSummary：本次讨论结论与进展（150-350字，适合写入商务记录；只写片段中有的内容）
+2. projectWorkLog：若有项目交付内容则写工作记录要点，否则可与 progressSummary 相同或留空
 3. todos：明确后续待办数组 {title, detail?, dueDate?}，dueDate 用 YYYY-MM-DD 或 null
 
 只输出 JSON：{ progressSummary, projectWorkLog, todos }`,
-      `议程：${opts.label}\n客户：${opts.customerName}\n项目：${opts.projectName}\n\n讨论片段：\n${raw}`,
+      `议程：${opts.label}\n主体：${opts.subjectTitle}\n\n讨论片段：\n${raw}`,
       {
         feature: "presales_project_meeting_split",
         userId: opts.userId,
@@ -59,7 +59,7 @@ async function summarizeSegment(opts: {
     const projectWorkLog = String(ai.projectWorkLog ?? progressSummary).trim();
     return {
       coreNotes: progressSummary,
-      businessRecordTitle: `${opts.customerName} · ${opts.projectName} 售前项目讨论`,
+      businessRecordTitle: `${titleBase} 售前讨论`,
       businessRecordContent: progressSummary || raw.slice(0, 2000),
       projectWorkLogContent: projectWorkLog || progressSummary || raw.slice(0, 2000),
       todos: (ai.todos ?? [])
@@ -73,7 +73,7 @@ async function summarizeSegment(opts: {
   } catch {
     return {
       coreNotes: raw.slice(0, 400),
-      businessRecordTitle: `${opts.customerName} · ${opts.projectName} 售前项目讨论`,
+      businessRecordTitle: `${titleBase} 售前讨论`,
       businessRecordContent: raw.slice(0, 2000),
       projectWorkLogContent: raw.slice(0, 2000),
       todos: [],
@@ -99,6 +99,8 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
           user: { select: { id: true, name: true } },
           customer: { select: { id: true, name: true } },
           project: { select: { id: true, name: true } },
+          opportunity: { select: { id: true, name: true } },
+          partner: { select: { id: true, name: true } },
         },
       },
     },
@@ -109,8 +111,11 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
     itemId: it.id,
     label: itemDisplayLabel({
       userName: it.user.name,
-      customerName: it.customer.name,
-      projectName: it.project.name,
+      subjectKind: it.subjectKind,
+      customerName: it.customer?.name ?? null,
+      projectName: it.project?.name ?? null,
+      opportunityName: it.opportunity?.name ?? null,
+      partnerName: it.partner?.name ?? null,
     }),
   }));
 
@@ -149,10 +154,15 @@ export async function buildSplitProposal(meetingId: string, userId?: string): Pr
       const item = agendaItems[i]!;
       const label = agenda[i]!.label;
       const segmentText = mergeSegments(noteSegments, item.id);
+      const subjectTitle =
+        item.project?.name ||
+        item.opportunity?.name ||
+        item.partner?.name ||
+        item.customer?.name ||
+        label;
       const summary = await summarizeSegment({
         label,
-        customerName: item.customer.name,
-        projectName: item.project.name,
+        subjectTitle,
         segmentText,
         userId,
       });

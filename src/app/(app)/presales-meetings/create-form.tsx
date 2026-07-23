@@ -7,11 +7,17 @@ import {
   recommendPresalesAgendaAction,
 } from "@/lib/presales-meeting/actions";
 import type { RecommendedAgendaItem } from "@/lib/presales-meeting/types";
+import {
+  subjectKeyFor,
+  type AgendaSubjectInput,
+  type AgendaSubjectKind,
+} from "@/lib/presales-meeting/subject";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
 import {
   OwnedPortfolioPicker,
   type CustomerOpt,
+  type OpportunityOpt,
   type PartnerCustomerLink,
   type PartnerOpt,
   type ProjectOpt,
@@ -30,7 +36,7 @@ type PersonBlock = {
   userId: string;
   /** recommended item keys selected: projectId */
   selectedProjectIds: Set<string>;
-  /** owned quick-pick projectIds */
+  /** owned quick-pick subjectKeys: project:|opportunity:|partner: */
   ownedPicks: Set<string>;
   manual: ManualRow[];
 };
@@ -70,6 +76,7 @@ export function CreatePresalesMeetingForm({
   customers,
   projects,
   partners,
+  opportunities,
   partnerLinks,
   onOpenChange,
 }: {
@@ -77,6 +84,7 @@ export function CreatePresalesMeetingForm({
   customers: CustomerOpt[];
   projects: ProjectOpt[];
   partners: PartnerOpt[];
+  opportunities: OpportunityOpt[];
   partnerLinks: PartnerCustomerLink[];
   onOpenChange?: (open: boolean) => void;
 }) {
@@ -216,12 +224,13 @@ export function CreatePresalesMeetingForm({
     });
   }
 
-  function toggleOwnedPick(userId: string, projectId: string) {
+  function toggleOwnedPick(userId: string, kind: AgendaSubjectKind, id: string) {
+    const key = subjectKeyFor(kind, id);
     setBlocks((prev) => {
       const block = prev[userId] ?? emptyBlock(userId);
       const ownedPicks = new Set(block.ownedPicks);
-      if (ownedPicks.has(projectId)) ownedPicks.delete(projectId);
-      else ownedPicks.add(projectId);
+      if (ownedPicks.has(key)) ownedPicks.delete(key);
+      else ownedPicks.add(key);
       return { ...prev, [userId]: { ...block, ownedPicks } };
     });
   }
@@ -240,42 +249,58 @@ export function CreatePresalesMeetingForm({
     });
   }
 
-  function collectItems(): { userId: string; customerId: string; projectId: string }[] {
-    const out: { userId: string; customerId: string; projectId: string }[] = [];
+  function collectItems(): AgendaSubjectInput[] {
+    const out: AgendaSubjectInput[] = [];
     const seen = new Set<string>();
+    const push = (item: AgendaSubjectInput) => {
+      const id =
+        item.kind === "PROJECT"
+          ? item.projectId
+          : item.kind === "OPPORTUNITY"
+            ? item.opportunityId
+            : item.partnerId;
+      if (!id) return;
+      const key = `${item.userId}|${subjectKeyFor(item.kind, id)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(item);
+    };
+
     for (const userId of selectedPeople) {
       const block = blocks[userId];
       if (!block) continue;
       for (const rec of recommendedByUser.get(userId) ?? []) {
         if (!block.selectedProjectIds.has(rec.projectId)) continue;
-        const key = `${userId}|${rec.projectId}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({
+        push({
           userId,
+          kind: "PROJECT",
           customerId: rec.customerId,
           projectId: rec.projectId,
         });
       }
-      for (const projectId of block.ownedPicks) {
-        const p = projectById.get(projectId);
-        if (!p) continue;
-        const key = `${userId}|${projectId}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({
-          userId,
-          customerId: p.customerId,
-          projectId: p.id,
-        });
+      for (const subjectKey of block.ownedPicks) {
+        const [prefix, id] = subjectKey.split(":");
+        if (!id) continue;
+        if (prefix === "project") {
+          const p = projectById.get(id);
+          if (!p) continue;
+          push({
+            userId,
+            kind: "PROJECT",
+            customerId: p.customerId,
+            projectId: p.id,
+          });
+        } else if (prefix === "opportunity") {
+          push({ userId, kind: "OPPORTUNITY", opportunityId: id });
+        } else if (prefix === "partner") {
+          push({ userId, kind: "PARTNER", partnerId: id });
+        }
       }
       for (const row of block.manual) {
         if (!row.customerId || !row.projectId) continue;
-        const key = `${userId}|${row.projectId}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({
+        push({
           userId,
+          kind: "PROJECT",
           customerId: row.customerId,
           projectId: row.projectId,
         });
@@ -457,17 +482,21 @@ export function CreatePresalesMeetingForm({
                   customers={customers}
                   projects={projects}
                   partners={partners}
+                  opportunities={opportunities}
                   partnerLinks={partnerLinks}
-                  selectedProjectIds={block.ownedPicks}
-                  onToggleProject={(projectId) => toggleOwnedPick(userId, projectId)}
+                  selectedKeys={block.ownedPicks}
+                  onToggle={(kind, id) => toggleOwnedPick(userId, kind, id)}
                   labels={{
                     ownedSection: t.ownedSection,
                     ownedProjects: t.ownedProjects,
+                    ownedOpportunities: t.ownedOpportunities,
                     ownedCustomers: t.ownedCustomers,
                     ownedPartners: t.ownedPartners,
                     ownedEmpty: t.ownedEmpty,
                     noProjectsUnder: t.noProjectsUnder,
+                    noOpportunitiesUnder: t.noOpportunitiesUnder,
                     partnerCustomers: t.partnerCustomers,
+                    partnerAlways: t.partnerAlways,
                   }}
                 />
 

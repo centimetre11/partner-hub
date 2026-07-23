@@ -1,14 +1,26 @@
-import { parseConfirmedSnapshot, itemDisplayLabel, type ConfirmedItemSnapshot, type PrepFacts } from "./types";
+import {
+  parseConfirmedSnapshot,
+  itemDisplayLabel,
+  type ConfirmedItemSnapshot,
+  type PrepFacts,
+} from "./types";
+import type { AgendaSubjectKind } from "./subject";
 
 export type MeetingItemClient = {
   id: string;
   userId: string;
   userName: string;
-  customerId: string;
-  customerName: string;
-  projectId: string;
-  projectName: string;
+  subjectKind: AgendaSubjectKind;
+  subjectKey: string;
+  customerId: string | null;
+  customerName: string | null;
+  projectId: string | null;
+  projectName: string | null;
   projectPhase: string | null;
+  opportunityId: string | null;
+  opportunityName: string | null;
+  partnerId: string | null;
+  partnerName: string | null;
   label: string;
   sortOrder: number;
   status: string;
@@ -49,11 +61,15 @@ export type MeetingClient = {
   items: MeetingItemClient[];
 };
 
-export function toMeetingItemClient(it: {
+type ItemRow = {
   id: string;
   userId: string;
-  customerId: string;
-  projectId: string;
+  subjectKind?: string | null;
+  subjectKey?: string | null;
+  customerId: string | null;
+  projectId: string | null;
+  opportunityId?: string | null;
+  partnerId?: string | null;
   sortOrder: number;
   status: string;
   discussedAt: Date | null;
@@ -61,8 +77,10 @@ export function toMeetingItemClient(it: {
   coreNotes: string | null;
   confirmedSnapshot: string | null;
   user: { name: string };
-  customer: { name: string };
-  project: { name: string; phase?: string | null };
+  customer: { name: string } | null;
+  project: { name: string; phase?: string | null } | null;
+  opportunity?: { name: string } | null;
+  partner?: { name: string } | null;
   todoDrafts: {
     id: string;
     title: string;
@@ -70,21 +88,51 @@ export function toMeetingItemClient(it: {
     dueDate: Date | null;
     confirmed: boolean;
   }[];
-}): MeetingItemClient {
+};
+
+function resolveKind(it: ItemRow): AgendaSubjectKind {
+  if (it.subjectKind === "OPPORTUNITY" || it.subjectKind === "PARTNER" || it.subjectKind === "PROJECT") {
+    return it.subjectKind;
+  }
+  if (it.opportunityId && !it.projectId) return "OPPORTUNITY";
+  if (it.partnerId && !it.projectId && !it.opportunityId) return "PARTNER";
+  return "PROJECT";
+}
+
+function resolveSubjectKey(it: ItemRow, kind: AgendaSubjectKind): string {
+  if (it.subjectKey) return it.subjectKey;
+  if (kind === "OPPORTUNITY" && it.opportunityId) return `opportunity:${it.opportunityId}`;
+  if (kind === "PARTNER" && it.partnerId) return `partner:${it.partnerId}`;
+  if (it.projectId) return `project:${it.projectId}`;
+  return it.id;
+}
+
+export function toMeetingItemClient(it: ItemRow): MeetingItemClient {
+  const subjectKind = resolveKind(it);
+  const subjectKey = resolveSubjectKey(it, subjectKind);
   const label = itemDisplayLabel({
     userName: it.user.name,
-    customerName: it.customer.name,
-    projectName: it.project.name,
+    subjectKind,
+    customerName: it.customer?.name ?? null,
+    projectName: it.project?.name ?? null,
+    opportunityName: it.opportunity?.name ?? null,
+    partnerName: it.partner?.name ?? null,
   });
   return {
     id: it.id,
     userId: it.userId,
     userName: it.user.name,
+    subjectKind,
+    subjectKey,
     customerId: it.customerId,
-    customerName: it.customer.name,
+    customerName: it.customer?.name ?? null,
     projectId: it.projectId,
-    projectName: it.project.name,
-    projectPhase: it.project.phase ?? null,
+    projectName: it.project?.name ?? null,
+    projectPhase: it.project?.phase ?? null,
+    opportunityId: it.opportunityId ?? null,
+    opportunityName: it.opportunity?.name ?? null,
+    partnerId: it.partnerId ?? null,
+    partnerName: it.partner?.name ?? null,
     label,
     sortOrder: it.sortOrder,
     status: it.status,
@@ -122,15 +170,13 @@ export function toMeetingClient(m: {
   transcriptStatus: string | null;
   transcriptError: string | null;
   prepGeneratedAt: Date | null;
-  items: Parameters<typeof toMeetingItemClient>[0][];
+  items: ItemRow[];
 }): MeetingClient {
-  let attendees: string[] = [];
-  if (m.attendeeUserIds) {
-    try {
-      attendees = JSON.parse(m.attendeeUserIds) as string[];
-    } catch {
-      attendees = [];
-    }
+  let attendeeUserIds: string[] = [];
+  try {
+    attendeeUserIds = m.attendeeUserIds ? (JSON.parse(m.attendeeUserIds) as string[]) : [];
+  } catch {
+    attendeeUserIds = [];
   }
   return {
     id: m.id,
@@ -139,7 +185,7 @@ export function toMeetingClient(m: {
     scheduledAt: m.scheduledAt?.toISOString() ?? null,
     startedAt: m.startedAt?.toISOString() ?? null,
     endedAt: m.endedAt?.toISOString() ?? null,
-    attendeeUserIds: attendees,
+    attendeeUserIds,
     liveNotes: m.liveNotes,
     transcriptText: m.transcriptText,
     matchSource: m.matchSource,

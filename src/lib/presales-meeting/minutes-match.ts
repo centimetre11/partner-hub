@@ -174,16 +174,22 @@ export function toMatchAgendaItem(it: {
   markerInsertedAt: Date | null;
   discussedAt: Date | null;
   sortOrder: number;
+  subjectKind?: string | null;
   user: { name: string };
-  customer: { name: string };
-  project: { name: string };
+  customer: { name: string } | null;
+  project: { name: string } | null;
+  opportunity?: { name: string } | null;
+  partner?: { name: string } | null;
 }): MatchAgendaItem {
   return {
     id: it.id,
     label: itemDisplayLabel({
       userName: it.user.name,
-      customerName: it.customer.name,
-      projectName: it.project.name,
+      subjectKind: it.subjectKind,
+      customerName: it.customer?.name ?? null,
+      projectName: it.project?.name ?? null,
+      opportunityName: it.opportunity?.name ?? null,
+      partnerName: it.partner?.name ?? null,
     }),
     markerInsertedAt: it.markerInsertedAt,
     discussedAt: it.discussedAt,

@@ -7,6 +7,7 @@ import { ListPagination } from "@/components/list-pagination";
 import { CreatePresalesMeetingForm } from "./create-form";
 import type {
   CustomerOpt,
+  OpportunityOpt,
   PartnerCustomerLink,
   PartnerOpt,
   ProjectOpt,
@@ -22,7 +23,7 @@ type MeetingRow = {
   status: string;
   scheduledAt: string | null;
   createdByName: string;
-  items: { userName: string; customerName: string; projectName: string }[];
+  items: { userName: string; subject: string }[];
 };
 
 export function PresalesMeetingsClient({
@@ -35,6 +36,7 @@ export function PresalesMeetingsClient({
   customers,
   projects,
   partners,
+  opportunities,
   partnerLinks,
 }: {
   tab: "active" | "history";
@@ -46,6 +48,7 @@ export function PresalesMeetingsClient({
   customers: CustomerOpt[];
   projects: ProjectOpt[];
   partners: PartnerOpt[];
+  opportunities: OpportunityOpt[];
   partnerLinks: PartnerCustomerLink[];
 }) {
   const msgs = useMessages();
@@ -85,6 +88,7 @@ export function PresalesMeetingsClient({
           customers={customers}
           projects={projects}
           partners={partners}
+          opportunities={opportunities}
           partnerLinks={partnerLinks}
           onOpenChange={setCreating}
         />
@@ -131,10 +135,7 @@ export function PresalesMeetingsClient({
                         <p className="text-[11px] text-slate-400 line-clamp-2">
                           {meeting.items
                             .slice(0, 4)
-                            .map(
-                              (it) =>
-                                `${it.userName} · ${it.customerName} / ${it.projectName}`,
-                            )
+                            .map((it) => `${it.userName} · ${it.subject}`)
                             .join(" · ")}
                           {meeting.items.length > 4 ? "…" : ""}
                         </p>

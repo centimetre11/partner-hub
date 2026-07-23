@@ -4,7 +4,10 @@ import { requireUser } from "@/lib/session";
 import { PageHeader } from "@/components/ui";
 import { PresalesMeetingWorkspace } from "./meeting-workspace";
 import { toMeetingClient } from "@/lib/presales-meeting/meeting-client";
-import { loadPrepFacts } from "@/lib/presales-meeting/prep-facts";
+import {
+  backfillPresalesItemSubjects,
+  loadPrepFacts,
+} from "@/lib/presales-meeting/prep-facts";
 
 export default async function PresalesMeetingPage({
   params,
@@ -13,6 +16,8 @@ export default async function PresalesMeetingPage({
 }) {
   await requireUser();
   const { id } = await params;
+  await backfillPresalesItemSubjects(id);
+
   const meeting = await db.presalesProjectMeeting.findUnique({
     where: { id },
     include: {
@@ -22,6 +27,8 @@ export default async function PresalesMeetingPage({
           user: { select: { name: true } },
           customer: { select: { name: true } },
           project: { select: { name: true, phase: true } },
+          opportunity: { select: { name: true } },
+          partner: { select: { name: true } },
           todoDrafts: { orderBy: { sortOrder: "asc" } },
         },
       },
@@ -33,8 +40,11 @@ export default async function PresalesMeetingPage({
   const factsEntries = await Promise.all(
     meeting.items.map(async (it) => {
       const facts = await loadPrepFacts({
+        subjectKind: it.subjectKind,
         customerId: it.customerId,
         projectId: it.projectId,
+        opportunityId: it.opportunityId,
+        partnerId: it.partnerId,
       });
       return [it.id, facts] as const;
     }),

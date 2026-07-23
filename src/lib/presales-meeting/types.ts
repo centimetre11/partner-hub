@@ -77,10 +77,4 @@ export function parseConfirmedSnapshot(raw: string | null): ConfirmedItemSnapsho
   }
 }
 
-export function itemDisplayLabel(opts: {
-  userName: string;
-  customerName: string;
-  projectName: string;
-}): string {
-  return `${opts.userName} · ${opts.customerName} / ${opts.projectName}`;
-}
+export { itemDisplayLabel, type AgendaSubjectKind } from "./subject";

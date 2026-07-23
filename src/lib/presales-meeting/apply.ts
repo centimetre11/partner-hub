@@ -16,6 +16,8 @@ export async function applyPresalesMeetingConfirm(opts: {
         include: {
           customer: { select: { id: true, name: true } },
           project: { select: { id: true, name: true } },
+          opportunity: { select: { id: true, name: true } },
+          partner: { select: { id: true, name: true } },
           todoDrafts: true,
         },
       },
@@ -37,21 +39,29 @@ export async function applyPresalesMeetingConfirm(opts: {
 
     let wroteRecord = false;
     if (!payload.skipBusinessRecord && payload.businessRecordTitle.trim()) {
-      await persistBusinessRecord({
-        owner: { kind: "customer", id: item.customerId },
-        userId: opts.userId,
-        category: "OTHER",
-        title: payload.businessRecordTitle.trim(),
-        content: payload.businessRecordContent?.trim() || payload.coreNotes?.trim() || null,
-        occurredAt: meeting.endedAt ?? new Date(),
-        source: "MANUAL",
-      });
-      wroteRecord = true;
+      const owner =
+        item.customerId
+          ? ({ kind: "customer" as const, id: item.customerId })
+          : item.partnerId
+            ? ({ kind: "partner" as const, id: item.partnerId })
+            : null;
+      if (owner) {
+        await persistBusinessRecord({
+          owner,
+          userId: opts.userId,
+          category: "OTHER",
+          title: payload.businessRecordTitle.trim(),
+          content: payload.businessRecordContent?.trim() || payload.coreNotes?.trim() || null,
+          occurredAt: meeting.endedAt ?? new Date(),
+          source: "MANUAL",
+        });
+        wroteRecord = true;
+      }
     }
 
     let wroteWorkLog = false;
     const workLog = payload.projectWorkLogContent?.trim() || payload.coreNotes?.trim();
-    if (!payload.skipProjectWorkLog && workLog) {
+    if (!payload.skipProjectWorkLog && workLog && item.projectId) {
       await db.projectWorkLog.create({
         data: {
           projectId: item.projectId,
@@ -68,12 +78,16 @@ export async function applyPresalesMeetingConfirm(opts: {
         title: `售前项目会议：${meeting.title}`,
         content: payload.coreNotes?.trim() || null,
         customerId: item.customerId,
+        partnerId: item.partnerId,
         createdById: opts.userId,
         meta: JSON.stringify({
           via: "presales_project_meeting",
           meetingId: meeting.id,
           itemId: item.id,
+          subjectKind: item.subjectKind,
           projectId: item.projectId,
+          opportunityId: item.opportunityId,
+          partnerId: item.partnerId,
         }),
       },
     });
@@ -88,6 +102,8 @@ export async function applyPresalesMeetingConfirm(opts: {
           detail: t.detail?.trim() || null,
           customerId: item.customerId,
           projectId: item.projectId,
+          opportunityId: item.opportunityId,
+          partnerId: item.partnerId,
           assigneeId: t.assigneeId || item.userId || opts.userId,
           dueDate: t.dueDate ? new Date(t.dueDate) : null,
           priority: "MEDIUM",
@@ -132,12 +148,12 @@ export async function applyPresalesMeetingConfirm(opts: {
     const snapshot: ConfirmedItemSnapshot = {
       confirmedAt: new Date().toISOString(),
       coreNotes: payload.coreNotes?.trim() || "",
-      businessRecordTitle: payload.businessRecordTitle?.trim() || "",
+      businessRecordTitle: payload.businessRecordTitle.trim(),
       businessRecordContent: payload.businessRecordContent?.trim() || "",
       skipBusinessRecord: !!payload.skipBusinessRecord,
       wroteBusinessRecord: wroteRecord,
       projectWorkLogContent: payload.projectWorkLogContent?.trim() || "",
-      skipProjectWorkLog: !!payload.skipProjectWorkLog,
+      skipProjectWorkLog: !!payload.skipProjectWorkLog || !item.projectId,
       wroteProjectWorkLog: wroteWorkLog,
       todos: confirmedTodos,
     };
@@ -145,15 +161,15 @@ export async function applyPresalesMeetingConfirm(opts: {
     await db.presalesProjectMeetingItem.update({
       where: { id: item.id },
       data: {
+        status: "CONFIRMED",
         coreNotes: payload.coreNotes?.trim() || null,
         confirmedSnapshot: JSON.stringify(snapshot),
-        status: "CONFIRMED",
       },
     });
 
     results.push({
       itemId: item.id,
-      label: `${item.customer.name} / ${item.project.name}`,
+      label: item.project?.name || item.opportunity?.name || item.partner?.name || item.id,
       todoCount,
       wroteRecord,
       wroteWorkLog,
@@ -166,9 +182,9 @@ export async function applyPresalesMeetingConfirm(opts: {
   if (remaining === 0) {
     await db.presalesProjectMeeting.update({
       where: { id: opts.meetingId },
-      data: { status: "DONE", endedAt: meeting.endedAt ?? new Date() },
+      data: { status: "DONE" },
     });
   }
 
-  return results;
+  return { results, allDone: remaining === 0 };
 }

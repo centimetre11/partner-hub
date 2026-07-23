@@ -562,7 +562,7 @@ export function PresalesMeetingWorkspace({
                 <div>
                   <h2 className="text-sm font-semibold text-slate-900">{active.label}</h2>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    {active.userName} · {active.customerName} / {active.projectName}
+                    {active.label}
                     {active.projectPhase ? ` · ${active.projectPhase}` : ""}
                   </p>
                 </div>

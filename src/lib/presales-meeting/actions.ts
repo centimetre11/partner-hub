@@ -15,6 +15,11 @@ import { markPrepReady, loadPrepFacts } from "./prep-facts";
 import { recommendAgendaForUsers } from "./recommend";
 import { buildSplitProposal, persistSplitDrafts } from "./split";
 import { toMeetingClient } from "./meeting-client";
+import {
+  normalizeAgendaSubject,
+  type AgendaSubjectInput,
+  type AgendaSubjectKind,
+} from "./subject";
 
 export async function recommendPresalesAgendaAction(userIds: string[]) {
   await requireUser();
@@ -35,21 +40,110 @@ export async function createPresalesMeetingAction(input: {
   title?: string;
   scheduledAt?: string;
   attendeeUserIds?: string[];
-  items: { userId: string; customerId: string; projectId: string }[];
+  items: AgendaSubjectInput[];
 }) {
   const user = await requireUser();
-  const items = input.items.filter((it) => it.userId && it.customerId && it.projectId);
-  if (!items.length) return { error: "请至少添加一条议程（同事 + 客户 + 项目）" };
+  const normalized = input.items
+    .map((it) => normalizeAgendaSubject(it))
+    .filter((x): x is NonNullable<typeof x> => !!x);
+  if (!normalized.length) {
+    return { error: "请至少添加一条议程（项目 / 商机 / 伙伴）" };
+  }
 
-  const projectIds = [...new Set(items.map((i) => i.projectId))];
-  const projects = await db.project.findMany({
-    where: { id: { in: projectIds } },
-    select: { id: true, customerId: true },
+  // de-dupe by user + subjectKey
+  const seen = new Set<string>();
+  const items = normalized.filter((it) => {
+    const key = `${it.userId}|${it.subjectKey}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
-  for (const row of items) {
-    const p = projects.find((x) => x.id === row.projectId);
-    if (!p) return { error: "存在无效项目" };
-    if (p.customerId !== row.customerId) return { error: "项目与客户不匹配" };
+
+  const projectIds = [
+    ...new Set(items.filter((i) => i.kind === "PROJECT").map((i) => i.projectId!)),
+  ];
+  const opportunityIds = [
+    ...new Set(items.filter((i) => i.kind === "OPPORTUNITY").map((i) => i.opportunityId!)),
+  ];
+  const partnerIds = [
+    ...new Set(items.filter((i) => i.kind === "PARTNER").map((i) => i.partnerId!)),
+  ];
+
+  const [projects, opportunities, partners] = await Promise.all([
+    projectIds.length
+      ? db.project.findMany({
+          where: { id: { in: projectIds } },
+          select: { id: true, customerId: true, partnerId: true },
+        })
+      : Promise.resolve([]),
+    opportunityIds.length
+      ? db.opportunity.findMany({
+          where: { id: { in: opportunityIds } },
+          select: { id: true, customerId: true, partnerId: true },
+        })
+      : Promise.resolve([]),
+    partnerIds.length
+      ? db.partner.findMany({
+          where: { id: { in: partnerIds } },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const createRows: {
+    userId: string;
+    subjectKind: AgendaSubjectKind;
+    subjectKey: string;
+    customerId: string | null;
+    projectId: string | null;
+    opportunityId: string | null;
+    partnerId: string | null;
+    sortOrder: number;
+  }[] = [];
+
+  for (const [sortOrder, row] of items.entries()) {
+    if (row.kind === "PROJECT") {
+      const p = projects.find((x) => x.id === row.projectId);
+      if (!p) return { error: "存在无效项目" };
+      createRows.push({
+        userId: row.userId,
+        subjectKind: "PROJECT",
+        subjectKey: row.subjectKey,
+        customerId: p.customerId,
+        projectId: p.id,
+        opportunityId: null,
+        partnerId: p.partnerId ?? null,
+        sortOrder,
+      });
+      continue;
+    }
+    if (row.kind === "OPPORTUNITY") {
+      const o = opportunities.find((x) => x.id === row.opportunityId);
+      if (!o) return { error: "存在无效商机" };
+      createRows.push({
+        userId: row.userId,
+        subjectKind: "OPPORTUNITY",
+        subjectKey: row.subjectKey,
+        customerId: o.customerId ?? null,
+        projectId: null,
+        opportunityId: o.id,
+        partnerId: o.partnerId ?? null,
+        sortOrder,
+      });
+      continue;
+    }
+    const partner = partners.find((x) => x.id === row.partnerId);
+    if (!partner) return { error: "存在无效伙伴" };
+    createRows.push({
+      userId: row.userId,
+      subjectKind: "PARTNER",
+      subjectKey: row.subjectKey,
+      customerId: null,
+      projectId: null,
+      opportunityId: null,
+      partnerId: partner.id,
+      sortOrder,
+    });
   }
 
   const title =
@@ -64,20 +158,12 @@ export async function createPresalesMeetingAction(input: {
       attendeeUserIds: JSON.stringify(
         input.attendeeUserIds?.length
           ? input.attendeeUserIds
-          : [...new Set(items.map((it) => it.userId))],
+          : [...new Set(createRows.map((it) => it.userId))],
       ),
-      items: {
-        create: items.map((it, sortOrder) => ({
-          userId: it.userId,
-          customerId: it.customerId,
-          projectId: it.projectId,
-          sortOrder,
-        })),
-      },
+      items: { create: createRows },
     },
   });
 
-  // 最终确认：拉起会前事实（无 AI）
   await markPrepReady(meeting.id);
 
   revalidatePath("/presales-meetings");
@@ -97,9 +183,15 @@ export async function runPresalesPrepAction(meetingId: string) {
   return { ok: true as const };
 }
 
-export async function loadItemPrepFactsAction(customerId: string, projectId: string) {
+export async function loadItemPrepFactsAction(opts: {
+  subjectKind?: string | null;
+  customerId?: string | null;
+  projectId?: string | null;
+  opportunityId?: string | null;
+  partnerId?: string | null;
+}) {
   await requireUser();
-  return { ok: true as const, facts: await loadPrepFacts({ customerId, projectId }) };
+  return { ok: true as const, facts: await loadPrepFacts(opts) };
 }
 
 export async function startPresalesMeetingAction(meetingId: string) {
@@ -210,7 +302,13 @@ export async function createLiveTodoAction(
 
   const item = await db.presalesProjectMeetingItem.findFirst({
     where: { id: itemId, meetingId },
-    select: { customerId: true, projectId: true, userId: true },
+    select: {
+      customerId: true,
+      projectId: true,
+      opportunityId: true,
+      partnerId: true,
+      userId: true,
+    },
   });
   if (!item) return { error: "议程项不存在" };
 
@@ -220,6 +318,8 @@ export async function createLiveTodoAction(
       detail: input.detail?.trim() || null,
       customerId: item.customerId,
       projectId: item.projectId,
+      opportunityId: item.opportunityId,
+      partnerId: item.partnerId,
       assigneeId: input.assigneeId || item.userId || user.id,
       dueDate: input.dueDate ? new Date(input.dueDate) : null,
       priority: "MEDIUM",
@@ -229,7 +329,8 @@ export async function createLiveTodoAction(
   });
 
   revalidateMeeting(meetingId);
-  revalidatePath(`/customers/${item.customerId}`);
+  if (item.customerId) revalidatePath(`/customers/${item.customerId}`);
+  if (item.partnerId) revalidatePath(`/partners/${item.partnerId}`);
   return { ok: true as const, todoId: todo.id };
 }
 
@@ -391,6 +492,8 @@ export async function getPresalesMeetingClientAction(meetingId: string) {
           user: { select: { name: true } },
           customer: { select: { name: true } },
           project: { select: { name: true, phase: true } },
+          opportunity: { select: { name: true } },
+          partner: { select: { name: true } },
           todoDrafts: { orderBy: { sortOrder: "asc" } },
         },
       },

@@ -23,6 +23,8 @@ export async function markItemDiscussed(
       user: { select: { name: true } },
       customer: { select: { name: true } },
       project: { select: { name: true } },
+      opportunity: { select: { name: true } },
+      partner: { select: { name: true } },
       meeting: true,
     },
   });
@@ -38,8 +40,11 @@ export async function markItemDiscussed(
     existing && existing.getTime() >= anchor.getTime() ? existing : now;
   const label = itemDisplayLabel({
     userName: item.user.name,
-    customerName: item.customer.name,
-    projectName: item.project.name,
+    subjectKind: item.subjectKind,
+    customerName: item.customer?.name ?? null,
+    projectName: item.project?.name ?? null,
+    opportunityName: item.opportunity?.name ?? null,
+    partnerName: item.partner?.name ?? null,
   });
 
   await db.$transaction([

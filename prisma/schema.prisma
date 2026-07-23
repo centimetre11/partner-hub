@@ -148,6 +148,7 @@ model Partner {
   assets        Asset[]
   reviewItems   PartnerReviewItem[]
   contracts     Contract[]
+  presalesProjectMeetingItems PresalesProjectMeetingItem[]
 
   @@index([parentId])
   @@index([isDistributor])
@@ -453,6 +454,7 @@ model Opportunity {
   project    Project?  @relation("OpportunityProject")
   contracts  Contract[]
   todos      TodoItem[]
+  presalesProjectMeetingItems PresalesProjectMeetingItem[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -1645,10 +1647,18 @@ model PresalesProjectMeetingItem {
   /// 会上「过谁」
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  customerId       String
-  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  projectId        String
-  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// PROJECT | OPPORTUNITY | PARTNER
+  subjectKind      String   @default("PROJECT")
+  /// project:<id> | opportunity:<id> | partner:<id>
+  subjectKey       String   @default("")
+  customerId       String?
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  projectId        String?
+  project          Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  opportunityId    String?
+  opportunity      Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  partnerId        String?
+  partner          Partner?  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   sortOrder        Int      @default(0)
   discussedAt      DateTime?
   markerInsertedAt DateTime?
@@ -1660,11 +1670,13 @@ model PresalesProjectMeetingItem {
   updatedAt        DateTime @updatedAt
   todoDrafts       PresalesProjectMeetingTodoDraft[]
 
-  @@unique([meetingId, userId, projectId])
+  @@index([meetingId, userId, subjectKey])
   @@index([meetingId, sortOrder])
   @@index([userId])
   @@index([customerId])
   @@index([projectId])
+  @@index([opportunityId])
+  @@index([partnerId])
   @@index([status])
 }
 

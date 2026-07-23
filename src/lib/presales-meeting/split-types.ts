@@ -2,8 +2,8 @@ export type SplitProposalItem = {
   itemId: string;
   label: string;
   userId: string;
-  customerId: string;
-  projectId: string;
+  customerId: string | null;
+  projectId: string | null;
   segmentText: string;
   coreNotes: string;
   businessRecordTitle: string;
