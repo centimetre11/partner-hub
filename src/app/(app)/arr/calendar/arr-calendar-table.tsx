@@ -26,6 +26,8 @@ export type CalendarRowData = {
   customerName: string;
   /** Customer.owner — sales owner on the customer, not a contract field. */
   ownerName: string | null;
+  /** Customer.satisfactionUser — satisfaction owner on the customer. */
+  satisfactionOwnerName: string | null;
   arr: number;
   latestService: string | null;
   /** Free-text notes (ArrCustomerProfile.situation). */
@@ -42,6 +44,7 @@ type Copy = {
   colArr: string;
   colLatestService: string;
   colOwner: string;
+  colSatisfactionOwner: string;
   colNotes: string;
   colTodo: string;
   save: string;
@@ -54,7 +57,7 @@ type Copy = {
   legacyTodoHint: string;
 };
 
-type SortKey = "customerName" | "arr" | "latestService" | "ownerName";
+type SortKey = "customerName" | "arr" | "latestService" | "ownerName" | "satisfactionOwnerName";
 type SortDir = "asc" | "desc";
 
 function formatArr(n: number) {
@@ -76,6 +79,9 @@ function compareRows(a: CalendarRowData, b: CalendarRowData, key: SortKey, dir: 
   }
   if (key === "ownerName") {
     return (a.ownerName || "").localeCompare(b.ownerName || "", "zh") * mul;
+  }
+  if (key === "satisfactionOwnerName") {
+    return (a.satisfactionOwnerName || "").localeCompare(b.satisfactionOwnerName || "", "zh") * mul;
   }
   return a.customerName.localeCompare(b.customerName, "zh") * mul;
 }
@@ -254,6 +260,13 @@ export function ArrCalendarTable({
                 onClick={() => toggleSort("ownerName")}
                 className="px-2 py-2.5 min-w-[100px] border-b border-slate-200"
               />
+              <SortableTh
+                label={copy.colSatisfactionOwner}
+                active={sortKey === "satisfactionOwnerName"}
+                dir={sortDir}
+                onClick={() => toggleSort("satisfactionOwnerName")}
+                className="px-2 py-2.5 min-w-[110px] border-b border-slate-200"
+              />
               <th className="px-2 py-2.5 font-medium min-w-[180px] border-b border-slate-200">
                 {copy.colNotes}
               </th>
@@ -288,6 +301,7 @@ export function ArrCalendarTable({
                   {row.latestService || "—"}
                 </td>
                 <td className="px-2 py-2 text-xs text-slate-600">{row.ownerName ?? "—"}</td>
+                <td className="px-2 py-2 text-xs text-slate-600">{row.satisfactionOwnerName ?? "—"}</td>
                 <td className="px-2 py-2">
                   {notesEdit?.customerId === row.customerId ? (
                     <textarea

@@ -54,6 +54,7 @@ export default async function ArrPage() {
           id: true,
           name: true,
           owner: { select: { id: true, name: true } },
+          satisfactionUser: { select: { id: true, name: true } },
           partnerLinks: {
             include: { partner: { select: { id: true, name: true } } },
             take: 3,
@@ -77,6 +78,7 @@ export default async function ArrPage() {
     customerId: string;
     customerName: string;
     ownerName: string | null;
+    satisfactionOwnerName: string | null;
     partners: string[];
     subscription: number;
     productMaintenance: number;
@@ -93,6 +95,7 @@ export default async function ArrPage() {
         customerId: ct.customerId,
         customerName: ct.customer.name,
         ownerName: ct.customer.owner?.name ?? null,
+        satisfactionOwnerName: ct.customer.satisfactionUser?.name ?? null,
         partners: ct.customer.partnerLinks.map((p) => p.partner.name),
         subscription: 0,
         productMaintenance: 0,
@@ -257,6 +260,7 @@ export default async function ArrPage() {
                     <th className="py-2 pr-3 font-medium">{t.colCustomer}</th>
                     <th className="py-2 px-2 font-medium">{t.colPartner}</th>
                     <th className="py-2 px-2 font-medium">{t.colOwner}</th>
+                    <th className="py-2 px-2 font-medium">{t.colSatisfactionOwner}</th>
                     <th className="py-2 px-2 font-medium text-right">{t.statSubscription}</th>
                     <th className="py-2 px-2 font-medium text-right">{t.statProductMaint}</th>
                     <th className="py-2 px-2 font-medium text-right">{t.statProjectMaint}</th>
@@ -282,6 +286,7 @@ export default async function ArrPage() {
                         {row.partners.length ? row.partners.join("、") : "—"}
                       </td>
                       <td className="py-2.5 px-2 text-slate-600">{row.ownerName ?? "—"}</td>
+                      <td className="py-2.5 px-2 text-slate-600">{row.satisfactionOwnerName ?? "—"}</td>
                       <td className="py-2.5 px-2 text-right tabular-nums text-sky-700">
                         {row.subscription ? formatArrUsd(row.subscription) : "—"}
                       </td>
