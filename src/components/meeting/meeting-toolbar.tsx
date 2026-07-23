@@ -50,72 +50,70 @@ export function MeetingToolbar({
     shareMode === "prep-and-later" && (phase === "post" || phase === "done");
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {canPrep ? (
+    <div className="flex flex-wrap items-center gap-2">
+      {canPrep ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onPrep}
+          className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+        >
+          {hasPrep ? t.refreshBrief : t.prep}
+        </button>
+      ) : null}
+
+      {phase === "prep" ? (
+        <>
+          <MeetingShareActions previewToken={previewToken} resolvePath={resolvePreviewPath} />
           <button
             type="button"
             disabled={busy}
-            onClick={onPrep}
-            className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+            onClick={onStart}
+            className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
           >
-            {hasPrep ? t.refreshBrief : t.prep}
+            {t.startMeeting}
           </button>
-        ) : null}
+        </>
+      ) : null}
 
-        {phase === "prep" ? (
-          <>
-            <MeetingShareActions previewToken={previewToken} resolvePath={resolvePreviewPath} />
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onStart}
-              className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
-            >
-              {t.startMeeting}
-            </button>
-          </>
-        ) : null}
-
-        {phase === "live" ? (
-          <>
-            {currentDiscussTitle ? (
-              <span className="rounded-lg bg-sky-50 text-sky-800 border border-sky-100 px-3 py-1.5 text-xs font-medium">
-                {currentDiscussTitle}
-              </span>
-            ) : (
-              <span className="rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-3 py-1.5 text-xs">
-                {t.noMarker}
-              </span>
-            )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onEnd}
-              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-40"
-            >
-              {t.endMeeting}
-            </button>
-          </>
-        ) : null}
-
-        {phase === "post" && onResetToPrep ? (
+      {phase === "live" ? (
+        <>
+          {currentDiscussTitle ? (
+            <span className="rounded-lg bg-sky-50 text-sky-800 border border-sky-100 px-3 py-1.5 text-xs font-medium">
+              {currentDiscussTitle}
+            </span>
+          ) : (
+            <span className="rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-3 py-1.5 text-xs">
+              {t.noMarker}
+            </span>
+          )}
           <button
             type="button"
             disabled={busy}
-            onClick={onResetToPrep}
-            className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-3 py-1.5 text-sm hover:bg-amber-100 disabled:opacity-40"
+            onClick={onEnd}
+            className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-40"
           >
-            {t.backToPrep}
+            {t.endMeeting}
           </button>
-        ) : null}
+        </>
+      ) : null}
 
-        {extra}
-      </div>
+      {phase === "post" && onResetToPrep ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onResetToPrep}
+          className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-3 py-1.5 text-sm hover:bg-amber-100 disabled:opacity-40"
+        >
+          {t.backToPrep}
+        </button>
+      ) : null}
 
       {showLaterShare ? (
         <MeetingShareActions previewToken={previewToken} resolvePath={resolvePreviewPath} />
       ) : null}
+
+      {extra}
     </div>
   );
 }

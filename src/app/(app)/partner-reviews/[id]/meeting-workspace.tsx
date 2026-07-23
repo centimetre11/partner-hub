@@ -24,7 +24,6 @@ import {
 } from "@/lib/partner-review/actions";
 import {
   MeetingAgendaPanel,
-  MeetingBatchRecorder,
   MeetingLiveRecording,
   MeetingMatchSourceSwitch,
   MeetingPathBPanel,
@@ -734,46 +733,6 @@ export function MeetingWorkspace({
                       </span>
                     ) : null}
                   </div>
-                  {phase === "post" ? (
-                    <MeetingBatchRecorder
-                      meetingId={meeting.id}
-                      apiBase={`/api/partner-reviews/${meeting.id}`}
-                      transcriptStatus={meeting.transcriptStatus}
-                      transcriptError={meeting.transcriptError}
-                      onFlash={flash}
-                      onRecordingStarted={(startedAt) => {
-                        setMeeting((m) => ({
-                          ...m,
-                          recordingStartedAt: startedAt ?? m.recordingStartedAt,
-                          transcriptStatus: "recording",
-                        }));
-                      }}
-                      onTranscribed={({ plain, liveNotes: notes, matchMethod }) => {
-                        setTranscript(plain);
-                        setMeeting((m) => ({
-                          ...m,
-                          transcriptText: plain,
-                          xfyunTranscriptText: plain,
-                          xfyunLiveNotes: notes,
-                          matchSource: "xfyun",
-                          transcriptStatus: "ready",
-                        }));
-                        if (notes) {
-                          setLiveNotes(notes);
-                          applySegmentsToDrafts(
-                            parsePartnerSectionsFromLiveNotes(notes, meeting.items),
-                            setMatchDrafts,
-                            setUnassignedDraft,
-                          );
-                          lockAssignStep.current = true;
-                          setPostStep("assign");
-                        }
-                        flash(
-                          `${matchMethodFlash(matchMethod, t)} (${t.sourceXfyun}) · ${t.sourceHint}`,
-                        );
-                      }}
-                    />
-                  ) : null}
                 </>
               )}
             </MeetingPathBPanel>

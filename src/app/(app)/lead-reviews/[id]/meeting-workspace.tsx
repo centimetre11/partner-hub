@@ -6,7 +6,6 @@ import { Badge, Card } from "@/components/ui";
 import {
   MeetingAgendaPanel,
   MeetingAssignmentTimeline,
-  MeetingBatchRecorder,
   MeetingLiveRecording,
   MeetingMatchSourceSwitch,
   MeetingPathBPanel,
@@ -404,30 +403,6 @@ export function LeadReviewWorkspace({
                 ) : null}
               </>
             ) : <p className="text-[11px] text-slate-400">{m.postXfyunEmpty}</p>}
-            {phase === "post" ? (
-              <MeetingBatchRecorder
-                meetingId={meetingId}
-                apiBase={`/api/lead-reviews/${meetingId}`}
-                transcriptStatus={transcriptStatus}
-                transcriptError={transcriptError}
-                onFlash={flash}
-                onRecordingStarted={(at) => {
-                  setStartedAt((current) => current ?? at ?? new Date().toISOString());
-                  setTranscriptStatus("recording");
-                }}
-                onTranscribed={({ plain, liveNotes: nextNotes }) => {
-                  setXfyunText(plain);
-                  setTranscriptStatus("ready");
-                  setMatchSource("xfyun");
-                  if (nextNotes) {
-                    setNotes(nextNotes);
-                    setXfyunNotes(nextNotes);
-                    syncAssignFromNotes(nextNotes);
-                    setPostStep("assign");
-                  }
-                }}
-              />
-            ) : null}
           </MeetingPathBPanel>
         }
       />
