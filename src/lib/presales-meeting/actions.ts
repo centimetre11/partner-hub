@@ -14,7 +14,7 @@ import { materializeLiveNotesForMeeting } from "./notes-materialize";
 import { markPrepReady, loadPrepFacts } from "./prep-facts";
 import { recommendAgendaForUsers } from "./recommend";
 import { buildSplitProposal, persistSplitDrafts } from "./split";
-import { toMeetingClient, toMeetingItemClient } from "./meeting-client";
+import { toMeetingClient } from "./meeting-client";
 
 export async function recommendPresalesAgendaAction(userIds: string[]) {
   await requireUser();
@@ -400,5 +400,3 @@ export async function getPresalesMeetingClientAction(meetingId: string) {
   return { ok: true as const, meeting: toMeetingClient(meeting) };
 }
 
-export type { ConfirmItemPayload };
-export { toMeetingItemClient };

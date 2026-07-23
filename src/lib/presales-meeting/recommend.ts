@@ -3,8 +3,6 @@ import "server-only";
 import { db } from "../db";
 import type { RecommendedAgendaItem } from "./types";
 
-export type { RecommendedAgendaItem };
-
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
