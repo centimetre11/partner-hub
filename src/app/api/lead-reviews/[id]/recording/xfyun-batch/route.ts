@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/session";
 import { db } from "@/lib/db";
+import path from "path";
 import { readMeetingRecording } from "@/lib/asr/recording-store";
-import {
-  extractPcmFromWavOrPcm,
-  serializeBatchDoc,
-  transcribePcmWithXfyunBatch,
-} from "@/lib/asr/xfyun-batch";
+import { serializeBatchDoc, transcribeFileWithXfyunBatch } from "@/lib/asr/xfyun-batch";
 import { getXfyunAsrConfig } from "@/lib/asr/xfyun";
 import { materializeLeadReviewLiveNotesFromMatch } from "@/lib/lead-review/minutes-match";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
 
-/** 会后一次性：用已上传录音走讯飞 RTASR，写入转写并按打点/匹配切段 */
+/** 会后一次性：用已上传录音走讯飞「录音文件转写大模型」，写入转写并按打点/匹配切段 */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const uid = await getSessionUserId();
   if (!uid) return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -38,10 +35,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
 
   try {
     const buf = await readMeetingRecording(meeting.recordingPath);
-    const { pcm, sampleRate } = extractPcmFromWavOrPcm(buf);
-    const doc = await transcribePcmWithXfyunBatch({
-      pcm,
-      sampleRate,
+    const doc = await transcribeFileWithXfyunBatch({
+      file: buf,
+      fileName: path.basename(meeting.recordingPath) || "meeting.wav",
       recordingStartedAt: meeting.recordingStartedAt ?? meeting.startedAt,
     });
     const json = serializeBatchDoc(doc);

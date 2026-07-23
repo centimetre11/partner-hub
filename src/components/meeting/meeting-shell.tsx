@@ -17,7 +17,7 @@ type Props = {
   onEnd: () => void;
   onResetToPrep?: () => void;
   toolbarExtra?: ReactNode;
-  shareMode?: "prep-only" | "prep-and-later";
+  shareMode?: "prep-only" | "prep-and-later" | "none";
   flashOk?: string | null;
   flashError?: string | null;
   recordingSlot?: ReactNode;

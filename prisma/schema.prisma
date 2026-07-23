@@ -55,6 +55,8 @@ model User {
   passwordResetExpiresAt DateTime?
   partnerReviewMeetings PartnerReviewMeeting[]
   leadReviewMeetings LeadReviewMeeting[]
+  presalesProjectMeetings PresalesProjectMeeting[]
+  presalesProjectMeetingItems PresalesProjectMeetingItem[]
   weeklyReportSnapshots WeeklyReportSnapshot[]
 }
 
@@ -227,6 +229,7 @@ model Customer {
   assets          Asset[]
   trainings       Training[]
   arrProfile      ArrCustomerProfile?
+  presalesProjectMeetingItems PresalesProjectMeetingItem[]
 
   @@index([partnerId])
   @@index([name])
@@ -491,6 +494,7 @@ model Project {
   events              TimelineEvent[]
   workLogs            ProjectWorkLog[]
   contracts           Contract[]
+  presalesProjectMeetingItems PresalesProjectMeetingItem[]
 
   @@index([customerId])
   @@index([partnerId])
@@ -1580,6 +1584,94 @@ model LeadReviewTodoDraft {
   id         String   @id @default(cuid())
   itemId     String
   item       LeadReviewItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  title      String
+  detail     String?
+  assigneeId String?
+  dueDate    DateTime?
+  confirmed  Boolean  @default(false)
+  todoItemId String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([itemId])
+}
+
+// 售前项目会议：议程项 = 1 人 + 1 客户 + 1 项目
+model PresalesProjectMeeting {
+  id                    String    @id @default(cuid())
+  title                 String
+  // DRAFT | PREP | LIVE | PROCESSING | DONE
+  status                String    @default("DRAFT")
+  scheduledAt           DateTime?
+  startedAt             DateTime?
+  endedAt               DateTime?
+  createdById           String
+  createdBy             User      @relation(fields: [createdById], references: [id])
+  /// JSON string[]：参会人 userId
+  attendeeUserIds       String?
+  liveNotes             String?
+  prepGeneratedAt       DateTime?
+  previewToken          String?   @unique
+  transcriptText        String?
+  transcriptJson        String?
+  matchSource           String?
+  tencentTranscriptText String?
+  tencentTranscriptJson String?
+  tencentLiveNotes      String?
+  xfyunTranscriptText   String?
+  xfyunTranscriptJson   String?
+  xfyunLiveNotes        String?
+  recordingPath         String?
+  recordingMimeType     String?
+  recordingBytes        Int?
+  recordingStartedAt    DateTime?
+  recordingEndedAt      DateTime?
+  /// idle | recording | uploaded | transcribing | ready | error
+  transcriptStatus      String?
+  transcriptError       String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  items                 PresalesProjectMeetingItem[]
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model PresalesProjectMeetingItem {
+  id               String   @id @default(cuid())
+  meetingId        String
+  meeting          PresalesProjectMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  /// 会上「过谁」
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId       String
+  customer         Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  projectId        String
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sortOrder        Int      @default(0)
+  discussedAt      DateTime?
+  markerInsertedAt DateTime?
+  coreNotes        String?
+  confirmedSnapshot String?
+  // PENDING | DISCUSSED | CONFIRMED
+  status           String   @default("PENDING")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  todoDrafts       PresalesProjectMeetingTodoDraft[]
+
+  @@unique([meetingId, userId, projectId])
+  @@index([meetingId, sortOrder])
+  @@index([userId])
+  @@index([customerId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model PresalesProjectMeetingTodoDraft {
+  id         String   @id @default(cuid())
+  itemId     String
+  item       PresalesProjectMeetingItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   title      String
   detail     String?
   assigneeId String?

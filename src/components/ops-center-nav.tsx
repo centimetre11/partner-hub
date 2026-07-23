@@ -8,6 +8,7 @@ const tabs = [
   { href: "/ops", label: "Overview", labelZh: "总览", icon: "◎", exact: true },
   { href: "/partner-reviews", label: "Partner reviews", labelZh: "过伙伴会议", icon: "◫" },
   { href: "/lead-reviews", label: "Lead reviews", labelZh: "过线索会议", icon: "◔" },
+  { href: "/presales-meetings", label: "Presales meetings", labelZh: "售前项目会议", icon: "▤" },
   { href: "/segments", label: "Segment insights", labelZh: "客群洞察", icon: "◍" },
   { href: "/documents", label: "Reports", labelZh: "报告中心", icon: "📋" },
   { href: "/ops/weekly-report", label: "Report history", labelZh: "历史周报", icon: "▤" },

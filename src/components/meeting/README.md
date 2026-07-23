@@ -21,8 +21,9 @@ Shared UI shell for review-style meetings (partner reviews, lead reviews, and fu
 
 - Partner review: `src/app/(app)/partner-reviews/[id]/meeting-workspace.tsx`
 - Lead review: `src/app/(app)/lead-reviews/[id]/meeting-workspace.tsx`
+- Presales project meeting: `src/app/(app)/presales-meetings/[id]/meeting-workspace.tsx`
 
-Both use the same shell chrome (toolbar colors/order, agenda, LIVE recording, post dual-path, step indicator). Domain panels stay in adapters (partner AI extract / final report; lead verdicts / CRM cards).
+All use the same shell chrome (toolbar colors/order, agenda, LIVE recording, post dual-path, step indicator). Domain panels stay in adapters (partner AI extract / final report; lead verdicts / CRM cards; presales prep-facts + project work logs).
 
 ## Adding a new meeting scenario
 

@@ -1,7 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "crypto";
-import WebSocket from "ws";
+import path from "path";
 import {
   buildTimedTranscriptDoc,
   serializeTimedTranscriptDoc,
@@ -9,13 +8,17 @@ import {
   type TranscriptSentence,
 } from "../partner-review/transcript";
 import {
-  buildXfyunRealtimeWsUrl,
+  buildSignedQuery,
+  formatDateTimeChina,
   getXfyunAsrConfig,
-  parseXfyunAsrMessage,
+  IFASR_FAIL_TYPE,
+  parseIfasrOrderResult,
+  randomSignatureId,
 } from "./xfyun";
 
-const FRAME_BYTES = 1280;
-const FRAME_MS = 40;
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 /** 从 WAV(PCM16 LE mono) 抽出 PCM；若非标准 WAV 则原样当作 PCM */
 export function extractPcmFromWavOrPcm(buf: Buffer): { pcm: Buffer; sampleRate: number } {
@@ -66,19 +69,221 @@ export function resamplePcm16Mono(pcm: Buffer, fromRate: number, toRate = 16000)
   return out;
 }
 
+function guessDurationMs(file: Buffer, fileName: string): number | undefined {
+  const ext = path.extname(fileName).toLowerCase();
+  if (ext === ".wav" || ext === ".pcm" || !ext) {
+    const { pcm, sampleRate } = extractPcmFromWavOrPcm(file);
+    if (pcm.length >= 2 && sampleRate > 0) {
+      return Math.max(1, Math.round((pcm.length / 2 / sampleRate) * 1000));
+    }
+  }
+  return undefined;
+}
+
+type UploadResponse = {
+  code?: string | number;
+  descInfo?: string;
+  content?: { orderId?: string; taskEstimateTime?: number };
+};
+
+type ResultResponse = {
+  code?: string | number;
+  descInfo?: string;
+  content?: {
+    orderResult?: string;
+    taskEstimateTime?: number;
+    orderInfo?: {
+      orderId?: string;
+      status?: number;
+      failType?: number;
+      originalDuration?: number;
+    };
+  };
+};
+
+function isOkCode(code: string | number | undefined): boolean {
+  return code === "000000" || code === 0 || code === "0";
+}
+
 /**
- * 会后一次性：把整段 PCM 喂给讯飞 RTASR，得到带相对时间轴的转写。
- * 不实时；录音起点 = 0ms，可与 recordingStartedAt + markerInsertedAt 对齐。
+ * 会后一次性：上传录音到讯飞「录音文件转写大模型」，轮询订单直至完成。
+ * 录音起点 = 0ms，可与 recordingStartedAt + markerInsertedAt 对齐。
  */
-export async function transcribePcmWithXfyunBatch(opts: {
-  pcm: Buffer;
-  sampleRate?: number;
+export async function transcribeFileWithXfyunBatch(opts: {
+  file: Buffer;
+  fileName: string;
+  durationMs?: number;
   recordingStartedAt?: Date | null;
   timeoutMs?: number;
+  pollIntervalMs?: number;
 }): Promise<TimedTranscriptDoc> {
   const cfg = getXfyunAsrConfig();
   if (!cfg.enabled) {
     throw new Error("未配置讯飞 XFYUN_APP_ID / API_KEY / API_SECRET");
+  }
+  if (!opts.file.length) {
+    throw new Error("录音文件为空");
+  }
+
+  const fileName = path.basename(opts.fileName || "meeting.wav") || "meeting.wav";
+  const durationMs = opts.durationMs ?? guessDurationMs(opts.file, fileName);
+  const signatureRandom = randomSignatureId(16);
+  const timeoutMs = opts.timeoutMs ?? 600_000;
+  const pollIntervalMs = opts.pollIntervalMs ?? 3_000;
+  const startedAt = Date.now();
+
+  const uploadParams: Record<string, string> = {
+    appId: cfg.appId,
+    accessKeyId: cfg.apiKey,
+    dateTime: formatDateTimeChina(),
+    signatureRandom,
+    fileSize: String(opts.file.length),
+    fileName,
+    language: cfg.language,
+    audioMode: "fileStream",
+  };
+  if (durationMs != null && durationMs > 0) {
+    uploadParams.duration = String(durationMs);
+  } else {
+    uploadParams.durationCheckDisable = "true";
+  }
+  if (cfg.pd) uploadParams.pd = cfg.pd;
+  if (cfg.vadMdn) uploadParams.eng_vad_mdn = cfg.vadMdn;
+
+  const { query: uploadQuery, signature: uploadSig } = buildSignedQuery({
+    apiSecret: cfg.apiSecret,
+    params: uploadParams,
+  });
+
+  const uploadUrl = `${cfg.apiHost}/v2/upload?${uploadQuery}`;
+  const uploadRes = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      signature: uploadSig,
+    },
+    body: new Uint8Array(opts.file),
+  });
+  const uploadText = await uploadRes.text();
+  let uploadJson: UploadResponse;
+  try {
+    uploadJson = JSON.parse(uploadText) as UploadResponse;
+  } catch {
+    throw new Error(`讯飞上传响应无法解析：HTTP ${uploadRes.status} ${uploadText.slice(0, 200)}`);
+  }
+  if (!uploadRes.ok || !isOkCode(uploadJson.code)) {
+    throw new Error(
+      `讯飞上传失败：${uploadJson.descInfo || uploadJson.code || `HTTP ${uploadRes.status}`}`,
+    );
+  }
+  const orderId = uploadJson.content?.orderId;
+  if (!orderId) {
+    throw new Error("讯飞上传成功但未返回 orderId");
+  }
+
+  let lastEstimate = uploadJson.content?.taskEstimateTime ?? 0;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const resultParams: Record<string, string> = {
+      accessKeyId: cfg.apiKey,
+      dateTime: formatDateTimeChina(),
+      signatureRandom,
+      orderId,
+      resultType: "transfer",
+    };
+    const { query: resultQuery, signature: resultSig } = buildSignedQuery({
+      apiSecret: cfg.apiSecret,
+      params: resultParams,
+    });
+    const resultUrl = `${cfg.apiHost}/v2/getResult?${resultQuery}`;
+    const resultRes = await fetch(resultUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        signature: resultSig,
+      },
+      body: "{}",
+    });
+    const resultText = await resultRes.text();
+    let resultJson: ResultResponse;
+    try {
+      resultJson = JSON.parse(resultText) as ResultResponse;
+    } catch {
+      throw new Error(`讯飞查询响应无法解析：HTTP ${resultRes.status} ${resultText.slice(0, 200)}`);
+    }
+    if (!resultRes.ok || !isOkCode(resultJson.code)) {
+      throw new Error(
+        `讯飞查询失败：${resultJson.descInfo || resultJson.code || `HTTP ${resultRes.status}`}`,
+      );
+    }
+
+    const info = resultJson.content?.orderInfo;
+    const status = info?.status;
+    if (typeof resultJson.content?.taskEstimateTime === "number") {
+      lastEstimate = resultJson.content.taskEstimateTime;
+    }
+
+    if (status === 4) {
+      const orderResult = resultJson.content?.orderResult || "";
+      if (!orderResult) {
+        throw new Error("讯飞订单已完成但转写结果为空");
+      }
+      const parsed = parseIfasrOrderResult(orderResult);
+      if (!parsed.length) {
+        throw new Error("讯飞未识别到有效语音，请确认录到了会议声音");
+      }
+      const sentences: TranscriptSentence[] = parsed.map((s) => ({
+        startTime: s.startMs,
+        endTime: s.endMs,
+        text: s.text,
+      }));
+      return buildTimedTranscriptDoc({
+        sentences,
+        timeBase: "relative_ms",
+        recordingStartedAt: opts.recordingStartedAt ?? null,
+      });
+    }
+
+    if (status === -1) {
+      const failType = info?.failType ?? 99;
+      const hint = IFASR_FAIL_TYPE[failType] || IFASR_FAIL_TYPE[99];
+      throw new Error(`讯飞转写失败（failType=${failType}：${hint}）`);
+    }
+
+    // 0 已创建 / 3 处理中
+    const wait = Math.min(
+      pollIntervalMs,
+      Math.max(1_000, lastEstimate > 0 ? Math.min(lastEstimate, 10_000) : pollIntervalMs),
+    );
+    await sleep(wait);
+  }
+
+  throw new Error("讯飞录音文件转写超时，请稍后重试");
+}
+
+/**
+ * 兼容旧调用：从 PCM/WAV buffer 走录音文件转写大模型。
+ * 优先按 WAV 原样上传；裸 PCM 则带 .pcm 后缀。
+ */
+export async function transcribePcmWithXfyunBatch(opts: {
+  pcm: Buffer;
+  sampleRate?: number;
+  fileName?: string;
+  recordingStartedAt?: Date | null;
+  timeoutMs?: number;
+}): Promise<TimedTranscriptDoc> {
+  const isWav =
+    opts.pcm.length >= 12 &&
+    opts.pcm.toString("ascii", 0, 4) === "RIFF" &&
+    opts.pcm.toString("ascii", 8, 12) === "WAVE";
+
+  if (isWav) {
+    return transcribeFileWithXfyunBatch({
+      file: opts.pcm,
+      fileName: opts.fileName || "meeting.wav",
+      recordingStartedAt: opts.recordingStartedAt,
+      timeoutMs: opts.timeoutMs,
+    });
   }
 
   let pcm = opts.pcm;
@@ -86,131 +291,13 @@ export async function transcribePcmWithXfyunBatch(opts: {
   if (fromRate !== 16000) {
     pcm = resamplePcm16Mono(pcm, fromRate, 16000);
   }
-
-  const sentences: TranscriptSentence[] = [];
-  let audioMsSent = 0;
-  let interim = "";
-  let closed = false;
-  let rejectErr: Error | null = null;
-
-  const url = buildXfyunRealtimeWsUrl({
-    appId: cfg.appId,
-    apiKey: cfg.apiKey,
-    apiSecret: cfg.apiSecret,
-    lang: cfg.lang,
-    pd: cfg.pd,
-    vadMdn: cfg.vadMdn,
-    uuid: randomUUID().replace(/-/g, ""),
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      rejectErr = new Error("讯飞一次性转写超时");
-      try {
-        ws.close();
-      } catch {
-        /* ignore */
-      }
-      reject(rejectErr);
-    }, opts.timeoutMs ?? 600_000);
-
-    const ws = new WebSocket(url);
-
-    const finish = (err?: Error) => {
-      if (closed) return;
-      closed = true;
-      clearTimeout(timer);
-      if (err) reject(err);
-      else resolve();
-    };
-
-    ws.on("open", () => {
-      let offset = 0;
-      const sendNext = () => {
-        if (closed || ws.readyState !== WebSocket.OPEN) return;
-        if (offset >= pcm.length) {
-          try {
-            ws.send(JSON.stringify({ end: true }));
-          } catch {
-            /* ignore */
-          }
-          return;
-        }
-        const end = Math.min(offset + FRAME_BYTES, pcm.length);
-        const frame = pcm.subarray(offset, end);
-        offset = end;
-        // 末帧不足 1280 时补零，讯飞更稳
-        const payload =
-          frame.length === FRAME_BYTES
-            ? frame
-            : Buffer.concat([frame, Buffer.alloc(FRAME_BYTES - frame.length)]);
-        ws.send(payload);
-        audioMsSent += FRAME_MS;
-        // 会后一次性：尽快喂完，不必按实时 40ms 节拍（否则 1 小时会开 1 小时）
-        setImmediate(sendNext);
-      };
-      sendNext();
-    });
-
-    ws.on("message", (data) => {
-      const raw = typeof data === "string" ? data : data.toString("utf8");
-      const parsed = parseXfyunAsrMessage(raw);
-      if (!parsed) return;
-      if (parsed.error) {
-        finish(new Error(parsed.error));
-        return;
-      }
-      if (parsed.isFinal && parsed.text) {
-        interim = "";
-        const xfyunDur =
-          parsed.endMs != null && parsed.startMs != null
-            ? Math.max(200, parsed.endMs - parsed.startMs)
-            : 2000;
-        const endMs = audioMsSent;
-        const startMs = Math.max(0, endMs - xfyunDur);
-        const last = sentences[sentences.length - 1];
-        if (last && last.text === parsed.text && Math.abs((last.startTime || 0) - startMs) < 500) {
-          return;
-        }
-        sentences.push({
-          startTime: parsed.startMs != null ? parsed.startMs : startMs,
-          endTime: parsed.endMs != null ? parsed.endMs : endMs,
-          text: parsed.text,
-        });
-      } else if (parsed.text) {
-        interim = parsed.text;
-      }
-      if (parsed.isLastFrame) {
-        finish();
-      }
-    });
-
-    ws.on("error", (e) => finish(e instanceof Error ? e : new Error(String(e))));
-    ws.on("close", () => {
-      if (interim.trim()) {
-        sentences.push({ startTime: Math.max(0, audioMsSent - 2000), text: interim.trim() });
-      }
-      finish();
-    });
-  });
-
-  if (!sentences.length) {
-    throw new Error("讯飞未识别到有效语音，请确认录到了会议声音");
-  }
-
-  // 统一成相对录音起点的 ms；若讯飞 bg 异常偏大，回退到我们累计的 audioMs
-  const normalized = sentences.map((s, i) => {
-    let start = Number(s.startTime) || 0;
-    if (start > audioMsSent + 60_000) {
-      start = Math.max(0, (audioMsSent * i) / Math.max(1, sentences.length));
-    }
-    return { ...s, startTime: start };
-  });
-
-  return buildTimedTranscriptDoc({
-    sentences: normalized,
-    timeBase: "relative_ms",
-    recordingStartedAt: opts.recordingStartedAt ?? null,
+  const durationMs = Math.max(1, Math.round((pcm.length / 2 / 16000) * 1000));
+  return transcribeFileWithXfyunBatch({
+    file: pcm,
+    fileName: opts.fileName || "meeting.pcm",
+    durationMs,
+    recordingStartedAt: opts.recordingStartedAt,
+    timeoutMs: opts.timeoutMs,
   });
 }
 

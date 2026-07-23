@@ -21,8 +21,8 @@ type Props = {
   onResetToPrep?: () => void;
   /** 额外插在按钮行右侧（如领域特有按钮） */
   extra?: ReactNode;
-  /** prep-only：仅会前行内分享（过伙伴）；prep-and-later：会后也显示（过线索） */
-  shareMode?: "prep-only" | "prep-and-later";
+  /** prep-only：仅会前行内分享；prep-and-later：会后也显示；none：不显示分享 */
+  shareMode?: "prep-only" | "prep-and-later" | "none";
 };
 
 /**
@@ -46,6 +46,7 @@ export function MeetingToolbar({
 }: Props) {
   const t = useMessages().meetingUi;
   const canPrep = phase === "prep" || status === "DRAFT" || status === "PREP";
+  const showPrepShare = shareMode !== "none" && phase === "prep";
   const showLaterShare =
     shareMode === "prep-and-later" && (phase === "post" || phase === "done");
 
@@ -64,7 +65,9 @@ export function MeetingToolbar({
 
       {phase === "prep" ? (
         <>
-          <MeetingShareActions previewToken={previewToken} resolvePath={resolvePreviewPath} />
+          {showPrepShare ? (
+            <MeetingShareActions previewToken={previewToken} resolvePath={resolvePreviewPath} />
+          ) : null}
           <button
             type="button"
             disabled={busy}
