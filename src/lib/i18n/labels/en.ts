@@ -280,6 +280,7 @@ export const labelsEn: LabelsBundle = {
   workspacePanels: [
     { id: "guide", label: "Overview", desc: "Status · Records · Todos" },
     { id: "positioning", label: "Positioning playbook", desc: "Tier · Type · Value pattern · Profile" },
+    { id: "capability", label: "Capability building", desc: "Training · Drive materials · Joint solutions" },
     { id: "pipeline", label: "Pipeline", desc: "Pipeline opportunity tracking" },
     { id: "relationship", label: "Relationship management", desc: "Power map · Activity" },
   ],

@@ -33,6 +33,7 @@ export function PartnerWorkspaceShell({
   taxonomy,
   guide,
   positioning,
+  capability,
   pipeline,
   relationship,
 }: {
@@ -43,6 +44,7 @@ export function PartnerWorkspaceShell({
   taxonomy: import("@/components/map-node-quick-edit").TaxonomyOptionsMap;
   guide: ReactNode;
   positioning: ReactNode;
+  capability: ReactNode;
   pipeline: ReactNode;
   relationship: ReactNode;
 }) {
@@ -56,6 +58,7 @@ export function PartnerWorkspaceShell({
   const panels: Record<WorkspacePanelId, ReactNode> = {
     guide,
     positioning,
+    capability,
     pipeline,
     relationship,
   };
@@ -81,7 +84,7 @@ export function PartnerWorkspaceShell({
     <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-5 pb-12 sm:pb-16">
       <div className="flex flex-col gap-3 mb-5">
         <p className="text-xs text-slate-500">{m.workspace.clickModule}</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
           {workspacePanels.map((p) => {
             const active = activePanel === p.id;
             const badge = badges[p.id];

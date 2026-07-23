@@ -27,6 +27,9 @@ import { PartnerCustomersSection } from "@/components/partner-customers-section"
 import { PartnerAgentsPanel } from "@/components/partner-agents-panel";
 import { PartnerIntegrationsPanel } from "@/components/partner-integrations-panel";
 import { PartnerHierarchySection } from "@/components/partner-hierarchy-section";
+import { PartnerSolutionsSection } from "@/components/partner-solutions-section";
+import { MaterialsSection } from "@/components/materials-section";
+import { TrainingList } from "@/components/training-list";
 import { BusinessRecordsSection, BusinessRecordDialogButton } from "@/components/business-records-section";
 import { BUSINESS_RECORD_PAGE_SIZE } from "@/lib/business-record-core";
 import { ImportKnownClientsButton } from "@/components/import-known-clients-button";
@@ -35,6 +38,7 @@ import { TodoItemRow } from "@/components/todo-item-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
 import { getWecomChatForPartner } from "@/lib/wecom-chats";
+import { getAmmoConfigForClient } from "@/lib/ammo-config";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { SentimentMonitorSection } from "@/components/sentiment-monitor-section";
 import { SENTIMENT_MONITOR_ENABLED } from "@/lib/feature-flags";
@@ -56,7 +60,8 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       contactLinks: true,
       opportunities: { orderBy: { updatedAt: "desc" } },
       events: { orderBy: { createdAt: "desc" }, take: 100, include: { createdBy: true } },
-      trainings: true,
+      trainings: { orderBy: { updatedAt: "desc" } },
+      assets: { orderBy: { createdAt: "desc" } },
       todos: {
         orderBy: [{ status: "asc" }, { dueDate: "asc" }],
         include: {
@@ -136,6 +141,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
     rollupOpportunities,
     rollupProjects,
     recentReviewItems,
+    ammoConfig,
   ] = await Promise.all([
     db.user.findMany(),
     db.customer.findMany({
@@ -234,6 +240,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
       select: { discussedAt: true, status: true, updatedAt: true },
       take: 20,
     }),
+    getAmmoConfigForClient(),
   ]);
 
   const taxonomyArchetype = taxonomyByDim.ARCHETYPE ?? [];
@@ -305,6 +312,7 @@ export async function PartnerDetailBody({ id }: { id: string }) {
 
   const openTodos = p.todos.filter((t) => t.status !== "DONE");
   const doneTodos = p.todos.filter((t) => t.status === "DONE");
+  const linkAssets = p.assets.filter((a) => !(a.provider === "gdrive" && a.size > 0));
 
   return (
       <PartnerWorkspaceShell
@@ -495,6 +503,33 @@ export async function PartnerDetailBody({ id }: { id: string }) {
                 </dl>
               </Card>
             </div>
+          </div>
+        }
+        capability={
+          <div className="space-y-5">
+            <Card title={m.partnerDetail.trainingCert.replace("{count}", String(p.trainings.length))}>
+              <TrainingList owner={{ partnerId: p.id }} trainings={p.trainings} input={input} m={m} />
+            </Card>
+            <MaterialsSection
+              partnerId={p.id}
+              entityName={p.name}
+              folderUrl={p.gdriveFolderUrl}
+              browseReady={ammoConfig.gdriveServiceAccountConfigured}
+              uploaderConnected={ammoConfig.gdriveUploaderConnected}
+              assets={linkAssets.map((a) => ({
+                id: a.id,
+                filename: a.filename,
+                url: a.url,
+                thumbnailUrl: a.thumbnailUrl,
+                provider: a.provider,
+              }))}
+              copy={m.gdriveMaterials}
+            />
+            <PartnerSolutionsSection
+              partnerId={p.id}
+              solutions={p.solutions}
+              copy={m.partnerDetail.solutionsSection}
+            />
           </div>
         }
         pipeline={

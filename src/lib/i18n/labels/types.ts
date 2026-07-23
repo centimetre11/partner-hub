@@ -1,6 +1,6 @@
 import type { Locale } from "../locale";
 
-export type WorkspacePanelId = "guide" | "positioning" | "pipeline" | "relationship";
+export type WorkspacePanelId = "guide" | "positioning" | "capability" | "pipeline" | "relationship";
 
 export type TaxonomyDimension =
   | "ARCHETYPE"

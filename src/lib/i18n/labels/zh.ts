@@ -280,6 +280,7 @@ export const labelsZh: LabelsBundle = {
   workspacePanels: [
     { id: "guide", label: "伙伴概览", desc: "状态总览 · 商务记录 · 待办" },
     { id: "positioning", label: "定位打法", desc: "Tier · 类型 · 价值模式 · 画像" },
+    { id: "capability", label: "能力建设", desc: "培训认证 · 云盘材料 · 联合方案" },
     { id: "pipeline", label: "商机推进", desc: "Pipeline 商机跟踪" },
     { id: "relationship", label: "关系经营", desc: "权力地图 · 动态" },
   ],
