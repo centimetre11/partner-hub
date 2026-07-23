@@ -12,8 +12,21 @@ import type { ConfirmItemPayload } from "./types";
 import { markItemDiscussed } from "./discuss-item";
 import { materializeLiveNotesForMeeting } from "./notes-materialize";
 import { markPrepReady, loadPrepFacts } from "./prep-facts";
+import { recommendAgendaForUsers, type RecommendedAgendaItem } from "./recommend";
 import { buildSplitProposal, persistSplitDrafts } from "./split";
 import { toMeetingClient, toMeetingItemClient } from "./meeting-client";
+
+export type { RecommendedAgendaItem };
+
+export async function recommendPresalesAgendaAction(userIds: string[]) {
+  await requireUser();
+  try {
+    const items = await recommendAgendaForUsers(userIds);
+    return { ok: true as const, items };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 function revalidateMeeting(id: string) {
   revalidatePath("/presales-meetings");
@@ -50,7 +63,11 @@ export async function createPresalesMeetingAction(input: {
       status: "DRAFT",
       scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
       createdById: user.id,
-      attendeeUserIds: JSON.stringify(input.attendeeUserIds ?? []),
+      attendeeUserIds: JSON.stringify(
+        input.attendeeUserIds?.length
+          ? input.attendeeUserIds
+          : [...new Set(items.map((it) => it.userId))],
+      ),
       items: {
         create: items.map((it, sortOrder) => ({
           userId: it.userId,
@@ -62,7 +79,11 @@ export async function createPresalesMeetingAction(input: {
     },
   });
 
+  // 最终确认：拉起会前事实（无 AI）
+  await markPrepReady(meeting.id);
+
   revalidatePath("/presales-meetings");
+  revalidatePath(`/presales-meetings/${meeting.id}`);
   return { ok: true as const, id: meeting.id };
 }
 
