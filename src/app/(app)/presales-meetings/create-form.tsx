@@ -28,15 +28,15 @@ type UserOpt = { id: string; name: string; role: string };
 type ManualRow = {
   key: string;
   customerId: string;
-  projectId: string;
-  customerQuery: string;
+  /** "" = 仅客户；project:<id> | opportunity:<id> */
+  linkKey: string;
 };
 
 type PersonBlock = {
   userId: string;
-  /** recommended item keys selected: projectId */
-  selectedProjectIds: Set<string>;
-  /** owned quick-pick subjectKeys: project:|opportunity:|partner: */
+  /** recommended subjectKeys selected */
+  selectedRecKeys: Set<string>;
+  /** owned quick-pick subjectKeys: project:|opportunity:|partner:|customer: */
   ownedPicks: Set<string>;
   manual: ManualRow[];
 };
@@ -44,7 +44,7 @@ type PersonBlock = {
 function emptyBlock(userId: string): PersonBlock {
   return {
     userId,
-    selectedProjectIds: new Set(),
+    selectedRecKeys: new Set(),
     ownedPicks: new Set(),
     manual: [],
   };
@@ -54,8 +54,7 @@ function newManualRow(): ManualRow {
   return {
     key: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     customerId: "",
-    projectId: "",
-    customerQuery: "",
+    linkKey: "",
   };
 }
 
@@ -119,6 +118,17 @@ export function CreatePresalesMeetingForm({
     }
     return map;
   }, [projects]);
+
+  const oppsByCustomer = useMemo(() => {
+    const map = new Map<string, OpportunityOpt[]>();
+    for (const o of opportunities) {
+      if (!o.customerId || ["WON", "LOST"].includes(o.status)) continue;
+      const list = map.get(o.customerId) ?? [];
+      list.push(o);
+      map.set(o.customerId, list);
+    }
+    return map;
+  }, [opportunities]);
 
   const recommendedByUser = useMemo(() => {
     const map = new Map<string, RecommendedAgendaItem[]>();
@@ -196,7 +206,7 @@ export function CreatePresalesMeetingForm({
             const forUser = items.filter((it) => it.userId === userId);
             next[userId] = {
               userId,
-              selectedProjectIds: new Set(forUser.map((it) => it.projectId)),
+              selectedRecKeys: new Set(forUser.map((it) => it.subjectKey)),
               ownedPicks: existing?.ownedPicks ?? new Set(),
               manual: existing?.manual ?? [],
             };
@@ -211,13 +221,13 @@ export function CreatePresalesMeetingForm({
     })();
   }
 
-  function toggleRecommended(userId: string, projectId: string) {
+  function toggleRecommended(userId: string, subjectKey: string) {
     setBlocks((prev) => {
       const block = prev[userId] ?? emptyBlock(userId);
-      const selected = new Set(block.selectedProjectIds);
-      if (selected.has(projectId)) selected.delete(projectId);
-      else selected.add(projectId);
-      return { ...prev, [userId]: { ...block, selectedProjectIds: selected } };
+      const selected = new Set(block.selectedRecKeys);
+      if (selected.has(subjectKey)) selected.delete(subjectKey);
+      else selected.add(subjectKey);
+      return { ...prev, [userId]: { ...block, selectedRecKeys: selected } };
     });
   }
 
@@ -255,7 +265,9 @@ export function CreatePresalesMeetingForm({
           ? item.projectId
           : item.kind === "OPPORTUNITY"
             ? item.opportunityId
-            : item.partnerId;
+            : item.kind === "CUSTOMER"
+              ? item.customerId
+              : item.partnerId;
       if (!id) return;
       const key = `${item.userId}|${subjectKeyFor(item.kind, id)}`;
       if (seen.has(key)) return;
@@ -267,13 +279,24 @@ export function CreatePresalesMeetingForm({
       const block = blocks[userId];
       if (!block) continue;
       for (const rec of recommendedByUser.get(userId) ?? []) {
-        if (!block.selectedProjectIds.has(rec.projectId)) continue;
-        push({
-          userId,
-          kind: "PROJECT",
-          customerId: rec.customerId,
-          projectId: rec.projectId,
-        });
+        if (!block.selectedRecKeys.has(rec.subjectKey)) continue;
+        if (rec.kind === "PROJECT" && rec.projectId) {
+          push({
+            userId,
+            kind: "PROJECT",
+            customerId: rec.customerId,
+            projectId: rec.projectId,
+          });
+        } else if (rec.kind === "OPPORTUNITY" && rec.opportunityId) {
+          push({
+            userId,
+            kind: "OPPORTUNITY",
+            customerId: rec.customerId,
+            opportunityId: rec.opportunityId,
+          });
+        } else if (rec.kind === "CUSTOMER" && rec.customerId) {
+          push({ userId, kind: "CUSTOMER", customerId: rec.customerId });
+        }
       }
       for (const subjectKey of block.ownedPicks) {
         const [prefix, id] = subjectKey.split(":");
@@ -291,16 +314,33 @@ export function CreatePresalesMeetingForm({
           push({ userId, kind: "OPPORTUNITY", opportunityId: id });
         } else if (prefix === "partner") {
           push({ userId, kind: "PARTNER", partnerId: id });
+        } else if (prefix === "customer") {
+          push({ userId, kind: "CUSTOMER", customerId: id });
         }
       }
       for (const row of block.manual) {
-        if (!row.customerId || !row.projectId) continue;
-        push({
-          userId,
-          kind: "PROJECT",
-          customerId: row.customerId,
-          projectId: row.projectId,
-        });
+        if (!row.customerId) continue;
+        if (!row.linkKey) {
+          push({ userId, kind: "CUSTOMER", customerId: row.customerId });
+          continue;
+        }
+        const [prefix, id] = row.linkKey.split(":");
+        if (!id) continue;
+        if (prefix === "project") {
+          push({
+            userId,
+            kind: "PROJECT",
+            customerId: row.customerId,
+            projectId: id,
+          });
+        } else if (prefix === "opportunity") {
+          push({
+            userId,
+            kind: "OPPORTUNITY",
+            customerId: row.customerId,
+            opportunityId: id,
+          });
+        }
       }
     }
     return out;
@@ -427,9 +467,9 @@ export function CreatePresalesMeetingForm({
                 {recs.length ? (
                   <ul className="space-y-1.5">
                     {recs.map((rec) => {
-                      const checked = block.selectedProjectIds.has(rec.projectId);
+                      const checked = block.selectedRecKeys.has(rec.subjectKey);
                       return (
-                        <li key={`${rec.userId}-${rec.projectId}`}>
+                        <li key={`${rec.userId}-${rec.subjectKey}`}>
                           <label
                             className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 text-sm cursor-pointer ${
                               checked
@@ -440,13 +480,11 @@ export function CreatePresalesMeetingForm({
                             <input
                               type="checkbox"
                               checked={checked}
-                              onChange={() => toggleRecommended(userId, rec.projectId)}
+                              onChange={() => toggleRecommended(userId, rec.subjectKey)}
                               className="mt-0.5 rounded border-slate-300"
                             />
                             <span className="min-w-0">
-                              <span className="font-medium text-slate-800">
-                                {rec.customerName} / {rec.projectName}
-                              </span>
+                              <span className="font-medium text-slate-800">{rec.title}</span>
                               <span className="block text-[11px] text-slate-400">
                                 {formatMsg(t.recommendReasons, {
                                   reasons: rec.reasons.join(" · "),
@@ -482,6 +520,7 @@ export function CreatePresalesMeetingForm({
                     noOpportunitiesUnder: t.noOpportunitiesUnder,
                     partnerCustomers: t.partnerCustomers,
                     partnerAlways: t.partnerAlways,
+                    customerOnly: t.customerOnly,
                   }}
                 />
 
@@ -525,15 +564,11 @@ export function CreatePresalesMeetingForm({
                         </button>
                       </div>
                       {block.manual.map((row) => {
-                        const filteredCustomers = customers.filter((c) =>
-                          !row.customerQuery.trim()
-                            ? true
-                            : c.name
-                                .toLowerCase()
-                                .includes(row.customerQuery.trim().toLowerCase()),
-                        );
                         const custProjects = row.customerId
                           ? (projectsByCustomer.get(row.customerId) ?? [])
+                          : [];
+                        const custOpps = row.customerId
+                          ? (oppsByCustomer.get(row.customerId) ?? [])
                           : [];
                         return (
                           <div
@@ -542,28 +577,18 @@ export function CreatePresalesMeetingForm({
                           >
                             <label className="block space-y-1">
                               <span className="text-[11px] text-slate-500">{t.customer}</span>
-                              <input
-                                value={row.customerQuery}
-                                onChange={(e) =>
-                                  updateManual(userId, row.key, {
-                                    customerQuery: e.target.value,
-                                  })
-                                }
-                                placeholder={t.searchCustomer}
-                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm mb-1"
-                              />
                               <select
                                 value={row.customerId}
                                 onChange={(e) =>
                                   updateManual(userId, row.key, {
                                     customerId: e.target.value,
-                                    projectId: "",
+                                    linkKey: "",
                                   })
                                 }
                                 className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
                               >
-                                <option value="">—</option>
-                                {filteredCustomers.slice(0, 80).map((c) => (
+                                <option value="">{t.selectCustomer}</option>
+                                {customers.map((c) => (
                                   <option key={c.id} value={c.id}>
                                     {c.name}
                                   </option>
@@ -571,23 +596,36 @@ export function CreatePresalesMeetingForm({
                               </select>
                             </label>
                             <label className="block space-y-1">
-                              <span className="text-[11px] text-slate-500">{t.project}</span>
+                              <span className="text-[11px] text-slate-500">{t.optionalLink}</span>
                               <select
-                                value={row.projectId}
+                                value={row.linkKey}
                                 disabled={!row.customerId}
                                 onChange={(e) =>
                                   updateManual(userId, row.key, {
-                                    projectId: e.target.value,
+                                    linkKey: e.target.value,
                                   })
                                 }
                                 className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm disabled:opacity-40"
                               >
-                                <option value="">{t.selectProject}</option>
-                                {custProjects.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                  </option>
-                                ))}
+                                <option value="">{t.customerOnly}</option>
+                                {custOpps.length ? (
+                                  <optgroup label={t.ownedOpportunities}>
+                                    {custOpps.map((o) => (
+                                      <option key={o.id} value={`opportunity:${o.id}`}>
+                                        {o.name}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ) : null}
+                                {custProjects.length ? (
+                                  <optgroup label={t.ownedProjects}>
+                                    {custProjects.map((p) => (
+                                      <option key={p.id} value={`project:${p.id}`}>
+                                        {p.name}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                ) : null}
                               </select>
                             </label>
                             <button

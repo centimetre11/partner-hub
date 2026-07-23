@@ -1,9 +1,16 @@
 export type RecommendedAgendaItem = {
   userId: string;
-  customerId: string;
-  customerName: string;
-  projectId: string;
-  projectName: string;
+  /** PROJECT | OPPORTUNITY | CUSTOMER */
+  kind: "PROJECT" | "OPPORTUNITY" | "CUSTOMER";
+  subjectKey: string;
+  /** 列表展示标题 */
+  title: string;
+  customerId: string | null;
+  customerName: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  opportunityId: string | null;
+  opportunityName: string | null;
   /** 命中原因：商务记录 / 待办 / 项目工作记录 */
   reasons: string[];
 };

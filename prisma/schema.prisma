@@ -1647,9 +1647,9 @@ model PresalesProjectMeetingItem {
   /// 会上「过谁」
   userId           String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// PROJECT | OPPORTUNITY | PARTNER
+  /// PROJECT | OPPORTUNITY | PARTNER | CUSTOMER
   subjectKind      String   @default("PROJECT")
-  /// project:<id> | opportunity:<id> | partner:<id>
+  /// project:<id> | opportunity:<id> | partner:<id> | customer:<id>
   subjectKey       String   @default("")
   customerId       String?
   customer         Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)

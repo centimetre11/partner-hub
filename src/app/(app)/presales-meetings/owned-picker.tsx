@@ -43,6 +43,7 @@ type Labels = {
   noOpportunitiesUnder: string;
   partnerCustomers: string;
   partnerAlways: string;
+  customerOnly?: string;
 };
 
 type Tab = "projects" | "opportunities" | "customers" | "partners";
@@ -306,48 +307,53 @@ export function OwnedPortfolioPicker({
                 const cps = projectsByCustomer.get(c.id) ?? [];
                 const ops = oppsByCustomer.get(c.id) ?? [];
                 return (
-                  <div key={c.id} className="rounded-md border border-slate-100">
-                    <button
-                      type="button"
-                      className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-left text-sm hover:bg-slate-50"
-                      onClick={() =>
-                        setOpenCustomerIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(c.id)) next.delete(c.id);
-                          else next.add(c.id);
-                          return next;
-                        })
-                      }
-                    >
-                      <span className="font-medium text-slate-800 truncate">{c.name}</span>
-                      <span className="text-[11px] text-slate-400 shrink-0">
-                        {cps.length + ops.length} · {open ? "▴" : "▾"}
-                      </span>
-                    </button>
-                    {open ? (
-                      <div className="px-2 pb-2 space-y-1">
-                        {ops.map((o) =>
-                          checkRow({
-                            kind: "OPPORTUNITY",
-                            id: o.id,
-                            title: o.name,
-                            subtitle: "商机",
-                          }),
-                        )}
-                        {cps.map((p) =>
-                          checkRow({
-                            kind: "PROJECT",
-                            id: p.id,
-                            title: p.name,
-                            subtitle: "项目",
-                          }),
-                        )}
-                        {!ops.length && !cps.length ? (
-                          <p className="text-[11px] text-slate-400 px-1">
-                            {labels.noProjectsUnder}
-                          </p>
+                  <div key={c.id} className="rounded-md border border-slate-100 space-y-1 p-1.5">
+                    {checkRow({
+                      kind: "CUSTOMER",
+                      id: c.id,
+                      title: c.name,
+                      subtitle: labels.customerOnly ?? "客户本身可勾选",
+                    })}
+                    {(cps.length > 0 || ops.length > 0) ? (
+                      <>
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between gap-2 px-2 py-1 text-left text-[11px] text-slate-500 hover:bg-slate-50 rounded"
+                          onClick={() =>
+                            setOpenCustomerIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(c.id)) next.delete(c.id);
+                              else next.add(c.id);
+                              return next;
+                            })
+                          }
+                        >
+                          <span>
+                            {labels.partnerCustomers} · {cps.length + ops.length}
+                          </span>
+                          <span>{open ? "▴" : "▾"}</span>
+                        </button>
+                        {open ? (
+                          <div className="px-1 pb-1 space-y-1">
+                            {ops.map((o) =>
+                              checkRow({
+                                kind: "OPPORTUNITY",
+                                id: o.id,
+                                title: o.name,
+                                subtitle: "商机",
+                              }),
+                            )}
+                            {cps.map((p) =>
+                              checkRow({
+                                kind: "PROJECT",
+                                id: p.id,
+                                title: p.name,
+                                subtitle: "项目",
+                              }),
+                            )}
+                          </div>
                         ) : null}
-                      </div>
+                      </>
                     ) : null}
                   </div>
                 );

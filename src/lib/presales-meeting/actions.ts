@@ -47,7 +47,7 @@ export async function createPresalesMeetingAction(input: {
     .map((it) => normalizeAgendaSubject(it))
     .filter((x): x is NonNullable<typeof x> => !!x);
   if (!normalized.length) {
-    return { error: "请至少添加一条议程（项目 / 商机 / 伙伴）" };
+    return { error: "请至少添加一条议程（客户 / 项目 / 商机 / 伙伴）" };
   }
 
   // de-dupe by user + subjectKey
@@ -68,8 +68,11 @@ export async function createPresalesMeetingAction(input: {
   const partnerIds = [
     ...new Set(items.filter((i) => i.kind === "PARTNER").map((i) => i.partnerId!)),
   ];
+  const customerIds = [
+    ...new Set(items.filter((i) => i.kind === "CUSTOMER").map((i) => i.customerId!)),
+  ];
 
-  const [projects, opportunities, partners] = await Promise.all([
+  const [projects, opportunities, partners, customers] = await Promise.all([
     projectIds.length
       ? db.project.findMany({
           where: { id: { in: projectIds } },
@@ -85,6 +88,12 @@ export async function createPresalesMeetingAction(input: {
     partnerIds.length
       ? db.partner.findMany({
           where: { id: { in: partnerIds } },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+    customerIds.length
+      ? db.customer.findMany({
+          where: { id: { in: customerIds } },
           select: { id: true },
         })
       : Promise.resolve([]),
@@ -128,6 +137,21 @@ export async function createPresalesMeetingAction(input: {
         projectId: null,
         opportunityId: o.id,
         partnerId: o.partnerId ?? null,
+        sortOrder,
+      });
+      continue;
+    }
+    if (row.kind === "CUSTOMER") {
+      const c = customers.find((x) => x.id === row.customerId);
+      if (!c) return { error: "存在无效客户" };
+      createRows.push({
+        userId: row.userId,
+        subjectKind: "CUSTOMER",
+        subjectKey: row.subjectKey,
+        customerId: c.id,
+        projectId: null,
+        opportunityId: null,
+        partnerId: null,
         sortOrder,
       });
       continue;

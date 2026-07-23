@@ -91,11 +91,17 @@ type ItemRow = {
 };
 
 function resolveKind(it: ItemRow): AgendaSubjectKind {
-  if (it.subjectKind === "OPPORTUNITY" || it.subjectKind === "PARTNER" || it.subjectKind === "PROJECT") {
+  if (
+    it.subjectKind === "OPPORTUNITY" ||
+    it.subjectKind === "PARTNER" ||
+    it.subjectKind === "PROJECT" ||
+    it.subjectKind === "CUSTOMER"
+  ) {
     return it.subjectKind;
   }
   if (it.opportunityId && !it.projectId) return "OPPORTUNITY";
-  if (it.partnerId && !it.projectId && !it.opportunityId) return "PARTNER";
+  if (it.partnerId && !it.projectId && !it.opportunityId && !it.customerId) return "PARTNER";
+  if (it.customerId && !it.projectId && !it.opportunityId && !it.partnerId) return "CUSTOMER";
   return "PROJECT";
 }
 
@@ -103,6 +109,7 @@ function resolveSubjectKey(it: ItemRow, kind: AgendaSubjectKind): string {
   if (it.subjectKey) return it.subjectKey;
   if (kind === "OPPORTUNITY" && it.opportunityId) return `opportunity:${it.opportunityId}`;
   if (kind === "PARTNER" && it.partnerId) return `partner:${it.partnerId}`;
+  if (kind === "CUSTOMER" && it.customerId) return `customer:${it.customerId}`;
   if (it.projectId) return `project:${it.projectId}`;
   return it.id;
 }

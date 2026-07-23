@@ -1,4 +1,4 @@
-export type AgendaSubjectKind = "PROJECT" | "OPPORTUNITY" | "PARTNER";
+export type AgendaSubjectKind = "PROJECT" | "OPPORTUNITY" | "PARTNER" | "CUSTOMER";
 
 export type AgendaSubjectInput = {
   userId: string;
@@ -9,19 +9,23 @@ export type AgendaSubjectInput = {
   partnerId?: string | null;
 };
 
-export function subjectKeyFor(
-  kind: AgendaSubjectKind,
-  id: string,
-): string {
+export function subjectKeyFor(kind: AgendaSubjectKind, id: string): string {
   const prefix =
-    kind === "PROJECT" ? "project" : kind === "OPPORTUNITY" ? "opportunity" : "partner";
+    kind === "PROJECT"
+      ? "project"
+      : kind === "OPPORTUNITY"
+        ? "opportunity"
+        : kind === "PARTNER"
+          ? "partner"
+          : "customer";
   return `${prefix}:${id}`;
 }
 
 export function subjectIdFromInput(input: AgendaSubjectInput): string | null {
   if (input.kind === "PROJECT") return input.projectId ?? null;
   if (input.kind === "OPPORTUNITY") return input.opportunityId ?? null;
-  return input.partnerId ?? null;
+  if (input.kind === "PARTNER") return input.partnerId ?? null;
+  return input.customerId ?? null;
 }
 
 export function normalizeAgendaSubject(
@@ -50,6 +54,8 @@ export function itemDisplayLabel(opts: {
   } else if (kind === "OPPORTUNITY") {
     const owner = opts.customerName?.trim() || opts.partnerName?.trim() || "—";
     subject = `${owner} / 商机 · ${opts.opportunityName?.trim() || "—"}`;
+  } else if (kind === "CUSTOMER") {
+    subject = `客户 · ${opts.customerName?.trim() || "—"}`;
   } else {
     subject = `${opts.customerName?.trim() || "—"} / ${opts.projectName?.trim() || "—"}`;
   }

@@ -138,7 +138,9 @@ export default async function PresalesMeetingsPage({
                 ? `伙伴 · ${it.partner?.name ?? "—"}`
                 : it.subjectKind === "OPPORTUNITY"
                   ? `商机 · ${it.opportunity?.name ?? "—"}`
-                  : `${it.customer?.name ?? "—"} / ${it.project?.name ?? "—"}`;
+                  : it.subjectKind === "CUSTOMER"
+                    ? `客户 · ${it.customer?.name ?? "—"}`
+                    : `${it.customer?.name ?? "—"} / ${it.project?.name ?? "—"}`;
             return {
               userName: it.user.name,
               subject,
