@@ -9,7 +9,6 @@ import {
   PROCESS_TAG_CODES,
   formatNextProcessDisplay,
   isProcessTagCode,
-  parseProcessTags,
   processTagLabel,
 } from "@/lib/opportunity-process-tags";
 import {
@@ -19,7 +18,9 @@ import {
   opportunityStatusTone,
 } from "@/lib/opportunity-status";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { ListPagination } from "@/components/list-pagination";
 import { nameContainsWhere } from "@/lib/name-search";
+import { parseListPage } from "@/lib/list-pagination";
 import { formatAmountDisplay } from "@/lib/amount";
 
 export default async function OpportunitiesPage({
@@ -32,6 +33,7 @@ export default async function OpportunitiesPage({
     partner?: string;
     dealType?: string;
     process?: string;
+    page?: string;
   }>;
 }) {
   await requireUser();
@@ -39,6 +41,7 @@ export default async function OpportunitiesPage({
   const o = m.opportunities;
   const c = m.customers;
   const sp = await searchParams;
+  const { page, take, skip } = parseListPage(sp.page);
   // 首次进入默认「推进中」（P20/P50/P80）；选「全部状态」时 status="" 不按状态过滤
   const statusFilter = sp.status === undefined ? "open" : sp.status;
   const processFilter =
@@ -56,32 +59,49 @@ export default async function OpportunitiesPage({
           ? { status: statusFilter }
           : {};
 
-  const [rawOpportunities, customers, partners] = await Promise.all([
+  const where = {
+    ...(nameFilter ? { name: nameFilter } : {}),
+    ...statusWhere,
+    ...(sp.customer ? { customerId: sp.customer } : {}),
+    ...(sp.partner ? { partnerId: sp.partner } : {}),
+    ...(sp.dealType ? { dealType: sp.dealType } : {}),
+    ...(processFilter ? { stage: { contains: processFilter } } : {}),
+  };
+
+  const [opportunities, total, customers, partners] = await Promise.all([
     db.opportunity.findMany({
-      where: {
-        ...(nameFilter ? { name: nameFilter } : {}),
-        ...statusWhere,
-        ...(sp.customer ? { customerId: sp.customer } : {}),
-        ...(sp.partner ? { partnerId: sp.partner } : {}),
-        ...(sp.dealType ? { dealType: sp.dealType } : {}),
-      },
+      where,
       include: {
         customer: { select: { id: true, name: true } },
         partner: { select: { id: true, name: true } },
         project: { select: { id: true } },
       },
       orderBy: { updatedAt: "desc" },
+      skip,
+      take,
     }),
+    db.opportunity.count({ where }),
     db.customer.findMany({
       select: { id: true, name: true, crmCustomerId: true },
       orderBy: { name: "asc" },
+      take: 500,
     }),
     db.partner.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
-  const opportunities = processFilter
-    ? rawOpportunities.filter((opp) => parseProcessTags(opp.stage).includes(processFilter))
-    : rawOpportunities;
+  const pageLabels = {
+    prevPage: m.common.prevPage,
+    nextPage: m.common.nextPage,
+    pageOf: m.common.pageOf,
+  };
+  const filterParams = {
+    q: sp.q,
+    status: sp.status,
+    process: sp.process,
+    customer: sp.customer,
+    partner: sp.partner,
+    dealType: sp.dealType,
+  };
 
   const dealTypeLabel = (dt: string | null) =>
     dt === "PROJECT" ? c.dealTypeProject : dt === "PRODUCT" ? c.dealTypeProduct : "—";
@@ -90,7 +110,7 @@ export default async function OpportunitiesPage({
     <div className="pb-16">
       <PageHeader
         title={o.title}
-        desc={o.desc.replace("{count}", String(opportunities.length))}
+        desc={o.desc.replace("{count}", String(total))}
         actions={<AddOpportunityForm customers={customers} partners={partners} />}
       />
       <div className="px-8">
@@ -247,6 +267,14 @@ export default async function OpportunitiesPage({
                 </tbody>
               </table>
             </div>
+            <ListPagination
+              pathname="/opportunities"
+              searchParams={filterParams}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
           </div>
         )}
       </div>

@@ -5,7 +5,9 @@ import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddProjectForm } from "./add-project-form";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { ListPagination } from "@/components/list-pagination";
 import { nameContainsWhere } from "@/lib/name-search";
+import { parseListPage } from "@/lib/list-pagination";
 
 function statusTone(status: string): "green" | "indigo" | "zinc" {
   if (status === "ACTIVE") return "green";
@@ -23,6 +25,7 @@ export default async function ProjectsPage({
     customer?: string;
     partner?: string;
     owner?: string;
+    page?: string;
   }>;
 }) {
   await requireUser();
@@ -30,19 +33,22 @@ export default async function ProjectsPage({
   const p = m.projects;
   const c = m.customers;
   const sp = await searchParams;
+  const { page, take, skip } = parseListPage(sp.page);
   const statusFilter = sp.status === undefined ? "ACTIVE" : sp.status;
   const nameFilter = nameContainsWhere(sp.q);
 
-  const [projects, customers, partners, users] = await Promise.all([
+  const where = {
+    ...(nameFilter ? { name: nameFilter } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(sp.phase ? { phase: sp.phase } : {}),
+    ...(sp.customer ? { customerId: sp.customer } : {}),
+    ...(sp.partner ? { partnerId: sp.partner } : {}),
+    ...(sp.owner ? { ownerId: sp.owner } : {}),
+  };
+
+  const [projects, total, customers, partners, users] = await Promise.all([
     db.project.findMany({
-      where: {
-        ...(nameFilter ? { name: nameFilter } : {}),
-        ...(statusFilter ? { status: statusFilter } : {}),
-        ...(sp.phase ? { phase: sp.phase } : {}),
-        ...(sp.customer ? { customerId: sp.customer } : {}),
-        ...(sp.partner ? { partnerId: sp.partner } : {}),
-        ...(sp.owner ? { ownerId: sp.owner } : {}),
-      },
+      where,
       include: {
         customer: { select: { id: true, name: true } },
         partner: { select: { id: true, name: true } },
@@ -50,7 +56,10 @@ export default async function ProjectsPage({
         sourceOpportunity: { select: { id: true, name: true } },
       },
       orderBy: { updatedAt: "desc" },
+      skip,
+      take,
     }),
+    db.project.count({ where }),
     db.customer.findMany({
       select: { id: true, name: true, crmCustomerId: true },
       orderBy: { name: "asc" },
@@ -80,11 +89,25 @@ export default async function ProjectsPage({
       }) as Record<string, string>
     )[s] ?? s;
 
+  const pageLabels = {
+    prevPage: m.common.prevPage,
+    nextPage: m.common.nextPage,
+    pageOf: m.common.pageOf,
+  };
+  const filterParams = {
+    q: sp.q,
+    status: sp.status,
+    phase: sp.phase,
+    customer: sp.customer,
+    partner: sp.partner,
+    owner: sp.owner,
+  };
+
   return (
     <div className="pb-16">
       <PageHeader
         title={p.title}
-        desc={p.desc.replace("{count}", String(projects.length))}
+        desc={p.desc.replace("{count}", String(total))}
         actions={<AddProjectForm customers={customers} partners={partners} />}
       />
       <div className="px-8">
@@ -226,6 +249,14 @@ export default async function ProjectsPage({
                 </tbody>
               </table>
             </div>
+            <ListPagination
+              pathname="/projects"
+              searchParams={filterParams}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
           </div>
         )}
       </div>

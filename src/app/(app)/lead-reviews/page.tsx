@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
+import { ListPagination } from "@/components/list-pagination";
 import { CreateLeadReviewForm } from "./create-form";
 import { DeleteLeadReviewButton } from "./delete-button";
 import { listLeadReviewSalesmen } from "@/lib/lead-review/select";
@@ -9,17 +10,20 @@ import { getLeadReviewLastConfigAction } from "@/lib/lead-review/actions";
 import { parseLeadReviewConfig } from "@/lib/lead-review/types";
 import { getLocale } from "@/lib/i18n/locale-server";
 import { formatMsg, getMessages } from "@/lib/i18n/messages";
+import { parseListPage } from "@/lib/list-pagination";
 
 export default async function LeadReviewsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
   await requireUser();
   const sp = await searchParams;
   const tab = sp.tab === "history" ? "history" : "active";
+  const { page, take, skip } = parseListPage(sp.page);
   const locale = await getLocale();
-  const m = getMessages(locale).leadReview;
+  const msgs = getMessages(locale);
+  const m = msgs.leadReview;
 
   const STATUS_LABEL: Record<string, { label: string; tone: "zinc" | "blue" | "amber" | "green" | "purple" }> = {
     DRAFT: { label: m.statusDraft, tone: "zinc" },
@@ -29,19 +33,30 @@ export default async function LeadReviewsPage({
     DONE: { label: m.statusDone, tone: "green" },
   };
 
-  const [meetings, salesmen, lastConfig] = await Promise.all([
+  const meetingWhere = tab === "history" ? { status: "DONE" as const } : { status: { not: "DONE" as const } };
+
+  const [meetings, total, salesmen, lastConfig] = await Promise.all([
     db.leadReviewMeeting.findMany({
-      where: tab === "history" ? { status: "DONE" } : { status: { not: "DONE" } },
+      where: meetingWhere,
       orderBy: tab === "history" ? [{ endedAt: "desc" }, { createdAt: "desc" }] : { createdAt: "desc" },
-      take: 50,
+      skip,
+      take,
       include: {
         createdBy: { select: { name: true } },
         items: { select: { id: true, source: true, displayName: true, verdict: true } },
       },
     }),
+    db.leadReviewMeeting.count({ where: meetingWhere }),
     listLeadReviewSalesmen(),
     getLeadReviewLastConfigAction(),
   ]);
+
+  const pageLabels = {
+    prevPage: msgs.common.prevPage,
+    nextPage: msgs.common.nextPage,
+    pageOf: msgs.common.pageOf,
+  };
+  const filterParams = { tab: tab === "history" ? "history" : undefined };
 
   const tabClass = (active: boolean) =>
     `px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
@@ -76,6 +91,7 @@ export default async function LeadReviewsPage({
           {!meetings.length ? (
             <EmptyState text={tab === "history" ? m.emptyHistory : m.emptyActive} />
           ) : (
+            <>
             <ul className="divide-y divide-slate-100">
               {meetings.map((mtg) => {
                 const st = STATUS_LABEL[mtg.status] ?? STATUS_LABEL.DRAFT!;
@@ -118,6 +134,15 @@ export default async function LeadReviewsPage({
                 );
               })}
             </ul>
+            <ListPagination
+              pathname="/lead-reviews"
+              searchParams={filterParams}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
+            </>
           )}
         </Card>
       </div>

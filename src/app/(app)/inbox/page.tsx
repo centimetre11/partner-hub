@@ -4,24 +4,43 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
 import { Badge, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
+import { ListPagination } from "@/components/list-pagination";
 import { applyAgentProposalAction, markAllReadAction, markReadAction } from "@/lib/agent-actions";
 import { saveNotificationAsDocumentAction } from "@/lib/content-actions";
+import { parseListPage } from "@/lib/list-pagination";
 import type { AgentFieldProposal } from "@/lib/skills";
 import { getServerI18n } from "@/lib/server-i18n";
 
-export default async function InboxPage() {
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   if (!INBOX_NAV_ENABLED) redirect("/");
   await requireUser();
   const { messages: m, bcp47 } = await getServerI18n();
-  const notifications = await db.notification.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    include: { agentRun: { include: { agent: true } } },
-  });
+  const sp = await searchParams;
+  const { page, take, skip } = parseListPage(sp.page);
+
+  const [notifications, total, unread] = await Promise.all([
+    db.notification.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+      include: { agentRun: { include: { agent: true } } },
+    }),
+    db.notification.count(),
+    db.notification.count({ where: { readAt: null } }),
+  ]);
   const partnerIds = [...new Set(notifications.map((n) => n.partnerId).filter(Boolean))] as string[];
   const partners = await db.partner.findMany({ where: { id: { in: partnerIds } }, select: { id: true, name: true } });
   const partnerName = new Map(partners.map((p) => [p.id, p.name]));
-  const unread = notifications.filter((n) => !n.readAt).length;
+
+  const pageLabels = {
+    prevPage: m.common.prevPage,
+    nextPage: m.common.nextPage,
+    pageOf: m.common.pageOf,
+  };
 
   return (
     <div className="pb-16">
@@ -38,7 +57,10 @@ export default async function InboxPage() {
       />
       <div className="px-8 max-w-4xl space-y-3">
         {notifications.length === 0 && <EmptyState text={m.inbox.empty} />}
-        {notifications.map((n) => {
+        {notifications.length > 0 && (
+          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="space-y-0">
+              {notifications.map((n) => {
           const proposal: AgentFieldProposal | null = n.proposal ? JSON.parse(n.proposal) : null;
           return (
             <div
@@ -115,7 +137,18 @@ export default async function InboxPage() {
               )}
             </div>
           );
-        })}
+              })}
+            </div>
+            <ListPagination
+              pathname="/inbox"
+              searchParams={{}}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

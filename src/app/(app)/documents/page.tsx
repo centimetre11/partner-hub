@@ -2,18 +2,37 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, PageHeader, fmtDateTime } from "@/components/ui";
+import { ListPagination } from "@/components/list-pagination";
 import { deleteDocumentAction } from "@/lib/content-actions";
+import { parseListPage } from "@/lib/list-pagination";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
-export default async function DocumentsPage() {
+export default async function DocumentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   await requireUser();
   const { labels, messages: m, bcp47 } = await getServerI18n();
   const L = labelConstants(labels);
-  const docs = await db.document.findMany({
-    orderBy: { updatedAt: "desc" },
-    include: { partner: true, createdBy: true },
-    take: 100,
-  });
+  const sp = await searchParams;
+  const { page, take, skip } = parseListPage(sp.page);
+
+  const [docs, total] = await Promise.all([
+    db.document.findMany({
+      orderBy: { updatedAt: "desc" },
+      include: { partner: true, createdBy: true },
+      skip,
+      take,
+    }),
+    db.document.count(),
+  ]);
+
+  const pageLabels = {
+    prevPage: m.common.prevPage,
+    nextPage: m.common.nextPage,
+    pageOf: m.common.pageOf,
+  };
 
   return (
     <div className="pb-16">
@@ -32,31 +51,45 @@ export default async function DocumentsPage() {
             {m.documents.empty}
           </div>
         )}
-        {docs.map((d) => (
-          <div key={d.id} className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <Link href={`/documents/${d.id}`} className="font-semibold text-slate-900 hover:text-sky-600">
-                  {d.title}
-                </Link>
-                <div className="flex items-center gap-2 mt-1 flex-wrap text-xs text-slate-400">
-                  <Badge tone="blue">{L.DOCUMENT_TYPE_LABELS[d.type] ?? d.type}</Badge>
-                  <Badge tone={d.status === "FINAL" ? "green" : "amber"}>{d.status === "FINAL" ? m.common.final : m.common.draft}</Badge>
-                  {d.partner && (
-                    <Link href={`/partners/${d.partnerId}`} className="text-slate-500 hover:underline">
-                      {d.partner.name}
-                    </Link>
-                  )}
-                  <span>{d.createdBy?.name ?? "—"} · {m.common.updated} {fmtDateTime(d.updatedAt, bcp47)}</span>
+        {docs.length > 0 && (
+          <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="space-y-0 divide-y divide-slate-100">
+              {docs.map((d) => (
+                <div key={d.id} className="p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link href={`/documents/${d.id}`} className="font-semibold text-slate-900 hover:text-sky-600">
+                        {d.title}
+                      </Link>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap text-xs text-slate-400">
+                        <Badge tone="blue">{L.DOCUMENT_TYPE_LABELS[d.type] ?? d.type}</Badge>
+                        <Badge tone={d.status === "FINAL" ? "green" : "amber"}>{d.status === "FINAL" ? m.common.final : m.common.draft}</Badge>
+                        {d.partner && (
+                          <Link href={`/partners/${d.partnerId}`} className="text-slate-500 hover:underline">
+                            {d.partner.name}
+                          </Link>
+                        )}
+                        <span>{d.createdBy?.name ?? "—"} · {m.common.updated} {fmtDateTime(d.updatedAt, bcp47)}</span>
+                      </div>
+                      <p className="text-sm text-slate-500 mt-2 line-clamp-2">{d.content.slice(0, 160)}</p>
+                    </div>
+                    <form action={deleteDocumentAction.bind(null, d.id)}>
+                      <button className="text-xs text-slate-400 hover:text-red-600 shrink-0">{m.common.delete}</button>
+                    </form>
+                  </div>
                 </div>
-                <p className="text-sm text-slate-500 mt-2 line-clamp-2">{d.content.slice(0, 160)}</p>
-              </div>
-              <form action={deleteDocumentAction.bind(null, d.id)}>
-                <button className="text-xs text-slate-400 hover:text-red-600 shrink-0">{m.common.delete}</button>
-              </form>
+              ))}
             </div>
+            <ListPagination
+              pathname="/documents"
+              searchParams={{}}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

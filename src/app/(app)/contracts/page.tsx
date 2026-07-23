@@ -4,7 +4,9 @@ import { requireUser } from "@/lib/session";
 import { Badge, EmptyState, PageHeader, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { ListPagination } from "@/components/list-pagination";
 import { nameContainsWhere } from "@/lib/name-search";
+import { parseListPage } from "@/lib/list-pagination";
 import {
   CONTRACT_STATUS_CODES,
   CONTRACT_TYPE_CODES,
@@ -34,63 +36,106 @@ export default async function ContractsPage({
     status?: string;
     customer?: string;
     arrOnly?: string;
+    page?: string;
   }>;
 }) {
   await requireUser();
   const { messages: m, bcp47, locale } = await getServerI18n();
   const t = m.contracts;
   const sp = await searchParams;
+  const { page, take, skip } = parseListPage(sp.page);
   const statusFilter = sp.status ?? "ACTIVE";
   const typeFilter = sp.type ?? "";
   const arrOnly = sp.arrOnly === "1";
   const nameFilter = nameContainsWhere(sp.q);
 
-  const contractsRaw = await db.contract.findMany({
-    where: {
-      ...(nameFilter ? { name: nameFilter } : {}),
-      ...(sp.customer ? { customerId: sp.customer } : {}),
-      ...(arrOnly
-        ? arrSourceContractWhere()
-        : {
-            ...(statusFilter ? { status: statusFilter } : {}),
-            ...(typeFilter ? { contractType: typeFilter } : {}),
-          }),
-    },
-    include: {
-      customer: { select: { id: true, name: true, owner: { select: { name: true } } } },
-      partner: { select: { id: true, name: true } },
-      parentContract: { select: { id: true, name: true } },
-      lineItems: { select: { amount: true, currency: true, cycleYears: true } },
-      ...ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
-    },
-    orderBy: [{ endDate: "asc" }, { updatedAt: "desc" }],
-  });
+  const where = {
+    ...(nameFilter ? { name: nameFilter } : {}),
+    ...(sp.customer ? { customerId: sp.customer } : {}),
+    ...(arrOnly
+      ? arrSourceContractWhere()
+      : {
+          ...(statusFilter ? { status: statusFilter } : {}),
+          ...(typeFilter ? { contractType: typeFilter } : {}),
+        }),
+  };
+
+  const tableInclude = {
+    customer: { select: { id: true, name: true, owner: { select: { name: true } } } },
+    partner: { select: { id: true, name: true } },
+    parentContract: { select: { id: true, name: true } },
+    lineItems: { select: { amount: true, currency: true, cycleYears: true } },
+    ...ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
+  };
+
+  const statsSelect = {
+    id: true,
+    contractType: true,
+    status: true,
+    amount: true,
+    currency: true,
+    billingCycle: true,
+    termYears: true,
+    endDate: true,
+    renewsAt: true,
+    productMaintRatePct: true,
+    lineItems: { select: { amount: true, currency: true, cycleYears: true } },
+    ...ARR_ACTIVE_PRODUCT_MAINT_CHILD_INCLUDE,
+  };
+
+  const [contractsRaw, total, statsRaw, customers] = await Promise.all([
+    db.contract.findMany({
+      where,
+      include: tableInclude,
+      orderBy: [{ endDate: "asc" }, { updatedAt: "desc" }],
+      skip,
+      take,
+    }),
+    db.contract.count({ where }),
+    db.contract.findMany({
+      where,
+      select: statsSelect,
+    }),
+    db.customer.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: 500,
+    }),
+  ]);
 
   const contracts = contractsRaw.map((ct) => ({
     ...ct,
     ...toArrContractInput(ct),
   }));
 
-  const customers = await db.customer.findMany({
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-    take: 500,
-  });
-
-  const activeArr = contracts.filter(isActiveArrContract);
+  const statsContracts = statsRaw.map((ct) => toArrContractInput(ct));
+  const activeArr = statsContracts.filter(isActiveArrContract);
   const totalArr = activeArr.reduce((sum, c) => sum + contractArrAmount(c), 0);
+
+  const pageLabels = {
+    prevPage: m.common.prevPage,
+    nextPage: m.common.nextPage,
+    pageOf: m.common.pageOf,
+  };
+  const filterParams = {
+    q: sp.q,
+    type: sp.type,
+    status: sp.status,
+    customer: sp.customer,
+    arrOnly: sp.arrOnly,
+  };
 
   return (
     <div className="pb-16">
       <PageHeader
         title={t.title}
-        desc={t.desc.replace("{count}", String(contracts.length))}
+        desc={t.desc.replace("{count}", String(total))}
       />
 
       <div className="px-4 sm:px-6 lg:px-8 space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
-            <div className="text-2xl font-bold tabular-nums text-slate-900">{contracts.length}</div>
+            <div className="text-2xl font-bold tabular-nums text-slate-900">{total}</div>
             <div className="text-xs text-slate-400 mt-0.5">{t.statListed}</div>
           </div>
           <div className="bg-white rounded-lg border border-slate-200/80 shadow-sm p-4">
@@ -232,6 +277,14 @@ export default async function ContractsPage({
                 })}
               </tbody>
             </table>
+            <ListPagination
+              pathname="/contracts"
+              searchParams={filterParams}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
           </div>
         )}
       </div>

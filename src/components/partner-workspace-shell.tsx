@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Partner, User } from "@prisma/client";
 import { PartnerFrameworkMap } from "@/components/partner-framework-map";
 import { MapNodeQuickEdit } from "@/components/map-node-quick-edit";
@@ -10,6 +11,7 @@ import {
   type WorkspacePanelId,
 } from "@/lib/partner-framework";
 import { useLabels, useMessages } from "@/lib/i18n/context";
+import { resolvePartnerPanel } from "@/lib/detail-tabs";
 
 function panelBadge(
   nodes: FrameworkMapNode[],
@@ -31,37 +33,39 @@ export function PartnerWorkspaceShell({
   users,
   pipelineStages,
   taxonomy,
-  guide,
-  positioning,
-  capability,
-  pipeline,
-  relationship,
+  activePanel: activePanelProp,
+  children,
 }: {
   mapNodes: FrameworkMapNode[];
   partner: Partner;
   users: User[];
   pipelineStages: { stage: number; name: string }[];
   taxonomy: import("@/components/map-node-quick-edit").TaxonomyOptionsMap;
-  guide: ReactNode;
-  positioning: ReactNode;
-  capability: ReactNode;
-  pipeline: ReactNode;
-  relationship: ReactNode;
+  /** Server-resolved panel; kept in sync with ?panel= */
+  activePanel: WorkspacePanelId;
+  children: ReactNode;
 }) {
   const labels = useLabels();
   const m = useMessages();
   const workspacePanels = labels.workspacePanels;
-  const [activePanel, setActivePanel] = useState<WorkspacePanelId>("guide");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlPanel = resolvePartnerPanel(searchParams.get("panel"));
+  const activePanel = urlPanel || activePanelProp;
   const [mapOpen, setMapOpen] = useState(false);
   const [editNode, setEditNode] = useState<FrameworkMapNode | null>(null);
 
-  const panels: Record<WorkspacePanelId, ReactNode> = {
-    guide,
-    positioning,
-    capability,
-    pipeline,
-    relationship,
-  };
+  const selectPanel = useCallback(
+    (panel: WorkspacePanelId) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (panel === "guide") params.delete("panel");
+      else params.set("panel", panel);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
 
   const badges = useMemo(
     () =>
@@ -71,11 +75,14 @@ export function PartnerWorkspaceShell({
     [mapNodes, m, workspacePanels],
   );
 
-  const handleNodeClick = useCallback((node: FrameworkMapNode) => {
-    const panel = node.panel ?? panelForNode(node.id);
-    setActivePanel(panel);
-    if (node.editable) setEditNode(node);
-  }, []);
+  const handleNodeClick = useCallback(
+    (node: FrameworkMapNode) => {
+      const panel = node.panel ?? panelForNode(node.id);
+      selectPanel(panel);
+      if (node.editable) setEditNode(node);
+    },
+    [selectPanel],
+  );
 
   const activeMeta = workspacePanels.find((p) => p.id === activePanel)!;
   const missingCount = mapNodes.filter((n) => n.status === "missing").length;
@@ -92,7 +99,7 @@ export function PartnerWorkspaceShell({
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setActivePanel(p.id)}
+                onClick={() => selectPanel(p.id)}
                 className={`rounded-lg border px-4 py-3 text-left ${
                   active
                     ? "border-slate-700 bg-slate-900 text-white border border-slate-300"
@@ -156,7 +163,7 @@ export function PartnerWorkspaceShell({
           <h2 className="text-base font-semibold text-slate-900">{activeMeta.label}</h2>
           <p className="text-sm text-slate-500 mt-0.5">{activeMeta.desc}</p>
         </div>
-        <div className="p-4 sm:p-6">{panels[activePanel]}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </div>
 
       {editNode && (

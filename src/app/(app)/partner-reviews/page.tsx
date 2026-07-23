@@ -2,19 +2,22 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { Badge, Card, EmptyState, PageHeader, fmtDateTime } from "@/components/ui";
+import { ListPagination } from "@/components/list-pagination";
 import { CreateReviewMeetingForm } from "./create-form";
 import { DeleteMeetingButton } from "./delete-meeting-button";
 import { getLocale } from "@/lib/i18n/locale-server";
 import { formatMsg, getMessages } from "@/lib/i18n/messages";
+import { parseListPage } from "@/lib/list-pagination";
 
 export default async function PartnerReviewsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
   await requireUser();
   const locale = await getLocale();
-  const t = getMessages(locale).partnerReview;
+  const msgs = getMessages(locale);
+  const t = msgs.partnerReview;
   const statusLabel = {
     DRAFT: { label: t.statusDraft, tone: "zinc" as const }, PREP: { label: t.statusPrep, tone: "blue" as const },
     LIVE: { label: t.statusLive, tone: "amber" as const }, PROCESSING: { label: t.statusProcessing, tone: "purple" as const },
@@ -22,12 +25,15 @@ export default async function PartnerReviewsPage({
   };
   const sp = await searchParams;
   const tab = sp.tab === "history" ? "history" : "active";
+  const { page, take, skip } = parseListPage(sp.page);
+  const meetingWhere = tab === "history" ? { status: "DONE" as const } : { status: { not: "DONE" as const } };
 
-  const [meetings, partners] = await Promise.all([
+  const [meetings, total, partners] = await Promise.all([
     db.partnerReviewMeeting.findMany({
-      where: tab === "history" ? { status: "DONE" } : { status: { not: "DONE" } },
+      where: meetingWhere,
       orderBy: tab === "history" ? [{ endedAt: "desc" }, { createdAt: "desc" }] : { createdAt: "desc" },
-      take: 50,
+      skip,
+      take,
       include: {
         createdBy: { select: { name: true } },
         items: {
@@ -39,12 +45,20 @@ export default async function PartnerReviewsPage({
         },
       },
     }),
+    db.partnerReviewMeeting.count({ where: meetingWhere }),
     db.partner.findMany({
       where: { status: "ACTIVE" },
       orderBy: { name: "asc" },
       select: { id: true, name: true, tier: true },
     }),
   ]);
+
+  const pageLabels = {
+    prevPage: msgs.common.prevPage,
+    nextPage: msgs.common.nextPage,
+    pageOf: msgs.common.pageOf,
+  };
+  const filterParams = { tab: tab === "history" ? "history" : undefined };
 
   const tabClass = (active: boolean) =>
     `px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
@@ -81,6 +95,7 @@ export default async function PartnerReviewsPage({
               }
             />
           ) : (
+            <>
             <ul className="divide-y divide-slate-100">
               {meetings.map((m) => {
                 const st = statusLabel[m.status as keyof typeof statusLabel] ?? statusLabel.DRAFT;
@@ -116,6 +131,15 @@ export default async function PartnerReviewsPage({
                 );
               })}
             </ul>
+            <ListPagination
+              pathname="/partner-reviews"
+              searchParams={filterParams}
+              page={page}
+              total={total}
+              pageSize={take}
+              labels={pageLabels}
+            />
+            </>
           )}
         </Card>
       </div>
