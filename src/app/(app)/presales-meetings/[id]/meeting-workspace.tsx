@@ -228,10 +228,47 @@ export function PresalesMeetingWorkspace({
     }));
   }
 
+  function finishWithoutMinutes() {
+    run(async () => {
+      const res = await finishPresalesMeetingWithoutExtractAction(meeting.id);
+      if (!res.error) {
+        setMeeting((prev) => ({
+          ...prev,
+          status: "DONE",
+          items: prev.items.map((it) =>
+            it.status === "CONFIRMED" ? it : { ...it, status: "CONFIRMED" },
+          ),
+        }));
+        flash(m.finishedNoExtract);
+        router.push("/presales-meetings?tab=history");
+      }
+      return res;
+    });
+  }
+
   const postSlot =
     phase === "post" || phase === "done" ? (
       <div className="space-y-3">
-        {phase === "post" ? (
+        {phase === "post" && postStep === "paste" ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800">{m.finishWithoutMinutesTitle}</p>
+              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                {m.finishWithoutMinutesHint}
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={finishWithoutMinutes}
+              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-40 shrink-0"
+            >
+              {m.finishWithoutExtract}
+            </button>
+          </div>
+        ) : null}
+
+        {phase === "post" && postStep !== "paste" ? (
           <MeetingMatchSourceSwitch
             tencentReady={Boolean(meeting.tencentLiveNotes)}
             xfyunReady={Boolean(meeting.xfyunLiveNotes)}
@@ -366,7 +403,7 @@ export function PresalesMeetingWorkspace({
         />
 
         {phase === "post" ? (
-          <MeetingPostStepIndicator step={postStep} extractOptional />
+          <MeetingPostStepIndicator step={postStep} pasteOptional extractOptional />
         ) : null}
 
         {phase === "post" && postStep === "assign" ? (
@@ -432,36 +469,6 @@ export function PresalesMeetingWorkspace({
                   return { error: e instanceof Error ? e.message : String(e) };
                 }
               }, { refresh: false })
-            }
-            finishWithoutExtractLabel={m.finishWithoutExtract}
-            onFinishWithoutExtract={() =>
-              run(async () => {
-                const notes = buildLiveNotesFromSegments([
-                  ...(unassignedDraft.trim()
-                    ? [{ partnerId: null, partnerName: null, text: unassignedDraft }]
-                    : []),
-                  ...orderedForTimeline.map((it) => ({
-                    partnerId: it.id,
-                    partnerName: it.label,
-                    text: matchDrafts[it.id] ?? "",
-                  })),
-                ]);
-                await savePresalesMatchedNotesAction(meeting.id, notes);
-                setLiveNotes(notes);
-                const res = await finishPresalesMeetingWithoutExtractAction(meeting.id);
-                if (!res.error) {
-                  setMeeting((prev) => ({
-                    ...prev,
-                    status: "DONE",
-                    items: prev.items.map((it) =>
-                      it.status === "CONFIRMED" ? it : { ...it, status: "CONFIRMED" },
-                    ),
-                  }));
-                  flash(m.finishedNoExtract);
-                  router.push("/presales-meetings?tab=history");
-                }
-                return res;
-              })
             }
           />
         ) : null}
@@ -810,25 +817,7 @@ export function PresalesMeetingWorkspace({
                   <button
                     type="button"
                     disabled={pending}
-                    onClick={() =>
-                      run(async () => {
-                        const res = await finishPresalesMeetingWithoutExtractAction(meeting.id);
-                        if (!res.error) {
-                          setMeeting((prev) => ({
-                            ...prev,
-                            status: "DONE",
-                            items: prev.items.map((it) =>
-                              it.status === "CONFIRMED"
-                                ? it
-                                : { ...it, status: "CONFIRMED" },
-                            ),
-                          }));
-                          flash(m.finishedNoExtract);
-                          router.push("/presales-meetings?tab=history");
-                        }
-                        return res;
-                      })
-                    }
+                    onClick={finishWithoutMinutes}
                     className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
                   >
                     {m.finishWithoutExtract}

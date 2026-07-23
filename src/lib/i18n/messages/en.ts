@@ -3666,7 +3666,7 @@ export const messagesEn = {
     confirmExtract: "Confirm ownership and extract",
     optionalStep: "optional",
     finishWithoutExtract: "Skip summary & finish",
-    finishWithoutExtractHint: "Skip AI extract and confirmation; the meeting moves to History.",
+    finishWithoutExtractHint: "Skip pasting minutes and AI extract; the meeting moves to History.",
   },
   presalesMeeting: {
     title: "Presales project meetings",
@@ -3755,7 +3755,10 @@ export const messagesEn = {
     ended: "Meeting ended — paste minutes or use iFlytek path",
     finishedNoExtract: "Meeting finished without extract — moved to History",
     finishWithoutExtract: "Skip summary & finish",
-    finishWithoutExtractHint: "Skip AI extract; the meeting goes to History.",
+    finishWithoutExtractHint: "Skip pasting minutes and AI extract; the meeting goes to History.",
+    finishWithoutMinutesTitle: "Or skip minutes entirely",
+    finishWithoutMinutesHint:
+      "Pasting Tencent minutes / iFlytek matching is optional. If todos were added live and you don’t need a post summary, finish to History now.",
     resetDone: "Reset to prep",
     resetConfirm: "Clear markers and minutes and return to prep?",
     pathBTitle: "Path B · iFlytek",

@@ -3599,7 +3599,7 @@ export const messagesZh: Messages = {
     confirmExtract: "确认归属并继续提炼",
     optionalStep: "可选",
     finishWithoutExtract: "不总结，结束会议",
-    finishWithoutExtractHint: "跳过 AI 提炼与入库核对，会议直接进入历史。",
+    finishWithoutExtractHint: "跳过粘贴纪要与 AI 提炼，会议直接进入历史。",
   },
   presalesMeeting: {
     title: "售前项目会议",
@@ -3685,7 +3685,10 @@ export const messagesZh: Messages = {
     ended: "已结束开会 — 请粘贴纪要或使用讯飞路径",
     finishedNoExtract: "已结束会议（未提炼）— 已进入历史",
     finishWithoutExtract: "不总结，结束会议",
-    finishWithoutExtractHint: "跳过 AI 提炼，会议进入历史列表。",
+    finishWithoutExtractHint: "跳过粘贴纪要与 AI 提炼，会议直接进入历史。",
+    finishWithoutMinutesTitle: "也可以不整理纪要",
+    finishWithoutMinutesHint:
+      "粘贴腾讯纪要 / 讯飞匹配不是必须的。若会中已记待办、无需会后总结，可直接结束进历史。",
     resetDone: "已回到会前",
     resetConfirm: "清空打标与纪要并回到会前？",
     pathBTitle: "路径 B · 讯飞",

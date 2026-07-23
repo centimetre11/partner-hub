@@ -166,14 +166,20 @@ export function PostMinutesDualPath({
 export function MeetingPostStepIndicator({
   step,
   extractOptional = false,
+  pasteOptional = false,
 }: {
   step: MeetingPostStep;
+  /** 第一步粘贴纪要可跳过时展示「可选」 */
+  pasteOptional?: boolean;
   /** 第三步提炼可跳过时展示「可选」 */
   extractOptional?: boolean;
 }) {
   const t = useMessages().meetingUi;
   const steps = [
-    ["paste", t.postStepPaste],
+    [
+      "paste",
+      pasteOptional ? `${t.postStepPaste} · ${t.optionalStep}` : t.postStepPaste,
+    ],
     ["assign", t.postStepAssign],
     [
       "extract",
