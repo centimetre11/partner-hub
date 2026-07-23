@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { createCustomerAction } from "@/lib/customer-actions";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { TaxonomySelectField } from "@/components/taxonomy-fields";
+import { CountryCityFields } from "@/components/country-city-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { useMessages } from "@/lib/i18n/context";
 import { PARTNER_TIERS } from "@/lib/tier";
@@ -79,10 +80,7 @@ export function AddCustomerForm({
                   <option value="INACTIVE">{c.statusInactive}</option>
                 </select>
               </div>
-              <div className="flex gap-2">
-                <input name="city" placeholder={c.cityPlaceholder} className={input} />
-                <input name="country" placeholder={c.countryPlaceholder} className={input} />
-              </div>
+              <CountryCityFields inputClassName={input} />
               {segmentOptions && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <TaxonomySelectField dimension="CUSTOMER_SEGMENT" name="customerSegment" value="" options={segmentOptions.customerSegment} />

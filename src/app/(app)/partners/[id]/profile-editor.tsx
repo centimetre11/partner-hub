@@ -6,6 +6,7 @@ import type { Partner, User } from "@prisma/client";
 import { updatePartnerAction } from "@/lib/actions";
 import { tierSelectValue } from "@/components/ui";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import { CountryCityFields } from "@/components/country-city-fields";
 import { PartnerTeamFields } from "@/components/partner-team-fields";
 import { ModalPortal } from "@/components/modal-portal";
 import {
@@ -180,14 +181,15 @@ export function ProfileEditor({
                 <span className="text-xs text-slate-500">{pe.valueCustomerOutcome}</span>
                 <input name="valueCustomerOutcome" defaultValue={p.valueCustomerOutcome ?? ""} className={input} />
               </label>
-              <label className="space-y-1">
-                <span className="text-xs text-slate-500">{pe.city}</span>
-                <input name="city" defaultValue={p.city ?? ""} className={input} />
-              </label>
-              <label className="space-y-1">
-                <span className="text-xs text-slate-500">{pe.country}</span>
-                <input name="country" defaultValue={p.country ?? ""} className={input} />
-              </label>
+              <CountryCityFields
+                defaultCountry={p.country}
+                defaultCity={p.city}
+                showLabels
+                countryLabelText={pe.country}
+                cityLabelText={pe.city}
+                inputClassName={input}
+                fieldClassName="space-y-1"
+              />
               <label className="space-y-1">
                 <span className="text-xs text-slate-500">{pe.headcount}</span>
                 <input name="headcount" defaultValue={p.headcount ?? ""} className={input} />

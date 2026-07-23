@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createPartnerAction } from "@/lib/actions";
 import { TaxonomyMultiField, TaxonomySelectField } from "@/components/taxonomy-fields";
+import { CountryCityFields } from "@/components/country-city-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { AiIntakePanel } from "@/components/ai-intake-panel";
 import { useMessages } from "@/lib/i18n/context";
@@ -103,10 +104,7 @@ export function AddPartnerForm({
                   Refresh the page to load taxonomy options, or manage them in the <Link href="/taxonomy" className="text-sky-600 hover:underline">Taxonomy Library</Link>
                 </p>
               )}
-              <div className="flex gap-2">
-                <input name="city" placeholder="City" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input name="country" placeholder="Country" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-              </div>
+              <CountryCityFields inputClassName="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               <input name="coreBusiness" placeholder="Core business (one line)" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               {(defaultParentId || (distributorOptions && distributorOptions.length > 0)) && (
                 <label className="block space-y-1">

@@ -7,6 +7,7 @@ import { Card, Badge, TierBadge, tierSelectValue } from "@/components/ui";
 import { AiAddButton } from "@/components/ai-add-button";
 import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
 import { TaxonomySelectField } from "@/components/taxonomy-fields";
+import { CountryCityFields } from "@/components/country-city-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { profileEnrichSeedMessage } from "@/lib/intake-profile-enrich";
 import { useMessages, useLabels, useLocale } from "@/lib/i18n/context";
@@ -299,14 +300,15 @@ export function CustomerProfilePanel({
                 <span className="text-xs text-slate-500">{c.scaleLabel}</span>
                 <input name="scale" defaultValue={customer.scale ?? ""} className={input} />
               </label>
-              <label className="text-sm">
-                <span className="text-xs text-slate-500">{c.cityPlaceholder}</span>
-                <input name="city" defaultValue={customer.city ?? ""} className={input} />
-              </label>
-              <label className="text-sm">
-                <span className="text-xs text-slate-500">{c.countryPlaceholder}</span>
-                <input name="country" defaultValue={customer.country ?? ""} className={input} />
-              </label>
+              <CountryCityFields
+                defaultCountry={customer.country}
+                defaultCity={customer.city}
+                showLabels
+                countryLabelText={c.countryPlaceholder}
+                cityLabelText={c.cityPlaceholder}
+                inputClassName={input}
+                fieldClassName="text-sm"
+              />
               <label className="text-sm sm:col-span-2">
                 <span className="text-xs text-slate-500">{c.websiteLabel}</span>
                 <input name="website" defaultValue={customer.website ?? ""} className={input} />
