@@ -16,6 +16,8 @@ export async function materializeLiveNotesForMeeting(
           user: { select: { name: true } },
           customer: { select: { name: true } },
           project: { select: { name: true } },
+          opportunity: { select: { name: true } },
+          partner: { select: { name: true } },
         },
       },
     },
