@@ -62,6 +62,11 @@ export function AddOpportunityForm({
     setFormKey((k) => k + 1);
   }
 
+  async function handleAction(formData: FormData) {
+    await createOpportunityFromListAction(formData);
+    close();
+  }
+
   return (
     <>
       <button
@@ -97,7 +102,7 @@ export function AddOpportunityForm({
                 {m.crm.importFromCrm.filledFromCrm}: {draft.crmOpportunityId}
               </p>
             )}
-            <form key={formKey} action={createOpportunityFromListAction} className="space-y-3">
+            <form key={formKey} action={handleAction} className="space-y-3">
               {draft?.crmOpportunityId && (
                 <input type="hidden" name="crmOpportunityId" value={draft.crmOpportunityId} />
               )}

@@ -6,6 +6,7 @@ import { OpportunityProcessFields } from "@/components/opportunity-process-field
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
 import { AmountInput } from "@/components/amount-input";
 import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
+import { PendingButton } from "@/components/pending-button";
 import type { CrmOpportunityDraft } from "@/lib/crm-mcp-map";
 import type { OwnerRef } from "@/lib/owner";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
@@ -44,15 +45,32 @@ export function CustomerAddOpportunityForm({
     "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400";
   const [formKey, setFormKey] = useState(0);
   const [draft, setDraft] = useState<CrmOpportunityDraft | null>(null);
+  const [open, setOpen] = useState(false);
 
   function onCrmPicked(result: CrmImportResult) {
     if (result.kind !== "opportunity") return;
     setDraft(result.draft);
     setFormKey((k) => k + 1);
+    setOpen(true);
+  }
+
+  function resetForm() {
+    setDraft(null);
+    setFormKey((k) => k + 1);
+    setOpen(false);
+  }
+
+  async function handleAction(formData: FormData) {
+    await action(owner, formData);
+    resetForm();
   }
 
   return (
-    <details className="rounded-lg border border-dashed border-slate-200">
+    <details
+      className="rounded-lg border border-dashed border-slate-200"
+      open={open}
+      onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
+    >
       <summary className="px-4 py-2.5 text-sm text-sky-600 cursor-pointer list-none flex items-center justify-between gap-2">
         <span>{c.addOpportunity}</span>
         <span onClick={(e) => e.stopPropagation()}>
@@ -76,7 +94,7 @@ export function CustomerAddOpportunityForm({
       )}
       <form
         key={formKey}
-        action={action.bind(null, owner)}
+        action={handleAction}
         className="px-4 pb-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm"
       >
         {draft?.crmOpportunityId && (
@@ -137,7 +155,10 @@ export function CustomerAddOpportunityForm({
           aria-label={m.common.note}
         />
         <div className="col-span-2 md:col-span-3 flex justify-end">
-          <button className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs">{m.common.add}</button>
+          <PendingButton
+            label={m.common.add}
+            className="rounded-md bg-slate-900 text-white px-3 py-1.5 text-xs hover:bg-slate-800"
+          />
         </div>
       </form>
     </details>

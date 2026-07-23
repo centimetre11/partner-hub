@@ -61,6 +61,11 @@ export function AddProjectForm({
     setFormKey((k) => k + 1);
   }
 
+  async function handleAction(formData: FormData) {
+    await createProjectFromListAction(formData);
+    close();
+  }
+
   return (
     <>
       <button
@@ -96,7 +101,7 @@ export function AddProjectForm({
                 {m.crm.importFromCrm.filledFromCrm}: {draft.crmPrjNumber || draft.crmProjectId}
               </p>
             )}
-            <form key={formKey} action={createProjectFromListAction} className="space-y-3">
+            <form key={formKey} action={handleAction} className="space-y-3">
               {draft?.crmProjectId && (
                 <input type="hidden" name="crmProjectId" value={draft.crmProjectId} />
               )}

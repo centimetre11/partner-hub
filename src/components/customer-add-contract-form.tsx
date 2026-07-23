@@ -54,6 +54,17 @@ export function CustomerAddContractForm({
     setOpen(true);
   }
 
+  function resetForm() {
+    setDraft(null);
+    setFormKey((k) => k + 1);
+    setOpen(false);
+  }
+
+  async function handleAction(formData: FormData) {
+    await action(owner, formData);
+    resetForm();
+  }
+
   return (
     <details
       className="rounded-lg border border-dashed border-slate-200"
@@ -86,7 +97,7 @@ export function CustomerAddContractForm({
       <div className="px-4 pb-4">
         <CustomerContractForm
           key={formKey}
-          action={action.bind(null, owner)}
+          action={handleAction}
           mode="create"
           locale={locale}
           copy={copy}
