@@ -107,7 +107,7 @@ export function AddCustomerForm({
                   ))}
                 </select>
               </div>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <select name="ownerId" defaultValue="" className={input} aria-label={c.salesOwnerLabel}>
                   <option value="">{c.salesOwnerLabel}</option>
                   {salesUsers.map((u) => (
@@ -117,6 +117,12 @@ export function AddCustomerForm({
                 <select name="presalesUserId" defaultValue="" className={input} aria-label={c.presalesOwnerLabel}>
                   <option value="">{c.presalesOwnerLabel}</option>
                   {presalesUsers.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                <select name="satisfactionUserId" defaultValue="" className={input} aria-label={c.satisfactionOwnerLabel}>
+                  <option value="">{c.satisfactionOwnerLabel}</option>
+                  {users.map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>

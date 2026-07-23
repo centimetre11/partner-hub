@@ -129,6 +129,7 @@ type CustomerBucketSearchParams = {
   partner?: string;
   owner?: string;
   presales?: string;
+  satisfaction?: string;
   unbound?: string;
   add?: string;
   segment?: string;
@@ -165,6 +166,7 @@ export default async function CustomersPage({
       : {}),
     ...(sp.owner ? { ownerId: sp.owner } : {}),
     ...(sp.presales ? { presalesUserId: sp.presales } : {}),
+    ...(sp.satisfaction ? { satisfactionUserId: sp.satisfaction } : {}),
     ...(sp.unbound === "1"
       ? { partnerLinks: { none: {} } }
       : sp.partner
@@ -236,6 +238,7 @@ export default async function CustomersPage({
           partnerLinks: { include: { partner: { select: { id: true, name: true } } } },
           owner: { select: { name: true } },
           presalesUser: { select: { name: true } },
+          satisfactionUser: { select: { name: true } },
           contacts: {
             select: { name: true, title: true, contactInfo: true },
             take: 1,
@@ -319,6 +322,8 @@ export default async function CustomersPage({
         <div className="text-[11px] text-slate-500 mt-1.5 truncate">
           {fmtDate(cust.createdAt, bcp47)}
           {cust.owner?.name ? ` · ${cust.owner.name}` : ""}
+          {cust.presalesUser?.name ? ` · ${cust.presalesUser.name}` : ""}
+          {cust.satisfactionUser?.name ? ` · ${cust.satisfactionUser.name}` : ""}
         </div>
         <div className="text-[11px] text-slate-500 mt-1 truncate">
           {summaryBits.join(" · ") || "—"}
@@ -426,6 +431,18 @@ export default async function CustomersPage({
             className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
           >
             <option value="">{c.allPresalesOwners}</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+          <select
+            name="satisfaction"
+            defaultValue={sp.satisfaction ?? ""}
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+          >
+            <option value="">{c.allSatisfactionOwners}</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}

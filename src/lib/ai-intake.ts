@@ -231,6 +231,7 @@ async function customerContextForIntake(customerId: string, locale: Locale): Pro
         crmCustomerId: true,
         owner: { select: { name: true } },
         presalesUser: { select: { name: true } },
+        satisfactionUser: { select: { name: true } },
       },
     }),
   ]);
@@ -248,6 +249,13 @@ async function customerContextForIntake(customerId: string, locale: Locale): Pro
       locale === "zh"
         ? `- 售前负责人[presales]: ${ownership.presalesUser.name}`
         : `- Presales[presales]: ${ownership.presalesUser.name}`
+    );
+  }
+  if (ownership.satisfactionUser?.name) {
+    extra.push(
+      locale === "zh"
+        ? `- 满意度负责人[satisfaction]: ${ownership.satisfactionUser.name}`
+        : `- Satisfaction owner[satisfaction]: ${ownership.satisfactionUser.name}`
     );
   }
   if (ownership.crmCustomerId) {
@@ -1282,7 +1290,7 @@ function parseOptionalDate(raw: unknown): Date | undefined {
 const CUSTOMER_STATUSES = ["ACTIVE", "PROSPECT", "INACTIVE"];
 
 /** Customer columns writable from intake (profile fields + CRM ownership). */
-const CUSTOMER_INTAKE_EXTRA_FIELDS = ["crmCustomerId", "ownerId", "presalesUserId"] as const;
+const CUSTOMER_INTAKE_EXTRA_FIELDS = ["crmCustomerId", "ownerId", "presalesUserId", "satisfactionUserId"] as const;
 
 function normalizeCustomerStatus(raw: unknown): string | undefined {
   const v = asTrimmedString(raw).toUpperCase();

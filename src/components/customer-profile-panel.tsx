@@ -42,6 +42,8 @@ type CustomerProfile = {
   owner: { name: string } | null;
   presalesUserId: string | null;
   presalesUser: { name: string } | null;
+  satisfactionUserId: string | null;
+  satisfactionUser: { name: string } | null;
   boundPartners: BoundPartner[];
   partnerRelation: string | null;
 };
@@ -88,6 +90,7 @@ export function CustomerProfilePanel({
     [c.statusLabel, statusLabel(customer.status)],
     [c.salesOwnerLabel, customer.owner?.name ?? null],
     [c.presalesOwnerLabel, customer.presalesUser?.name ?? null],
+    [c.satisfactionOwnerLabel, customer.satisfactionUser?.name ?? null],
     [c.customerSegmentLabel, mapLabel(labels.customerSegmentLabels, customer.customerSegment)],
     [m.common.tier, resolvedTier ? formatTierLabel(resolvedTier) : null],
     [c.buyingTriggerLabel, mapLabel(labels.buyingTriggerLabels, customer.buyingTrigger)],
@@ -254,6 +257,17 @@ export function CustomerProfilePanel({
                 <select name="presalesUserId" defaultValue={customer.presalesUserId ?? ""} className={input}>
                   <option value="">—</option>
                   {presalesUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-xs text-slate-500">{c.satisfactionOwnerLabel}</span>
+                <select name="satisfactionUserId" defaultValue={customer.satisfactionUserId ?? ""} className={input}>
+                  <option value="">—</option>
+                  {users.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}
                     </option>

@@ -81,6 +81,7 @@ export async function CustomerDetailBody({ id, tab }: { id: string; tab: Custome
         },
         owner: { select: { id: true, name: true } },
         presalesUser: { select: { id: true, name: true } },
+        satisfactionUser: { select: { id: true, name: true } },
         createdBy: { select: { name: true } },
         _count: {
           select: {
@@ -394,6 +395,8 @@ async function CustomerTabContent({
               owner: customer.owner,
               presalesUserId: customer.presalesUserId,
               presalesUser: customer.presalesUser,
+              satisfactionUserId: customer.satisfactionUserId,
+              satisfactionUser: customer.satisfactionUser,
               boundPartners: customer.partnerLinks.map(
                 (l: { partner: { id: string; name: string }; relation: string }) => ({
                   id: l.partner.id,

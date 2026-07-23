@@ -38,6 +38,7 @@ function readCustomerFields(formData: FormData) {
     notes: str(formData, "notes"),
     ownerId: str(formData, "ownerId"),
     presalesUserId: str(formData, "presalesUserId"),
+    satisfactionUserId: str(formData, "satisfactionUserId"),
   };
 }
 
@@ -113,7 +114,7 @@ export async function updateCustomerAction(customerId: string, formData: FormDat
     "industry", "customerSegment", "buyingTrigger", "entryPath",
     "city", "country", "website", "scale",
     "contactName", "contactTitle", "contactPhone", "contactEmail",
-    "notes", "ownerId", "presalesUserId",
+    "notes", "ownerId", "presalesUserId", "satisfactionUserId",
   ] as const) {
     if (formData.has(key)) data[key] = str(formData, key);
   }

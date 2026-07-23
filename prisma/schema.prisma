@@ -38,6 +38,7 @@ model User {
   feedbackSubmissions FeedbackSubmission[]
   ownedCustomers   Customer[] @relation("CustomerOwner")
   presalesCustomers Customer[] @relation("CustomerPresalesUser")
+  satisfactionCustomers Customer[] @relation("CustomerSatisfactionUser")
   createdCustomers Customer[] @relation("CustomerCreatedBy")
   ownedProjects    Project[]  @relation("ProjectOwner")
   projectWorkLogs  ProjectWorkLog[]
@@ -202,11 +203,13 @@ model Customer {
   mossSyncedAt  DateTime?
   wecomChatBindCode          String?
   wecomChatBindCodeExpiresAt DateTime?
-  // 销售负责人 / 售前负责人
+  // 销售负责人 / 售前负责人 / 满意度负责人
   ownerId      String?
   owner        User?    @relation("CustomerOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   presalesUserId String?
   presalesUser   User?  @relation("CustomerPresalesUser", fields: [presalesUserId], references: [id], onDelete: SetNull)
+  satisfactionUserId String?
+  satisfactionUser   User?  @relation("CustomerSatisfactionUser", fields: [satisfactionUserId], references: [id], onDelete: SetNull)
   createdById  String?
   createdBy    User?    @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())

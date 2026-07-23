@@ -200,6 +200,7 @@ async function main() {
       "tier",
       "ownerId",
       "presalesUserId",
+      "satisfactionUserId",
       "partnerId",
       "wecomChatBindCode",
       "wecomChatBindCodeExpiresAt",
