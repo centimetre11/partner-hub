@@ -1608,6 +1608,10 @@ model PresalesProjectMeeting {
   scheduledAt           DateTime?
   startedAt             DateTime?
   endedAt               DateTime?
+  /// 推荐 / 会前事实时间窗起点（含）
+  factsSince            DateTime?
+  /// 推荐 / 会前事实时间窗终点（含）
+  factsUntil            DateTime?
   createdById           String
   createdBy             User      @relation(fields: [createdById], references: [id])
   /// JSON string[]：参会人 userId

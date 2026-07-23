@@ -20,11 +20,15 @@ import {
   type AgendaSubjectInput,
   type AgendaSubjectKind,
 } from "./subject";
+import { defaultFactsRangeDates, parseFactsRange } from "./facts-range";
 
-export async function recommendPresalesAgendaAction(userIds: string[]) {
+export async function recommendPresalesAgendaAction(
+  userIds: string[],
+  range?: { since?: string; until?: string },
+) {
   await requireUser();
   try {
-    const items = await recommendAgendaForUsers(userIds);
+    const items = await recommendAgendaForUsers(userIds, range);
     return { ok: true as const, items };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
@@ -41,6 +45,9 @@ export async function createPresalesMeetingAction(input: {
   scheduledAt?: string;
   attendeeUserIds?: string[];
   items: AgendaSubjectInput[];
+  /** YYYY-MM-DD：推荐与会前事实时间窗 */
+  factsSince?: string;
+  factsUntil?: string;
 }) {
   const user = await requireUser();
   const normalized = input.items
@@ -49,6 +56,12 @@ export async function createPresalesMeetingAction(input: {
   if (!normalized.length) {
     return { error: "请至少添加一条议程（客户 / 项目 / 商机 / 伙伴）" };
   }
+
+  const { since: factsSince, until: factsUntil } = parseFactsRange(
+    input.factsSince,
+    input.factsUntil,
+    defaultFactsRangeDates(),
+  );
 
   // de-dupe by user + subjectKey
   const seen = new Set<string>();
@@ -178,6 +191,8 @@ export async function createPresalesMeetingAction(input: {
       title,
       status: "DRAFT",
       scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
+      factsSince,
+      factsUntil,
       createdById: user.id,
       attendeeUserIds: JSON.stringify(
         input.attendeeUserIds?.length
@@ -213,6 +228,8 @@ export async function loadItemPrepFactsAction(opts: {
   projectId?: string | null;
   opportunityId?: string | null;
   partnerId?: string | null;
+  since?: string | null;
+  until?: string | null;
 }) {
   await requireUser();
   return { ok: true as const, facts: await loadPrepFacts(opts) };

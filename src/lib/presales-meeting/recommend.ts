@@ -3,27 +3,31 @@ import "server-only";
 import { db } from "../db";
 import type { RecommendedAgendaItem } from "./types";
 import { subjectKeyFor } from "./subject";
+import { defaultFactsRangeDates, parseFactsRange } from "./facts-range";
 
 type RecKind = RecommendedAgendaItem["kind"];
 
-const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
-
 /**
- * 按所选同事，取近 2 周有商务记录 / 待办 / 项目工作记录的议程主体。
+ * 按所选同事 + 时间窗，取有商务记录 / 待办 / 项目工作记录的议程主体。
  * 商务记录可落到客户（不必有项目/商机）；有项目/商机时优先更具体主体。
  */
 export async function recommendAgendaForUsers(
   userIds: string[],
+  range?: { since?: string | null; until?: string | null },
 ): Promise<RecommendedAgendaItem[]> {
   const ids = [...new Set(userIds.map((id) => id.trim()).filter(Boolean))];
   if (!ids.length) return [];
 
-  const since = new Date(Date.now() - TWO_WEEKS_MS);
+  const { since, until } = parseFactsRange(
+    range?.since,
+    range?.until,
+    defaultFactsRangeDates(),
+  );
 
   const [records, todos, workLogs] = await Promise.all([
     db.businessRecord.findMany({
       where: {
-        occurredAt: { gte: since },
+        occurredAt: { gte: since, lte: until },
         customerId: { not: null },
         OR: [
           { createdById: { in: ids } },
@@ -41,7 +45,10 @@ export async function recommendAgendaForUsers(
     db.todoItem.findMany({
       where: {
         assigneeId: { in: ids },
-        OR: [{ createdAt: { gte: since } }, { updatedAt: { gte: since } }],
+        OR: [
+          { createdAt: { gte: since, lte: until } },
+          { updatedAt: { gte: since, lte: until } },
+        ],
       },
       select: {
         assigneeId: true,
@@ -71,7 +78,7 @@ export async function recommendAgendaForUsers(
     db.projectWorkLog.findMany({
       where: {
         authorId: { in: ids },
-        createdAt: { gte: since },
+        createdAt: { gte: since, lte: until },
       },
       select: {
         authorId: true,

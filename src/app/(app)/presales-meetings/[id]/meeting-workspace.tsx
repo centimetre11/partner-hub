@@ -51,6 +51,11 @@ import { Badge } from "@/components/ui";
 import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
+import {
+  defaultFactsRangeDates,
+  formatFactsRangeLabel,
+  toDateInputValue,
+} from "@/lib/presales-meeting/facts-range";
 import { DeletePresalesMeetingButton } from "../delete-meeting-button";
 
 type TodoOption = { id: string; name: string };
@@ -714,7 +719,18 @@ export function PresalesMeetingWorkspace({
       postSlot={postSlot}
     >
       {phase === "prep" ? (
-        <p className="text-xs text-slate-500 leading-relaxed">{m.prepHint}</p>
+        <p className="text-xs text-slate-500 leading-relaxed">
+          {formatMsg(m.prepHint, {
+            range: formatFactsRangeLabel(
+              meeting.factsSince
+                ? toDateInputValue(new Date(meeting.factsSince))
+                : defaultFactsRangeDates().since,
+              meeting.factsUntil
+                ? toDateInputValue(new Date(meeting.factsUntil))
+                : defaultFactsRangeDates().until,
+            ),
+          })}
+        </p>
       ) : null}
 
       {showMain ? (

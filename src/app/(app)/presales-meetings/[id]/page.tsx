@@ -63,6 +63,8 @@ export default async function PresalesMeetingPage({
         projectId: it.projectId,
         opportunityId: it.opportunityId,
         partnerId: it.partnerId,
+        since: meeting.factsSince,
+        until: meeting.factsUntil,
       });
       return [it.id, facts] as const;
     }),

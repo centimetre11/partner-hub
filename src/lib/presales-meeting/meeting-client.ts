@@ -45,6 +45,8 @@ export type MeetingClient = {
   scheduledAt: string | null;
   startedAt: string | null;
   endedAt: string | null;
+  factsSince: string | null;
+  factsUntil: string | null;
   attendeeUserIds: string[];
   liveNotes: string | null;
   transcriptText: string | null;
@@ -164,6 +166,8 @@ export function toMeetingClient(m: {
   scheduledAt: Date | null;
   startedAt: Date | null;
   endedAt: Date | null;
+  factsSince?: Date | null;
+  factsUntil?: Date | null;
   attendeeUserIds: string | null;
   liveNotes: string | null;
   transcriptText: string | null;
@@ -192,6 +196,8 @@ export function toMeetingClient(m: {
     scheduledAt: m.scheduledAt?.toISOString() ?? null,
     startedAt: m.startedAt?.toISOString() ?? null,
     endedAt: m.endedAt?.toISOString() ?? null,
+    factsSince: m.factsSince?.toISOString() ?? null,
+    factsUntil: m.factsUntil?.toISOString() ?? null,
     attendeeUserIds,
     liveNotes: m.liveNotes,
     transcriptText: m.transcriptText,

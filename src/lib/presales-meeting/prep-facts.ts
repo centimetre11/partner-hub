@@ -3,23 +3,32 @@ import "server-only";
 import { db } from "../db";
 import type { PrepFacts } from "./types";
 import type { AgendaSubjectKind } from "./subject";
+import { defaultFactsRangeDates, parseFactsRange } from "./facts-range";
 
-const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
-
-/** 会前只读事实：待办 / 商务记录 / 项目工作记录（无 AI）；记录类仅近 2 周 */
+/** 会前只读事实：待办 / 商务记录 / 项目工作记录（无 AI）；记录类按时间窗 */
 export async function loadPrepFacts(opts: {
   subjectKind?: AgendaSubjectKind | string | null;
   customerId?: string | null;
   projectId?: string | null;
   opportunityId?: string | null;
   partnerId?: string | null;
+  since?: string | Date | null;
+  until?: string | Date | null;
 }): Promise<PrepFacts> {
   const kind = (opts.subjectKind ?? "PROJECT") as AgendaSubjectKind;
   const customerId = opts.customerId ?? null;
   const projectId = opts.projectId ?? null;
   const opportunityId = opts.opportunityId ?? null;
   const partnerId = opts.partnerId ?? null;
-  const since = new Date(Date.now() - TWO_WEEKS_MS);
+  const sinceStr =
+    opts.since instanceof Date
+      ? opts.since.toISOString().slice(0, 10)
+      : opts.since ?? null;
+  const untilStr =
+    opts.until instanceof Date
+      ? opts.until.toISOString().slice(0, 10)
+      : opts.until ?? null;
+  const { since, until } = parseFactsRange(sinceStr, untilStr, defaultFactsRangeDates());
 
   const todoOr: Record<string, unknown>[] = [];
   if (kind === "CUSTOMER" && customerId) {
@@ -33,11 +42,11 @@ export async function loadPrepFacts(opts: {
 
   const recordWhere =
     kind === "PARTNER" && partnerId
-      ? { partnerId, occurredAt: { gte: since } }
+      ? { partnerId, occurredAt: { gte: since, lte: until } }
       : customerId
-        ? { customerId, occurredAt: { gte: since } }
+        ? { customerId, occurredAt: { gte: since, lte: until } }
         : partnerId
-          ? { partnerId, occurredAt: { gte: since } }
+          ? { partnerId, occurredAt: { gte: since, lte: until } }
           : { id: "__none__" };
 
   const [todos, records, logs] = await Promise.all([
@@ -68,7 +77,7 @@ export async function loadPrepFacts(opts: {
     }),
     projectId
       ? db.projectWorkLog.findMany({
-          where: { projectId, createdAt: { gte: since } },
+          where: { projectId, createdAt: { gte: since, lte: until } },
           orderBy: { createdAt: "desc" },
           take: 15,
           select: {

@@ -15,6 +15,10 @@ import {
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
 import {
+  defaultFactsRangeDates,
+  formatFactsRangeLabel,
+} from "@/lib/presales-meeting/facts-range";
+import {
   OwnedPortfolioPicker,
   type CustomerOpt,
   type OpportunityOpt,
@@ -91,6 +95,9 @@ export function CreatePresalesMeetingForm({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const defaultRange = defaultFactsRangeDates();
+  const [factsSince, setFactsSince] = useState(defaultRange.since);
+  const [factsUntil, setFactsUntil] = useState(defaultRange.until);
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [recommended, setRecommended] = useState<RecommendedAgendaItem[]>([]);
   const [recommendedAt, setRecommendedAt] = useState(false);
@@ -98,6 +105,8 @@ export function CreatePresalesMeetingForm({
   const [showAllAdd, setShowAllAdd] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const rangeLabel = formatFactsRangeLabel(factsSince, factsUntil);
 
   const userName = useMemo(
     () => new Map(users.map((u) => [u.id, u.name])),
@@ -145,10 +154,13 @@ export function CreatePresalesMeetingForm({
     onOpenChange?.(next);
     if (next) {
       const defaults = defaultPresalesSelection(users);
+      const range = defaultFactsRangeDates();
       setError(null);
       setRecommended([]);
       setRecommendedAt(false);
       setTitle("");
+      setFactsSince(range.since);
+      setFactsUntil(range.until);
       setSelectedPeople(defaults.selected);
       setBlocks(defaults.blocks);
       setShowAllAdd({});
@@ -191,7 +203,10 @@ export function CreatePresalesMeetingForm({
       setBusy(true);
       setError(null);
       try {
-        const res = await recommendPresalesAgendaAction(selectedPeople);
+        const res = await recommendPresalesAgendaAction(selectedPeople, {
+          since: factsSince,
+          until: factsUntil,
+        });
         if (res.error) {
           setError(res.error);
           return;
@@ -360,6 +375,8 @@ export function CreatePresalesMeetingForm({
           title: title.trim() || undefined,
           attendeeUserIds: selectedPeople,
           items,
+          factsSince,
+          factsUntil,
         });
         if (res.error) {
           setError(res.error);
@@ -438,15 +455,48 @@ export function CreatePresalesMeetingForm({
             );
           })}
         </div>
-        <button
-          type="button"
-          disabled={busy || !selectedPeople.length}
-          onClick={runRecommend}
-          className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
-        >
-          {busy && !recommendedAt ? t.recommending : t.recommendAction}
-        </button>
-        <p className="text-[11px] text-slate-400">{t.recommendHint}</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block space-y-1">
+            <span className="text-[11px] text-slate-500">{t.factsRange}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-slate-400">{t.factsRangeFrom}</span>
+              <input
+                type="date"
+                value={factsSince}
+                max={factsUntil}
+                onChange={(e) => {
+                  setFactsSince(e.target.value);
+                  setRecommendedAt(false);
+                  setRecommended([]);
+                }}
+                className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+              />
+              <span className="text-[11px] text-slate-400">{t.factsRangeTo}</span>
+              <input
+                type="date"
+                value={factsUntil}
+                min={factsSince}
+                onChange={(e) => {
+                  setFactsUntil(e.target.value);
+                  setRecommendedAt(false);
+                  setRecommended([]);
+                }}
+                className="rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+              />
+            </div>
+          </label>
+          <button
+            type="button"
+            disabled={busy || !selectedPeople.length}
+            onClick={runRecommend}
+            className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+          >
+            {busy && !recommendedAt ? t.recommending : t.recommendAction}
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          {formatMsg(t.recommendHint, { range: rangeLabel })}
+        </p>
       </section>
 
       {selectedPeople.length > 0 ? (
@@ -497,7 +547,9 @@ export function CreatePresalesMeetingForm({
                     })}
                   </ul>
                 ) : recommendedAt ? (
-                  <p className="text-[11px] text-slate-400">{t.noRecommend}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {formatMsg(t.noRecommend, { range: rangeLabel })}
+                  </p>
                 ) : null}
 
                 <OwnedPortfolioPicker

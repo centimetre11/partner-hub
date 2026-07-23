@@ -3673,7 +3673,7 @@ export const messagesEn = {
   },
   presalesMeeting: {
     title: "Presales project meetings",
-    desc: "Agenda = person + customer/opportunity/project/partner. Prep: last-2-week facts. Live: tag + record + todos. Post: choose path → confirm summary → meeting report to History.",
+    desc: "Agenda = person + customer/opportunity/project/partner. Prep uses the selected date range. Live: tag + record + todos. Post: choose path → confirm summary → meeting report to History.",
     create: "New meeting",
     createTitle: "Create presales project meeting",
     createFlowHint:
@@ -3687,11 +3687,14 @@ export const messagesEn = {
     needPeople: "Select at least one attendee",
     recommendAction: "Recommend customers & projects",
     recommending: "Recommending…",
+    factsRange: "Date range",
+    factsRangeFrom: "From",
+    factsRangeTo: "To",
     recommendHint:
-      "Based on the last 2 weeks of business records, todos, and project work logs. Uncheck or add more under each person.",
+      "Based on business records, todos, and project work logs in {range}. Uncheck or add more under each person.",
     agendaByPerson: "Confirm agenda by person",
     recommendReasons: "Sources: {reasons}",
-    noRecommend: "No activity in the last 2 weeks — add a customer manually (opportunity/project optional).",
+    noRecommend: "No activity in {range} — add a customer manually (opportunity/project optional).",
     manualAdd: "Add manually",
     ownedSection: "Owned — quick pick",
     ownedProjects: "Projects",
@@ -3732,7 +3735,8 @@ export const messagesEn = {
     empty: "No meetings yet",
     itemsCount: "{n} agenda items",
     openWorkspace: "Open",
-    prepHint: "Prep shows open todos plus business records and project work logs from the last 2 weeks — no AI recommendations.",
+    prepHint:
+      "Prep shows open todos plus business records and project work logs in {range} — no AI recommendations.",
     prepReady: "Prep ready",
     openTodos: "Open todos",
     businessRecords: "Business records",
