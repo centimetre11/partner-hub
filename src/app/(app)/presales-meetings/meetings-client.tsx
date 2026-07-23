@@ -5,12 +5,16 @@ import Link from "next/link";
 import { Badge, Card, EmptyState, fmtDateTime } from "@/components/ui";
 import { ListPagination } from "@/components/list-pagination";
 import { CreatePresalesMeetingForm } from "./create-form";
+import type {
+  CustomerOpt,
+  PartnerCustomerLink,
+  PartnerOpt,
+  ProjectOpt,
+} from "./owned-picker";
 import { formatMsg } from "@/lib/i18n/messages";
 import { useMessages } from "@/lib/i18n/context";
 
 type UserOpt = { id: string; name: string; role: string };
-type CustomerOpt = { id: string; name: string };
-type ProjectOpt = { id: string; name: string; customerId: string };
 
 type MeetingRow = {
   id: string;
@@ -30,6 +34,8 @@ export function PresalesMeetingsClient({
   users,
   customers,
   projects,
+  partners,
+  partnerLinks,
 }: {
   tab: "active" | "history";
   meetings: MeetingRow[];
@@ -39,6 +45,8 @@ export function PresalesMeetingsClient({
   users: UserOpt[];
   customers: CustomerOpt[];
   projects: ProjectOpt[];
+  partners: PartnerOpt[];
+  partnerLinks: PartnerCustomerLink[];
 }) {
   const msgs = useMessages();
   const m = msgs.presalesMeeting;
@@ -76,6 +84,8 @@ export function PresalesMeetingsClient({
           users={users}
           customers={customers}
           projects={projects}
+          partners={partners}
+          partnerLinks={partnerLinks}
           onOpenChange={setCreating}
         />
       ) : null}

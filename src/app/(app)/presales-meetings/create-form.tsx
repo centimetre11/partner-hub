@@ -9,10 +9,15 @@ import {
 import type { RecommendedAgendaItem } from "@/lib/presales-meeting/types";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
+import {
+  OwnedPortfolioPicker,
+  type CustomerOpt,
+  type PartnerCustomerLink,
+  type PartnerOpt,
+  type ProjectOpt,
+} from "./owned-picker";
 
 type UserOpt = { id: string; name: string; role: string };
-type CustomerOpt = { id: string; name: string };
-type ProjectOpt = { id: string; name: string; customerId: string };
 
 type ManualRow = {
   key: string;
@@ -25,8 +30,19 @@ type PersonBlock = {
   userId: string;
   /** recommended item keys selected: projectId */
   selectedProjectIds: Set<string>;
+  /** owned quick-pick projectIds */
+  ownedPicks: Set<string>;
   manual: ManualRow[];
 };
+
+function emptyBlock(userId: string): PersonBlock {
+  return {
+    userId,
+    selectedProjectIds: new Set(),
+    ownedPicks: new Set(),
+    manual: [],
+  };
+}
 
 function newManualRow(): ManualRow {
   return {
@@ -44,11 +60,7 @@ function defaultPresalesSelection(users: UserOpt[]): {
   const selected = users.filter((u) => u.role === "PRESALES").map((u) => u.id);
   const blocks: Record<string, PersonBlock> = {};
   for (const userId of selected) {
-    blocks[userId] = {
-      userId,
-      selectedProjectIds: new Set(),
-      manual: [],
-    };
+    blocks[userId] = emptyBlock(userId);
   }
   return { selected, blocks };
 }
@@ -57,11 +69,15 @@ export function CreatePresalesMeetingForm({
   users,
   customers,
   projects,
+  partners,
+  partnerLinks,
   onOpenChange,
 }: {
   users: UserOpt[];
   customers: CustomerOpt[];
   projects: ProjectOpt[];
+  partners: PartnerOpt[];
+  partnerLinks: PartnerCustomerLink[];
   onOpenChange?: (open: boolean) => void;
 }) {
   const t = useMessages().presalesMeeting;
@@ -73,12 +89,18 @@ export function CreatePresalesMeetingForm({
   const [recommended, setRecommended] = useState<RecommendedAgendaItem[]>([]);
   const [recommendedAt, setRecommendedAt] = useState(false);
   const [blocks, setBlocks] = useState<Record<string, PersonBlock>>({});
+  const [showAllAdd, setShowAllAdd] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const userName = useMemo(
     () => new Map(users.map((u) => [u.id, u.name])),
     [users],
+  );
+
+  const projectById = useMemo(
+    () => new Map(projects.map((p) => [p.id, p])),
+    [projects],
   );
 
   const projectsByCustomer = useMemo(() => {
@@ -113,6 +135,7 @@ export function CreatePresalesMeetingForm({
       setScheduledAt("");
       setSelectedPeople(defaults.selected);
       setBlocks(defaults.blocks);
+      setShowAllAdd({});
     } else {
       setError(null);
       setRecommended([]);
@@ -121,6 +144,7 @@ export function CreatePresalesMeetingForm({
       setSelectedPeople([]);
       setTitle("");
       setScheduledAt("");
+      setShowAllAdd({});
     }
   }
 
@@ -133,11 +157,7 @@ export function CreatePresalesMeetingForm({
         if (on) {
           delete copy[id];
         } else if (!copy[id]) {
-          copy[id] = {
-            userId: id,
-            selectedProjectIds: new Set(),
-            manual: [],
-          };
+          copy[id] = emptyBlock(id);
         }
         return copy;
       });
@@ -172,6 +192,7 @@ export function CreatePresalesMeetingForm({
             next[userId] = {
               userId,
               selectedProjectIds: new Set(forUser.map((it) => it.projectId)),
+              ownedPicks: existing?.ownedPicks ?? new Set(),
               manual: existing?.manual ?? [],
             };
           }
@@ -187,15 +208,21 @@ export function CreatePresalesMeetingForm({
 
   function toggleRecommended(userId: string, projectId: string) {
     setBlocks((prev) => {
-      const block = prev[userId] ?? {
-        userId,
-        selectedProjectIds: new Set<string>(),
-        manual: [],
-      };
+      const block = prev[userId] ?? emptyBlock(userId);
       const selected = new Set(block.selectedProjectIds);
       if (selected.has(projectId)) selected.delete(projectId);
       else selected.add(projectId);
       return { ...prev, [userId]: { ...block, selectedProjectIds: selected } };
+    });
+  }
+
+  function toggleOwnedPick(userId: string, projectId: string) {
+    setBlocks((prev) => {
+      const block = prev[userId] ?? emptyBlock(userId);
+      const ownedPicks = new Set(block.ownedPicks);
+      if (ownedPicks.has(projectId)) ownedPicks.delete(projectId);
+      else ownedPicks.add(projectId);
+      return { ...prev, [userId]: { ...block, ownedPicks } };
     });
   }
 
@@ -228,6 +255,18 @@ export function CreatePresalesMeetingForm({
           userId,
           customerId: rec.customerId,
           projectId: rec.projectId,
+        });
+      }
+      for (const projectId of block.ownedPicks) {
+        const p = projectById.get(projectId);
+        if (!p) continue;
+        const key = `${userId}|${projectId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          userId,
+          customerId: p.customerId,
+          projectId: p.id,
         });
       }
       for (const row of block.manual) {
@@ -326,7 +365,6 @@ export function CreatePresalesMeetingForm({
         </label>
       </div>
 
-      {/* Step 1: people checkboxes */}
       <section className="space-y-2">
         <div className="text-xs font-medium text-slate-700">{t.pickPeople}</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5 max-h-52 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50 p-2">
@@ -361,18 +399,14 @@ export function CreatePresalesMeetingForm({
         <p className="text-[11px] text-slate-400">{t.recommendHint}</p>
       </section>
 
-      {/* Step 2: per-person recommended + manual */}
       {selectedPeople.length > 0 ? (
         <section className="space-y-4">
           <div className="text-xs font-medium text-slate-700">{t.agendaByPerson}</div>
           {selectedPeople.map((userId) => {
             const name = userName.get(userId) ?? userId;
-            const block = blocks[userId] ?? {
-              userId,
-              selectedProjectIds: new Set<string>(),
-              manual: [],
-            };
+            const block = blocks[userId] ?? emptyBlock(userId);
             const recs = recommendedByUser.get(userId) ?? [];
+            const allOpen = !!showAllAdd[userId];
             return (
               <div
                 key={userId}
@@ -418,118 +452,154 @@ export function CreatePresalesMeetingForm({
                   <p className="text-[11px] text-slate-400">{t.noRecommend}</p>
                 ) : null}
 
+                <OwnedPortfolioPicker
+                  userId={userId}
+                  customers={customers}
+                  projects={projects}
+                  partners={partners}
+                  partnerLinks={partnerLinks}
+                  selectedProjectIds={block.ownedPicks}
+                  onToggleProject={(projectId) => toggleOwnedPick(userId, projectId)}
+                  labels={{
+                    ownedSection: t.ownedSection,
+                    ownedProjects: t.ownedProjects,
+                    ownedCustomers: t.ownedCustomers,
+                    ownedPartners: t.ownedPartners,
+                    ownedEmpty: t.ownedEmpty,
+                    noProjectsUnder: t.noProjectsUnder,
+                    partnerCustomers: t.partnerCustomers,
+                  }}
+                />
+
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-slate-600">{t.manualAdd}</span>
-                    <button
-                      type="button"
-                      className="text-[11px] text-sky-700 hover:underline"
-                      onClick={() =>
-                        setBlocks((prev) => {
-                          const cur = prev[userId] ?? {
-                            userId,
-                            selectedProjectIds: new Set<string>(),
-                            manual: [],
-                          };
-                          return {
-                            ...prev,
-                            [userId]: {
-                              ...cur,
-                              manual: [...cur.manual, newManualRow()],
-                            },
-                          };
-                        })
-                      }
-                    >
-                      {t.addItem}
-                    </button>
-                  </div>
-                  {block.manual.map((row) => {
-                    const filteredCustomers = customers.filter((c) =>
-                      !row.customerQuery.trim()
-                        ? true
-                        : c.name
-                            .toLowerCase()
-                            .includes(row.customerQuery.trim().toLowerCase()),
-                    );
-                    const custProjects = row.customerId
-                      ? (projectsByCustomer.get(row.customerId) ?? [])
-                      : [];
-                    return (
-                      <div
-                        key={row.key}
-                        className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] rounded-lg border border-slate-100 bg-white p-2.5"
-                      >
-                        <label className="block space-y-1">
-                          <span className="text-[11px] text-slate-500">{t.customer}</span>
-                          <input
-                            value={row.customerQuery}
-                            onChange={(e) =>
-                              updateManual(userId, row.key, {
-                                customerQuery: e.target.value,
-                              })
-                            }
-                            placeholder={t.searchCustomer}
-                            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm mb-1"
-                          />
-                          <select
-                            value={row.customerId}
-                            onChange={(e) =>
-                              updateManual(userId, row.key, {
-                                customerId: e.target.value,
-                                projectId: "",
-                              })
-                            }
-                            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-                          >
-                            <option value="">—</option>
-                            {filteredCustomers.slice(0, 80).map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {c.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="block space-y-1">
-                          <span className="text-[11px] text-slate-500">{t.project}</span>
-                          <select
-                            value={row.projectId}
-                            disabled={!row.customerId}
-                            onChange={(e) =>
-                              updateManual(userId, row.key, { projectId: e.target.value })
-                            }
-                            className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm disabled:opacity-40"
-                          >
-                            <option value="">{t.selectProject}</option>
-                            {custProjects.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                  <button
+                    type="button"
+                    className="text-[11px] text-sky-700 hover:underline"
+                    onClick={() =>
+                      setShowAllAdd((prev) => ({
+                        ...prev,
+                        [userId]: !prev[userId],
+                      }))
+                    }
+                  >
+                    {allOpen ? t.hideAddFromAll : t.addFromAll}
+                  </button>
+
+                  {allOpen ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-slate-600">
+                          {t.manualAdd}
+                        </span>
                         <button
                           type="button"
-                          className="self-end text-[11px] text-slate-400 hover:text-red-600 pb-2"
+                          className="text-[11px] text-sky-700 hover:underline"
                           onClick={() =>
                             setBlocks((prev) => {
-                              const cur = prev[userId];
-                              if (!cur) return prev;
+                              const cur = prev[userId] ?? emptyBlock(userId);
                               return {
                                 ...prev,
                                 [userId]: {
                                   ...cur,
-                                  manual: cur.manual.filter((r) => r.key !== row.key),
+                                  manual: [...cur.manual, newManualRow()],
                                 },
                               };
                             })
                           }
                         >
-                          {t.removeItem}
+                          {t.addItem}
                         </button>
                       </div>
-                    );
-                  })}
+                      {block.manual.map((row) => {
+                        const filteredCustomers = customers.filter((c) =>
+                          !row.customerQuery.trim()
+                            ? true
+                            : c.name
+                                .toLowerCase()
+                                .includes(row.customerQuery.trim().toLowerCase()),
+                        );
+                        const custProjects = row.customerId
+                          ? (projectsByCustomer.get(row.customerId) ?? [])
+                          : [];
+                        return (
+                          <div
+                            key={row.key}
+                            className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] rounded-lg border border-slate-100 bg-white p-2.5"
+                          >
+                            <label className="block space-y-1">
+                              <span className="text-[11px] text-slate-500">{t.customer}</span>
+                              <input
+                                value={row.customerQuery}
+                                onChange={(e) =>
+                                  updateManual(userId, row.key, {
+                                    customerQuery: e.target.value,
+                                  })
+                                }
+                                placeholder={t.searchCustomer}
+                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm mb-1"
+                              />
+                              <select
+                                value={row.customerId}
+                                onChange={(e) =>
+                                  updateManual(userId, row.key, {
+                                    customerId: e.target.value,
+                                    projectId: "",
+                                  })
+                                }
+                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
+                              >
+                                <option value="">—</option>
+                                {filteredCustomers.slice(0, 80).map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block space-y-1">
+                              <span className="text-[11px] text-slate-500">{t.project}</span>
+                              <select
+                                value={row.projectId}
+                                disabled={!row.customerId}
+                                onChange={(e) =>
+                                  updateManual(userId, row.key, {
+                                    projectId: e.target.value,
+                                  })
+                                }
+                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm disabled:opacity-40"
+                              >
+                                <option value="">{t.selectProject}</option>
+                                {custProjects.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              className="self-end text-[11px] text-slate-400 hover:text-red-600 pb-2"
+                              onClick={() =>
+                                setBlocks((prev) => {
+                                  const cur = prev[userId];
+                                  if (!cur) return prev;
+                                  return {
+                                    ...prev,
+                                    [userId]: {
+                                      ...cur,
+                                      manual: cur.manual.filter((r) => r.key !== row.key),
+                                    },
+                                  };
+                                })
+                              }
+                            >
+                              {t.removeItem}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             );

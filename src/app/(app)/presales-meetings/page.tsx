@@ -22,45 +22,73 @@ export default async function PresalesMeetingsPage({
   const meetingWhere =
     tab === "history" ? { status: "DONE" as const } : { status: { not: "DONE" as const } };
 
-  const [meetings, total, users, customers, projects] = await Promise.all([
-    db.presalesProjectMeeting.findMany({
-      where: meetingWhere,
-      orderBy:
-        tab === "history"
-          ? [{ endedAt: "desc" }, { createdAt: "desc" }]
-          : { createdAt: "desc" },
-      skip,
-      take,
-      include: {
-        createdBy: { select: { name: true } },
-        items: {
-          select: {
-            id: true,
-            user: { select: { name: true } },
-            customer: { select: { name: true } },
-            project: { select: { name: true } },
+  const [meetings, total, users, customers, projects, partners, partnerLinks] =
+    await Promise.all([
+      db.presalesProjectMeeting.findMany({
+        where: meetingWhere,
+        orderBy:
+          tab === "history"
+            ? [{ endedAt: "desc" }, { createdAt: "desc" }]
+            : { createdAt: "desc" },
+        skip,
+        take,
+        include: {
+          createdBy: { select: { name: true } },
+          items: {
+            select: {
+              id: true,
+              user: { select: { name: true } },
+              customer: { select: { name: true } },
+              project: { select: { name: true } },
+            },
           },
         },
-      },
-    }),
-    db.presalesProjectMeeting.count({ where: meetingWhere }),
-    db.user.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, role: true },
-    }),
-    db.customer.findMany({
-      where: { status: { not: "INACTIVE" } },
-      orderBy: { name: "asc" },
-      take: 500,
-      select: { id: true, name: true },
-    }),
-    db.project.findMany({
-      where: { status: { not: "CLOSED" } },
-      orderBy: { name: "asc" },
-      take: 1000,
-      select: { id: true, name: true, customerId: true },
-    }),
-  ]);
+      }),
+      db.presalesProjectMeeting.count({ where: meetingWhere }),
+      db.user.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, role: true },
+      }),
+      db.customer.findMany({
+        where: { status: { not: "INACTIVE" } },
+        orderBy: { name: "asc" },
+        take: 500,
+        select: {
+          id: true,
+          name: true,
+          ownerId: true,
+          presalesUserId: true,
+        },
+      }),
+      db.project.findMany({
+        where: { status: { not: "CLOSED" } },
+        orderBy: { name: "asc" },
+        take: 1000,
+        select: {
+          id: true,
+          name: true,
+          customerId: true,
+          ownerId: true,
+          partnerId: true,
+        },
+      }),
+      db.partner.findMany({
+        where: { status: { not: "ARCHIVED" } },
+        orderBy: { name: "asc" },
+        take: 500,
+        select: {
+          id: true,
+          name: true,
+          ownerId: true,
+          salesUserId: true,
+          presalesUserId: true,
+        },
+      }),
+      db.customerPartner.findMany({
+        select: { partnerId: true, customerId: true },
+        take: 3000,
+      }),
+    ]);
 
   return (
     <div className="pb-16 space-y-0">
@@ -73,6 +101,8 @@ export default async function PresalesMeetingsPage({
         users={users}
         customers={customers}
         projects={projects}
+        partners={partners}
+        partnerLinks={partnerLinks}
         meetings={meetings.map((meeting) => ({
           id: meeting.id,
           title: meeting.title,
