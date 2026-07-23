@@ -220,6 +220,33 @@ export async function endPresalesMeetingAction(meetingId: string) {
   }
 }
 
+/** 跳过 AI 提炼 / 入库核对，直接结束并进入历史 */
+export async function finishPresalesMeetingWithoutExtractAction(meetingId: string) {
+  await requireUser();
+  const meeting = await db.presalesProjectMeeting.findUnique({
+    where: { id: meetingId },
+    select: { status: true, endedAt: true },
+  });
+  if (!meeting) return { error: "会议不存在" };
+  if (meeting.status === "DONE") return { ok: true as const };
+
+  await db.$transaction([
+    db.presalesProjectMeetingItem.updateMany({
+      where: { meetingId, status: { not: "CONFIRMED" } },
+      data: { status: "CONFIRMED" },
+    }),
+    db.presalesProjectMeeting.update({
+      where: { id: meetingId },
+      data: {
+        status: "DONE",
+        endedAt: meeting.endedAt ?? new Date(),
+      },
+    }),
+  ]);
+  revalidateMeeting(meetingId);
+  return { ok: true as const };
+}
+
 export async function resetPresalesMeetingToPrepAction(meetingId: string) {
   await requireUser();
   const meeting = await db.presalesProjectMeeting.findUnique({

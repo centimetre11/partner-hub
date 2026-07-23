@@ -19,9 +19,9 @@ import {
 } from "@/components/meeting";
 import {
   confirmPresalesItemsAction,
-  createLiveTodoAction,
   endPresalesMeetingAction,
   extractPresalesOutcomesAction,
+  finishPresalesMeetingWithoutExtractAction,
   matchPresalesMinutesAction,
   matchPresalesXfyunAction,
   resetPresalesMeetingToPrepAction,
@@ -37,9 +37,42 @@ import {
   parseItemSectionsFromLiveNotes,
 } from "@/lib/presales-meeting/markers";
 import type { SplitProposal } from "@/lib/presales-meeting/split-types";
+import { CreateTodoDrawer } from "@/components/create-todo-drawer";
+import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
 import { Badge } from "@/components/ui";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
+
+type TodoOption = { id: string; name: string };
+
+function todoDefaultsForItem(item: MeetingItemClient): {
+  defaultOwnerRef: string;
+  defaultLink: string;
+} {
+  if (item.subjectKind === "PARTNER" && item.partnerId) {
+    return {
+      defaultOwnerRef: encodeTodoOwnerRef("partner", item.partnerId),
+      defaultLink: "",
+    };
+  }
+  if (item.customerId) {
+    return {
+      defaultOwnerRef: encodeTodoOwnerRef("customer", item.customerId),
+      defaultLink: item.projectId
+        ? `proj:${item.projectId}`
+        : item.opportunityId
+          ? `opp:${item.opportunityId}`
+          : "",
+    };
+  }
+  if (item.partnerId) {
+    return {
+      defaultOwnerRef: encodeTodoOwnerRef("partner", item.partnerId),
+      defaultLink: item.opportunityId ? `opp:${item.opportunityId}` : "",
+    };
+  }
+  return { defaultOwnerRef: "", defaultLink: "" };
+}
 
 type ConfirmDraft = {
   coreNotes: string;
@@ -81,9 +114,16 @@ function draftsFromProposal(proposal: SplitProposal): Record<string, ConfirmDraf
 export function PresalesMeetingWorkspace({
   initial,
   prepFactsByItemId,
+  todoContext,
 }: {
   initial: MeetingClient;
   prepFactsByItemId: Record<string, PrepFacts>;
+  todoContext: {
+    currentUserId: string;
+    users: TodoOption[];
+    partners: TodoOption[];
+    customers: TodoOption[];
+  };
 }) {
   const m = useMessages().presalesMeeting;
   const router = useRouter();
@@ -107,12 +147,12 @@ export function PresalesMeetingWorkspace({
   const [matchDrafts, setMatchDrafts] = useState<Record<string, string>>({});
   const [unassignedDraft, setUnassignedDraft] = useState("");
   const [confirmDrafts, setConfirmDrafts] = useState<Record<string, ConfirmDraft>>({});
-  const [todoTitle, setTodoTitle] = useState("");
   const lockAssign = useRef(false);
 
   const phase = meetingPhaseFromStatus(meeting.status);
   const active = meeting.items.find((it) => it.id === activeId) ?? meeting.items[0] ?? null;
   const facts = active ? prepFactsByItemId[active.id] : null;
+  const activeTodoDefaults = active ? todoDefaultsForItem(active) : null;
 
   const agendaItems: (MeetingAgendaItemBase & MeetingItemClient)[] = useMemo(
     () => meeting.items.map((it) => ({ ...it, title: it.label })),
@@ -324,7 +364,9 @@ export function PresalesMeetingWorkspace({
           }
         />
 
-        {phase === "post" ? <MeetingPostStepIndicator step={postStep} /> : null}
+        {phase === "post" ? (
+          <MeetingPostStepIndicator step={postStep} extractOptional />
+        ) : null}
 
         {phase === "post" && postStep === "assign" ? (
           <MeetingAssignmentTimeline
@@ -389,6 +431,36 @@ export function PresalesMeetingWorkspace({
                   return { error: e instanceof Error ? e.message : String(e) };
                 }
               }, { refresh: false })
+            }
+            finishWithoutExtractLabel={m.finishWithoutExtract}
+            onFinishWithoutExtract={() =>
+              run(async () => {
+                const notes = buildLiveNotesFromSegments([
+                  ...(unassignedDraft.trim()
+                    ? [{ partnerId: null, partnerName: null, text: unassignedDraft }]
+                    : []),
+                  ...orderedForTimeline.map((it) => ({
+                    partnerId: it.id,
+                    partnerName: it.label,
+                    text: matchDrafts[it.id] ?? "",
+                  })),
+                ]);
+                await savePresalesMatchedNotesAction(meeting.id, notes);
+                setLiveNotes(notes);
+                const res = await finishPresalesMeetingWithoutExtractAction(meeting.id);
+                if (!res.error) {
+                  setMeeting((prev) => ({
+                    ...prev,
+                    status: "DONE",
+                    items: prev.items.map((it) =>
+                      it.status === "CONFIRMED" ? it : { ...it, status: "CONFIRMED" },
+                    ),
+                  }));
+                  flash(m.finishedNoExtract);
+                  router.push("/presales-meetings?tab=history");
+                }
+                return res;
+              })
             }
           />
         ) : null}
@@ -597,36 +669,24 @@ export function PresalesMeetingWorkspace({
                   </div>
                 ) : null}
 
-                {phase === "live" ? (
-                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 space-y-2">
+                {phase === "live" || phase === "post" || phase === "prep" ? (
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="text-xs font-medium text-emerald-900">{m.addTodo}</div>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        value={todoTitle}
-                        onChange={(e) => setTodoTitle(e.target.value)}
-                        placeholder={m.todoTitle}
-                        className="flex-1 min-w-[160px] rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm"
-                      />
-                      <button
-                        type="button"
-                        disabled={pending || !todoTitle.trim()}
-                        onClick={() =>
-                          run(async () => {
-                            const res = await createLiveTodoAction(meeting.id, active.id, {
-                              title: todoTitle,
-                            });
-                            if (!res.error) {
-                              setTodoTitle("");
-                              flash(m.todoAdded);
-                            }
-                            return res;
-                          }, { refresh: false })
+                    {activeTodoDefaults ? (
+                      <CreateTodoDrawer
+                        userId={
+                          active.userId || todoContext.currentUserId
                         }
-                        className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm hover:bg-emerald-800 disabled:opacity-40"
-                      >
-                        {m.addTodo}
-                      </button>
-                    </div>
+                        users={todoContext.users}
+                        partners={todoContext.partners}
+                        customers={todoContext.customers}
+                        defaultOwnerRef={activeTodoDefaults.defaultOwnerRef}
+                        defaultLink={activeTodoDefaults.defaultLink}
+                        lockOwner={Boolean(activeTodoDefaults.defaultOwnerRef)}
+                        buttonLabel={m.addTodo}
+                        buttonClassName="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm hover:bg-emerald-800"
+                      />
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -692,46 +752,80 @@ export function PresalesMeetingWorkspace({
                 ) : null}
               </section>
 
-              {phase === "post" && postStep === "extract" && Object.keys(confirmDrafts).length ? (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() =>
-                    run(async () => {
-                      const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
-                        ([itemId, d]) => ({
-                          itemId,
-                          coreNotes: d.coreNotes,
-                          businessRecordTitle: d.businessRecordTitle,
-                          businessRecordContent: d.businessRecordContent,
-                          skipBusinessRecord: d.skipBusinessRecord,
-                          projectWorkLogContent: d.projectWorkLogContent,
-                          skipProjectWorkLog: d.skipProjectWorkLog,
-                          todos: d.todos.map((t) => ({
-                            id: t.id,
-                            title: t.title,
-                            detail: t.detail,
-                            dueDate: t.dueDate || null,
-                            include: t.include,
-                          })),
-                        }),
-                      );
-                      const res = await confirmPresalesItemsAction(meeting.id, items);
-                      if (!res.error) {
-                        setMeeting((prev) => ({
-                          ...prev,
-                          status: "DONE",
-                          items: prev.items.map((it) => ({ ...it, status: "CONFIRMED" })),
-                        }));
-                        flash(m.confirmed);
+              {phase === "post" && postStep === "extract" ? (
+                <div className="flex flex-wrap gap-2 items-center">
+                  {Object.keys(confirmDrafts).length ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() =>
+                        run(async () => {
+                          const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
+                            ([itemId, d]) => ({
+                              itemId,
+                              coreNotes: d.coreNotes,
+                              businessRecordTitle: d.businessRecordTitle,
+                              businessRecordContent: d.businessRecordContent,
+                              skipBusinessRecord: d.skipBusinessRecord,
+                              projectWorkLogContent: d.projectWorkLogContent,
+                              skipProjectWorkLog: d.skipProjectWorkLog,
+                              todos: d.todos.map((t) => ({
+                                id: t.id,
+                                title: t.title,
+                                detail: t.detail,
+                                dueDate: t.dueDate || null,
+                                include: t.include,
+                              })),
+                            }),
+                          );
+                          const res = await confirmPresalesItemsAction(meeting.id, items);
+                          if (!res.error) {
+                            setMeeting((prev) => ({
+                              ...prev,
+                              status: "DONE",
+                              items: prev.items.map((it) => ({
+                                ...it,
+                                status: "CONFIRMED",
+                              })),
+                            }));
+                            flash(m.confirmed);
+                          }
+                          return res;
+                        })
                       }
-                      return res;
-                    })
-                  }
-                  className="rounded-lg bg-violet-700 text-white px-4 py-2 text-sm font-medium hover:bg-violet-800 disabled:opacity-40"
-                >
-                  {m.confirmAll}
-                </button>
+                      className="rounded-lg bg-violet-700 text-white px-4 py-2 text-sm font-medium hover:bg-violet-800 disabled:opacity-40"
+                    >
+                      {m.confirmAll}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() =>
+                      run(async () => {
+                        const res = await finishPresalesMeetingWithoutExtractAction(meeting.id);
+                        if (!res.error) {
+                          setMeeting((prev) => ({
+                            ...prev,
+                            status: "DONE",
+                            items: prev.items.map((it) =>
+                              it.status === "CONFIRMED"
+                                ? it
+                                : { ...it, status: "CONFIRMED" },
+                            ),
+                          }));
+                          flash(m.finishedNoExtract);
+                          router.push("/presales-meetings?tab=history");
+                        }
+                        return res;
+                      })
+                    }
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    {m.finishWithoutExtract}
+                  </button>
+                  <span className="text-[11px] text-slate-400">{m.finishWithoutExtractHint}</span>
+                </div>
               ) : null}
             </div>
           ) : (

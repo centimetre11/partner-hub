@@ -17,6 +17,8 @@ export function CreateTodoDrawer({
   customers,
   users,
   defaultOwnerRef = "",
+  /** Pre-select opportunity/project link: opp:<id> / proj:<id> */
+  defaultLink = "",
   /** When set, written to FormData as TodoItem.source (e.g. ARR from calendar). */
   source,
   /** Lock related owner to defaultOwnerRef (no switching partner/customer). */
@@ -31,6 +33,7 @@ export function CreateTodoDrawer({
   users: Option[];
   /** Pre-select related partner/customer on open (e.g. on detail pages). */
   defaultOwnerRef?: string;
+  defaultLink?: string;
   source?: string;
   lockOwner?: boolean;
   buttonClassName?: string;
@@ -42,7 +45,7 @@ export function CreateTodoDrawer({
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [ownerRef, setOwnerRef] = useState(defaultOwnerRef);
-  const [link, setLink] = useState("");
+  const [link, setLink] = useState(defaultLink);
   const [linkOptions, setLinkOptions] = useState<{ opportunities: Option[]; projects: Option[] } | null>(null);
   const [linkLoading, setLinkLoading] = useState(false);
 
@@ -64,13 +67,14 @@ export function CreateTodoDrawer({
   }, [open, saving]);
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
       setOwnerRef(defaultOwnerRef);
-      setLink("");
+      setLink(defaultLink);
+    } else {
       setLinkOptions(null);
       setLinkLoading(false);
     }
-  }, [open, defaultOwnerRef]);
+  }, [open, defaultOwnerRef, defaultLink]);
 
   useEffect(() => {
     setLink("");

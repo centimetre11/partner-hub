@@ -163,12 +163,22 @@ export function PostMinutesDualPath({
   );
 }
 
-export function MeetingPostStepIndicator({ step }: { step: MeetingPostStep }) {
+export function MeetingPostStepIndicator({
+  step,
+  extractOptional = false,
+}: {
+  step: MeetingPostStep;
+  /** 第三步提炼可跳过时展示「可选」 */
+  extractOptional?: boolean;
+}) {
   const t = useMessages().meetingUi;
   const steps = [
     ["paste", t.postStepPaste],
     ["assign", t.postStepAssign],
-    ["extract", t.postStepExtract],
+    [
+      "extract",
+      extractOptional ? `${t.postStepExtract} · ${t.optionalStep}` : t.postStepExtract,
+    ],
   ] as const;
   const order = { paste: 0, assign: 1, extract: 2 } as const;
   return (

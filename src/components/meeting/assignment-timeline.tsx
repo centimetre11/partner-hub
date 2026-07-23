@@ -16,8 +16,11 @@ type Props<T extends MeetingAgendaItemBase> = {
   onChangeUnassigned: (text: string) => void;
   onSave: () => void;
   onConfirm: () => void;
+  /** 跳过提炼，直接结束会议（可选） */
+  onFinishWithoutExtract?: () => void;
   /** 确认按钮文案；默认「确认归属并提炼」 */
   confirmLabel?: string;
+  finishWithoutExtractLabel?: string;
   /** 每条标题旁额外信息 */
   renderItemMeta?: (item: T, idx: number) => ReactNode;
 };
@@ -38,7 +41,9 @@ export function MeetingAssignmentTimeline<T extends MeetingAgendaItemBase>({
   onChangeUnassigned,
   onSave,
   onConfirm,
+  onFinishWithoutExtract,
   confirmLabel,
+  finishWithoutExtractLabel,
   renderItemMeta,
 }: Props<T>) {
   const t = useMessages().meetingUi;
@@ -107,7 +112,7 @@ export function MeetingAssignmentTimeline<T extends MeetingAgendaItemBase>({
         })}
       </ol>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         <button
           type="button"
           disabled={busy}
@@ -124,7 +129,20 @@ export function MeetingAssignmentTimeline<T extends MeetingAgendaItemBase>({
         >
           {confirmLabel ?? t.confirmExtract}
         </button>
+        {onFinishWithoutExtract ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onFinishWithoutExtract}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+          >
+            {finishWithoutExtractLabel ?? t.finishWithoutExtract}
+          </button>
+        ) : null}
       </div>
+      {onFinishWithoutExtract ? (
+        <p className="text-[11px] text-slate-400">{t.finishWithoutExtractHint}</p>
+      ) : null}
     </section>
   );
 }

@@ -14,26 +14,44 @@ export default async function PresalesMeetingPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
   await backfillPresalesItemSubjects(id);
 
-  const meeting = await db.presalesProjectMeeting.findUnique({
-    where: { id },
-    include: {
-      items: {
-        orderBy: { sortOrder: "asc" },
-        include: {
-          user: { select: { name: true } },
-          customer: { select: { name: true } },
-          project: { select: { name: true, phase: true } },
-          opportunity: { select: { name: true } },
-          partner: { select: { name: true } },
-          todoDrafts: { orderBy: { sortOrder: "asc" } },
+  const [meeting, users, partners, customers] = await Promise.all([
+    db.presalesProjectMeeting.findUnique({
+      where: { id },
+      include: {
+        items: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            user: { select: { name: true } },
+            customer: { select: { name: true } },
+            project: { select: { name: true, phase: true } },
+            opportunity: { select: { name: true } },
+            partner: { select: { name: true } },
+            todoDrafts: { orderBy: { sortOrder: "asc" } },
+          },
         },
       },
-    },
-  });
+    }),
+    db.user.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    db.partner.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      orderBy: { name: "asc" },
+      take: 500,
+      select: { id: true, name: true },
+    }),
+    db.customer.findMany({
+      where: { status: { not: "INACTIVE" } },
+      orderBy: { name: "asc" },
+      take: 500,
+      select: { id: true, name: true },
+    }),
+  ]);
   if (!meeting) notFound();
 
   const client = toMeetingClient(meeting);
@@ -61,6 +79,12 @@ export default async function PresalesMeetingPage({
         <PresalesMeetingWorkspace
           initial={client}
           prepFactsByItemId={prepFactsByItemId}
+          todoContext={{
+            currentUserId: user.id,
+            users,
+            partners,
+            customers,
+          }}
         />
       </div>
     </div>
