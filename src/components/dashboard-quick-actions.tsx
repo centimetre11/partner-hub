@@ -12,6 +12,7 @@ import {
   type MeetingCustomerOption,
 } from "@/components/meeting-scheduler";
 import type { BoundUserWithEmail } from "@/components/meeting-customer-invite-form";
+import { MOSS_ENABLED } from "@/lib/feature-flags";
 
 type Option = { id: string; name: string };
 type BoundUser = BoundUserWithEmail;
@@ -85,12 +86,14 @@ export function DashboardQuickActions({
 
   return (
     <div className="mb-6 grid grid-cols-1 gap-3 px-8 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-      <QuickActionCard title={q.mossTitle} desc={q.mossDesc}>
-        <Link href="/moss" className={cardActionBtn}>
-          {openLabel}
-          <ChevronRightIcon />
-        </Link>
-      </QuickActionCard>
+      {MOSS_ENABLED && (
+        <QuickActionCard title={q.mossTitle} desc={q.mossDesc}>
+          <Link href="/moss" className={cardActionBtn}>
+            {openLabel}
+            <ChevronRightIcon />
+          </Link>
+        </QuickActionCard>
+      )}
 
       <QuickActionCard title={m.dashboard.createTodo} desc={q.createTodoDesc}>
         <CreateTodoDrawer

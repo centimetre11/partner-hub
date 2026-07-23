@@ -46,6 +46,7 @@ import {
 import { MossCustomerSection } from "@/components/moss/moss-workflow-sections";
 import { getMossConfigStatus } from "@/lib/moss";
 import { parseMossDossier } from "@/lib/moss-dossier";
+import { MOSS_ENABLED } from "@/lib/feature-flags";
 import { getTaxonomyOptionsMany, type TaxonomyOptionRow } from "@/lib/taxonomy";
 import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-fields";
 import { CustomerContractForm } from "@/components/customer-contract-form";
@@ -292,7 +293,7 @@ async function CustomerTabContent({
                 select: { id: true, name: true, city: true, status: true, salesman: true, presales: true },
               })
             : Promise.resolve(null),
-          getMossConfigStatus(),
+          MOSS_ENABLED ? getMossConfigStatus() : Promise.resolve({ configured: false }),
           db.customer.findMany({
             where: { status: { in: ["ACTIVE", "PROSPECT"] } },
             select: { id: true, name: true },
@@ -300,7 +301,7 @@ async function CustomerTabContent({
           }),
         ]);
 
-      const initialMossDossier = parseMossDossier(customer.mossSnapshot);
+      const initialMossDossier = MOSS_ENABLED ? parseMossDossier(customer.mossSnapshot) : null;
       const contactOptions = contacts.map((ct) => ({ id: ct.id, name: ct.name }));
 
       const todoTag = (t: {
@@ -314,14 +315,16 @@ async function CustomerTabContent({
 
       tabContent = (
         <div className="space-y-5">
-          <MossCustomerSection
-            customerId={customer.id}
-            entityName={customer.name}
-            creditCode={customer.creditCode}
-            mossSyncedAt={customer.mossSyncedAt?.toISOString() ?? null}
-            initialDossier={initialMossDossier}
-            configured={mossStatus.configured}
-          />
+          {MOSS_ENABLED && (
+            <MossCustomerSection
+              customerId={customer.id}
+              entityName={customer.name}
+              creditCode={customer.creditCode}
+              mossSyncedAt={customer.mossSyncedAt?.toISOString() ?? null}
+              initialDossier={initialMossDossier}
+              configured={mossStatus.configured}
+            />
+          )}
           <BusinessRecordsSection
             owner={owner}
             records={businessRecords}

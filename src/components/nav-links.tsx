@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useMessages } from "@/lib/i18n/context";
-import { INBOX_NAV_ENABLED } from "@/lib/feature-flags";
+import { INBOX_NAV_ENABLED, MOSS_ENABLED } from "@/lib/feature-flags";
 
 type Leaf = {
   href: string;
@@ -75,7 +75,7 @@ export function NavLinks({
         { href: "/pool", label: m.nav.partnerPool, icon: "◬" },
         { href: "/materials", label: m.nav.materials, icon: "📦" },
         { href: "/knowhow", label: m.nav.knowhow, icon: "🔍" },
-        { href: "/moss", label: m.nav.moss, icon: "◈" },
+        ...(MOSS_ENABLED ? [{ href: "/moss" as const, label: m.nav.moss, icon: "◈" }] : []),
         { href: "/faq", label: m.nav.faq, icon: "?" },
         { href: "/taxonomy", label: m.nav.taxonomy, icon: "◇" },
       ],

@@ -7,6 +7,7 @@ import { toMeetingClient } from "@/lib/partner-review/meeting-client";
 import { DeleteMeetingButton } from "../delete-meeting-button";
 import { MeetingWorkspace } from "./meeting-workspace";
 import { isMossConfigured } from "@/lib/moss";
+import { MOSS_ENABLED } from "@/lib/feature-flags";
 import { getLocale } from "@/lib/i18n/locale-server";
 import { formatMsg, getMessages } from "@/lib/i18n/messages";
 
@@ -47,7 +48,7 @@ export default async function PartnerReviewDetailPage({ params }: { params: Prom
     orderBy: { name: "asc" },
     select: { id: true, name: true, tier: true },
   });
-  const mossConfigured = await isMossConfigured();
+  const mossConfigured = MOSS_ENABLED && (await isMossConfigured());
 
   return (
     <div className="pb-16">

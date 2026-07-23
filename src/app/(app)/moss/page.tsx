@@ -1,11 +1,14 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { PageHeader } from "@/components/ui";
 import { getMossConfigStatus } from "@/lib/moss";
 import { isSuperAdmin } from "@/lib/user-roles";
 import { getServerI18n } from "@/lib/server-i18n";
+import { MOSS_ENABLED } from "@/lib/feature-flags";
 import { MossPanel } from "./moss-panel";
 
 export default async function MossPage() {
+  if (!MOSS_ENABLED) redirect("/");
   const user = await requireUser();
   const { messages: m } = await getServerI18n();
   const status = await getMossConfigStatus();

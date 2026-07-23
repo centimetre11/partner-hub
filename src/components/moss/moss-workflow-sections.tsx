@@ -6,6 +6,7 @@ import { useMessages } from "@/lib/i18n/context";
 import { MossDossierPanel } from "@/components/moss/moss-dossier-panel";
 import { MossCustomerDrawer } from "@/app/(app)/moss/moss-panel";
 import type { MossDossier } from "@/lib/moss-dossier";
+import { MOSS_ENABLED } from "@/lib/feature-flags";
 
 export function MossCustomerSection({
   customerId,
@@ -23,6 +24,7 @@ export function MossCustomerSection({
   configured: boolean;
 }) {
   const m = useMessages();
+  if (!MOSS_ENABLED) return null;
   return (
     <Card title={m.moss.dossier.title}>
       <p className="text-xs text-slate-500 mb-4">{m.moss.dossier.customerDesc}</p>
@@ -47,6 +49,7 @@ export function MossLeadSection({
   configured: boolean;
 }) {
   const m = useMessages();
+  if (!MOSS_ENABLED) return null;
   const name = entityName?.trim();
   if (!name) return null;
 
@@ -78,7 +81,7 @@ export function MossPrepCustomerBadge({
   const m = useMessages();
   const [open, setOpen] = useState(false);
 
-  if (!configured) return null;
+  if (!MOSS_ENABLED || !configured) return null;
 
   const label = mossFitLevel ? m.moss.dossier.fitLevel[mossFitLevel] : "Moss";
 
