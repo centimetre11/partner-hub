@@ -3735,6 +3735,10 @@ export const messagesEn = {
     noRecords: "No recent business records",
     noLogs: "No project work logs",
     addTodo: "Add todo",
+    addBusinessRecord: "Log business record",
+    addWorkLog: "Log project note",
+    noOwnerForRecord: "No customer/partner on this agenda item",
+    noProjectForLog: "No linked project — cannot add work log",
     todoTitle: "Todo title",
     todoDue: "Due date",
     todoAdded: "Todo created",
@@ -3769,6 +3773,17 @@ export const messagesEn = {
     needRecording: "Record during the live meeting first",
     status: "Status:",
     noItem: "Select an agenda item",
+    delete: "Delete",
+    deleting: "Deleting…",
+    deleteConfirm: "Delete meeting “{title}”? This cannot be undone.",
+    reportSaved: "Meeting report (saved)",
+    reportTitle: "Meeting report · confirm",
+    reportHint:
+      "Includes discussion summaries and follow-up todos per agenda item. Copy as Markdown. A checklist-style report is still generated if you skip post-meeting extract.",
+    copyReport: "Copy report",
+    reportCopied: "Meeting report copied",
+    copyFailed: "Copy failed — select the text manually",
+    saveHistory: "Confirm to History",
   },
 };
 

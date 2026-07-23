@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Badge, Card, EmptyState, fmtDateTime } from "@/components/ui";
+import { Badge, Card, EmptyState } from "@/components/ui";
 import { ListPagination } from "@/components/list-pagination";
 import { CreatePresalesMeetingForm } from "./create-form";
+import { DeletePresalesMeetingButton } from "./delete-meeting-button";
 import type {
   CustomerOpt,
   OpportunityOpt,
@@ -21,7 +22,6 @@ type MeetingRow = {
   id: string;
   title: string;
   status: string;
-  scheduledAt: string | null;
   createdByName: string;
   items: { userName: string; subject: string }[];
 };
@@ -126,9 +126,6 @@ export function PresalesMeetingsClient({
                         </div>
                         <p className="text-xs text-slate-500">
                           {meeting.createdByName}
-                          {meeting.scheduledAt
-                            ? ` · ${fmtDateTime(meeting.scheduledAt)}`
-                            : ""}
                           {" · "}
                           {formatMsg(m.itemsCount, { n: meeting.items.length })}
                         </p>
@@ -140,12 +137,18 @@ export function PresalesMeetingsClient({
                           {meeting.items.length > 4 ? "…" : ""}
                         </p>
                       </div>
-                      <Link
-                        href={`/presales-meetings/${meeting.id}`}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
-                      >
-                        {m.openWorkspace}
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <Link
+                          href={`/presales-meetings/${meeting.id}`}
+                          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
+                        >
+                          {m.openWorkspace}
+                        </Link>
+                        <DeletePresalesMeetingButton
+                          meetingId={meeting.id}
+                          meetingTitle={meeting.title}
+                        />
+                      </div>
                     </div>
                   </Card>
                 );

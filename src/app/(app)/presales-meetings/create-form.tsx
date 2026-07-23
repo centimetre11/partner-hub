@@ -92,7 +92,6 @@ export function CreatePresalesMeetingForm({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
   const [recommended, setRecommended] = useState<RecommendedAgendaItem[]>([]);
   const [recommendedAt, setRecommendedAt] = useState(false);
@@ -140,7 +139,6 @@ export function CreatePresalesMeetingForm({
       setRecommended([]);
       setRecommendedAt(false);
       setTitle("");
-      setScheduledAt("");
       setSelectedPeople(defaults.selected);
       setBlocks(defaults.blocks);
       setShowAllAdd({});
@@ -151,7 +149,6 @@ export function CreatePresalesMeetingForm({
       setBlocks({});
       setSelectedPeople([]);
       setTitle("");
-      setScheduledAt("");
       setShowAllAdd({});
     }
   }
@@ -321,7 +318,6 @@ export function CreatePresalesMeetingForm({
         }
         const res = await createPresalesMeetingAction({
           title: title.trim() || undefined,
-          scheduledAt: scheduledAt || undefined,
           attendeeUserIds: selectedPeople,
           items,
         });
@@ -369,26 +365,15 @@ export function CreatePresalesMeetingForm({
         </button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block space-y-1 sm:col-span-2">
-          <span className="text-xs text-slate-500">{t.meetingTitle}</span>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t.meetingTitlePh}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block space-y-1">
-          <span className="text-xs text-slate-500">{t.scheduledAt}</span>
-          <input
-            type="datetime-local"
-            value={scheduledAt}
-            onChange={(e) => setScheduledAt(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-        </label>
-      </div>
+      <label className="block space-y-1">
+        <span className="text-xs text-slate-500">{t.meetingTitle}</span>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={t.meetingTitlePh}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        />
+      </label>
 
       <section className="space-y-2">
         <div className="text-xs font-medium text-slate-700">{t.pickPeople}</div>

@@ -30,6 +30,10 @@ import {
   startPresalesMeetingAction,
   switchPresalesMatchSourceAction,
 } from "@/lib/presales-meeting/actions";
+import {
+  buildPresalesFinalReportMarkdown,
+  reportRowFromPresalesItem,
+} from "@/lib/presales-meeting/final-report";
 import type { MeetingClient, MeetingItemClient } from "@/lib/presales-meeting/meeting-client";
 import type { ConfirmItemPayload, PrepFacts } from "@/lib/presales-meeting/types";
 import {
@@ -38,11 +42,17 @@ import {
 } from "@/lib/presales-meeting/markers";
 import type { SplitProposal } from "@/lib/presales-meeting/split-types";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
+import { CreateProjectWorkLogButton } from "@/components/create-project-work-log-button";
+import { BusinessRecordDialogButton } from "@/components/business-records-section";
 import { TodoCompleteButton } from "@/components/todo-complete-dialog";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
+import type { OwnerRef } from "@/lib/owner";
+import { categoryLabel, tidyProgressText } from "@/lib/partner-review/brief-text";
 import { Badge } from "@/components/ui";
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
+import { DeletePresalesMeetingButton } from "../delete-meeting-button";
 
 type TodoOption = { id: string; name: string };
 
@@ -235,21 +245,21 @@ export function PresalesMeetingWorkspace({
         setMeeting((prev) => ({
           ...prev,
           status: "DONE",
+          endedAt: prev.endedAt ?? new Date().toISOString(),
           items: prev.items.map((it) =>
             it.status === "CONFIRMED" ? it : { ...it, status: "CONFIRMED" },
           ),
         }));
         flash(m.finishedNoExtract);
-        router.push("/presales-meetings?tab=history");
       }
       return res;
-    });
+    }, { refresh: false });
   }
 
   const postSlot =
-    phase === "post" || phase === "done" ? (
+    phase === "post" ? (
       <div className="space-y-3">
-        {phase === "post" && postStep === "paste" ? (
+        {postStep === "paste" ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-medium text-slate-800">{m.finishWithoutMinutesTitle}</p>
@@ -268,7 +278,7 @@ export function PresalesMeetingWorkspace({
           </div>
         ) : null}
 
-        {phase === "post" && postStep !== "paste" ? (
+        {postStep !== "paste" ? (
           <MeetingMatchSourceSwitch
             tencentReady={Boolean(meeting.tencentLiveNotes)}
             xfyunReady={Boolean(meeting.xfyunLiveNotes)}
@@ -402,11 +412,9 @@ export function PresalesMeetingWorkspace({
           }
         />
 
-        {phase === "post" ? (
-          <MeetingPostStepIndicator step={postStep} pasteOptional extractOptional />
-        ) : null}
+        <MeetingPostStepIndicator step={postStep} pasteOptional extractOptional />
 
-        {phase === "post" && postStep === "assign" ? (
+        {postStep === "assign" ? (
           <MeetingAssignmentTimeline
             items={orderedForTimeline}
             matchDrafts={matchDrafts}
@@ -649,60 +657,76 @@ export function PresalesMeetingWorkspace({
 
                 {(phase === "prep" || phase === "live") && facts ? (
                   <div className="grid gap-3 md:grid-cols-3">
-                    <PrepTodosPanel
-                      title={m.openTodos}
-                      empty={m.noTodos}
-                      todos={facts.openTodos}
-                      customerId={active.customerId}
-                      partnerId={active.partnerId}
-                    />
-                    <FactList
-                      title={m.businessRecords}
-                      empty={m.noRecords}
-                      lines={facts.businessRecords.map(
-                        (r) => `${r.title} · ${r.occurredAt.slice(0, 10)}`,
-                      )}
-                    />
-                    <FactList
-                      title={m.workLogs}
-                      empty={m.noLogs}
-                      lines={facts.workLogs.map(
-                        (l) =>
-                          `${l.content.slice(0, 80)}${l.content.length > 80 ? "…" : ""}`,
-                      )}
-                    />
-                  </div>
-                ) : null}
-
-                {phase === "live" || phase === "post" || phase === "prep" ? (
-                  <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-xs font-medium text-emerald-900">{m.addTodo}</div>
-                      {activeTodoDefaults?.defaultOwnerRef ? (
-                        <p className="text-[11px] text-emerald-800/70 mt-0.5 truncate">
-                          {active.customerName || active.partnerName || "—"}
-                          {active.projectName
-                            ? ` / ${active.projectName}`
-                            : active.opportunityName
-                              ? ` / ${active.opportunityName}`
-                              : ""}
-                        </p>
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-2 flex flex-col">
+                      <PrepTodosPanel
+                        title={m.openTodos}
+                        empty={m.noTodos}
+                        todos={facts.openTodos}
+                        customerId={active.customerId}
+                        partnerId={active.partnerId}
+                        bare
+                      />
+                      {phase === "live" && activeTodoDefaults?.defaultOwnerRef ? (
+                        <div className="pt-1 mt-auto">
+                          <CreateTodoDrawer
+                            key={`${active.id}-${activeTodoDefaults.defaultOwnerRef}-${activeTodoDefaults.defaultLink}`}
+                            userId={active.userId || todoContext.currentUserId}
+                            users={todoContext.users}
+                            partners={todoContext.partners}
+                            customers={todoContext.customers}
+                            defaultOwnerRef={activeTodoDefaults.defaultOwnerRef}
+                            defaultLink={activeTodoDefaults.defaultLink}
+                            lockOwner
+                            buttonLabel={m.addTodo}
+                            buttonClassName="w-full rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs hover:bg-emerald-800"
+                          />
+                        </div>
                       ) : null}
                     </div>
-                    {activeTodoDefaults ? (
-                      <CreateTodoDrawer
-                        key={`${active.id}-${activeTodoDefaults.defaultOwnerRef}-${activeTodoDefaults.defaultLink}`}
-                        userId={active.userId || todoContext.currentUserId}
-                        users={todoContext.users}
-                        partners={todoContext.partners}
-                        customers={todoContext.customers}
-                        defaultOwnerRef={activeTodoDefaults.defaultOwnerRef}
-                        defaultLink={activeTodoDefaults.defaultLink}
-                        lockOwner={Boolean(activeTodoDefaults.defaultOwnerRef)}
-                        buttonLabel={m.addTodo}
-                        buttonClassName="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm hover:bg-emerald-800"
+
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-2 flex flex-col">
+                      <BusinessRecordsPanel
+                        title={m.businessRecords}
+                        empty={m.noRecords}
+                        records={facts.businessRecords}
                       />
-                    ) : null}
+                      {phase === "live" ? (
+                        <div className="pt-1 mt-auto">
+                          {recordOwnerForItem(active) ? (
+                            <BusinessRecordDialogButton
+                              owner={recordOwnerForItem(active)!}
+                              hideAi
+                              label={m.addBusinessRecord}
+                              buttonClassName="w-full rounded-lg border border-sky-200 bg-sky-50 text-sky-900 px-3 py-1.5 text-xs hover:bg-sky-100"
+                            />
+                          ) : (
+                            <p className="text-[10px] text-slate-400">{m.noOwnerForRecord}</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-2 flex flex-col">
+                      <WorkLogsPanel
+                        title={m.workLogs}
+                        empty={m.noLogs}
+                        logs={facts.workLogs}
+                      />
+                      {phase === "live" ? (
+                        <div className="pt-1 mt-auto">
+                          {active.projectId && recordOwnerForItem(active) ? (
+                            <CreateProjectWorkLogButton
+                              owner={recordOwnerForItem(active)!}
+                              projectId={active.projectId}
+                              label={m.addWorkLog}
+                              buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                            />
+                          ) : (
+                            <p className="text-[10px] text-slate-400">{m.noProjectForLog}</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
 
@@ -758,11 +782,11 @@ export function PresalesMeetingWorkspace({
                   />
                 ) : null}
 
-                {phase === "done" && active.confirmedSnapshot ? (
+                {phase === "done" && (active.confirmedSnapshot || active.coreNotes) ? (
                   <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3 text-sm space-y-2">
                     <p className="text-xs font-medium text-slate-500">{m.coreNotes}</p>
                     <p className="text-slate-800 whitespace-pre-wrap text-xs leading-relaxed">
-                      {active.confirmedSnapshot.coreNotes || active.coreNotes || "—"}
+                      {active.confirmedSnapshot?.coreNotes || active.coreNotes || "—"}
                     </p>
                   </div>
                 ) : null}
@@ -770,50 +794,6 @@ export function PresalesMeetingWorkspace({
 
               {phase === "post" && postStep === "extract" ? (
                 <div className="flex flex-wrap gap-2 items-center">
-                  {Object.keys(confirmDrafts).length ? (
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() =>
-                        run(async () => {
-                          const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
-                            ([itemId, d]) => ({
-                              itemId,
-                              coreNotes: d.coreNotes,
-                              businessRecordTitle: d.businessRecordTitle,
-                              businessRecordContent: d.businessRecordContent,
-                              skipBusinessRecord: d.skipBusinessRecord,
-                              projectWorkLogContent: d.projectWorkLogContent,
-                              skipProjectWorkLog: d.skipProjectWorkLog,
-                              todos: d.todos.map((t) => ({
-                                id: t.id,
-                                title: t.title,
-                                detail: t.detail,
-                                dueDate: t.dueDate || null,
-                                include: t.include,
-                              })),
-                            }),
-                          );
-                          const res = await confirmPresalesItemsAction(meeting.id, items);
-                          if (!res.error) {
-                            setMeeting((prev) => ({
-                              ...prev,
-                              status: "DONE",
-                              items: prev.items.map((it) => ({
-                                ...it,
-                                status: "CONFIRMED",
-                              })),
-                            }));
-                            flash(m.confirmed);
-                          }
-                          return res;
-                        })
-                      }
-                      className="rounded-lg bg-violet-700 text-white px-4 py-2 text-sm font-medium hover:bg-violet-800 disabled:opacity-40"
-                    >
-                      {m.confirmAll}
-                    </button>
-                  ) : null}
                   <button
                     type="button"
                     disabled={pending}
@@ -831,31 +811,321 @@ export function PresalesMeetingWorkspace({
           )}
         </div>
       ) : null}
+
+      {phase === "post" && postStep === "extract" ? (
+        <PresalesFinalReportPanel
+          meeting={meeting}
+          confirmDrafts={confirmDrafts}
+          prepFactsByItemId={prepFactsByItemId}
+          busy={pending}
+          onConfirmAll={() => {
+            if (!Object.keys(confirmDrafts).length) return;
+            run(async () => {
+              const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
+                ([itemId, d]) => ({
+                  itemId,
+                  coreNotes: d.coreNotes,
+                  businessRecordTitle: d.businessRecordTitle,
+                  businessRecordContent: d.businessRecordContent,
+                  skipBusinessRecord: d.skipBusinessRecord,
+                  projectWorkLogContent: d.projectWorkLogContent,
+                  skipProjectWorkLog: d.skipProjectWorkLog,
+                  todos: d.todos.map((t) => ({
+                    id: t.id,
+                    title: t.title,
+                    detail: t.detail,
+                    dueDate: t.dueDate || null,
+                    include: t.include,
+                  })),
+                }),
+              );
+              const res = await confirmPresalesItemsAction(meeting.id, items);
+              if (!res.error) {
+                setMeeting((prev) => ({
+                  ...prev,
+                  status: "DONE",
+                  endedAt: prev.endedAt ?? new Date().toISOString(),
+                  items: prev.items.map((it) => {
+                    const d = confirmDrafts[it.id];
+                    if (!d) return { ...it, status: "CONFIRMED" as const };
+                    return {
+                      ...it,
+                      status: "CONFIRMED" as const,
+                      coreNotes: d.coreNotes,
+                      confirmedSnapshot: {
+                        confirmedAt: new Date().toISOString(),
+                        coreNotes: d.coreNotes,
+                        businessRecordTitle: d.businessRecordTitle,
+                        businessRecordContent: d.businessRecordContent,
+                        skipBusinessRecord: d.skipBusinessRecord,
+                        wroteBusinessRecord:
+                          !d.skipBusinessRecord && !!d.businessRecordTitle.trim(),
+                        projectWorkLogContent: d.projectWorkLogContent,
+                        skipProjectWorkLog: d.skipProjectWorkLog,
+                        wroteProjectWorkLog:
+                          !d.skipProjectWorkLog && !!d.projectWorkLogContent.trim(),
+                        todos: d.todos
+                          .filter((todo) => todo.include && todo.title.trim())
+                          .map((todo) => ({
+                            title: todo.title.trim(),
+                            detail: todo.detail?.trim() || null,
+                            dueDate: todo.dueDate || null,
+                            todoItemId: null,
+                          })),
+                      },
+                    };
+                  }),
+                }));
+                flash(m.confirmed);
+              }
+              return res;
+            }, { refresh: false });
+          }}
+          onFlash={flash}
+        />
+      ) : null}
+
+      {phase === "done" ? (
+        <PresalesFinalReportPanel
+          meeting={meeting}
+          confirmDrafts={confirmDrafts}
+          prepFactsByItemId={prepFactsByItemId}
+          busy={pending}
+          readonly
+          onFlash={flash}
+        />
+      ) : null}
+
+      <div className="flex justify-end pt-2">
+        <DeletePresalesMeetingButton
+          meetingId={meeting.id}
+          meetingTitle={meeting.title}
+          redirectTo="/presales-meetings?tab=history"
+        />
+      </div>
     </MeetingShell>
   );
 }
 
-function FactList({
+function PresalesFinalReportPanel({
+  meeting,
+  confirmDrafts,
+  prepFactsByItemId,
+  busy,
+  readonly,
+  onConfirmAll,
+  onFlash,
+}: {
+  meeting: MeetingClient;
+  confirmDrafts: Record<string, ConfirmDraft>;
+  prepFactsByItemId: Record<string, PrepFacts>;
+  busy: boolean;
+  readonly?: boolean;
+  onConfirmAll?: () => void;
+  onFlash: (ok?: string, err?: string) => void;
+}) {
+  const m = useMessages().presalesMeeting;
+
+  const reportMd = useMemo(() => {
+    const items = meeting.items.map((it) => {
+      const draft = readonly || meeting.status === "DONE" ? null : confirmDrafts[it.id] ?? null;
+      return reportRowFromPresalesItem({
+        label: it.label,
+        snapshot: it.confirmedSnapshot,
+        coreNotes: it.coreNotes,
+        draft,
+        prepFacts: prepFactsByItemId[it.id] ?? null,
+      });
+    });
+    return buildPresalesFinalReportMarkdown({
+      title: meeting.title,
+      endedAt: meeting.endedAt,
+      items,
+    });
+  }, [meeting, confirmDrafts, prepFactsByItemId, readonly]);
+
+  async function copyReport() {
+    const ok = await copyTextToClipboard(reportMd);
+    onFlash(ok ? m.reportCopied : undefined, ok ? undefined : m.copyFailed);
+  }
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 mt-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">
+            {readonly ? m.reportSaved : m.reportTitle}
+          </div>
+          <p className="text-[11px] text-slate-500 mt-0.5">{m.reportHint}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void copyReport()}
+            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs hover:bg-slate-50"
+          >
+            {m.copyReport}
+          </button>
+          {!readonly && onConfirmAll ? (
+            <button
+              type="button"
+              disabled={busy || !Object.keys(confirmDrafts).length}
+              onClick={onConfirmAll}
+              className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium hover:bg-emerald-800 disabled:opacity-40"
+            >
+              {m.saveHistory}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-4 py-3 max-h-[420px] overflow-y-auto space-y-4 text-sm">
+        {meeting.items.map((it, idx) => {
+          const d = confirmDrafts[it.id];
+          const notes =
+            d?.coreNotes ||
+            it.confirmedSnapshot?.coreNotes ||
+            it.coreNotes ||
+            "";
+          const todos = d
+            ? d.todos.filter((t) => t.include !== false && t.title.trim())
+            : it.confirmedSnapshot?.todos ?? [];
+          return (
+            <div key={it.id} className="space-y-1.5">
+              <div className="text-sm font-semibold text-slate-900">
+                {idx + 1}. {it.label}
+              </div>
+              <p className="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">
+                {notes.trim() || "（未做会后总结）"}
+              </p>
+              {todos.length ? (
+                <ul className="text-xs text-slate-600 list-disc pl-4 space-y-0.5">
+                  {todos.map((t, i) => (
+                    <li key={i}>
+                      {"title" in t ? t.title : ""}
+                      {"dueDate" in t && t.dueDate
+                        ? `（截止 ${String(t.dueDate).slice(0, 10)}）`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[11px] text-slate-400">后续待办：（无）</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <pre className="hidden">{reportMd}</pre>
+    </section>
+  );
+}
+
+function recordOwnerForItem(item: MeetingItemClient): OwnerRef | null {
+  if (item.customerId) return { kind: "customer", id: item.customerId };
+  if (item.partnerId) return { kind: "partner", id: item.partnerId };
+  return null;
+}
+
+function BusinessRecordsPanel({
   title,
   empty,
-  lines,
+  records,
 }: {
   title: string;
   empty: string;
-  lines: string[];
+  records: PrepFacts["businessRecords"];
 }) {
   return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-1.5">
+    <div className="space-y-1.5 min-h-0">
       <div className="text-[11px] font-medium text-slate-600">{title}</div>
-      {!lines.length ? (
+      {!records.length ? (
         <p className="text-[11px] text-slate-400">{empty}</p>
       ) : (
-        <ul className="space-y-1">
-          {lines.slice(0, 8).map((line, i) => (
-            <li key={`${i}-${line.slice(0, 12)}`} className="text-[11px] text-slate-700 leading-snug">
-              · {line}
-            </li>
-          ))}
+        <ul className="space-y-2">
+          {records.slice(0, 8).map((r) => {
+            const label = categoryLabel(r.category);
+            const body = tidyProgressText(r.content || "");
+            const dateLabel = r.occurredAt
+              ? new Date(r.occurredAt).toLocaleDateString("zh-CN", {
+                  month: "numeric",
+                  day: "numeric",
+                })
+              : "";
+            return (
+              <li
+                key={r.id}
+                className="rounded-lg border border-slate-100 bg-white px-2.5 py-2 space-y-1"
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
+                    {label}
+                  </span>
+                  {dateLabel ? (
+                    <span className="text-[10px] text-slate-400">{dateLabel}</span>
+                  ) : null}
+                </div>
+                <div className="text-xs font-medium text-slate-900 leading-snug">{r.title}</div>
+                {body && body !== r.title ? (
+                  <p className="text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap">
+                    {body}
+                  </p>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function WorkLogsPanel({
+  title,
+  empty,
+  logs,
+}: {
+  title: string;
+  empty: string;
+  logs: PrepFacts["workLogs"];
+}) {
+  const badge = useMessages().presalesMeeting.workLogs;
+  return (
+    <div className="space-y-1.5 min-h-0">
+      <div className="text-[11px] font-medium text-slate-600">{title}</div>
+      {!logs.length ? (
+        <p className="text-[11px] text-slate-400">{empty}</p>
+      ) : (
+        <ul className="space-y-2">
+          {logs.slice(0, 8).map((l) => {
+            const dateLabel = l.createdAt
+              ? new Date(l.createdAt).toLocaleDateString("zh-CN", {
+                  month: "numeric",
+                  day: "numeric",
+                })
+              : "";
+            const body = tidyProgressText(l.content, 200);
+            return (
+              <li
+                key={l.id}
+                className="rounded-lg border border-slate-100 bg-white px-2.5 py-2 space-y-1"
+              >
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
+                    {badge}
+                  </span>
+                  {dateLabel ? (
+                    <span className="text-[10px] text-slate-400">{dateLabel}</span>
+                  ) : null}
+                  {l.authorName ? (
+                    <span className="text-[10px] text-sky-700">{l.authorName}</span>
+                  ) : null}
+                </div>
+                <p className="text-[11px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {body || l.content}
+                </p>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
@@ -868,12 +1138,14 @@ function PrepTodosPanel({
   todos,
   customerId,
   partnerId,
+  bare = false,
 }: {
   title: string;
   empty: string;
   todos: PrepFacts["openTodos"];
   customerId: string | null;
   partnerId: string | null;
+  bare?: boolean;
 }) {
   const [doneMap, setDoneMap] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(todos.map((t) => [t.id, false])),
@@ -883,8 +1155,8 @@ function PrepTodosPanel({
     setDoneMap(Object.fromEntries(todos.map((t) => [t.id, false])));
   }, [todos.map((t) => t.id).join("|")]);
 
-  return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-1.5">
+  const inner = (
+    <>
       <div className="text-[11px] font-medium text-slate-600">{title}</div>
       {!todos.length ? (
         <p className="text-[11px] text-slate-400">{empty}</p>
@@ -928,6 +1200,13 @@ function PrepTodosPanel({
           })}
         </ul>
       )}
+    </>
+  );
+
+  if (bare) return <div className="space-y-1.5 min-h-0">{inner}</div>;
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/70 p-3 space-y-1.5">
+      {inner}
     </div>
   );
 }

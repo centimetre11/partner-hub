@@ -230,10 +230,14 @@ export function BusinessRecordDialogButton({
   owner,
   contacts = [],
   label,
+  buttonClassName,
+  hideAi = false,
 }: {
   owner: OwnerRef;
   contacts?: { id: string; name: string }[];
   label?: string;
+  buttonClassName?: string;
+  hideAi?: boolean;
 }) {
   const pd = useMessages().partnerDetail;
   const [open, setOpen] = useState(false);
@@ -241,13 +245,16 @@ export function BusinessRecordDialogButton({
   return (
     <>
       <div className="flex items-center gap-2">
-        {owner.kind === "partner" && (
+        {!hideAi && owner.kind === "partner" ? (
           <AiAddButton scope="business_record" partnerId={owner.id} label={pd.aiBusinessRecord} variant="soft" />
-        )}
+        ) : null}
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-sky-700 hover:bg-slate-100"
+          className={
+            buttonClassName ??
+            "rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-sky-700 hover:bg-slate-100"
+          }
         >
           {label ?? pd.logBusinessRecord}
         </button>

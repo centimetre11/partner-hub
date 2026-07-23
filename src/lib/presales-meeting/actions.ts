@@ -530,3 +530,17 @@ export async function getPresalesMeetingClientAction(meetingId: string) {
   return { ok: true as const, meeting: toMeetingClient(meeting) };
 }
 
+/** 允许删除任意状态（含历史 DONE），便于清理测试数据 */
+export async function deletePresalesMeetingAction(meetingId: string) {
+  await requireUser();
+  const meeting = await db.presalesProjectMeeting.findUnique({
+    where: { id: meetingId },
+    select: { id: true },
+  });
+  if (!meeting) return { error: "会议不存在" };
+  await db.presalesProjectMeeting.delete({ where: { id: meetingId } });
+  revalidatePath("/presales-meetings");
+  revalidatePath("/ops");
+  return { ok: true as const };
+}
+

@@ -131,7 +131,6 @@ export default async function PresalesMeetingsPage({
           id: meeting.id,
           title: meeting.title,
           status: meeting.status,
-          scheduledAt: meeting.scheduledAt?.toISOString() ?? null,
           createdByName: meeting.createdBy.name,
           items: meeting.items.map((it) => {
             const subject =

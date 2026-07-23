@@ -12,7 +12,6 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
   const t = useMessages().partnerReview;
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +35,6 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
       try {
         const fd = new FormData();
         fd.set("title", title.trim());
-        if (scheduledAt) fd.set("scheduledAt", scheduledAt);
         for (const id of selected) fd.append("partnerIds", id);
         const res = await createPartnerReviewMeetingAction(fd);
         if (res.error) {
@@ -86,16 +84,7 @@ export function CreateReviewMeetingForm({ partners }: { partners: PartnerOption[
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
           />
         </label>
-        <label className="block space-y-1">
-          <span className="text-xs text-slate-500">{t.scheduledAt}</span>
-          <input
-            type="datetime-local"
-            value={scheduledAt}
-            onChange={(e) => setScheduledAt(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block space-y-1">
+        <label className="block space-y-1 sm:col-span-2">
           <span className="text-xs text-slate-500">{t.searchPartners}</span>
           <input
             value={query}

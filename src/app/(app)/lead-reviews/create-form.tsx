@@ -22,7 +22,6 @@ export function CreateLeadReviewForm({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
   const [allSalesmen, setAllSalesmen] = useState(initialConfig.allSalesmen);
   const [selectedSales, setSelectedSales] = useState<string[]>(
     initialConfig.allSalesmen ? [] : initialConfig.salesmanNames,
@@ -96,7 +95,6 @@ export function CreateLeadReviewForm({
       setError(null);
       const res = await createLeadReviewMeetingAction({
         title: title.trim() || undefined,
-        scheduledAt: scheduledAt || undefined,
         config,
       });
       if ("error" in res && res.error) {
@@ -113,7 +111,6 @@ export function CreateLeadReviewForm({
   function openForm() {
     setOpen(true);
     setTitle("");
-    setScheduledAt("");
     setAllSalesmen(initialConfig.allSalesmen);
     setSelectedSales(initialConfig.allSalesmen ? [] : initialConfig.salesmanNames);
     setChannelCount(initialConfig.channelCount);
@@ -157,16 +154,6 @@ export function CreateLeadReviewForm({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={m.meetingTitlePh}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-slate-500">{m.scheduledAt}</label>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             />
           </div>
