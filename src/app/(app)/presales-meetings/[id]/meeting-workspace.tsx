@@ -21,7 +21,6 @@ import {
   confirmPresalesItemsAction,
   endPresalesMeetingAction,
   extractPresalesOutcomesAction,
-  finishPresalesMeetingWithoutExtractAction,
   matchPresalesMinutesAction,
   matchPresalesXfyunAction,
   resetPresalesMeetingToPrepAction,
@@ -266,24 +265,6 @@ export function PresalesMeetingWorkspace({
           : it,
       ),
     }));
-  }
-
-  function finishWithoutMinutes() {
-    run(async () => {
-      const res = await finishPresalesMeetingWithoutExtractAction(meeting.id);
-      if (!res.error) {
-        setMeeting((prev) => ({
-          ...prev,
-          status: "DONE",
-          endedAt: prev.endedAt ?? new Date().toISOString(),
-          items: prev.items.map((it) =>
-            it.status === "CONFIRMED" ? it : { ...it, status: "CONFIRMED" },
-          ),
-        }));
-        flash(m.finishedNoExtract);
-      }
-      return res;
-    }, { refresh: false });
   }
 
   const onPathStep =
@@ -980,14 +961,6 @@ export function PresalesMeetingWorkspace({
             onClick={() => setPostStep("extract")}
           >
             ← {m.extractTitle}
-          </button>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={finishWithoutMinutes}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-          >
-            {m.finishWithoutExtract}
           </button>
         </div>
       ) : null}

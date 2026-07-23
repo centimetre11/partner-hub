@@ -3637,7 +3637,7 @@ export const messagesZh: Messages = {
     addFromAll: "+ 从全部中添加",
     hideAddFromAll: "收起全部添加",
     agendaItems: "议程",
-    addItem: "+ 添加客户",
+    addItem: "+ 再加一个客户",
     removeItem: "删除",
     who: "过谁",
     customer: "客户",

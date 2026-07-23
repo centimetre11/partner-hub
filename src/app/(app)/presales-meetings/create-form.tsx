@@ -528,41 +528,35 @@ export function CreatePresalesMeetingForm({
                   <button
                     type="button"
                     className="text-[11px] text-sky-700 hover:underline"
-                    onClick={() =>
+                    onClick={() => {
+                      const nextOpen = !allOpen;
                       setShowAllAdd((prev) => ({
                         ...prev,
-                        [userId]: !prev[userId],
-                      }))
-                    }
+                        [userId]: nextOpen,
+                      }));
+                      if (nextOpen) {
+                        setBlocks((prev) => {
+                          const cur = prev[userId] ?? emptyBlock(userId);
+                          if (cur.manual.length > 0) return prev;
+                          return {
+                            ...prev,
+                            [userId]: {
+                              ...cur,
+                              manual: [newManualRow()],
+                            },
+                          };
+                        });
+                      }
+                    }}
                   >
                     {allOpen ? t.hideAddFromAll : t.addFromAll}
                   </button>
 
                   {allOpen ? (
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-medium text-slate-600">
-                          {t.manualAdd}
-                        </span>
-                        <button
-                          type="button"
-                          className="text-[11px] text-sky-700 hover:underline"
-                          onClick={() =>
-                            setBlocks((prev) => {
-                              const cur = prev[userId] ?? emptyBlock(userId);
-                              return {
-                                ...prev,
-                                [userId]: {
-                                  ...cur,
-                                  manual: [...cur.manual, newManualRow()],
-                                },
-                              };
-                            })
-                          }
-                        >
-                          {t.addItem}
-                        </button>
-                      </div>
+                      <span className="text-[11px] font-medium text-slate-600">
+                        {t.manualAdd}
+                      </span>
                       {block.manual.map((row) => {
                         const custProjects = row.customerId
                           ? (projectsByCustomer.get(row.customerId) ?? [])
@@ -635,11 +629,13 @@ export function CreatePresalesMeetingForm({
                                 setBlocks((prev) => {
                                   const cur = prev[userId];
                                   if (!cur) return prev;
+                                  const next = cur.manual.filter((r) => r.key !== row.key);
                                   return {
                                     ...prev,
                                     [userId]: {
                                       ...cur,
-                                      manual: cur.manual.filter((r) => r.key !== row.key),
+                                      // 至少保留一行，避免删光后又要点「添加」
+                                      manual: next.length ? next : [newManualRow()],
                                     },
                                   };
                                 })
@@ -650,6 +646,24 @@ export function CreatePresalesMeetingForm({
                           </div>
                         );
                       })}
+                      <button
+                        type="button"
+                        className="text-[11px] text-sky-700 hover:underline"
+                        onClick={() =>
+                          setBlocks((prev) => {
+                            const cur = prev[userId] ?? emptyBlock(userId);
+                            return {
+                              ...prev,
+                              [userId]: {
+                                ...cur,
+                                manual: [...cur.manual, newManualRow()],
+                              },
+                            };
+                          })
+                        }
+                      >
+                        {t.addItem}
+                      </button>
                     </div>
                   ) : null}
                 </div>

@@ -3706,7 +3706,7 @@ export const messagesEn = {
     addFromAll: "+ Add from all",
     hideAddFromAll: "Hide full catalog",
     agendaItems: "Agenda",
-    addItem: "+ Add customer",
+    addItem: "+ Add another customer",
     removeItem: "Remove",
     who: "Person",
     customer: "Customer",
