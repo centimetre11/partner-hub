@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import {
   createPresalesMeetingAction,
   recommendPresalesAgendaAction,
-  type RecommendedAgendaItem,
 } from "@/lib/presales-meeting/actions";
+import type { RecommendedAgendaItem } from "@/lib/presales-meeting/types";
 import { useMessages } from "@/lib/i18n/context";
 import { formatMsg } from "@/lib/i18n/messages";
 
-type UserOpt = { id: string; name: string };
+type UserOpt = { id: string; name: string; role: string };
 type CustomerOpt = { id: string; name: string };
 type ProjectOpt = { id: string; name: string; customerId: string };
 
@@ -35,6 +35,22 @@ function newManualRow(): ManualRow {
     projectId: "",
     customerQuery: "",
   };
+}
+
+function defaultPresalesSelection(users: UserOpt[]): {
+  selected: string[];
+  blocks: Record<string, PersonBlock>;
+} {
+  const selected = users.filter((u) => u.role === "PRESALES").map((u) => u.id);
+  const blocks: Record<string, PersonBlock> = {};
+  for (const userId of selected) {
+    blocks[userId] = {
+      userId,
+      selectedProjectIds: new Set(),
+      manual: [],
+    };
+  }
+  return { selected, blocks };
 }
 
 export function CreatePresalesMeetingForm({
@@ -88,7 +104,16 @@ export function CreatePresalesMeetingForm({
   function setCreating(next: boolean) {
     setOpen(next);
     onOpenChange?.(next);
-    if (!next) {
+    if (next) {
+      const defaults = defaultPresalesSelection(users);
+      setError(null);
+      setRecommended([]);
+      setRecommendedAt(false);
+      setTitle("");
+      setScheduledAt("");
+      setSelectedPeople(defaults.selected);
+      setBlocks(defaults.blocks);
+    } else {
       setError(null);
       setRecommended([]);
       setRecommendedAt(false);

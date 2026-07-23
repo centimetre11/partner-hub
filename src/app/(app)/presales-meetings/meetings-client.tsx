@@ -8,7 +8,7 @@ import { CreatePresalesMeetingForm } from "./create-form";
 import { formatMsg } from "@/lib/i18n/messages";
 import { useMessages } from "@/lib/i18n/context";
 
-type UserOpt = { id: string; name: string };
+type UserOpt = { id: string; name: string; role: string };
 type CustomerOpt = { id: string; name: string };
 type ProjectOpt = { id: string; name: string; customerId: string };
 

@@ -1,16 +1,9 @@
 import "server-only";
 
 import { db } from "../db";
+import type { RecommendedAgendaItem } from "./types";
 
-export type RecommendedAgendaItem = {
-  userId: string;
-  customerId: string;
-  customerName: string;
-  projectId: string;
-  projectName: string;
-  /** 命中原因：商务记录 / 待办 / 项目工作记录 */
-  reasons: string[];
-};
+export type { RecommendedAgendaItem };
 
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000;
 

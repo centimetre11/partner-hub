@@ -12,11 +12,9 @@ import type { ConfirmItemPayload } from "./types";
 import { markItemDiscussed } from "./discuss-item";
 import { materializeLiveNotesForMeeting } from "./notes-materialize";
 import { markPrepReady, loadPrepFacts } from "./prep-facts";
-import { recommendAgendaForUsers, type RecommendedAgendaItem } from "./recommend";
+import { recommendAgendaForUsers } from "./recommend";
 import { buildSplitProposal, persistSplitDrafts } from "./split";
 import { toMeetingClient, toMeetingItemClient } from "./meeting-client";
-
-export type { RecommendedAgendaItem };
 
 export async function recommendPresalesAgendaAction(userIds: string[]) {
   await requireUser();

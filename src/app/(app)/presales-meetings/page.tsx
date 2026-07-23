@@ -46,7 +46,7 @@ export default async function PresalesMeetingsPage({
     db.presalesProjectMeeting.count({ where: meetingWhere }),
     db.user.findMany({
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      select: { id: true, name: true, role: true },
     }),
     db.customer.findMany({
       where: { status: { not: "INACTIVE" } },

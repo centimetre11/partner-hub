@@ -1,3 +1,13 @@
+export type RecommendedAgendaItem = {
+  userId: string;
+  customerId: string;
+  customerName: string;
+  projectId: string;
+  projectName: string;
+  /** 命中原因：商务记录 / 待办 / 项目工作记录 */
+  reasons: string[];
+};
+
 export type ConfirmTodoPayload = {
   id?: string;
   title: string;
