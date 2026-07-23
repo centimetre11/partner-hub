@@ -22,7 +22,17 @@ import {
   startPartnerReviewMeetingAction,
   confirmMeetingItemsAction,
 } from "@/lib/partner-review/actions";
-import { MeetingBatchRecorder } from "@/components/partner-review/meeting-batch-recorder";
+import {
+  MeetingAgendaPanel,
+  MeetingBatchRecorder,
+  MeetingLiveRecording,
+  MeetingMatchSourceSwitch,
+  MeetingPathBPanel,
+  MeetingPostStepIndicator,
+  MeetingShell,
+  PostMinutesDualPath,
+} from "@/components/meeting";
+import type { MeetingPhase, MeetingPostStep, MeetingWorkStage } from "@/components/meeting";
 import type { SplitProposal } from "@/lib/partner-review/split-types";
 import type { MeetingClient, ReviewItemClient } from "@/lib/partner-review/meeting-client";
 import {
@@ -47,8 +57,8 @@ const RAPID_CLICK_WINDOW_MS = 12_000;
 const RAPID_CLICK_WARN_COUNT = 3;
 
 /** 会后子阶段：粘贴 → 确认归属 → 提炼确认 */
-type PostStep = "paste" | "assign" | "extract";
-type WorkStage = "idle" | "saving" | "matching" | "extracting" | "done";
+type PostStep = MeetingPostStep;
+type WorkStage = MeetingWorkStage;
 
 function matchMethodFlash(method: string | undefined, t: ReturnType<typeof useMessages>["partnerReview"]): string {
   switch (method) {
@@ -440,83 +450,384 @@ export function MeetingWorkspace({
     });
   }
 
+
+  const agendaItems = useMemo(
+    () =>
+      meeting.items.map((it) => ({
+        ...it,
+        title: it.partnerName,
+      })),
+    [meeting.items],
+  );
+
+  const recordingSlot =
+    phase === "live" ? (
+      <>
+        <DiscussingNowBanner
+          currentDiscussItem={currentDiscussItem}
+          meetingStartedAt={meeting.startedAt}
+          markJustAt={markJustAt}
+        />
+        <MeetingLiveRecording
+          phase={phase as MeetingPhase}
+          meetingId={meeting.id}
+          apiBase={`/api/partner-reviews/${meeting.id}`}
+          transcriptStatus={meeting.transcriptStatus}
+          transcriptError={meeting.transcriptError}
+          onFlash={flash}
+          onRecordingStarted={(startedAt) => {
+            setMeeting((m) => ({
+              ...m,
+              status: "LIVE",
+              startedAt: m.startedAt ?? startedAt ?? new Date().toISOString(),
+              recordingStartedAt: startedAt ?? new Date().toISOString(),
+              transcriptStatus: "recording",
+            }));
+          }}
+          onTranscribed={({ plain, liveNotes: notes, matchMethod }) => {
+            setTranscript(plain);
+            setMeeting((m) => ({
+              ...m,
+              transcriptText: plain,
+              xfyunTranscriptText: plain,
+              xfyunLiveNotes: notes,
+              matchSource: "xfyun",
+              transcriptStatus: "ready",
+            }));
+            if (notes) {
+              setLiveNotes(notes);
+              applySegmentsToDrafts(
+                parsePartnerSectionsFromLiveNotes(notes, meeting.items),
+                setMatchDrafts,
+                setUnassignedDraft,
+              );
+              lockAssignStep.current = true;
+              setPostStep("assign");
+            }
+            flash(`${matchMethodFlash(matchMethod, t)} (${t.sourceXfyun}) · ${t.sourceHint}`);
+          }}
+        />
+      </>
+    ) : null;
+
+  const postSlot =
+    phase === "post" || phase === "done" ? (
+      <div className="space-y-3">
+        {phase === "post" ? (
+          <MeetingMatchSourceSwitch
+            tencentReady={Boolean(meeting.tencentLiveNotes)}
+            xfyunReady={Boolean(meeting.xfyunLiveNotes)}
+            matchSource={meeting.matchSource}
+            busy={busy}
+            onSwitch={(source) =>
+              run(async () => {
+                const res = await switchMatchSourceAction(meeting.id, source);
+                if (res.error) {
+                  flash(undefined, res.error);
+                  return;
+                }
+                const notes =
+                  source === "tencent"
+                    ? (meeting.tencentLiveNotes ?? "")
+                    : (meeting.xfyunLiveNotes ?? "");
+                setLiveNotes(notes);
+                setTranscript(
+                  source === "tencent"
+                    ? (meeting.tencentTranscriptText ?? transcript)
+                    : (meeting.xfyunTranscriptText ?? transcript),
+                );
+                setMeeting((m) => ({ ...m, matchSource: source, liveNotes: notes }));
+                applySegmentsToDrafts(
+                  parsePartnerSectionsFromLiveNotes(notes, meeting.items),
+                  setMatchDrafts,
+                  setUnassignedDraft,
+                );
+                lockAssignStep.current = true;
+                setPostStep("assign");
+                flash(source === "tencent" ? t.switchedTencent : t.switchedXfyun);
+              }, { refresh: false })
+            }
+          />
+        ) : null}
+
+        <PostMinutesDualPath
+          phase={phase}
+          postStep={postStep}
+          transcript={
+            meeting.matchSource === "xfyun" && meeting.tencentTranscriptText
+              ? meeting.tencentTranscriptText
+              : transcript
+          }
+          liveNotes={liveNotes}
+          busy={busy}
+          workStage={workStage}
+          onTranscriptChange={setTranscript}
+          onMatch={() =>
+            run(async () => {
+              setWorkStage("saving");
+              const matchingTimer = window.setTimeout(() => setWorkStage("matching"), 400);
+              try {
+                const res = await matchMeetingMinutesAction(meeting.id, transcript);
+                if (res.error) {
+                  setWorkStage("idle");
+                  flash(undefined, res.error);
+                  return;
+                }
+                if (res.liveNotes) {
+                  setLiveNotes(res.liveNotes);
+                  setMeeting((m) => ({
+                    ...m,
+                    matchSource: "tencent",
+                    tencentTranscriptText: transcript,
+                    tencentLiveNotes: res.liveNotes ?? null,
+                    liveNotes: res.liveNotes ?? null,
+                  }));
+                  applySegmentsToDrafts(
+                    parsePartnerSectionsFromLiveNotes(res.liveNotes, meeting.items),
+                    setMatchDrafts,
+                    setUnassignedDraft,
+                  );
+                }
+                setProposal(null);
+                setConfirmDrafts({});
+                lockAssignStep.current = true;
+                setPostStep("assign");
+                setWorkStage("done");
+                flash(`${matchMethodFlash(res.matchMethod, t)} (${t.sourceTencent})`);
+                requestAnimationFrame(() => {
+                  document.getElementById("assignment-timeline")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                });
+              } finally {
+                window.clearTimeout(matchingTimer);
+              }
+            }, { refresh: false })
+          }
+          onRematch={() => {
+            lockAssignStep.current = true;
+            setPostStep("assign");
+            setProposal(null);
+            setConfirmDrafts({});
+            setWorkStage("idle");
+            flash(t.postAssignHint);
+            requestAnimationFrame(() => {
+              document.getElementById("assignment-timeline")?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            });
+          }}
+          pathB={
+            <MeetingPathBPanel title={t.pathBTitle} hint={t.pathBHint}>
+              {phase === "done" ? (
+                <p className="text-xs text-slate-500">
+                  {(meeting.xfyunTranscriptText || "").trim()
+                    ? formatMsg(t.pathBPreview, {
+                        n: (meeting.xfyunTranscriptText || "").trim().length,
+                      })
+                    : t.pathBUnused}
+                </p>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-[11px] text-slate-600 space-y-1">
+                    <p>
+                      {t.status}{" "}
+                      <span className="font-medium text-slate-800">
+                        {meeting.transcriptStatus || "idle"}
+                      </span>
+                      {meeting.recordingBytes
+                        ? ` · ${formatMsg(t.recordingSize, {
+                            n: (meeting.recordingBytes / 1024 / 1024).toFixed(1),
+                          })}`
+                        : ""}
+                    </p>
+                    {meeting.recordingStartedAt ? (
+                      <p>
+                        {formatMsg(t.recordingStarted, {
+                          time: new Date(meeting.recordingStartedAt).toLocaleString(),
+                        })}
+                      </p>
+                    ) : (
+                      <p className="text-amber-800">{t.noRecordingHint}</p>
+                    )}
+                    {meeting.transcriptError ? (
+                      <p className="text-red-600">{meeting.transcriptError}</p>
+                    ) : null}
+                  </div>
+                  {(meeting.xfyunTranscriptText || "").trim() ? (
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
+                        {formatMsg(t.pathBPreview, {
+                          n: (meeting.xfyunTranscriptText || "").trim().length,
+                        })}
+                      </summary>
+                      <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-100 bg-white px-2 py-1.5 font-mono text-[11px]">
+                        {(meeting.xfyunTranscriptText || "").trim().slice(0, 4000)}
+                        {(meeting.xfyunTranscriptText || "").trim().length > 4000 ? "…" : ""}
+                      </pre>
+                    </details>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !(
+                          meeting.xfyunTranscriptText?.trim() ||
+                          meeting.transcriptStatus === "ready"
+                        )
+                      }
+                      onClick={() =>
+                        run(async () => {
+                          setWorkStage("matching");
+                          try {
+                            const res = await matchXfyunMinutesAction(meeting.id);
+                            if (res.error) {
+                              setWorkStage("idle");
+                              flash(undefined, res.error);
+                              return;
+                            }
+                            if (res.liveNotes) {
+                              setLiveNotes(res.liveNotes);
+                              setTranscript(meeting.xfyunTranscriptText ?? transcript);
+                              setMeeting((m) => ({
+                                ...m,
+                                matchSource: "xfyun",
+                                xfyunLiveNotes: res.liveNotes ?? null,
+                                liveNotes: res.liveNotes ?? null,
+                              }));
+                              applySegmentsToDrafts(
+                                parsePartnerSectionsFromLiveNotes(res.liveNotes, meeting.items),
+                                setMatchDrafts,
+                                setUnassignedDraft,
+                              );
+                            }
+                            setProposal(null);
+                            setConfirmDrafts({});
+                            lockAssignStep.current = true;
+                            setPostStep("assign");
+                            setWorkStage("done");
+                            flash(`${matchMethodFlash(res.matchMethod, t)} (${t.sourceXfyun})`);
+                            requestAnimationFrame(() => {
+                              document
+                                .getElementById("assignment-timeline")
+                                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            });
+                          } catch (e) {
+                            setWorkStage("idle");
+                            flash(undefined, e instanceof Error ? e.message : String(e));
+                          }
+                        }, { refresh: false })
+                      }
+                      className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-800 disabled:opacity-40"
+                    >
+                      {meeting.xfyunLiveNotes ? t.rematchXfyun : t.matchXfyun}
+                    </button>
+                    {!(
+                      meeting.xfyunTranscriptText?.trim() ||
+                      meeting.transcriptStatus === "ready"
+                    ) ? (
+                      <span className="text-[11px] text-slate-400 self-center">
+                        {t.needRecording}
+                      </span>
+                    ) : null}
+                  </div>
+                  {phase === "post" ? (
+                    <MeetingBatchRecorder
+                      meetingId={meeting.id}
+                      apiBase={`/api/partner-reviews/${meeting.id}`}
+                      transcriptStatus={meeting.transcriptStatus}
+                      transcriptError={meeting.transcriptError}
+                      onFlash={flash}
+                      onRecordingStarted={(startedAt) => {
+                        setMeeting((m) => ({
+                          ...m,
+                          recordingStartedAt: startedAt ?? m.recordingStartedAt,
+                          transcriptStatus: "recording",
+                        }));
+                      }}
+                      onTranscribed={({ plain, liveNotes: notes, matchMethod }) => {
+                        setTranscript(plain);
+                        setMeeting((m) => ({
+                          ...m,
+                          transcriptText: plain,
+                          xfyunTranscriptText: plain,
+                          xfyunLiveNotes: notes,
+                          matchSource: "xfyun",
+                          transcriptStatus: "ready",
+                        }));
+                        if (notes) {
+                          setLiveNotes(notes);
+                          applySegmentsToDrafts(
+                            parsePartnerSectionsFromLiveNotes(notes, meeting.items),
+                            setMatchDrafts,
+                            setUnassignedDraft,
+                          );
+                          lockAssignStep.current = true;
+                          setPostStep("assign");
+                        }
+                        flash(
+                          `${matchMethodFlash(matchMethod, t)} (${t.sourceXfyun}) · ${t.sourceHint}`,
+                        );
+                      }}
+                    />
+                  ) : null}
+                </>
+              )}
+            </MeetingPathBPanel>
+          }
+        />
+
+        {phase === "post" ? <MeetingPostStepIndicator step={postStep} /> : null}
+      </div>
+    ) : null;
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {canRunPrep && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={runPrep}
-            className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
-          >
-            {needsPrep ? t.prep : t.refreshBrief}
-          </button>
-        )}
-        {phase === "prep" && (
-          <>
-            <MeetingPreviewActions meetingId={meeting.id} previewToken={meeting.previewToken} />
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                run(async () => {
-                  const res = await startPartnerReviewMeetingAction(meeting.id);
-                  if (res.error) flash(undefined, res.error);
-                  else {
-                    setMeeting((m) => ({ ...m, status: "LIVE", startedAt: new Date().toISOString() }));
-                    flash(t.started);
-                  }
-                }, { refresh: false })
-              }
-              className="rounded-lg bg-rose-700 text-white px-3 py-1.5 text-sm hover:bg-rose-800 disabled:opacity-40"
-            >
-              {t.startMeeting}
-            </button>
-          </>
-        )}
-        {phase === "live" && (
-          <>
-            {currentDiscussItem ? (
-              <span className="rounded-lg bg-sky-50 text-sky-800 border border-sky-100 px-3 py-1.5 text-xs font-medium">
-                {formatMsg(t.currentPartner, { name: currentDiscussItem.partnerName })}
-              </span>
-            ) : (
-              <span className="rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-3 py-1.5 text-xs">
-                {t.noMarker}
-              </span>
-            )}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                run(async () => {
-                  const res = await endPartnerReviewMeetingAction(meeting.id);
-                  if (res.error) flash(undefined, res.error);
-                  else {
-                    setMeeting((m) => ({ ...m, status: "PROCESSING", endedAt: new Date().toISOString() }));
-                    flash(t.ended);
-                  }
-                }, { refresh: false })
-              }
-              className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800 disabled:opacity-40"
-            >
-              {t.endMeeting}
-            </button>
-          </>
-        )}
-        {phase === "post" && meeting.status === "PROCESSING" && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              if (
-                !window.confirm(
-                  t.resetConfirm,
-                )
-              ) {
-                return;
-              }
+    <MeetingShell
+      phase={phase as MeetingPhase}
+      status={meeting.status}
+      busy={busy}
+      hasPrep={!needsPrep}
+      currentDiscussTitle={
+        currentDiscussItem
+          ? formatMsg(t.currentPartner, { name: currentDiscussItem.partnerName })
+          : null
+      }
+      previewToken={meeting.previewToken}
+      resolvePreviewPath={async () => {
+        if (meeting.previewToken) return `/partner-reviews/preview/${meeting.previewToken}`;
+        const res = await getMeetingPreviewPathAction(meeting.id);
+        if (!res.ok || !res.path) return null;
+        return res.path;
+      }}
+      shareMode="prep-only"
+      onPrep={runPrep}
+      onStart={() =>
+        run(async () => {
+          const res = await startPartnerReviewMeetingAction(meeting.id);
+          if (res.error) flash(undefined, res.error);
+          else {
+            setMeeting((m) => ({ ...m, status: "LIVE", startedAt: new Date().toISOString() }));
+            flash(t.started);
+          }
+        }, { refresh: false })
+      }
+      onEnd={() =>
+        run(async () => {
+          const res = await endPartnerReviewMeetingAction(meeting.id);
+          if (res.error) flash(undefined, res.error);
+          else {
+            setMeeting((m) => ({ ...m, status: "PROCESSING", endedAt: new Date().toISOString() }));
+            flash(t.ended);
+          }
+        }, { refresh: false })
+      }
+      onResetToPrep={
+        phase === "post" && meeting.status === "PROCESSING"
+          ? () => {
+              if (!window.confirm(t.resetConfirm)) return;
               run(async () => {
                 const res = await resetMeetingToPrepAction(meeting.id);
                 if (res.error) flash(undefined, res.error);
@@ -551,279 +862,18 @@ export function MeetingWorkspace({
                   flash(t.resetDone);
                 }
               }, { refresh: false });
-            }}
-            className="rounded-lg border border-amber-200 bg-amber-50 text-amber-900 px-3 py-1.5 text-sm hover:bg-amber-100 disabled:opacity-40"
-          >
-            {t.backToPrep}
-          </button>
-        )}
-      </div>
-
-      {(message || error) && (
-        <div
-          className={`sticky top-0 z-30 rounded-lg border px-3 py-2 text-sm shadow-sm ${
-            error
-              ? "border-red-200 bg-red-50 text-red-700"
-              : "border-emerald-200 bg-emerald-50 text-emerald-800"
-          }`}
-        >
-          {error || message}
-        </div>
-      )}
-
+            }
+          : undefined
+      }
+      flashOk={message}
+      flashError={error}
+      recordingSlot={recordingSlot}
+      postSlot={postSlot}
+    >
       {phase === "prep" ? (
-        <p className="text-xs text-slate-500 leading-relaxed">
-          {t.prepHint}
-        </p>
+        <p className="text-xs text-slate-500 leading-relaxed">{t.prepHint}</p>
       ) : null}
 
-      {phase === "live" ? (
-        <>
-          <DiscussingNowBanner
-            currentDiscussItem={currentDiscussItem}
-            meetingStartedAt={meeting.startedAt}
-            markJustAt={markJustAt}
-          />
-          <MeetingBatchRecorder
-            meetingId={meeting.id}
-            transcriptStatus={meeting.transcriptStatus}
-            transcriptError={meeting.transcriptError}
-            onFlash={flash}
-            onRecordingStarted={(startedAt) => {
-              setMeeting((m) => ({
-                ...m,
-                status: "LIVE",
-                startedAt: m.startedAt ?? startedAt ?? new Date().toISOString(),
-                recordingStartedAt: startedAt ?? new Date().toISOString(),
-                transcriptStatus: "recording",
-              }));
-            }}
-            onTranscribed={({ plain, liveNotes: notes, matchMethod }) => {
-              setTranscript(plain);
-              setMeeting((m) => ({
-                ...m,
-                transcriptText: plain,
-                xfyunTranscriptText: plain,
-                xfyunLiveNotes: notes,
-                matchSource: "xfyun",
-                transcriptStatus: "ready",
-              }));
-              if (notes) {
-                setLiveNotes(notes);
-                applySegmentsToDrafts(
-                  parsePartnerSectionsFromLiveNotes(notes, meeting.items),
-                  setMatchDrafts,
-                  setUnassignedDraft,
-                );
-                lockAssignStep.current = true;
-                setPostStep("assign");
-              }
-              flash(`${matchMethodFlash(matchMethod, t)} (${t.sourceXfyun}) · ${t.sourceHint}`);
-            }}
-          />
-        </>
-      ) : null}
-
-      {/* 会后：路径 A 腾讯粘贴 + 路径 B 讯飞（并行保留） */}
-      {(phase === "post" || phase === "done") && (
-        <div className="space-y-3">
-          {(meeting.tencentLiveNotes || meeting.xfyunLiveNotes) && phase === "post" ? (
-            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px]">
-              <span className="font-medium text-slate-700">{t.activeSource}</span>
-              <button
-                type="button"
-                disabled={busy || !meeting.tencentLiveNotes}
-                onClick={() =>
-                  run(async () => {
-                    const res = await switchMatchSourceAction(meeting.id, "tencent");
-                    if (res.error) {
-                      flash(undefined, res.error);
-                      return;
-                    }
-                    const notes = meeting.tencentLiveNotes ?? "";
-                    setLiveNotes(notes);
-                    setTranscript(meeting.tencentTranscriptText ?? transcript);
-                    setMeeting((m) => ({ ...m, matchSource: "tencent", liveNotes: notes }));
-                    applySegmentsToDrafts(
-                      parsePartnerSectionsFromLiveNotes(notes, meeting.items),
-                      setMatchDrafts,
-                      setUnassignedDraft,
-                    );
-                    lockAssignStep.current = true;
-                    setPostStep("assign");
-                    flash(t.switchedTencent);
-                  }, { refresh: false })
-                }
-                className={`rounded-full border px-2.5 py-1 ${
-                  meeting.matchSource === "tencent"
-                    ? "border-sky-400 bg-sky-50 font-semibold text-sky-900"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                } disabled:opacity-40`}
-              >
-                {t.sourceTencent}
-              </button>
-              <button
-                type="button"
-                disabled={busy || !meeting.xfyunLiveNotes}
-                onClick={() =>
-                  run(async () => {
-                    const res = await switchMatchSourceAction(meeting.id, "xfyun");
-                    if (res.error) {
-                      flash(undefined, res.error);
-                      return;
-                    }
-                    const notes = meeting.xfyunLiveNotes ?? "";
-                    setLiveNotes(notes);
-                    setTranscript(meeting.xfyunTranscriptText ?? transcript);
-                    setMeeting((m) => ({ ...m, matchSource: "xfyun", liveNotes: notes }));
-                    applySegmentsToDrafts(
-                      parsePartnerSectionsFromLiveNotes(notes, meeting.items),
-                      setMatchDrafts,
-                      setUnassignedDraft,
-                    );
-                    lockAssignStep.current = true;
-                    setPostStep("assign");
-                    flash(t.switchedXfyun);
-                  }, { refresh: false })
-                }
-                className={`rounded-full border px-2.5 py-1 ${
-                  meeting.matchSource === "xfyun"
-                    ? "border-emerald-400 bg-emerald-50 font-semibold text-emerald-900"
-                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                } disabled:opacity-40`}
-              >
-                {t.sourceXfyun}
-              </button>
-              <span className="text-slate-400">{t.sourceHint}</span>
-            </div>
-          ) : null}
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <MinutesPastePanel
-              phase={phase}
-              postStep={postStep}
-              transcript={
-                meeting.matchSource === "xfyun" && meeting.tencentTranscriptText
-                  ? meeting.tencentTranscriptText
-                  : transcript
-              }
-              liveNotes={liveNotes}
-              busy={busy}
-              workStage={workStage}
-              onTranscriptChange={setTranscript}
-              onMatch={() =>
-                run(async () => {
-                  setWorkStage("saving");
-                  const matchingTimer = window.setTimeout(() => setWorkStage("matching"), 400);
-                  try {
-                    const res = await matchMeetingMinutesAction(meeting.id, transcript);
-                    if (res.error) {
-                      setWorkStage("idle");
-                      flash(undefined, res.error);
-                      return;
-                    }
-                    if (res.liveNotes) {
-                      setLiveNotes(res.liveNotes);
-                      setMeeting((m) => ({
-                        ...m,
-                        matchSource: "tencent",
-                        tencentTranscriptText: transcript,
-                        tencentLiveNotes: res.liveNotes ?? null,
-                        liveNotes: res.liveNotes ?? null,
-                      }));
-                      applySegmentsToDrafts(
-                        parsePartnerSectionsFromLiveNotes(res.liveNotes, meeting.items),
-                        setMatchDrafts,
-                        setUnassignedDraft,
-                      );
-                    }
-                    setProposal(null);
-                    setConfirmDrafts({});
-                    lockAssignStep.current = true;
-                    setPostStep("assign");
-                    setWorkStage("done");
-                    flash(`${matchMethodFlash(res.matchMethod, t)} (${t.sourceTencent})`);
-                    requestAnimationFrame(() => {
-                      document.getElementById("assignment-timeline")?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      });
-                    });
-                  } finally {
-                    window.clearTimeout(matchingTimer);
-                  }
-                }, { refresh: false })
-              }
-              onRematch={() => {
-                lockAssignStep.current = true;
-                setPostStep("assign");
-                setProposal(null);
-                setConfirmDrafts({});
-                setWorkStage("idle");
-                flash(t.postAssignHint);
-                requestAnimationFrame(() => {
-                  document.getElementById("assignment-timeline")?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start",
-                  });
-                });
-              }}
-            />
-            <XfyunPathPanel
-              phase={phase}
-              busy={busy}
-              meeting={meeting}
-              onMatchXfyun={() =>
-                run(async () => {
-                  setWorkStage("matching");
-                  try {
-                    const res = await matchXfyunMinutesAction(meeting.id);
-                    if (res.error) {
-                      setWorkStage("idle");
-                      flash(undefined, res.error);
-                      return;
-                    }
-                    if (res.liveNotes) {
-                      setLiveNotes(res.liveNotes);
-                      setTranscript(meeting.xfyunTranscriptText ?? transcript);
-                      setMeeting((m) => ({
-                        ...m,
-                        matchSource: "xfyun",
-                        xfyunLiveNotes: res.liveNotes ?? null,
-                        liveNotes: res.liveNotes ?? null,
-                      }));
-                      applySegmentsToDrafts(
-                        parsePartnerSectionsFromLiveNotes(res.liveNotes, meeting.items),
-                        setMatchDrafts,
-                        setUnassignedDraft,
-                      );
-                    }
-                    setProposal(null);
-                    setConfirmDrafts({});
-                    lockAssignStep.current = true;
-                    setPostStep("assign");
-                    setWorkStage("done");
-                    flash(`${matchMethodFlash(res.matchMethod, t)} (${t.sourceXfyun})`);
-                    requestAnimationFrame(() => {
-                      document.getElementById("assignment-timeline")?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      });
-                    });
-                  } catch (e) {
-                    setWorkStage("idle");
-                    flash(undefined, e instanceof Error ? e.message : String(e));
-                  }
-                }, { refresh: false })
-              }
-            />
-          </div>
-        </div>
-      )}
-
-      {phase === "post" ? <PostStepIndicator step={postStep} /> : null}
-
-      {/* 会后第一步：归属时间线确认（主交互） */}
       {phase === "post" && postStep === "assign" ? (
         <AssignmentTimelinePanel
           items={orderedForTimeline}
@@ -867,7 +917,6 @@ export function MeetingWorkspace({
             });
           }}
           onMoveTurns={(fromIdx, turnFrom, turnTo, direction) => {
-            // fromIdx: -1 = 未归属；伙伴按 orderedForTimeline 下标
             const ordered = orderedForTimeline;
             const readTurns = (idx: number) => {
               if (idx === -1) return splitTranscriptTurns(unassignedDraft);
@@ -939,7 +988,6 @@ export function MeetingWorkspace({
                   const proposal = res.proposal;
                   setProposal(proposal);
                   setConfirmDrafts(draftsFromProposal(proposal));
-                  // 立即反映已写入的草案，避免 refresh 前看起来「没生效」
                   setMeeting((m) => ({
                     ...m,
                     status: "PROCESSING",
@@ -949,11 +997,11 @@ export function MeetingWorkspace({
                       return {
                         ...it,
                         coreNotes: row.coreNotes || null,
-                        todoDrafts: row.todos.map((t, i) => ({
+                        todoDrafts: row.todos.map((todo, i) => ({
                           id: `local-${it.id}-${i}`,
-                          title: t.title,
-                          detail: t.detail ?? null,
-                          dueDate: t.dueDate ?? null,
+                          title: todo.title,
+                          detail: todo.detail ?? null,
+                          dueDate: todo.dueDate ?? null,
                           confirmed: false,
                         })),
                       };
@@ -984,190 +1032,152 @@ export function MeetingWorkspace({
         />
       ) : null}
 
-      {/* 归属确认阶段隐藏三栏，避免干扰 */}
       {phase === "post" && postStep === "assign" ? null : (
-      <div id="post-extract-workspace" className="space-y-3">
-      {phase === "post" && postStep === "extract" ? (
-        <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3">
-          <p className="text-sm font-semibold text-violet-950">{t.extractTitle}</p>
-          <p className="mt-1 text-[11px] text-violet-900/80 leading-relaxed">
-            {t.extractHint}
-          </p>
-        </div>
-      ) : null}
-      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Partner list */}
-        <aside className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-          <div className="px-3 py-2 border-b border-slate-100 text-xs font-medium text-slate-500">
-            {t.agenda}
-            {phase === "live" ? (
-              <span className="font-normal text-slate-400">{t.agendaHint}</span>
-            ) : null}
-          </div>
-          <ul className="divide-y divide-slate-50 max-h-[70vh] overflow-y-auto">
-            {meeting.items.map((item, idx) => {
-              const isDiscussing =
-                currentDiscussItemId === item.id && phase === "live";
-              const justMarked =
-                isDiscussing && markJustAt > 0 && Date.now() - markJustAt < 2500;
-              return (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveItemId(item.id);
-                    if (phase === "live") {
-                      markPartnerDiscuss(item.id, item.partnerName);
-                    }
-                  }}
-                  className={`w-full text-left py-2.5 pr-3 text-sm transition-colors ${
-                    isDiscussing
-                      ? "pl-2 border-l-4 border-emerald-500 bg-emerald-50/90 hover:bg-emerald-50"
-                      : activeItemId === item.id
-                        ? "pl-3 bg-sky-50/80 hover:bg-sky-50"
-                        : "pl-3 hover:bg-slate-50"
-                  } ${justMarked ? "ring-2 ring-emerald-400 ring-inset" : ""}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-400 w-4">{idx + 1}</span>
-                    <span className="font-medium text-slate-800 truncate">{item.partnerName}</span>
-                    {isDiscussing ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 shrink-0 rounded-full bg-emerald-100 px-1.5 py-0.5">
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        {t.discussing}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-slate-400 pl-6">
-                    {item.status === "CONFIRMED"
-                      ? t.confirmed
-                      : item.status === "DISCUSSED"
-                        ? isDiscussing
-                          ? t.nowDiscussing
-                          : t.discussed
-                        : phase === "live"
-                          ? t.pendingDiscuss
-                          : t.pending}
-                    {item.partnerTier ? ` · Tier ${item.partnerTier}` : ""}
-                    {isDiscussing && item.markerInsertedAt && meeting.startedAt ? (
-                      <span className="ml-1 font-mono text-emerald-700">
-                        · {formatRelativeMeetingTime(item.markerInsertedAt, meeting.startedAt)}
-                      </span>
-                    ) : null}
-                  </div>
-                </button>
-              </li>
-            );
-            })}
-          </ul>
-          {phase === "live" ? (
-            <LiveAgendaPanel
-              items={meeting.items}
-              currentDiscussItemId={currentDiscussItemId}
-              meetingStartedAt={meeting.startedAt}
-              compact
-            />
+        <div id="post-extract-workspace" className="space-y-3">
+          {phase === "post" && postStep === "extract" ? (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3">
+              <p className="text-sm font-semibold text-violet-950">{t.extractTitle}</p>
+              <p className="mt-1 text-[11px] text-violet-900/80 leading-relaxed">
+                {t.extractHint}
+              </p>
+            </div>
           ) : null}
-          {(phase === "prep" || phase === "live" || phase === "post") && (
-            <AddPartnersPanel
-              meetingId={meeting.id}
-              allPartners={allPartners}
-              existingPartnerIds={meeting.items.map((it) => it.partnerId)}
-              busy={busy}
-              onAdded={(items) => {
-                setMeeting((m) => ({ ...m, items: [...m.items, ...items] }));
-                if (items[0]) setActiveItemId(items[0].id);
-                flash(formatMsg(t.addedPartners, { n: items.length }));
-              }}
-              onError={(err) => flash(undefined, err)}
-            />
-          )}
-        </aside>
-
-        {/* 伙伴详情 · 左栏：概览与商机 */}
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
-          {!activeItem ? (
-            <p className="text-sm text-slate-400">{t.noPartnerSelected}</p>
-          ) : (
-            <>
-              <PartnerDetailHeader activeItem={activeItem} phase={phase} />
-              {phase === "done" ? (
-                <ConfirmedHistoryPanel item={activeItem} part="left" />
-              ) : (
+          <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)_minmax(0,1fr)]">
+            <MeetingAgendaPanel
+              phase={phase as MeetingPhase}
+              items={agendaItems}
+              activeId={activeItemId}
+              currentDiscussId={currentDiscussItemId}
+              markJustAt={markJustAt}
+              onSelect={(item) => setActiveItemId(item.id)}
+              onDiscuss={(item) => markPartnerDiscuss(item.id, item.partnerName)}
+              renderMeta={(item) => (
                 <>
-                  {!activeItem.prepBrief && canRunPrep ? (
-                    <div className="rounded-lg border border-sky-100 bg-sky-50/80 px-3 py-3 space-y-2">
-                      <p className="text-sm text-slate-700">
-                        {t.briefExplain}
-                      </p>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={runPrep}
-                        className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
-                      >
-                        {t.generateBrief}
-                      </button>
-                    </div>
-                  ) : null}
-                  {postConfirmReady ? (
-                    <PostConfirmPanel
-                      item={activeItem}
-                      draft={confirmDrafts[activeItem.id]}
-                      onChange={(d) => setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))}
-                      proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
-                      part="left"
-                    />
-                  ) : activeItem.prepBrief ? (
-                    <PrepBriefOverview brief={activeItem.prepBrief} mossConfigured={mossConfigured} />
-                  ) : phase === "post" && postStep === "assign" ? (
-                    <p className="text-xs text-slate-400">{t.needAssignProgress}</p>
-                  ) : phase === "post" ? (
-                    <p className="text-xs text-slate-400">{t.needMatchProgress}</p>
+                  {item.partnerTier ? ` · Tier ${item.partnerTier}` : ""}
+                  {currentDiscussItemId === item.id &&
+                  phase === "live" &&
+                  item.markerInsertedAt &&
+                  meeting.startedAt ? (
+                    <span className="ml-1 font-mono text-emerald-700">
+                      · {formatRelativeMeetingTime(item.markerInsertedAt, meeting.startedAt)}
+                    </span>
                   ) : null}
                 </>
               )}
-            </>
-          )}
-        </section>
+              footer={
+                <>
+                  {phase === "live" ? (
+                    <LiveAgendaPanel
+                      items={meeting.items}
+                      currentDiscussItemId={currentDiscussItemId}
+                      meetingStartedAt={meeting.startedAt}
+                      compact
+                    />
+                  ) : null}
+                  {(phase === "prep" || phase === "live" || phase === "post") && (
+                    <AddPartnersPanel
+                      meetingId={meeting.id}
+                      allPartners={allPartners}
+                      existingPartnerIds={meeting.items.map((it) => it.partnerId)}
+                      busy={busy}
+                      onAdded={(items) => {
+                        setMeeting((m) => ({ ...m, items: [...m.items, ...items] }));
+                        if (items[0]) setActiveItemId(items[0].id);
+                        flash(formatMsg(t.addedPartners, { n: items.length }));
+                      }}
+                      onError={(err) => flash(undefined, err)}
+                    />
+                  )}
+                </>
+              }
+            />
 
-        {/* 伙伴详情 · 右栏：待办与进展 */}
-        <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
-          {!activeItem ? (
-            <p className="text-sm text-slate-400">{t.noBriefActivity}</p>
-          ) : (
-            <>
-              {phase === "done" ? (
-                <ConfirmedHistoryPanel item={activeItem} part="right" />
+            <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
+              {!activeItem ? (
+                <p className="text-sm text-slate-400">{t.noPartnerSelected}</p>
               ) : (
                 <>
-                  {postConfirmReady ? (
-                    <PostConfirmPanel
-                      item={activeItem}
-                      draft={confirmDrafts[activeItem.id]}
-                      onChange={(d) => setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))}
-                      proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
-                      part="right"
-                    />
-                  ) : activeItem.prepBrief ? (
-                    <PrepBriefActivity brief={activeItem.prepBrief} />
-                  ) : phase === "post" && postStep === "assign" ? (
-                    <p className="text-xs text-slate-400">{t.needAssignTodos}</p>
-                  ) : phase === "post" ? (
-                    <p className="text-xs text-slate-400">{t.needMatchTodos}</p>
+                  <PartnerDetailHeader activeItem={activeItem} phase={phase} />
+                  {phase === "done" ? (
+                    <ConfirmedHistoryPanel item={activeItem} part="left" />
                   ) : (
-                    <p className="text-xs text-slate-400">{t.noBriefActivity}</p>
+                    <>
+                      {!activeItem.prepBrief && canRunPrep ? (
+                        <div className="rounded-lg border border-sky-100 bg-sky-50/80 px-3 py-3 space-y-2">
+                          <p className="text-sm text-slate-700">{t.briefExplain}</p>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={runPrep}
+                            className="rounded-lg bg-sky-700 text-white px-3 py-1.5 text-sm hover:bg-sky-800 disabled:opacity-40"
+                          >
+                            {t.generateBrief}
+                          </button>
+                        </div>
+                      ) : null}
+                      {postConfirmReady ? (
+                        <PostConfirmPanel
+                          item={activeItem}
+                          draft={confirmDrafts[activeItem.id]}
+                          onChange={(d) =>
+                            setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))
+                          }
+                          proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
+                          part="left"
+                        />
+                      ) : activeItem.prepBrief ? (
+                        <PrepBriefOverview
+                          brief={activeItem.prepBrief}
+                          mossConfigured={mossConfigured}
+                        />
+                      ) : phase === "post" && postStep === "assign" ? (
+                        <p className="text-xs text-slate-400">{t.needAssignProgress}</p>
+                      ) : phase === "post" ? (
+                        <p className="text-xs text-slate-400">{t.needMatchProgress}</p>
+                      ) : null}
+                    </>
                   )}
                 </>
               )}
-            </>
-          )}
-        </section>
-      </div>
-      </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 min-h-[320px] max-h-[78vh] overflow-y-auto">
+              {!activeItem ? (
+                <p className="text-sm text-slate-400">{t.noBriefActivity}</p>
+              ) : (
+                <>
+                  {phase === "done" ? (
+                    <ConfirmedHistoryPanel item={activeItem} part="right" />
+                  ) : (
+                    <>
+                      {postConfirmReady ? (
+                        <PostConfirmPanel
+                          item={activeItem}
+                          draft={confirmDrafts[activeItem.id]}
+                          onChange={(d) =>
+                            setConfirmDrafts((prev) => ({ ...prev, [activeItem.id]: d }))
+                          }
+                          proposalItem={proposal?.items.find((p) => p.itemId === activeItem.id)}
+                          part="right"
+                        />
+                      ) : activeItem.prepBrief ? (
+                        <PrepBriefActivity brief={activeItem.prepBrief} />
+                      ) : phase === "post" && postStep === "assign" ? (
+                        <p className="text-xs text-slate-400">{t.needAssignTodos}</p>
+                      ) : phase === "post" ? (
+                        <p className="text-xs text-slate-400">{t.needMatchTodos}</p>
+                      ) : (
+                        <p className="text-xs text-slate-400">{t.noBriefActivity}</p>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+          </div>
+        </div>
       )}
 
-      {/* 会后第二步：会议报告 + 入库 */}
       {phase === "post" && postStep === "extract" ? (
         <FinalReportPanel
           meeting={meeting}
@@ -1185,12 +1195,12 @@ export function MeetingWorkspace({
                     ? d.coreNotes
                     : d.businessRecordContent || d.coreNotes,
                   skipBusinessRecord: d.skipBusinessRecord,
-                  todos: d.todos.map((t) => ({
-                    id: t.id,
-                    title: t.title,
-                    detail: t.detail,
-                    dueDate: t.dueDate || null,
-                    include: t.include,
+                  todos: d.todos.map((todo) => ({
+                    id: todo.id,
+                    title: todo.title,
+                    detail: todo.detail,
+                    dueDate: todo.dueDate || null,
+                    include: todo.include,
                   })),
                 }),
               );
@@ -1205,11 +1215,11 @@ export function MeetingWorkspace({
                     const d = confirmDrafts[it.id];
                     if (!d) return { ...it, status: "CONFIRMED" };
                     const todos = d.todos
-                      .filter((t) => t.include && t.title.trim())
-                      .map((t) => ({
-                        title: t.title.trim(),
-                        detail: t.detail?.trim() || null,
-                        dueDate: t.dueDate || null,
+                      .filter((todo) => todo.include && todo.title.trim())
+                      .map((todo) => ({
+                        title: todo.title.trim(),
+                        detail: todo.detail?.trim() || null,
+                        dueDate: todo.dueDate || null,
                         todoItemId: null,
                       }));
                     return {
@@ -1246,286 +1256,7 @@ export function MeetingWorkspace({
           onFlash={flash}
         />
       ) : null}
-    </div>
-  );
-}
-
-function PostStepIndicator({ step }: { step: PostStep }) {
-  const t = useMessages().partnerReview;
-  const steps: { id: PostStep; label: string }[] = [
-    { id: "paste", label: t.postStepPaste },
-    { id: "assign", label: t.postStepAssign },
-    { id: "extract", label: t.postStepExtract },
-  ];
-  const order = { paste: 0, assign: 1, extract: 2 } as const;
-  const cur = order[step];
-  return (
-    <ol className="flex flex-wrap gap-2 text-xs">
-      {steps.map((s, idx) => {
-        const active = s.id === step;
-        const done = idx < cur;
-        return (
-          <li
-            key={s.id}
-            className={`rounded-full px-3 py-1.5 border font-medium ${
-              active
-                ? "border-sky-500 bg-sky-100 text-sky-900"
-                : done
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-slate-200 bg-white text-slate-400"
-            }`}
-          >
-            {s.label}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function XfyunPathPanel({
-  phase,
-  busy,
-  meeting,
-  onMatchXfyun,
-}: {
-  phase: string;
-  busy: boolean;
-  meeting: MeetingClient;
-  onMatchXfyun: () => void;
-}) {
-  const t = useMessages().partnerReview;
-  const hasXfyun = !!(meeting.xfyunTranscriptText?.trim() || meeting.transcriptStatus === "ready");
-  const preview = (meeting.xfyunTranscriptText || "").trim();
-
-  return (
-    <section className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
-      <div>
-        <div className="text-sm font-semibold text-slate-900">{t.pathBTitle}</div>
-        <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-          {t.pathBHint}
-        </p>
-      </div>
-      {phase === "done" ? (
-        <p className="text-xs text-slate-500">
-          {preview ? formatMsg(t.pathBPreview, { n: preview.length }) : t.pathBUnused}
-        </p>
-      ) : (
-        <>
-          <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2 text-[11px] text-slate-600 space-y-1">
-            <p>
-              {t.status}{" "}
-              <span className="font-medium text-slate-800">
-                {meeting.transcriptStatus || "idle"}
-              </span>
-              {meeting.recordingBytes
-                ? ` · ${formatMsg(t.recordingSize, { n: (meeting.recordingBytes / 1024 / 1024).toFixed(1) })}`
-                : ""}
-            </p>
-            {meeting.recordingStartedAt ? (
-              <p>{formatMsg(t.recordingStarted, { time: new Date(meeting.recordingStartedAt).toLocaleString() })}</p>
-            ) : (
-              <p className="text-amber-800">{t.noRecordingHint}</p>
-            )}
-            {meeting.transcriptError ? (
-              <p className="text-red-600">{meeting.transcriptError}</p>
-            ) : null}
-          </div>
-          {preview ? (
-            <details className="text-xs">
-              <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
-                {formatMsg(t.pathBPreview, { n: preview.length })}
-              </summary>
-              <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg border border-slate-100 bg-white px-2 py-1.5 font-mono text-[11px]">
-                {preview.slice(0, 4000)}
-                {preview.length > 4000 ? "…" : ""}
-              </pre>
-            </details>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy || !hasXfyun}
-              onClick={onMatchXfyun}
-              className="rounded-lg bg-emerald-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-800 disabled:opacity-40"
-            >
-              {meeting.xfyunLiveNotes ? t.rematchXfyun : t.matchXfyun}
-            </button>
-            {!hasXfyun ? (
-              <span className="text-[11px] text-slate-400 self-center">
-                {t.needRecording}
-              </span>
-            ) : null}
-          </div>
-        </>
-      )}
-    </section>
-  );
-}
-
-function MinutesPastePanel({
-  phase,
-  postStep,
-  transcript,
-  liveNotes,
-  busy,
-  workStage,
-  onTranscriptChange,
-  onMatch,
-  onRematch,
-}: {
-  phase: string;
-  postStep: PostStep;
-  transcript: string;
-  liveNotes: string;
-  busy: boolean;
-  workStage: WorkStage;
-  onTranscriptChange: (v: string) => void;
-  onMatch: () => void;
-  onRematch: () => void;
-}) {
-  const t = useMessages().partnerReview;
-  const matching = busy && (workStage === "saving" || workStage === "matching");
-  const collapsed = postStep === "assign";
-
-  return (
-    <section className="rounded-xl border-2 border-sky-200 bg-sky-50/40 p-4 space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold text-slate-900">
-            {phase === "done"
-              ? t.postPasteReadonly
-              : collapsed
-                ? t.postPasteMatched
-                : t.postPasteTitle}
-          </div>
-          {phase === "post" && !collapsed ? (
-            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-              {t.postPasteHint}
-            </p>
-          ) : null}
-          {phase === "post" && collapsed ? (
-            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-              {t.postAssignHint}
-            </p>
-          ) : null}
-        </div>
-        {matching ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-800">
-            <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
-            {workStageLabel(workStage, t)}
-          </span>
-        ) : postStep === "assign" ? (
-          <span className="text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
-            {t.postCurrentAssign}
-          </span>
-        ) : postStep === "extract" ? (
-          <span className="text-xs font-medium text-emerald-700">{t.postExtractedRedo}</span>
-        ) : null}
-      </div>
-
-      {phase === "post" ? (
-        <>
-          {!collapsed ? (
-            <textarea
-              value={transcript}
-              onChange={(e) => onTranscriptChange(e.target.value)}
-              rows={7}
-              disabled={matching}
-              placeholder={t.postPastePh}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono leading-relaxed disabled:opacity-60"
-            />
-          ) : (
-            <details className="text-xs">
-              <summary className="cursor-pointer text-slate-500 hover:text-slate-700">
-                {formatMsg(t.postExpand, { n: transcript.length })}
-              </summary>
-              <textarea
-                value={transcript}
-                onChange={(e) => onTranscriptChange(e.target.value)}
-                rows={4}
-                disabled={matching}
-                className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-mono leading-relaxed disabled:opacity-60"
-              />
-            </details>
-          )}
-          {matching ? (
-            <ol className="flex flex-wrap gap-2 text-[11px]">
-              {(
-                [
-                  ["saving", t.workSaving],
-                  ["matching", t.workMatching],
-                ] as const
-              ).map(([key, label], idx) => {
-                const order = { saving: 0, matching: 1, extracting: 2, done: 3, idle: -1 } as const;
-                const cur = order[workStage];
-                const active = key === workStage;
-                const done = idx < cur;
-                return (
-                  <li
-                    key={key}
-                    className={`rounded-full px-2.5 py-1 border ${
-                      active
-                        ? "border-sky-400 bg-sky-100 text-sky-900 font-medium"
-                        : done
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                          : "border-slate-200 bg-white text-slate-400"
-                    }`}
-                  >
-                    {label}
-                  </li>
-                );
-              })}
-            </ol>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            {postStep !== "assign" ? (
-              <button
-                type="button"
-                disabled={busy || !transcript.trim()}
-                onClick={onMatch}
-                className="rounded-lg bg-sky-700 text-white px-4 py-2 text-sm font-medium hover:bg-sky-800 disabled:opacity-40"
-              >
-                {matching
-                  ? workStageLabel(workStage, t)
-                  : postStep === "paste"
-                    ? t.postMatch
-                    : t.postRematch}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={busy || !transcript.trim()}
-                onClick={onMatch}
-                className="rounded-lg border border-sky-300 bg-white text-sky-800 px-3 py-1.5 text-xs hover:bg-sky-50 disabled:opacity-40"
-              >
-                {matching ? workStageLabel(workStage, t) : t.postRunMatch}
-              </button>
-            )}
-            {postStep === "extract" ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={onRematch}
-                className="rounded-lg bg-amber-600 text-white px-4 py-2 text-sm font-medium hover:bg-amber-700 disabled:opacity-40"
-              >
-                {t.postOpenTimeline}
-              </button>
-            ) : null}
-            {postStep === "paste" && !matching ? (
-              <span className="text-[11px] text-slate-500">{t.postNext}</span>
-            ) : null}
-          </div>
-        </>
-      ) : (
-        <textarea
-          value={liveNotes || transcript}
-          readOnly
-          rows={5}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed bg-white text-slate-700"
-        />
-      )}
-    </section>
+    </MeetingShell>
   );
 }
 
@@ -2268,97 +1999,6 @@ function AddPartnersPanel({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-function MeetingPreviewActions({
-  meetingId,
-  previewToken,
-}: {
-  meetingId: string;
-  previewToken: string | null;
-}) {
-  const t = useMessages().partnerReview;
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState<string | null>(null);
-  const [manualUrl, setManualUrl] = useState<string | null>(null);
-
-  async function resolvePreviewPath(): Promise<string | null> {
-    if (previewToken) return `/partner-reviews/preview/${previewToken}`;
-    const res = await getMeetingPreviewPathAction(meetingId);
-    if (!res.ok || !res.path) return null;
-    return res.path;
-  }
-
-  async function openPreview() {
-    setCopyError(null);
-    try {
-      const path = await resolvePreviewPath();
-      if (!path) {
-        setCopyError(t.previewUnavailable);
-        return;
-      }
-      window.open(path, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      setCopyError(e instanceof Error ? e.message : t.previewOpenFailed);
-    }
-  }
-
-  async function copyLink() {
-    setCopyError(null);
-    setManualUrl(null);
-    try {
-      const path = await resolvePreviewPath();
-      if (!path) {
-        setCopyError(t.previewUnavailable);
-        return;
-      }
-      const url = `${window.location.origin}${path}`;
-      const ok = await copyTextToClipboard(url);
-      if (ok) {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-        return;
-      }
-      setManualUrl(url);
-      setCopyError(t.browserCopyBlocked);
-    } catch (e) {
-      setCopyError(e instanceof Error ? e.message : t.copyFailed);
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => void openPreview()}
-          className="rounded-lg border border-sky-200 bg-sky-50 text-sky-800 px-3 py-1.5 text-sm hover:bg-sky-100"
-        >
-          {t.openPreview}
-        </button>
-        <button
-          type="button"
-          onClick={() => void copyLink()}
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm hover:bg-slate-50"
-        >
-          {copied ? t.copiedLink : t.copyPreviewLink}
-        </button>
-        {previewToken ? null : (
-          <span className="text-[11px] text-slate-400 self-center">{t.firstCopyCreates}</span>
-        )}
-      </div>
-      {copyError ? <p className="text-xs text-amber-700">{copyError}</p> : null}
-      {manualUrl ? (
-        <input
-          type="text"
-          readOnly
-          value={manualUrl}
-          onFocus={(e) => e.currentTarget.select()}
-          className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs font-mono text-slate-700 bg-slate-50"
-        />
-      ) : null}
     </div>
   );
 }
