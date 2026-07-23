@@ -2963,6 +2963,8 @@ export const messagesZh: Messages = {
     noneTopLevel: "（无 = 顶层）",
     reportsToPerson: "汇报给 {name}",
     contactInfo: "联系方式",
+    email: "邮箱",
+    phone: "电话",
     bestApproach: "最佳触达方式",
     notes: "备注",
     saving: "保存中…",

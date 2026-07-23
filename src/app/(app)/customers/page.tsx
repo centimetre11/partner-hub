@@ -240,7 +240,7 @@ export default async function CustomersPage({
           presalesUser: { select: { name: true } },
           satisfactionUser: { select: { name: true } },
           contacts: {
-            select: { name: true, title: true, contactInfo: true },
+            select: { name: true, title: true, email: true, phone: true, contactInfo: true },
             take: 1,
             orderBy: { updatedAt: "desc" },
           },

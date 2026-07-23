@@ -22,7 +22,7 @@ export async function PartnerDetailHeader({ id }: { id: string }) {
     db.partner.findUnique({
       where: { id },
       include: {
-        contacts: { select: { role: true, contactInfo: true } },
+        contacts: { select: { role: true, email: true, phone: true, contactInfo: true } },
         opportunities: { select: { id: true }, take: 1 },
         events: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 1 },
         trainings: { select: { id: true }, take: 1 },

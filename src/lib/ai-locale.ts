@@ -245,7 +245,7 @@ ${clarificationFooter}`;
   "proposal": {
     "summary": "One-line summary of people identified (${lang})",
     "fields": [],
-    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"source in material (${lang})"}],
+    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","email":"...","phone":"...","reason":"source in material (${lang})"}],
     "opportunities": [],
     "todos": [],
     "trainings": [],
@@ -254,6 +254,7 @@ ${clarificationFooter}`;
 }
 Rules:
 - Fill contacts only; keep fields/opportunities/todos/trainings/solutions as empty arrays.
+- Prefer email and phone as separate fields when available.
 - Extract only from material (text/image); cite reason; do not invent.
 - Match [Existing contacts] for add vs update (update must include id).
 - ready=true when core info is enough; use clarifications only for missing reporting lines.
@@ -275,7 +276,7 @@ ${clarificationFooter}`;
     "partnerName": "(the END-CUSTOMER / account company name — this is the customer being profiled, NOT a Fanruan partner)",
     "summary": "One-line summary of what will be saved (${lang})",
     "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
-    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
+    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"APPROVER|DECISION_MAKER|SUPPORTER|EVALUATOR|INFLUENCER","title":"...","department":"...","attitude":0,"reportsToName":"...","email":"...","phone":"...","reason":"..."}],
     "opportunities": [],
     "todos": [{"title":"...","dueDate":"YYYY-MM-DD","assigneeName":"...","detail":"..."}],
     "trainings": [],
@@ -390,7 +391,7 @@ ${clarificationFooter}`;
     "partnerName": "(new_partner only: company name)",
     "summary": "One-line summary of what will be saved (${lang})",
     "fields": [{"field":"...","label":"${lang} field display name","oldValue":"...","newValue":"...","reason":"source (${lang})"}],
-    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"...","title":"...","department":"...","attitude":0,"reportsToName":"...","contactInfo":"...","reason":"..."}],
+    "contacts": [{"action":"add|update","id":"(when update)","name":"...","role":"...","title":"...","department":"...","attitude":0,"reportsToName":"...","email":"...","phone":"...","reason":"..."}],
     "opportunities": [{"action":"add|update","id":"...","name":"...","client":"...","amount":"...","stage":"comma-separated process codes","nextStep":"single process code","status":"...","reason":"..."}],
     "todos": [{"title":"...","dueDate":"YYYY-MM-DD","assigneeName":"...","detail":"..."}],
     "trainings": [{"person":"...","currentSkill":"...","targetCert":"...","deadline":"YYYY-MM-DD","status":"PLANNED|IN_PROGRESS|DONE","reason":"..."}],

@@ -61,6 +61,8 @@ export type CrmActivationContactInput = {
   name: string;
   role?: string | null;
   title?: string | null;
+  email?: string | null;
+  phone?: string | null;
   contactInfo?: string | null;
   updatedAt?: Date | string | null;
 };
@@ -117,6 +119,19 @@ export function parseContactInfo(info: string | null | undefined): { email?: str
   const withoutEmail = email ? info.replace(email, " ") : info;
   const phone = withoutEmail.match(PHONE_RE)?.[0]?.replace(/\s+/g, "") || undefined;
   return { email, phone };
+}
+
+/** 优先读独立 email/phone，旧数据回退解析 contactInfo */
+export function resolveContactEmailPhone(c: {
+  email?: string | null;
+  phone?: string | null;
+  contactInfo?: string | null;
+}): { email?: string; phone?: string } {
+  const parsed = parseContactInfo(c.contactInfo);
+  return {
+    email: c.email?.trim() || parsed.email,
+    phone: c.phone?.trim() || parsed.phone,
+  };
 }
 
 export function fakeEmailForEntity(entityId: string): string {
@@ -208,7 +223,7 @@ export function buildCrmActivationFields(input: {
       const c = pickPartnerContact(contacts);
       if (c) {
         if (!contactName) contactName = c.name;
-        const parsed = parseContactInfo(c.contactInfo);
+        const parsed = resolveContactEmailPhone(c);
         if (!email && parsed.email) email = parsed.email;
         if (!phone && parsed.phone) phone = parsed.phone;
       }
@@ -217,7 +232,7 @@ export function buildCrmActivationFields(input: {
     const c = pickPartnerContact(contacts);
     if (c) {
       contactName = c.name;
-      const parsed = parseContactInfo(c.contactInfo);
+      const parsed = resolveContactEmailPhone(c);
       email = parsed.email || "";
       phone = parsed.phone || "";
     }

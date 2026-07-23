@@ -392,7 +392,9 @@ model Contact {
   y           Float?
   linksAsSub  ContactLink[] @relation("LinkSub") // 作为下级的附加汇报线
   linksAsSup  ContactLink[] @relation("LinkSup") // 作为上级的附加汇报线
-  contactInfo String?
+  email       String?
+  phone       String?
+  contactInfo String? // 兼容旧数据；优先用 email/phone
   approach    String?
   notes       String?
   createdAt   DateTime  @default(now())

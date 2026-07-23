@@ -57,7 +57,7 @@ export async function getPoolReviewCounts() {
 }
 
 const partnerReviewInclude = {
-  contacts: { select: { role: true, contactInfo: true }, take: 3 },
+  contacts: { select: { role: true, email: true, phone: true, contactInfo: true }, take: 3 },
   opportunities: { select: { id: true }, take: 1 },
   events: { select: { createdAt: true }, orderBy: { createdAt: "desc" as const }, take: 1 },
   trainings: { select: { id: true }, take: 1 },

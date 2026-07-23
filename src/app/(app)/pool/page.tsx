@@ -53,7 +53,7 @@ export default async function PoolPage({
     db.partner.findMany({
       where: listWhere,
       include: {
-        contacts: { select: { role: true, contactInfo: true } },
+        contacts: { select: { role: true, email: true, phone: true, contactInfo: true } },
         opportunities: { select: { id: true } },
         events: { select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: 5 },
         trainings: { select: { status: true } },

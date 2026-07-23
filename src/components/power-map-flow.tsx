@@ -44,10 +44,28 @@ import type { OwnerRef } from "@/lib/owner";
 export type PowerMapNodeContact = PowerMapContact & {
   x: number | null;
   y: number | null;
+  email?: string | null;
+  phone?: string | null;
   contactInfo?: string | null;
   approach?: string | null;
   notes?: string | null;
 };
+
+const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+const PHONE_RE = /(?:\+?\d[\d\s\-().]{6,}\d)/;
+
+function fallbackEmailPhone(contact: PowerMapNodeContact | null): { email: string; phone: string } {
+  const email = (contact?.email ?? "").trim();
+  const phone = (contact?.phone ?? "").trim();
+  if (email || phone || !contact?.contactInfo) {
+    return { email, phone };
+  }
+  const info = contact.contactInfo;
+  const parsedEmail = info.match(EMAIL_RE)?.[0] ?? "";
+  const withoutEmail = parsedEmail ? info.replace(parsedEmail, " ") : info;
+  const parsedPhone = withoutEmail.match(PHONE_RE)?.[0]?.replace(/\s+/g, "") ?? "";
+  return { email: parsedEmail, phone: parsedPhone };
+}
 
 export type PowerMapLink = {
   id: string;
@@ -546,6 +564,8 @@ function EditDrawer({
     });
   }, [owner, contact, onClose]);
 
+  const reach = fallbackEmailPhone(contact);
+
   return (
     <>
       <div className="fixed inset-0 bg-black/20 z-40" onClick={onClose} />
@@ -608,8 +628,12 @@ function EditDrawer({
             </select>
           </label>
           <label className="block">
-            <span className="text-xs text-slate-500">{pm.contactInfo}</span>
-            <input name="contactInfo" defaultValue={contact?.contactInfo ?? ""} placeholder={pm.contactInfo} className={DRAWER_INPUT} />
+            <span className="text-xs text-slate-500">{pm.email}</span>
+            <input name="email" type="email" defaultValue={reach.email} placeholder={pm.email} className={DRAWER_INPUT} />
+          </label>
+          <label className="block">
+            <span className="text-xs text-slate-500">{pm.phone}</span>
+            <input name="phone" type="tel" defaultValue={reach.phone} placeholder={pm.phone} className={DRAWER_INPUT} />
           </label>
           <label className="block">
             <span className="text-xs text-slate-500">{pm.bestApproach}</span>

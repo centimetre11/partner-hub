@@ -166,6 +166,8 @@ export async function createCustomerFromCrmAction(comId: string): Promise<Create
               create: {
                 name: detail.contact.name,
                 title: detail.contact.duty ?? undefined,
+                phone: detail.contact.mobile ?? undefined,
+                email: detail.contact.email ?? undefined,
                 contactInfo:
                   [detail.contact.mobile, detail.contact.email].filter(Boolean).join(" / ") || undefined,
               },
@@ -225,6 +227,8 @@ export async function createPartnerFromCrmAction(
                 create: {
                   name: detail.contact.name,
                   title: detail.contact.duty ?? undefined,
+                  phone: detail.contact.mobile ?? undefined,
+                  email: detail.contact.email ?? undefined,
                   contactInfo:
                     [detail.contact.mobile, detail.contact.email].filter(Boolean).join(" / ") || undefined,
                 },

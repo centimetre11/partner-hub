@@ -31,7 +31,7 @@ const CHECKS: Check[] = [
   { labelKey: 14, weight: 2, ok: (p) => !!p.presalesUserId },
   { labelKey: 15, weight: 10, ok: (p) => p.contacts.length > 0 },
   { labelKey: 16, weight: 8, ok: (p) => p.contacts.some((c) => c.role === "DECISION_MAKER") },
-  { labelKey: 17, weight: 4, ok: (p) => p.contacts.some((c) => !!c.contactInfo) },
+  { labelKey: 17, weight: 4, ok: (p) => p.contacts.some((c) => !!(c.email || c.phone || c.contactInfo)) },
   { labelKey: 18, weight: 10, ok: (p) => p.opportunities.length > 0 },
   { labelKey: 19, weight: 8, ok: (p) => p.events.some((e) => Date.now() - new Date(e.createdAt).getTime() < 30 * 24 * 3600 * 1000) },
 ];

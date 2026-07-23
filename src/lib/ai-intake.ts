@@ -1233,13 +1233,21 @@ async function applyCustomerContacts(
   for (const c of contacts) {
     const name = asTrimmedString(c.name);
     if (!name) continue;
+    const email = typeof c.email === "string" ? c.email.trim() || undefined : undefined;
+    const phone = typeof c.phone === "string" ? c.phone.trim() || undefined : undefined;
+    const contactInfo =
+      (typeof c.contactInfo === "string" ? c.contactInfo.trim() || undefined : undefined) ||
+      [phone, email].filter(Boolean).join(" / ") ||
+      undefined;
     const payload = {
       name,
       role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
       title: c.title,
       department: c.department,
       attitude: typeof c.attitude === "number" && c.attitude >= -1 && c.attitude <= 3 ? c.attitude : undefined,
-      contactInfo: c.contactInfo,
+      email,
+      phone,
+      contactInfo,
       approach: c.approach,
       notes: c.notes,
     };
@@ -1737,13 +1745,21 @@ export async function applyIntake(opts: {
   // ---- Contacts (two passes: save first, then resolve reporting lines) ----
   const contactIdByName = new Map<string, string>();
   if (partnerId) for (const c of proposal.contacts) {
+    const email = typeof c.email === "string" ? c.email.trim() || undefined : undefined;
+    const phone = typeof c.phone === "string" ? c.phone.trim() || undefined : undefined;
+    const contactInfo =
+      (typeof c.contactInfo === "string" ? c.contactInfo.trim() || undefined : undefined) ||
+      [phone, email].filter(Boolean).join(" / ") ||
+      undefined;
     const payload = {
       name: c.name,
       role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
       title: c.title,
       department: c.department,
       attitude: typeof c.attitude === "number" && c.attitude >= -1 && c.attitude <= 3 ? c.attitude : undefined,
-      contactInfo: c.contactInfo,
+      email,
+      phone,
+      contactInfo,
       approach: c.approach,
       notes: c.notes,
     };

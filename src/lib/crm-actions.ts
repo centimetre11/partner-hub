@@ -371,7 +371,7 @@ export async function getCrmActivationPayloadAction(
         city: true,
         crmCustomerId: true,
         contacts: {
-          select: { name: true, role: true, title: true, contactInfo: true, updatedAt: true },
+          select: { name: true, role: true, title: true, email: true, phone: true, contactInfo: true, updatedAt: true },
           orderBy: { updatedAt: "desc" },
           take: 20,
         },
@@ -403,7 +403,7 @@ export async function getCrmActivationPayloadAction(
       contactEmail: true,
       crmCustomerId: true,
       contacts: {
-        select: { name: true, role: true, title: true, contactInfo: true, updatedAt: true },
+        select: { name: true, role: true, title: true, email: true, phone: true, contactInfo: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 20,
       },

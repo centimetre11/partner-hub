@@ -51,11 +51,23 @@ export type ContactProposal = {
   department?: string;
   attitude?: number; // 3 champion / 2 supportive exclusive / 1 supportive / 0 neutral / -1 opposed
   reportsToName?: string; // Manager name for power map hierarchy
-  contactInfo?: string;
+  email?: string;
+  phone?: string;
+  contactInfo?: string; // legacy free-text; prefer email/phone
   approach?: string;
   notes?: string;
   reason?: string;
 };
+
+function formatContactReach(c: {
+  email?: string | null;
+  phone?: string | null;
+  contactInfo?: string | null;
+}): string {
+  const parts = [c.phone, c.email].filter(Boolean);
+  if (parts.length) return parts.join(" / ");
+  return c.contactInfo || "?";
+}
 
 export type OpportunityProposal = {
   action: "add" | "update";
@@ -119,7 +131,7 @@ export async function partnerContext(partnerId: string, locale: Locale = "zh"): 
     ? p.contacts
         .map(
           (c) =>
-            `- id=${c.id} name:${c.name} role:${c.role} title:${c.title ?? "?"} dept:${c.department ?? "?"} attitude:${c.attitude}(${attitudeDisplayName(labels, c.attitude)}) reportsTo:${c.reportsToId ? contactById.get(c.reportsToId) ?? "?" : locale === "zh" ? "顶层" : "(top)"} contact:${c.contactInfo ?? "?"}`
+            `- id=${c.id} name:${c.name} role:${c.role} title:${c.title ?? "?"} dept:${c.department ?? "?"} attitude:${c.attitude}(${attitudeDisplayName(labels, c.attitude)}) reportsTo:${c.reportsToId ? contactById.get(c.reportsToId) ?? "?" : locale === "zh" ? "顶层" : "(top)"} contact:${formatContactReach(c)}`
         )
         .join("\n")
     : noneLabel(locale);
@@ -181,7 +193,7 @@ export async function customerContext(customerId: string, locale: Locale = "zh")
     ? c.contacts
         .map(
           (ct) =>
-            `- id=${ct.id} name:${ct.name} role:${ct.role} title:${ct.title ?? "?"} dept:${ct.department ?? "?"} contact:${ct.contactInfo ?? "?"}`
+            `- id=${ct.id} name:${ct.name} role:${ct.role} title:${ct.title ?? "?"} dept:${ct.department ?? "?"} contact:${formatContactReach(ct)}`
         )
         .join("\n")
     : noneLabel(locale);
@@ -380,6 +392,12 @@ export async function applyProposal(opts: {
       });
       reportsToId = boss?.id;
     }
+    const email = c.email?.trim() || undefined;
+    const phone = c.phone?.trim() || undefined;
+    const contactInfo =
+      c.contactInfo?.trim() ||
+      [phone, email].filter(Boolean).join(" / ") ||
+      undefined;
     const payload = {
       name: c.name,
       role: c.role && VALID_ROLES.includes(c.role) ? c.role : "INFLUENCER",
@@ -387,7 +405,9 @@ export async function applyProposal(opts: {
       department: c.department,
       attitude: typeof c.attitude === "number" && c.attitude >= -1 && c.attitude <= 3 ? c.attitude : undefined,
       reportsToId,
-      contactInfo: c.contactInfo,
+      email,
+      phone,
+      contactInfo,
       approach: c.approach,
       notes: c.notes,
     };

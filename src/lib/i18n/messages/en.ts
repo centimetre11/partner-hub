@@ -2975,6 +2975,8 @@ export const messagesEn = {
     noneTopLevel: "(None = top level)",
     reportsToPerson: "Reports to {name}",
     contactInfo: "Contact info",
+    email: "Email",
+    phone: "Phone",
     bestApproach: "Best approach",
     notes: "Notes",
     saving: "Saving…",

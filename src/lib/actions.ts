@@ -581,7 +581,8 @@ export async function upsertContactAction(owner: OwnerRef, formData: FormData) {
     department: String(formData.get("department") ?? "") || null,
     attitude: parseInt(String(formData.get("attitude") ?? "0"), 10) || 0,
     reportsToId: String(formData.get("reportsToId") ?? "") || null,
-    contactInfo: String(formData.get("contactInfo") ?? "") || null,
+    email: String(formData.get("email") ?? "").trim() || null,
+    phone: String(formData.get("phone") ?? "").trim() || null,
     approach: String(formData.get("approach") ?? "") || null,
     notes: String(formData.get("notes") ?? "") || null,
   };

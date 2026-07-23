@@ -949,6 +949,8 @@ async function CustomerTabContent({
                 reportsToId: ct.reportsToId,
                 x: ct.x,
                 y: ct.y,
+                email: ct.email,
+                phone: ct.phone,
                 contactInfo: ct.contactInfo,
                 approach: ct.approach,
                 notes: ct.notes,
