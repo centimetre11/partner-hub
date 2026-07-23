@@ -1,6 +1,6 @@
 export type MeetingStatus = "DRAFT" | "PREP" | "LIVE" | "PROCESSING" | "DONE";
 export type MeetingPhase = "prep" | "live" | "post" | "done";
-export type MeetingPostStep = "paste" | "assign" | "extract";
+export type MeetingPostStep = "paste" | "assign" | "extract" | "report";
 export type MeetingWorkStage = "idle" | "saving" | "matching" | "extracting" | "done";
 export type MeetingMatchSource = "tencent" | "xfyun" | string | null;
 

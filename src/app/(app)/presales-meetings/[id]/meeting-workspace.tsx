@@ -122,6 +122,32 @@ function draftsFromProposal(proposal: SplitProposal): Record<string, ConfirmDraf
   return out;
 }
 
+function emptyManualDrafts(items: MeetingItemClient[]): Record<string, ConfirmDraft> {
+  const out: Record<string, ConfirmDraft> = {};
+  for (const it of items) {
+    const subject =
+      it.customerName || it.partnerName || it.projectName || it.opportunityName || "售前";
+    out[it.id] = {
+      coreNotes: "",
+      businessRecordTitle: `${subject} 售前讨论`,
+      businessRecordContent: "",
+      skipBusinessRecord: false,
+      projectWorkLogContent: "",
+      skipProjectWorkLog: !it.projectId,
+      todos: [],
+    };
+  }
+  return out;
+}
+
+function initialPresalesPostStep(meeting: MeetingClient): MeetingPostStep {
+  if (meeting.items.some((it) => it.coreNotes?.trim() || it.confirmedSnapshot)) {
+    return "extract";
+  }
+  if (meeting.liveNotes?.trim()) return "assign";
+  return "paste";
+}
+
 export function PresalesMeetingWorkspace({
   initial,
   prepFactsByItemId,
@@ -147,8 +173,12 @@ export function PresalesMeetingWorkspace({
     initial.items.find((it) => it.status === "DISCUSSED")?.id ?? null,
   );
   const [markJustAt, setMarkJustAt] = useState(0);
-  const [postStep, setPostStep] = useState<MeetingPostStep>(
-    initial.liveNotes?.trim() ? "assign" : "paste",
+  const [postStep, setPostStep] = useState<MeetingPostStep>(() =>
+    initialPresalesPostStep(initial),
+  );
+  /** paste 阶段：尚未选路径 / 已选录音路径 */
+  const [pathMode, setPathMode] = useState<"choose" | "recording">(() =>
+    initial.liveNotes?.trim() ? "recording" : "choose",
   );
   const [workStage, setWorkStage] = useState<MeetingWorkStage>("idle");
   const [transcript, setTranscript] = useState(
@@ -256,234 +286,313 @@ export function PresalesMeetingWorkspace({
     }, { refresh: false });
   }
 
+  const onPathStep =
+    phase === "post" && (postStep === "paste" || postStep === "assign");
+  const onSummaryStep = phase === "post" && postStep === "extract";
+  const onReportStep = phase === "post" && postStep === "report";
+
+  function goDirectToSummary() {
+    setConfirmDrafts(emptyManualDrafts(meeting.items));
+    setPathMode("choose");
+    setPostStep("extract");
+    flash(m.pathDirectAction);
+  }
+
   const postSlot =
     phase === "post" ? (
       <div className="space-y-3">
-        {postStep === "paste" ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800">{m.finishWithoutMinutesTitle}</p>
-              <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                {m.finishWithoutMinutesHint}
-              </p>
-            </div>
-            <button
-              type="button"
-              disabled={pending}
-              onClick={finishWithoutMinutes}
-              className="rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-40 shrink-0"
-            >
-              {m.finishWithoutExtract}
-            </button>
-          </div>
-        ) : null}
+        <MeetingPostStepIndicator step={postStep} variant="presales" />
 
-        {postStep !== "paste" ? (
-          <MeetingMatchSourceSwitch
-            tencentReady={Boolean(meeting.tencentLiveNotes)}
-            xfyunReady={Boolean(meeting.xfyunLiveNotes)}
-            matchSource={meeting.matchSource}
-            busy={pending}
-            onSwitch={(source) =>
-              run(async () => {
-                const res = await switchPresalesMatchSourceAction(meeting.id, source);
-                if (res.error) return res;
-                const notes =
-                  source === "tencent"
-                    ? (meeting.tencentLiveNotes ?? "")
-                    : (meeting.xfyunLiveNotes ?? "");
-                setLiveNotes(notes);
-                setTranscript(
-                  source === "tencent"
-                    ? (meeting.tencentTranscriptText ?? transcript)
-                    : (meeting.xfyunTranscriptText ?? transcript),
-                );
-                setMeeting((prev) => ({ ...prev, matchSource: source, liveNotes: notes }));
-                syncAssignFromNotes(notes);
-                lockAssign.current = true;
-                setPostStep("assign");
-                return res;
-              }, { refresh: false })
-            }
-          />
-        ) : null}
+        {onPathStep ? (
+          <>
+            {postStep === "paste" && pathMode === "choose" ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{m.pathChoiceTitle}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{m.pathChoiceHint}</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setPathMode("recording")}
+                    className="rounded-xl border-2 border-sky-200 bg-sky-50/50 p-4 text-left hover:border-sky-400 hover:bg-sky-50"
+                  >
+                    <div className="text-sm font-semibold text-slate-900">
+                      {m.pathRecordingTitle}
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1.5 leading-relaxed">
+                      {m.pathRecordingHint}
+                    </p>
+                    <span className="inline-block mt-3 text-xs font-medium text-sky-800">
+                      {m.pathRecordingAction} →
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goDirectToSummary}
+                    className="rounded-xl border-2 border-slate-200 bg-white p-4 text-left hover:border-slate-400 hover:bg-slate-50"
+                  >
+                    <div className="text-sm font-semibold text-slate-900">
+                      {m.pathDirectTitle}
+                    </div>
+                    <p className="text-[11px] text-slate-600 mt-1.5 leading-relaxed">
+                      {m.pathDirectHint}
+                    </p>
+                    <span className="inline-block mt-3 text-xs font-medium text-slate-800">
+                      {m.pathDirectAction} →
+                    </span>
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
-        <PostMinutesDualPath
-          phase={phase}
-          postStep={postStep}
-          transcript={transcript}
-          liveNotes={liveNotes}
-          busy={pending}
-          workStage={workStage}
-          onTranscriptChange={setTranscript}
-          onMatch={() =>
-            run(async () => {
-              setWorkStage("saving");
-              const timer = window.setTimeout(() => setWorkStage("matching"), 400);
-              try {
-                const res = await matchPresalesMinutesAction(meeting.id, transcript);
-                if (res.error) {
-                  setWorkStage("idle");
-                  return res;
-                }
-                if (res.liveNotes) {
-                  setLiveNotes(res.liveNotes);
-                  setMeeting((prev) => ({
-                    ...prev,
-                    matchSource: "tencent",
-                    tencentTranscriptText: transcript,
-                    tencentLiveNotes: res.liveNotes ?? null,
-                    liveNotes: res.liveNotes ?? null,
-                  }));
-                  syncAssignFromNotes(res.liveNotes);
-                }
-                lockAssign.current = true;
-                setPostStep("assign");
-                setWorkStage("done");
-                flash(formatMsg(m.matchOk, { method: res.matchMethod ?? "match" }));
-                return res;
-              } finally {
-                window.clearTimeout(timer);
-              }
-            }, { refresh: false })
-          }
-          onRematch={() => {
-            lockAssign.current = true;
-            setPostStep("assign");
-            setConfirmDrafts({});
-            setWorkStage("idle");
-          }}
-          pathB={
-            <MeetingPathBPanel title={m.pathBTitle} hint={m.pathBHint}>
-              {meeting.xfyunTranscriptText?.trim() ? (
-                <>
-                  <p className="text-xs text-slate-500">
-                    {meeting.xfyunTranscriptText.length} chars
-                  </p>
-                  {phase === "post" ? (
-                    <button
-                      type="button"
-                      disabled={pending || workStage === "matching"}
-                      onClick={() =>
-                        run(async () => {
-                          setWorkStage("matching");
-                          try {
-                            const res = await matchPresalesXfyunAction(meeting.id);
-                            if (res.error) {
-                              setWorkStage("idle");
-                              return res;
-                            }
-                            if (res.liveNotes) {
-                              setLiveNotes(res.liveNotes);
-                              setTranscript(meeting.xfyunTranscriptText ?? transcript);
-                              setMeeting((prev) => ({
-                                ...prev,
-                                matchSource: "xfyun",
-                                xfyunLiveNotes: res.liveNotes ?? null,
-                                liveNotes: res.liveNotes ?? null,
-                              }));
-                              syncAssignFromNotes(res.liveNotes);
-                            }
-                            lockAssign.current = true;
-                            setPostStep("assign");
-                            setWorkStage("done");
-                            flash(formatMsg(m.matchOk, { method: res.matchMethod ?? "xfyun" }));
-                            return res;
-                          } finally {
-                            setWorkStage("idle");
-                          }
-                        }, { refresh: false })
+            {(postStep === "assign" ||
+              (postStep === "paste" && pathMode === "recording")) && (
+              <>
+                {postStep === "paste" && pathMode === "recording" ? (
+                  <button
+                    type="button"
+                    className="text-[11px] text-sky-700 hover:underline"
+                    onClick={() => setPathMode("choose")}
+                  >
+                    ← {m.pathBackChoice}
+                  </button>
+                ) : null}
+
+                {postStep === "assign" ? (
+                  <MeetingMatchSourceSwitch
+                    tencentReady={Boolean(meeting.tencentLiveNotes)}
+                    xfyunReady={Boolean(meeting.xfyunLiveNotes)}
+                    matchSource={meeting.matchSource}
+                    busy={pending}
+                    onSwitch={(source) =>
+                      run(async () => {
+                        const res = await switchPresalesMatchSourceAction(meeting.id, source);
+                        if (res.error) return res;
+                        const notes =
+                          source === "tencent"
+                            ? (meeting.tencentLiveNotes ?? "")
+                            : (meeting.xfyunLiveNotes ?? "");
+                        setLiveNotes(notes);
+                        setTranscript(
+                          source === "tencent"
+                            ? (meeting.tencentTranscriptText ?? transcript)
+                            : (meeting.xfyunTranscriptText ?? transcript),
+                        );
+                        setMeeting((prev) => ({
+                          ...prev,
+                          matchSource: source,
+                          liveNotes: notes,
+                        }));
+                        syncAssignFromNotes(notes);
+                        lockAssign.current = true;
+                        setPostStep("assign");
+                        return res;
+                      }, { refresh: false })
+                    }
+                  />
+                ) : null}
+
+                <PostMinutesDualPath
+                  phase={phase}
+                  postStep={postStep === "assign" ? "assign" : "paste"}
+                  transcript={transcript}
+                  liveNotes={liveNotes}
+                  busy={pending}
+                  workStage={workStage}
+                  onTranscriptChange={setTranscript}
+                  onMatch={() =>
+                    run(async () => {
+                      setWorkStage("saving");
+                      const timer = window.setTimeout(() => setWorkStage("matching"), 400);
+                      try {
+                        const res = await matchPresalesMinutesAction(meeting.id, transcript);
+                        if (res.error) {
+                          setWorkStage("idle");
+                          return res;
+                        }
+                        if (res.liveNotes) {
+                          setLiveNotes(res.liveNotes);
+                          setMeeting((prev) => ({
+                            ...prev,
+                            matchSource: "tencent",
+                            tencentTranscriptText: transcript,
+                            tencentLiveNotes: res.liveNotes ?? null,
+                            liveNotes: res.liveNotes ?? null,
+                          }));
+                          syncAssignFromNotes(res.liveNotes);
+                        }
+                        lockAssign.current = true;
+                        setPathMode("recording");
+                        setPostStep("assign");
+                        setWorkStage("done");
+                        flash(formatMsg(m.matchOk, { method: res.matchMethod ?? "match" }));
+                        return res;
+                      } finally {
+                        window.clearTimeout(timer);
                       }
-                      className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800 disabled:opacity-40"
-                    >
-                      {meeting.xfyunLiveNotes ? m.rematchXfyun : m.matchXfyun}
-                    </button>
-                  ) : null}
-                </>
-              ) : (
-                <p className="text-[11px] text-slate-400">{m.pathBEmpty}</p>
-              )}
-              {meeting.transcriptStatus ? (
-                <p className="text-[11px] text-slate-500">
-                  {m.status} {meeting.transcriptStatus}
-                </p>
-              ) : null}
-            </MeetingPathBPanel>
-          }
-        />
-
-        <MeetingPostStepIndicator step={postStep} pasteOptional extractOptional />
-
-        {postStep === "assign" ? (
-          <MeetingAssignmentTimeline
-            items={orderedForTimeline}
-            matchDrafts={matchDrafts}
-            unassignedDraft={unassignedDraft}
-            busy={pending}
-            workStage={workStage}
-            statusMessage={error ?? flashOk}
-            statusIsError={Boolean(error)}
-            onChangeItem={(itemId, text) =>
-              setMatchDrafts((prev) => ({ ...prev, [itemId]: text }))
-            }
-            onChangeUnassigned={setUnassignedDraft}
-            onSave={() =>
-              run(async () => {
-                const notes = buildLiveNotesFromSegments([
-                  ...(unassignedDraft.trim()
-                    ? [{ partnerId: null, partnerName: null, text: unassignedDraft }]
-                    : []),
-                  ...orderedForTimeline.map((it) => ({
-                    partnerId: it.id,
-                    partnerName: it.label,
-                    text: matchDrafts[it.id] ?? "",
-                  })),
-                ]);
-                await savePresalesMatchedNotesAction(meeting.id, notes);
-                setLiveNotes(notes);
-                flash("Ownership saved");
-              }, { refresh: false })
-            }
-            onConfirm={() =>
-              run(async () => {
-                setWorkStage("extracting");
-                try {
-                  const notes = buildLiveNotesFromSegments([
-                    ...(unassignedDraft.trim()
-                      ? [{ partnerId: null, partnerName: null, text: unassignedDraft }]
-                      : []),
-                    ...orderedForTimeline.map((it) => ({
-                      partnerId: it.id,
-                      partnerName: it.label,
-                      text: matchDrafts[it.id] ?? "",
-                    })),
-                  ]);
-                  await savePresalesMatchedNotesAction(meeting.id, notes);
-                  setLiveNotes(notes);
-                  const res = await extractPresalesOutcomesAction(meeting.id);
-                  if (res.error) {
+                    }, { refresh: false })
+                  }
+                  onRematch={() => {
+                    lockAssign.current = true;
+                    setPathMode("recording");
+                    setPostStep("assign");
+                    setConfirmDrafts({});
                     setWorkStage("idle");
-                    return res;
+                  }}
+                  pathB={
+                    <MeetingPathBPanel title={m.pathBTitle} hint={m.pathBHint}>
+                      {meeting.xfyunTranscriptText?.trim() ? (
+                        <>
+                          <p className="text-xs text-slate-500">
+                            {meeting.xfyunTranscriptText.length} chars
+                          </p>
+                          <button
+                            type="button"
+                            disabled={pending || workStage === "matching"}
+                            onClick={() =>
+                              run(async () => {
+                                setWorkStage("matching");
+                                try {
+                                  const res = await matchPresalesXfyunAction(meeting.id);
+                                  if (res.error) {
+                                    setWorkStage("idle");
+                                    return res;
+                                  }
+                                  if (res.liveNotes) {
+                                    setLiveNotes(res.liveNotes);
+                                    setTranscript(meeting.xfyunTranscriptText ?? transcript);
+                                    setMeeting((prev) => ({
+                                      ...prev,
+                                      matchSource: "xfyun",
+                                      xfyunLiveNotes: res.liveNotes ?? null,
+                                      liveNotes: res.liveNotes ?? null,
+                                    }));
+                                    syncAssignFromNotes(res.liveNotes);
+                                  }
+                                  lockAssign.current = true;
+                                  setPathMode("recording");
+                                  setPostStep("assign");
+                                  setWorkStage("done");
+                                  flash(
+                                    formatMsg(m.matchOk, {
+                                      method: res.matchMethod ?? "xfyun",
+                                    }),
+                                  );
+                                  return res;
+                                } finally {
+                                  setWorkStage("idle");
+                                }
+                              }, { refresh: false })
+                            }
+                            className="rounded-lg bg-emerald-700 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-800 disabled:opacity-40"
+                          >
+                            {meeting.xfyunLiveNotes ? m.rematchXfyun : m.matchXfyun}
+                          </button>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-slate-400">{m.pathBEmpty}</p>
+                      )}
+                      {meeting.transcriptStatus ? (
+                        <p className="text-[11px] text-slate-500">
+                          {m.status} {meeting.transcriptStatus}
+                        </p>
+                      ) : null}
+                    </MeetingPathBPanel>
                   }
-                  if (res.proposal) {
-                    setConfirmDrafts(draftsFromProposal(res.proposal));
-                    setPostStep("extract");
-                    flash(m.extracted);
-                  }
-                  setWorkStage("done");
-                  return res;
-                } catch (e) {
-                  setWorkStage("idle");
-                  return { error: e instanceof Error ? e.message : String(e) };
-                }
-              }, { refresh: false })
-            }
-          />
+                />
+
+                {postStep === "assign" ? (
+                  <MeetingAssignmentTimeline
+                    items={orderedForTimeline}
+                    matchDrafts={matchDrafts}
+                    unassignedDraft={unassignedDraft}
+                    busy={pending}
+                    workStage={workStage}
+                    statusMessage={error ?? flashOk}
+                    statusIsError={Boolean(error)}
+                    onChangeItem={(itemId, text) =>
+                      setMatchDrafts((prev) => ({ ...prev, [itemId]: text }))
+                    }
+                    onChangeUnassigned={setUnassignedDraft}
+                    onSave={() =>
+                      run(async () => {
+                        const notes = buildLiveNotesFromSegments([
+                          ...(unassignedDraft.trim()
+                            ? [{ partnerId: null, partnerName: null, text: unassignedDraft }]
+                            : []),
+                          ...orderedForTimeline.map((it) => ({
+                            partnerId: it.id,
+                            partnerName: it.label,
+                            text: matchDrafts[it.id] ?? "",
+                          })),
+                        ]);
+                        await savePresalesMatchedNotesAction(meeting.id, notes);
+                        setLiveNotes(notes);
+                        flash("Ownership saved");
+                      }, { refresh: false })
+                    }
+                    onConfirm={() =>
+                      run(async () => {
+                        setWorkStage("extracting");
+                        try {
+                          const notes = buildLiveNotesFromSegments([
+                            ...(unassignedDraft.trim()
+                              ? [
+                                  {
+                                    partnerId: null,
+                                    partnerName: null,
+                                    text: unassignedDraft,
+                                  },
+                                ]
+                              : []),
+                            ...orderedForTimeline.map((it) => ({
+                              partnerId: it.id,
+                              partnerName: it.label,
+                              text: matchDrafts[it.id] ?? "",
+                            })),
+                          ]);
+                          await savePresalesMatchedNotesAction(meeting.id, notes);
+                          setLiveNotes(notes);
+                          const res = await extractPresalesOutcomesAction(meeting.id);
+                          if (res.error) {
+                            setWorkStage("idle");
+                            return res;
+                          }
+                          if (res.proposal) {
+                            setConfirmDrafts(draftsFromProposal(res.proposal));
+                            setPostStep("extract");
+                            flash(m.extracted);
+                          }
+                          setWorkStage("done");
+                          return res;
+                        } catch (e) {
+                          setWorkStage("idle");
+                          return { error: e instanceof Error ? e.message : String(e) };
+                        }
+                      }, { refresh: false })
+                    }
+                  />
+                ) : null}
+              </>
+            )}
+          </>
+        ) : null}
+
+        {onSummaryStep ? (
+          <p className="text-[11px] text-slate-500">{m.goToReportHint}</p>
+        ) : null}
+
+        {onReportStep ? (
+          <p className="text-[11px] text-slate-500">{m.reportStepOnly}</p>
         ) : null}
       </div>
     ) : null;
 
-  const showMain = !(phase === "post" && postStep === "assign");
+  const showMain =
+    !(phase === "post" && postStep === "assign") &&
+    !(phase === "post" && postStep === "report") &&
+    !(phase === "post" && postStep === "paste" && pathMode === "choose");
 
   return (
     <MeetingShell
@@ -537,6 +646,7 @@ export function PresalesMeetingWorkspace({
               endedAt: new Date().toISOString(),
             }));
             setPostStep("paste");
+            setPathMode("choose");
             flash(m.ended);
           }
           return res;
@@ -569,6 +679,7 @@ export function PresalesMeetingWorkspace({
                   setLiveNotes("");
                   setTranscript("");
                   setPostStep("paste");
+                  setPathMode("choose");
                   setConfirmDrafts({});
                   setMatchDrafts({});
                   setUnassignedDraft("");
@@ -730,7 +841,7 @@ export function PresalesMeetingWorkspace({
                   </div>
                 ) : null}
 
-                {phase === "post" && postStep === "extract" ? (
+                {onSummaryStep ? (
                   <ExtractConfirmPanel
                     item={active}
                     draft={confirmDrafts[active.id]}
@@ -740,44 +851,7 @@ export function PresalesMeetingWorkspace({
                       setConfirmDrafts((prev) => ({ ...prev, [active.id]: d }))
                     }
                     onConfirm={() => {
-                      const d = confirmDrafts[active.id];
-                      if (!d) return;
-                      run(async () => {
-                        const payload: ConfirmItemPayload = {
-                          itemId: active.id,
-                          coreNotes: d.coreNotes,
-                          businessRecordTitle: d.businessRecordTitle,
-                          businessRecordContent: d.businessRecordContent,
-                          skipBusinessRecord: d.skipBusinessRecord,
-                          projectWorkLogContent: d.projectWorkLogContent,
-                          skipProjectWorkLog: d.skipProjectWorkLog,
-                          todos: d.todos.map((t) => ({
-                            id: t.id,
-                            title: t.title,
-                            detail: t.detail,
-                            dueDate: t.dueDate || null,
-                            include: t.include,
-                          })),
-                        };
-                        const res = await confirmPresalesItemsAction(meeting.id, [payload]);
-                        if (!res.error) {
-                          setMeeting((prev) => ({
-                            ...prev,
-                            items: prev.items.map((it) =>
-                              it.id === active.id
-                                ? { ...it, status: "CONFIRMED", coreNotes: d.coreNotes }
-                                : it,
-                            ),
-                            status: prev.items.every(
-                              (it) => it.id === active.id || it.status === "CONFIRMED",
-                            )
-                              ? "DONE"
-                              : prev.status,
-                          }));
-                          flash(m.confirmed);
-                        }
-                        return res;
-                      });
+                      flash(m.draftSaved);
                     }}
                   />
                 ) : null}
@@ -792,17 +866,26 @@ export function PresalesMeetingWorkspace({
                 ) : null}
               </section>
 
-              {phase === "post" && postStep === "extract" ? (
+              {onSummaryStep ? (
                 <div className="flex flex-wrap gap-2 items-center">
                   <button
                     type="button"
-                    disabled={pending}
-                    onClick={finishWithoutMinutes}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                    disabled={!Object.keys(confirmDrafts).length}
+                    onClick={() => setPostStep("report")}
+                    className="rounded-lg bg-violet-700 text-white px-4 py-2 text-sm font-medium hover:bg-violet-800 disabled:opacity-40"
                   >
-                    {m.finishWithoutExtract}
+                    {m.goToReport}
                   </button>
-                  <span className="text-[11px] text-slate-400">{m.finishWithoutExtractHint}</span>
+                  <button
+                    type="button"
+                    className="text-[11px] text-sky-700 hover:underline"
+                    onClick={() => {
+                      setPostStep("paste");
+                      setPathMode("choose");
+                    }}
+                  >
+                    ← {m.pathBackChoice}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -812,18 +895,22 @@ export function PresalesMeetingWorkspace({
         </div>
       ) : null}
 
-      {phase === "post" && postStep === "extract" ? (
+      {onReportStep ? (
         <PresalesFinalReportPanel
           meeting={meeting}
           confirmDrafts={confirmDrafts}
           prepFactsByItemId={prepFactsByItemId}
           busy={pending}
           onConfirmAll={() => {
-            if (!Object.keys(confirmDrafts).length) return;
+            const drafts =
+              Object.keys(confirmDrafts).length > 0
+                ? confirmDrafts
+                : emptyManualDrafts(meeting.items);
             run(async () => {
-              const items: ConfirmItemPayload[] = Object.entries(confirmDrafts).map(
-                ([itemId, d]) => ({
-                  itemId,
+              const items: ConfirmItemPayload[] = meeting.items.map((it) => {
+                const d = drafts[it.id] ?? emptyManualDrafts([it])[it.id]!;
+                return {
+                  itemId: it.id,
                   coreNotes: d.coreNotes,
                   businessRecordTitle: d.businessRecordTitle,
                   businessRecordContent: d.businessRecordContent,
@@ -837,8 +924,8 @@ export function PresalesMeetingWorkspace({
                     dueDate: t.dueDate || null,
                     include: t.include,
                   })),
-                }),
-              );
+                };
+              });
               const res = await confirmPresalesItemsAction(meeting.id, items);
               if (!res.error) {
                 setMeeting((prev) => ({
@@ -846,7 +933,7 @@ export function PresalesMeetingWorkspace({
                   status: "DONE",
                   endedAt: prev.endedAt ?? new Date().toISOString(),
                   items: prev.items.map((it) => {
-                    const d = confirmDrafts[it.id];
+                    const d = drafts[it.id];
                     if (!d) return { ...it, status: "CONFIRMED" as const };
                     return {
                       ...it,
@@ -883,6 +970,26 @@ export function PresalesMeetingWorkspace({
           }}
           onFlash={flash}
         />
+      ) : null}
+
+      {onReportStep ? (
+        <div className="flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            className="text-[11px] text-sky-700 hover:underline"
+            onClick={() => setPostStep("extract")}
+          >
+            ← {m.extractTitle}
+          </button>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={finishWithoutMinutes}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+          >
+            {m.finishWithoutExtract}
+          </button>
+        </div>
       ) : null}
 
       {phase === "done" ? (

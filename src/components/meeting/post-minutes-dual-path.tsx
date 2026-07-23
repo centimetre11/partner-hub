@@ -167,14 +167,50 @@ export function MeetingPostStepIndicator({
   step,
   extractOptional = false,
   pasteOptional = false,
+  /** 售前三步：选路径 → 确认总结 → 会议报告（paste/assign 都算第 1 步） */
+  variant = "default",
 }: {
   step: MeetingPostStep;
   /** 第一步粘贴纪要可跳过时展示「可选」 */
   pasteOptional?: boolean;
   /** 第三步提炼可跳过时展示「可选」 */
   extractOptional?: boolean;
+  variant?: "default" | "presales";
 }) {
   const t = useMessages().meetingUi;
+
+  if (variant === "presales") {
+    const current =
+      step === "extract" ? 1 : step === "report" ? 2 : 0; /* paste | assign */
+    const steps = [
+      t.postStepPath,
+      t.postStepSummary,
+      t.postStepReport,
+    ];
+    return (
+      <div className="flex flex-wrap gap-2 text-[11px]">
+        {steps.map((label, idx) => {
+          const active = current === idx;
+          const done = current > idx;
+          return (
+            <span
+              key={label}
+              className={`rounded-full border px-2.5 py-1 ${
+                active
+                  ? "border-violet-400 bg-violet-50 text-violet-900 font-medium"
+                  : done
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : "border-slate-200 bg-white text-slate-400"
+              }`}
+            >
+              {label}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+
   const steps = [
     [
       "paste",
@@ -186,12 +222,13 @@ export function MeetingPostStepIndicator({
       extractOptional ? `${t.postStepExtract} · ${t.optionalStep}` : t.postStepExtract,
     ],
   ] as const;
-  const order = { paste: 0, assign: 1, extract: 2 } as const;
+  const order = { paste: 0, assign: 1, extract: 2, report: 3 } as const;
+  const stepOrder = order[step] ?? 0;
   return (
     <div className="flex flex-wrap gap-2 text-[11px]">
       {steps.map(([key, label]) => {
-        const active = order[step] === order[key];
-        const done = order[step] > order[key];
+        const active = stepOrder === order[key];
+        const done = stepOrder > order[key];
         return (
           <span
             key={key}
