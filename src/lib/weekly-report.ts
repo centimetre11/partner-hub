@@ -874,9 +874,22 @@ export async function runWeeklyReportPipeline(
   if (skippedInactive) pushNotes.push(`跳过无活动 ${skippedInactive} 人`);
   if (skippedNoEmail) pushNotes.push(`无邮箱仅存档 ${skippedNoEmail} 人`);
 
-  // 管理者汇总：先存档，再发信
-  let managerOk = false;
+  // 团队周报汇总：发给每个人（全体成员 + 管理者，去重）；先存档，再发信
+  let digestOk = false;
   const unresolved = managerResolved.filter((r) => !r.email).map((r) => r.token);
+  const digestEmails = (() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const raw of [...users.map((u) => u.email ?? ""), ...managerEmails]) {
+      const email = raw.trim();
+      if (!email) continue;
+      const key = email.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(email);
+    }
+    return list;
+  })();
   {
     const digestLocale = config.managerDigestLocale ?? "zh";
     const digestCopy = getWeeklyReportCopy(digestLocale);
@@ -895,27 +908,27 @@ export async function runWeeklyReportPipeline(
       source: opts.source ?? "SCHEDULED",
       agentRunId: opts.agentRunId,
     });
-    if (managerEmails.length) {
+    if (digestEmails.length) {
       const ctx = { actions: [] as string[] };
       try {
         const result = await runSendEmailTool(
-          { to: managerEmails.join(","), subject, body: text, html },
+          { to: digestEmails.join(","), subject, body: text, html },
           ctx
         );
-        managerOk = /Email sent/i.test(result);
-        toolLog.push({ tool: "send_email", args: { to: managerEmails, subject }, result: result.slice(0, 200) });
-        pushNotes.push(managerOk ? `管理者汇总已发（${managerEmails.length} 人）` : `管理者汇总发送失败（已存档）`);
+        digestOk = /Email sent/i.test(result);
+        toolLog.push({ tool: "send_email", args: { to: digestEmails, subject }, result: result.slice(0, 200) });
+        pushNotes.push(digestOk ? `团队周报汇总已发全员（${digestEmails.length} 人）` : `团队周报汇总发送失败（已存档）`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         toolLog.push({
           tool: "send_email",
-          args: { to: managerEmails, subject },
+          args: { to: digestEmails, subject },
           result: `error: ${msg.slice(0, 180)} (archived)`,
         });
-        pushNotes.push("管理者汇总发送失败（已存档）");
+        pushNotes.push("团队周报汇总发送失败（已存档）");
       }
     } else {
-      pushNotes.push("管理者汇总已存档（未解析到收件人，未发信）");
+      pushNotes.push("团队周报汇总已存档（未解析到收件人，未发信）");
     }
   }
   if (unresolved.length) pushNotes.push(`未识别管理者：${unresolved.join("、")}`);
@@ -925,7 +938,7 @@ export async function runWeeklyReportPipeline(
   const allOk =
     (archivedPersonal > 0 || skippedInactive === allReports.length || allReports.length === 0) &&
     (emailTargets === 0 || sentPersonal === emailTargets) &&
-    (managerEmails.length === 0 || managerOk) &&
+    (digestEmails.length === 0 || digestOk) &&
     unresolved.length === 0;
   const runStatus: "SUCCESS" | "PARTIAL_SUCCESS" = allOk ? "SUCCESS" : "PARTIAL_SUCCESS";
 
