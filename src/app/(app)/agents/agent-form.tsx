@@ -5,6 +5,7 @@ import { upsertAgentAction } from "@/lib/agent-actions";
 import type { PromptSkillOption, ToolOption } from "@/lib/skill-resolver";
 import { useMessages, useLocale } from "@/lib/i18n/context";
 import { getToolDesc, getToolLabel } from "@/lib/tool-labels";
+import { SearchableSelect } from "@/components/searchable-select";
 
 const AGENT_PUSH_SKILLS = ["push_wecom", "send_wecom_app", "send_email"] as const;
 
@@ -189,14 +190,14 @@ export function AgentForm({
           {scopeType === "PARTNER" && (
             <label className="space-y-1">
               <span className="text-xs text-slate-500">{a.formPartner}</span>
-              <select name="partnerId" defaultValue={agent.partnerId} className={input}>
-                <option value="">{a.formSelectPartner}</option>
-                {partners.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                name="partnerId"
+                defaultValue={agent.partnerId}
+                emptyLabel={a.formSelectPartner}
+                className={input}
+                aria-label={a.formPartner}
+                options={partners.map((p) => ({ value: p.id, label: p.name }))}
+              />
             </label>
           )}
         </div>

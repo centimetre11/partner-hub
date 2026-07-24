@@ -5,6 +5,7 @@ import { useMessages, useLocale } from "@/lib/i18n/context";
 import { AmountInput } from "@/components/amount-input";
 import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
 import { PendingButton } from "@/components/pending-button";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { CrmProjectDraft } from "@/lib/crm-mcp-map";
 import type { OwnerRef } from "@/lib/owner";
 
@@ -126,14 +127,14 @@ export function CustomerAddProjectForm({
           className={input}
           placeholder={c.projectEndDate}
         />
-        <select name="partnerId" defaultValue={defaultPartnerId ?? ""} className={input}>
-          <option value="">{c.deliveryPartnerNone}</option>
-          {partners.map((pp) => (
-            <option key={pp.id} value={pp.id}>
-              {pp.name}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="partnerId"
+          defaultValue={defaultPartnerId ?? ""}
+          emptyLabel={c.deliveryPartnerNone}
+          className={input}
+          aria-label={c.deliveryPartnerNone}
+          options={partners.map((pp) => ({ value: pp.id, label: pp.name }))}
+        />
         {draft?.notes ? (
           <textarea
             name="notes"

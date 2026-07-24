@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createTodoAction } from "@/lib/actions";
 import { useMessages } from "@/lib/i18n/context";
 import { appendTodoOwnerToFormData, encodeTodoOwnerRef, parseTodoOwnerRef } from "@/lib/todo-owner-select";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type Option = { id: string; name: string };
 
@@ -216,32 +217,26 @@ export function CreateTodoDrawer({
                 ) : (
                   <label className="block min-w-0">
                     <span className="mb-1 block text-xs text-slate-500">{m.todos.fieldRelated}</span>
-                    <select
+                    <SearchableSelect
                       name="ownerRef"
                       value={ownerRef}
-                      onChange={(e) => setOwnerRef(e.target.value)}
+                      onChange={setOwnerRef}
+                      emptyLabel={m.todos.noRelated}
                       className={input}
-                    >
-                      <option value="">{m.todos.noRelated}</option>
-                      {partners.length > 0 && (
-                        <optgroup label={m.todos.partnersGroup}>
-                          {partners.map((p) => (
-                            <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {customers.length > 0 && (
-                        <optgroup label={m.todos.customersGroup}>
-                          {customers.map((c) => (
-                            <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                      aria-label={m.todos.fieldRelated}
+                      options={[
+                        ...partners.map((p) => ({
+                          value: encodeTodoOwnerRef("partner", p.id),
+                          label: p.name,
+                          group: m.todos.partnersGroup,
+                        })),
+                        ...customers.map((c) => ({
+                          value: encodeTodoOwnerRef("customer", c.id),
+                          label: c.name,
+                          group: m.todos.customersGroup,
+                        })),
+                      ]}
+                    />
                   </label>
                 )}
 

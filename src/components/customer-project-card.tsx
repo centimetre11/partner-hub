@@ -13,6 +13,7 @@ import {
 import { useMessages, useLocale } from "@/lib/i18n/context";
 import type { OwnerRef } from "@/lib/owner";
 import { AmountInput } from "@/components/amount-input";
+import { SearchableSelect } from "@/components/searchable-select";
 import { formatAmountDisplay } from "@/lib/amount";
 
 type Option = { id: string; name: string; role?: string };
@@ -266,14 +267,15 @@ export function CustomerProjectCard({
                 className={input}
                 aria-label={c.projectEndDate}
               />
-              <select name="partnerId" defaultValue={project.partnerId ?? ""} className={`${input} md:col-span-3`}>
-                <option value="">{c.deliveryPartnerNone}</option>
-                {partners.map((pp) => (
-                  <option key={pp.id} value={pp.id}>
-                    {pp.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                name="partnerId"
+                defaultValue={project.partnerId ?? ""}
+                emptyLabel={c.deliveryPartnerNone}
+                className={input}
+                containerClassName="md:col-span-3"
+                aria-label={c.deliveryPartnerNone}
+                options={partners.map((pp) => ({ value: pp.id, label: pp.name }))}
+              />
               <div className="col-span-2 md:col-span-3 flex justify-end gap-2">
                 <button type="button" onClick={() => setEditing(false)} className="text-xs text-slate-500 hover:text-slate-700">
                   {m.common.cancel}

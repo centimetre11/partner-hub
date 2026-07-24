@@ -13,6 +13,7 @@ import {
   type AgendaSubjectKind,
 } from "@/lib/presales-meeting/subject";
 import { useMessages } from "@/lib/i18n/context";
+import { SearchableSelect } from "@/components/searchable-select";
 import { formatMsg } from "@/lib/i18n/messages";
 import {
   defaultFactsRangeDates,
@@ -623,23 +624,19 @@ export function CreatePresalesMeetingForm({
                           >
                             <label className="block space-y-1">
                               <span className="text-[11px] text-slate-500">{t.customer}</span>
-                              <select
+                              <SearchableSelect
                                 value={row.customerId}
-                                onChange={(e) =>
+                                onChange={(value) =>
                                   updateManual(userId, row.key, {
-                                    customerId: e.target.value,
+                                    customerId: value,
                                     linkKey: "",
                                   })
                                 }
+                                emptyLabel={t.selectCustomer}
                                 className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm"
-                              >
-                                <option value="">{t.selectCustomer}</option>
-                                {customers.map((c) => (
-                                  <option key={c.id} value={c.id}>
-                                    {c.name}
-                                  </option>
-                                ))}
-                              </select>
+                                aria-label={t.customer}
+                                options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                              />
                             </label>
                             <label className="block space-y-1">
                               <span className="text-[11px] text-slate-500">{t.optionalLink}</span>

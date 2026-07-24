@@ -7,6 +7,7 @@ import { useMessages, useLocale } from "@/lib/i18n/context";
 import { OpportunityProcessFields } from "@/components/opportunity-process-fields";
 import { AmountInput } from "@/components/amount-input";
 import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { CrmOpportunityDraft } from "@/lib/crm-mcp-map";
 
 type Option = { id: string; name: string; crmCustomerId?: string | null };
@@ -106,23 +107,15 @@ export function AddOpportunityForm({
               {draft?.crmOpportunityId && (
                 <input type="hidden" name="crmOpportunityId" value={draft.crmOpportunityId} />
               )}
-              <select
+              <SearchableSelect
                 name="customerId"
-                required
                 value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
+                onChange={setCustomerId}
+                placeholder={o.selectCustomer}
                 className={input}
                 aria-label={o.selectCustomer}
-              >
-                <option value="" disabled>
-                  {o.selectCustomer}
-                </option>
-                {customers.map((cust) => (
-                  <option key={cust.id} value={cust.id}>
-                    {cust.name}
-                  </option>
-                ))}
-              </select>
+                options={customers.map((cust) => ({ value: cust.id, label: cust.name }))}
+              />
               <input
                 name="name"
                 required
@@ -167,14 +160,14 @@ export function AddOpportunityForm({
                   <option value="PROJECT">{c.dealTypeProject}</option>
                   <option value="PRODUCT">{c.dealTypeProduct}</option>
                 </select>
-                <select name="partnerId" defaultValue="" className={input} aria-label={o.colPartner}>
-                  <option value="">{c.viaPartnerNone}</option>
-                  {partners.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  name="partnerId"
+                  defaultValue=""
+                  emptyLabel={c.viaPartnerNone}
+                  className={input}
+                  aria-label={o.colPartner}
+                  options={partners.map((p) => ({ value: p.id, label: p.name }))}
+                />
               </div>
               <textarea
                 name="notes"

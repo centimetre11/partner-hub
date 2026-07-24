@@ -8,6 +8,7 @@ import { CreateFromCrmButton } from "@/components/create-from-crm-button";
 import { END_CUSTOMER_WHERE } from "@/lib/customer-filters";
 import { nameContainsWhere } from "@/lib/name-search";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { SearchableSelect } from "@/components/searchable-select";
 import { getTaxonomyOptionsMany, loadTaxonomyLabelMaps, labelFromMap } from "@/lib/taxonomy";
 import { classifyCustomers, type CustomerBucketMeta, type GrowthProbability } from "@/lib/customer-bucket";
 import { toArrContractInput } from "@/lib/arr";
@@ -401,18 +402,15 @@ export default async function CustomersPage({
             <option value="B">{pe.tierB}</option>
             <option value="C">{pe.tierC}</option>
           </select>
-          <select
+          <SearchableSelect
             name="partner"
             defaultValue={sp.partner ?? ""}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
-          >
-            <option value="">{c.allPartners}</option>
-            {partners.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel={c.allPartners}
+            fullWidth={false}
+            className="w-44 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+            aria-label={c.allPartners}
+            options={partners.map((p) => ({ value: p.id, label: p.name }))}
+          />
           <select
             name="owner"
             defaultValue={sp.owner ?? ""}

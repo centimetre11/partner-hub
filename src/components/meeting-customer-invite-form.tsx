@@ -18,6 +18,7 @@ import {
   formatTimeZoneLabel,
 } from "@/lib/meeting-datetime";
 import { resolveSubmitTimeZone, useClientTimeZone } from "@/lib/use-client-timezone";
+import { SearchableSelect, type SearchableOption } from "@/components/searchable-select";
 
 export type MeetingCustomerOption = {
   id: string;
@@ -64,6 +65,7 @@ export function MeetingCustomerInviteForm({
   wecomScheduleConfigured,
   boundUsers,
   customers,
+  partners = [],
   onBusyChange,
 }: {
   currentUserId: string;
@@ -72,6 +74,7 @@ export function MeetingCustomerInviteForm({
   wecomScheduleConfigured: boolean;
   boundUsers: BoundUserWithEmail[];
   customers: MeetingCustomerOption[];
+  partners?: MeetingCustomerOption[];
   /** 创建会议 / 打开企业邮进行中时通知父级，避免抽屉被误关导致状态丢失 */
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -87,7 +90,7 @@ export function MeetingCustomerInviteForm({
   const [selected, setSelected] = useState<Set<string>>(() => new Set([currentUserId]));
   const [notifyAttendees, setNotifyAttendees] = useState(true);
 
-  const [customerId, setCustomerId] = useState("");
+  const [inviteeRef, setInviteeRef] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [contactName, setContactName] = useState("");
   const [colleagueEmails, setColleagueEmails] = useState("");
@@ -140,9 +143,37 @@ export function MeetingCustomerInviteForm({
     return fd;
   }
 
-  const selectedCustomer = useMemo(
-    () => customers.find((c) => c.id === customerId) ?? null,
-    [customers, customerId],
+  const inviteeLookup = useMemo(() => {
+    const map = new Map<string, MeetingCustomerOption>();
+    for (const p of partners) map.set(`partner:${p.id}`, p);
+    for (const c of customers) map.set(`customer:${c.id}`, c);
+    return map;
+  }, [partners, customers]);
+
+  const inviteeOptions = useMemo<SearchableOption[]>(() => {
+    const opts: SearchableOption[] = [];
+    for (const p of partners) {
+      opts.push({
+        value: `partner:${p.id}`,
+        label: p.name,
+        hint: p.contactName ?? undefined,
+        group: s.inviteePartnersGroup,
+      });
+    }
+    for (const c of customers) {
+      opts.push({
+        value: `customer:${c.id}`,
+        label: c.name,
+        hint: c.contactName ?? undefined,
+        group: s.inviteeCustomersGroup,
+      });
+    }
+    return opts;
+  }, [partners, customers, s.inviteePartnersGroup, s.inviteeCustomersGroup]);
+
+  const selectedInvitee = useMemo(
+    () => inviteeLookup.get(inviteeRef) ?? null,
+    [inviteeLookup, inviteeRef],
   );
 
   const customerEmailOk = isValidEmail(customerEmail);
@@ -162,12 +193,12 @@ export function MeetingCustomerInviteForm({
     };
   }, []);
 
-  function onCustomerSelect(id: string) {
-    setCustomerId(id);
-    const c = customers.find((x) => x.id === id);
-    if (c) {
-      setCustomerEmail(c.contactEmail?.trim() ?? "");
-      setContactName(c.contactName?.trim() ?? "");
+  function onInviteeSelect(ref: string) {
+    setInviteeRef(ref);
+    const entity = inviteeLookup.get(ref);
+    if (entity) {
+      if (entity.contactEmail?.trim()) setCustomerEmail(entity.contactEmail.trim());
+      if (entity.contactName?.trim()) setContactName(entity.contactName.trim());
     }
   }
 
@@ -228,10 +259,15 @@ export function MeetingCustomerInviteForm({
     const customerEmailFromAi = data.customerEmails?.[0]?.trim();
     if (customerEmailFromAi) {
       setCustomerEmail(customerEmailFromAi);
-      const matched = customers.find(
-        (c) => c.contactEmail?.trim().toLowerCase() === customerEmailFromAi.toLowerCase(),
+      const target = customerEmailFromAi.toLowerCase();
+      const matchedCustomer = customers.find(
+        (c) => c.contactEmail?.trim().toLowerCase() === target,
       );
-      if (matched) setCustomerId(matched.id);
+      const matchedPartner = partners.find(
+        (p) => p.contactEmail?.trim().toLowerCase() === target,
+      );
+      if (matchedCustomer) setInviteeRef(`customer:${matchedCustomer.id}`);
+      else if (matchedPartner) setInviteeRef(`partner:${matchedPartner.id}`);
     }
     if (data.colleagueEmails?.length) {
       const existing = parseEmailRecipients(colleagueEmails);
@@ -375,7 +411,7 @@ export function MeetingCustomerInviteForm({
       cc,
       subject,
       meetingTitle: subject,
-      customerName: selectedCustomer?.name ?? (contactName.trim() || customerEmail.trim()),
+      customerName: selectedInvitee?.name ?? (contactName.trim() || customerEmail.trim()),
       contactName: contactName.trim() || null,
       startLocal: startAt,
       endLocal: endAt,
@@ -784,20 +820,17 @@ export function MeetingCustomerInviteForm({
 
       <label className="block space-y-1">
         <span className="text-xs text-slate-500">{invite.customer}</span>
-        {customers.length > 0 && (
-          <select
-            value={customerId}
-            onChange={(e) => onCustomerSelect(e.target.value)}
-            className={`${input} mb-2`}
-          >
-            <option value="">{invite.customerPlaceholder}</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {c.contactName ? ` · ${c.contactName}` : ""}
-              </option>
-            ))}
-          </select>
+        {inviteeOptions.length > 0 && (
+          <div className="mb-2">
+            <SearchableSelect
+              options={inviteeOptions}
+              value={inviteeRef}
+              onChange={onInviteeSelect}
+              emptyLabel={invite.customerPlaceholder}
+              className={input}
+              aria-label={invite.customer}
+            />
+          </div>
         )}
         <span className="text-xs text-slate-500">{invite.customerEmail}</span>
         <input

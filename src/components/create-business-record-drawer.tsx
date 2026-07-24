@@ -6,6 +6,7 @@ import { BusinessRecordForm } from "@/components/business-record-form";
 import { useMessages } from "@/lib/i18n/context";
 import type { OwnerRef } from "@/lib/owner";
 import { parseOwnerRef } from "@/lib/todo-owner-select";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type Option = { id: string; name: string };
 
@@ -100,32 +101,25 @@ export function CreateBusinessRecordDrawer({
             <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
               <label className="block min-w-0">
                 <span className="mb-1 block text-xs text-slate-500">{q.businessRecordSelectTarget}</span>
-                <select
+                <SearchableSelect
                   value={ownerRef}
-                  onChange={(e) => setOwnerRef(e.target.value)}
+                  onChange={setOwnerRef}
+                  emptyLabel={q.businessRecordNone}
                   className={input}
-                  autoFocus
-                >
-                  <option value="">{q.businessRecordNone}</option>
-                  {partners.length > 0 && (
-                    <optgroup label={q.businessRecordPartnersGroup}>
-                      {partners.map((p) => (
-                        <option key={p.id} value={`partner:${p.id}`}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {customers.length > 0 && (
-                    <optgroup label={q.businessRecordCustomersGroup}>
-                      {customers.map((c) => (
-                        <option key={c.id} value={`customer:${c.id}`}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
+                  aria-label={q.businessRecordSelectTarget}
+                  options={[
+                    ...partners.map((p) => ({
+                      value: `partner:${p.id}`,
+                      label: p.name,
+                      group: q.businessRecordPartnersGroup,
+                    })),
+                    ...customers.map((c) => ({
+                      value: `customer:${c.id}`,
+                      label: c.name,
+                      group: q.businessRecordCustomersGroup,
+                    })),
+                  ]}
+                />
               </label>
 
               {owner ? (

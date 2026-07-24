@@ -18,6 +18,7 @@ import {
   opportunityStatusTone,
 } from "@/lib/opportunity-status";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ListPagination } from "@/components/list-pagination";
 import { nameContainsWhere } from "@/lib/name-search";
 import { parseListPage } from "@/lib/list-pagination";
@@ -144,30 +145,24 @@ export default async function OpportunitiesPage({
               </option>
             ))}
           </select>
-          <select
+          <SearchableSelect
             name="customer"
             defaultValue={sp.customer ?? ""}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
-          >
-            <option value="">{o.allCustomers}</option>
-            {customers.map((cust) => (
-              <option key={cust.id} value={cust.id}>
-                {cust.name}
-              </option>
-            ))}
-          </select>
-          <select
+            emptyLabel={o.allCustomers}
+            fullWidth={false}
+            className="w-44 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+            aria-label={o.allCustomers}
+            options={customers.map((cust) => ({ value: cust.id, label: cust.name }))}
+          />
+          <SearchableSelect
             name="partner"
             defaultValue={sp.partner ?? ""}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
-          >
-            <option value="">{o.allPartners}</option>
-            {partners.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel={o.allPartners}
+            fullWidth={false}
+            className="w-44 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+            aria-label={o.allPartners}
+            options={partners.map((p) => ({ value: p.id, label: p.name }))}
+          />
           <select
             name="dealType"
             defaultValue={sp.dealType ?? ""}

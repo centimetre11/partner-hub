@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/session";
 import { PageHeader } from "@/components/ui";
 import { upsertDocumentAction } from "@/lib/content-actions";
 import { RichEditor } from "@/components/rich-editor";
+import { SearchableSelect } from "@/components/searchable-select";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
 
 export default async function NewDocumentPage({
@@ -39,12 +40,14 @@ export default async function NewDocumentPage({
               <option value="FINAL">{m.common.final}</option>
             </select>
           </div>
-          <select name="partnerId" defaultValue={sp.partnerId ?? ""} className={input}>
-            <option value="">{m.common.noPartner}</option>
-            {partners.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            name="partnerId"
+            defaultValue={sp.partnerId ?? ""}
+            emptyLabel={m.common.noPartner}
+            className={input}
+            aria-label={m.common.noPartner}
+            options={partners.map((p) => ({ value: p.id, label: p.name }))}
+          />
           {sp.solutionId && <input type="hidden" name="solutionId" value={sp.solutionId} />}
           <RichEditor />
         </div>

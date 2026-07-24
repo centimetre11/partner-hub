@@ -8,6 +8,7 @@ import { AiAddButton } from "@/components/ai-add-button";
 import { updateCustomerAction, addCustomerPartnerAction, removeCustomerPartnerAction } from "@/lib/customer-actions";
 import { TaxonomySelectField } from "@/components/taxonomy-fields";
 import { CountryCityFields } from "@/components/country-city-fields";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { profileEnrichSeedMessage } from "@/lib/intake-profile-enrich";
 import { useMessages, useLabels, useLocale } from "@/lib/i18n/context";
@@ -182,14 +183,14 @@ export function CustomerProfilePanel({
               )}
               {availablePartners.length > 0 && (
                 <form action={addCustomerPartnerAction.bind(null, customer.id)} className="space-y-2">
-                  <select name="partnerId" defaultValue="" className={input} required>
-                    <option value="" disabled>{c.selectPartner}</option>
-                    {availablePartners.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="partnerId"
+                    defaultValue=""
+                    placeholder={c.selectPartner}
+                    className={input}
+                    aria-label={c.selectPartner}
+                    options={availablePartners.map((p) => ({ value: p.id, label: p.name }))}
+                  />
                   <button className="rounded-lg bg-slate-900 text-white px-3 py-1.5 text-sm hover:bg-slate-800">
                     {c.bindPartner}
                   </button>

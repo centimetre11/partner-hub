@@ -8,6 +8,7 @@ import {
   unlinkDocumentAssetAction,
 } from "@/lib/content-actions";
 import { RichEditor } from "@/components/rich-editor";
+import { SearchableSelect } from "@/components/searchable-select";
 import { DocumentAssetUpload } from "@/components/document-asset-upload";
 import { AssetCard } from "@/components/asset-link";
 import { getServerI18n, labelConstants } from "@/lib/server-i18n";
@@ -52,12 +53,14 @@ export default async function DocumentDetailPage({ params }: { params: Promise<{
               <option value="FINAL">{m.common.final}</option>
             </select>
           </div>
-          <select name="partnerId" defaultValue={doc.partnerId ?? ""} className={input}>
-            <option value="">{m.common.noPartner}</option>
-            {partners.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            name="partnerId"
+            defaultValue={doc.partnerId ?? ""}
+            emptyLabel={m.common.noPartner}
+            className={input}
+            aria-label={m.common.noPartner}
+            options={partners.map((p) => ({ value: p.id, label: p.name }))}
+          />
           <RichEditor defaultValue={doc.content} />
         </div>
         <button className="rounded-lg bg-slate-900 text-white px-6 py-2.5 text-sm font-medium hover:bg-slate-800">{m.common.save}</button>

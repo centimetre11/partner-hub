@@ -396,6 +396,7 @@ export function MeetingCustomerInviteScheduler({
   wecomScheduleConfigured,
   boundUsers,
   customers,
+  partners = [],
   buttonClassName,
   buttonLabel,
   buttonSuffix,
@@ -406,6 +407,7 @@ export function MeetingCustomerInviteScheduler({
   wecomScheduleConfigured: boolean;
   boundUsers: BoundUserWithEmail[];
   customers: MeetingCustomerOption[];
+  partners?: MeetingCustomerOption[];
   buttonClassName?: string;
   buttonLabel?: string;
   buttonSuffix?: React.ReactNode;
@@ -443,6 +445,7 @@ export function MeetingCustomerInviteScheduler({
           wecomScheduleConfigured={wecomScheduleConfigured}
           boundUsers={boundUsers}
           customers={customers}
+          partners={partners}
           onBusyChange={setFormBusy}
         />
       </MobileDrawer>

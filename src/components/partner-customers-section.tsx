@@ -3,6 +3,7 @@ import { Badge, Card, EmptyState, fmtDate } from "@/components/ui";
 import { NavLink } from "@/components/nav-link";
 import { CustomerAiIntakeButton } from "@/components/customer-ai-intake-button";
 import { OpportunityProcessBadges } from "@/components/opportunity-process-badges";
+import { SearchableSelect } from "@/components/searchable-select";
 import {
   bindCustomerToPartnerAction,
   unbindCustomerFromPartnerAction,
@@ -274,12 +275,15 @@ export function PartnerCustomersSection({
       <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
         {canBind ? (
           <form action={bindCustomerToPartnerAction.bind(null, partnerId)} className="flex items-center gap-1.5">
-            <select name="customerId" defaultValue="" className={selectInput} required aria-label={copy.bindExisting}>
-              <option value="" disabled>{copy.selectCustomer}</option>
-              {unboundCustomers.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              name="customerId"
+              defaultValue=""
+              placeholder={copy.selectCustomer}
+              fullWidth={false}
+              className={selectInput}
+              aria-label={copy.bindExisting}
+              options={unboundCustomers.map((u) => ({ value: u.id, label: u.name }))}
+            />
             <button type="submit" className={actionBtn}>{copy.bind}</button>
           </form>
         ) : (

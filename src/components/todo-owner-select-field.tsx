@@ -1,5 +1,9 @@
+"use client";
+
+import { useMemo } from "react";
 import type { TodoOwnerOption } from "@/lib/todo-owner-select";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
+import { SearchableSelect, type SearchableOption } from "@/components/searchable-select";
 
 export function TodoOwnerSelectField({
   partners,
@@ -22,30 +26,26 @@ export function TodoOwnerSelectField({
   className?: string;
   defaultValue?: string;
 }) {
+  const options = useMemo<SearchableOption[]>(() => {
+    const opts: SearchableOption[] = [];
+    for (const p of partners)
+      opts.push({ value: encodeTodoOwnerRef("partner", p.id), label: p.name, group: partnersGroupLabel });
+    for (const c of customers)
+      opts.push({ value: encodeTodoOwnerRef("customer", c.id), label: c.name, group: customersGroupLabel });
+    return opts;
+  }, [partners, customers, partnersGroupLabel, customersGroupLabel]);
+
   return (
     <label className="block min-w-0">
       <span className="mb-1 block text-xs text-slate-500">{label}</span>
-      <select name={name} defaultValue={defaultValue} className={className}>
-        <option value="">{noneLabel}</option>
-        {partners.length > 0 && (
-          <optgroup label={partnersGroupLabel}>
-            {partners.map((p) => (
-              <option key={p.id} value={encodeTodoOwnerRef("partner", p.id)}>
-                {p.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {customers.length > 0 && (
-          <optgroup label={customersGroupLabel}>
-            {customers.map((c) => (
-              <option key={c.id} value={encodeTodoOwnerRef("customer", c.id)}>
-                {c.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
+      <SearchableSelect
+        name={name}
+        defaultValue={defaultValue}
+        options={options}
+        emptyLabel={noneLabel}
+        className={className}
+        aria-label={label}
+      />
     </label>
   );
 }

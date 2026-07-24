@@ -10,6 +10,7 @@ import {
 import type { BuilderDeliveryPrefs } from "@/lib/builder-context-prompt";
 import type { AutomationBuilderDraft } from "@/lib/automation-builder-types";
 import { useLocale, useMessages } from "@/lib/i18n";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type WecomOption = { chatId: string; label: string | null; partnerName: string | null };
 type EmailOption = { id: string; name: string; email: string };
@@ -219,19 +220,15 @@ export function BuilderDeliveryBar({
       {showPartner && (
         <div>
           <label className="block text-[10px] font-medium text-slate-500 mb-1">{a.monitorPartnerLabel}</label>
-          <select
+          <SearchableSelect
             className={selectCls}
             value={prefs.partnerId}
             disabled={disabled}
-            onChange={(e) => onPartnerChange!(e.target.value)}
-          >
-            <option value="">{a.monitorPartnerAll}</option>
-            {(partners ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => onPartnerChange!(value)}
+            emptyLabel={a.monitorPartnerAll}
+            aria-label={a.monitorPartnerLabel}
+            options={(partners ?? []).map((p) => ({ value: p.id, label: p.name }))}
+          />
         </div>
       )}
       <div>

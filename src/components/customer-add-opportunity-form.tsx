@@ -7,6 +7,7 @@ import { OpportunityStatusWithOutcome } from "@/components/opportunity-outcome-f
 import { AmountInput } from "@/components/amount-input";
 import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
 import { PendingButton } from "@/components/pending-button";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { CrmOpportunityDraft } from "@/lib/crm-mcp-map";
 import type { OwnerRef } from "@/lib/owner";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
@@ -138,14 +139,14 @@ export function CustomerAddOpportunityForm({
           <option value="PROJECT">{c.dealTypeProject}</option>
           <option value="PRODUCT">{c.dealTypeProduct}</option>
         </select>
-        <select name="partnerId" defaultValue={defaultPartnerId ?? ""} className={input}>
-          <option value="">{c.viaPartnerNone}</option>
-          {partners.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          name="partnerId"
+          defaultValue={defaultPartnerId ?? ""}
+          emptyLabel={c.viaPartnerNone}
+          className={input}
+          aria-label={c.viaPartnerNone}
+          options={partners.map((p) => ({ value: p.id, label: p.name }))}
+        />
         <textarea
           name="notes"
           rows={2}

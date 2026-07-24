@@ -8,6 +8,7 @@ import { TaxonomySelectField } from "@/components/taxonomy-fields";
 import { CountryCityFields } from "@/components/country-city-fields";
 import type { TaxonomyOptionRow } from "@/lib/taxonomy";
 import { useMessages } from "@/lib/i18n/context";
+import { SearchableSelect } from "@/components/searchable-select";
 import { PARTNER_TIERS } from "@/lib/tier";
 
 type Option = { id: string; name: string; role?: string };
@@ -100,12 +101,14 @@ export function AddCustomerForm({
               <input name="website" placeholder={c.websitePlaceholder} className={input} />
               <input name="scale" placeholder={c.scalePlaceholder} className={input} />
               <div className="flex gap-2">
-                <select name="partnerId" defaultValue={defaultPartnerId ?? ""} className={input} aria-label={c.partnerLabel}>
-                  <option value="">{c.noPartner}</option>
-                  {partners.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  name="partnerId"
+                  defaultValue={defaultPartnerId ?? ""}
+                  emptyLabel={c.noPartner}
+                  className={input}
+                  aria-label={c.partnerLabel}
+                  options={partners.map((p) => ({ value: p.id, label: p.name }))}
+                />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <select name="ownerId" defaultValue="" className={input} aria-label={c.salesOwnerLabel}>

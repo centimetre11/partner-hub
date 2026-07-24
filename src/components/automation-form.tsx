@@ -23,6 +23,7 @@ import {
 } from "@/lib/automation-query";
 import { useLocale, useMessages } from "@/lib/i18n/context";
 import { AutomationPageHeader } from "@/components/automation-page-header";
+import { SearchableSelect } from "@/components/searchable-select";
 import { AutomationRunHistory, type AutomationRunItem } from "@/components/automation-run-history";
 import { RunButton } from "@/app/(app)/agents/[id]/run-button";
 
@@ -364,24 +365,28 @@ export function AutomationForm({
                   {scope === "partner" && (
                     <div>
                       <label className={labelCls}>{aq.partnerLabel}</label>
-                      <select className={inputCls} value={partnerId} onChange={(e) => setPartnerId(e.target.value)}>
-                        <option value="">{aq.partnerPlaceholder}</option>
-                        {partnerOpts.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        className={inputCls}
+                        value={partnerId}
+                        onChange={setPartnerId}
+                        emptyLabel={aq.partnerPlaceholder}
+                        aria-label={aq.partnerLabel}
+                        options={partnerOpts.map((p) => ({ value: p.id, label: p.name }))}
+                      />
                     </div>
                   )}
 
                   {scope === "customer" && (
                     <div>
                       <label className={labelCls}>{aq.customerLabel}</label>
-                      <select className={inputCls} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                        <option value="">{aq.customerPlaceholder}</option>
-                        {customers.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
+                      <SearchableSelect
+                        className={inputCls}
+                        value={customerId}
+                        onChange={setCustomerId}
+                        emptyLabel={aq.customerPlaceholder}
+                        aria-label={aq.customerLabel}
+                        options={customers.map((c) => ({ value: c.id, label: c.name }))}
+                      />
                     </div>
                   )}
 

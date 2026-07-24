@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import { Badge, EmptyState, PageHeader, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ListPagination } from "@/components/list-pagination";
 import { nameContainsWhere } from "@/lib/name-search";
 import { parseListPage } from "@/lib/list-pagination";
@@ -177,18 +178,15 @@ export default async function ContractsPage({
               </option>
             ))}
           </select>
-          <select
+          <SearchableSelect
             name="customer"
             defaultValue={sp.customer ?? ""}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm max-w-[12rem]"
-          >
-            <option value="">{t.allCustomers}</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel={t.allCustomers}
+            fullWidth={false}
+            className="w-44 max-w-[12rem] rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+            aria-label={t.allCustomers}
+            options={customers.map((c) => ({ value: c.id, label: c.name }))}
+          />
           <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-600">
             <input type="checkbox" name="arrOnly" value="1" defaultChecked={arrOnly} className="rounded" />
             {t.arrOnly}

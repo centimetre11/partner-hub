@@ -30,6 +30,7 @@ import {
   type ContractLineItemInput,
 } from "@/lib/contract-line-items";
 import { ContractAiExtract } from "@/components/contract-ai-extract";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { ContractExtractResult } from "@/lib/contract-extract-types";
 import { termYearsFromDateRange } from "@/lib/arr";
 import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
@@ -576,14 +577,14 @@ export function CustomerContractForm({
           aria-label={copy.contractRenewsAt}
         />
       </label>
-      <select name="partnerId" defaultValue={defaults?.partnerId ?? ""} className={inputClassName}>
-        <option value="">{copy.viaPartnerNone}</option>
-        {partners.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
+      <SearchableSelect
+        name="partnerId"
+        defaultValue={defaults?.partnerId ?? ""}
+        emptyLabel={copy.viaPartnerNone}
+        className={inputClassName}
+        aria-label={copy.viaPartnerNone}
+        options={partners.map((p) => ({ value: p.id, label: p.name }))}
+      />
       <select
         name="opportunityId"
         value={opportunityId}

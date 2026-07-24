@@ -6,6 +6,7 @@ import { createProjectFromListAction } from "@/lib/actions";
 import { useMessages, useLocale } from "@/lib/i18n/context";
 import { AmountInput } from "@/components/amount-input";
 import { CrmImportPicker, type CrmImportResult } from "@/components/crm-import-picker";
+import { SearchableSelect } from "@/components/searchable-select";
 import type { CrmProjectDraft } from "@/lib/crm-mcp-map";
 
 type Option = { id: string; name: string; crmCustomerId?: string | null };
@@ -108,23 +109,15 @@ export function AddProjectForm({
               {draft?.crmPrjNumber && (
                 <input type="hidden" name="crmPrjNumber" value={draft.crmPrjNumber} />
               )}
-              <select
+              <SearchableSelect
                 name="customerId"
-                required
                 value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
+                onChange={setCustomerId}
+                placeholder={p.selectCustomer}
                 className={input}
                 aria-label={p.selectCustomer}
-              >
-                <option value="" disabled>
-                  {p.selectCustomer}
-                </option>
-                {customers.map((cust) => (
-                  <option key={cust.id} value={cust.id}>
-                    {cust.name}
-                  </option>
-                ))}
-              </select>
+                options={customers.map((cust) => ({ value: cust.id, label: cust.name }))}
+              />
               <input
                 name="name"
                 required
@@ -168,14 +161,14 @@ export function AddProjectForm({
                   aria-label={c.projectEndDate}
                 />
               </div>
-              <select name="partnerId" defaultValue="" className={input} aria-label={p.colPartner}>
-                <option value="">{c.deliveryPartnerNone}</option>
-                {partners.map((pp) => (
-                  <option key={pp.id} value={pp.id}>
-                    {pp.name}
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect
+                name="partnerId"
+                defaultValue=""
+                emptyLabel={c.deliveryPartnerNone}
+                className={input}
+                aria-label={p.colPartner}
+                options={partners.map((pp) => ({ value: pp.id, label: pp.name }))}
+              />
               {draft?.notes ? (
                 <textarea
                   name="notes"

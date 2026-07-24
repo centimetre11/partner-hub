@@ -63,6 +63,7 @@ export function DashboardQuickActions({
   partners,
   customers,
   inviteCustomers,
+  invitePartners = [],
   users,
   googleMeetConnected,
   wecomScheduleConfigured,
@@ -73,6 +74,7 @@ export function DashboardQuickActions({
   partners: Option[];
   customers: Option[];
   inviteCustomers: MeetingCustomerOption[];
+  invitePartners?: MeetingCustomerOption[];
   users: Option[];
   googleMeetConnected: boolean;
   wecomScheduleConfigured: boolean;
@@ -156,6 +158,7 @@ export function DashboardQuickActions({
           wecomScheduleConfigured={wecomScheduleConfigured}
           boundUsers={boundUsers}
           customers={inviteCustomers}
+          partners={invitePartners}
           buttonClassName={cardActionBtn}
           buttonLabel={openLabel}
           buttonSuffix={<ChevronRightIcon />}

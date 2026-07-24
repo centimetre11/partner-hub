@@ -7,6 +7,7 @@ import { createTodoAction } from "@/lib/actions";
 import { useMessages } from "@/lib/i18n/context";
 import type { OwnerRef } from "@/lib/owner";
 import { appendTodoOwnerToFormData, encodeTodoOwnerRef, parseOwnerRef, parseTodoOwnerRef } from "@/lib/todo-owner-select";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type Option = { id: string; name: string };
 
@@ -197,27 +198,26 @@ export function MobileTodoCapture({
 
           <label className="block min-w-0">
             <span className="mb-1 block text-xs font-medium text-slate-500">{labels.relatedTo}</span>
-            <select name="ownerRef" value={ownerRef} onChange={(e) => setOwnerRef(e.target.value)} className={input}>
-              <option value="">{labels.none}</option>
-              {partners.length > 0 && (
-                <optgroup label={labels.partnersGroup}>
-                  {partners.map((item) => (
-                    <option key={item.id} value={encodeTodoOwnerRef("partner", item.id)}>
-                      {item.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {customers.length > 0 && (
-                <optgroup label={labels.customersGroup}>
-                  {customers.map((item) => (
-                    <option key={item.id} value={encodeTodoOwnerRef("customer", item.id)}>
-                      {item.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            <SearchableSelect
+              name="ownerRef"
+              value={ownerRef}
+              onChange={setOwnerRef}
+              emptyLabel={labels.none}
+              className={input}
+              aria-label={labels.relatedTo}
+              options={[
+                ...partners.map((item) => ({
+                  value: encodeTodoOwnerRef("partner", item.id),
+                  label: item.name,
+                  group: labels.partnersGroup,
+                })),
+                ...customers.map((item) => ({
+                  value: encodeTodoOwnerRef("customer", item.id),
+                  label: item.name,
+                  group: labels.customersGroup,
+                })),
+              ]}
+            />
           </label>
 
           {customerId && hasLinkOptions && (
@@ -349,27 +349,25 @@ export function MobileBusinessRecordCapture({
         <div className="min-w-0 space-y-3">
           <label className="block min-w-0">
             <span className="mb-1 block text-xs font-medium text-slate-500">{labels.selectTarget}</span>
-            <select value={ownerRef} onChange={(e) => setOwnerRef(e.target.value)} className={input}>
-              <option value="">{labels.none}</option>
-              {partners.length > 0 && (
-                <optgroup label={labels.partnersGroup}>
-                  {partners.map((item) => (
-                    <option key={item.id} value={`partner:${item.id}`}>
-                      {item.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {customers.length > 0 && (
-                <optgroup label={labels.customersGroup}>
-                  {customers.map((item) => (
-                    <option key={item.id} value={`customer:${item.id}`}>
-                      {item.name}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            <SearchableSelect
+              value={ownerRef}
+              onChange={setOwnerRef}
+              emptyLabel={labels.none}
+              className={input}
+              aria-label={labels.selectTarget}
+              options={[
+                ...partners.map((item) => ({
+                  value: `partner:${item.id}`,
+                  label: item.name,
+                  group: labels.partnersGroup,
+                })),
+                ...customers.map((item) => ({
+                  value: `customer:${item.id}`,
+                  label: item.name,
+                  group: labels.customersGroup,
+                })),
+              ]}
+            />
           </label>
 
           {owner ? (

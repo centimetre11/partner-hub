@@ -164,6 +164,7 @@ async function WorkOverview({ userId, userName, now, todoView, m, bcp47, labels 
         partners={partners}
         customers={customers}
         inviteCustomers={customers}
+        invitePartners={meetingCtx.invitePartners}
         users={users}
         googleMeetConnected={meetingCtx.googleMeetConnected}
         wecomScheduleConfigured={meetingCtx.wecomScheduleConfigured}

@@ -19,6 +19,7 @@ import { getWecomChatForCustomer } from "@/lib/wecom-chats";
 import { CustomerProfilePanel } from "@/components/customer-profile-panel";
 import { CustomerStockPanel } from "@/components/customer-stock-panel";
 import { CustomerProjectCard } from "@/components/customer-project-card";
+import { SearchableSelect } from "@/components/searchable-select";
 import { CustomerTodoRow } from "@/components/customer-todo-row";
 import { CreateTodoDrawer } from "@/components/create-todo-drawer";
 import { encodeTodoOwnerRef } from "@/lib/todo-owner-select";
@@ -509,14 +510,15 @@ async function CustomerTabContent({
                     <option value="PROJECT">{c.dealTypeProject}</option>
                     <option value="PRODUCT">{c.dealTypeProduct}</option>
                   </select>
-                  <select name="partnerId" defaultValue={o.partnerId ?? ""} className={`${input} md:col-span-3`}>
-                    <option value="">{c.viaPartnerNone}</option>
-                    {partners.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="partnerId"
+                    defaultValue={o.partnerId ?? ""}
+                    emptyLabel={c.viaPartnerNone}
+                    className={input}
+                    containerClassName="md:col-span-3"
+                    aria-label={c.viaPartnerNone}
+                    options={partners.map((p) => ({ value: p.id, label: p.name }))}
+                  />
                   <textarea
                     name="notes"
                     rows={2}

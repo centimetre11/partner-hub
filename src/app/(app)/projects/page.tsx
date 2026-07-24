@@ -5,6 +5,7 @@ import { Badge, PageHeader, EmptyState, fmtDate } from "@/components/ui";
 import { getServerI18n } from "@/lib/server-i18n";
 import { AddProjectForm } from "./add-project-form";
 import { InstantSearchInput } from "@/components/instant-search-input";
+import { SearchableSelect } from "@/components/searchable-select";
 import { ListPagination } from "@/components/list-pagination";
 import { nameContainsWhere } from "@/lib/name-search";
 import { parseListPage } from "@/lib/list-pagination";
@@ -139,30 +140,24 @@ export default async function ProjectsPage({
             <option value="GOLIVE">{c.phaseGOLIVE}</option>
             <option value="MAINTENANCE">{c.phaseMAINTENANCE}</option>
           </select>
-          <select
+          <SearchableSelect
             name="customer"
             defaultValue={sp.customer ?? ""}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
-          >
-            <option value="">{p.allCustomers}</option>
-            {customers.map((cust) => (
-              <option key={cust.id} value={cust.id}>
-                {cust.name}
-              </option>
-            ))}
-          </select>
-          <select
+            emptyLabel={p.allCustomers}
+            fullWidth={false}
+            className="w-44 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+            aria-label={p.allCustomers}
+            options={customers.map((cust) => ({ value: cust.id, label: cust.name }))}
+          />
+          <SearchableSelect
             name="partner"
             defaultValue={sp.partner ?? ""}
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
-          >
-            <option value="">{p.allPartners}</option>
-            {partners.map((pp) => (
-              <option key={pp.id} value={pp.id}>
-                {pp.name}
-              </option>
-            ))}
-          </select>
+            emptyLabel={p.allPartners}
+            fullWidth={false}
+            className="w-44 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm"
+            aria-label={p.allPartners}
+            options={partners.map((pp) => ({ value: pp.id, label: pp.name }))}
+          />
           <select
             name="owner"
             defaultValue={sp.owner ?? ""}

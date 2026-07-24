@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { updateTodoAction } from "@/lib/actions";
 import { useMessages } from "@/lib/i18n/context";
+import { SearchableSelect } from "@/components/searchable-select";
 
 type TodoData = {
   id: string;
@@ -138,14 +139,14 @@ export function TodoEditButton({
               {partners && (
                 <div>
                   <label className="mb-1 block text-xs text-slate-500">Partner</label>
-                  <select name="partnerId" defaultValue={todo.partnerId ?? ""} className={input}>
-                    <option value="">No partner</option>
-                    {partners.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    name="partnerId"
+                    defaultValue={todo.partnerId ?? ""}
+                    emptyLabel="No partner"
+                    className={input}
+                    aria-label="Partner"
+                    options={partners.map((p) => ({ value: p.id, label: p.name }))}
+                  />
                 </div>
               )}
 
