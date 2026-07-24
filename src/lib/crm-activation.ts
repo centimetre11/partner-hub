@@ -5,7 +5,7 @@ import { buildCountryAliases } from "./country";
 export { COUNTRY_ALIAS_GROUPS, buildCountryAliases } from "./country";
 
 export const CRM_ACTIVATION_URL =
-  "https://crm.finereporthelp.com/WebReport/decision/view/report?viewlet=sale%252Foversea%252Foversea_activation_single.cpt&ref_t=design&op=write&ref_c=33896294-5d32-461f-97d7-d3a23e0cf834";
+  "https://overseas.finereporthelp.com/WebReport/decision/view/report?viewlet=sale%252Foversea%252Foversea_activation_single.cpt&ref_t=design&op=write&ref_c=33896294-5d32-461f-97d7-d3a23e0cf834";
 
 export const CRM_ACTIVATION_REGION = "中东-ME";
 export const CRM_ACTIVATION_PARTNER_TYPE = "经销商伙伴（Reseller）";
